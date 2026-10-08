@@ -142,7 +142,7 @@ void app::show_levels() {
   }
   // And of room events, for their lists to show what is in effect.
   {
-    mux::ui::room_events_at(mux::choice_level::everywhere{}) = {history.show_room_events, history.room_event_kinds};
+    mux::ui::room_events_at(mux::choice_level::everywhere{}) = {this->history().show_room_events, this->history().room_event_kinds};
     mux::ui::room_events_held account_held, chat_held;
     if (const auto& chosen = root().main().chosen) {
       chat_held.all = this->own_of<&mux::app::chat_choices::room_events>(*chosen);

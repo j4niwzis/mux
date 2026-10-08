@@ -467,7 +467,7 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   shared.looks.window.interface_scale = this->interface_scale;
   if (!demo)
     this->drafts.load();
-  this->model->show_deleted = this->history.show_deleted;
+  this->model->show_deleted = this->history().show_deleted;
   this->settings.apply_limits();
   marks.load();
   // UnifiedPush only where chosen; off by default.

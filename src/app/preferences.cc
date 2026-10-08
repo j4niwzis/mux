@@ -205,9 +205,13 @@ class preferences_part {
     };
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
                                  if (one.kind)
-                                   set_kind(k_->history.room_event_kinds);
+                                 {
+                                   auto kinds = k_->history().room_event_kinds;
+                                   set_kind(kinds);
+                                   k_->choose_field<&mux::config::history_settings::room_event_kinds>(std::move(kinds));
+                                 }
                                  else
-                                   k_->history.show_room_events = one.show.value_or(true);
+                                   k_->choose_field<&mux::config::history_settings::show_room_events>(one.show.value_or(true));
                                },
                                [&](mux::choice_level::account) {
                                  s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
@@ -303,8 +307,8 @@ class preferences_part {
   // How a level shows room events, as a whole: what it holds replaced.
   void apply(const request::set_room_events& one) {
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
-                                       k_->history.show_room_events = one.all.value_or(true);
-                                       k_->history.room_event_kinds = one.kinds;
+                                       k_->choose_field<&mux::config::history_settings::show_room_events>(one.all.value_or(true));
+                                       k_->choose_field<&mux::config::history_settings::room_event_kinds>(one.kinds);
                                      },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
@@ -325,7 +329,7 @@ class preferences_part {
   }
   // How far a jump's search pages back, at a level.
   void apply(const request::set_jump_search& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->history.jump_search = one.most.value_or(5000); },
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::history_settings::jump_search>(one.most.value_or(5000)); },
                                [&](mux::choice_level::account) {
                                  s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                    mux::config::jump_search_in(account) = one.most;
@@ -343,7 +347,7 @@ class preferences_part {
   }
   // Link previews, at a level.
   void apply(const request::set_link_previews& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->history.link_previews = one.show.value_or(true); },
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::history_settings::link_previews>(one.show.value_or(true)); },
                                [&](mux::choice_level::account) {
                                  s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                    mux::config::link_previews_in(account) = one.show;
@@ -361,7 +365,7 @@ class preferences_part {
   }
   // Where link previews come from, at a level.
   void apply(const request::set_previews_direct& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->history.previews_direct = one.direct.value_or(false); },
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::history_settings::previews_direct>(one.direct.value_or(false)); },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                          mux::config::previews_direct_in(account) = one.direct;
@@ -379,7 +383,7 @@ class preferences_part {
   }
   // Whether others are told one is typing, at a level.
   void apply(const request::set_typing_sent& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->history.send_typing = one.send.value_or(true); },
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::history_settings::send_typing>(one.send.value_or(true)); },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                          mux::config::send_typing_in(account) = one.send;
@@ -397,7 +401,7 @@ class preferences_part {
   }
   // Who has read up to where, as faces, at a level.
   void apply(const request::set_receipts_shown& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->history.show_receipts = one.show.value_or(false); },
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::history_settings::show_receipts>(one.show.value_or(false)); },
                                [&](mux::choice_level::account) {
                                  s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                    mux::config::show_receipts_in(account) = one.show;
@@ -418,7 +422,7 @@ class preferences_part {
   void apply(const request::flip_account_room_events&) {
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
       auto& kept = mux::config::room_events_in(account);
-      kept = !kept.value_or(k_->history.show_room_events);
+      kept = !kept.value_or(k_->history().show_room_events);
 
       (void)k_->write();
       s_->refresh_due = true;

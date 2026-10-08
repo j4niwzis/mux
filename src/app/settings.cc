@@ -176,7 +176,7 @@ class settings_part {
   // of it cleared.
   void apply(const request::settings_storage&) {
     if (auto* up = s_->root().settings_up())
-      up->show_storage(k_->limits, k_->history, s_->vault->on());
+      up->show_storage(k_->limits, k_->history(), s_->vault->on());
   }
   void apply(const request::change_limit& one) {
     std::int64_t& value = mux::config::value_of(k_->limits, one.which);
@@ -204,16 +204,16 @@ class settings_part {
   }
   // Deleted messages shown where they were, marked, or taken out of view.
   void apply(const request::flip_show_deleted&) {
-    k_->history.show_deleted = !k_->history.show_deleted;
-    s_->model->show_deleted = k_->history.show_deleted;
+    k_->choose_field<&mux::config::history_settings::show_deleted>(!k_->history().show_deleted);
+    s_->model->show_deleted = k_->history().show_deleted;
     if (auto* up = s_->root().settings_up())
       if (auto* page = up->storage())
-        page->show_deleted(k_->history.show_deleted);
+        page->show_deleted(k_->history().show_deleted);
     (void)k_->write();
   }
   // Room events, for every chat that has not chosen, nor its account.
   void apply(const request::flip_room_events&) {
-    k_->history.show_room_events = !k_->history.show_room_events;
+    k_->choose_field<&mux::config::history_settings::show_room_events>(!k_->history().show_room_events);
     (void)k_->write();
     s_->refresh_due = true;
   }

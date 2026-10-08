@@ -47,6 +47,8 @@ struct kept_root {
   skiff::model::Tracked<mux::config::sending_settings> sending;
   // How frames are drawn.
   skiff::model::Tracked<mux::config::frame_settings> frames;
+  // What is kept and shown of the history, for every chat that does not say.
+  skiff::model::Tracked<mux::config::history_settings> history;
 };
 // The file to be written again: one, however many changes asked for it.
 struct write_kept {
@@ -67,6 +69,7 @@ struct kept_reactions {
   }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::sending_settings>, const mux::config::sending_settings&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::frame_settings>, const mux::config::frame_settings&) const { return {}; }
+  [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::history_settings>, const mux::config::history_settings&) const { return {}; }
   [[nodiscard]] push_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::notification_settings::unified_push>>, const auto& at) const {
     return {skiff::model::part(at).value_or(false)};
   }
@@ -118,6 +121,8 @@ struct kept_settings {
   mux::config::cache_limits limits;
   // What is done to a picture dropped before it is sent, as the model holds it.
   [[nodiscard]] const mux::config::sending_settings& sending() const { return model.root().sending.fValue; }
+  // What is kept and shown of the history, as the model holds it.
+  [[nodiscard]] const mux::config::history_settings& history() const { return model.root().history.fValue; }
   // How frames are drawn, as the model holds it: read by the host at each.
   [[nodiscard]] const mux::config::frame_settings& frames() const { return model.root().frames.fValue; }
   // One setting of what the model keeps, chosen in its place by its member
@@ -129,8 +134,6 @@ struct kept_settings {
     (void)model.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(),
                                          skiff::model::setTo(Part(std::move(now)))));
   }
-  // What is kept of the history: deleted messages, or not.
-  mux::config::history_settings history;
   // The chats listed in other accounts' lists than their own.
   std::vector<mux::config::chat_placement> placements;
   // Every chat's background, bubbles and panels.
@@ -286,7 +289,7 @@ struct kept_settings {
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::jump_search_of(*account))
         return *chosen;
-    return history.jump_search;
+    return this->history().jump_search;
   }
   // Whether a chat shows link previews: its own choice, else its account's,
   // else every account's.
@@ -296,7 +299,7 @@ struct kept_settings {
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::link_previews_of(*account))
         return *chosen;
-    return history.link_previews;
+    return this->history().link_previews;
   }
   // Whether a chat's link previews come from the sites themselves: its own
   // choice, its space's, its account's, else every account's.
@@ -306,7 +309,7 @@ struct kept_settings {
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::previews_direct_of(*account))
         return *chosen;
-    return history.previews_direct.value_or(false);
+    return this->history().previews_direct.value_or(false);
   }
   // Whether others in a chat are told one is typing: its own choice, its
   // space's, its account's, else every account's.
@@ -316,7 +319,7 @@ struct kept_settings {
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::send_typing_of(*account))
         return *chosen;
-    return history.send_typing.value_or(true);
+    return this->history().send_typing.value_or(true);
   }
   [[nodiscard]] bool receipts_shown(const conversation_id& chat) {
     if (const auto own = this->own_or_space<&chat_choices::receipts>(chat))
@@ -324,7 +327,7 @@ struct kept_settings {
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::show_receipts_of(*account))
         return *chosen;
-    return history.show_receipts;
+    return this->history().show_receipts;
   }
   // Whether a chat shows what is done in it: its own choice, else its
   // account's, else every account's.
@@ -334,7 +337,7 @@ struct kept_settings {
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::room_events_of(*account))
         return *chosen;
-    return history.show_room_events;
+    return this->history().show_room_events;
   }
 
   // What a message coming to a chat notifies with: nothing where the chat
@@ -389,8 +392,8 @@ struct kept_settings {
     return mux::logic::filter_of(
         this->own_or_space<&chat_choices::room_event_kinds>(chat), this->own_or_space<&chat_choices::room_events>(chat),
         account ? mux::config::room_event_kinds_of(*account) : std::nullopt,
-        account ? mux::config::room_events_of(*account) : std::nullopt, history.room_event_kinds,
-        history.show_room_events);
+        account ? mux::config::room_events_of(*account) : std::nullopt, this->history().room_event_kinds,
+        this->history().show_room_events);
   }
 
   // The file as all of this says it.
@@ -444,7 +447,7 @@ struct kept_settings {
     this->interface_scale = saved.interface_scale.value_or(100);
     this->limits = saved.cache.value_or(mux::config::cache_limits{});
     const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
-    this->history = saved.history.value_or(mux::config::history_settings{});
+    const auto history_read = saved.history.value_or(mux::config::history_settings{});
     this->proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
     const auto notifications_read = saved.notifications.value_or(mux::config::notification_settings{});
     for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
@@ -484,6 +487,7 @@ struct kept_settings {
     root.notifications.fValue = notifications_read;
     root.sending.fValue = sending_read;
     root.frames.fValue = frames_read;
+    root.history.fValue = history_read;
     this->model = kept_model(std::move(root));
   }
   [[nodiscard]] mux::config::file file() const {
@@ -546,7 +550,7 @@ struct kept_settings {
       out.interface_scale = interface_scale;
     out.cache = limits;
     out.sending = this->sending();
-    out.history = history;
+    out.history = this->history();
     out.notifications = this->notifications();
     std::vector<mux::config::chat_notify> notify;
     std::vector<mux::config::room_events_choice> choices;

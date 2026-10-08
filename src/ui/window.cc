@@ -208,11 +208,11 @@ struct shown_frame : Frame {
 // A layer holding Node while its part of what is shown holds its facts --
 // made from them, with what the program handed the window -- and nothing
 // where they are gone: a message's menu.
-template <class Node, class Facts, class Needs>
+template <class Content, class Facts, class Needs>
 struct shown_layer : scene::Node {
   const Needs* needs = nullptr;
   struct parts_t {
-    std::optional<Node> up;
+    std::optional<Content> up;
   } parts;
   explicit shown_layer(const Needs* handed) : needs(handed) {
     fState.apply({.fill = true});
@@ -228,7 +228,7 @@ struct shown_layer : scene::Node {
     this->invalidateLayout();
     this->markDamaged();
   }
-  [[nodiscard]] Node* shown() { return parts.up ? &*parts.up : nullptr; }
+  [[nodiscard]] Content* shown() { return parts.up ? &*parts.up : nullptr; }
 };
 
 // The conversations; over them the panel that is open, if one is, sliding in
@@ -598,7 +598,18 @@ struct window : scene::Node {
       const auto over = [&](auto&... each) { (scene::draw(each, painting, canvas, alpha), ...); };
       over(settings, notice, person, room, reactions, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
            tools, sending, passphrase, verifying);
-      const auto over_if = [&](auto&... each) { ((each ? scene::draw(*each, painting, canvas, alpha) : void()), ...); };
+      // A layer up: an optional's node, or a shown layer with what it holds.
+      const auto draw_up = spl::overloaded{[&](auto& one)
+                                             requires requires { one.shown(); }
+                                           {
+                                             if (one.shown())
+                                               scene::draw(one, painting, canvas, alpha);
+                                           },
+                                           [&](auto& one) {
+                                             if (one)
+                                               scene::draw(*one, painting, canvas, alpha);
+                                           }};
+      const auto over_if = [&](auto&... each) { (draw_up(each), ...); };
       over_if(emoji, menu, viewer, text_menu_up, call_up, call_whole);
     }
 

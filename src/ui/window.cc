@@ -474,6 +474,10 @@ struct window : scene::Node, outbox {
       scene::work::mark(screen.fState.fId);  // an ease ticked by the screen
     }
     this->show_behind(chosen ? reads.wallpaper_of(*chosen) : looks.wallpaper.value_or(config::wallpaper_t{config::wallpaper::theme{}}));
+    // The drawer: the accounts saved, with what the chats say of each.
+    const auto& current = screen.current;
+    layer().frame.base().content().show(kept_->accounts.values(), *screen.last_model,
+                                        current ? std::string_view(current->address) : std::string_view());
   }
   // The background behind the whole window, where it is so.
   void show_behind(const config::wallpaper_t& chosen) {
@@ -789,11 +793,6 @@ struct window : scene::Node, outbox {
   }
   void close_dialog() { layer().tools.close(); }
 
-  template <std::ranges::input_range Saved>
-  void show(const Saved& saved, const model& now) {
-    const auto& current = layer().frame.base().base().current;
-    layer().frame.base().content().show(saved, now, current ? std::string_view(current->address) : std::string_view());
-  }
 
   // Its layers, each filling the window, as the default layout places them:
   // nothing placed by hand.

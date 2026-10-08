@@ -59,6 +59,7 @@ struct shown_root {
   skiff::model::Tracked<std::optional<send_facts>> sending;
   skiff::model::Tracked<std::optional<verification_view>> verifying;
   skiff::model::Tracked<std::optional<proto::passphrase_for_t>> passphrase;
+  skiff::model::Tracked<std::optional<menu_facts>> menu;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -92,6 +93,32 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
   }
   void dismissable_for(const Facts&) {}
   auto onPress() { return skiff::bind::own(skiff::model::setTo(std::optional<Facts>{})); }
+};
+
+// A layer holding Node while its part of what is shown holds its facts --
+// made from them, with what the program handed the window -- and nothing
+// where they are gone: a message's menu.
+template <class Node, class Facts, class Needs>
+struct shown_layer : scene::Node {
+  const Needs* needs = nullptr;
+  struct parts_t {
+    std::optional<Node> up;
+  } parts;
+  explicit shown_layer(const Needs* handed) : needs(handed) {
+    fState.apply({.fill = true});
+    fState.setFloats(true);
+    this->setVisible(false);
+  }
+  void read(const std::optional<Facts>& now) {
+    if (now)
+      parts.up.emplace(*needs, *now);
+    else
+      parts.up.reset();
+    this->setVisible(now.has_value());
+    this->invalidateLayout();
+    this->markDamaged();
+  }
+  [[nodiscard]] Node* shown() { return parts.up ? &*parts.up : nullptr; }
 };
 
 // The conversations; over them the panel that is open, if one is, sliding in
@@ -278,7 +305,7 @@ struct window : scene::Node {
       // An emoji verification, as it goes.
       shown_in<verification_box<Actions>, verification_view> verifying;
       std::optional<emoji_popup<Actions>> emoji;
-      std::optional<context_menu<Actions>> menu;
+      skiff::bind::Bound<std::optional<menu_facts>, shown_layer<context_menu<Actions>, menu_facts, ui_needs<Actions>>> menu;
       std::optional<picture_viewer<Actions>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
       std::optional<text_menu> text_menu_up;
@@ -345,7 +372,7 @@ struct window : scene::Node {
         this->markDamaged();
         return closed();
       }
-      if (parts.menu)
+      if (parts.menu.shown())
         return closed(::mux::ui::request::close_menu{});
       if (parts.emoji)
         return closed(::mux::ui::request::close_emoji{});
@@ -485,7 +512,8 @@ struct window : scene::Node {
                 .explore = shown_made<explore_box<Actions>, explore_facts>(n),
                 .sending = shown_made<send_box<Actions>, send_facts>(n),
                 .passphrase = shown_made<passphrase_box<Actions>, proto::passphrase_for_t>(n),
-                .verifying = shown_made<verification_box<Actions>, verification_view>(n)} {
+                .verifying = shown_made<verification_box<Actions>, verification_view>(n),
+                .menu = decltype(parts_t::menu)(shown_layer<context_menu<Actions>, menu_facts, ui_needs<Actions>>(&n))} {
       auto& [backdrop, behind, frame, ...over] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -713,7 +741,7 @@ struct window : scene::Node {
     now.markDamaged();
   }
   // A message's menu up: the right press was its.
-  [[nodiscard]] bool context_menu_up() { return layer().menu.has_value(); }
+  [[nodiscard]] bool context_menu_up() { return layer().menu.shown() != nullptr; }
   void close_text_menu() {
     auto& now = *parts.now;
     if (now.parts.text_menu_up) {
@@ -731,8 +759,6 @@ struct window : scene::Node {
   // Whether the pages are still moving.
   [[nodiscard]] bool pages_moving() { return layer().frame.settling(); }
 
-  void open_menu(const menu_facts& facts) { layer().menu.emplace(needs_, facts); }
-  void close_menu() { layer().menu.reset(); }
   // The input's emoji panel, over the chat above its button.
   void open_emoji(float right, float bottom) { layer().emoji.emplace(needs_, right, bottom); }
   void close_emoji() {
@@ -754,7 +780,10 @@ struct window : scene::Node {
     return layer().emoji ? layer().emoji->parts.card.parts.stickers.pictures_shown() : std::vector<std::string>{};
   }
   // The menu's card, where one is up: what takes the keys while it is.
-  [[nodiscard]] scene::Node* menu_card() { return layer().menu ? &layer().menu->parts.menu : nullptr; }
+  [[nodiscard]] scene::Node* menu_card() {
+    auto* up = layer().menu.shown();
+    return up ? &up->parts.menu : nullptr;
+  }
 
   void passphrase_refused(std::string why) {
     if (auto* box = layer().passphrase.shown())

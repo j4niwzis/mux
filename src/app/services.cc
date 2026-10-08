@@ -30,6 +30,8 @@ struct services {
   mux::model* model = nullptr;
   // What the window shows that the program opens and closes.
   mux::ui::shown_model* showing = nullptr;
+  // A message's menu asked for: focused once it is made.
+  bool menu_focus_due = false;
   // The emoji and stickers kept, as the window's panels show them.
   mux::ui::emoji_kept emoji;
   // The looks the window shows.

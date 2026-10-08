@@ -35,7 +35,7 @@ void app::rebuild_in_theme() {
   root().rebuild();
   // The dialogs made again: each reads what is shown afresh.
   showing_binding.invalidate();
-  showing_binding.refresh(root(), showing);
+  this->refresh_shown();
   auto& after = root().main();
   after.chosen = chosen;
   after.current = current;
@@ -44,7 +44,7 @@ void app::rebuild_in_theme() {
   after.info_open = info_open;
   this->refresh();
   mux::ui::show(showing, std::optional(mux::ui::settings_facts{}));
-  showing_binding.refresh(root(), showing);
+  this->refresh_shown();
   if (auto* up = root().settings_up()) {
     up->show_appearance(this->appearance().theme, this->appearance().accent);
     up->keep_offset(settings_at);

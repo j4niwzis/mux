@@ -232,6 +232,9 @@ struct app : kept_settings {
   // facts -- and the binding the dialogs read it through.
   mux::ui::shown_model showing{mux::ui::shown_root{}};
   skiff::bind::Binding<mux::ui::shown_model> showing_binding;
+  // What is shown read by the dialogs and layers bound to it; a menu just
+  // made, given the keys.
+  void refresh_shown();
   std::array<const void*, 3> bound_pages{};
   // And to the chats, the window's other model.
   skiff::bind::Binding<mux::chats_model> chats_binding;

@@ -283,7 +283,7 @@ void app::take_page_input() {
     window_binding.invalidate();
     window_binding.refresh(root(), this->state);
     showing_binding.invalidate();
-    showing_binding.refresh(root(), showing);
+    this->refresh_shown();
     chats_binding.invalidate();
     chats_binding.refresh(root(), model->chats());
   }
@@ -343,7 +343,7 @@ void app::settle_model() {
                                }},
                effect);
   window_binding.refresh(root(), this->state);
-  showing_binding.refresh(root(), showing);
+  this->refresh_shown();
   chats_binding.refresh(root(), model->chats());
 }
 
@@ -380,6 +380,13 @@ void app::apply_asked() {
     spl::visit([this](const auto& each) { this->route(each); }, one);
 }
 
+void app::refresh_shown() {
+  showing_binding.refresh(root(), showing);
+  if (std::exchange(shared.menu_focus_due, false))
+    if (skiff::scene::Node* card = root().menu_card())
+      scene.focus(*card);
+}
+
 // Right after an event is handled, what it asked for -- taken from the
 // window and done at once, the handler that asked having returned: a press
 // acts before the next event, not a frame later.
@@ -410,7 +417,7 @@ void app::after_event() {
   this->take_page_input();
   this->apply_asked();
   // What the requests opened or closed, shown.
-  showing_binding.refresh(root(), showing);
+  this->refresh_shown();
 }
 
 void app::before_frame() {

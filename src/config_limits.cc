@@ -40,7 +40,7 @@ struct chat_placement {
   std::string conversation;  // the chat's id in it
   std::string listed_in;     // the account whose list it is in, by its address
   bool moved = false;        // out of its own account's list
-  std::optional<std::string> strip_colour;
+  std::optional<accent_said_t> strip_colour;
   std::optional<bool> strip;
   friend bool operator==(const chat_placement&, const chat_placement&) = default;
 };

@@ -178,7 +178,7 @@ class notices_part {
                                        this->sound_only(sound);
                                        toasts_due_.push_back({in, in.id, std::move(title), std::move(text)});
                                      }},
-                  mux::config::notify_backend_of(s_->kept->notifications().backend));
+                  s_->kept->notifications().backend);
   }
   // A sound with nothing shown, or with mux's own window: the chime.
   void sound_only(bool sound) {

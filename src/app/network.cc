@@ -127,7 +127,7 @@ struct network {
                                                                [](mux::config::proxy_kind::http) {
                                                                  return mux::net::proxy_kind_t{mux::net::proxy_kind::http{}};
                                                                }},
-                                              mux::config::proxy_kind_of(kept->kind)),
+                                              kept->kind),
                            .host = kept->host,
                            .port = static_cast<std::uint16_t>(kept->port),
                            .username = kept->username,

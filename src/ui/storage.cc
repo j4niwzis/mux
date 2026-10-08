@@ -194,9 +194,8 @@ struct storage_page : nodes::Stack {
 
 inline auto notification_settings_view(const palette& colours) {
   using every = config::notification_settings;
-  auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(widgets::ChoiceTabs<std::string>(
-      {{"System", std::string(config::word_of(config::notify_backend::native{}))},
-       {"Built in", std::string(config::word_of(config::notify_backend::built_in{}))}}));
+  auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(widgets::ChoiceTabs<config::notify_backend_t>(
+      {{"System", config::notify_backend::native{}}, {"Built in", config::notify_backend::built_in{}}}));
   backend.apply({.margin = {4.0f, 20.0f, 4.0f, 20.0f}});
   return skiff::compose::column(
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), spaced_title(colours, "NOTIFICATIONS"),

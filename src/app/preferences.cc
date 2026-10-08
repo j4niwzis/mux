@@ -95,7 +95,7 @@ class preferences_part {
   // kept, and the lists shown again.
   void apply(const request::set_account_colour& one) {
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-      mux::config::colour_in(account) = std::string(spl::visit([](const auto& each) { return mux::config::word_of(each); }, one.colour));
+      mux::config::colour_in(account) = mux::config::said_of<mux::config::accent_said_t>(one.colour);
       if (auto* page = panel.chats_page())
         page->show_colour(mux::config::colour_of(account), mux::config::strip_of(account));
       (void)k_->write();
@@ -154,7 +154,7 @@ class preferences_part {
     (void)s_->root().main().close_space_menu();
     k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
       if (auto* kept = placement_in(all, one.chat, one.in)) {
-        kept->strip_colour = std::string(spl::visit([](const auto& each) { return mux::config::word_of(each); }, one.colour));
+        kept->strip_colour = mux::config::said_of<mux::config::accent_said_t>(one.colour);
         kept->strip = true;
       }
     });

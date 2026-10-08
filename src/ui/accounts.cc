@@ -464,7 +464,7 @@ struct account_proxy : nodes::Stack {
     choices.emplace_back(colours, "No proxy", choose_account_proxy<Actions>{a, -1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
                          !current.has_value());
     for (std::size_t i = 0; i < all.size(); ++i)
-      choices.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
+      choices.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(all[i].kind),
                                        all[i].host, all[i].port),
                            choose_account_proxy<Actions>{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)},
                            current && *current == all[i].name);

@@ -534,7 +534,7 @@ struct kept_settings {
               .mentions = spl::visit(spl::overloaded{[](mux::config::notify_mode::mentions) { return std::optional<bool>(true); },
                                                            [](mux::config::notify_mode::all) { return std::optional<bool>(false); },
                                                            [](const auto&) { return std::optional<bool>(); }},
-                                        mux::config::notify_mode_of(one.mode)),
+                                        one.mode.value_or(mux::config::notify_mode_t{mux::config::notify_mode::by_default{}})),
               .name = one.name,
               .text = one.text,
               .sound = one.sound};
@@ -650,7 +650,10 @@ struct kept_settings {
       if (const auto& own = chosen.notify; own != mux::config::notify_choices{})
         notify.push_back({.account = chat.account.address,
                           .conversation = chat.id,
-                          .mode = own.mentions.transform([](bool only) { return std::string(only ? "mentions" : "all"); }),
+                          .mode = own.mentions.transform([](bool only) {
+                            return only ? mux::config::notify_mode_t{mux::config::notify_mode::mentions{}}
+                                        : mux::config::notify_mode_t{mux::config::notify_mode::all{}};
+                          }),
                           .on = own.on,
                           .name = own.name,
                           .text = own.text,

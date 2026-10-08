@@ -203,9 +203,6 @@ struct built_in {
 };
 }  // namespace notify_backend
 using notify_backend_t = spl::variant<notify_backend::native, notify_backend::built_in>;
-[[nodiscard]] inline notify_backend_t notify_backend_of(const std::optional<std::string>& word) {
-  return word == "built-in" ? notify_backend_t{notify_backend::built_in{}} : notify_backend_t{notify_backend::native{}};
-}
 // A chat's own choice of what notifies, as Telegram's and Element's: as
 // its account says, everything, only what mentions the user, nothing.
 namespace notify_mode {
@@ -227,13 +224,6 @@ struct off {
 };
 }  // namespace notify_mode
 using notify_mode_t = spl::variant<notify_mode::by_default, notify_mode::all, notify_mode::mentions, notify_mode::off>;
-[[nodiscard]] inline notify_mode_t notify_mode_of(const std::optional<std::string>& word) {
-  if (word == "all")
-    return notify_mode::all{};
-  if (word == "mentions")
-    return notify_mode::mentions{};
-  return notify_mode::by_default{};
-}
 // The switches of the notifications page, each a member of its settings.
 namespace notify_flag {
 struct desktop {};
@@ -243,9 +233,6 @@ struct sound {};
 }  // namespace notify_flag
 using notify_flag_t = spl::variant<notify_flag::desktop, notify_flag::show_name, notify_flag::show_text, notify_flag::sound>;
 
-[[nodiscard]] inline proxy_kind_t proxy_kind_of(std::string_view word) {
-  return word == "http" ? proxy_kind_t{proxy_kind::http{}} : proxy_kind_t{proxy_kind::socks5{}};
-}
 [[nodiscard]] constexpr std::string_view word_of(theme::classic) { return "classic"; }
 [[nodiscard]] constexpr std::string_view word_of(theme::day) { return "day"; }
 [[nodiscard]] constexpr std::string_view word_of(theme::tinted) { return "tinted"; }

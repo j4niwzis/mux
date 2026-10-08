@@ -170,7 +170,7 @@ struct proxies_page : nodes::Stack {
     empty.apply({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}});
     fState.apply({.fill = true});
     for (std::size_t i = 0; i < all.size(); ++i)
-      profiles.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
+      profiles.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(all[i].kind),
                                         all[i].host, all[i].port),
                             edit_proxy<Actions>{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
     empty.setVisible(all.empty());
@@ -285,7 +285,7 @@ struct proxy_editor : nodes::Stack {
       password.parts.box.setText(from->password.value_or(""));
       resolver.parts.box.setText(from->srv_resolver.value_or(""));
     }
-    kind = from ? config::proxy_kind_of(from->kind) : config::proxy_kind_t{config::proxy_kind::socks5{}};
+    kind = from ? from->kind : config::proxy_kind_t{config::proxy_kind::socks5{}};
     kinds.show(kind, true);
   }
 
@@ -297,7 +297,7 @@ struct proxy_editor : nodes::Stack {
   // The profile as typed, or what is wrong with it.
   [[nodiscard]] std::expected<config::proxy_settings, std::string> proxy() const {
     const auto& [header, name, kinds, host, port, username, password, resolver, message, buttons] = parts;
-    config::proxy_settings out{.name = name.parts.box.text(), .kind = config::word_of(kind), .host = host.parts.box.text()};
+    config::proxy_settings out{.name = name.parts.box.text(), .kind = kind, .host = host.parts.box.text()};
     if (out.name.empty())
       return std::unexpected("Name the proxy");
     if (out.host.empty())

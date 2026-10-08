@@ -14,7 +14,7 @@ export namespace mux::config {
 // -- that accounts choose by its name: SOCKS5 or HTTP CONNECT.
 struct proxy_settings {
   std::string name;
-  std::string kind = "socks5";  // "socks5" or "http"
+  proxy_kind_t kind = proxy_kind::socks5{};
   std::string host;
   std::int64_t port = 1080;
   std::optional<std::string> username;
@@ -67,7 +67,7 @@ struct notification_settings {
   bool show_text = true;
   bool sound = true;
   std::optional<bool> mentions_only;  // only @mentions and keywords notify
-  std::string backend = "native";
+  notify_backend_t backend = notify_backend::native{};
   std::optional<std::string> sound_file;
   // Woken by UnifiedPush, through the desktop's distributor (its D-Bus
   // specification) -- off unless chosen: only then is the bus asked, and
@@ -91,7 +91,7 @@ consteval auto json_schema(knot::type<notification_settings>) { return knot::sch
 struct chat_notify {
   std::string account;
   std::string conversation;
-  std::optional<std::string> mode;  // "mentions" or "all", where chosen
+  std::optional<notify_mode_t> mode;  // mentions or all, where chosen
   std::optional<bool> on;           // notifications on, where chosen (off: muted)
   std::optional<bool> name;
   std::optional<bool> text;
@@ -128,7 +128,7 @@ struct account_shared {
   std::optional<bool> notify_name;
   std::optional<bool> notify_text;
   std::optional<std::string> proxy;
-  std::optional<std::string> colour;
+  std::optional<accent_said_t> colour;
   std::optional<bool> strip;
   friend bool operator==(const account_shared&, const account_shared&) = default;
 };

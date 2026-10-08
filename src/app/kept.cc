@@ -43,6 +43,8 @@ struct kept_root {
   skiff::model::Keyed<conversation_id, chat_choices> chats;
   // What notifies, and how.
   skiff::model::Tracked<mux::config::notification_settings> notifications;
+  // What is done to a picture dropped before it is sent.
+  skiff::model::Tracked<mux::config::sending_settings> sending;
 };
 // The file to be written again: one, however many changes asked for it.
 struct write_kept {
@@ -61,6 +63,7 @@ struct kept_reactions {
                               const mux::config::notification_settings&) const {
     return {};
   }
+  [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::sending_settings>, const mux::config::sending_settings&) const { return {}; }
   [[nodiscard]] push_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::notification_settings::unified_push>>, const auto& at) const {
     return {skiff::model::part(at).value_or(false)};
   }
@@ -114,8 +117,17 @@ struct kept_settings {
   int interface_scale = 100;
   // How much is kept, in memory and on disk.
   mux::config::cache_limits limits;
-  // What is done to a picture dropped before it is sent.
-  mux::config::sending_settings sending;
+  // What is done to a picture dropped before it is sent, as the model holds it.
+  [[nodiscard]] const mux::config::sending_settings& sending() const { return model.root().sending.fValue; }
+  // One setting of what the model keeps, chosen in its place by its member
+  // pointer: a field of a part the root holds one of.
+  template <auto M, class T>
+  void choose_field(T now) {
+    using Owner = typename skiff::model::detail::MemberPointer<decltype(M)>::Class;
+    using Part = std::remove_cvref_t<decltype(std::declval<Owner&>().*M)>;
+    (void)model.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(),
+                                         skiff::model::setTo(Part(std::move(now)))));
+  }
   // What is kept of the history: deleted messages, or not.
   mux::config::history_settings history;
   // The chats listed in other accounts' lists than their own.
@@ -430,7 +442,7 @@ struct kept_settings {
     this->show_fps = saved.show_fps.value_or(false);
     this->interface_scale = saved.interface_scale.value_or(100);
     this->limits = saved.cache.value_or(mux::config::cache_limits{});
-    this->sending = saved.sending.value_or(mux::config::sending_settings{});
+    const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
     this->history = saved.history.value_or(mux::config::history_settings{});
     this->proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
     const auto notifications_read = saved.notifications.value_or(mux::config::notification_settings{});
@@ -469,6 +481,7 @@ struct kept_settings {
     kept_root root;
     root.chats.putAll(chats);
     root.notifications.fValue = notifications_read;
+    root.sending.fValue = sending_read;
     this->model = kept_model(std::move(root));
   }
   [[nodiscard]] mux::config::file file() const {
@@ -530,7 +543,7 @@ struct kept_settings {
     if (interface_scale != 100)
       out.interface_scale = interface_scale;
     out.cache = limits;
-    out.sending = sending;
+    out.sending = this->sending();
     out.history = history;
     out.notifications = this->notifications();
     std::vector<mux::config::chat_notify> notify;

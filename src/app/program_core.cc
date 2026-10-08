@@ -18,6 +18,8 @@ import skiff.paint;
 import skiff.scene;
 import skiff.nodes.text;
 import mux.app.network;
+import mux.app.kept;
+import skiff.bind;
 import mux.app.demo;
 import mux.app.store;
 import mux.app.requests;
@@ -251,10 +253,55 @@ void app::wire() {
   store.vault = vault;
 }
 
+// The settings page up, where it has the model's widgets (parts.settings):
+// a page newly up bound afresh; its input taken as edits of the model.
+void app::take_page_input() {
+  auto* up = root().settings_up();
+  if (up == nullptr) {
+    bound_page = nullptr;
+    return;
+  }
+  spl::visit(
+      [&](auto& page) {
+        if constexpr (requires { page.parts.settings; }) {
+          if (bound_page != &page.parts.settings) {
+            bound_page = &page.parts.settings;
+            page_binding = {};
+            page_binding.refresh(page.parts.settings, model);
+          }
+          page_binding.drain(page.parts.settings, model);
+        } else {
+          bound_page = nullptr;
+        }
+      },
+      up->page());
+  this->settle_model();
+}
+// What the model's reactions asked for: the file written, UnifiedPush's
+// connector started or stopped; and the page up shown the model again.
+void app::settle_model() {
+  for (const auto& effect : this->take_effects())
+    std::visit(spl::overloaded{[&](const write_kept&) { (void)this->write(); },
+                               [&](const push_wanted& wanted) {
+                                 if (wanted.on)
+                                   notices.start_push();
+                                 else
+                                   notices.stop_push();
+                               }},
+               effect);
+  if (auto* up = root().settings_up())
+    spl::visit(
+        [&](auto& page) {
+          if constexpr (requires { page.parts.settings; })
+            page_binding.refresh(page.parts.settings, model);
+        },
+        up->page());
+}
+
 void app::before_frame() {
   ++mux::ui::image_cache::frame();
   // What the model's widgets did: edits of the model, before the frame.
-  notices.take_input();
+  this->take_page_input();
   root().drop_closed();
   // What has been on screen in the chat shown is read, as far as it goes,
   // as in tdesktop: the chat list's counts go down as it is read, not all

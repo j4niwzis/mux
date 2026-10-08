@@ -181,7 +181,7 @@ struct storage_page : nodes::Stack {
 // its setting by its member pointer: what is chosen is an edit of the
 // model, and what the model holds is what shows.
 template <auto Setting, class T = bool>
-auto notify_switch(const palette& colours, std::string text) {
+auto setting_switch(const palette& colours, std::string text) {
   auto label = nodes::Text(std::move(text), 15.0f, colours.text);
   label.setElided(true);
   label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
@@ -210,15 +210,15 @@ inline auto notification_settings_view(const palette& colours) {
   backend.apply({.margin = {4.0f, 20.0f, 4.0f, 20.0f}});
   return skiff::compose::column(
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), spaced_title(colours, "NOTIFICATIONS"),
-      notify_switch<&every::desktop>(colours, "Notifications"),
-      notify_switch<&every::mentions_only, std::optional<bool>>(colours, "Only mentions and keywords"),
-      notify_switch<&every::show_name>(colours, "The sender's name"),
-      notify_switch<&every::show_text>(colours, "The message's text"), notify_switch<&every::sound>(colours, "Sound"),
+      setting_switch<&every::desktop>(colours, "Notifications"),
+      setting_switch<&every::mentions_only, std::optional<bool>>(colours, "Only mentions and keywords"),
+      setting_switch<&every::show_name>(colours, "The sender's name"),
+      setting_switch<&every::show_text>(colours, "The message's text"), setting_switch<&every::sound>(colours, "Sound"),
       spaced_title(colours, "SHOWN BY"), std::move(backend),
       spaced_note(colours, "System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
                            "shows mux's own, in a corner of the screen, as Telegram Desktop does."),
       spaced_title(colours, "WAKE"),
-      notify_switch<&every::unified_push, std::optional<bool>>(colours, "Wake by UnifiedPush"),
+      setting_switch<&every::unified_push, std::optional<bool>>(colours, "Wake by UnifiedPush"),
       spaced_note(colours, "Your Matrix servers push to the UnifiedPush distributor on this device (ntfy, NextPush, "
                            "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
                            "of messages while it runs."));
@@ -244,35 +244,28 @@ struct notifications_page : nodes::Stack {
 
 // Settings' Files page: what is done to a picture dropped on the window
 // before it is sent.
+inline auto files_settings_view(const palette& colours) {
+  using sending = config::sending_settings;
+  return skiff::compose::column(
+      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      spaced_title(colours, "PICTURES DROPPED ON THE WINDOW"),
+      setting_switch<&sending::strip_metadata>(colours, "Remove metadata"),
+      setting_switch<&sending::rename>(colours, "Name them image.<type>"),
+      spaced_note(colours, "Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
+                           "It is cut out of the file; the picture itself is sent as it is, not compressed again."));
+}
 template <class Actions>
 struct files_page : nodes::Stack {
   using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
-  using strip_row = switch_row<ask<Actions, &Actions::flip_strip_metadata>>;
-  using rename_row = switch_row<ask<Actions, &Actions::flip_rename_pictures>>;
+  using settings_t = decltype(files_settings_view(std::declval<const palette&>()));
   struct parts_t {
     header_t header;
-    nodes::Text title;
-    strip_row strip;
-    rename_row rename;
-    nodes::Text note;
+    settings_t settings;
   } parts;
-  files_page(const ui_needs<Actions>& n, const config::sending_settings& now) : files_page(*n.colours, n.actions, now) {}
-  files_page(const palette& colours, Actions* a, const config::sending_settings& now)
-      : parts{.header = header_t(colours, "Files", {a}, {a}, true, true),
-              .title = section_title(colours, "PICTURES DROPPED ON THE WINDOW"),
-              .strip = strip_row(colours, "Remove metadata", {a}),
-              .rename = rename_row(colours, "Name them image.<type>", {a}),
-              .note = note_text(colours, "Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
-                     "It is cut out of the file; the picture itself is sent as it is, not compressed again.")} {
+  files_page(const ui_needs<Actions>& n, const config::sending_settings&) : files_page(*n.colours, n.actions) {}
+  files_page(const palette& colours, Actions* a)
+      : parts{.header = header_t(colours, "Files", {a}, {a}, true, true), .settings = files_settings_view(colours)} {
     fState.apply({.fill = true});
-    parts.title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
-    parts.note.setWrapped(true);
-    parts.note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
-    this->show(now);
-  }
-  void show(const config::sending_settings& now) {
-    parts.strip.parts.toggle.setOnNow(now.strip_metadata);
-    parts.rename.parts.toggle.setOnNow(now.rename);
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}

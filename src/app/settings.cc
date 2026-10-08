@@ -210,7 +210,7 @@ class settings_part {
   // Files sent: their metadata cut out, their names made plain.
   void apply(const request::settings_files&) {
     if (auto* up = s_->root().settings_up())
-      up->show_files(k_->sending);
+      up->show_files(k_->sending());
   }
   // Deleted messages shown where they were, marked, or taken out of view.
   void apply(const request::flip_show_deleted&) {
@@ -228,11 +228,11 @@ class settings_part {
     s_->refresh_due = true;
   }
   void apply(const request::flip_strip_metadata&) {
-    k_->sending.strip_metadata = !k_->sending.strip_metadata;
+    k_->choose_field<&mux::config::sending_settings::strip_metadata>(!k_->sending().strip_metadata);
     (void)k_->write();
   }
   void apply(const request::flip_rename_pictures&) {
-    k_->sending.rename = !k_->sending.rename;
+    k_->choose_field<&mux::config::sending_settings::rename>(!k_->sending().rename);
     (void)k_->write();
   }
 

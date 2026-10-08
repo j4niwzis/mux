@@ -25,6 +25,7 @@ import mux.ui.proto;
 import mux.app.proto;
 import skiff.paint;
 import skiff.scene;
+import skiff.bind;
 import mux.app.network;
 import mux.app.workers;
 import mux.app.demo;
@@ -79,7 +80,7 @@ struct app : kept_settings {
   pictures_part pictures{shared};
   drafts_part drafts{shared};
   reading_part reading{shared};
-  outbox_part outbox{shared, drafts, sending};
+  outbox_part outbox{shared, drafts, this->sending()};
   menu_part menu{shared, outbox, pictures};
   settings_part settings{shared, *this, pictures};
   notices_part notices{shared};
@@ -200,6 +201,13 @@ struct app : kept_settings {
   // A link pressed in a message's text: routed as a link is.
   void open_link(std::string url) { ask.open_url(std::move(url)); }
   void before_frame();
+  // The settings page up, where it is made of the model's widgets: bound
+  // to the model, its input taken as the model's edits, what those asked
+  // for done, and the page shown the model again.
+  skiff::bind::Binding<kept_model> page_binding;
+  const void* bound_page = nullptr;
+  void take_page_input();
+  void settle_model();
 
   void closing();
   // Drafts: in the screen, and on disk in one small file, written anew

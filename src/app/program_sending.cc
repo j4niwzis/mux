@@ -26,7 +26,7 @@ void app::apply(const request::switch_account& one) {
   screen.wanted.reset();
   screen.chosen.reset();
   this->change_part<recently_used>([&](recently_used& now) { now.last_account = one.address; });
-  root().close_drawer();
+  mux::ui::show(showing, mux::ui::drawer_shown{false});
   this->refresh();
 }
 

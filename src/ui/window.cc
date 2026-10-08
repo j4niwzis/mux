@@ -39,7 +39,12 @@ export namespace mux::ui {
 // What the window shows that the program opens and closes, as a model:
 // each dialog's facts, while it is open. The program edits it; the
 // dialogs, bound to it, open and close as they read it.
+// Whether the drawer is out.
+struct drawer_shown {
+  bool out = false;
+};
 struct shown_root {
+  skiff::model::Tracked<drawer_shown> drawer;
   skiff::model::Tracked<std::optional<marks_facts>> marks;
   skiff::model::Tracked<std::optional<leave_space_facts>> leaving;
   skiff::model::Tracked<std::optional<link_facts>> linking;
@@ -65,6 +70,10 @@ struct shown_root {
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
+// The drawer out or pushed back.
+inline void show(shown_model& showing, drawer_shown drawer) {
+  (void)showing.apply(skiff::model::edit(skiff::model::placeOf<drawer_shown, shown_root>(), skiff::model::setTo(drawer)));
+}
 // A dialog shown with these facts, or closed: its part of what is shown set.
 template <class Facts>
 void show(shown_model& showing, std::optional<Facts> facts) {
@@ -95,6 +104,18 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
   }
   void dismissable_for(const Facts&) {}
   auto onPress() { return skiff::bind::own(skiff::model::setTo(std::optional<Facts>{})); }
+};
+
+// The drawer, out while what is shown says so; pushed back -- the scrim
+// pressed, a swipe, Esc -- that part set so.
+template <class Base, class Content>
+struct shown_drawer : widgets::Drawer<Base, Content, widgets::dismiss::pressed> {
+  using widgets::Drawer<Base, Content, widgets::dismiss::pressed>::Drawer;
+  void read(const drawer_shown& now) {
+    if (now.out != this->isOpen())
+      this->setOpen(now.out);
+  }
+  auto onPress() { return skiff::bind::own(skiff::model::setTo(drawer_shown{false})); }
 };
 
 // A layer holding Node while its part of what is shown holds its facts --
@@ -131,7 +152,8 @@ struct shown_layer : scene::Node {
 template <class Actions>
 struct window : scene::Node {
   using panel_type = spl::variant<accounts_panel<Actions>>;
-  using with_drawer = widgets::Drawer<conversations_screen<Actions>, drawer_panel<Actions>>;
+  using drawer_node = shown_drawer<conversations_screen<Actions>, drawer_panel<Actions>>;
+  using with_drawer = skiff::bind::Bound<drawer_shown, drawer_node>;
 
   // What the window holds, made anew when the theme changes: what is made
   // takes its colours then. Its layers, bottom to top.
@@ -252,7 +274,7 @@ struct window : scene::Node {
   };
   struct layers : scene::Node {
     // What its handlers ask for, returned.
-    using Answer = std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_reactions, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings>;
+    using Answer = std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_reactions, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer>;
     using frame_t = widgets::SlideOver<with_drawer, panel_type>;
     // A dialog of Content, bound to its Facts' part of what is shown.
     template <class Content, class Facts>
@@ -430,10 +452,8 @@ struct window : scene::Node {
         return closed(::mux::ui::request::close_settings{});
       }
       // The drawer, under every dialog.
-      if (parts.frame.base().isOpen()) {
-        parts.frame.base().close();
-        return closed();
-      }
+      if (parts.frame.base().isOpen())
+        return closed(::mux::ui::request::close_drawer{});
       return std::nullopt;
     }
 
@@ -495,7 +515,7 @@ struct window : scene::Node {
 
     layers(const ui_needs<Actions>& n)
         : parts{.backdrop = nodes::Box<>(n.colours->background),
-                .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n)),
+                .frame = frame_t(with_drawer(drawer_node(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n)))),
                 .settings = shown_made<settings_dialog<Actions>, settings_facts>(n),
                 .notice = shown_made<notice_box<Actions>, notice_facts>(n),
                 .person = shown_made<person_card<Actions>, person_shown>(n),
@@ -742,8 +762,6 @@ struct window : scene::Node {
   }
   [[nodiscard]] room_settings<Actions>* manage_up() { return layer().manage.shown(); }
 
-  void open_drawer() { layer().frame.base().open(); }
-  void close_drawer() { layer().frame.base().close(); }
   void close_drawer_now() { layer().frame.base().closeNow(); }
   [[nodiscard]] bool drawer_open() { return layer().frame.base().isOpen(); }
   // Whether the pages are still moving.

@@ -133,7 +133,8 @@ void app::apply(const request::close_leave_space&) { mux::ui::show<mux::ui::leav
 
 void app::apply(const request::back&) { this->show_conversations(); }
 
-void app::apply(const request::open_drawer&) { root().open_drawer(); }
+void app::apply(const request::open_drawer&) { mux::ui::show(showing, mux::ui::drawer_shown{true}); }
+void app::apply(const request::close_drawer&) { mux::ui::show(showing, mux::ui::drawer_shown{false}); }
 
 void app::apply(const request::quit&) { mux::platform::events::request_quit(); }
 

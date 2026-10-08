@@ -35,7 +35,7 @@ class settings_part {
   }
 
   void apply(const request::open_settings&) {
-    s_->root().close_drawer();
+    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show(*s_->showing, std::optional(mux::ui::settings_facts{}));
   }
   void apply(const request::close_settings&) { mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt); }

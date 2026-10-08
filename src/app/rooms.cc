@@ -43,7 +43,7 @@ class rooms_part {
       link = mux::proto::share_link(mux::ui::protocol_state_of(s_->ui, *current), current->address).value_or(std::string());
     }
     std::ranges::sort(known, {}, &mux::found_person::name);
-    s_->root().close_drawer();
+    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show(*s_->showing, std::optional(mux::ui::new_chat_facts{std::move(known), std::move(link)}));
   }
   void apply(const request::find_people& one) {
@@ -61,12 +61,12 @@ class rooms_part {
   }
   void apply(const request::open_new_room&) {
     const auto by = s_->account_offering(mux::proto::feature::room_creation{});
-    s_->root().close_drawer();
+    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show(*s_->showing, std::optional(mux::ui::new_room_facts{by ? by->address.substr(by->address.find(':') + 1) : std::string()}));
   }
   void apply(const request::open_new_room_in& one) {
     const std::string& address = one.space.account.address;
-    s_->root().close_drawer();
+    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show(*s_->showing, std::optional(mux::ui::new_room_facts{address.substr(address.find(':') + 1),
                              mux::ui::new_room_place{one.space, one.name, one.make_space}}));
   }
@@ -89,7 +89,7 @@ class rooms_part {
   void apply(const request::open_explore&) {
     const auto by = s_->account_offering(mux::proto::feature::room_directory{});
     const std::string own = by ? by->address.substr(by->address.find(':') + 1) : std::string();
-    s_->root().close_drawer();
+    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
     mux::ui::show(*s_->showing, std::optional(mux::ui::explore_facts{own}));
     // What the server lists, at once, as Cinny opens its explorer: its
@@ -106,7 +106,7 @@ class rooms_part {
     const auto by = s_->root().main().current;
     if (!by || s_->demo())
       return;
-    s_->root().close_drawer();
+    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
     mux::ui::show(*s_->showing, std::optional(mux::ui::explore_facts{by->address.substr(by->address.find(':') + 1)}));
     // Said as the space's: its name and picture over what it holds.

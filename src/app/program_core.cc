@@ -493,6 +493,7 @@ void app::before_frame() {
     });
   }
   if (shared.drawer_waits && !root().pages_moving()) {
+    mux::ui::show(showing, mux::ui::drawer_shown{false});
     root().close_drawer_now();
     shared.drawer_waits = false;
   }
@@ -507,7 +508,7 @@ void app::closing() {
 auto app::root() -> window_type& { return scene.root(); }
 
 void app::show_conversations() {
-  root().close_drawer();
+  mux::ui::show(showing, mux::ui::drawer_shown{false});
   accounts_screen.forget_login();
   root().close();
   this->refresh();

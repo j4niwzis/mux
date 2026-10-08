@@ -292,6 +292,7 @@ struct app : kept_settings {
   void apply(const request::close_chat&);
   void apply(const request::back&);
   void apply(const request::open_drawer&);
+  void apply(const request::close_drawer&);
   void apply(const request::quit&);
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);

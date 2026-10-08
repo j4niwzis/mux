@@ -17,6 +17,7 @@ import skiff.nodes.icon;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
 import skiff.widgets.button;
+import skiff.widgets.model;
 import skiff.widgets.sliderbar;
 import skiff.widgets.textarea;
 import skiff.model;
@@ -253,104 +254,68 @@ struct leave_space_facts {
   std::vector<room_settings_facts::named_room> rooms;  // its rooms one is in
 };
 namespace leave_choice {
-struct none {};
-struct all {};
-struct some {};
-}  // namespace leave_choice
+struct none { friend bool operator==(none, none) = default; };
+struct all { friend bool operator==(all, all) = default; };
+struct some { friend bool operator==(some, some) = default; };
+}
 using leave_choice_t = spl::variant<leave_choice::none, leave_choice::all, leave_choice::some>;
-template <class Actions> struct leave_space_box : skiff::compose::Stacked {
-  // The dialog it is shown in.
-  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}}; }
-  leave_space_facts facts;
+struct leave_draft {
   leave_choice_t choice = leave_choice::none{};
-  std::set<std::string> chosen;  // the rooms to leave, where some are
-  struct pick {
-    leave_space_box* box;
-    leave_choice_t to;
-    void operator()() const {
-      box->choice = to;
-      box->show();
-    }
-  };
-  struct flip_room {
-    leave_space_box* box;
-    std::string room;
-    void operator()() const {
-      if (!box->chosen.erase(room))
-        box->chosen.insert(room);
-    }
-  };
-  struct go {
-    using Answer = ::mux::ui::request::leave_space;
-    leave_space_box* box;
-    ::mux::ui::request::leave_space operator()() const { return ::mux::ui::request::leave_space{box->facts.space, box->leaving()}; }
-  };
-  struct cancel {
-    using Answer = ::mux::ui::request::close_leave_space;
-    ::mux::ui::request::close_leave_space operator()() { return ::mux::ui::request::close_leave_space{}; }
-  };
-  struct parts_t {
-    nodes::Text title;
-    nodes::Text about;
-    radio_choice<pick> none, all, some;
-    std::vector<toggle_line<flip_room>> rooms;
-    dialog_buttons<cancel, go> buttons;
-  } parts;
-  leave_space_box(const ui_needs<Actions> &n, leave_space_facts what)
-      : Stacked(skiff::compose::vbox(
-            8.0f, {.fillX = true,
-                   .autoSize = scene::axes::kY,
-                   .padding = {20.0f, 22.0f, 20.0f, 22.0f}})),
-        facts(std::move(what)),
-        parts{.title = nodes::Text("Leave " + facts.name, 17.0f,
-                                   n.colours->text, true),
-              .about = explained(
-                  *n.colours,
-                  facts.rooms.empty()
-                      ? "You are in none of its rooms."
-                      : "Would you like to leave the rooms in this space too?"),
-              .none =
-                  radio_choice<pick>(*n.colours, "Don't leave any rooms", "",
-                                     {this, leave_choice::none{}}, true, true),
-              .all =
-                  radio_choice<pick>(*n.colours, "Leave all rooms", "",
-                                     {this, leave_choice::all{}}, false, true),
-              .some =
-                  radio_choice<pick>(*n.colours, "Leave some rooms", "",
-                                     {this, leave_choice::some{}}, false, true),
-              .buttons = dialog_buttons<cancel, go>(*n.colours, "Leave space",
-                                                    {}, {this}, 130.0f)} {
-    for (const auto& one : facts.rooms)
-      parts.rooms.emplace_back(*n.colours, one.name, flip_room{this, one.id}, false, true);
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.none, &parts.all, &parts.some})
-      each->setVisible(!facts.rooms.empty());
-    this->show();
+  std::set<std::string> chosen;
+};
+struct flip_leave_room { std::string room; };
+struct submit_leave_space {};
+struct leave_events {
+  leave_space_facts facts;
+  auto on(const flip_leave_room& event, const leave_draft& draft) const {
+    auto chosen = draft.chosen;
+    if (!chosen.erase(event.room))
+      chosen.insert(event.room);
+    return skiff::model::over<skiff::model::Field<&leave_draft::chosen>>(skiff::model::setTo(std::move(chosen)));
   }
-  // The choice made shown: its ring lit, the rooms' switches where some.
-  void show() {
-    const auto is = [&](auto which) {
-      return spl::visit(spl::overloaded{[](decltype(which)) { return true; }, [](const auto&) { return false; }}, choice);
-    };
-    parts.none.parts.ring.set_on(is(leave_choice::none{}));
-    parts.all.parts.ring.set_on(is(leave_choice::all{}));
-    parts.some.parts.ring.set_on(is(leave_choice::some{}));
-    for (auto& one : parts.rooms)
-      one.setVisible(is(leave_choice::some{}));
-    this->invalidateLayout();
-    this->markDamaged();
-  }
-  // The rooms to leave with it, as chosen.
-  [[nodiscard]] std::vector<std::string> leaving() const {
-    return spl::visit(
-        spl::overloaded{[](const leave_choice::none&) { return std::vector<std::string>{}; },
-                        [&](const leave_choice::all&) {
-                          return std::ranges::to<std::vector<std::string>>(
-                              std::views::transform(facts.rooms, [](const room_settings_facts::named_room& one) { return one.id; }));
-                        },
-                        [&](const leave_choice::some&) { return std::vector<std::string>(chosen.begin(), chosen.end()); }},
-        choice);
+  auto on(submit_leave_space, const leave_draft& draft) const {
+    auto leaving = spl::visit(spl::overloaded{
+        [](leave_choice::none) { return std::vector<std::string>{}; },
+        [&](leave_choice::all) {
+          return facts.rooms | std::views::transform([](const auto& room) { return room.id; }) | std::ranges::to<std::vector>();
+        },
+        [&](leave_choice::some) { return std::vector<std::string>(draft.chosen.begin(), draft.chosen.end()); }}, draft.choice);
+    return skiff::model::Up{request::leave_space{facts.space, std::move(leaving)}};
   }
 };
+inline auto leave_room_row(const palette& colours, const room_settings_facts::named_room& room) {
+  return skiff::compose::row(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
+      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(room.name, 14.0f, colours.text))),
+      skiff::compose::onClick(flip_leave_room{room.id}, skiff::compose::projected<skiff::model::Field<&leave_draft::chosen>>(
+          [id = room.id](const auto& chosen) { return chosen.contains(id); },
+          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::ToggleField<bool>(colours.widgets))), room.name));
+}
+inline auto leave_space_box(const palette& colours, const leave_space_facts& facts) {
+  using choice = skiff::model::Field<&leave_draft::choice>;
+  return skiff::compose::local<leave_draft>(leave_events{facts}, skiff::compose::column(
+      skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+      nodes::Text("Leave " + facts.name, 17.0f, colours.text, true),
+      explained(colours, facts.rooms.empty() ? "You are in none of its rooms." : "Would you like to leave the rooms in this space too?"),
+      skiff::compose::visible(!facts.rooms.empty(), skiff::compose::bound<choice>(
+          widgets::ChoiceRowField<leave_choice_t>(colours.widgets, "Don't leave any rooms", leave_choice::none{}))),
+      skiff::compose::visible(!facts.rooms.empty(), skiff::compose::bound<choice>(
+          widgets::ChoiceRowField<leave_choice_t>(colours.widgets, "Leave all rooms", leave_choice::all{}))),
+      skiff::compose::visible(!facts.rooms.empty(), skiff::compose::bound<choice>(
+          widgets::ChoiceRowField<leave_choice_t>(colours.widgets, "Leave some rooms", leave_choice::some{}))),
+      skiff::compose::shown_for<choice>([](const auto& picked) { return picked == leave_choice_t(leave_choice::some{}); },
+          skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              facts.rooms | std::views::transform([&](const auto& room) { return leave_room_row(colours, room); }) | std::ranges::to<std::vector>())),
+      skiff::compose::row(skiff::compose::justified(
+          skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}), nodes::justify::end{}),
+          skiff::compose::styled({.width = 130.0f, .height = 36.0f}, widgets::SendButton<request::close_leave_space>(colours.widgets, "Cancel", {})),
+          skiff::compose::styled({.width = 130.0f, .height = 36.0f}, primary(widgets::SendButton<submit_leave_space>(colours.widgets, "Leave space", {}))))));
+}
+using leave_space_box_t = decltype(leave_space_box(std::declval<const palette&>(), std::declval<const leave_space_facts&>()));
+inline dialog_look content_look(std::type_identity<leave_space_box_t>) { return {.size = dialog_size::fitting{440.0f}}; }
+template <class Needs>
+auto make_content(std::type_identity<leave_space_box_t>, const Needs& needs, const leave_space_facts& facts) {
+  return leave_space_box(*needs.colours, facts);
+}
 
 // A text to copy, as Element's "Internal room ID": the text, and a button.
 struct copy_line : skiff::compose::Stacked {

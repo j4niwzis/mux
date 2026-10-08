@@ -1198,3 +1198,36 @@ TEST(Forms, PassphraseDialogRetainsContentOnModelRefresh) {
   facts.why = mux::config::passphrase_for::encrypt{};
   EXPECT_TRUE(content_dismissable(std::type_identity<mux::ui::passphrase_box_t>{}, facts));
 }
+
+TEST(Forms, LeaveSpaceChoicesAndRoomsAreModelEdits) {
+  struct sink {
+    std::optional<mux::ui::request::leave_space> saved;
+    bool cancelled = false;
+    void take(const mux::ui::request::leave_space& request) { saved = request; }
+    void take(const mux::ui::request::close_leave_space&) { cancelled = true; }
+  } requests;
+  skiff::model::Model<int, skiff::bind::NoReactions> model(0);
+  mux::ui::palette colours;
+  mux::ui::leave_space_facts facts;
+  facts.name = "Space";
+  facts.rooms = {{"one", "One"}, {"two", "Two"}};
+  auto box = mux::ui::leave_space_box(colours, facts);
+  skiff::bind::Binding<decltype(model)> binding;
+  binding.refresh(box, model);
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 1}, &requests));
+  ASSERT_TRUE(requests.saved.has_value());
+  EXPECT_TRUE(requests.saved->rooms.empty());
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{3}, &requests));
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 1}, &requests));
+  EXPECT_EQ(requests.saved->rooms, (std::vector<std::string>{"one", "two"}));
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{4}, &requests));
+  binding.refresh(box, model);
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{5, 1, 1}, &requests));
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 1}, &requests));
+  EXPECT_EQ(requests.saved->rooms, (std::vector<std::string>{"two"}));
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{5, 1, 1}, &requests));
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 1}, &requests));
+  EXPECT_TRUE(requests.saved->rooms.empty());
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 0}, &requests));
+  EXPECT_TRUE(requests.cancelled);
+}

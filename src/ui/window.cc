@@ -397,7 +397,7 @@ template <class Actions> struct window : skiff::compose::Specced {
       // The pages slide over the drawer too: Manage accounts comes in over it.
       frame_t frame;
       shown_in<settings_dialog<Actions>, settings_facts> settings;
-      shown_in<notice_box<Actions>, notice_facts> notice;
+      shown_in<notice_box_t, notice_facts> notice;
       // A person's info, in the middle, as tdesktop's profile layer.
       shown_in<person_card<Actions>, person_shown> person;
       // A room not joined, from a link: its card, as a person's.
@@ -409,7 +409,7 @@ template <class Actions> struct window : skiff::compose::Specced {
       // A link put on what is selected in the message field: Ctrl+K's.
       shown_in<link_box_t, link_facts> linking;
       // Leaving a space, and which of its rooms with it.
-      shown_in<leave_space_box<Actions>, leave_space_facts> leaving;
+      shown_in<leave_space_box_t, leave_space_facts> leaving;
       // The mentions or the reactions not yet seen, listed.
       shown_in<marks_box<Actions>, marks_facts> marks;
       // A room's management.
@@ -643,7 +643,7 @@ template <class Actions> struct window : skiff::compose::Specced {
                                      std::forward_as_tuple(n)))),
                 .settings =
                     shown_made<settings_dialog<Actions>, settings_facts>(n),
-                .notice = shown_made<notice_box<Actions>, notice_facts>(n),
+                .notice = shown_made<notice_box_t, notice_facts>(n),
                 .person = shown_made<person_card<Actions>, person_shown>(n),
                 .room = shown_made<room_card<Actions>, room_card_facts>(n),
                 .reactions =
@@ -652,7 +652,7 @@ template <class Actions> struct window : skiff::compose::Specced {
                     shown_made<edit_history_box<Actions>, history_facts>(n),
                 .linking = shown_made<link_box_t, link_facts>(n),
                 .leaving =
-                    shown_made<leave_space_box<Actions>, leave_space_facts>(n),
+                    shown_made<leave_space_box_t, leave_space_facts>(n),
                 .marks = shown_made<marks_box<Actions>, marks_facts>(n),
                 .manage =
                     shown_made<room_settings<Actions>, room_settings_facts>(n),

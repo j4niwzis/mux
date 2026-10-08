@@ -11,6 +11,7 @@ import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.widgets.button;
+import skiff.widgets.model;
 import skiff.widgets.textbox;
 import skiff.compose;
 import mux.core;
@@ -32,34 +33,22 @@ struct notice_facts {
   std::string text;
 };
 // A notice's text: wrapped, selectable, as wide as the box.
-[[nodiscard]] inline nodes::Text notice_line(std::string text, float size, skia::SkColor colour, bool bold = false) {
-  nodes::Text line(std::move(text), size, colour, bold);
-  line.setWrapped(true);
-  line.setSelectable(true);
-  line.apply({.fillX = true});
-  return line;
+[[nodiscard]] inline auto notice_line(std::string text, float size, skia::SkColor colour, bool bold = false) {
+  return skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::move(text), size, colour, bold, true)));
 }
-
-// A notice: its heading and its text over an OK at the end -- as high as
-// what it says, no room left empty under its button.
-template <class Actions>
-using notice_box_of = skiff::compose::Box<nodes::Text, nodes::Text, button_for<sends<::mux::ui::request::close_notice>>>;
-template <class Actions>
-struct notice_box : notice_box_of<Actions> {
-  // The dialog it is shown in.
-  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}}; }
-  using ok_button = button_for<sends<::mux::ui::request::close_notice>>;
-
-  notice_box(const ui_needs<Actions>& n, const notice_facts& facts) : notice_box(*n.colours, facts.heading, facts.text) {}
-  notice_box(const ui_needs<Actions>& n, std::string heading, std::string text)
-      : notice_box(*n.colours, std::move(heading), std::move(text)) {}
-  notice_box(const palette& colours, std::string heading, std::string text)
-      : notice_box_of<Actions>(
-            skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
-            notice_line(std::move(heading), 17.0f, colours.text, true), notice_line(std::move(text), 14.0f, colours.dim),
-            skiff::compose::styled({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},
-                                   primary(ok_button(colours.widgets, "OK", {})))) {}
-};
+inline auto notice_box(const palette& colours, const notice_facts& facts) {
+  return skiff::compose::column(
+      skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+      notice_line(facts.heading, 17.0f, colours.text, true), notice_line(facts.text, 14.0f, colours.dim),
+      skiff::compose::styled({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},
+          primary(widgets::SendButton<request::close_notice>(colours.widgets, "OK", {}))));
+}
+using notice_box_t = decltype(notice_box(std::declval<const palette&>(), std::declval<const notice_facts&>()));
+inline dialog_look content_look(std::type_identity<notice_box_t>) { return {.size = dialog_size::fitting{440.0f}}; }
+template <class Needs>
+auto make_content(std::type_identity<notice_box_t>, const Needs& needs, const notice_facts& facts) {
+  return notice_box(*needs.colours, facts);
+}
 
 // An emoji verification, as Element shows it: with whom, and where it is --
 // asked of you (Accept, Decline), waiting on them (Cancel), the 7 emoji to

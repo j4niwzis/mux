@@ -96,6 +96,24 @@ struct services {
     this->root().emoji_closed();
   }
   [[nodiscard]] bool emoji_open() const { return showing->root().emoji.fValue.has_value(); }
+  // The threads' panel, as what is shown says: opened on a thread, the
+  // thread closed in it, or the panel toggled -- whether it is open now.
+  void open_thread(std::string root) const {
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) {
+      now.threads_open = true;
+      now.thread = std::move(root);
+    });
+  }
+  void close_thread() const {
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) { now.thread.reset(); });
+  }
+  bool toggle_threads() const {
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) {
+      now.threads_open = !now.threads_open;
+      now.thread.reset();
+    });
+    return showing->look<mux::ui::chat_shown>()->threads_open;
+  }
   void close_notice() const { mux::ui::show<mux::ui::notice_facts>(*showing, std::nullopt); }
   // A chat that is a window of its history away from its newest: back to
   // its newest, live -- before anything is put at its end. Its newest from

@@ -131,7 +131,7 @@ class menu_part {
     auto& screen = s_->root().main();
     if (!screen.chosen)
       return;
-    screen.open_thread(target_.id);
+    s_->open_thread(target_.id);
     if (!s_->demo())
       s_->net->load_thread(*screen.chosen, target_.id);
     s_->refresh_due = true;

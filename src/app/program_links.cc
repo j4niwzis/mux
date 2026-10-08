@@ -117,7 +117,7 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
   auto& screen = root().main();
   screen.stop_jump();
   if (screen.thread_open() != thread) {
-    screen.open_thread(*thread);
+    shared.open_thread(*thread);
     if (!shared.demo())
       net->load_thread(chat.id, *thread);
   }
@@ -155,7 +155,7 @@ void app::apply(const request::jump_to_message& one) {
                                                                                       : std::nullopt;
         if (thread) {
           if (screen.thread_open() != thread) {
-            screen.open_thread(*thread);
+            shared.open_thread(*thread);
             if (!shared.demo())
               net->load_thread(chat->id, *thread);
             this->refresh();

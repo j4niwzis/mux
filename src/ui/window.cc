@@ -45,6 +45,9 @@ struct chat_shown {
   std::optional<conversation_id> chosen;
   std::optional<account_id> current;
   bool info_open = false;
+  // The threads' panel open, and the thread open in it, if one is.
+  bool threads_open = false;
+  std::optional<std::string> thread;
 };
 // Whether the drawer is out.
 struct drawer_shown {
@@ -135,6 +138,8 @@ struct shown_screen : Screen {
       this->current = now.current;
     if (this->info_open != now.info_open)
       this->set_info_open(now.info_open);
+    if (this->threads_open != now.threads_open || this->parts.threads.open != now.thread)
+      this->set_threads(now.threads_open, now.thread);
   }
 };
 

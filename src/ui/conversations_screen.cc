@@ -934,24 +934,14 @@ struct conversations_screen : nodes::Stack {
   config::wallpaper_t wallpaper = config::wallpaper::theme{};
   // And its bubbles' look: the bubbles made again where it changes.
   config::bubble_look bubbles;
-  // The threads' panel opened or closed: whether it is open now.
-  bool toggle_threads() {
-    threads_open = !threads_open;
-    parts.threads.open.reset();
-    parts.threads.stop_answering();
-    this->show_info();
-    return threads_open;
-  }
-  void open_thread(std::string root) {
-    threads_open = true;
+  // The threads' panel open or shut, and the thread open in it: an answer
+  // being written let go where the thread changes.
+  void set_threads(bool on, std::optional<std::string> root) {
     if (parts.threads.open != root)
       parts.threads.stop_answering();
+    threads_open = on;
     parts.threads.open = std::move(root);
     this->show_info();
-  }
-  void close_thread() {
-    parts.threads.open.reset();
-    parts.threads.stop_answering();
   }
   // The thread open, where the panel shows one.
   [[nodiscard]] std::optional<std::string> thread_open() const {

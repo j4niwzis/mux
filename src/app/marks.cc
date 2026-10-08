@@ -243,7 +243,7 @@ class marks_part {
   // was looked for there for ever.
   void go_to(const mux::conversation& chat, mux::mark_kind_t kind, const std::string& event, const std::string& target) {
     if (const mux::message* said = mux::ui::held_message(chat, target); said && said->thread) {
-      s_->root().main().open_thread(*said->thread);
+      s_->open_thread(*said->thread);
       if (!s_->demo())
         s_->net->load_thread(chat.id, *said->thread);
       s_->model->apply(mux::change_t{mux::change::mark_taken{chat.id, kind, event}});

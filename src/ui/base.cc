@@ -363,9 +363,8 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
 //        save_proxy_profile(), delete_proxy_profile()
 //   void settings_appearance(), settings_rendering(), settings_storage()
-//   void change_limit(config::limit_t, bool more), clear_stored()  -- Storage
+//   void clear_stored()  -- Storage (its limits are the model's)
 //   void settings_files()  -- Files (its switches are the model's)
-//   void flip_show_deleted()  -- Storage: deleted messages shown, marked
 //   void set_renderer(config::renderer_t)  -- the theme and accent are the model's
 //   void proxy_kind(config::proxy_kind_t)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet

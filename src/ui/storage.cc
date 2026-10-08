@@ -13,6 +13,7 @@ import skiff.nodes.text;
 import skiff.model;
 import skiff.compose;
 import skiff.widgets.model;
+import skiff.bind;
 import mux.core;
 import mux.config;
 import :base;
@@ -22,157 +23,6 @@ import :accounts;
 import :proxies;
 
 export namespace mux::ui {
-
-// A limit changed by a step: halved or doubled.
-template <class Actions>
-struct step_limit {
-  Actions* actions = nullptr;
-  config::limit_t which;
-  bool more = true;
-  void operator()() const { actions->change_limit(which, more); }
-};
-
-// Settings' Storage page: how much is kept in memory and on disk, each a
-// line with its number and a step down and up; a way to clear what is kept
-// on disk; and whether deleted messages are kept.
-template <class Actions>
-struct storage_page : nodes::Stack {
-  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
-  struct stepper : nodes::Stack {
-    using step_button = icon_button<step_limit<Actions>>;
-    struct parts_t {
-      nodes::Text label;
-      nodes::Text value;
-      step_button less;
-      step_button more;
-    } parts;
-    stepper(const palette& colours, Actions* a, std::string what, config::limit_t which)
-        : parts{.label = nodes::Text(std::move(what), 15.0f, colours.text),
-                .value = nodes::Text("", 14.0f, colours.accent, true),
-                .less = step_button(colours, icon::minus{}, {a, which, false}),
-                .more = step_button(colours, icon::plus{}, {a, which, true})} {
-      this->setHorizontal();
-      this->setGap(6.0f);
-      fState.apply({.fillX = true, .height = 50.0f, .padding = {0.0f, 12.0f, 0.0f, 20.0f}});
-      parts.label.setElided(true);
-      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      for (scene::Node* middle : std::initializer_list<scene::Node*>{&parts.value, &parts.less, &parts.more})
-        middle->apply({.alignSelf = scene::align::kMiddle});
-    }
-  };
-  using clear_row = row_item<ask<Actions, &Actions::clear_stored>>;
-  using keep_row = switch_row<ask<Actions, &Actions::flip_show_deleted>>;
-  using seal_row = switch_row<ask<Actions, &Actions::flip_local_encryption>>;
-  using change_row = row_item<ask<Actions, &Actions::change_passphrase>>;
-  // What is under the header: it scrolls where the dialog is too low for it.
-  struct body : nodes::Stack {
-    struct parts_t {
-      nodes::Text seal_title;
-      seal_row seal;
-      change_row change;
-      nodes::Text seal_note;
-      nodes::Text memory_title;
-      stepper messages_in_memory;
-      stepper pictures_in_memory;
-      nodes::Text disk_title;
-      stepper messages_on_disk;
-      stepper pictures_on_disk;
-      clear_row clear;
-      nodes::Text note;
-      nodes::Text history_title;
-      keep_row show_deleted;
-      stepper deleted_on_disk;
-      nodes::Text events_title;
-      chat_choices<Actions> chats;
-      typing_choice<Actions> typing;
-      nodes::Text history_note;
-    } parts;
-    body(const palette& colours, Actions* a, const config::history_settings& history, bool sealed)
-        : parts{.seal_title = section_title(colours, "ENCRYPTION"),
-                .seal = seal_row(colours, "Encrypt local data", {a}),
-                .change = change_row(colours, "Change the passphrase", {a}),
-                .seal_note = note_text(colours, "Off by default. On, everything mux keeps on disk is sealed under a passphrase asked for at "
-                            "every start: settings with passwords and tokens, chats, drafts, encryption keys. Pictures "
-                            "are not kept on disk then."),
-                .memory_title = section_title(colours, "IN MEMORY"),
-                .messages_in_memory = stepper(colours, a, "Messages", config::limit::messages_in_memory{}),
-                .pictures_in_memory = stepper(colours, a, "Pictures", config::limit::pictures_in_memory{}),
-                .disk_title = section_title(colours, "ON DISK"),
-                .messages_on_disk = stepper(colours, a, "Messages", config::limit::messages_on_disk{}),
-                .pictures_on_disk = stepper(colours, a, "Pictures", config::limit::pictures_on_disk{}),
-                .clear = clear_row(colours, "Clear stored messages and pictures", {a}, icon::close{}),
-                .note = note_text(colours, "Memory holds the newest of the chats read lately; the disk holds the rest, and what is scrolled "
-                       "back to comes from there before the server. Past a limit, what was used longest ago goes first."),
-                .history_title = section_title(colours, "DELETED MESSAGES"),
-                .show_deleted = keep_row(colours, "Show deleted messages", {a}),
-                .deleted_on_disk = stepper(colours, a, "On disk", config::limit::deleted_on_disk{}),
-                .events_title = section_title(colours, "ROOM EVENTS"),
-                .chats = chat_choices<Actions>(a, colours, choice_level::everywhere{},
-                                               {.events_all = history.show_room_events,
-                                                .event_kinds = history.room_event_kinds,
-                                                .receipts = history.show_receipts,
-                                                .previews = history.link_previews,
-                                                .previews_direct = history.previews_direct.value_or(false),
-                                                .jump_search = history.jump_search},
-                                               0.0f),
-                .typing = typing_choice<Actions>(a, colours, choice_level::everywhere{}, history.send_typing.value_or(true)),
-                .history_note = note_text(colours, "Deleted messages are kept on disk, apart from the rest and up to their own size, the "
-                               "oldest going first past it. Shown, one stays where it was, with all it said and its "
-                               "time, marked removed.")} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
-      parts.memory_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
-      parts.disk_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
-      parts.history_title.apply({.margin = {14.0f, 0.0f, 4.0f, 20.0f}});
-      for (nodes::Text* each : {&parts.note, &parts.history_note}) {
-        each->setWrapped(true);
-        each->apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
-      }
-      parts.show_deleted.parts.toggle.setOnNow(history.show_deleted);
-      parts.seal_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
-      parts.seal_note.setWrapped(true);
-      parts.seal_note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
-      this->show_sealed(sealed, true);
-      parts.events_title.apply({.margin = {14.0f, 0.0f, 4.0f, 20.0f}});
-    }
-    // Whether local data is encrypted now: its switch, and the passphrase
-    // to change where it is.
-    void show_sealed(bool sealed, bool at_once = false) {
-      if (at_once)
-        parts.seal.parts.toggle.setOnNow(sealed);
-      else
-        parts.seal.parts.toggle.setOn(sealed);
-      parts.change.setVisible(sealed);
-    }
-  };
-  struct parts_t {
-    header_t header;
-    body list;  // in the settings' own scroll view
-  } parts;
-
-  storage_page(const ui_needs<Actions>& n, const config::cache_limits& limits, const config::history_settings& history, bool sealed)
-      : storage_page(*n.colours, n.actions, limits, history, sealed) {}
-  storage_page(const palette& colours, Actions* a, const config::cache_limits& limits, const config::history_settings& history,
-               bool sealed)
-      : parts{.header = header_t(colours, "Storage", {a}, {a}, true, true),
-              .list = body(colours, a, history, sealed)} {
-    fState.apply({.fill = true});
-    parts.list.apply({.fillX = true});
-    this->show(limits);
-  }
-  [[nodiscard]] body& content() { return parts.list; }
-  void show(const config::cache_limits& limits) {
-    auto& rows = this->content().parts;
-    rows.messages_in_memory.parts.value.setText(std::format("{} messages", limits.messages_in_memory));
-    rows.pictures_in_memory.parts.value.setText(std::format("{} MB", limits.pictures_in_memory_mb));
-    rows.messages_on_disk.parts.value.setText(std::format("{} MB", limits.messages_on_disk_mb));
-    rows.pictures_on_disk.parts.value.setText(std::format("{} MB", limits.pictures_on_disk_mb));
-    rows.deleted_on_disk.parts.value.setText(std::format("{} MB", config::deleted_on_disk_of(limits)));
-  }
-  void show_motion(std::string_view) {}
-  void show_receipts(bool) {}
-  void show_deleted(bool shown) { this->content().parts.show_deleted.parts.toggle.setOn(shown); }
-  void show_sealed(bool sealed) { this->content().show_sealed(sealed); }
-};
 
 // Settings' Notifications page, as Telegram Desktop's: a notification on
 // the desktop or not, the sender's name and the text in it or not, a sound
@@ -202,6 +52,147 @@ inline nodes::Text spaced_note(const palette& colours, std::string text) {
   note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
   return note;
 }
+// A limit, as the model holds it, shown with a step down and up: halved or
+// doubled within its bounds, the whole of the limits set again.
+template <class Which>
+struct limit_stepper : nodes::Stack {
+  struct step {
+    bool more = true;
+    int pressed = 0;
+    void operator()() {
+      ++pressed;
+      ++skiff::bind::pendingCount();
+    }
+  };
+  using step_button = icon_button<step>;
+  struct parts_t {
+    nodes::Text label;
+    nodes::Text value;
+    step_button less;
+    step_button more;
+  } parts;
+  std::string_view unit;
+  config::cache_limits shown;
+  limit_stepper(const palette& colours, std::string what, std::string_view in)
+      : parts{.label = nodes::Text(std::move(what), 15.0f, colours.text),
+              .value = nodes::Text("", 14.0f, colours.accent, true),
+              .less = step_button(colours, icon::minus{}, {false}),
+              .more = step_button(colours, icon::plus{}, {true})},
+        unit(in) {
+    this->setHorizontal();
+    this->setGap(6.0f);
+    fState.apply({.fillX = true, .height = 50.0f, .padding = {0.0f, 12.0f, 0.0f, 20.0f}});
+    parts.label.setElided(true);
+    parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    for (scene::Node* middle : std::initializer_list<scene::Node*>{&parts.value, &parts.less, &parts.more})
+      middle->apply({.alignSelf = scene::align::kMiddle});
+  }
+  void read(const config::cache_limits& now) {
+    shown = now;
+    auto copy = now;
+    parts.value.setText(std::format("{} {}", config::value_of(copy, Which{}), unit));
+  }
+  std::vector<skiff::model::SetTo<config::cache_limits>> takeChanges() {
+    std::vector<skiff::model::SetTo<config::cache_limits>> out;
+    int steps = std::exchange(parts.more.act.pressed, 0) - std::exchange(parts.less.act.pressed, 0);
+    if (steps == 0)
+      return out;
+    auto next = shown;
+    std::int64_t& value = config::value_of(next, Which{});
+    const auto [low, high] = config::bounds_of(config::limit_t{Which{}});
+    for (; steps > 0; --steps)
+      value = std::clamp(value * 2, low, high);
+    for (; steps < 0; ++steps)
+      value = std::clamp(value / 2, low, high);
+    out.push_back(skiff::model::setTo(std::move(next)));
+    return out;
+  }
+};
+
+// Settings' Storage page: whether what mux keeps on disk is sealed; how
+// much is kept in memory and on disk, each a line with its number and a
+// step down and up; a way to clear what is kept on disk; whether deleted
+// messages are shown, and how much of them is kept; and every chat's room
+// events. The limits and the history's switch are the model's widgets; the
+// seal, the clearing and every chat's choices are asked as before.
+template <class Actions>
+struct storage_page : nodes::Stack {
+  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using clear_row = row_item<ask<Actions, &Actions::clear_stored>>;
+  using seal_row = switch_row<ask<Actions, &Actions::flip_local_encryption>>;
+  using change_row = row_item<ask<Actions, &Actions::change_passphrase>>;
+  // The seal: its switch, and the passphrase to change where it is on.
+  struct seal_rows : nodes::Stack {
+    struct parts_t {
+      seal_row seal;
+      change_row change;
+    } parts;
+    seal_rows(const palette& colours, Actions* a, bool sealed)
+        : parts{.seal = seal_row(colours, "Encrypt local data", {a}),
+                .change = change_row(colours, "Change the passphrase", {a})} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      this->show_sealed(sealed, true);
+    }
+    void show_sealed(bool sealed, bool at_once = false) {
+      if (at_once)
+        parts.seal.parts.toggle.setOnNow(sealed);
+      else
+        parts.seal.parts.toggle.setOn(sealed);
+      parts.change.setVisible(sealed);
+    }
+  };
+  static auto settings_of(const palette& colours, Actions* a, const config::history_settings& history, bool sealed) {
+    namespace limit = config::limit;
+    using skiff::compose::bound;
+    auto clear = clear_row(colours, "Clear stored messages and pictures", {a}, icon::close{});
+    return skiff::compose::column(
+        skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+        spaced_title(colours, "ENCRYPTION"), seal_rows(colours, a, sealed),
+        spaced_note(colours, "Off by default. On, everything mux keeps on disk is sealed under a passphrase asked for at "
+                             "every start: settings with passwords and tokens, chats, drafts, encryption keys. Pictures "
+                             "are not kept on disk then."),
+        spaced_title(colours, "IN MEMORY"),
+        bound<config::cache_limits>(limit_stepper<limit::messages_in_memory>(colours, "Messages", "messages")),
+        bound<config::cache_limits>(limit_stepper<limit::pictures_in_memory>(colours, "Pictures", "MB")),
+        spaced_title(colours, "ON DISK"),
+        bound<config::cache_limits>(limit_stepper<limit::messages_on_disk>(colours, "Messages", "MB")),
+        bound<config::cache_limits>(limit_stepper<limit::pictures_on_disk>(colours, "Pictures", "MB")), std::move(clear),
+        spaced_note(colours, "Memory holds the newest of the chats read lately; the disk holds the rest, and what is scrolled "
+                             "back to comes from there before the server. Past a limit, what was used longest ago goes first."),
+        spaced_title(colours, "DELETED MESSAGES"),
+        setting_switch<&config::history_settings::show_deleted>(colours, "Show deleted messages"),
+        bound<config::cache_limits>(limit_stepper<limit::deleted_on_disk>(colours, "On disk", "MB")),
+        spaced_title(colours, "ROOM EVENTS"),
+        chat_choices<Actions>(a, colours, choice_level::everywhere{},
+                              {.events_all = history.show_room_events,
+                               .event_kinds = history.room_event_kinds,
+                               .receipts = history.show_receipts,
+                               .previews = history.link_previews,
+                               .previews_direct = history.previews_direct.value_or(false),
+                               .jump_search = history.jump_search},
+                              0.0f),
+        typing_choice<Actions>(a, colours, choice_level::everywhere{}, history.send_typing.value_or(true)),
+        spaced_note(colours, "Deleted messages are kept on disk, apart from the rest and up to their own size, the "
+                             "oldest going first past it. Shown, one stays where it was, with all it said and its "
+                             "time, marked removed."));
+  }
+  using settings_t = decltype(settings_of(std::declval<const palette&>(), nullptr, std::declval<const config::history_settings&>(), false));
+  struct parts_t {
+    header_t header;
+    settings_t settings;
+  } parts;
+
+  storage_page(const ui_needs<Actions>& n, const config::cache_limits&, const config::history_settings& history, bool sealed)
+      : storage_page(*n.colours, n.actions, history, sealed) {}
+  storage_page(const palette& colours, Actions* a, const config::history_settings& history, bool sealed)
+      : parts{.header = header_t(colours, "Storage", {a}, {a}, true, true), .settings = settings_of(colours, a, history, sealed)} {
+    fState.apply({.fill = true});
+  }
+  void show_motion(std::string_view) {}
+  void show_receipts(bool) {}
+  void show_sealed(bool sealed) { std::get<1>(parts.settings.fParts).show_sealed(sealed); }
+};
+
 inline auto notification_settings_view(const palette& colours) {
   using every = config::notification_settings;
   auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(widgets::ChoiceTabs<std::string>(

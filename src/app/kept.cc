@@ -82,6 +82,11 @@ struct restyle_wanted {
 struct opacity_chosen {
   [[nodiscard]] constexpr int key() const { return 0; }
 };
+// Deleted messages shown or not: the chats' model told, the window shown
+// again.
+struct deleted_shown {
+  [[nodiscard]] constexpr int key() const { return 0; }
+};
 // A chat's choices changed or gone, or what notifies: the file is written
 // again. UnifiedPush turned on or off: its connector with it.
 struct kept_reactions {
@@ -93,6 +98,9 @@ struct kept_reactions {
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::sending_settings>, const mux::config::sending_settings&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::frame_settings>, const mux::config::frame_settings&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::history_settings>, const mux::config::history_settings&) const { return {}; }
+  [[nodiscard]] deleted_shown on(skiff::model::Changed<skiff::model::Field<&mux::config::history_settings::show_deleted>>, const auto&) const {
+    return {};
+  }
   [[nodiscard]] std::tuple<write_kept, limits_changed> on(skiff::model::Changed<mux::config::cache_limits>, const mux::config::cache_limits&) const {
     return {};
   }

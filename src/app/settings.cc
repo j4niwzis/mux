@@ -89,17 +89,6 @@ class settings_part {
     if (auto* up = s_->root().settings_up())
       up->show_storage(k_->limits(), k_->history(), s_->vault->on());
   }
-  void apply(const request::change_limit& one) {
-    // The model's reaction tells the caches and the disk, and writes it.
-    auto next = k_->limits();
-    std::int64_t& value = mux::config::value_of(next, one.which);
-    const auto [low, high] = mux::config::bounds_of(one.which);
-    value = std::clamp(one.more ? value * 2 : value / 2, low, high);
-    k_->set_part(std::move(next));
-    if (auto* up = s_->root().settings_up())
-      if (auto* page = up->storage())
-        page->show(k_->limits());
-  }
   void apply(const request::clear_stored&) {
     std::error_code failed;
     std::filesystem::remove_all(mux::config::state_path("messages"), failed);
@@ -112,15 +101,6 @@ class settings_part {
   void apply(const request::settings_files&) {
     if (auto* up = s_->root().settings_up())
       up->show_files(k_->sending());
-  }
-  // Deleted messages shown where they were, marked, or taken out of view.
-  void apply(const request::flip_show_deleted&) {
-    k_->choose_field<&mux::config::history_settings::show_deleted>(!k_->history().show_deleted);
-    s_->model->show_deleted = k_->history().show_deleted;
-    if (auto* up = s_->root().settings_up())
-      if (auto* page = up->storage())
-        page->show_deleted(k_->history().show_deleted);
-    (void)k_->write();
   }
   // Room events, for every chat that has not chosen, nor its account.
   void apply(const request::flip_room_events&) {

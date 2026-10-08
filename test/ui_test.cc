@@ -90,7 +90,6 @@ struct stub {
   void attach_files() {}
   void typing(bool) {}
   void settings_files() {}
-  void flip_show_deleted() {}
   void close_send_box() {}
   void send_files() {}
   void open_member_info(std::string) {}
@@ -250,7 +249,6 @@ struct stub {
   void settings_appearance() {}
   void settings_rendering() {}
   void settings_storage() {}
-  void change_limit(mux::config::limit_t, bool) {}
   void clear_stored() {}
   void menu_quote_reply() {}
   void show_account(std::string) {}

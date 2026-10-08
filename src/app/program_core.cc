@@ -302,6 +302,10 @@ void app::settle_model() {
   for (const auto& effect : this->take_effects())
     std::visit(spl::overloaded{[&](const write_kept&) { (void)this->write(); },
                                [&](const looks_changed&) { this->show_looks(); },
+                               [&](const deleted_shown&) {
+                                 model->show_deleted = this->history().show_deleted;
+                                 shared.refresh_due = true;
+                               },
                                [&](const restyle_wanted&) {
                                  skiff::scene::forgetStyles();
                                  shared.rebuild_due = true;

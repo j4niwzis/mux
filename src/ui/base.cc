@@ -9,6 +9,8 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 import skiff.nodes.box;
+import skiff.nodes.text;
+import skiff.compose;
 import skiff.widgets.theme;
 import skiff.widgets.sliderbar;
 import skiff.widgets.button;
@@ -23,6 +25,23 @@ import mux.logic.text;
 import mux.platform.audio;
 
 export namespace mux::ui {
+
+// Leaves said as they are made, for the combinators: a button drawn as the
+// primary one, what its box is for; a text cut where it runs out of room; a
+// text wrapped onto lines, selectable.
+template <class Button>
+[[nodiscard]] Button primary(Button button) {
+  button.setPrimary(true);
+  return button;
+}
+[[nodiscard]] inline skiff::nodes::Text elided(skiff::nodes::Text text) {
+  text.setElided(true);
+  return text;
+}
+[[nodiscard]] inline skiff::nodes::Text wrapped(skiff::nodes::Text text) {
+  text.setWrapped(true);
+  return text;
+}
 
 namespace scene = skiff::scene;
 namespace nodes = skiff::nodes;

@@ -86,18 +86,6 @@ struct avatar_button : avatar_mark {
     return ::mux::ui::request::open_avatar{key};
   }
 };
-// A button that is what its box is for: drawn as the primary one.
-template <class Button>
-[[nodiscard]] Button primary(Button button) {
-  button.setPrimary(true);
-  return button;
-}
-
-// A text cut where it runs out of room.
-[[nodiscard]] inline nodes::Text elided(nodes::Text text) {
-  text.setElided(true);
-  return text;
-}
 
 // A name over how it is: two lines, each cut where it runs out of room,
 // taking what their row leaves them.

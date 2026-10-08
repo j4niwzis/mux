@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.widgets.button;
@@ -22,7 +23,7 @@ export namespace mux::ui {
 
 // ---- a form row: a caption and a field -----------------------------------
 
-struct field : nodes::Stack {
+struct field : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text caption;
     widgets::TextArea<> box;
@@ -32,15 +33,22 @@ struct field : nodes::Stack {
   const palette* colours_ = nullptr;
   // Declared: the caption over the field, which sits on a plate.
   field(const palette& colours, std::string label, std::string placeholder, std::string text = {})
-      : parts{.caption = nodes::Text(std::move(label), 13.0f, colours.dim), .box = widgets::TextArea<>(colours.widgets, std::move(placeholder))},
-        colours_(&colours) {
-    auto& box = parts.box;
-    this->setGap(4.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.caption = nodes::Text(std::move(label), 13.0f, colours.dim),
+              .box = skiff::compose::styled({.fillX = true, .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .background = colours.tile,
+                                             .border = scene::Border{colours.band, 1.0f}},
+                                            one_line(widgets::TextArea<>(colours.widgets, std::move(placeholder)), std::move(text)))},
+        colours_(&colours) {}
+  // One line, holding what it starts with.
+  [[nodiscard]] static widgets::TextArea<> one_line(widgets::TextArea<> box, std::string text) {
     box.setSingleLine(true);
-    box.apply({.fillX = true, .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .background = colours.tile,
-               .border = scene::Border{colours.band, 1.0f}});
     box.setText(std::move(text));
+    return box;
+  }
+  // Its typing hidden, as a passphrase's.
+  [[nodiscard]] field masked() && {
+    parts.box.setMasked(true);
+    return std::move(*this);
   }
   // Its border in the accent while it has the focus.
   bool lit = false;
@@ -71,7 +79,7 @@ struct link_facts {
   std::string url;
 };
 template <class Actions>
-struct link_box : nodes::Stack {
+struct link_box : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{400.0f}}; }
   struct done {
@@ -92,15 +100,12 @@ struct link_box : nodes::Stack {
   } parts;
   link_box(const ui_needs<Actions>& n, const link_facts& facts) : link_box(n, facts.text, facts.url) {}
   link_box(const ui_needs<Actions>& n, std::string text, std::string url)
-      : parts{.title = nodes::Text(url.empty() ? "Add link" : "Edit link", 17.0f, n.colours->text, true),
+      : Stacked(skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}})),
+        parts{.title = skiff::compose::styled({.fillX = true}, nodes::Text(url.empty() ? "Add link" : "Edit link", 17.0f, n.colours->text, true)),
               .text = field(*n.colours, "Text", "Text", std::move(text)),
               .url = field(*n.colours, "URL", "https://", std::move(url)),
               .go = widgets::Button<done>(n.colours->widgets, "Done", {this}),
-              .back = widgets::Button<cancel>(n.colours->widgets, "Cancel", {})} {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
-    this->setGap(10.0f);
-    parts.title.apply({.fillX = true});
-  }
+              .back = widgets::Button<cancel>(n.colours->widgets, "Cancel", {})} {}
 };
 
 // A passphrase asked for: to open local data at the start (not dismissed --
@@ -108,7 +113,7 @@ struct link_box : nodes::Stack {
 // or off, or to change it. Its fields are the forms' own, masked; what each
 // purpose shows and says, by its type.
 template <class Actions>
-struct passphrase_box : nodes::Stack {
+struct passphrase_box : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{420.0f}}; }
   struct words {
@@ -166,31 +171,17 @@ struct passphrase_box : nodes::Stack {
     return spl::visit(spl::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, why);
   }
   passphrase_box(const palette& colours, proto::passphrase_for_t why)
-      : purpose(why),
-        parts{.title = nodes::Text(std::string(said().title), 17.0f, colours.text, true),
-              .note = nodes::Text(std::string(said().note), 14.0f, colours.dim),
-              .file = field(colours, "Key file", "/home/you/element-keys.txt"),
-              .current = field(colours, said().fresh ? "Passphrase now" : "Passphrase", "Passphrase"),
-              .fresh = field(colours, "New passphrase", "New passphrase"),
-              .again = field(colours, "The new one again", "New passphrase"),
-              .error = nodes::Text("", 13.0f, colours.error),
-              .go = widgets::Button<submit>(colours.widgets, std::string(said().button), {this})} {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
-    this->setGap(10.0f);
-    for (nodes::Text* each : {&parts.title, &parts.note, &parts.error}) {
-      each->setWrapped(true);
-      each->apply({.fillX = true});
-    }
-    for (field* each : {&parts.current, &parts.fresh, &parts.again})
-      each->parts.box.setMasked(true);
-    parts.current.setVisible(said().current);
-    parts.file.setVisible(said().file);
-    parts.fresh.setVisible(said().fresh);
-    parts.again.setVisible(said().fresh);
-    parts.error.setVisible(false);
-    parts.go.setPrimary(true);
-    parts.go.apply({.width = 110.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
-  }
+      : Stacked(skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}})),
+        purpose(why),
+        parts{.title = skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::string(said().title), 17.0f, colours.text, true))),
+              .note = skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::string(said().note), 14.0f, colours.dim))),
+              .file = skiff::compose::visible(said().file, field(colours, "Key file", "/home/you/element-keys.txt")),
+              .current = skiff::compose::visible(said().current, field(colours, said().fresh ? "Passphrase now" : "Passphrase", "Passphrase").masked()),
+              .fresh = skiff::compose::visible(said().fresh, field(colours, "New passphrase", "New passphrase").masked()),
+              .again = skiff::compose::visible(said().fresh, field(colours, "The new one again", "New passphrase").masked()),
+              .error = skiff::compose::visible(false, skiff::compose::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.error)))),
+              .go = skiff::compose::styled({.width = 110.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},
+                                           primary(widgets::Button<submit>(colours.widgets, std::string(said().button), {this})))} {}
   [[nodiscard]] words said() const {
     return spl::visit([](auto why) { return words_of(why); }, purpose);
   }
@@ -207,21 +198,18 @@ struct passphrase_box : nodes::Stack {
 
 // Buttons side by side, as a form ends.
 template <class... Buttons>
-struct button_row : nodes::Stack {
+struct button_row : skiff::compose::Stacked {
   struct parts_t {
     std::tuple<Buttons...> buttons;
   } parts;
-  explicit button_row(Buttons... all) : parts{.buttons = std::tuple<Buttons...>(std::move(all)...)} {
-    this->setHorizontal();
-    this->setGap(10.0f);
-    fState.apply({.autoSize = scene::axes::kBoth});
-  }
+  explicit button_row(Buttons... all)
+      : Stacked(skiff::compose::hbox(10.0f, {.autoSize = scene::axes::kBoth})), parts{.buttons = std::tuple<Buttons...>(std::move(all)...)} {}
 };
 
 // What every account form ends with: what went wrong or what is happening,
 // and its buttons. Enter in any of the form's fields submits it.
 template <class Actions>
-struct form_end : nodes::Stack {
+struct form_end : skiff::compose::Stacked {
   using submit_button = button_for<sends<::mux::ui::request::submit_login>>;
   using close_button = button_for<sends<::mux::ui::request::pop_panel>>;
   // The colours it is made in, for what it says later.
@@ -232,21 +220,13 @@ struct form_end : nodes::Stack {
   } parts;
 
   form_end(const palette& colours, bool editing)
-      : colours_(&colours),
-        parts{.message = nodes::Text("", 13.0f, colours.error),
-              .buttons = button_row<submit_button, close_button>(submit_button(colours.widgets, editing ? "Save" : "Log in", {}),
-                                                                 close_button(colours.widgets, "Close", {}))} {
-    auto& message = parts.message;
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    this->setGap(12.0f);
-    auto& [submit, close] = parts.buttons.parts.buttons;
-    submit.setPrimary(true);
-    submit.apply({.width = 120.0f, .height = 36.0f});
-    close.apply({.width = 120.0f, .height = 36.0f});
-    close.setVisible(editing);
-    message.setWrapped(true);
-    message.apply({.fillX = true});
-  }
+      : Stacked(skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        colours_(&colours),
+        parts{.message = skiff::compose::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.error))),
+              .buttons = button_row<submit_button, close_button>(
+                  skiff::compose::styled({.width = 120.0f, .height = 36.0f}, primary(submit_button(colours.widgets, editing ? "Save" : "Log in", {}))),
+                  skiff::compose::visible(editing, skiff::compose::styled({.width = 120.0f, .height = 36.0f},
+                                                                          close_button(colours.widgets, "Close", {}))))} {}
 
   void say(std::string text, bool error) {
     parts.message.setText(std::move(text));

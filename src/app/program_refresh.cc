@@ -49,12 +49,12 @@ void app::show_placements() {
       screen.listed_in[to].push_back(chat);
       if (one.moved)
         screen.moved_out.insert(chat);
-      const auto own = this->find(one.account);
-      const bool on = one.strip.value_or(own == saved.end() || mux::config::strip_of(*own));
+      const auto* own = this->settings_of(one.account);
+      const bool on = one.strip.value_or(own == nullptr || mux::config::strip_of(*own));
       if (!on)
         continue;
       const mux::config::accent_t colour = one.strip_colour ? mux::config::accent_of(one.strip_colour)
-                                           : own != saved.end() ? mux::config::colour_of(*own)
+                                           : own != nullptr ? mux::config::colour_of(*own)
                                                                 : mux::config::default_colour_of(one.account);
       screen.strips.insert_or_assign(chat, mux::ui::colour_of(colour, this->appearance().theme));
     }

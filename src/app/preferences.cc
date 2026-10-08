@@ -140,8 +140,8 @@ class preferences_part {
   void apply(const request::flip_chat_strip& one) {
     (void)s_->root().main().close_space_menu();
     if (auto* kept = this->placement_of(one.chat, one.in)) {
-      const auto own = k_->find(one.chat.account.address);
-      const bool now = kept->strip.value_or(own == k_->saved.end() || mux::config::strip_of(*own));
+      const auto* own = k_->settings_of(one.chat.account.address);
+      const bool now = kept->strip.value_or(own == nullptr || mux::config::strip_of(*own));
       kept->strip = !now;
       (void)k_->write();
     }

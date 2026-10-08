@@ -740,7 +740,8 @@ struct window : scene::Node {
   }
   void close_dialog() { layer().tools.close(); }
 
-  void show(const std::vector<config::account_t>& saved, const model& now) {
+  template <std::ranges::input_range Saved>
+  void show(const Saved& saved, const model& now) {
     const auto& current = layer().frame.base().base().current;
     layer().frame.base().content().show(actions, saved, now, current ? std::string_view(current->address) : std::string_view());
   }

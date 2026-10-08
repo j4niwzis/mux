@@ -628,7 +628,8 @@ struct accounts_panel : closes_on_escape<Actions, ask<Actions, &Actions::account
 
   // The saved accounts, with what the model says of each; the chosen one's
   // form is kept as it is, typing and all.
-  void show(const std::vector<config::account_t>& saved, const model& now) {
+  template <std::ranges::input_range Saved>
+  void show(const Saved& saved, const model& now) {
     auto& entries = std::get<0>(std::get<0>(list.fChildren).fChildren);
     entries.clear();
     const config::account_t* chosen = nullptr;
@@ -644,7 +645,7 @@ struct accounts_panel : closes_on_escape<Actions, ask<Actions, &Actions::account
     } else if (!this->adding()) {
       // Nothing to show beside the list: with no account at all, adding one.
       selected.reset();
-      if (saved.empty())
+      if (std::ranges::empty(saved))
         this->show_adding();
       else
         detail.template emplace<0>("Choose an account.", 15.0f, needs_.colours->dim);

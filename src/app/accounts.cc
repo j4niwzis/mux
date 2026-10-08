@@ -47,9 +47,9 @@ class accounts_part {
   // The accounts, with this one's settings up beside them.
   accounts& show_account(const std::string& address) {
     auto& panel = this->show_accounts();
-    if (const auto found = k_->find(address); found != k_->saved.end()) {
+    if (const auto* found = k_->settings_of(address)) {
       panel.select(*found, *s_->model);
-      panel.show(k_->saved, *s_->model);
+      panel.show(k_->accounts().values(), *s_->model);
     }
     return panel;
   }
@@ -64,7 +64,7 @@ class accounts_part {
   // the account being added is in now -- the chats to be shown.
   [[nodiscard]] bool bring_up_to_date(accounts& panel) {
     panel.proxies = k_->proxies;
-    panel.show(k_->saved, *s_->model);
+    panel.show(k_->accounts().values(), *s_->model);
     auto* pane = panel.adding();
     return pane && spl::visit([this](auto& form) { return this->watch_login(form); }, pane->parts.form);
   }
@@ -91,10 +91,10 @@ class accounts_part {
       return;
     spl::visit(
         [&](accounts& panel) {
-          if (const auto found = k_->find(one.address); found != k_->saved.end()) {
+          if (const auto* found = k_->settings_of(one.address)) {
             pending_login_.reset();
             panel.select(*found, *s_->model);
-            panel.show(k_->saved, *s_->model);
+            panel.show(k_->accounts().values(), *s_->model);
           }
         },
         *up);
@@ -131,12 +131,14 @@ class accounts_part {
   }
   // An account turned on -- started -- or off -- stopped.
   void apply(const request::flip_enabled& one) {
-    const auto found = k_->find(one.address);
-    if (found == k_->saved.end())
+    k_->change_account(one.address, [](mux::config::account_t& account) {
+      bool& enabled = mux::config::enabled_of(account);
+      enabled = !enabled;
+    });
+    const auto* found = k_->settings_of(one.address);
+    if (found == nullptr)
       return;
-    bool& enabled = mux::config::enabled_of(*found);
-    enabled = !enabled;
-    if (enabled)
+    if (mux::config::enabled_of(*found))
       s_->net->add(*found, k_->proxies);
     else
       s_->net->remove(one.address);
@@ -144,7 +146,7 @@ class accounts_part {
     s_->refresh_due = true;
   }
   void apply(const request::remove_account& one) {
-    if (std::erase_if(k_->saved, [&](const auto& each) { return mux::config::address_of(each) == one.address; }) == 0)
+    if (!k_->remove_account(one.address))
       return;
     s_->net->remove(one.address);
     this->save();
@@ -214,11 +216,10 @@ class accounts_part {
     mux::config::account_t account{.own = mux::config::kept_t{std::move(*typed)}};
     mux::config::proxy_in(account) = std::exchange(new_proxy_, std::nullopt);
     const std::string address = mux::config::address_of(account);
-    if (k_->find(address) != k_->saved.end()) {
+    if (!k_->add_account(account)) {
       form.say("That account is already here.", true);
       return;
     }
-    k_->saved.push_back(account);
     if (auto failed = k_->write()) {
       form.say(*failed, true);
       return;
@@ -239,10 +240,10 @@ class accounts_part {
     mux::config::account_t account{.own = mux::config::kept_t{std::move(*typed)}};
     const std::string address = mux::config::address_of(account);
     const std::string was = form.editing.value_or(address);
-    const auto old = k_->find(was);
-    if (old == k_->saved.end())
+    const auto* old = k_->settings_of(was);
+    if (old == nullptr)
       return;
-    if (address != was && k_->find(address) != k_->saved.end()) {
+    if (address != was && k_->settings_of(address) != nullptr) {
       form.say("That account is already here.", true);
       return;
     }
@@ -258,7 +259,7 @@ class accounts_part {
                   account.own, std::as_const(old->own));
     // Nothing changed: saved as it is, and the connection left alone.
     const bool same = account == *old;
-    *old = account;
+    k_->change_account(was, [&](mux::config::account_t& kept) { kept = account; });
     const auto failed = k_->write();
     if (!same) {
       s_->net->remove(was);

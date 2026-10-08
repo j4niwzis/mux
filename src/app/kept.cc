@@ -40,6 +40,8 @@ struct chat_choices {
 
 // What is kept, as the model holds it: each chat's own choices, by the chat.
 struct kept_root {
+  // The accounts saved, by their addresses, in the order they are listed.
+  skiff::model::Keyed<std::string, mux::config::account_t> accounts;
   skiff::model::Keyed<conversation_id, chat_choices> chats;
   // What notifies, and how.
   skiff::model::Tracked<mux::config::notification_settings> notifications;
@@ -123,6 +125,8 @@ struct kept_reactions {
   [[nodiscard]] push_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::notification_settings::unified_push>>, const auto& at) const {
     return {skiff::model::part(at).value_or(false)};
   }
+  [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::account_t>, const mux::config::account_t&) const { return {}; }
+  [[nodiscard]] write_kept on(skiff::model::Removed<mux::config::account_t>, const mux::config::account_t&, const std::string&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Removed<chat_choices>, const chat_choices&, const conversation_id&) const {
     return {};
   }
@@ -133,7 +137,6 @@ struct kept_settings {
   // What is kept is read and written through: the program's, given by main.
   mux::vault::vault* vault = nullptr;
   std::filesystem::path config_path;
-  std::vector<mux::config::account_t> saved;
   // The file's accounts of a protocol this build has not: written back as
   // they were, not lost.
   std::vector<mux::config::saved_account> foreign_accounts;
@@ -300,13 +303,46 @@ struct kept_settings {
     const std::string address = mux::config::address_of(account);
     return mux::account_id{mux::proto::protocol_of(address), address};
   }
-  [[nodiscard]] std::vector<mux::config::account_t>::iterator find(std::string_view address) {
-    return std::ranges::find(saved, address,
-                             [](const auto& one) -> std::string_view { return mux::config::address_of(one); });
+  // The accounts saved, as the model holds them: by their addresses, in
+  // the order they are listed.
+  [[nodiscard]] const skiff::model::Keyed<std::string, mux::config::account_t>& accounts() const { return state.root().accounts; }
+  [[nodiscard]] const mux::config::account_t* settings_of(std::string_view address) const {
+    return this->accounts().find(std::string(address));
   }
-  [[nodiscard]] const mux::config::account_t* settings_of(std::string_view address) {
-    const auto found = this->find(address);
-    return found == saved.end() ? nullptr : &*found;
+  // An account changed: in its place, only where something did; under its
+  // new address where that changed, where it was in the list.
+  template <class F>
+  void change_account(std::string_view address, F&& change) {
+    const mux::config::account_t* had = this->settings_of(address);
+    if (had == nullptr)
+      return;
+    mux::config::account_t next = *had;
+    change(next);
+    if (next == *had)
+      return;
+    const std::string now = mux::config::address_of(next);
+    if (now == address) {
+      (void)state.apply(skiff::model::edit(skiff::model::placeOf<mux::config::account_t, kept_root>(std::string(address)),
+                                           skiff::model::setTo(std::move(next))));
+      return;
+    }
+    const auto at = static_cast<std::size_t>(std::ranges::distance(
+        this->accounts().keys().begin(), std::ranges::find(this->accounts().keys(), address)));
+    (void)state.applyBatch(skiff::model::take<mux::config::account_t>(std::string(address)),
+                           skiff::model::over<skiff::model::Keyed<std::string, mux::config::account_t>>(
+                               skiff::model::Put<std::string, mux::config::account_t>{now, std::move(next), at}));
+  }
+  // An account saved, at the end of the list: false where one has its
+  // address already.
+  bool add_account(mux::config::account_t account) {
+    std::string address = mux::config::address_of(account);
+    if (this->settings_of(address) != nullptr)
+      return false;
+    (void)state.apply(skiff::model::put<mux::config::account_t>(std::move(address), std::move(account)));
+    return true;
+  }
+  bool remove_account(std::string_view address) {
+    return this->settings_of(address) != nullptr && state.apply(skiff::model::take<mux::config::account_t>(std::string(address)));
   }
   // Whether a chat shows who has read up to where: its own choice, else its
   // account's, else every account's.
@@ -436,7 +472,7 @@ struct kept_settings {
     // then the model made of them.
     mux::config::look_settings looks_read;
     std::map<conversation_id, chat_choices> chats;
-    this->saved = mux::config::accounts_of(saved);
+    const auto accounts_read = mux::config::accounts_of(saved);
     this->foreign_accounts = mux::config::foreign_of(saved);
     looks_read.motion = mux::config::motion_of(saved.motion);
     // The account shown last, shown again once it is in the model: accounts
@@ -514,6 +550,9 @@ struct kept_settings {
       chats[chat_of(one.account, one.conversation)].muted = true;
     std::erase_if(chats, [](const auto& one) { return one.second == chat_choices{}; });
     kept_root root;
+    root.accounts.putAll(accounts_read | std::views::transform([](const mux::config::account_t& one) {
+                           return std::pair{mux::config::address_of(one), one};
+                         }));
     root.chats.putAll(chats);
     root.notifications.fValue = notifications_read;
     root.sending.fValue = sending_read;
@@ -524,7 +563,9 @@ struct kept_settings {
     this->state = kept_model(std::move(root));
   }
   [[nodiscard]] mux::config::file file() const {
-    auto out = mux::config::file_of(saved, foreign_accounts);
+    // Copied: the file is made of a contiguous list of them.
+    const auto listed = std::ranges::to<std::vector>(this->accounts().values());
+    auto out = mux::config::file_of(listed, foreign_accounts);
     out.motion = mux::config::word_of(this->appearance().motion);
     out.last_account = last_account;
     if (!recent_emoji.empty())

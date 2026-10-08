@@ -106,7 +106,8 @@ struct drawer_panel : nodes::Stack {
     parts.rule_1.apply({.fillX = true, .height = 1.0f});
   }
 
-  void show(Actions*, const std::vector<config::account_t>& saved, const model& now, std::string_view current) {
+  template <std::ranges::input_range Saved>
+  void show(Actions*, const Saved& saved, const model& now, std::string_view current) {
     parts.accounts.clear();
     for (const config::account_t& one : saved)
       parts.accounts.emplace_back(needs_, one, now, config::address_of(one) == current);

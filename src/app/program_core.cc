@@ -455,7 +455,7 @@ void app::refresh(std::source_location from) {
   this->show_levels();
   this->show_backgrounds();
   this->show_chat_choices();
-  root().show(saved, *model);
+  root().show(this->accounts().values(), *model);
   root().main().show(*model);
   // The newly made range is now known, including a just-opened chat.
   pictures.ask();

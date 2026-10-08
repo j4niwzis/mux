@@ -106,8 +106,8 @@ struct services {
         [&](mux::ui::accounts_panel<actions>& panel) {
           if (!panel.selected)
             return;
-          if (const auto found = kept->find(*panel.selected); found != kept->saved.end())
-            f(panel, *found);
+          // A copy changed, and put back in the model where it changed.
+          kept->change_account(*panel.selected, [&](mux::config::account_t& account) { f(panel, account); });
         },
         *up);
   }

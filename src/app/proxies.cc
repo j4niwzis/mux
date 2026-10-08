@@ -33,7 +33,7 @@ class proxies_part {
   }
   // The accounts going through a profile, connected again.
   void reconnect_through(const std::string& name) {
-    for (const auto& one : k_->saved)
+    for (const auto& one : k_->accounts().values())
       if (mux::config::proxy_of(one) == name)
         this->reconnect(one);
   }
@@ -87,9 +87,13 @@ class proxies_part {
       k_->proxies.push_back(std::move(*typed));
     } else {
       auto& kept = k_->proxies[static_cast<std::size_t>(editor->index)];
-      for (auto& one : k_->saved)
-        if (auto& uses = mux::config::proxy_in(one); uses == kept.name)
-          uses = name;
+      // The accounts going through it, through it under its new name.
+      const auto users = std::ranges::to<std::vector<std::string>>(
+          std::views::filter(k_->accounts().keys(), [&](const std::string& address) {
+            return mux::config::proxy_of(*k_->settings_of(address)) == kept.name;
+          }));
+      for (const std::string& address : users)
+        k_->change_account(address, [&](mux::config::account_t& one) { mux::config::proxy_in(one) = name; });
       kept = std::move(*typed);
     }
     if (auto failed = k_->write()) {
@@ -109,7 +113,7 @@ class proxies_part {
     if (!editor || editor->index < 0 || static_cast<std::size_t>(editor->index) >= k_->proxies.size())
       return;
     const std::string name = k_->proxies[static_cast<std::size_t>(editor->index)].name;
-    const auto users = std::ranges::to<std::vector<std::string>>(std::views::transform(std::views::filter(k_->saved, [&](const auto& one) { return mux::config::proxy_of(one) == name; }), [](const auto& one) { return mux::config::address_of(one); }));
+    const auto users = std::ranges::to<std::vector<std::string>>(std::views::transform(std::views::filter(k_->accounts().values(), [&](const auto& one) { return mux::config::proxy_of(one) == name; }), [](const auto& one) { return mux::config::address_of(one); }));
     if (!users.empty()) {
       editor->say(std::format("In use by {}: choose another proxy for them, or none, first.",
                               std::ranges::to<std::string>(std::views::join_with(users, std::string_view(", ")))),

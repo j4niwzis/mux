@@ -410,6 +410,20 @@ auto selection_bar(const ui_needs<Actions>& n) {
 template <class Actions>
 using selection_bar_t = decltype(selection_bar(std::declval<const ui_needs<Actions>&>()));
 
+// Where the finding is, as what is shown says: the one shown of how many;
+// none asked yet, nothing said.
+struct search_found {
+  std::optional<std::size_t> at;
+  std::size_t of = 0;
+  bool asked = false;
+};
+// What the bar says of it: a callable type, made as it is shown.
+struct found_said_t {
+  std::string operator()(const search_found& now) const {
+    return !now.asked ? std::string() : now.of == 0 ? std::string("No results") : std::format("{} of {}", now.at.value_or(0) + 1, now.of);
+  }
+};
+
 // Finding in a chat, as tdesktop's search in a chat: in place of the head,
 // a field with the magnifier, how many are found and which is shown ("3 of
 // 12"), the arrows to the newer and the older, and ✕. Enter goes to the
@@ -434,7 +448,7 @@ struct search_bar : skiff::compose::Stacked {
   using close_button = icon_button<sends<::mux::ui::request::close_search>>;
   struct parts_t {
     field_t field;
-    nodes::Text found;
+    decltype(skiff::compose::text_of<search_found>(found_said_t{}, nodes::Text("", 13.0f, 0u))) found;
     step_button newer, older;
     close_button close;
     nodes::Box<> bottom_line;
@@ -452,18 +466,13 @@ struct search_bar : skiff::compose::Stacked {
                                             .background = colours.sidebar})),
         parts{.field = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                                               searching(field_t(colours.widgets, "Search", {}))),
-              .found = skiff::compose::styled(middle(), nodes::Text("", 13.0f, colours.dim)),
+              .found = skiff::compose::text_of<search_found>(found_said_t{}, skiff::compose::styled(middle(), nodes::Text("", 13.0f, colours.dim))),
               .newer = skiff::compose::styled(middle(), step_button(colours, icon::up{}, {false})),
               .older = skiff::compose::styled(middle(), step_button(colours, icon::down{}, {true})),
               .close = skiff::compose::styled(middle(), close_button(colours, icon::close{}, {})),
               .bottom_line = skiff::compose::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f},
                                                     nodes::Box<>(colours.band))} {
     this->setVisible(false);
-  }
-  // Where the finding is: the one shown of how many, or none found.
-  void show_found(std::optional<std::size_t> at, std::size_t of, bool asked) {
-    parts.found.setText(!asked ? std::string() : of == 0 ? std::string("No results") : std::format("{} of {}", at.value_or(0) + 1, of));
-    this->invalidateLayout();
   }
   using Node::onKey;
   std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {

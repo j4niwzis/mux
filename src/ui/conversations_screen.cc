@@ -797,7 +797,6 @@ struct conversations_screen : nodes::Stack {
     header.setVisible(!shown);
     if (!shown) {
       search.parts.field.setText({});
-      search.show_found(std::nullopt, 0, false);
     }
     this->invalidateLayout();
   }

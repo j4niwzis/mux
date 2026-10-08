@@ -59,6 +59,7 @@ struct shown_root {
   skiff::model::Tracked<drawer_shown> drawer;
   skiff::model::Tracked<chat_shown> chat;
   skiff::model::Tracked<selection_shown> selection;
+  skiff::model::Tracked<search_found> found;
   skiff::model::Tracked<std::optional<marks_facts>> marks;
   skiff::model::Tracked<std::optional<leave_space_facts>> leaving;
   skiff::model::Tracked<std::optional<link_facts>> linking;

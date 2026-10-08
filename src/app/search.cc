@@ -33,6 +33,7 @@ class search_part {
     searching_.reset();
     s_->root().main().show_search(false);
     s_->root().main().show_search_results({}, std::nullopt);
+    mux::ui::show(*s_->showing, mux::ui::search_found{});
   }
   void apply(const request::search_typed& one) {
     if (!searching_)
@@ -79,6 +80,7 @@ class search_part {
       searching_.reset();
       s_->root().main().show_search(false);
       s_->root().main().show_search_results({}, std::nullopt);
+      mux::ui::show(*s_->showing, mux::ui::search_found{});
     }
   }
 
@@ -122,7 +124,7 @@ class search_part {
     auto& screen = s_->root().main();
     if (searching_->at)
       screen.jump_to(searching_->found[*searching_->at], searching_->query);
-    screen.search.show_found(searching_->at, searching_->found.size(), !searching_->query.empty());
+    mux::ui::show(*s_->showing, mux::ui::search_found{searching_->at, searching_->found.size(), !searching_->query.empty()});
   }
 
   // To the next found, older or newer, shown and flashed; the count set.

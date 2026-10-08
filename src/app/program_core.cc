@@ -284,15 +284,17 @@ void app::take_page_input() {
     spl::visit([&](auto& page) { this->bind_page(page, manage_binding, bound_manage); }, managing->holder().parts.page);
   else
     bound_manage = nullptr;
+  if (auto* panel = root().open_panel())
+    spl::visit([&](auto& accounts) {
+      spl::visit([&](auto& page) { this->bind_page(page, panel_binding, bound_panel); }, accounts.detail);
+    }, *panel);
+  else
+    bound_panel = nullptr;
   if (up == nullptr) {
     this->settle_model();
     return;
   }
   spl::visit([&](auto& page) { this->bind_page(page, page_binding, bound_page); }, up->page());
-  if (auto* managing = root().manage_up())
-    spl::visit([&](auto& page) { this->bind_page(page, manage_binding, bound_manage); }, managing->holder().parts.page);
-  else
-    bound_manage = nullptr;
   this->settle_model();
 }
 // How the window looks, as the model holds it, put where the window's
@@ -352,6 +354,9 @@ void app::settle_model() {
     spl::visit([&](auto& page) { this->refresh_page(page, page_binding); }, up->page());
   if (auto* managing = root().manage_up())
     spl::visit([&](auto& page) { this->refresh_page(page, manage_binding); }, managing->holder().parts.page);
+  if (auto* panel = root().open_panel())
+    spl::visit([&](auto& accounts) { spl::visit([&](auto& page) { this->refresh_page(page, panel_binding); }, accounts.detail); },
+               *panel);
 }
 
 void app::before_frame() {

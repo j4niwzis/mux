@@ -13,6 +13,8 @@ import skiff.nodes.text;
 import skiff.widgets.button;
 import skiff.widgets.sliderbar;
 import skiff.widgets.textbox;
+import skiff.model;
+import skiff.compose;
 import mux.core;
 import mux.config;
 import :base;
@@ -335,14 +337,32 @@ struct account_privacy : nodes::Stack {
 // in its own settings.
 template <class Actions>
 struct account_notifications : nodes::Stack {
+  // Its rows, bound to the account's own choices in the model, under a scope
+  // at the account.
+  static auto settings_of(const palette& colours, std::string address) {
+    using shared = config::account_shared;
+    using skiff::compose::bound;
+    const choice_level_t level = choice_level::account{};
+    return skiff::compose::scoped<config::account_t>(
+        skiff::compose::handlers(),
+        skiff::compose::column(
+            skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+            bound<skiff::model::Field<&shared::notify>>(show_hide_field<notify_on_setting, std::optional<bool>>(colours, level)),
+            bound<skiff::model::Field<&shared::notify_mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>>(colours, level)),
+            bound<skiff::model::Field<&shared::notify_name>>(show_hide_field<notify_name_setting, std::optional<bool>>(colours, level)),
+            bound<skiff::model::Field<&shared::notify_text>>(show_hide_field<notify_text_setting, std::optional<bool>>(colours, level)),
+            bound<skiff::model::Field<&shared::notify_sound>>(show_hide_field<notify_sound_setting, std::optional<bool>>(colours, level))),
+        std::move(address));
+  }
+  using settings_t = decltype(settings_of(std::declval<const palette&>(), std::string()));
   struct parts_t {
     nodes::Text title;
-    notify_choice_rows<Actions> choices;
+    settings_t settings;
     nodes::Text note;
   } parts;
-  account_notifications(const ui_needs<Actions>& n, const config::notify_choices& now)
+  account_notifications(const ui_needs<Actions>& n, std::string address)
       : parts{.title = section_title(*n.colours, "NOTIFICATIONS"),
-              .choices = notify_choice_rows<Actions>(n.actions, *n.colours, choice_level::account{}, now),
+              .settings = settings_of(*n.colours, std::move(address)),
               .note = note_text(*n.colours, "For messages and invites that come through this account; Default is as the "
                                             "Notifications settings say. A space, and a chat, can choose again in its own "
                                             "settings.")} {
@@ -672,7 +692,7 @@ struct accounts_panel : closes_on_escape<Actions, ask<Actions, &Actions::account
                                            config::link_previews_of(one), config::mentions_choice_of(one));
             },
             [&](account_page::notifications) {
-              detail.template emplace<6>(needs_, config::notify_choices_of(one.shared));
+              detail.template emplace<6>(needs_, config::address_of(one));
             },
             [&](account_page::chats) {
               detail.template emplace<5>(this->actions, *needs_.colours, *needs_.looks, *needs_.shared,

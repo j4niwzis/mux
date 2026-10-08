@@ -209,6 +209,9 @@ struct app : kept_settings {
   // And the room settings' page up, the same way.
   skiff::bind::Binding<kept_model> manage_binding;
   const void* bound_manage = nullptr;
+  // And the accounts panel's page of the chosen account.
+  skiff::bind::Binding<kept_model> panel_binding;
+  const void* bound_panel = nullptr;
   template <class Page>
   void bind_page(Page& page, skiff::bind::Binding<kept_model>& binding, const void*& bound);
   template <class Page>

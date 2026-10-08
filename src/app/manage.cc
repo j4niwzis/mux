@@ -56,8 +56,8 @@ class manage_part {
       const mux::conversation* in = s_->model->find(mux::conversation_id{*by, child});
       return in && in->space;
     });
-    if (k_->own_of(id, &mux::app::chat_choices::forum) || !holds_spaces)
-      k_->flip(id, &mux::app::chat_choices::forum);
+    if (k_->own_of<&mux::app::chat_choices::forum>(id) || !holds_spaces)
+      k_->flip<&mux::app::chat_choices::forum>(id);
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* managing = s_->root().manage_up())
@@ -72,7 +72,7 @@ class manage_part {
     const mux::conversation* space = s_->model->find(id);
     if (!space || !space->space)
       return;
-    k_->flip(id, &mux::app::chat_choices::hidden_from_home);
+    k_->flip<&mux::app::chat_choices::hidden_from_home>(id);
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* managing = s_->root().manage_up())
@@ -110,20 +110,20 @@ class manage_part {
                                        .encrypted = chat->encrypted,
                                        .theirs = chat->theirs,
                                        .notify = k_->notify_choices_of(chat->id),
-                                       .events_all = k_->own_of(chat->id, &mux::app::chat_choices::room_events),
-                                       .typing = k_->own_of(chat->id, &mux::app::chat_choices::typing),
-                                       .previews = k_->own_of(chat->id, &mux::app::chat_choices::previews),
-                                       .previews_direct = k_->own_of(chat->id, &mux::app::chat_choices::previews_direct),
-                                       .receipts = k_->own_of(chat->id, &mux::app::chat_choices::receipts),
-                                       .jump_search = k_->own_of(chat->id, &mux::app::chat_choices::jump_search),
-                                       .event_kinds = k_->own_of(chat->id, &mux::app::chat_choices::room_event_kinds),
+                                       .events_all = k_->own_of<&mux::app::chat_choices::room_events>(chat->id),
+                                       .typing = k_->own_of<&mux::app::chat_choices::typing>(chat->id),
+                                       .previews = k_->own_of<&mux::app::chat_choices::previews>(chat->id),
+                                       .previews_direct = k_->own_of<&mux::app::chat_choices::previews_direct>(chat->id),
+                                       .receipts = k_->own_of<&mux::app::chat_choices::receipts>(chat->id),
+                                       .jump_search = k_->own_of<&mux::app::chat_choices::jump_search>(chat->id),
+                                       .event_kinds = k_->own_of<&mux::app::chat_choices::room_event_kinds>(chat->id),
                                        .space = chat->space,
                                        .holds_spaces = std::ranges::any_of(chat->children, [&](const std::string& child) {
                                          const mux::conversation* in = s_->model->find(mux::conversation_id{chat->id.account, child});
                                          return in && in->space;
                                        }),
-                                       .forum = k_->own_of(chat->id, &mux::app::chat_choices::forum),
-                                       .hidden_from_home = k_->own_of(chat->id, &mux::app::chat_choices::hidden_from_home),
+                                       .forum = k_->own_of<&mux::app::chat_choices::forum>(chat->id),
+                                       .hidden_from_home = k_->own_of<&mux::app::chat_choices::hidden_from_home>(chat->id),
                                        .speaks = chat->id.account.speaks};
     // The spaces it is in: those of its account whose rooms list it. A
     // space's rooms, by their names; and the account's other rooms, by

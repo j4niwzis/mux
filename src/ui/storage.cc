@@ -235,10 +235,10 @@ struct notifications_page : nodes::Stack {
   }
   void show(const config::notification_settings& now) {
     parts.choices.show(config::notify_choices_of(now));
-    parts.push.parts.toggle.setOnNow(now.unified_push.value.value_or(false));
+    parts.push.parts.toggle.setOnNow(now.unified_push.value_or(false));
     const bool native = spl::visit(spl::overloaded{[](config::notify_backend::native) { return true; },
                                               [](const auto&) { return false; }},
-                                   config::notify_backend_of(now.backend.value));
+                                   config::notify_backend_of(now.backend));
     parts.backend.parts.native.set_active(native);
     parts.backend.parts.built_in.set_active(!native);
   }

@@ -82,8 +82,8 @@ class looks_part {
                                        const auto chosen = s_->managed();
                                        if (!chosen)
                                          return;
-                                       spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) { k_->choose(*chosen, &mux::app::chat_choices::bubbles, one.look); },
-                                                                  [&](mux::config::look_part::panels) { k_->choose(*chosen, &mux::app::chat_choices::panels, one.look); }},
+                                       spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) { k_->choose<&mux::app::chat_choices::bubbles>(*chosen, one.look); },
+                                                                  [&](mux::config::look_part::panels) { k_->choose<&mux::app::chat_choices::panels>(*chosen, one.look); }},
                                                   one.part);
                                      }},
                   one.level);
@@ -135,7 +135,7 @@ class looks_part {
                                        const auto chat = s_->managed();
                                        if (!chat)
                                          return;
-                                       k_->choose(*chat, &mux::app::chat_choices::wallpaper, chosen);
+                                       k_->choose<&mux::app::chat_choices::wallpaper>(*chat, chosen);
                                      }},
                   level);
     (void)k_->write();

@@ -110,7 +110,7 @@ TEST(Config, AnOldFilesAccountsAreReadAsTheyAreNow) {
   ASSERT_EQ(all.size(), 2u);
   EXPECT_EQ(mux::config::address_of(all[0]), "a@b.c");
   EXPECT_EQ(mux::config::protocol_name(all[0]), "XMPP");
-  EXPECT_EQ(all[0].shared.colour.value, std::optional<std::string>("red"));
+  EXPECT_EQ(all[0].shared.colour, std::optional<std::string>("red"));
   EXPECT_EQ(mux::config::address_of(all[1]), "@d:e.f");
   EXPECT_EQ(mux::config::protocol_name(all[1]), "Matrix");
   EXPECT_FALSE(mux::config::enabled_of(all[1]));
@@ -186,8 +186,8 @@ TEST(Config, ProxiesAndTheirAccountsAreKept) {
   scratch here;
   const fs::path where = here.dir / "accounts.json";
   auto account = mux::config::account_from("alice@example.com", "x");
-  account.shared.read_receipts.value = false;
-  account.shared.proxy.value = "tor";
+  account.shared.read_receipts = false;
+  account.shared.proxy = "tor";
   mux::config::file kept = mux::config::file_of(std::vector{account});
   kept.proxies = std::vector<mux::config::proxy_settings>{
       {.name = "tor", .kind = "socks5", .host = "127.0.0.1", .port = 9050}};

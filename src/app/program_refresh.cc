@@ -37,7 +37,7 @@ void app::note_spaces() {
 // strips: each its own colour, else its account's; shown as it says, else
 // as its account.
 void app::show_placements() {
-  root().main().muted = this->chats_where(&mux::app::chat_choices::muted);
+  root().main().muted = this->chats_where<&mux::app::chat_choices::muted>();
   {
     auto& screen = root().main();
     screen.listed_in.clear();
@@ -98,8 +98,8 @@ void app::show_space_bars() {
   root().main().spaces_on = spaces;
   root().main().top_bar_on = top_bar;
   root().main().space_places = space_places;
-  root().main().forums = this->chats_where(&mux::app::chat_choices::forum);
-  root().main().hidden_from_home = this->chats_where(&mux::app::chat_choices::hidden_from_home);
+  root().main().forums = this->chats_where<&mux::app::chat_choices::forum>();
+  root().main().hidden_from_home = this->chats_where<&mux::app::chat_choices::hidden_from_home>();
   // Home without what spaces hold: the account's own choice, else every one's.
   root().main().home_hides_spaced = [&] {
     if (const auto& by = root().main().current)
@@ -125,9 +125,9 @@ void app::show_levels() {
     shared.looks.at(mux::choice_level::everywhere{}) = {wallpaper, bubbles, panels};
     mux::ui::looks_held account_held, chat_held;
     if (const auto& chosen = root().main().chosen) {
-      chat_held.wallpaper = this->own_of(*chosen, &mux::app::chat_choices::wallpaper);
-      chat_held.bubbles = this->own_of(*chosen, &mux::app::chat_choices::bubbles);
-      chat_held.panels = this->own_of(*chosen, &mux::app::chat_choices::panels);
+      chat_held.wallpaper = this->own_of<&mux::app::chat_choices::wallpaper>(*chosen);
+      chat_held.bubbles = this->own_of<&mux::app::chat_choices::bubbles>(*chosen);
+      chat_held.panels = this->own_of<&mux::app::chat_choices::panels>(*chosen);
       if (const auto* account = this->settings_of(chosen->account.address)) {
         if (const auto& word = mux::config::wallpaper_of(*account))
           account_held.wallpaper = mux::config::wallpaper_of(std::string_view(*word));
@@ -145,8 +145,8 @@ void app::show_levels() {
     mux::ui::room_events_at(mux::choice_level::everywhere{}) = {history.show_room_events, history.room_event_kinds};
     mux::ui::room_events_held account_held, chat_held;
     if (const auto& chosen = root().main().chosen) {
-      chat_held.all = this->own_of(*chosen, &mux::app::chat_choices::room_events);
-      chat_held.kinds = this->own_of(*chosen, &mux::app::chat_choices::room_event_kinds);
+      chat_held.all = this->own_of<&mux::app::chat_choices::room_events>(*chosen);
+      chat_held.kinds = this->own_of<&mux::app::chat_choices::room_event_kinds>(*chosen);
       if (const auto* account = this->settings_of(chosen->account.address)) {
         account_held.all = mux::config::room_events_of(*account);
         account_held.kinds = mux::config::room_event_kinds_of(*account);

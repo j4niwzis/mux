@@ -18,22 +18,23 @@ import skiff.model;
 export namespace mux::app {
 
 // What a chat -- or a space, for its rooms -- chose for itself: each setting
-// a Named field, found in the model by its name; unsaid, as the level above.
+// a field, found in the model by its member pointer (Field<&chat_choices::
+// muted>); unsaid, as the level above.
 struct chat_choices {
-  skiff::model::Named<"muted", bool> muted;
-  skiff::model::Named<"room_events", std::optional<bool>> room_events;
-  skiff::model::Named<"room_event_kinds", std::optional<mux::config::room_event_kinds>> room_event_kinds;
-  skiff::model::Named<"receipts", std::optional<bool>> receipts;
-  skiff::model::Named<"previews", std::optional<bool>> previews;
-  skiff::model::Named<"previews_direct", std::optional<bool>> previews_direct;
-  skiff::model::Named<"typing", std::optional<bool>> typing;
-  skiff::model::Named<"jump_search", std::optional<std::int64_t>> jump_search;
-  skiff::model::Named<"wallpaper", std::optional<mux::config::wallpaper_t>> wallpaper;
-  skiff::model::Named<"bubbles", std::optional<mux::config::bubble_look>> bubbles;
-  skiff::model::Named<"panels", std::optional<mux::config::bubble_look>> panels;
-  skiff::model::Named<"forum", bool> forum;
-  skiff::model::Named<"hidden_from_home", bool> hidden_from_home;
-  skiff::model::Named<"notify", mux::config::notify_choices> notify;
+  bool muted = false;
+  std::optional<bool> room_events;
+  std::optional<mux::config::room_event_kinds> room_event_kinds;
+  std::optional<bool> receipts;
+  std::optional<bool> previews;
+  std::optional<bool> previews_direct;
+  std::optional<bool> typing;
+  std::optional<std::int64_t> jump_search;
+  std::optional<mux::config::wallpaper_t> wallpaper;
+  std::optional<mux::config::bubble_look> bubbles;
+  std::optional<mux::config::bubble_look> panels;
+  bool forum = false;
+  bool hidden_from_home = false;
+  mux::config::notify_choices notify;
   friend bool operator==(const chat_choices&, const chat_choices&) = default;
 };
 
@@ -116,19 +117,21 @@ struct kept_settings {
   // rooms', where they have none, nearest first, through spaces in spaces.
   std::map<conversation_id, conversation_id> space_above;
 
-  // A chat's own choice of one setting; as unsaid where it chose nothing.
-  template <class Field>
-  [[nodiscard]] decltype(Field::value) own_of(const conversation_id& chat, Field chat_choices::* field) const {
+  // A chat's own choice of one setting, by its member pointer; as unsaid
+  // where it chose nothing.
+  template <auto M>
+  [[nodiscard]] auto own_of(const conversation_id& chat) const {
+    using T = std::remove_cvref_t<decltype(std::declval<const chat_choices&>().*M)>;
     const chat_choices* found = model.root().chats.find(chat);
-    return found == nullptr ? decltype(Field::value){} : (found->*field).value;
+    return found == nullptr ? T{} : found->*M;
   }
   // One setting of a chat's, chosen: the chat forgotten where it then has
   // nothing chosen.
-  template <class Field>
-  void choose(const conversation_id& chat, Field chat_choices::* field, decltype(Field::value) now) {
+  template <auto M, class T>
+  void choose(const conversation_id& chat, T now) {
     const chat_choices* had = model.root().chats.find(chat);
     chat_choices next = had == nullptr ? chat_choices{} : *had;
-    (next.*field).value = now;
+    next.*M = now;
     if (next == chat_choices{}) {
       if (had != nullptr)
         (void)model.apply(skiff::model::take<chat_choices>(chat));
@@ -137,50 +140,49 @@ struct kept_settings {
     } else {
       // Only the one setting, in its place: what shows it is told, and
       // nothing else.
-      (void)model.apply(skiff::model::edit(skiff::model::placeOf<Field, kept_root>(chat),
-                                           skiff::model::setTo(Field{std::move(now)})));
+      using Part = std::remove_cvref_t<decltype(next.*M)>;
+      (void)model.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(chat),
+                                           skiff::model::setTo(Part(std::move(now)))));
     }
   }
   // A flag of a chat's, flipped.
-  template <skiff::model::Name N>
-  void flip(const conversation_id& chat, skiff::model::Named<N, bool> chat_choices::* flag) {
-    this->choose(chat, flag, !this->own_of(chat, flag));
+  template <auto M>
+  void flip(const conversation_id& chat) {
+    this->choose<M>(chat, !this->own_of<M>(chat));
   }
   // The chats with a flag set.
-  template <skiff::model::Name N>
-  [[nodiscard]] std::set<conversation_id> chats_where(skiff::model::Named<N, bool> chat_choices::* flag) const {
+  template <auto M>
+  [[nodiscard]] std::set<conversation_id> chats_where() const {
     std::set<conversation_id> out;
     const auto& chats = model.root().chats;
     for (std::size_t i = 0; i < chats.size(); ++i)
-      if ((chats.valueAt(i).*flag).value)
+      if (chats.valueAt(i).*M)
         out.insert(chats.keyAt(i));
     return out;
   }
   // A chat's own choice of a setting, else the nearest space's above it.
-  template <skiff::model::Name N, class T>
-  [[nodiscard]] std::optional<T> own_or_space(const conversation_id& chat,
-                                              skiff::model::Named<N, std::optional<T>> chat_choices::* field) const {
+  template <auto M>
+  [[nodiscard]] auto own_or_space(const conversation_id& chat) const {
     conversation_id at = chat;
     for (int steps = 0; steps < 17; ++steps) {
-      if (auto own = this->own_of(at, field))
+      if (auto own = this->own_of<M>(at))
         return own;
       const auto up = space_above.find(at);
       if (up == space_above.end())
         break;
       at = up->second;
     }
-    return std::nullopt;
+    return decltype(this->own_of<M>(chat)){};
   }
   // A chat's look: the lowest level's that has one -- its own or its
   // space's, its account's, every chat's -- what it leaves unsaid taken
   // from the levels over it, in turn.
-  template <skiff::model::Name N>
-  [[nodiscard]] mux::config::bubble_look look_of(skiff::model::Named<N, std::optional<mux::config::bubble_look>> chat_choices::* in,
-                                                 const std::optional<std::string>& account_word,
+  template <auto In>
+  [[nodiscard]] mux::config::bubble_look look_of(const std::optional<std::string>& account_word,
                                                  const std::optional<mux::config::bubble_look>& everywhere,
                                                  const conversation_id& chat) {
     std::vector<mux::config::bubble_look> levels;
-    if (const auto own = this->own_or_space(chat, in))
+    if (const auto own = this->own_or_space<In>(chat))
       levels.push_back(*own);
     if (account_word)
       levels.push_back(mux::config::bubble_look_of(*account_word));
@@ -195,16 +197,16 @@ struct kept_settings {
   }
   [[nodiscard]] mux::config::bubble_look panels_of(const conversation_id& chat) {
     const auto* account = this->settings_of(chat.account.address);
-    return this->look_of(&chat_choices::panels, account ? mux::config::panels_of(*account) : std::nullopt, panels, chat);
+    return this->look_of<&chat_choices::panels>(account ? mux::config::panels_of(*account) : std::nullopt, panels, chat);
   }
   [[nodiscard]] mux::config::bubble_look bubbles_of(const conversation_id& chat) {
     const auto* account = this->settings_of(chat.account.address);
-    return this->look_of(&chat_choices::bubbles, account ? mux::config::bubbles_of(*account) : std::nullopt, bubbles, chat);
+    return this->look_of<&chat_choices::bubbles>(account ? mux::config::bubbles_of(*account) : std::nullopt, bubbles, chat);
   }
   // A chat's background: its own, else its account's, else every chat's,
   // else the theme's.
   [[nodiscard]] mux::config::wallpaper_t wallpaper_of(const conversation_id& chat) {
-    if (const auto own = this->own_or_space(chat, &chat_choices::wallpaper))
+    if (const auto own = this->own_or_space<&chat_choices::wallpaper>(chat))
       return *own;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::wallpaper_of(*account))
@@ -239,7 +241,7 @@ struct kept_settings {
   // How far a jump's search pages back in a chat: its own limit, else its
   // account's, else every account's.
   [[nodiscard]] std::int64_t jump_search_of(const conversation_id& chat) {
-    if (const auto own = this->own_or_space(chat, &chat_choices::jump_search))
+    if (const auto own = this->own_or_space<&chat_choices::jump_search>(chat))
       return *own;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::jump_search_of(*account))
@@ -249,7 +251,7 @@ struct kept_settings {
   // Whether a chat shows link previews: its own choice, else its account's,
   // else every account's.
   [[nodiscard]] bool previews_shown(const conversation_id& chat) {
-    if (const auto own = this->own_or_space(chat, &chat_choices::previews))
+    if (const auto own = this->own_or_space<&chat_choices::previews>(chat))
       return *own;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::link_previews_of(*account))
@@ -259,7 +261,7 @@ struct kept_settings {
   // Whether a chat's link previews come from the sites themselves: its own
   // choice, its space's, its account's, else every account's.
   [[nodiscard]] bool previews_direct(const conversation_id& chat) {
-    if (const auto own = this->own_or_space(chat, &chat_choices::previews_direct))
+    if (const auto own = this->own_or_space<&chat_choices::previews_direct>(chat))
       return *own;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::previews_direct_of(*account))
@@ -269,7 +271,7 @@ struct kept_settings {
   // Whether others in a chat are told one is typing: its own choice, its
   // space's, its account's, else every account's.
   [[nodiscard]] bool typing_sent(const conversation_id& chat) {
-    if (const auto own = this->own_or_space(chat, &chat_choices::typing))
+    if (const auto own = this->own_or_space<&chat_choices::typing>(chat))
       return *own;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::send_typing_of(*account))
@@ -277,7 +279,7 @@ struct kept_settings {
     return history.send_typing.value_or(true);
   }
   [[nodiscard]] bool receipts_shown(const conversation_id& chat) {
-    if (const auto own = this->own_or_space(chat, &chat_choices::receipts))
+    if (const auto own = this->own_or_space<&chat_choices::receipts>(chat))
       return *own;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::show_receipts_of(*account))
@@ -287,7 +289,7 @@ struct kept_settings {
   // Whether a chat shows what is done in it: its own choice, else its
   // account's, else every account's.
   [[nodiscard]] bool room_events_shown(const conversation_id& chat) {
-    if (const auto own = this->own_or_space(chat, &chat_choices::room_events))
+    if (const auto own = this->own_or_space<&chat_choices::room_events>(chat))
       return *own;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::room_events_of(*account))
@@ -307,8 +309,8 @@ struct kept_settings {
   // A chat's own notification choices -- or a space's -- as chosen for it:
   // muted is notifications off.
   [[nodiscard]] mux::config::notify_choices notify_choices_of(const conversation_id& chat) const {
-    auto out = this->own_of(chat, &chat_choices::notify);
-    if (this->own_of(chat, &chat_choices::muted))
+    auto out = this->own_of<&chat_choices::notify>(chat);
+    if (this->own_of<&chat_choices::muted>(chat))
       out.on = false;
     return out;
   }
@@ -326,7 +328,7 @@ struct kept_settings {
       at = up->second;
     }
     if (const mux::config::account_t* account = this->settings_of(chat.account.address))
-      if (const std::optional<bool>& chosen = (account->shared.*Setting::account).value)
+      if (const std::optional<bool>& chosen = account->shared.*Setting::account)
         return *chosen;
     return Setting::of(notifications);
   }
@@ -345,7 +347,7 @@ struct kept_settings {
   [[nodiscard]] mux::room_event_filter room_event_filter_of(const conversation_id& chat) {
     const mux::config::account_t* account = this->settings_of(chat.account.address);
     return mux::logic::filter_of(
-        this->own_or_space(chat, &chat_choices::room_event_kinds), this->own_or_space(chat, &chat_choices::room_events),
+        this->own_or_space<&chat_choices::room_event_kinds>(chat), this->own_or_space<&chat_choices::room_events>(chat),
         account ? mux::config::room_event_kinds_of(*account) : std::nullopt,
         account ? mux::config::room_events_of(*account) : std::nullopt, history.room_event_kinds,
         history.show_room_events);
@@ -406,7 +408,7 @@ struct kept_settings {
     this->proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
     this->notifications = saved.notifications.value_or(mux::config::notification_settings{});
     for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
-      chats[chat_of(one.account, one.conversation)].notify.value = mux::config::notify_choices{
+      chats[chat_of(one.account, one.conversation)].notify = mux::config::notify_choices{
               .on = one.on,
               .mentions = spl::visit(spl::overloaded{[](mux::config::notify_mode::mentions) { return std::optional<bool>(true); },
                                                            [](mux::config::notify_mode::all) { return std::optional<bool>(false); },
@@ -417,25 +419,25 @@ struct kept_settings {
               .sound = one.sound};
     for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{})) {
       auto& chosen = chats[chat_of(one.account, one.conversation)];
-      chosen.room_events.value = one.show;
-      chosen.room_event_kinds.value = one.kinds;
-      chosen.receipts.value = one.receipts;
-      chosen.previews.value = one.previews;
-      chosen.typing.value = one.typing;
-      chosen.previews_direct.value = one.previews_direct;
-      chosen.jump_search.value = one.jump_search;
+      chosen.room_events = one.show;
+      chosen.room_event_kinds = one.kinds;
+      chosen.receipts = one.receipts;
+      chosen.previews = one.previews;
+      chosen.typing = one.typing;
+      chosen.previews_direct = one.previews_direct;
+      chosen.jump_search = one.jump_search;
       if (one.wallpaper)
-        chosen.wallpaper.value = mux::config::wallpaper_of(std::string_view(*one.wallpaper));
+        chosen.wallpaper = mux::config::wallpaper_of(std::string_view(*one.wallpaper));
       if (one.bubbles)
-        chosen.bubbles.value = mux::config::bubble_look_of(*one.bubbles);
+        chosen.bubbles = mux::config::bubble_look_of(*one.bubbles);
       if (one.panels)
-        chosen.panels.value = mux::config::bubble_look_of(*one.panels);
-      chosen.forum.value = one.forum.value_or(false);
-      chosen.hidden_from_home.value = one.hide_from_home.value_or(false);
+        chosen.panels = mux::config::bubble_look_of(*one.panels);
+      chosen.forum = one.forum.value_or(false);
+      chosen.hidden_from_home = one.hide_from_home.value_or(false);
     }
     this->placements = saved.placements.value_or(std::vector<mux::config::chat_placement>{});
     for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
-      chats[chat_of(one.account, one.conversation)].muted.value = true;
+      chats[chat_of(one.account, one.conversation)].muted = true;
     std::erase_if(chats, [](const auto& one) { return one.second == chat_choices{}; });
     kept_root root;
     root.chats.putAll(chats);
@@ -510,7 +512,7 @@ struct kept_settings {
     for (std::size_t i = 0; i < chats.size(); ++i) {
       const conversation_id& chat = chats.keyAt(i);
       const chat_choices& chosen = chats.valueAt(i);
-      if (const auto& own = chosen.notify.value; own != mux::config::notify_choices{})
+      if (const auto& own = chosen.notify; own != mux::config::notify_choices{})
         notify.push_back({.account = chat.account.address,
                           .conversation = chat.id,
                           .mode = own.mentions.transform([](bool only) { return std::string(only ? "mentions" : "all"); }),
@@ -518,23 +520,23 @@ struct kept_settings {
                           .name = own.name,
                           .text = own.text,
                           .sound = own.sound});
-      if (chosen.muted.value)
+      if (chosen.muted)
         muted.push_back({chat.account.address, chat.id});
       const mux::config::room_events_choice one{
           .account = chat.account.address,
           .conversation = chat.id,
-          .show = chosen.room_events.value,
-          .kinds = chosen.room_event_kinds.value,
-          .receipts = chosen.receipts.value,
-          .previews = chosen.previews.value,
-          .previews_direct = chosen.previews_direct.value,
-          .typing = chosen.typing.value,
-          .jump_search = chosen.jump_search.value,
-          .wallpaper = chosen.wallpaper.value.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
-          .forum = chosen.forum.value ? std::optional<bool>(true) : std::nullopt,
-          .hide_from_home = chosen.hidden_from_home.value ? std::optional<bool>(true) : std::nullopt,
-          .bubbles = chosen.bubbles.value.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
-          .panels = chosen.panels.value.transform([](const auto& look) { return std::string(mux::config::word_of(look)); })};
+          .show = chosen.room_events,
+          .kinds = chosen.room_event_kinds,
+          .receipts = chosen.receipts,
+          .previews = chosen.previews,
+          .previews_direct = chosen.previews_direct,
+          .typing = chosen.typing,
+          .jump_search = chosen.jump_search,
+          .wallpaper = chosen.wallpaper.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
+          .forum = chosen.forum ? std::optional<bool>(true) : std::nullopt,
+          .hide_from_home = chosen.hidden_from_home ? std::optional<bool>(true) : std::nullopt,
+          .bubbles = chosen.bubbles.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
+          .panels = chosen.panels.transform([](const auto& look) { return std::string(mux::config::word_of(look)); })};
       if (one != mux::config::room_events_choice{.account = one.account, .conversation = one.conversation})
         choices.push_back(one);
     }

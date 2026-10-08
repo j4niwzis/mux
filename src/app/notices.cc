@@ -187,7 +187,7 @@ class notices_part {
   }
   void show_page() {
     if (auto* up = s_->root().settings_up())
-      up->show_notifications(s_->kept->notifications());
+      s_->settings_page(mux::ui::settings_page::notifications{s_->kept->notifications()});
   }
 
   // UnifiedPush's connector, on a thread of its own: what it says put in a

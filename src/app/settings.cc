@@ -41,21 +41,21 @@ class settings_part {
   void apply(const request::close_settings&) { mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt); }
   void apply(const request::settings_home&) {
     if (auto* up = s_->root().settings_up())
-      up->show_home();
+      s_->settings_page(mux::ui::settings_page::home{});
   }
   void apply(const request::settings_animations&) {
     if (auto* up = s_->root().settings_up())
-      up->show_animations();
+      s_->settings_page(mux::ui::settings_page::animations{});
   }
 
   // Appearance and rendering.
   void apply(const request::settings_appearance&) {
     if (auto* up = s_->root().settings_up())
-      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
+      s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
   }
   void apply(const request::settings_rendering&) {
     if (auto* up = s_->root().settings_up())
-      up->show_rendering(k_->appearance().renderer);
+      s_->settings_page(mux::ui::settings_page::rendering{k_->appearance().renderer});
   }
   // Frosted's blur: kept, the backgrounds' frost made again, and shown.
   void apply(const request::set_frost_blur& one) {
@@ -64,7 +64,7 @@ class settings_part {
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
+      s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
   }
   void apply(const request::set_renderer& one) {
     k_->choose_field<&mux::config::look_settings::renderer>(one.renderer);
@@ -79,7 +79,7 @@ class settings_part {
   // of it cleared.
   void apply(const request::settings_storage&) {
     if (auto* up = s_->root().settings_up())
-      up->show_storage(k_->limits(), k_->history(), s_->vault->on());
+      s_->settings_page(mux::ui::settings_page::storage{k_->limits(), k_->history(), s_->vault->on()});
   }
   void apply(const request::clear_stored&) {
     std::error_code failed;
@@ -92,7 +92,7 @@ class settings_part {
   // Files sent: their metadata cut out, their names made plain.
   void apply(const request::settings_files&) {
     if (auto* up = s_->root().settings_up())
-      up->show_files(k_->sending());
+      s_->settings_page(mux::ui::settings_page::files{k_->sending()});
   }
   // Room events, for every chat that has not chosen, nor its account.
   void apply(const request::flip_room_events&) {

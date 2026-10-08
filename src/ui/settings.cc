@@ -17,8 +17,44 @@ import :storage;
 
 export namespace mux::ui {
 
-// Settings open: nothing more to say of it -- its pages are its own.
-struct settings_facts {};
+// Settings' pages, each with what it shows.
+namespace settings_page {
+struct home {};
+struct animations {};
+struct appearance {
+  config::theme_t theme;
+  config::accent_t accent;
+};
+struct rendering {
+  config::renderer_t renderer;
+};
+struct notifications {
+  config::notification_settings now;
+};
+struct files {
+  config::sending_settings now;
+};
+struct storage {
+  config::cache_limits limits;
+  config::history_settings history;
+  bool sealed = false;
+};
+struct proxies {
+  std::vector<config::proxy_settings> all;
+  bool with_back = true;
+};
+struct proxy {
+  std::optional<config::proxy_settings> from;
+  int index = -1;
+};
+}  // namespace settings_page
+using settings_page_t = spl::variant<settings_page::home, settings_page::animations, settings_page::appearance, settings_page::rendering,
+                                     settings_page::notifications, settings_page::files, settings_page::storage, settings_page::proxies,
+                                     settings_page::proxy>;
+// Settings open, on a page.
+struct settings_facts {
+  settings_page_t page = settings_page::home{};
+};
 template <class Actions>
 struct settings_dialog : scene::Node {
   // The dialog it is shown in.
@@ -107,7 +143,23 @@ struct settings_dialog : scene::Node {
       this->invalidateLayout();
   }
 
-  settings_dialog(const ui_needs<Actions>& n, const settings_facts&) : settings_dialog(n) {}
+  // Opened on its page: home is where it opens anyway.
+  settings_dialog(const ui_needs<Actions>& n, const settings_facts& facts) : settings_dialog(n) {
+    spl::visit(spl::overloaded{[](settings_page::home) {}, [&](const auto& other) { this->show_page_of(other); }}, facts.page);
+  }
+  // The page what is shown says, shown -- where it is open already.
+  void show_page(const settings_facts& facts) {
+    spl::visit([&](const auto& page) { this->show_page_of(page); }, facts.page);
+  }
+  void show_page_of(settings_page::home) { this->show_home(); }
+  void show_page_of(settings_page::animations) { this->show_animations(); }
+  void show_page_of(const settings_page::appearance& page) { this->show_appearance(page.theme, page.accent); }
+  void show_page_of(const settings_page::rendering& page) { this->show_rendering(page.renderer); }
+  void show_page_of(const settings_page::notifications& page) { this->show_notifications(page.now); }
+  void show_page_of(const settings_page::files& page) { this->show_files(page.now); }
+  void show_page_of(const settings_page::storage& page) { this->show_storage(page.limits, page.history, page.sealed); }
+  void show_page_of(const settings_page::proxies& page) { this->show_proxies(page.all, page.with_back); }
+  void show_page_of(const settings_page::proxy& page) { this->show_proxy(page.from, page.index); }
   settings_dialog(const ui_needs<Actions>& n)
       : needs_(n),
         parts{.scroll = nodes::ScrollContainer<page_t>(page_t(std::in_place_index<0>, n))} {

@@ -40,21 +40,19 @@ class proxies_part {
 
   // Settings opened on the proxies, from an account's page.
   void apply(const request::manage_proxies&) {
-    mux::ui::show(*s_->showing, std::optional(mux::ui::settings_facts{}));
-    if (auto* up = s_->root().settings_up())
-      up->show_proxies(k_->proxies(), false);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::settings_facts{mux::ui::settings_page::proxies{k_->proxies(), false}}));
   }
   void apply(const request::settings_proxies&) {
     if (auto* up = s_->root().settings_up())
-      up->show_proxies(k_->proxies());
+      s_->settings_page(mux::ui::settings_page::proxies{k_->proxies()});
   }
   void apply(const request::add_proxy&) {
     if (auto* up = s_->root().settings_up())
-      up->show_proxy(std::nullopt, -1);
+      s_->settings_page(mux::ui::settings_page::proxy{std::nullopt, -1});
   }
   void apply(const request::edit_proxy& one) {
     if (auto* up = s_->root().settings_up(); up && one.index >= 0 && static_cast<std::size_t>(one.index) < k_->proxies().size())
-      up->show_proxy(k_->proxies()[static_cast<std::size_t>(one.index)], one.index);
+      s_->settings_page(mux::ui::settings_page::proxy{k_->proxies()[static_cast<std::size_t>(one.index)], one.index});
   }
   // The kind of proxy the editor shows.
   void apply(const request::proxy_kind& one) {
@@ -102,7 +100,7 @@ class proxies_part {
       return;
     }
     this->reconnect_through(name);
-    up->show_proxies(k_->proxies());
+    s_->settings_page(mux::ui::settings_page::proxies{k_->proxies()});
     s_->refresh_due = true;  // the new account's row of proxies, where it is being added
   }
   // A profile deleted -- not while an account goes through it: those would
@@ -123,7 +121,7 @@ class proxies_part {
     }
     k_->change_part<std::vector<mux::config::proxy_settings>>([&](auto& all) { all.erase(all.begin() + editor->index); });
     (void)k_->write();
-    up->show_proxies(k_->proxies());
+    s_->settings_page(mux::ui::settings_page::proxies{k_->proxies()});
   }
 
  private:

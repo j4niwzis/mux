@@ -112,11 +112,22 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
   void read(const std::optional<Facts>& now) {
     if (now) {
       this->dismissable_for(*now);
-      (void)this->open(*needs, *now);
+      this->show_with(*now);
     } else {
       this->close();
     }
   }
+  // Facts changed while it is up: shown in place where what it shows says
+  // how (show_page); else made again from them.
+  void show_with(const Facts& facts)
+    requires requires(Content& up) { up.show_page(facts); }
+  {
+    if (auto* up = this->shown())
+      up->show_page(facts);
+    else
+      (void)this->open(*needs, facts);
+  }
+  void show_with(const Facts& facts) { (void)this->open(*needs, facts); }
   // Whether a press off it or Esc dismisses it, where what it shows says so
   // of these facts; else as its look says.
   void dismissable_for(const Facts& facts)

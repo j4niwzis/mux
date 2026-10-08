@@ -196,7 +196,7 @@ class preferences_part {
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
+      s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
   }
   void apply(const request::set_home_direct& one) {
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
@@ -213,7 +213,7 @@ class preferences_part {
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
+      s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
   }
   // An item's bars, as chosen: the side, the top, both, or none -- hidden.
   void apply(const request::set_space_bars& one) {
@@ -230,7 +230,7 @@ class preferences_part {
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
+      s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
   }
   // Room events, for the chosen account's chats: shown or not from now on,
   // whatever every account's is.

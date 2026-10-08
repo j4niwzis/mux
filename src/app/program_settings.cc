@@ -37,12 +37,10 @@ void app::rebuild_in_theme() {
   after.side_width = side_width;
   after.info_width = info_width;
   this->refresh();
-  mux::ui::show(showing, std::optional(mux::ui::settings_facts{}));
+  mux::ui::show(showing, std::optional(mux::ui::settings_facts{mux::ui::settings_page::appearance{this->appearance().theme, this->appearance().accent}}));
   this->refresh_shown();
-  if (auto* up = root().settings_up()) {
-    up->show_appearance(this->appearance().theme, this->appearance().accent);
+  if (auto* up = root().settings_up())
     up->keep_offset(settings_at);
-  }
 }
 
 }  // namespace mux::app

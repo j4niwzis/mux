@@ -114,6 +114,11 @@ struct services {
     });
     return showing->look<mux::ui::chat_shown>()->threads_open;
   }
+  // A page of settings shown, where settings are open.
+  void settings_page(mux::ui::settings_page_t page) const {
+    if (showing->look<std::optional<mux::ui::settings_facts>>()->has_value())
+      mux::ui::show(*showing, std::optional(mux::ui::settings_facts{std::move(page)}));
+  }
   void close_notice() const { mux::ui::show<mux::ui::notice_facts>(*showing, std::nullopt); }
   // A chat that is a window of its history away from its newest: back to
   // its newest, live -- before anything is put at its end. Its newest from

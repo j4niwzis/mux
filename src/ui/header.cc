@@ -450,7 +450,7 @@ struct search_step {
   ::mux::ui::request::search_step operator()() { return ::mux::ui::request::search_step{older}; }
 };
 template <class Actions>
-struct search_bar : nodes::Stack {
+struct search_bar : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = std::variant<::mux::ui::request::search_step, ::mux::ui::request::close_search>;
   using field_t = widgets::TextBox<search_typed<Actions>>;
@@ -465,25 +465,23 @@ struct search_bar : nodes::Stack {
   } parts;
 
   explicit search_bar(const ui_needs<Actions>& n) : search_bar(*n.colours) {}
-  search_bar(const palette& colours)
-      : parts{.field = field_t(colours.widgets, "Search", {}),
-                          .found = nodes::Text("", 13.0f, colours.dim),
-                          .newer = step_button(colours, icon::up{}, {false}),
-                          .older = step_button(colours, icon::down{}, {true}),
-                          .close = close_button(colours, icon::close{}, {}),
-                          .bottom_line = nodes::Box<>(colours.band)} {
-    auto& [field, found, newer, older, close, bottom_line] = parts;
-    this->setHorizontal();
-    this->setGap(4.0f);
-    fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
-                  .background = colours.sidebar});
-    bottom_line.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
+  [[nodiscard]] static scene::Spec middle() { return {.alignSelf = scene::align::kMiddle}; }
+  // The field, with the magnifier in it.
+  [[nodiscard]] static field_t searching(field_t field) {
     field.setSearchIcon(true);
-    field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    found.apply({.alignSelf = scene::align::kMiddle});
-    newer.apply({.alignSelf = scene::align::kMiddle});
-    older.apply({.alignSelf = scene::align::kMiddle});
-    close.apply({.alignSelf = scene::align::kMiddle});
+    return field;
+  }
+  search_bar(const palette& colours)
+      : Stacked(skiff::compose::hbox(4.0f, {.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
+                                            .background = colours.sidebar})),
+        parts{.field = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                              searching(field_t(colours.widgets, "Search", {}))),
+              .found = skiff::compose::styled(middle(), nodes::Text("", 13.0f, colours.dim)),
+              .newer = skiff::compose::styled(middle(), step_button(colours, icon::up{}, {false})),
+              .older = skiff::compose::styled(middle(), step_button(colours, icon::down{}, {true})),
+              .close = skiff::compose::styled(middle(), close_button(colours, icon::close{}, {})),
+              .bottom_line = skiff::compose::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f},
+                                                    nodes::Box<>(colours.band))} {
     this->setVisible(false);
   }
   // Where the finding is: the one shown of how many, or none found.

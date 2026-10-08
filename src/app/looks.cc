@@ -65,10 +65,6 @@ class looks_part {
         spl::overloaded{[this](mux::config::look_part::bubbles) -> mux::config::bubble_look& { return s_->looks.bubbles_everywhere; },
                            [this](mux::config::look_part::panels) -> mux::config::bubble_look& { return s_->looks.panels_everywhere; }},
         one.part);
-    auto& per_chat = spl::visit(
-        spl::overloaded{[&](mux::config::look_part::bubbles) -> std::map<mux::conversation_id, mux::config::bubble_look>& { return k_->bubbles_in; },
-                           [&](mux::config::look_part::panels) -> std::map<mux::conversation_id, mux::config::bubble_look>& { return k_->panels_in; }},
-        one.part);
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
                                        everywhere = one.look;
                                        known = one.look.value_or(mux::config::bubble_look{});
@@ -86,10 +82,9 @@ class looks_part {
                                        const auto chosen = s_->managed();
                                        if (!chosen)
                                          return;
-                                       if (one.look)
-                                         per_chat.insert_or_assign(*chosen, *one.look);
-                                       else
-                                         per_chat.erase(*chosen);
+                                       spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) { k_->choose(*chosen, &mux::app::chat_choices::bubbles, one.look); },
+                                                                  [&](mux::config::look_part::panels) { k_->choose(*chosen, &mux::app::chat_choices::panels, one.look); }},
+                                                  one.part);
                                      }},
                   one.level);
     (void)k_->write();
@@ -140,10 +135,7 @@ class looks_part {
                                        const auto chat = s_->managed();
                                        if (!chat)
                                          return;
-                                       if (chosen)
-                                         k_->wallpaper_in.insert_or_assign(*chat, *chosen);
-                                       else
-                                         k_->wallpaper_in.erase(*chat);
+                                       k_->choose(*chat, &mux::app::chat_choices::wallpaper, chosen);
                                      }},
                   level);
     (void)k_->write();

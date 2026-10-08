@@ -56,10 +56,8 @@ class manage_part {
       const mux::conversation* in = s_->model->find(mux::conversation_id{*by, child});
       return in && in->space;
     });
-    if (k_->forums.contains(id))
-      k_->forums.erase(id);
-    else if (!holds_spaces)
-      k_->forums.insert(id);
+    if (k_->own_of(id, &mux::app::chat_choices::forum) || !holds_spaces)
+      k_->flip(id, &mux::app::chat_choices::forum);
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* managing = s_->root().manage_up())
@@ -74,8 +72,7 @@ class manage_part {
     const mux::conversation* space = s_->model->find(id);
     if (!space || !space->space)
       return;
-    if (!k_->hidden_from_home.erase(id))
-      k_->hidden_from_home.insert(id);
+    k_->flip(id, &mux::app::chat_choices::hidden_from_home);
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* managing = s_->root().manage_up())
@@ -113,33 +110,20 @@ class manage_part {
                                        .encrypted = chat->encrypted,
                                        .theirs = chat->theirs,
                                        .notify = k_->notify_choices_of(chat->id),
-                                       .events_all = k_->room_events.contains(chat->id)
-                                                         ? std::optional<bool>(k_->room_events.at(chat->id))
-                                                         : std::nullopt,
-                                       .typing = k_->typing_sent_in.contains(chat->id) ? std::optional<bool>(k_->typing_sent_in.at(chat->id))
-                                                                                   : std::nullopt,
-                                       .previews = k_->previews_shown_in.contains(chat->id)
-                                                       ? std::optional<bool>(k_->previews_shown_in.at(chat->id))
-                                                       : std::nullopt,
-                                       .previews_direct = k_->previews_direct_in.contains(chat->id)
-                                                              ? std::optional<bool>(k_->previews_direct_in.at(chat->id))
-                                                              : std::nullopt,
-                                       .receipts = k_->receipts_shown_in.contains(chat->id)
-                                                       ? std::optional<bool>(k_->receipts_shown_in.at(chat->id))
-                                                       : std::nullopt,
-                                       .jump_search = k_->jump_search_in.contains(chat->id)
-                                                          ? std::optional<std::int64_t>(k_->jump_search_in.at(chat->id))
-                                                          : std::nullopt,
-                                       .event_kinds = k_->room_event_kinds.contains(chat->id)
-                                                          ? std::optional<mux::config::room_event_kinds>(k_->room_event_kinds.at(chat->id))
-                                                          : std::nullopt,
+                                       .events_all = k_->own_of(chat->id, &mux::app::chat_choices::room_events),
+                                       .typing = k_->own_of(chat->id, &mux::app::chat_choices::typing),
+                                       .previews = k_->own_of(chat->id, &mux::app::chat_choices::previews),
+                                       .previews_direct = k_->own_of(chat->id, &mux::app::chat_choices::previews_direct),
+                                       .receipts = k_->own_of(chat->id, &mux::app::chat_choices::receipts),
+                                       .jump_search = k_->own_of(chat->id, &mux::app::chat_choices::jump_search),
+                                       .event_kinds = k_->own_of(chat->id, &mux::app::chat_choices::room_event_kinds),
                                        .space = chat->space,
                                        .holds_spaces = std::ranges::any_of(chat->children, [&](const std::string& child) {
                                          const mux::conversation* in = s_->model->find(mux::conversation_id{chat->id.account, child});
                                          return in && in->space;
                                        }),
-                                       .forum = k_->forums.contains(chat->id),
-                                       .hidden_from_home = k_->hidden_from_home.contains(chat->id),
+                                       .forum = k_->own_of(chat->id, &mux::app::chat_choices::forum),
+                                       .hidden_from_home = k_->own_of(chat->id, &mux::app::chat_choices::hidden_from_home),
                                        .speaks = chat->id.account.speaks};
     // The spaces it is in: those of its account whose rooms list it. A
     // space's rooms, by their names; and the account's other rooms, by

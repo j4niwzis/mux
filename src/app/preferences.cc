@@ -35,14 +35,12 @@ class preferences_part {
     auto& screen = s_->root().main();
     if (!screen.chosen)
       return;
-    if (!k_->muted.erase(*screen.chosen))
-      k_->muted.insert(*screen.chosen);
+    k_->flip(*screen.chosen, &mux::app::chat_choices::muted);
     (void)k_->write();
     s_->refresh_due = true;
   }
   void apply(const request::toggle_mute_of& one) {
-    if (!k_->muted.erase(one.which))
-      k_->muted.insert(one.which);
+    k_->flip(one.which, &mux::app::chat_choices::muted);
     (void)k_->write();
     s_->refresh_due = true;
   }
@@ -183,17 +181,13 @@ class preferences_part {
   // are as the level above.
   template <class Setting>
   void set_chat_notify(const mux::conversation_id& chat, Setting, std::optional<bool> value) {
-    auto& own = k_->notify_in[chat];
+    auto own = k_->own_of(chat, &mux::app::chat_choices::notify);
     own.*Setting::chat = value;
-    if (own == mux::config::notify_choices{})
-      k_->notify_in.erase(chat);
+    k_->choose(chat, &mux::app::chat_choices::notify, own);
   }
   // Notifications off is muted -- the chat list's mute, the same.
   void set_chat_notify(const mux::conversation_id& chat, mux::config::notify_setting::on which, std::optional<bool> value) {
-    if (value == false)
-      k_->muted.insert(chat);
-    else
-      k_->muted.erase(chat);
+    k_->choose(chat, &mux::app::chat_choices::muted, value == false);
     this->set_chat_notify<mux::config::notify_setting::on>(chat, which, value == true ? value : std::nullopt);
   }
 
@@ -223,12 +217,13 @@ class preferences_part {
                                  const auto chosen = s_->managed();
                                  if (!chosen)
                                    return;
-                                 if (one.kind)
-                                   mux::logic::choice_in(k_->room_event_kinds[*chosen], *one.kind) = one.show;
-                                 else if (one.show)
-                                   k_->room_events.insert_or_assign(*chosen, *one.show);
-                                 else
-                                   k_->room_events.erase(*chosen);
+                                 if (one.kind) {
+                                   auto kinds = k_->own_of(*chosen, &mux::app::chat_choices::room_event_kinds).value_or(mux::config::room_event_kinds{});
+                                   mux::logic::choice_in(kinds, *one.kind) = one.show;
+                                   k_->choose(*chosen, &mux::app::chat_choices::room_event_kinds, std::move(kinds));
+                                 } else {
+                                   k_->choose(*chosen, &mux::app::chat_choices::room_events, one.show);
+                                 }
                                }},
                one.level);
     (void)k_->write();
@@ -317,14 +312,8 @@ class preferences_part {
                                        const auto chosen = s_->managed();
                                        if (!chosen)
                                          return;
-                                       if (one.all)
-                                         k_->room_events.insert_or_assign(*chosen, *one.all);
-                                       else
-                                         k_->room_events.erase(*chosen);
-                                       if (one.kinds)
-                                         k_->room_event_kinds.insert_or_assign(*chosen, *one.kinds);
-                                       else
-                                         k_->room_event_kinds.erase(*chosen);
+                                       k_->choose(*chosen, &mux::app::chat_choices::room_events, one.all);
+                                       k_->choose(*chosen, &mux::app::chat_choices::room_event_kinds, one.kinds);
                                      }},
                   one.level);
     (void)k_->write();
@@ -342,10 +331,7 @@ class preferences_part {
                                  const auto chosen = s_->managed();
                                  if (!chosen)
                                    return;
-                                 if (one.most)
-                                   k_->jump_search_in.insert_or_assign(*chosen, *one.most);
-                                 else
-                                   k_->jump_search_in.erase(*chosen);
+                                 k_->choose(*chosen, &mux::app::chat_choices::jump_search, one.most);
                                }},
                one.level);
     (void)k_->write();
@@ -363,10 +349,7 @@ class preferences_part {
                                  const auto chosen = s_->managed();
                                  if (!chosen)
                                    return;
-                                 if (one.show)
-                                   k_->previews_shown_in.insert_or_assign(*chosen, *one.show);
-                                 else
-                                   k_->previews_shown_in.erase(*chosen);
+                                 k_->choose(*chosen, &mux::app::chat_choices::previews, one.show);
                                }},
                one.level);
     (void)k_->write();
@@ -384,10 +367,7 @@ class preferences_part {
                                        const auto chosen = s_->managed();
                                        if (!chosen)
                                          return;
-                                       if (one.direct)
-                                         k_->previews_direct_in.insert_or_assign(*chosen, *one.direct);
-                                       else
-                                         k_->previews_direct_in.erase(*chosen);
+                                       k_->choose(*chosen, &mux::app::chat_choices::previews_direct, one.direct);
                                      }},
                   one.level);
     (void)k_->write();
@@ -405,10 +385,7 @@ class preferences_part {
                                        const auto chosen = s_->managed();
                                        if (!chosen)
                                          return;
-                                       if (one.send)
-                                         k_->typing_sent_in.insert_or_assign(*chosen, *one.send);
-                                       else
-                                         k_->typing_sent_in.erase(*chosen);
+                                       k_->choose(*chosen, &mux::app::chat_choices::typing, one.send);
                                      }},
                   one.level);
     (void)k_->write();
@@ -426,10 +403,7 @@ class preferences_part {
                                  const auto chosen = s_->managed();
                                  if (!chosen)
                                    return;
-                                 if (one.show)
-                                   k_->receipts_shown_in.insert_or_assign(*chosen, *one.show);
-                                 else
-                                   k_->receipts_shown_in.erase(*chosen);
+                                 k_->choose(*chosen, &mux::app::chat_choices::receipts, one.show);
                                }},
                one.level);
     (void)k_->write();
@@ -452,7 +426,7 @@ class preferences_part {
     if (!chosen)
       return;
     const bool now = k_->room_events_shown(*chosen);
-    k_->room_events.insert_or_assign(*chosen, !now);
+    k_->choose(*chosen, &mux::app::chat_choices::room_events, !now);
     (void)k_->write();
     s_->root().show_message("Room events", !now ? "Joins, renames and other room events are shown in this chat."
                                             : "Room events are hidden in this chat.");

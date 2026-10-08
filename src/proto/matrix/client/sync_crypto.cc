@@ -402,7 +402,7 @@ bool account<Sink>::verification_in_room(const conversation_id& in, const loom::
   // Asked here, outside the step's lambda, as before: an inline member
   // reached only from inside a generic lambda was not emitted where this is
   // explicitly instantiated.
-  const bool answerable = this->live(where) && one.sender != id_.address && crypto_;
+  const bool answerable = (!telling_history_ && placed_as_news(where)) && one.sender != id_.address && crypto_;
   const auto take = [&](auto content) {
     if (!answerable)
       return true;

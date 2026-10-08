@@ -82,6 +82,11 @@ struct plaintext_refused : std::runtime_error {
 };
 plaintext_refused::~plaintext_refused() = default;
 
+// Whether an event placed so is news: come at the end, not from history.
+[[nodiscard]] bool placed_as_news(const placement_t& where) {
+  return spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+}
+
 template <class Sink>
 class account {
  public:
@@ -701,10 +706,10 @@ class account {
   // no call -- a login showed every old mention as new.
   bool telling_history_ = false;
   // Whether an event placed so is news: come at the end, not from history.
-  [[nodiscard]] bool live(const placement_t& where) const {
-    return !telling_history_ &&
-           spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
-  }
+  // (Whether an event so placed is news is placed_as_news(), a plain
+  // function, with telling_history_: an inline member of this template
+  // called where the account is explicitly instantiated was not emitted
+  // anywhere, and the link failed on it.)
   void event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where = placement::at_end{},
              bool sealed = false);
 

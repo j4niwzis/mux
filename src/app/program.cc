@@ -155,12 +155,20 @@ struct app : kept_settings {
     part.apply(one);
     return true;
   }
-  template <class Part, class Request>
-    requires requires(Part& part, const Request& one) {
-      { part.apply(one) } -> std::same_as<std::optional<mux::proto::any_request_t>>;
+  // What a part asks for in turn, in its own type, given to the program
+  // to do at once: where the part decides it in a visit -- a chat's
+  // protocol -- its type is static there.
+  struct taker {
+    app* program = nullptr;
+    template <class R>
+    void operator()(const R& asked) const {
+      program->take(asked);
     }
+  };
+  template <class Part, class Request>
+    requires requires(Part& part, const Request& one, const taker& asked) { part.apply(one, asked); }
   bool offer(Part& part, const Request& one) {
-    this->take(part.apply(one));
+    part.apply(one, taker{this});
     return true;
   }
   template <class Part, class Request>
@@ -190,7 +198,8 @@ struct app : kept_settings {
   // A protocol's "nothing to ask": nothing.
   void take(const mux::proto::part::no_request&) {}
   template <class Part, class Request>
-  static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); };
+  static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); } ||
+                                requires(Part& part, const Request& one, const taker& asked) { part.apply(one, asked); };
   // A protocol's own request: done as its program glue says (mux.app.proto).
   template <class Request>
     requires requires(app& self, const Request& one) { program_asked(self, one); }

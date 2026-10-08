@@ -201,13 +201,17 @@ class outbox_part {
   }
   // Enter in the field: sent while the field still holds it. Two asked for
   // before the first was handled -- the field emptied by it -- send once.
-  std::optional<mux::proto::any_request_t> apply(const request::submit_message& one) {
+  template <class Asked>
+  void apply(const request::submit_message& one, const Asked& asked) {
     if (s_->root().main().line.plain().empty())
-      return std::nullopt;
-    return this->send(one.text);
+      return;
+    this->send(one.text, asked);
   }
   void apply(const request::stop_jump&) { s_->root().main().stop_jump(); }
-  std::optional<mux::proto::any_request_t> apply(const request::send_typed&) { return this->send(s_->root().main().line.plain()); }
+  template <class Asked>
+  void apply(const request::send_typed&, const Asked& asked) {
+    this->send(s_->root().main().line.plain(), asked);
+  }
 
   // Files: chosen with the paperclip, or dropped; the send box closed, or
   // what is in it sent -- the caption with the first.
@@ -388,20 +392,41 @@ class outbox_part {
   std::optional<std::string> files_thread_;
   // The field's text sent: as a message, an answer, or an edit -- as what is
   // written says -- and the field and its draft emptied.
-  // Sent; or, a command of its protocol's own, what it asks for returned.
-  std::optional<mux::proto::any_request_t> send(std::string text) {
+  // A line its chat's protocol reads as a command of its own -- an IRC
+  // /join -- what it asks given to `asked`, in the protocol's own type: the
+  // protocol is decided here, in the visit of the chat's state.
+  template <class Asked>
+  bool asked_as_command(const conversation_id& to, std::string_view text, const Asked& asked) {
+    return spl::visit(
+        [&](const auto& now) {
+          using mux::proto::command_defaults::command_of;
+          return asked_if(command_of(now, to, text), asked);
+        },
+        mux::ui::protocol_state_of(s_->ui, to.account));
+  }
+  static bool asked_if(std::nullopt_t, const auto&) { return false; }
+  template <class R>
+  static bool asked_if(const std::optional<R>& command, const auto& asked) {
+    if (!command)
+      return false;
+    asked(*command);
+    return true;
+  }
+  // Sent; or, a command of its protocol's own, what it asks done.
+  template <class Asked>
+  void send(std::string text, const Asked& asked) {
     // A text sent: the ways back from jumps let go, as tdesktop's
     // sendTextWithTags clears its reply returns.
     if (const auto& chosen = s_->root().main().chosen)
       s_->root().main().returns.erase(*chosen);
     auto& screen = s_->root().main();
     if (!screen.chosen || !logic::sendable(text))
-      return std::nullopt;
+      return;
     const conversation_id to = *screen.chosen;
     // A command of its protocol's own: asked, not sent.
-    if (const auto asked = mux::proto::command_of(mux::ui::protocol_state_of(s_->ui, to.account), to, text)) {
+    if (this->asked_as_command(to, text, asked)) {
       screen.line.set_text({});
-      return asked;
+      return;
     }
     // What is sent goes at the chat's end: the chat back to its newest
     // first, where it is a window elsewhere, or it would not be shown.
@@ -439,7 +464,6 @@ class outbox_part {
     screen.line.show_context(std::nullopt);
     screen.line.clear();
     drafts_->keep(to, std::string());
-    return std::nullopt;
   }
 
   struct file {

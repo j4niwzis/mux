@@ -59,20 +59,20 @@ class settings_part {
   // Appearance and rendering.
   void apply(const request::settings_appearance&) {
     if (auto* up = s_->root().settings_up())
-      up->show_appearance(k_->theme, k_->accent);
+      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
   }
   void apply(const request::settings_rendering&) {
     if (auto* up = s_->root().settings_up())
-      up->show_rendering(k_->renderer);
+      up->show_rendering(k_->appearance().renderer);
   }
   void apply(const request::set_theme& one) {
-    k_->theme = one.theme;
+    k_->choose_field<&mux::config::look_settings::theme>(one.theme);
     (void)k_->write();
     skiff::scene::forgetStyles();  // resolved with the theme before
     s_->rebuild_due = true;
   }
   void apply(const request::set_accent& one) {
-    k_->accent = one.accent;
+    k_->choose_field<&mux::config::look_settings::accent>(one.accent);
     (void)k_->write();
     skiff::scene::forgetStyles();  // resolved with the accent before
     s_->rebuild_due = true;
@@ -94,9 +94,9 @@ class settings_part {
   // The window's opacity: kept, and shown chosen; in effect from the next
   // start, where the window is made see-through or not.
   void apply(const request::set_window_opacity& one) {
-    k_->window_opacity = std::clamp(one.percent, 20, 100);
+    k_->choose_field<&mux::config::look_settings::window_opacity>(std::clamp(one.percent, 20, 100));
     auto& look = s_->looks.window;
-    look.chosen = k_->window_opacity;
+    look.chosen = k_->appearance().window_opacity;
     (void)k_->write();
     // A window made see-through: at once, everything in its colours again.
     if (look.see_through) {
@@ -104,70 +104,70 @@ class settings_part {
       skiff::scene::forgetStyles();
       s_->rebuild_due = true;
     } else if (auto* up = s_->root().settings_up()) {
-      up->show_appearance(k_->theme, k_->accent);
+      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
     }
   }
   // The interface's scale: kept, and taken by the host at the next frame --
   // all of the window laid out again at it; the page shows it chosen.
   void apply(const request::set_interface_scale& one) {
-    k_->interface_scale = std::clamp(one.percent, mux::ui::kScaleLeast, mux::ui::kScaleMost);
-    s_->looks.window.interface_scale = k_->interface_scale;
+    k_->choose_field<&mux::config::look_settings::interface_scale>(std::clamp(one.percent, mux::ui::kScaleLeast, mux::ui::kScaleMost));
+    s_->looks.window.interface_scale = k_->appearance().interface_scale;
     (void)k_->write();
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->theme, k_->accent);
+      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
   }
   // Frosted popups blurring what is under them, live: repainted with it.
   void apply(const request::flip_live_blur&) {
-    k_->live_blur = !k_->live_blur;
-    s_->looks.window.live_blur = k_->live_blur;
+    k_->choose_field<&mux::config::look_settings::live_blur>(!k_->appearance().live_blur);
+    s_->looks.window.live_blur = k_->appearance().live_blur;
     (void)k_->write();
     s_->refresh_due = true;
   }
   // The background behind the whole window: everything made again over it.
   void apply(const request::flip_wallpaper_behind&) {
-    k_->wallpaper_behind = !k_->wallpaper_behind;
-    s_->looks.window.behind = k_->wallpaper_behind;
+    k_->choose_field<&mux::config::look_settings::wallpaper_behind>(!k_->appearance().wallpaper_behind);
+    s_->looks.window.behind = k_->appearance().wallpaper_behind;
     (void)k_->write();
     skiff::scene::forgetStyles();
     s_->rebuild_due = true;
   }
   // Frosted's blur: kept, the backgrounds' frost made again, and shown.
   void apply(const request::set_frost_blur& one) {
-    k_->frost_blur = std::clamp(one.percent, 0.0, 100.0);
-    s_->looks.window.frost = k_->frost_blur;
+    k_->choose_field<&mux::config::look_settings::frost_blur>(std::clamp(one.percent, 0.0, 100.0));
+    s_->looks.window.frost = k_->appearance().frost_blur;
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->theme, k_->accent);
+      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
   }
   // The space bars at all, and the top one.
   void apply(const request::flip_spaces&) {
-    k_->spaces = !k_->spaces;
-    s_->looks.window.spaces = k_->spaces;
+    k_->choose_field<&mux::config::look_settings::spaces>(!k_->appearance().spaces);
+    s_->looks.window.spaces = k_->appearance().spaces;
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->theme, k_->accent);
+      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
   }
   void apply(const request::flip_top_bar&) {
-    k_->top_bar = !k_->top_bar;
-    s_->looks.window.top_bar = k_->top_bar;
+    k_->choose_field<&mux::config::look_settings::top_bar>(!k_->appearance().top_bar);
+    s_->looks.window.top_bar = k_->appearance().top_bar;
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->theme, k_->accent);
+      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
   }
   void apply(const request::flip_show_fps&) {
     k_->choose_field<&mux::config::frame_settings::show_fps>(!k_->frames().show_fps);
     (void)k_->write();
   }
   void apply(const request::set_renderer& one) {
-    k_->renderer = one.renderer;
+    k_->choose_field<&mux::config::look_settings::renderer>(one.renderer);
     if (auto* up = s_->root().settings_up()) {
       if (auto* page = up->appearance())
-        page->show(k_->theme, k_->accent);
+        page->show(k_->appearance().theme, k_->appearance().accent);
       if (auto* page = up->rendering())
-        page->show(k_->renderer);
+        page->show(k_->appearance().renderer);
     }
     (void)k_->write();
   }

@@ -458,18 +458,18 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   shared.emoji.favourite_stickers = this->favourite_stickers;
   if (saved.last_account)
     this->root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
-  shared.looks.bubbles_everywhere = this->bubbles.value_or(mux::config::bubble_look{});
-  shared.looks.panels_everywhere = this->panels.value_or(mux::config::bubble_look{});
-  this->wallpaper_behind = shared.looks.window.behind;
+  shared.looks.bubbles_everywhere = this->appearance().bubbles.value_or(mux::config::bubble_look{});
+  shared.looks.panels_everywhere = this->appearance().panels.value_or(mux::config::bubble_look{});
+  this->choose_field<&mux::config::look_settings::wallpaper_behind>(shared.looks.window.behind);
   shared.looks.window.live_blur = saved.live_blur.value_or(false);
-  this->live_blur = shared.looks.window.live_blur;
-  this->frost_blur = shared.looks.window.frost;
-  shared.looks.window.home_hides = this->home_hides_spaced;
-  shared.looks.window.home_direct = this->home_hides_direct;
-  shared.looks.window.spaces = this->spaces;
-  shared.looks.window.top_bar = this->top_bar;
-  this->interface_scale = std::clamp(this->interface_scale, mux::ui::kScaleLeast, mux::ui::kScaleMost);
-  shared.looks.window.interface_scale = this->interface_scale;
+  this->choose_field<&mux::config::look_settings::live_blur>(shared.looks.window.live_blur);
+  this->choose_field<&mux::config::look_settings::frost_blur>(shared.looks.window.frost);
+  shared.looks.window.home_hides = this->appearance().home_hides_spaced;
+  shared.looks.window.home_direct = this->appearance().home_hides_direct;
+  shared.looks.window.spaces = this->appearance().spaces;
+  shared.looks.window.top_bar = this->appearance().top_bar;
+  this->choose_field<&mux::config::look_settings::interface_scale>(std::clamp(this->appearance().interface_scale, mux::ui::kScaleLeast, mux::ui::kScaleMost));
+  shared.looks.window.interface_scale = this->appearance().interface_scale;
   if (!demo)
     this->drafts.load();
   this->model->show_deleted = this->history().show_deleted;

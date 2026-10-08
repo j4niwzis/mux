@@ -56,10 +56,10 @@ void app::show_placements() {
       const mux::config::accent_t colour = one.strip_colour ? mux::config::accent_of(one.strip_colour)
                                            : own != saved.end() ? mux::config::colour_of(*own)
                                                                 : mux::config::default_colour_of(one.account);
-      screen.strips.insert_or_assign(chat, mux::ui::colour_of(colour, theme));
+      screen.strips.insert_or_assign(chat, mux::ui::colour_of(colour, this->appearance().theme));
     }
     screen.side.current_account = screen.current;
-    screen.side.theme_now = theme;
+    screen.side.theme_now = this->appearance().theme;
     screen.side.accounts_known.clear();
     for (const auto& [id, account] : model->accounts())
       screen.side.accounts_known.push_back(id);
@@ -87,7 +87,7 @@ void app::show_looks_now() {
   // The panels' look, as the chosen chat's levels say, else every chat's:
   // the whole window repainted where it changes -- nothing made again.
   shared.looks.panels = root().main().chosen ? this->panels_of(*root().main().chosen)
-                                                   : panels.value_or(mux::config::bubble_look{});
+                                                   : this->appearance().panels.value_or(mux::config::bubble_look{});
   if (mux::ui::show_panels(shared.paint, shared.looks.panels, shared.looks.window, colours)) {
     root().markDamaged();
     skiff::scene::work::mark(root().main().fState.fId);  // an ease ticked by the screen
@@ -95,9 +95,9 @@ void app::show_looks_now() {
 }
 
 void app::show_space_bars() {
-  root().main().spaces_on = spaces;
-  root().main().top_bar_on = top_bar;
-  root().main().space_places = space_places;
+  root().main().spaces_on = this->appearance().spaces;
+  root().main().top_bar_on = this->appearance().top_bar;
+  root().main().space_places = this->appearance().space_places;
   root().main().forums = this->chats_where<&mux::app::chat_choices::forum>();
   root().main().hidden_from_home = this->chats_where<&mux::app::chat_choices::hidden_from_home>();
   // Home without what spaces hold: the account's own choice, else every one's.
@@ -106,14 +106,14 @@ void app::show_space_bars() {
       if (const auto* account = this->settings_of(by->address))
         if (const auto& own = mux::config::home_hides_of(*account))
           return *own;
-    return home_hides_spaced;
+    return this->appearance().home_hides_spaced;
   }();
   root().main().home_hides_direct = [&] {
     if (const auto& by = root().main().current)
       if (const auto* account = this->settings_of(by->address))
         if (const auto& own = mux::config::home_direct_of(*account))
           return *own;
-    return home_hides_direct;
+    return this->appearance().home_hides_direct;
   }();
 }
 
@@ -122,7 +122,7 @@ void app::show_space_bars() {
 // account's.
 void app::show_levels() {
   {
-    shared.looks.at(mux::choice_level::everywhere{}) = {wallpaper, bubbles, panels};
+    shared.looks.at(mux::choice_level::everywhere{}) = {this->appearance().wallpaper, this->appearance().bubbles, this->appearance().panels};
     mux::ui::looks_held account_held, chat_held;
     if (const auto& chosen = root().main().chosen) {
       chat_held.wallpaper = this->own_of<&mux::app::chat_choices::wallpaper>(*chosen);
@@ -162,7 +162,7 @@ void app::show_backgrounds() {
                                                  : mux::config::wallpaper_t{mux::config::wallpaper::theme{}};
   // Behind the whole window, where it is so: the chat's, else every chat's.
   root().show_behind(root().main().chosen ? root().main().wallpaper
-                                          : wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}}));
+                                          : this->appearance().wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}}));
 }
 
 // Which chats show who has read up to where, which show no link previews,

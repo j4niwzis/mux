@@ -241,7 +241,8 @@ class preferences_part {
   // the one moved taken out of the bar it came from, and from hidden.
   void apply(const request::place_spaces& one) {
     const auto mine = [&](const mux::config::space_placed& p) { return p.account == one.account; };
-    std::erase_if(k_->space_places, [&](const mux::config::space_placed& p) {
+    auto places = k_->appearance().space_places;
+    std::erase_if(places, [&](const mux::config::space_placed& p) {
       return mine(p) && (p.bar == one.bar || (one.moved && p.item == *one.moved && (p.bar == mux::config::space_bar_t{mux::config::space_bar::hidden{}} ||
                                                                                 (one.from && p.bar == *one.from))));
     });
@@ -250,15 +251,16 @@ class preferences_part {
     std::ranges::copy(std::views::transform(one.order, [&](const mux::config::space_item_t& item) {
                         return mux::config::space_placed{one.account, item, one.bar};
                       }),
-                      std::back_inserter(k_->space_places));
+                      std::back_inserter(places));
+    k_->choose_field<&mux::config::look_settings::space_places>(std::move(places));
     (void)k_->write();
     s_->refresh_due = true;
   }
   // Home without what spaces hold, at a level.
   void apply(const request::set_home_hides& one) {
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
-                                       k_->home_hides_spaced = one.on.value_or(false);
-                                       s_->looks.window.home_hides = k_->home_hides_spaced;
+                                       k_->choose_field<&mux::config::look_settings::home_hides_spaced>(one.on.value_or(false));
+                                       s_->looks.window.home_hides = k_->appearance().home_hides_spaced;
                                      },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
@@ -270,12 +272,12 @@ class preferences_part {
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->theme, k_->accent);
+      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
   }
   void apply(const request::set_home_direct& one) {
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
-                                       k_->home_hides_direct = one.on.value_or(false);
-                                       s_->looks.window.home_direct = k_->home_hides_direct;
+                                       k_->choose_field<&mux::config::look_settings::home_hides_direct>(one.on.value_or(false));
+                                       s_->looks.window.home_direct = k_->appearance().home_hides_direct;
                                      },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
@@ -287,22 +289,24 @@ class preferences_part {
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->theme, k_->accent);
+      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
   }
   // An item's bars, as chosen: the side, the top, both, or none -- hidden.
   void apply(const request::set_space_bars& one) {
     (void)s_->root().main().close_space_menu();
-    std::erase_if(k_->space_places, [&](const mux::config::space_placed& p) { return p.account == one.account && p.item == one.item; });
+    auto places = k_->appearance().space_places;
+    std::erase_if(places, [&](const mux::config::space_placed& p) { return p.account == one.account && p.item == one.item; });
     if (one.side)
-      k_->space_places.push_back({one.account, one.item, mux::config::space_bar::side{}});
+      places.push_back({one.account, one.item, mux::config::space_bar::side{}});
     if (one.top)
-      k_->space_places.push_back({one.account, one.item, mux::config::space_bar::top{}});
+      places.push_back({one.account, one.item, mux::config::space_bar::top{}});
     if (!one.side && !one.top)
-      k_->space_places.push_back({one.account, one.item, mux::config::space_bar::hidden{}});
+      places.push_back({one.account, one.item, mux::config::space_bar::hidden{}});
+    k_->choose_field<&mux::config::look_settings::space_places>(std::move(places));
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->theme, k_->accent);
+      up->show_appearance(k_->appearance().theme, k_->appearance().accent);
   }
   // How a level shows room events, as a whole: what it holds replaced.
   void apply(const request::set_room_events& one) {
@@ -449,7 +453,7 @@ class preferences_part {
         kept = k_->proxies[static_cast<std::size_t>(one.index)].name;
       (void)k_->write();
       proxying_->reconnect(account);
-      panel.show_page(mux::ui::account_page::proxy{}, account, *s_->model, k_->proxies, k_->theme);
+      panel.show_page(mux::ui::account_page::proxy{}, account, *s_->model, k_->proxies, k_->appearance().theme);
     });
   }
 

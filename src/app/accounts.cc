@@ -168,7 +168,7 @@ class accounts_part {
   // asks for it as it opens.
   void apply(const request::account_page& one) {
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-      panel.show_page(one.page, account, *s_->model, k_->proxies, k_->theme);
+      panel.show_page(one.page, account, *s_->model, k_->proxies, k_->appearance().theme);
     });
   }
 

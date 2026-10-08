@@ -143,6 +143,30 @@ struct frame_settings {
   friend bool operator==(const frame_settings&, const frame_settings&) = default;
 };
 
+// How the window looks, for every account and chat that does not say: the
+// theme and its accent, the renderer for the next start, the window's
+// opacity, scale and blur, the space bars and where each item is put, and
+// every chat's background, bubbles and panels.
+struct look_settings {
+  theme_t theme = theme::tinted{};
+  accent_t accent = accent::theme_own{};
+  renderer_t renderer = renderer::opengl{};
+  int window_opacity = 100;
+  bool wallpaper_behind = false;
+  bool live_blur = false;
+  double frost_blur = 10.0;
+  bool spaces = true;
+  bool top_bar = true;
+  bool home_hides_spaced = false;
+  bool home_hides_direct = false;  // and direct messages, where that is so
+  std::vector<space_placed> space_places;
+  int interface_scale = 100;  // in percent of the display's
+  std::optional<wallpaper_t> wallpaper;
+  std::optional<bubble_look> bubbles;
+  std::optional<bubble_look> panels;
+  friend bool operator==(const look_settings&, const look_settings&) = default;
+};
+
 // What is done to a picture dropped on the window before it is sent.
 struct sending_settings {
   bool strip_metadata = true;  // its EXIF, XMP, text and the like cut out

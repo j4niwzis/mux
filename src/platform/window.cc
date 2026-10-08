@@ -250,7 +250,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
         // window's by it, and what the pointer says is taken in the scene's.
         const float to_scene = sdl::SDL_GetWindowPixelDensity(window) /
                                sdl::SDL_GetWindowDisplayScale(window) *
-                               100.0f / static_cast<float>(std::max(1, app.interface_scale));
+                               100.0f / static_cast<float>(std::max(1, app.appearance().interface_scale));
         // An event of a notification's window: a press opens its chat, in
         // the window brought up; nothing else of it reaches the scene.
         if (sdl::SDL_Window* over = sdl::SDL_GetWindowFromEvent(&event); over && over != window && shown_toasts.owns(over)) {
@@ -451,7 +451,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       }
 
       // The display's scale, times the interface's (Settings, Appearance).
-      const float scale = sdl::SDL_GetWindowDisplayScale(window) * static_cast<float>(app.interface_scale) / 100.0f;
+      const float scale = sdl::SDL_GetWindowDisplayScale(window) * static_cast<float>(app.appearance().interface_scale) / 100.0f;
       // Another: all of it laid out and painted again at it.
       if (scale != std::exchange(scale_before, scale)) {
         scene.state().invalidateLayout();

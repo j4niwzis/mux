@@ -51,6 +51,8 @@ struct kept_root {
   skiff::model::Tracked<mux::config::history_settings> history;
   // How much is kept, in memory and on disk.
   skiff::model::Tracked<mux::config::cache_limits> limits;
+  // How the window looks.
+  skiff::model::Tracked<mux::config::look_settings> looks;
 };
 // The file to be written again: one, however many changes asked for it.
 struct write_kept {
@@ -80,6 +82,7 @@ struct kept_reactions {
   [[nodiscard]] std::tuple<write_kept, limits_changed> on(skiff::model::Changed<mux::config::cache_limits>, const mux::config::cache_limits&) const {
     return {};
   }
+  [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::look_settings>, const mux::config::look_settings&) const { return {}; }
   [[nodiscard]] push_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::notification_settings::unified_push>>, const auto& at) const {
     return {skiff::model::part(at).value_or(false)};
   }
@@ -105,28 +108,6 @@ struct kept_settings {
   std::vector<std::string> recent_emoji;
   // The stickers sent lately, and the favourites.
   std::vector<mux::emote> recent_stickers, favourite_stickers;
-  // The theme and the renderer, for the next start.
-  mux::config::theme_t theme = mux::config::theme::tinted{};
-  mux::config::accent_t accent = mux::config::accent::theme_own{};
-  mux::config::renderer_t renderer = mux::config::renderer::opengl{};
-  // Read by the host at each frame: only the damage repainted; and it
-  // outlined.
-  int window_opacity = 100;
-  bool wallpaper_behind = false;
-  bool live_blur = false;
-  double frost_blur = 10.0;
-  // The space bars: whether there are any, whether the top one is, and
-  // where each item is put, in order.
-  bool spaces = true;
-  bool top_bar = true;
-  // Home without what spaces hold -- but direct messages -- for every
-  // account that does not say.
-  bool home_hides_spaced = false;
-  bool home_hides_direct = false;  // and direct messages, where that is so
-  std::vector<mux::config::space_placed> space_places;
-  // The interface's scale, in percent of the display's: read by the host at
-  // each frame.
-  int interface_scale = 100;
   // What is done to a picture dropped before it is sent, as the model holds it.
   [[nodiscard]] const mux::config::sending_settings& sending() const { return state.root().sending.fValue; }
   // What is kept and shown of the history, as the model holds it.
@@ -138,6 +119,8 @@ struct kept_settings {
   void set_part(Part now) {
     (void)state.apply(skiff::model::edit(skiff::model::placeOf<Part, kept_root>(), skiff::model::setTo(std::move(now))));
   }
+  // How the window looks, as the model holds it.
+  [[nodiscard]] const mux::config::look_settings& appearance() const { return state.root().looks.fValue; }
   // How frames are drawn, as the model holds it: read by the host at each.
   [[nodiscard]] const mux::config::frame_settings& frames() const { return state.root().frames.fValue; }
   // One setting of what the model keeps, chosen in its place by its member
@@ -151,10 +134,6 @@ struct kept_settings {
   }
   // The chats listed in other accounts' lists than their own.
   std::vector<mux::config::chat_placement> placements;
-  // Every chat's background, bubbles and panels.
-  std::optional<mux::config::wallpaper_t> wallpaper;
-  std::optional<mux::config::bubble_look> bubbles;
-  std::optional<mux::config::bubble_look> panels;
   // What each chat -- or space -- chose for itself, by the chat: only those
   // that chose something.
   kept_model state;
@@ -243,11 +222,11 @@ struct kept_settings {
   }
   [[nodiscard]] mux::config::bubble_look panels_of(const conversation_id& chat) {
     const auto* account = this->settings_of(chat.account.address);
-    return this->look_of<&chat_choices::panels>(account ? mux::config::panels_of(*account) : std::nullopt, panels, chat);
+    return this->look_of<&chat_choices::panels>(account ? mux::config::panels_of(*account) : std::nullopt, this->appearance().panels, chat);
   }
   [[nodiscard]] mux::config::bubble_look bubbles_of(const conversation_id& chat) {
     const auto* account = this->settings_of(chat.account.address);
-    return this->look_of<&chat_choices::bubbles>(account ? mux::config::bubbles_of(*account) : std::nullopt, bubbles, chat);
+    return this->look_of<&chat_choices::bubbles>(account ? mux::config::bubbles_of(*account) : std::nullopt, this->appearance().bubbles, chat);
   }
   // A chat's background: its own, else its account's, else every chat's,
   // else the theme's.
@@ -257,7 +236,7 @@ struct kept_settings {
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::wallpaper_of(*account))
         return mux::config::wallpaper_of(std::string_view(*chosen));
-    return wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}});
+    return this->appearance().wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}});
   }
   // What notifies, as the model holds it; changed by its edits: one
   // setting in its place, by its member pointer, or all of them at once.
@@ -418,7 +397,9 @@ struct kept_settings {
     const auto chat_of = [](const std::string& account, const std::string& conversation) {
       return mux::conversation_id{{mux::proto::protocol_of(account), account}, conversation};
     };
-    // Each chat's choices put together first, then the model made of them.
+    // Each chat's choices, and how the window looks, put together first,
+    // then the model made of them.
+    mux::config::look_settings looks_read;
     std::map<conversation_id, chat_choices> chats;
     this->saved = mux::config::accounts_of(saved);
     this->foreign_accounts = mux::config::foreign_of(saved);
@@ -436,30 +417,30 @@ struct kept_settings {
     };
     this->recent_stickers = emotes_of(saved.recent_stickers);
     this->favourite_stickers = emotes_of(saved.favourite_stickers);
-    this->theme = mux::config::theme_of(saved.theme);
+    looks_read.theme = mux::config::theme_of(saved.theme);
     if (saved.wallpaper)
-      this->wallpaper = mux::config::wallpaper_of(std::string_view(*saved.wallpaper));
+      looks_read.wallpaper = mux::config::wallpaper_of(std::string_view(*saved.wallpaper));
     if (saved.bubbles)
-      this->bubbles = mux::config::bubble_look_of(*saved.bubbles);
+      looks_read.bubbles = mux::config::bubble_look_of(*saved.bubbles);
     if (saved.panels)
-      this->panels = mux::config::bubble_look_of(*saved.panels);
-    this->accent = mux::config::accent_of(saved.accent);
-    this->renderer = mux::config::renderer_of(saved.renderer);
+      looks_read.panels = mux::config::bubble_look_of(*saved.panels);
+    looks_read.accent = mux::config::accent_of(saved.accent);
+    looks_read.renderer = mux::config::renderer_of(saved.renderer);
     const mux::config::frame_settings frames_read{.partial_redraw = saved.partial_redraw.value_or(false),
                                               .flash_redraws = saved.flash_redraws.value_or(false),
                                               .vsync = saved.vsync.value_or(true),
                                               .show_fps = saved.show_fps.value_or(false)};
-    this->window_opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
-    this->spaces = saved.spaces.value_or(true);
-    this->top_bar = saved.top_bar.value_or(true);
-    this->home_hides_spaced = saved.home_hides_spaced.value_or(false);
-    this->home_hides_direct = saved.home_hides_direct.value_or(false);
+    looks_read.window_opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
+    looks_read.spaces = saved.spaces.value_or(true);
+    looks_read.top_bar = saved.top_bar.value_or(true);
+    looks_read.home_hides_spaced = saved.home_hides_spaced.value_or(false);
+    looks_read.home_hides_direct = saved.home_hides_direct.value_or(false);
     if (saved.space_places)
-      this->space_places = std::ranges::to<std::vector>(std::views::transform(*saved.space_places, [](const mux::config::space_place& one) {
+      looks_read.space_places = std::ranges::to<std::vector>(std::views::transform(*saved.space_places, [](const mux::config::space_place& one) {
                                return mux::config::space_placed{one.account, mux::config::space_item_of(one.item),
                                                                 mux::config::space_bar_of(one.bar)};
                              }));
-    this->interface_scale = saved.interface_scale.value_or(100);
+    looks_read.interface_scale = saved.interface_scale.value_or(100);
     const auto limits_read = saved.cache.value_or(mux::config::cache_limits{});
     const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
     const auto history_read = saved.history.value_or(mux::config::history_settings{});
@@ -504,6 +485,7 @@ struct kept_settings {
     root.frames.fValue = frames_read;
     root.history.fValue = history_read;
     root.limits.fValue = limits_read;
+    root.looks.fValue = looks_read;
     this->state = kept_model(std::move(root));
   }
   [[nodiscard]] mux::config::file file() const {
@@ -523,47 +505,47 @@ struct kept_settings {
       out.favourite_stickers = kept_of(favourite_stickers);
     if (!proxies.empty())
       out.proxies = proxies;
-    out.theme = mux::config::word_of(theme);
-    if (wallpaper)
-      out.wallpaper = mux::config::word_of(*wallpaper);
-    if (bubbles)
-      out.bubbles = mux::config::word_of(*bubbles);
-    if (panels)
-      out.panels = mux::config::word_of(*panels);
-    out.accent = mux::config::word_of(accent);
-    out.renderer = mux::config::word_of(renderer);
+    out.theme = mux::config::word_of(this->appearance().theme);
+    if (this->appearance().wallpaper)
+      out.wallpaper = mux::config::word_of(*this->appearance().wallpaper);
+    if (this->appearance().bubbles)
+      out.bubbles = mux::config::word_of(*this->appearance().bubbles);
+    if (this->appearance().panels)
+      out.panels = mux::config::word_of(*this->appearance().panels);
+    out.accent = mux::config::word_of(this->appearance().accent);
+    out.renderer = mux::config::word_of(this->appearance().renderer);
     if (this->frames().partial_redraw)
       out.partial_redraw = true;
     if (this->frames().flash_redraws)
       out.flash_redraws = true;
     if (!this->frames().vsync)
       out.vsync = false;
-    if (window_opacity != 100)
-      out.window_opacity = window_opacity;
-    if (wallpaper_behind)
+    if (this->appearance().window_opacity != 100)
+      out.window_opacity = this->appearance().window_opacity;
+    if (this->appearance().wallpaper_behind)
       out.wallpaper_behind = true;
-    if (live_blur)
+    if (this->appearance().live_blur)
       out.live_blur = true;
-    if (frost_blur != 10.0)
-      out.frost = frost_blur;
+    if (this->appearance().frost_blur != 10.0)
+      out.frost = this->appearance().frost_blur;
     out.frost_blur = std::nullopt;
-    if (!spaces)
+    if (!this->appearance().spaces)
       out.spaces = false;
-    if (!top_bar)
+    if (!this->appearance().top_bar)
       out.top_bar = false;
-    if (home_hides_spaced)
+    if (this->appearance().home_hides_spaced)
       out.home_hides_spaced = true;
-    if (home_hides_direct)
+    if (this->appearance().home_hides_direct)
       out.home_hides_direct = true;
-    if (!space_places.empty())
-      out.space_places = std::ranges::to<std::vector>(std::views::transform(space_places, [](const mux::config::space_placed& one) {
+    if (!this->appearance().space_places.empty())
+      out.space_places = std::ranges::to<std::vector>(std::views::transform(this->appearance().space_places, [](const mux::config::space_placed& one) {
                            return mux::config::space_place{one.account, mux::config::word_of(one.item),
                                                            std::string(mux::config::word_of(one.bar))};
                          }));
     if (this->frames().show_fps)
       out.show_fps = true;
-    if (interface_scale != 100)
-      out.interface_scale = interface_scale;
+    if (this->appearance().interface_scale != 100)
+      out.interface_scale = this->appearance().interface_scale;
     out.cache = this->limits();
     out.sending = this->sending();
     out.history = this->history();

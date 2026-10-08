@@ -45,7 +45,7 @@ export namespace mux::ui {
 // when the latest came -- and one opened: its root, its answers, and a
 // field to answer in it.
 template <class Actions>
-struct threads_panel : nodes::Stack, outbox {
+struct threads_panel : nodes::Stack {
   std::optional<std::string> open;  // the thread open, else the list
   std::vector<message> shown;       // what the open thread shows now
   std::optional<std::string> answering;  // an answer in it, answered

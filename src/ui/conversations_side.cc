@@ -200,7 +200,9 @@ struct top_view : nodes::Stack {
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
 template <class Actions, class Pick>
-struct side_column : nodes::Stack, outbox {
+struct side_column : nodes::Stack {
+  // A space dragged to another place in the bars.
+  using Answer = ::mux::ui::request::place_spaces;
   // The colours it is made in, for what it makes later: its menus, the
   // icon dragged.
   const palette* colours_ = nullptr;

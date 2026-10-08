@@ -34,11 +34,12 @@ import :conversations_screen;
 export namespace mux::ui {
 
 template <class Actions>
-void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+auto conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) -> std::optional<Answer> {
+  std::optional<Answer> asked;
   namespace keys = scene::keys;
   if (press.key == keys::kEscape && this->close_space_menu()) {
     reply.handle();
-    return;
+    return asked;
   }
   const bool control = press.modifiers.template has<scene::modifier::control>();
   const bool any = control || press.modifiers.template has<scene::modifier::shift>() ||
@@ -51,29 +52,29 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     if (const auto place = static_cast<std::size_t>(digit - kFolderKeys.begin()); place < tabs.size())
       this->choose_folder(tabs[place].which);
     reply.handle();
-    return;
+    return asked;
   }
   // A forum gone into, no chat of it open: Esc back out to the chats.
   if (press.key == keys::kEscape && !any && !chosen && forum_open) {
     this->close_forum();
     reply.handle();
-    return;
+    return asked;
   }
   if (!chosen && !pointed)
-    return;
+    return asked;
   // Only a forum gone to: Alt+Up and Alt+Down go on from it, nothing else.
   if (!chosen && !((press.key == keys::kUp || press.key == keys::kDown) && press.modifiers.template has<scene::modifier::alt>()))
-    return;
+    return asked;
   if (press.key == keys::kF && control) {
-    this->emit(::mux::ui::request::open_search{});
+    asked = ::mux::ui::request::open_search{};
   } else if (press.key == keys::kK && control) {
-    this->emit(::mux::ui::request::ask_link{});
+    asked = ::mux::ui::request::ask_link{};
   } else if (press.key == keys::kUp && control) {
-    this->emit(::mux::ui::request::reply_step{true});
+    asked = ::mux::ui::request::reply_step{true};
   } else if (press.key == keys::kDown && control) {
-    this->emit(::mux::ui::request::reply_step{false});
+    asked = ::mux::ui::request::reply_step{false};
   } else if (press.key == keys::kUp && !any && line.text().empty()) {
-    this->emit(::mux::ui::request::edit_last{});
+    asked = ::mux::ui::request::edit_last{};
   } else if (press.key == keys::kC && control) {
     auto& bubbles = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
     const auto selected = std::ranges::find_if(bubbles, [](message_bubble<Actions>& one) { return one.parts.body.parts.text.hasSelection(); });
@@ -81,18 +82,18 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     if (selected == bubbles.end()) {
       if (!scene::selectedText().empty())
         skiff::scene::setClipboardText(scene::selectedText());
-      return;
+      return asked;
     }
     skiff::scene::setClipboardText(selected->parts.body.parts.text.selected());
   } else if (press.key == keys::kEscape && !any && chat.parts.selection.visible()) {
     // Messages selected, the focus elsewhere than their bar: let go first.
-    this->emit(::mux::ui::request::selection_cancel{});
+    asked = ::mux::ui::request::selection_cancel{};
   } else if (press.key == keys::kEscape && !any && search.visible()) {
-    this->emit(::mux::ui::request::close_search{});
+    asked = ::mux::ui::request::close_search{};
   } else if (press.key == keys::kEscape && !any && parts.threads.answering) {
     parts.threads.stop_answering();
   } else if (press.key == keys::kEscape && !any && line.answering()) {
-    this->emit(::mux::ui::request::cancel_compose{});
+    asked = ::mux::ui::request::cancel_compose{};
   } else if ((press.key == keys::kTab && control) ||
              ((press.key == keys::kUp || press.key == keys::kDown) && press.modifiers.template has<scene::modifier::alt>())) {
     // To the next chat in the list, or the one before: Ctrl+Tab and
@@ -103,7 +104,7 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     // From the forum gone to, where one is; else from the chat open.
     const auto at = std::ranges::find(rows, pointed ? *pointed : *chosen);
     if (at == rows.end() || rows.empty())
-      return;
+      return asked;
     const auto index = static_cast<std::size_t>(at - rows.begin());
     const std::size_t to = back ? (index == 0 ? rows.size() - 1 : index - 1) : (index + 1) % rows.size();
     // A forum: gone to, lit, not opened -- Alt+Right opens it. A chat: opened.
@@ -113,22 +114,23 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
         this->show(*last_model, false);
     } else {
       pointed.reset();
-      this->emit(::mux::ui::request::choose{rows[to]});
+      asked = ::mux::ui::request::choose{rows[to]};
     }
   } else if (press.key == keys::kPageUp || press.key == keys::kPageDown) {
     // A page of the messages, most of what is in view.
     const float page = timeline.bounds().height() * 0.9f;
     timeline.scrollTo(std::max(0.0f, timeline.current() + (press.key == keys::kPageUp ? -page : page)));
   } else if (press.key == keys::kEnd && control) {
-    this->emit(::mux::ui::request::jump_to_end{});
+    asked = ::mux::ui::request::jump_to_end{};
   } else if (press.key == keys::kEscape && !any) {
     // Nothing else to cancel: a step back -- the threads or the info shut,
     // else the chat closed, as tdesktop's Esc closes it.
-    this->step_back();
+    asked = this->step_back();
   } else {
-    return;
+    return asked;
   }
   reply.handle();
+  return asked;
 }
 
 template <class Actions>
@@ -332,22 +334,24 @@ void conversations_screen<Actions>::onPointer(scene::phase::capture, const scene
 }
 
 template <class Actions>
-void conversations_screen<Actions>::onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) {
+auto conversations_screen<Actions>::onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) -> std::optional<Answer> {
+  std::optional<Answer> asked;
   const std::optional<skia::SkPoint> from = std::exchange(swipe_from, std::nullopt);
   if (!from || !single)
-    return;
+    return asked;
   const float dx = lift.x - from->fX;
   const float dy = lift.y - from->fY;
   if (dx > 90.0f && std::abs(dy) < dx * 0.5f) {
     if (chosen)
-      this->step_back();
+      asked = this->step_back();
     else
-      this->emit(::mux::ui::request::open_drawer{});
+      asked = ::mux::ui::request::open_drawer{};
     reply.handle();
   } else if (const auto row = std::exchange(swipe_row, std::nullopt); row && !chosen && -dx > 90.0f && std::abs(dy) < -dx * 0.5f) {
-    this->emit(::mux::ui::request::toggle_mute_of{*row});
+    asked = ::mux::ui::request::toggle_mute_of{*row};
     reply.handle();
   }
+  return asked;
 }
 
 template <class Actions>

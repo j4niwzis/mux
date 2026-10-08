@@ -164,7 +164,7 @@ struct found_person_row : nodes::Stack {
 // a press on one starting the chat; and one's own link, to send to someone
 // not found.
 template <class Actions>
-struct start_chat_box : nodes::Stack, outbox {
+struct start_chat_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
   // The colours it is made in, for its parts and the rows it makes later.

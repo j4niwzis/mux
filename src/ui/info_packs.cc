@@ -48,7 +48,7 @@ export namespace mux::ui {
 // removable; images added from files, uploaded as they are chosen; saved as
 // the room's state, or one's account data.
 template <class Actions>
-struct packs_box : nodes::Stack, outbox {
+struct packs_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
   // The colours it is made in, for its parts and the rows it makes later.

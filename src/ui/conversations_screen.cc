@@ -70,6 +70,8 @@ constexpr auto composer_views_for(const State& state, type_tag<Actions> tag) {
 
 template <class Actions>
 struct conversations_screen : nodes::Stack, outbox {
+  // What its keys and its swipes ask for.
+  using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of>;
   // What it was handed, for the rows it makes.
   ui_needs<Actions> needs_;
   std::optional<conversation_id> chosen;
@@ -537,26 +539,25 @@ struct conversations_screen : nodes::Stack, outbox {
   }
   // The keys, while the list is up: Up and Down through it, Enter picks,
   // Esc closes it -- before the input reads Enter as sending.
-  void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
+  std::optional<Answer> onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
     namespace keys = scene::keys;
     // Alt+Right: into the forum gone to; Alt+Left: out of the one open, to
     // its row. Taken before the field: it moves its caret on Left and Right
     // whatever the modifiers, and took Alt+Left from under this.
     if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kRight && pointed) {
-      const conversation_id into = *std::exchange(pointed, std::nullopt);
-      this->emit(::mux::ui::request::choose{into});
       reply.handle();
-      return;
+      return ::mux::ui::request::choose{*std::exchange(pointed, std::nullopt)};
     }
     if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kLeft && forum_open && current) {
       pointed = conversation_id{*current, *forum_open};
       this->close_forum();
       reply.handle();
-      return;
+      return std::nullopt;
     }
     if (this->list_keys(chat.parts.mentions, mention_lit, [this](std::size_t i) { this->choose_mention(i); }, press) ||
         this->list_keys(chat.parts.emojis, emoji_lit, [this](std::size_t i) { this->choose_emoji(i); }, press))
       reply.handle();
+    return std::nullopt;
   }
   void choose_folder(const folder_t& which) {
     if (which != folder)
@@ -786,7 +787,7 @@ struct conversations_screen : nodes::Stack, outbox {
   // above, Ctrl+Down back down; Ctrl+C copies what is selected in the
   // messages; Esc lets an answer or an edit go.
   using Node::onKey;
-  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply);
+  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply);
   // Messages selected: the selection bar in place of the head, and the
   // messages marked; none, the head back.
   void show_selection(const std::set<std::string>& ids, bool forwardable, bool deletable) {
@@ -852,16 +853,16 @@ struct conversations_screen : nodes::Stack, outbox {
   void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply);
   // The swipe let go: far enough to the right, and more across than down --
   // out of the chat, to the chats.
-  void onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply);
+  std::optional<Answer> onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply);
   // Single, a step back: from the threads or the info to the chat, from
   // the chat to the chats -- a swipe across, or Esc.
-  void step_back() {
+  Answer step_back() {
     if (threads_open)
-      this->emit(::mux::ui::request::toggle_threads{});
+      return ::mux::ui::request::toggle_threads{};
     else if (info_open)
-      this->emit(::mux::ui::request::toggle_info{});
+      return ::mux::ui::request::toggle_info{};
     else
-      this->emit(::mux::ui::request::close_chat{});
+      return ::mux::ui::request::close_chat{};
   }
   // Esc too.
   bool close_space_menu() {

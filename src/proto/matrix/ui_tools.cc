@@ -29,7 +29,7 @@ using namespace ::mux::ui;
 // The developer tools, as Element's: some JSON to read and copy; a room's
 // state, by type, then by key, then the event; an event of any type sent.
 template <class Actions>
-struct devtools_box : nodes::Stack, outbox {
+struct devtools_box : nodes::Stack {
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   struct close_it {

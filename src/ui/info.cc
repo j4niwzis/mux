@@ -224,8 +224,8 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
       std::optional<person_row> person_tiles;
       nodes::Box<> band_1;
       about_block about;
-      std::vector<id_line> addresses;
-      id_line id_text;
+      std::vector<id_line_t> addresses;
+      id_line_t id_text;
     } parts;
 
     head(info_panel *panel, const view &shown)
@@ -244,7 +244,7 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
                 .id_text = id_line(*panel->colours_, shown.key, shown.copied)} {
       auto& [top, avatar, name, status, tiles, person_tiles, band_1, about, addresses, id_text] = parts;
       for (const std::string& address : shown.addresses)
-        addresses.emplace_back(*panel->colours_, address, "", "Address");
+        addresses.push_back(id_line(*panel->colours_, address, "", "Address"));
       if (shown.of_person)
         person_tiles.emplace(panel);
       else
@@ -259,7 +259,7 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
   struct members_head : skiff::compose::Stacked {
     using add_button = icon_button<not_yet<Actions>>;
     struct parts_t {
-      icon_view people;
+      icon_view_t people;
       nodes::Text title;
       add_button add_member;
     } parts;

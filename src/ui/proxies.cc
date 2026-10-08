@@ -124,10 +124,10 @@ inline std::expected<config::proxy_settings, std::string> proxy_profile(const pr
 }
 struct proxy_draft_events {
   auto on(save_proxy_draft, const proxy_draft& draft) const {
-    return request::save_proxy_profile{proxy_profile(draft), draft.index};
+    return skiff::model::Up{request::save_proxy_profile{proxy_profile(draft), draft.index}};
   }
   auto on(delete_proxy_draft, const proxy_draft& draft) const {
-    return request::delete_proxy_profile{draft.index};
+    return skiff::model::Up{request::delete_proxy_profile{draft.index}};
   }
 };
 template <auto Member>

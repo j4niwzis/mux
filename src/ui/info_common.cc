@@ -8,6 +8,7 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 import skiff.compose;
+import skiff.model;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -135,14 +136,14 @@ struct big_avatar : avatar_mark {
   big_avatar() : avatar_mark(std::string(), std::string(), 96.0f) {}
 };
 // An icon on its own, not to be pressed.
-struct icon_view : nodes::Icon {
-  icon_view(const palette& colours, icon_t mark) : nodes::Icon(shape_of(mark), colours.dim) { fState.apply({.width = 28.0f, .height = 36.0f}); }
-};
+inline auto icon_view(const palette& colours, icon_t mark) {
+  return skiff::compose::styled({.width = 28.0f, .height = 36.0f}, nodes::Icon(shape_of(mark), colours.dim));
+}
+using icon_view_t = decltype(icon_view(std::declval<const palette&>(), icon::none{}));
 // A band between sections: just darker than the panel.
-inline nodes::Box<> section_band(const palette& colours) {
-  nodes::Box<> out{colours.section};
-  out.apply({.fillX = true, .height = 6.0f, .margin = {6.0f, 0.0f, 6.0f, 0.0f}});
-  return out;
+inline auto section_band(const palette& colours) {
+  return skiff::compose::styled({.fillX = true, .height = 6.0f, .margin = {6.0f, 0.0f, 6.0f, 0.0f}},
+                                nodes::Box<>(colours.section));
 }
 
 // A chat's info, beside it, as Telegram Desktop shows it: a big avatar, the
@@ -150,42 +151,29 @@ inline nodes::Box<> section_band(const palette& colours) {
 // Declared: a column of these, nothing placed by hand.
 // An ID, whole -- wrapped, never cut -- and copied when pressed: a chat's
 // or a person's.
-struct id_line : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text id;
-    nodes::Text label;
-  } parts;
+struct id_feedback { bool copied = false; };
+struct copy_id_line {};
+struct id_copy_events {
   std::string copied;
-  bool a_link = false;  // what is copied is a link to it, not the ID
-  std::string named;    // what it is: ID, Address
-  id_line(const palette &colours, std::string text, std::string link,
-          std::string label = "ID")
-      : Stacked(
-            skiff::compose::vbox(2.0f, {.fillX = true,
-                                        .autoSize = scene::axes::kY,
-                                        .padding = {8.0f, 20.0f, 8.0f, 20.0f},
-                                        .hoverBackground = colours.chosen,
-                                        .focusBackground = colours.chosen})),
-        parts{.id = skiff::compose::styled(
-                  {.fillX = true},
-                  wrapped(nodes::Text(text, 14.0f, colours.accent))),
-              .label = nodes::Text(label, 12.0f, colours.dim)},
-        copied(link.empty() ? text : link), a_link(!link.empty()),
-        named(std::move(label)) {
-    fState.setCursor(scene::cursor::hand{});
-
-    // Selectable, as any text shown: a drag takes part of it, the right
-    // button its Copy; a click still copies it whole.
-    parts.id.setSelectable(true);
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    skiff::scene::setClipboardText(copied);
-    parts.label.setText(a_link ? named + " · link copied, with its servers" : named + " · copied");
-    return true;
+  auto on(copy_id_line, const id_feedback&) const {
+    return std::tuple{skiff::model::over<id_feedback>(skiff::model::setTo(id_feedback{true})),
+                      skiff::model::Up{request::copy_text{copied}}};
   }
 };
+inline auto id_line(const palette& colours, std::string text, std::string link, std::string label = "ID") {
+  const bool a_link = !link.empty();
+  const std::string copied = a_link ? link : text;
+  return skiff::compose::local<id_feedback>(id_copy_events{copied},
+      skiff::compose::onClick(copy_id_line{}, skiff::compose::column(
+          skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
+              .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen,
+              .focusBackground = colours.chosen}),
+          wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(text, 14.0f, colours.accent, false, true))),
+          skiff::compose::text_for<id_feedback>([label, a_link](const id_feedback& now) {
+              return !now.copied ? label : a_link ? label + " · link copied, with its servers" : label + " · copied";
+            }, nodes::Text(label, 12.0f, colours.dim))), "Copy " + label));
+}
+using id_line_t = decltype(id_line(std::declval<const palette&>(), "", ""));
 
 // A person's name and how they are, as a chat knows them: a member's, with
 // their role; the other side of a direct chat; anyone else by their address.

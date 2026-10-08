@@ -105,7 +105,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
     top_bar top;
     cover face;
     nodes::Box<> band;
-    id_line id;
+    id_line_t id;
     action_tile<message_them> message;
     action_tile<verify_them> verify;
     // Their identity reset: taken as theirs now, unverified (Element's
@@ -258,7 +258,7 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
       cover face;
       nodes::Box<> band;
       nodes::Text about;
-      id_line id;
+      id_line_t id;
     } parts;
 
     details(const palette &colours, const std::string &asked,

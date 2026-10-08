@@ -990,11 +990,11 @@ TEST(Proxies, DraftValidationPreservesCredentialsAndPortBounds) {
 TEST(Proxies, RequestsCarryTheDraftAndProfileIndex) {
   const mux::ui::proxy_draft draft{.index = 2, .name = "Work", .host = "localhost", .port = "1080"};
   const mux::ui::proxy_draft_events events;
-  const auto saved = events.on(mux::ui::save_proxy_draft{}, draft);
+  const auto saved = events.on(mux::ui::save_proxy_draft{}, draft).fEvent;
   ASSERT_TRUE(saved.profile);
   EXPECT_EQ(saved.index, 2);
   EXPECT_EQ(saved.profile->name, "Work");
-  EXPECT_EQ(events.on(mux::ui::delete_proxy_draft{}, draft).index, 2);
+  EXPECT_EQ(events.on(mux::ui::delete_proxy_draft{}, draft).fEvent.index, 2);
 }
 
 TEST(Storage, SealModelRefreshesControlsWithoutReplacingThem) {
@@ -1035,4 +1035,52 @@ TEST(Controls, PersonSearchRowSendsItsIdAndNamesItsAction) {
   EXPECT_EQ(row.onPress().user, person.id);
   EXPECT_EQ(row.semantics().fLabel, "Alice");
   EXPECT_EQ(std::get<0>(std::get<1>(row.fParts).fParts).text(), "Alice");
+}
+
+TEST(Controls, CopyIdRequestUpdatesOnlyItsLocalFeedback) {
+  struct sink {
+    std::vector<std::string> copied;
+    void take(const mux::ui::request::copy_text& request) { copied.push_back(request.text); }
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  auto row = mux::ui::id_line(colours, "#room:example.com", "https://matrix.to/#/#room:example.com");
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(row, model);
+  auto& label = std::get<1>(row.fParts);
+  const auto id = label.fState.id();
+  EXPECT_EQ(label.text(), "ID");
+  ASSERT_TRUE(skiff::bind::press(row, model, scene::Path{}, &requests));
+  binding.refresh(row, model);
+  ASSERT_EQ(requests.copied.size(), 1u);
+  EXPECT_EQ(requests.copied.front(), "https://matrix.to/#/#room:example.com");
+  EXPECT_EQ(label.text(), "ID · link copied, with its servers");
+  EXPECT_EQ(label.fState.id(), id);
+  EXPECT_EQ(model.root(), 0);
+}
+
+TEST(Proxies, LocalEditorPressesSendTypedSaveAndDeleteRequests) {
+  struct sink {
+    std::optional<mux::ui::request::save_proxy_profile> saved;
+    int removed = -1;
+    void take(const mux::ui::request::save_proxy_profile& request) { saved = request; }
+    void take(const mux::ui::request::delete_proxy_profile& request) { removed = request.index; }
+    void take(const mux::ui::request::settings_proxies&) {}
+    void take(const mux::ui::request::close_settings&) {}
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  const mux::config::proxy_settings profile{.name = "Home", .host = "localhost", .port = 1080};
+  auto editor = mux::ui::proxy_editor(colours, profile, 2);
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(editor, model);
+  ASSERT_TRUE(skiff::bind::press(editor, model, scene::Path{9, 0}, &requests));
+  ASSERT_TRUE(requests.saved.has_value());
+  ASSERT_TRUE(requests.saved->profile);
+  EXPECT_EQ(requests.saved->index, 2);
+  EXPECT_EQ(requests.saved->profile->name, "Home");
+  ASSERT_TRUE(skiff::bind::press(editor, model, scene::Path{9, 1}, &requests));
+  EXPECT_EQ(requests.removed, 2);
 }

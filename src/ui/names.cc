@@ -34,7 +34,7 @@ export namespace mux::ui {
 // protocol says (proto::unheard_presence).
 [[nodiscard]] inline std::string presence_of(const ui_shared& shared, const model& now, const account_id& account, const std::string& contact) {
   const auto unknown = [&] { return proto::unheard_presence(protocol_state_of(shared, account)); };
-  const account* found = now.accounts().find(account);
+  const mux::account* found = now.accounts().find(account);
   if (found == nullptr)
     return unknown();
   const auto kept = found->presences.find(contact);

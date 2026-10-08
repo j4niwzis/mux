@@ -201,6 +201,8 @@ struct app : kept_settings {
   // A link pressed in a message's text: routed as a link is.
   void open_link(std::string url) { ask.open_url(std::move(url)); }
   void before_frame();
+  void after_event();
+  void apply_asked();
   // The window bound to the model, and the pages with the model's widgets
   // it was last walked whole with.
   skiff::bind::Binding<kept_model> window_binding;

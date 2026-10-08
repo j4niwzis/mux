@@ -360,6 +360,23 @@ void app::show_chats_now() {
   chats_binding.refresh(root(), model->chats());
 }
 
+// What the window asked for, done: each request in the order it came.
+void app::apply_asked() {
+  auto pending = std::exchange(ask.requests, {});
+  for (const request_t& one : pending)
+    spl::visit([this](const auto& each) { this->route(each); }, one);
+}
+
+// Right after an event is handled, what it asked for -- taken from the
+// window and done at once, the handler that asked having returned: a press
+// acts before the next event, not a frame later.
+void app::after_event() {
+  if (skiff::bind::pendingCount() == 0 && ask.requests.empty())
+    return;
+  this->take_page_input();
+  this->apply_asked();
+}
+
 void app::before_frame() {
   ++mux::ui::image_cache::frame();
   // What the model's widgets did: edits of the model, before the frame.
@@ -400,9 +417,7 @@ void app::before_frame() {
   }
   calls.tick();
   menu.keep_selection();
-  auto pending = std::exchange(ask.requests, {});
-  for (const request_t& one : pending)
-    spl::visit([this](const auto& each) { this->route(each); }, one);
+  this->apply_asked();
   // A selectable text or a field pressed with the right button -- a long
   // press, on a phone: its menu, the last asked for.
   if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !root().context_menu_up())

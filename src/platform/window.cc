@@ -65,6 +65,9 @@ inline double now_ms() {
 //   take_toasts()   the notifications to show in windows of their own
 //                   (toast_due: chat, key, title, text; toast_card, the node)
 //   open_notified(chat)  one of them pressed
+//   after_event()   right after each event is handled: what it asked for,
+//                   taken from the window and done at once -- the handler
+//                   that asked returned, nothing of it running
 //   before_frame()  between events: what the screens asked for, applied
 //                   where no handler is running
 //   closing()       the window is going away
@@ -437,9 +440,11 @@ int run(App& app, const options& how, const events::kinds& kinds) {
                                     [&](std::string& path) { app.save_path_chosen(std::move(path)); });
             break;
         }
+        app.after_event();
         got = sdl::SDL_PollEvent(&event);
       }
       give_motion();
+      app.after_event();
       if (!running)
         break;
       // Held long enough where it went down: what is under it lets go of the

@@ -265,10 +265,13 @@ struct window : scene::Node, outbox {
       }
     }
     std::optional<Answer> onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
-      std::optional<Answer> answer;
       if (press.key != scene::keys::kEscape)
-        return answer;
-      const auto closed = [&] { reply.handle(); };
+        return std::nullopt;
+      // Taken: with what it asks for, where it asks for something.
+      const auto closed = [&](std::optional<Answer> asked = std::nullopt) {
+        reply.handle();
+        return asked;
+      };
       if (parts.text_menu_up) {
         parts.text_menu_up.reset();
         this->invalidateLayout();
@@ -276,64 +279,66 @@ struct window : scene::Node, outbox {
         return closed();
       }
       if (parts.menu)
-        return answer = ::mux::ui::request::close_menu{}, closed();
+        return closed(::mux::ui::request::close_menu{});
       if (parts.emoji)
-        return answer = ::mux::ui::request::close_emoji{}, closed();
+        return closed(::mux::ui::request::close_emoji{});
       if (parts.viewer)
-        return answer = ::mux::ui::request::close_picture{}, closed();
+        return closed(::mux::ui::request::close_picture{});
       // A verification: OK where it is over, Decline or Cancel where it
       // waits. Not while the emoji are compared: an answer is asked there.
       if (auto* box = parts.verifying.shown()) {
         if (box->parts.close.visible())
-          return answer = ::mux::ui::request::close_verification{}, closed();
+          return closed(::mux::ui::request::close_verification{});
         if (box->parts.decline.visible())
-          return answer = ::mux::ui::request::verify_cancel_now{}, closed();
+          return closed(::mux::ui::request::verify_cancel_now{});
       }
       // The dialogs, the one drawn last -- on top -- first.
       if (parts.sending.shown())
-        return answer = ::mux::ui::request::close_send_box{}, closed();
+        return closed(::mux::ui::request::close_send_box{});
       if (parts.tools.shown())
-        return answer = ::mux::ui::request::close_dialog{}, closed();
+        return closed(::mux::ui::request::close_dialog{});
       if (parts.explore.shown())
-        return answer = ::mux::ui::request::close_explore{}, closed();
+        return closed(::mux::ui::request::close_explore{});
       if (parts.wallpaper.shown())
-        return answer = ::mux::ui::request::close_wallpaper{}, closed();
+        return closed(::mux::ui::request::close_wallpaper{});
       if (parts.packs.shown())
-        return answer = ::mux::ui::request::close_packs{}, closed();
+        return closed(::mux::ui::request::close_packs{});
       if (parts.new_room.shown())
-        return answer = ::mux::ui::request::close_new_room{}, closed();
+        return closed(::mux::ui::request::close_new_room{});
       if (parts.new_chat.shown())
-        return answer = ::mux::ui::request::close_new_chat{}, closed();
+        return closed(::mux::ui::request::close_new_chat{});
       if (parts.forwarding.shown())
-        return answer = ::mux::ui::request::close_forward{}, closed();
+        return closed(::mux::ui::request::close_forward{});
       if (parts.manage.shown())
-        return answer = ::mux::ui::request::close_manage{}, closed();
+        return closed(::mux::ui::request::close_manage{});
       if (parts.marks.shown())
-        return answer = ::mux::ui::request::close_marks{}, closed();
+        return closed(::mux::ui::request::close_marks{});
       if (parts.leaving.shown())
-        return answer = ::mux::ui::request::close_leave_space{}, closed();
+        return closed(::mux::ui::request::close_leave_space{});
       if (parts.linking.shown())
-        return answer = ::mux::ui::request::close_link{}, closed();
+        return closed(::mux::ui::request::close_link{});
       if (parts.history.shown())
-        return answer = ::mux::ui::request::close_edit_history{}, closed();
+        return closed(::mux::ui::request::close_edit_history{});
       if (parts.reactions.shown())
-        return answer = ::mux::ui::request::close_reactions{}, closed();
+        return closed(::mux::ui::request::close_reactions{});
       if (parts.room.shown())
-        return answer = ::mux::ui::request::close_room_card{}, closed();
+        return closed(::mux::ui::request::close_room_card{});
       if (parts.person.shown())
-        return answer = ::mux::ui::request::close_person_info{}, closed();
+        return closed(::mux::ui::request::close_person_info{});
       if (parts.notice.shown())
-        return answer = ::mux::ui::request::close_notice{}, closed();
+        return closed(::mux::ui::request::close_notice{});
       // Settings: a page back to where its ← goes; home, closed.
       if (auto* box = parts.settings.shown()) {
         if (box->step_back())
           return closed();
-        return answer = ::mux::ui::request::close_settings{}, closed();
+        return closed(::mux::ui::request::close_settings{});
       }
       // The drawer, under every dialog.
-      if (parts.frame.base().isOpen())
-        return parts.frame.base().close(), closed();
-      return answer;
+      if (parts.frame.base().isOpen()) {
+        parts.frame.base().close();
+        return closed();
+      }
+      return std::nullopt;
     }
 
     // While a dialog fades in or out, what is under it -- the window's

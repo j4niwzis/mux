@@ -744,6 +744,10 @@ struct window : scene::Node {
   void close() { layer().frame.close(); }
   // From the program, between events.
   void drop_closed() {
+    if (std::exchange(text_menu_close_due, false))
+      this->close_text_menu_now();
+    if (std::exchange(call_hide_due, false))
+      this->hide_call_now();
     layer().frame.dropClosed();
     layer().settings.dropClosed();
     layer().notice.dropClosed();
@@ -777,6 +781,7 @@ struct window : scene::Node {
     this->place_text_menu(parts.now->parts.text_menu_up.emplace(needs_, field));
   }
   void place_text_menu(text_menu& menu) {
+    text_menu_close_due = false;
     auto& now = *parts.now;
     const skia::SkRect box = fState.fBounds;
     menu.apply({.place = scene::anchor::kTopLeft,
@@ -789,6 +794,7 @@ struct window : scene::Node {
   // and it does not ring here; else the card at the top of the window. And
   // gone, with the call.
   void show_call(const call_view& view) {
+    call_hide_due = false;
     auto& now = *parts.now;
     // A phone's: the whole window, whatever it rings or is in.
     if (view.whole) {
@@ -816,7 +822,10 @@ struct window : scene::Node {
     now.invalidateLayout();
     now.markDamaged();
   }
-  void hide_call() {
+  // The call gone: between events, not now -- its Hang up is still being
+  // answered as the program says so.
+  void hide_call() { call_hide_due = true; }
+  void hide_call_now() {
     this->main().chat.hide_call();
     this->hide_call_card();
     this->hide_call_screen();
@@ -839,7 +848,13 @@ struct window : scene::Node {
   }
   // A message's menu up: the right press was its.
   [[nodiscard]] bool context_menu_up() { return layer().menu.shown() != nullptr; }
+  // Closed between events, not now: the program asks it as it does what
+  // was pressed in it, while that press is still being answered.
   void close_text_menu() {
+    if (parts.now->parts.text_menu_up)
+      text_menu_close_due = true;
+  }
+  void close_text_menu_now() {
     auto& now = *parts.now;
     if (now.parts.text_menu_up) {
       now.parts.text_menu_up.reset();
@@ -847,6 +862,8 @@ struct window : scene::Node {
       now.markDamaged();
     }
   }
+  bool text_menu_close_due = false;
+  bool call_hide_due = false;
   [[nodiscard]] room_settings<Actions>* manage_up() { return layer().manage.shown(); }
 
   void close_drawer_now() { layer().frame.base().closeNow(); }

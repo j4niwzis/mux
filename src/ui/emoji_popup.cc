@@ -119,6 +119,8 @@ struct gif_grid : nodes::Stack {
 struct emoji_facts {
   float right = 0.0f;
   float bottom = 0.0f;
+  // The GIFs saved, for its GIF tab, as the program has them.
+  std::vector<std::string> gifs;
 };
 template <class Actions>
 struct emoji_popup : scene::Node {
@@ -264,7 +266,9 @@ struct emoji_popup : scene::Node {
   // What the window's parts tell one another: the docked panel's height.
   ui_shared* shared_ = nullptr;
 
-  emoji_popup(const ui_needs<Actions>& n, const emoji_facts& facts) : emoji_popup(n, facts.right, facts.bottom) {}
+  emoji_popup(const ui_needs<Actions>& n, const emoji_facts& facts) : emoji_popup(n, facts.right, facts.bottom) { this->show_page(facts); }
+  // What it shows changed while it is up: the GIFs saved.
+  void show_page(const emoji_facts& facts) { parts.card.parts.gifs.show(facts.gifs); }
   emoji_popup(const ui_needs<Actions>& n, float at_right, float at_bottom)
       : parts{.card = card_t(*n.colours, *n.emoji)}, right(at_right), bottom(at_bottom), shared_(n.shared) {
     fState.apply({.fill = true});

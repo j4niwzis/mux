@@ -94,7 +94,7 @@ struct services {
   }
   // The emoji panel open where it is put, or closed -- the field back where
   // it was; and whether it is open, as what is shown says.
-  void open_emoji(float right, float bottom) const { mux::ui::show(*showing, std::optional(mux::ui::emoji_facts{right, bottom})); }
+  void open_emoji(float right, float bottom) const { mux::ui::show(*showing, std::optional(mux::ui::emoji_facts{right, bottom, {}})); }
   void close_emoji() const {
     mux::ui::show<mux::ui::emoji_facts>(*showing, std::nullopt);
     this->root().emoji_closed();

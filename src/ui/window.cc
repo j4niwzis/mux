@@ -893,11 +893,6 @@ struct window : scene::Node {
     // the field where nothing ticked it.
     main().follow_docked();
   }
-  // The GIFs saved, for the popup's GIF tab, where it is open.
-  void show_gifs(const std::vector<std::string>& paths) {
-    if (auto* up = layer().emoji.shown())
-      up->parts.card.parts.gifs.show(paths);
-  }
   [[nodiscard]] bool emoji_open() { return layer().emoji.shown() != nullptr; }
   // The sticker pictures the panel shows, for the program to ask for.
   [[nodiscard]] std::vector<std::string> emoji_pictures_shown() {

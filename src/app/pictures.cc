@@ -537,7 +537,10 @@ class pictures_part {
         };
       });
     }
-    s_->root().show_gifs(paths);
+    mux::ui::change_shown<std::optional<mux::ui::emoji_facts>>(*s_->showing, [&](auto& now) {
+      if (now)
+        now->gifs = paths;
+    });
   }
   // Where the saved GIFs are kept: with the program's state, not its cache,
   // which is pruned.

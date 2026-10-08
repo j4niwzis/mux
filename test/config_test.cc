@@ -86,6 +86,22 @@ TEST(Config, ABrokenFileSaysSo) {
   EXPECT_NE(got.error().find("is not an accounts file"), std::string::npos);
 }
 
+// The choices' words, read once into the choices: each its own, the old
+// ones as what they meant, an unknown one as the default.
+TEST(Config, TheChoicesWordsAreReadAsChoices) {
+  mux::vault::vault vault;
+  scratch here;
+  fs::create_directories(here.dir);
+  const fs::path where = here.dir / "accounts.json";
+  std::ofstream(where) << R"({"theme": "dark", "accent": "cyan", "renderer": "software", "motion": "spinning"})";
+  const auto got = mux::config::load(where, vault);
+  ASSERT_TRUE(got.has_value());
+  EXPECT_EQ(mux::config::theme_of(got->theme), mux::config::theme_t{mux::config::theme::night{}});
+  EXPECT_EQ(mux::config::accent_of(got->accent), mux::config::accent_t{mux::config::accent::blue{}});
+  EXPECT_EQ(mux::config::renderer_of(got->renderer), mux::config::renderer_t{mux::config::renderer::software{}});
+  EXPECT_EQ(mux::config::motion_of(got->motion), mux::config::motion_t{mux::config::motion::full{}});
+}
+
 TEST(Config, AnOldFileIsNotReadAsEmpty) {
   mux::vault::vault vault;
   scratch here;

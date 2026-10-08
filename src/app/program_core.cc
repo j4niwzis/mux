@@ -353,6 +353,9 @@ void app::settle_model() {
 // model holds beside the chats, whether or not they moved.
 void app::show_chats_now() {
   root().main().last_model = &*model;
+  // What is kept read first, where it moved since: the screen reads each
+  // chat's settings from it as it is shown.
+  window_binding.refresh(root(), this->state);
   chats_binding.invalidate();
   chats_binding.refresh(root(), model->chats());
 }

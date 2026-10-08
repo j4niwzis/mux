@@ -44,7 +44,7 @@ class rooms_part {
     }
     std::ranges::sort(known, {}, &mux::found_person::name);
     mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
-    mux::ui::show(*s_->showing, std::optional(mux::ui::new_chat_facts{std::move(known), std::move(link)}));
+    mux::ui::show(*s_->showing, std::optional(mux::ui::new_chat_facts{std::move(known), std::move(link), {}, {}}));
   }
   void apply(const request::find_people& one) {
     const auto by = s_->account_offering(mux::proto::feature::people_directory{});

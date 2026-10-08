@@ -915,10 +915,6 @@ struct window : scene::Node {
       box->say(std::move(why));
   }
 
-  void show_found_people(const std::vector<found_person>& people, const std::string& query) {
-    if (auto* up = layer().new_chat.shown())
-      up->show_found(people, query);
-  }
   void show_packs(std::vector<emote_pack> packs) {
     if (auto* up = layer().packs.shown())
       up->show_packs(std::move(packs));

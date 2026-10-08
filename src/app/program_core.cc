@@ -93,7 +93,12 @@ void app::woken() {
                                  }
                                },
                                [&](const mux::change::people_found& found) {
-                                 root().show_found_people(found.people, found.query);
+                                 mux::ui::change_shown<std::optional<mux::ui::new_chat_facts>>(showing, [&](auto& now) {
+                                   if (now) {
+                                     now->found = found.people;
+                                     now->query = found.query;
+                                   }
+                                 });
                                  root().main().found_people_elsewhere(found.query, found.people);
                                },
                                // A room looked up: its card filled, while it

@@ -172,6 +172,9 @@ struct found_person_row : nodes::Stack {
 struct new_chat_facts {
   std::vector<found_person> people;
   std::string own_link;
+  // What the directory answered, and for what was typed.
+  std::vector<found_person> found;
+  std::string query;
 };
 template <class Actions>
 struct start_chat_box : nodes::Stack {
@@ -290,6 +293,8 @@ struct start_chat_box : nodes::Stack {
       asked = ::mux::ui::request::find_people{query};
     return asked;
   }
+  // What is shown, changed while it is up: the directory's answer.
+  void show_page(const new_chat_facts& facts) { this->show_found(facts.found, facts.query); }
   // The directory's answer, where it is for what is typed now.
   void show_found(const std::vector<found_person>& people, const std::string& asked) {
     if (asked != query)

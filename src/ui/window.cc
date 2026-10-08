@@ -129,7 +129,10 @@ struct shown_screen : Screen {
   using Screen::Screen;
   void read(const chat_shown& now) {
     this->chosen = now.chosen;
-    this->current = now.current;
+    // The account the program asked for; where it asked for none, the one
+    // the screen falls back on as it shows the chats (the first) is kept.
+    if (now.current)
+      this->current = now.current;
     if (this->info_open != now.info_open)
       this->set_info_open(now.info_open);
   }

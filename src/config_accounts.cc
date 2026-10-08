@@ -19,15 +19,15 @@ export namespace mux::config {
 }
 
 [[nodiscard]] inline bool& enabled_of(account_t& one) noexcept {
-  return one.shared.enabled;
+  return one.shared.enabled.value;
 }
 [[nodiscard]] inline bool enabled_of(const account_t& one) noexcept {
-  return one.shared.enabled;
+  return one.shared.enabled.value;
 }
 
 // Whether an account sends read receipts, and the proxy it goes through.
 [[nodiscard]] inline bool read_receipts_of(const account_t& one) {
-  return one.shared.read_receipts.value_or(true);
+  return one.shared.read_receipts.value.value_or(true);
 }
 // Whether an account sends room keys to verified sessions only: where its
 // protocol keeps that (only_verified_in(kept), by ADL); none for another.
@@ -93,7 +93,7 @@ struct mentions_choice {
   }, one.own);
 }
 [[nodiscard]] inline std::optional<bool>& read_receipts_in(account_t& one) {
-  return one.shared.read_receipts;
+  return one.shared.read_receipts.value;
 }
 // An account's colour: its own choice, else one of the eight its address
 // picks -- the same every time, and accounts apart mostly apart.
@@ -115,17 +115,17 @@ struct mentions_choice {
   }
 }
 [[nodiscard]] inline accent_t colour_of(const account_t& one) {
-  const std::optional<std::string>& word = one.shared.colour;
+  const std::optional<std::string>& word = one.shared.colour.value;
   return word ? accent_of(word) : default_colour_of(address_of(one));
 }
 [[nodiscard]] inline std::optional<std::string>& colour_in(account_t& one) {
-  return one.shared.colour;
+  return one.shared.colour.value;
 }
 [[nodiscard]] inline bool strip_of(const account_t& one) {
-  return one.shared.strip.value_or(true);
+  return one.shared.strip.value.value_or(true);
 }
 [[nodiscard]] inline std::optional<bool>& strip_in(account_t& one) {
-  return one.shared.strip;
+  return one.shared.strip.value;
 }
 // Whether the account tells whom it talks to that the user is typing.
 // What a passphrase is asked for, of the client's own: local data opened at
@@ -161,98 +161,98 @@ struct decrypt {
 
 // Its own choice, if it made one; else as every account's.
 [[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {
-  return one.shared.send_typing;
+  return one.shared.send_typing.value;
 }
 [[nodiscard]] inline std::optional<bool>& send_typing_in(account_t& one) {
-  return one.shared.send_typing;
+  return one.shared.send_typing.value;
 }
 // Whether the account's chats show their room events: its own choice, if
 // it made one.
 [[nodiscard]] inline const std::optional<std::int64_t>& jump_search_of(const account_t& one) {
-  return one.shared.jump_search;
+  return one.shared.jump_search.value;
 }
 [[nodiscard]] inline std::optional<std::int64_t>& jump_search_in(account_t& one) {
-  return one.shared.jump_search;
+  return one.shared.jump_search.value;
 }
 // An account's chats' background, as word_of(wallpaper_t) says it.
 [[nodiscard]] inline const std::optional<std::string>& wallpaper_of(const account_t& one) {
-  return one.shared.wallpaper;
+  return one.shared.wallpaper.value;
 }
 [[nodiscard]] inline std::optional<std::string>& wallpaper_in(account_t& one) {
-  return one.shared.wallpaper;
+  return one.shared.wallpaper.value;
 }
 [[nodiscard]] inline const std::optional<std::string>& bubbles_of(const account_t& one) {
-  return one.shared.bubbles;
+  return one.shared.bubbles.value;
 }
 [[nodiscard]] inline std::optional<std::string>& bubbles_in(account_t& one) {
-  return one.shared.bubbles;
+  return one.shared.bubbles.value;
 }
 [[nodiscard]] inline const std::optional<std::string>& panels_of(const account_t& one) {
-  return one.shared.panels;
+  return one.shared.panels.value;
 }
 [[nodiscard]] inline std::optional<std::string>& panels_in(account_t& one) {
-  return one.shared.panels;
+  return one.shared.panels.value;
 }
 [[nodiscard]] inline const std::optional<bool>& home_hides_of(const account_t& one) {
-  return one.shared.home_hides_spaced;
+  return one.shared.home_hides_spaced.value;
 }
 [[nodiscard]] inline const std::optional<bool>& home_direct_of(const account_t& one) {
-  return one.shared.home_hides_direct;
+  return one.shared.home_hides_direct.value;
 }
 [[nodiscard]] inline std::optional<bool>& home_direct_in(account_t& one) {
-  return one.shared.home_hides_direct;
+  return one.shared.home_hides_direct.value;
 }
 [[nodiscard]] inline std::optional<bool>& home_hides_in(account_t& one) {
-  return one.shared.home_hides_spaced;
+  return one.shared.home_hides_spaced.value;
 }
 [[nodiscard]] inline const std::optional<bool>& link_previews_of(const account_t& one) {
-  return one.shared.link_previews;
+  return one.shared.link_previews.value;
 }
 [[nodiscard]] inline std::optional<bool>& link_previews_in(account_t& one) {
-  return one.shared.link_previews;
+  return one.shared.link_previews.value;
 }
 // Whether its chats' link previews come from the sites themselves.
 [[nodiscard]] inline const std::optional<bool>& previews_direct_of(const account_t& one) {
-  return one.shared.previews_direct;
+  return one.shared.previews_direct.value;
 }
 [[nodiscard]] inline std::optional<bool>& previews_direct_in(account_t& one) {
-  return one.shared.previews_direct;
+  return one.shared.previews_direct.value;
 }
 [[nodiscard]] inline const std::optional<bool>& show_receipts_of(const account_t& one) {
-  return one.shared.show_receipts;
+  return one.shared.show_receipts.value;
 }
 [[nodiscard]] inline std::optional<bool>& show_receipts_in(account_t& one) {
-  return one.shared.show_receipts;
+  return one.shared.show_receipts.value;
 }
 [[nodiscard]] inline const std::optional<bool>& room_events_of(const account_t& one) {
-  return one.shared.room_events;
+  return one.shared.room_events.value;
 }
 [[nodiscard]] inline std::optional<bool>& room_events_in(account_t& one) {
-  return one.shared.room_events;
+  return one.shared.room_events.value;
 }
 [[nodiscard]] inline const std::optional<bool>& notify_of(const account_t& one) {
-  return one.shared.notify;
+  return one.shared.notify.value;
 }
 [[nodiscard]] inline std::optional<bool>& notify_in(account_t& one) {
-  return one.shared.notify;
+  return one.shared.notify.value;
 }
 [[nodiscard]] inline const std::optional<bool>& notify_sound_of(const account_t& one) {
-  return one.shared.notify_sound;
+  return one.shared.notify_sound.value;
 }
 [[nodiscard]] inline std::optional<bool>& notify_sound_in(account_t& one) {
-  return one.shared.notify_sound;
+  return one.shared.notify_sound.value;
 }
 [[nodiscard]] inline const std::optional<room_event_kinds>& room_event_kinds_of(const account_t& one) {
-  return one.shared.room_event_kinds;
+  return one.shared.room_event_kinds.value;
 }
 [[nodiscard]] inline std::optional<room_event_kinds>& room_event_kinds_in(account_t& one) {
-  return one.shared.room_event_kinds;
+  return one.shared.room_event_kinds.value;
 }
 [[nodiscard]] inline std::optional<std::string>& proxy_in(account_t& one) {
-  return one.shared.proxy;
+  return one.shared.proxy.value;
 }
 [[nodiscard]] inline const std::optional<std::string>& proxy_of(const account_t& one) {
-  return one.shared.proxy;
+  return one.shared.proxy.value;
 }
 // The profile of that name, where there is one.
 [[nodiscard]] inline const proxy_settings* find_proxy(const std::vector<proxy_settings>& all,

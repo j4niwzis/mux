@@ -5,6 +5,7 @@ export module mux.config:config_settings;
 import std;
 import splice;
 import knot;
+import skiff.model;
 import mux.vault;
 import mux.proto.kept;
 import :config_choices;
@@ -105,31 +106,34 @@ consteval auto json_schema(knot::type<chat_notify>) { return knot::schema<chat_n
 // client's settings of it. What a protocol keeps of its own -- its address,
 // its password, its server -- is its kept type, mux::proto::<protocol>::kept
 // (through mux.proto.kept).
+// Each setting a type of its own -- found by it in the model, flipped and
+// set by it -- and in JSON still what it holds (knot reads a Named as its
+// value).
 struct account_shared {
-  bool enabled = true;
-  std::optional<bool> read_receipts;
-  std::optional<bool> send_typing;  // others' typing is always shown
-  std::optional<bool> room_events;
-  std::optional<room_event_kinds> room_event_kinds;
-  std::optional<bool> show_receipts;
-  std::optional<bool> link_previews;
-  std::optional<bool> previews_direct;  // link previews fetched from the site itself
-  std::optional<std::string> wallpaper;  // its chats' background, as word_of(wallpaper_t) says it
-  std::optional<std::string> bubbles;    // its chats' bubbles, as word_of(bubble_look) says them
-  std::optional<std::string> panels;     // its panels' look
-  std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
-  std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
-  std::optional<std::int64_t> jump_search;
-  std::optional<bool> notify;
-  std::optional<bool> notify_sound;
+  skiff::model::Named<"enabled", bool> enabled{true};
+  skiff::model::Named<"read_receipts", std::optional<bool>> read_receipts;
+  skiff::model::Named<"send_typing", std::optional<bool>> send_typing;  // others' typing is always shown
+  skiff::model::Named<"room_events", std::optional<bool>> room_events;
+  skiff::model::Named<"room_event_kinds", std::optional<room_event_kinds>> room_event_kinds;
+  skiff::model::Named<"show_receipts", std::optional<bool>> show_receipts;
+  skiff::model::Named<"link_previews", std::optional<bool>> link_previews;
+  skiff::model::Named<"previews_direct", std::optional<bool>> previews_direct;  // link previews fetched from the site itself
+  skiff::model::Named<"wallpaper", std::optional<std::string>> wallpaper;  // its chats' background, as word_of(wallpaper_t) says it
+  skiff::model::Named<"bubbles", std::optional<std::string>> bubbles;    // its chats' bubbles, as word_of(bubble_look) says them
+  skiff::model::Named<"panels", std::optional<std::string>> panels;     // its panels' look
+  skiff::model::Named<"home_hides_spaced", std::optional<bool>> home_hides_spaced;  // Home without what spaces hold, but direct messages
+  skiff::model::Named<"home_hides_direct", std::optional<bool>> home_hides_direct;  // and without direct messages too, where it is so
+  skiff::model::Named<"jump_search", std::optional<std::int64_t>> jump_search;
+  skiff::model::Named<"notify", std::optional<bool>> notify;
+  skiff::model::Named<"notify_sound", std::optional<bool>> notify_sound;
   // Whether only mentions and keywords notify, and what a notification
   // shows: the sender's name, the message's text.
-  std::optional<bool> notify_mentions;
-  std::optional<bool> notify_name;
-  std::optional<bool> notify_text;
-  std::optional<std::string> proxy;
-  std::optional<std::string> colour;
-  std::optional<bool> strip;
+  skiff::model::Named<"notify_mentions", std::optional<bool>> notify_mentions;
+  skiff::model::Named<"notify_name", std::optional<bool>> notify_name;
+  skiff::model::Named<"notify_text", std::optional<bool>> notify_text;
+  skiff::model::Named<"proxy", std::optional<std::string>> proxy;
+  skiff::model::Named<"colour", std::optional<std::string>> colour;
+  skiff::model::Named<"strip", std::optional<bool>> strip;
   friend bool operator==(const account_shared&, const account_shared&) = default;
 };
 consteval auto json_schema(knot::type<account_shared>) { return knot::schema<account_shared>(); }
@@ -194,8 +198,8 @@ using notify_setting_t =
 }
 // An account's, as it keeps them.
 [[nodiscard]] inline notify_choices notify_choices_of(const account_shared& one) {
-  return {.on = one.notify, .mentions = one.notify_mentions, .name = one.notify_name, .text = one.notify_text,
-          .sound = one.notify_sound};
+  return {.on = one.notify.value, .mentions = one.notify_mentions.value, .name = one.notify_name.value,
+          .text = one.notify_text.value, .sound = one.notify_sound.value};
 }
 
 // What each protocol keeps of its own: its kept type, found by ADL on its tag

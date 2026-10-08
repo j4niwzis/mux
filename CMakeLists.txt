@@ -151,7 +151,7 @@ cme_find_package(alef 0.1.1 COMPONENTS precis idna grapheme line bidi emoji REQU
 # loom.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG f915e34f13265ee1302775cd4851dbfdf6201b24
+  GIT_TAG 6389154f394c740520b61b7981fd631c6845dab2
   LICENSE AGPL-3.0-only)
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),
@@ -225,28 +225,17 @@ target_sources(mux_vault PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/vau
 target_compile_features(mux_vault PUBLIC cxx_std_26)
 target_compile_options(mux_vault PUBLIC ${mux_std_flags})
 target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
-add_library(mux_config)
-# With the protocols' tags and what each keeps in the accounts file: the
-# settings read them, and everything above reads the settings.
-target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/proto/identity.cc src/proto/tags.cc src/proto/xmpp/kept.cc src/proto/matrix/kept.cc src/proto/kept.cc
-        src/proto/xmpp/state.cc src/proto/matrix/state.cc src/proto/state.cc src/config_choices.cc src/config_settings.cc src/config_looks.cc src/config_limits.cc src/config_accounts.cc src/config.cc)
-target_compile_features(mux_config PUBLIC cxx_std_26)
-target_compile_options(mux_config PUBLIC ${mux_std_flags})
-target_link_libraries(mux_config PUBLIC knot splice mux_vault)
-target_link_libraries(mux_modules PUBLIC mux_config splice)
-foreach(name IN ITEMS core net xmpp http matrix media logic)
-  add_library(mux_${name} ALIAS mux_modules)
-endforeach()
-
+# skiff: skiff.model holds the settings and the program's state, and is
+# there in every build; the rest of skiff, which draws, only with a window.
+# Without one, skiff is built as skiff.model alone, and no Skia is asked for.
+# skiff and skiff-widgets say the rest of what they are in their own trees.
+cme_declare_port(NAME skiff PROVIDES skiff
+  GITHUB_REPOSITORY j4niwzis/skiff
+  GIT_TAG 6dcee5da734177bee95ed724738f11d110009829)
+cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
+  GITHUB_REPOSITORY j4niwzis/skiff-widgets
+  GIT_TAG 34811bdd3573b77afb539c20350cf05ea7ca2540)
 if(MUX_UI)
-  # skiff and skiff-widgets say the rest of what they are in their own trees.
-  cme_declare_port(NAME skiff PROVIDES skiff
-    GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 3ccd977a1e4c86a3868d1df27599b8cb384d11c4)
-  cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
-    GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG dd4713eeaf699a51ba65e74f35fa0b5f27e71f95)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.
@@ -267,6 +256,26 @@ if(MUX_UI)
       list(APPEND mux_skiff_components ${feature})
     endif()
   endforeach()
+else()
+  set(mux_skiff_components)
+  cme_options(skiff "SKIFF_UI OFF")
+endif()
+cme_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
+add_library(mux_config)
+# With the protocols' tags and what each keeps in the accounts file: the
+# settings read them, and everything above reads the settings.
+target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
+  FILES src/proto/identity.cc src/proto/tags.cc src/proto/xmpp/kept.cc src/proto/matrix/kept.cc src/proto/kept.cc
+        src/proto/xmpp/state.cc src/proto/matrix/state.cc src/proto/state.cc src/config_choices.cc src/config_settings.cc src/config_looks.cc src/config_limits.cc src/config_accounts.cc src/config.cc)
+target_compile_features(mux_config PUBLIC cxx_std_26)
+target_compile_options(mux_config PUBLIC ${mux_std_flags})
+target_link_libraries(mux_config PUBLIC knot splice mux_vault skiff::model)
+target_link_libraries(mux_modules PUBLIC mux_config splice)
+foreach(name IN ITEMS core net xmpp http matrix media logic)
+  add_library(mux_${name} ALIAS mux_modules)
+endforeach()
+
+if(MUX_UI)
   cme_find_package(SDL3 REQUIRED)
   # Sound: voice messages are Opus in Ogg; audio files are that or Vorbis.
   cme_find_package(Opus REQUIRED)
@@ -365,7 +374,6 @@ if(MUX_UI)
       list(REMOVE_ITEM mux_platform_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/${common_name}")
     endif()
   endforeach()
-  cme_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
 
   # The emoji face the window draws emoji with, as tdesktop has its own:

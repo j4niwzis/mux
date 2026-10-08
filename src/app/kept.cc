@@ -271,7 +271,7 @@ struct kept_settings {
       at = up->second;
     }
     if (const mux::config::account_t* account = this->settings_of(chat.account.address))
-      if (const std::optional<bool>& chosen = account->shared.*Setting::account)
+      if (const std::optional<bool>& chosen = (account->shared.*Setting::account).value)
         return *chosen;
     return Setting::of(notifications);
   }

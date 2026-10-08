@@ -170,7 +170,7 @@ class preferences_part {
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { Setting::set(k_->notifications, value.value_or(Setting::unsaid)); },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                         account.shared.*Setting::account = value;
+                                         (account.shared.*Setting::account).value = value;
                                        });
                                      },
                                      [&](mux::choice_level::chat) {

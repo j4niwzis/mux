@@ -31,7 +31,6 @@ struct choose_new_proxy : outbox {
 // that protocol's form under it.
 template <class Actions>
 struct add_account_pane : nodes::Stack, outbox {
-  Actions* actions = nullptr;
   // A segment a protocol, in a thin frame -- from the list, each named as
   // its protocol names itself.
   struct pick_protocol : outbox {
@@ -43,11 +42,11 @@ struct add_account_pane : nodes::Stack, outbox {
       std::vector<segment<pick_protocol>> each;
     } parts;
     template <class... Tags>
-    void make(const palette& colours, Actions* a, protocol_list<Tags...>) {
+    void make(const palette& colours, protocol_list<Tags...>) {
       (parts.each.emplace_back(colours, std::string(protocol_name(config::kept_of<Tags>{})), pick_protocol{{}, protocol_t{Tags{}}}), ...);
     }
-    protocol_switch(const palette& colours, Actions* a) {
-      this->make(colours, a, protocols{});
+    protocol_switch(const palette& colours) {
+      this->make(colours, protocols{});
       this->setHorizontal();
       this->setGap(1.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen});
@@ -62,7 +61,7 @@ struct add_account_pane : nodes::Stack, outbox {
       std::vector<segment<choose_new_proxy<Actions>>> choices;
       add_button add;
     } parts;
-    proxy_row(const palette& colours, Actions* a)
+    proxy_row(const palette& colours)
         : parts{.title = nodes::Text("Proxy", 13.0f, colours.dim), .add = add_button(colours, "Add proxy\u2026", {})} {
       this->setHorizontal();
       this->setGap(4.0f);
@@ -84,14 +83,11 @@ struct add_account_pane : nodes::Stack, outbox {
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
 
   add_account_pane(const ui_needs<Actions>& n, const std::vector<config::proxy_settings>& proxies)
-      : add_account_pane(n, n.actions, proxies) {}
-  add_account_pane(const ui_needs<Actions>& n, Actions* a, const std::vector<config::proxy_settings>& proxies)
-      : actions(a),
-        colours_(n.colours),
-        parts{.tabs = protocol_switch(*n.colours, a),
+      : colours_(n.colours),
+        parts{.tabs = protocol_switch(*n.colours),
               .note = nodes::Text("", 13.0f, n.colours->dim),
-              .proxies_row = proxy_row(*n.colours, a),
-              .form = account_form<Actions>(std::in_place_index<0>, a, *n.colours, std::nullopt)} {
+              .proxies_row = proxy_row(*n.colours),
+              .form = account_form<Actions>(std::in_place_index<0>, *n.colours, std::nullopt)} {
     fState.apply({.fill = true});
     this->setGap(12.0f);
     parts.note.setWrapped(true);
@@ -103,7 +99,7 @@ struct add_account_pane : nodes::Stack, outbox {
   // A protocol's form, blank, in place of the one up.
   void show(const protocol_t& speaks) {
     spl::visit([this](auto of) {
-      parts.form.template emplace<form_of_t<decltype(of), Actions>>(this->actions, *colours_, std::nullopt);
+      parts.form.template emplace<form_of_t<decltype(of), Actions>>(*colours_, std::nullopt);
     }, speaks);
     this->begin_swap();
     this->light();

@@ -51,7 +51,6 @@ template <class Actions>
 struct packs_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
-  Actions* actions = nullptr;
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   // What the window's parts tell the program: the pictures shown.
@@ -235,7 +234,7 @@ struct packs_box : nodes::Stack, outbox {
       widgets::Button<back_press> back;
       widgets::Button<save_press> save;
     } parts;
-    edit_buttons(Actions* a, packs_box* box)
+    edit_buttons(packs_box* box)
         : parts{.add = widgets::Button<add_press>(box->colours_->widgets, "Add images", {}),
                 .remove = widgets::Button<delete_press>(box->colours_->widgets, "Delete pack", {box}),
                 .back = widgets::Button<back_press>(box->colours_->widgets, "Back", {box}),
@@ -266,8 +265,8 @@ struct packs_box : nodes::Stack, outbox {
     nodes::ScrollContainer<pictures_t> pictures{pictures_t({.spacingY = 0.0f, .wrap = false}, {})};
     edit_buttons edit_actions;
   } parts;
-  packs_box(Actions* a, const palette& colours, ui_shared& shared, std::optional<std::string> in, bool editable)
-      : actions(a), colours_(&colours), shared_(&shared), room(std::move(in)), may_edit(editable),
+  packs_box(const palette& colours, ui_shared& shared, std::optional<std::string> in, bool editable)
+      : colours_(&colours), shared_(&shared), room(std::move(in)), may_edit(editable),
         parts{.header = header_t(colours, "Emojis & Stickers", {}, {}, false, true),
               .note = nodes::Text("", 13.0f, colours.dim),
               .list_actions = list_buttons(this),
@@ -275,7 +274,7 @@ struct packs_box : nodes::Stack, outbox {
               .attribution = field(colours, "Attribution (optional)", "Where its images are from"),
               .use = use_row(this),
               .images_heading = nodes::Text("Images", 13.0f, colours.dim, true),
-              .edit_actions = edit_buttons(a, this)} {
+              .edit_actions = edit_buttons(this)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .height = 600.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}});
     parts.note.setWrapped(true);

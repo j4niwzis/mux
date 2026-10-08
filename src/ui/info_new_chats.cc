@@ -59,7 +59,6 @@ template <class Actions>
 struct forward_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{400.0f, 520.0f}}; }
-  Actions* actions = nullptr;
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
   std::vector<forward_target> all;
@@ -71,14 +70,13 @@ struct forward_box : nodes::Stack, outbox {
     void operator()(std::string_view text) const { box->find(text); }
   };
   struct row : nodes::Stack, outbox {
-    Actions* actions;
     conversation_id id;
     struct parts_t {
       avatar_mark face;
       nodes::Text name;
     } parts;
-    row(Actions* a, const palette& colours, const forward_target& one)
-        : actions(a), id(one.id), parts{.face = avatar_mark(one.id.id, one.name, 36.0f),
+    row(const palette& colours, const forward_target& one)
+        : id(one.id), parts{.face = avatar_mark(one.id.id, one.name, 36.0f),
                                         .name = nodes::Text(one.name, 15.0f, colours.text)} {
       this->setHorizontal();
       this->setGap(12.0f);
@@ -103,8 +101,8 @@ struct forward_box : nodes::Stack, outbox {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
 
-  forward_box(Actions* a, const palette& colours, const std::vector<forward_target>& chats)
-      : actions(a), colours_(&colours), all(chats),
+  forward_box(const palette& colours, const std::vector<forward_target>& chats)
+      : colours_(&colours), all(chats),
         parts{.header = header_t(colours, "Forward to…", {}, {}, false, true),
               .field = widgets::TextBox<typed>(colours.widgets, "Search", {this})} {
     fState.apply({.fillX = true, .height = 520.0f});
@@ -122,7 +120,7 @@ struct forward_box : nodes::Stack, outbox {
     rows.clear();
     for (const forward_target& one : all)
       if (wanted.empty() || lower(one.name).contains(wanted))
-        rows.emplace_back(actions, *colours_, one);
+        rows.emplace_back(*colours_, one);
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
   }
@@ -132,7 +130,6 @@ struct forward_box : nodes::Stack, outbox {
 // in Start chat, and in the chat list where nothing joined matches.
 template <class Actions>
 struct found_person_row : nodes::Stack, outbox {
-  Actions* actions;
   std::string id;
   struct lines_t : two_lines {
     lines_t(const palette& colours, const found_person& one) : two_lines(colours, one.name.empty() ? one.id : one.name, one.id, 14.0f, 2.0f) {}
@@ -141,8 +138,8 @@ struct found_person_row : nodes::Stack, outbox {
     avatar_mark face;
     lines_t lines;
   } parts;
-  found_person_row(Actions* a, const palette& colours, const found_person& one)
-      : actions(a), id(one.id),
+  found_person_row(const palette& colours, const found_person& one)
+      : id(one.id),
         parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 36.0f), .lines = lines_t(colours, one)} {
     this->setHorizontal();
     this->setGap(12.0f);
@@ -167,7 +164,6 @@ template <class Actions>
 struct start_chat_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
-  Actions* actions = nullptr;
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   // Those one has direct chats with, and what the directory found for what
@@ -237,8 +233,8 @@ struct start_chat_box : nodes::Stack, outbox {
     nodes::Text note;
     link_row share;
   } parts;
-  start_chat_box(Actions* a, const palette& colours, std::vector<found_person> people, std::string own_link)
-      : actions(a), colours_(&colours), known(std::move(people)), link(std::move(own_link)),
+  start_chat_box(const palette& colours, std::vector<found_person> people, std::string own_link)
+      : colours_(&colours), known(std::move(people)), link(std::move(own_link)),
         parts{.header = header_t(colours, "Start chat", {}, {}, false, true),
               .intro = nodes::Text("Start a conversation with someone using their name or username (like @user:server).",
                                    14.0f, colours.text),
@@ -291,7 +287,7 @@ struct start_chat_box : nodes::Stack, outbox {
     std::set<std::string> listed;
     const auto add = [&](const found_person& one) {
       if (rows.size() < 60 && listed.insert(one.id).second)
-        rows.emplace_back(actions, *colours_, one);
+        rows.emplace_back(*colours_, one);
     };
     if (whole_id(query))
       add(found_person{.id = query});
@@ -323,7 +319,6 @@ template <class Actions>
 struct create_room_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{480.0f}}; }
-  Actions* actions = nullptr;
   // The colours it is made in, for its parts.
   const palette* colours_ = nullptr;
   std::string server;
@@ -498,8 +493,8 @@ struct create_room_box : nodes::Stack, outbox {
     nodes::Text block_note;
     buttons_row buttons;
   } parts;
-  create_room_box(Actions* a, const palette& colours, std::string own_server, std::optional<new_room_place> where = std::nullopt)
-      : actions(a), colours_(&colours), server(std::move(own_server)), place(std::move(where)), space_members(place.has_value()),
+  create_room_box(const palette& colours, std::string own_server, std::optional<new_room_place> where = std::nullopt)
+      : colours_(&colours), server(std::move(own_server)), place(std::move(where)), space_members(place.has_value()),
         parts{.header = header_t(colours, "Create a room", {}, {}, false, true),
               .name = field(colours, "Name", ""),
               .topic = field(colours, "Topic (optional)", ""),

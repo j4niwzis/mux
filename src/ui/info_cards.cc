@@ -60,8 +60,8 @@ struct person_card : nodes::Stack {
       avatar_button<Actions> photo;
       two_lines texts;
     } parts;
-    cover(Actions* a, const palette& colours, const std::string& key, const person_facts& facts)
-        : parts{.photo = avatar_button<Actions>(a, key, facts.name, 72.0f),
+    cover(const palette& colours, const std::string& key, const person_facts& facts)
+        : parts{.photo = avatar_button<Actions>(key, facts.name, 72.0f),
                 .texts = two_lines(colours, facts.name, facts.status, 17.0f, 6.0f)} {
       parts.texts.parts.name.setSelectable(true);
       parts.texts.parts.state.setSelectable(true);
@@ -119,17 +119,17 @@ struct person_card : nodes::Stack {
     std::vector<action_tile<ask_protocol>> theirs;
   } parts;
 
-  person_card(Actions* a, const palette& colours, const ui_shared& shared, const account_id& account, const std::string& key, const person_facts& facts)
+  person_card(const palette& colours, const ui_shared& shared, const account_id& account, const std::string& key, const person_facts& facts)
       : colours_(&colours),
         parts{.top = top_bar(colours, "User info", {}, {}, false, true),
-              .face = cover(a, colours, key, facts),
+              .face = cover(colours, key, facts),
               .band = section_band(colours),
               .id = id_line(colours, key, ""),
-              .message = action_tile<message_them>(colours, "Message", icon::send{}, {a, conversation_id{account, key}}),
-              .verify = action_tile<verify_them>(colours, "Verify with emoji", icon::check{}, {a, conversation_id{account, key}}),
-              .accept = action_tile<accept_them>(colours, "Withdraw verification", icon::close{}, {a, conversation_id{account, key}}),
-              .remove = action_tile<to_them>(colours, "Remove from room", icon::leave{}, {a, room_action::kick{key}}),
-              .ban = action_tile<to_them>(colours, "Ban from room", icon::close{}, {a, room_action::ban{key}}),
+              .message = action_tile<message_them>(colours, "Message", icon::send{}, {{}, conversation_id{account, key}}),
+              .verify = action_tile<verify_them>(colours, "Verify with emoji", icon::check{}, {{}, conversation_id{account, key}}),
+              .accept = action_tile<accept_them>(colours, "Withdraw verification", icon::close{}, {{}, conversation_id{account, key}}),
+              .remove = action_tile<to_them>(colours, "Remove from room", icon::leave{}, {{}, room_action::kick{key}}),
+              .ban = action_tile<to_them>(colours, "Ban from room", icon::close{}, {{}, room_action::ban{key}}),
               .sessions_title = nodes::Text("", 13.0f, colours.dim, true)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.verify, &parts.accept, &parts.remove, &parts.ban})
@@ -246,11 +246,11 @@ struct room_card : nodes::Stack {
     std::optional<action_tile<decline_it>> decline;
   } parts;
 
-  room_card(Actions* a, const palette& colours, const std::string& asked, const room_preview& known)
+  room_card(const palette& colours, const std::string& asked, const room_preview& known)
       : parts{.top = top_bar(colours, "Room info", {}, {}, false, true),
               .scroll = nodes::ScrollContainer<details>(details(colours, asked, known)),
               .join = action_tile<join_it>(colours, known.invite ? "Accept" : known.knock ? "Ask to join" : "Join", icon::plus{},
-                                           {a, known.knock && !known.invite})} {
+                                           {{}, known.knock && !known.invite})} {
     fState.apply({.fillX = true, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
     parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
     if (known.invite) {

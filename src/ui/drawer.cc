@@ -25,7 +25,6 @@ export namespace mux::ui {
 // chats are the ones shown; the current one is lit and ticked.
 template <class Actions>
 struct drawer_account : nodes::Stack, outbox {
-  Actions* actions = nullptr;
   std::string address;
   bool current = false;
   struct parts_t {
@@ -37,7 +36,7 @@ struct drawer_account : nodes::Stack, outbox {
 
   // Declared: the avatar, the address over its state, the tick.
   drawer_account(const ui_needs<Actions>& n, const config::account_t& saved, const model& now, bool is_current)
-      : actions(n.actions), address(config::address_of(saved)), current(is_current),
+      : address(config::address_of(saved)), current(is_current),
         parts{.face = avatar_mark(address, address, 38.0f), .texts = two_lines(*n.colours, address, "", 14.0f, 3.0f),
               .tick = icon_mark(*n.colours, icon::check{})} {
     const palette& colours = *n.colours;
@@ -89,8 +88,7 @@ struct drawer_panel : nodes::Stack {
     quit_row quit;
   } parts;
 
-  explicit drawer_panel(const ui_needs<Actions>& n) : drawer_panel(n, n.actions) {}
-  drawer_panel(const ui_needs<Actions>& n, Actions* a)
+  drawer_panel(const ui_needs<Actions>& n)
       : needs_(n),
         parts{.title = nodes::Text("mux", 20.0f, n.colours->text, true),
               .manage = manage_row(*n.colours, "Manage accounts", {}, icon::person{}),
@@ -107,7 +105,7 @@ struct drawer_panel : nodes::Stack {
   }
 
   template <std::ranges::input_range Saved>
-  void show(Actions*, const Saved& saved, const model& now, std::string_view current) {
+  void show(const Saved& saved, const model& now, std::string_view current) {
     parts.accounts.clear();
     for (const config::account_t& one : saved)
       parts.accounts.emplace_back(needs_, one, now, config::address_of(one) == current);

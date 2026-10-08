@@ -74,13 +74,12 @@ struct reactions_box : nodes::Stack {
   // saying what they reacted with, in runs as the chat's bubbles are.
   // Pressed, it is answered.
   struct row : nodes::Stack, outbox {
-    Actions* actions;
     reaction_entry entry;
     struct parts_t {
       message_bubble<Actions> bubble;
     } parts;
     row(const ui_needs<Actions>& n, const conversation& in, reaction_entry one, bool first, bool last, const model* now)
-        : actions(n.actions), entry(one),
+        : entry(one),
           parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, message_of(in, one), first, last, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
                     .hoverBackground = n.colours->chosen});
@@ -246,7 +245,6 @@ struct marks_box : nodes::Stack {
     }
   };
   struct row : nodes::Stack, outbox {
-    Actions* actions = nullptr;
     mark_kind_t kind;
     std::string event;
     struct parts_t {
@@ -254,7 +252,7 @@ struct marks_box : nodes::Stack {
       std::optional<badge> reacted;
     } parts;
     row(const ui_needs<Actions>& n, mark_kind_t which, const conversation& in, const mark_entry& one, const model* now)
-        : actions(n.actions), kind(which), event(one.event),
+        : kind(which), event(one.event),
           parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, one.said, true, true, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 8.0f, 12.0f},
                     .hoverBackground = n.colours->chosen});

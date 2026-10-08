@@ -294,17 +294,14 @@ struct timeline_area : scene::Node, outbox {
     // its cross stopping the search.
     widgets::RadialLoader<stop_jump> loading;
   } parts;
-  Actions* actions = nullptr;
   // What it was handed down, for the bubbles it makes.
   ui_needs<Actions> needs_;
-  explicit timeline_area(const ui_needs<Actions>& n) : timeline_area(n, n.actions) {}
-  timeline_area(const ui_needs<Actions>& n, Actions* a)
-      : parts{.jump = jump_button<Actions>(*n.colours, a),
-              .back = back_button<Actions>(*n.colours, a),
-              .mentions = mark_button<Actions>(*n.colours, a, mark_kind::mention{}, "@"),
-              .reactions = mark_button<Actions>(*n.colours, a, mark_kind::reaction{}, "\u2665"),
+  timeline_area(const ui_needs<Actions>& n)
+      : parts{.jump = jump_button<Actions>(*n.colours),
+              .back = back_button<Actions>(*n.colours),
+              .mentions = mark_button<Actions>(*n.colours, mark_kind::mention{}, "@"),
+              .reactions = mark_button<Actions>(*n.colours, mark_kind::reaction{}, "\u2665"),
               .loading = widgets::RadialLoader<stop_jump>(44.0f, {})},
-        actions(a),
         needs_(n) {
     parts.wall.apply({.fill = true});
     this->show_wallpaper(config::wallpaper::theme{});

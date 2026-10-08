@@ -35,7 +35,7 @@ struct xmpp_advanced : nodes::Stack {
       plain_toggle plain;
       nodes::Text label;
     } parts;
-    plain_row(Actions* a, const palette& colours)
+    plain_row(const palette& colours)
         : parts{.plain = plain_toggle(colours.widgets, {}),
                 .label = nodes::Text("Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
                                      13.0f, colours.error)} {
@@ -53,10 +53,10 @@ struct xmpp_advanced : nodes::Stack {
     plain_row row;
   } parts;
 
-  xmpp_advanced(Actions* a, const palette& colours) : parts{.resource = field(colours, "Device name (resource)", "mux", "mux"),
+  xmpp_advanced(const palette& colours) : parts{.resource = field(colours, "Device name (resource)", "mux", "mux"),
               .host = field(colours, "Host", "from the domain's SRV records"),
               .port = field(colours, "Port", "5222"),
-              .row = plain_row(a, colours)} {
+              .row = plain_row(colours)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
     this->setGap(8.0f);
   }
@@ -173,7 +173,6 @@ template <class Actions>
 struct xmpp_form : nodes::Stack, outbox {
   // What the add-account pane says of the protocol.
   static constexpr std::string_view note = "An address like user@example.com, on a server such as Prosody or ejabberd.";
-  Actions* actions = nullptr;
   // The address the account was saved under, when this is an edit of one.
   std::optional<std::string> editing;
   bool advanced = false;
@@ -198,9 +197,8 @@ struct xmpp_form : nodes::Stack, outbox {
     form_end<Actions> end;
   } parts;
 
-  xmpp_form(Actions* a, const palette& colours, const std::optional<::mux::proto::xmpp::kept>& from)
-      : actions(a),
-        creating(from && from->create.value_or(false)),
+  xmpp_form(const palette& colours, const std::optional<::mux::proto::xmpp::kept>& from)
+      : creating(from && from->create.value_or(false)),
         answered(from ? from->answers.value_or(std::vector<registration_answer>{}) : std::vector<registration_answer>{}),
         colours_(&colours),
         parts{.address = field(colours, "Address (JID)", "user@example.com"),
@@ -209,8 +207,8 @@ struct xmpp_form : nodes::Stack, outbox {
                                              creating ? 1 : 0, pick_mode{this}),
               .asked = asked_part(colours),
               .advanced_button = advanced_button_t(colours.widgets, "Advanced", {}),
-              .more = widgets::Collapsible<xmpp_advanced<Actions>>(a, colours),
-              .end = form_end<Actions>(colours, a, from.has_value())} {
+              .more = widgets::Collapsible<xmpp_advanced<Actions>>(colours),
+              .end = form_end<Actions>(colours, from.has_value())} {
     auto& [address, password, mode, asked, advanced_button, more, end] = parts;
     // An account kept and signed in to: one already, nothing to choose.
     mode.setVisible(!from || creating);

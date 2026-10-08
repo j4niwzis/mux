@@ -694,7 +694,7 @@ struct composer_bar : nodes::Stack {
       nodes::Text line;
       widgets::Button<go_on> go;
     } parts;
-    replaced_row(const palette& colours, Actions* a)
+    replaced_row(const palette& colours)
         : parts{.line = nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim),
                 .go = widgets::Button<go_on>(colours.widgets, "The conversation continues here", {})} {
       this->setHorizontal();
@@ -752,7 +752,7 @@ struct composer_bar : nodes::Stack {
               .input = input_row(*n.colours, std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji),
                                  std::move(send)),
               .no_post = no_post_row(*n.colours),
-              .replaced = replaced_row(*n.colours, n.actions)} {
+              .replaced = replaced_row(*n.colours)} {
     parts.unsent.setVisible(false);
     parts.no_post.setVisible(false);
     parts.replaced.setVisible(false);
@@ -841,7 +841,7 @@ struct composer_bar : nodes::Stack {
   }
   // Those asking to join, where one may let them in: the first, and how many
   // more. Made again only as who is first changes.
-  void show_knocks(Actions* a, const std::vector<knock_request>& knocking, bool may) {
+  void show_knocks(const std::vector<knock_request>& knocking, bool may) {
     if (!may || knocking.empty()) {
       if (parts.knocks) {
         parts.knocks.reset();
@@ -905,15 +905,14 @@ struct composer_bar : nodes::Stack {
 // reactions to theirs, are not yet seen; pressed, the oldest is gone to.
 template <class Actions>
 struct mark_button : scene::Node, outbox {
-  Actions* actions = nullptr;
   mark_kind_t kind;
   using badge_t = count_badge;
   struct parts_t {
     nodes::Text glyph;
     badge_t badge;
   } parts;
-  mark_button(const palette& colours, Actions* a, mark_kind_t which, std::string glyph)
-      : actions(a), kind(which), parts{.glyph = nodes::Text(std::move(glyph), 18.0f, colours.text, true), .badge = badge_t(colours)} {
+  mark_button(const palette& colours, mark_kind_t which, std::string glyph)
+      : kind(which), parts{.glyph = nodes::Text(std::move(glyph), 18.0f, colours.text, true), .badge = badge_t(colours)} {
     fState.apply({.place = scene::anchor::kBottomRight,
                   .x = -18.0f,
                   .y = -12.0f,
@@ -966,7 +965,6 @@ struct mark_button : scene::Node, outbox {
 // "↓": back to the newest, with how many came while one read above them.
 template <class Actions>
 struct jump_button : scene::Node, outbox {
-  Actions* actions = nullptr;
   int unseen = 0;
   // A round plate with a chevron down, and over its top the count of what
   // came while the reader was above, on a badge in the accent.
@@ -975,8 +973,8 @@ struct jump_button : scene::Node, outbox {
     nodes::Icon chevron;
     badge_t badge;
   } parts;
-  jump_button(const palette& colours, Actions* a)
-      : actions(a), parts{.chevron = nodes::Icon(shape_of(icon::down{}), colours.text), .badge = badge_t(colours)} {
+  jump_button(const palette& colours)
+      : parts{.chevron = nodes::Icon(shape_of(icon::down{}), colours.text), .badge = badge_t(colours)} {
     parts.badge.setVisible(false);
     fState.apply({.place = scene::anchor::kBottomRight,
                   .x = -18.0f,
@@ -1007,11 +1005,10 @@ struct jump_button : scene::Node, outbox {
 // -- over "↓", as Telegram's: the chat as it was left.
 template <class Actions>
 struct back_button : scene::Node, outbox {
-  Actions* actions = nullptr;
   struct parts_t {
     nodes::Icon mark;
   } parts;
-  back_button(const palette& colours, Actions* a) : actions(a), parts{.mark = nodes::Icon(shape_of(icon::back{}), colours.text)} {
+  back_button(const palette& colours) : parts{.mark = nodes::Icon(shape_of(icon::back{}), colours.text)} {
     fState.apply({.place = scene::anchor::kBottomRight,
                   .x = -18.0f,
                   .y = -12.0f,

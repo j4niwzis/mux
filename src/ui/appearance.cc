@@ -288,13 +288,13 @@ struct appearance_page : nodes::Stack {
   } parts;
 
   appearance_page(const ui_needs<Actions>& n, const config::theme_t& theme, const config::accent_t&)
-      : appearance_page(*n.colours, *n.looks, *n.shared, n.actions, theme) {}
-  appearance_page(const palette& colours, const looks_shown& looks, const ui_shared& shared, Actions* a, const config::theme_t& theme)
+      : appearance_page(*n.colours, *n.looks, *n.shared, theme) {}
+  appearance_page(const palette& colours, const looks_shown& looks, const ui_shared& shared, const config::theme_t& theme)
       : parts{.header = header_t(colours, "Appearance", {}, {}, true, true),
               .settings = skiff::compose::column(
                   skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), appearance_settings_view(colours, theme),
-                  look_choices<Actions>(a, colours, looks, choice_level::everywhere{}), window_settings_view(colours),
-                  spaces_choices<Actions>(a, colours, shared), frame_look_view(colours, looks.window.see_through))} {
+                  look_choices<Actions>(colours, looks, choice_level::everywhere{}), window_settings_view(colours),
+                  spaces_choices<Actions>(colours, shared), frame_look_view(colours, looks.window.see_through))} {
     fState.apply({.fill = true});
     std::get<1>(parts.settings.fParts).apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
     std::get<3>(parts.settings.fParts).setVisible(looks.window.spaces);
@@ -329,9 +329,9 @@ struct rendering_page : nodes::Stack {
       choice cpu;
       nodes::Text note;
     } parts;
-    body(const palette& colours, Actions* a)
-        : parts{.gpu = choice(colours, "OpenGL (the graphics card)", {a, config::renderer::opengl{}}, icon::none{}, false),
-                .cpu = choice(colours, "Software (the processor)", {a, config::renderer::software{}}, icon::none{}, false),
+    body(const palette& colours)
+        : parts{.gpu = choice(colours, "OpenGL (the graphics card)", {{}, config::renderer::opengl{}}, icon::none{}, false),
+                .cpu = choice(colours, "Software (the processor)", {{}, config::renderer::software{}}, icon::none{}, false),
                 .note = note_text(colours, "Takes effect when mux starts again.")} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
       parts.note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
@@ -346,10 +346,10 @@ struct rendering_page : nodes::Stack {
   } parts;
 
   rendering_page(const ui_needs<Actions>& n, const config::renderer_t& renderer)
-      : rendering_page(*n.colours, n.actions, renderer) {}
-  rendering_page(const palette& colours, Actions* a, const config::renderer_t& renderer)
+      : rendering_page(*n.colours, renderer) {}
+  rendering_page(const palette& colours, const config::renderer_t& renderer)
       : parts{.header = header_t(colours, "Rendering", {}, {}, true, true),
-              .list = body(colours, a),
+              .list = body(colours),
               .settings = frame_settings_view(colours)} {
     fState.apply({.fill = true});
     parts.list.apply({.fillX = true});

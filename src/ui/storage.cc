@@ -127,7 +127,7 @@ struct storage_page : nodes::Stack {
       seal_row seal;
       change_row change;
     } parts;
-    seal_rows(const palette& colours, Actions* a, bool sealed)
+    seal_rows(const palette& colours, bool sealed)
         : parts{.seal = seal_row(colours, "Encrypt local data", {}),
                 .change = change_row(colours, "Change the passphrase", {})} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -141,13 +141,13 @@ struct storage_page : nodes::Stack {
       parts.change.setVisible(sealed);
     }
   };
-  static auto settings_of(const palette& colours, Actions* a, const config::history_settings& history, bool sealed) {
+  static auto settings_of(const palette& colours, const config::history_settings& history, bool sealed) {
     namespace limit = config::limit;
     using skiff::compose::bound;
     auto clear = clear_row(colours, "Clear stored messages and pictures", {}, icon::close{});
     return skiff::compose::column(
         skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
-        spaced_title(colours, "ENCRYPTION"), seal_rows(colours, a, sealed),
+        spaced_title(colours, "ENCRYPTION"), seal_rows(colours, sealed),
         spaced_note(colours, "Off by default. On, everything mux keeps on disk is sealed under a passphrase asked for at "
                              "every start: settings with passwords and tokens, chats, drafts, encryption keys. Pictures "
                              "are not kept on disk then."),
@@ -183,9 +183,9 @@ struct storage_page : nodes::Stack {
   } parts;
 
   storage_page(const ui_needs<Actions>& n, const config::cache_limits&, const config::history_settings& history, bool sealed)
-      : storage_page(*n.colours, n.actions, history, sealed) {}
-  storage_page(const palette& colours, Actions* a, const config::history_settings& history, bool sealed)
-      : parts{.header = header_t(colours, "Storage", {}, {}, true, true), .settings = settings_of(colours, a, history, sealed)} {
+      : storage_page(*n.colours, history, sealed) {}
+  storage_page(const palette& colours, const config::history_settings& history, bool sealed)
+      : parts{.header = header_t(colours, "Storage", {}, {}, true, true), .settings = settings_of(colours, history, sealed)} {
     fState.apply({.fill = true});
   }
   void show_receipts(bool) {}
@@ -221,8 +221,8 @@ struct notifications_page : nodes::Stack {
     settings_t settings;
   } parts;
   notifications_page(const ui_needs<Actions>& n, const config::notification_settings&)
-      : notifications_page(*n.colours, n.actions) {}
-  notifications_page(const palette& colours, Actions* a)
+      : notifications_page(*n.colours) {}
+  notifications_page(const palette& colours)
       : parts{.header = header_t(colours, "Notifications", {}, {}, true, true),
               .settings = notification_settings_view(colours)} {
     fState.apply({.fill = true});
@@ -250,8 +250,8 @@ struct files_page : nodes::Stack {
     header_t header;
     settings_t settings;
   } parts;
-  files_page(const ui_needs<Actions>& n, const config::sending_settings&) : files_page(*n.colours, n.actions) {}
-  files_page(const palette& colours, Actions* a)
+  files_page(const ui_needs<Actions>& n, const config::sending_settings&) : files_page(*n.colours) {}
+  files_page(const palette& colours)
       : parts{.header = header_t(colours, "Files", {}, {}, true, true), .settings = files_settings_view(colours)} {
     fState.apply({.fill = true});
   }

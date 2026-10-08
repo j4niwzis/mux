@@ -56,7 +56,6 @@ export namespace mux::ui {
 
 template <class Actions>
 struct info_panel : nodes::Stack, outbox {
-  Actions* actions = nullptr;
   // The colours it is made in, for what it makes later; and what the
   // window's parts share: the accounts' protocol states.
   const palette* colours_ = nullptr;
@@ -138,7 +137,7 @@ struct info_panel : nodes::Stack, outbox {
         nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
         close_button close;
       } parts;
-      top_row(Actions* a, info_panel* panel, bool with_back)
+      top_row(info_panel* panel, bool with_back)
           : parts{.back = icon_button<back_to_group>(*panel->colours_, icon::back{}, {panel}),
                   .close = close_button(*panel->colours_, icon::close{}, {})} {
         this->setHorizontal();
@@ -156,7 +155,7 @@ struct info_panel : nodes::Stack, outbox {
         manage_tile manage;
         leave_tile leave;
       } parts;
-      tiles_row(Actions* a, const palette& colours, bool muted, bool leavable)
+      tiles_row(const palette& colours, bool muted, bool leavable)
           : parts{.mute = mute_tile(colours, muted ? "Unmute" : "Mute", icon::bell{}, {}),
                   .manage = manage_tile(colours, "Manage", icon::sliders{}, {}),
                   .leave = leave_tile(colours, "Leave", icon::leave{}, {})} {
@@ -174,8 +173,8 @@ struct info_panel : nodes::Stack, outbox {
       struct parts_t {
         action_tile<message_them> message;
       } parts;
-      person_row(Actions* a, info_panel* panel)
-          : parts{.message = action_tile<message_them>(*panel->colours_, "Message", icon::send{}, {a, panel})} {
+      person_row(info_panel* panel)
+          : parts{.message = action_tile<message_them>(*panel->colours_, "Message", icon::send{}, {{}, panel})} {
         this->setHorizontal();
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
         parts.message.apply({.grow = scene::axes::kX});
@@ -211,9 +210,9 @@ struct info_panel : nodes::Stack, outbox {
       id_line id_text;
     } parts;
 
-    head(Actions* a, info_panel* panel, const view& shown)
-        : parts{.top = top_row(a, panel, shown.of_person),
-                .avatar = avatar_button<Actions>(a, shown.key, shown.name, 96.0f),
+    head(info_panel* panel, const view& shown)
+        : parts{.top = top_row(panel, shown.of_person),
+                .avatar = avatar_button<Actions>(shown.key, shown.name, 96.0f),
                 .name = nodes::Text(shown.name, 17.0f, panel->colours_->text, true),
                 .status = nodes::Text(shown.status, 13.0f, panel->colours_->dim),
                 .band_1 = section_band(*panel->colours_),
@@ -226,9 +225,9 @@ struct info_panel : nodes::Stack, outbox {
       this->setGap(2.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       if (shown.of_person)
-        person_tiles.emplace(a, panel);
+        person_tiles.emplace(panel);
       else
-        tiles.emplace(a, *panel->colours_, shown.muted, shown.leavable);
+        tiles.emplace(*panel->colours_, shown.muted, shown.leavable);
       for (nodes::Text* centred : {&name, &status}) {
         centred->setElided(true);
         centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});
@@ -243,10 +242,10 @@ struct info_panel : nodes::Stack, outbox {
       nodes::Text title;
       add_button add_member;
     } parts;
-    members_head(Actions* a, const palette& colours, std::size_t count)
+    members_head(const palette& colours, std::size_t count)
         : parts{.people = icon_view(colours, icon::people{}),
                 .title = nodes::Text(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, colours.dim, true),
-                .add_member = add_button(colours, icon::add_person{}, {a, "Adding members"})} {
+                .add_member = add_button(colours, icon::add_person{}, {{}, "Adding members"})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}});
@@ -284,7 +283,7 @@ struct info_panel : nodes::Stack, outbox {
 
   static constexpr float kWidth = 340.0f;
 
-  info_panel(Actions* a, const palette& colours, const ui_shared& shared) : actions(a), colours_(&colours), shared_(&shared), parts{.scroll = nodes::ScrollContainer<column>(column(colours)), .edge = nodes::Box<>(colours.band)} {
+  info_panel(const palette& colours, const ui_shared& shared) : colours_(&colours), shared_(&shared), parts{.scroll = nodes::ScrollContainer<column>(column(colours)), .edge = nodes::Box<>(colours.band)} {
     fState.apply({.background = colours.sidebar, .masking = true});
     parts.edge.apply({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f});
     parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
@@ -365,7 +364,7 @@ struct info_panel : nodes::Stack, outbox {
             }))
       members.invalidateLayout();
     members_header.show(static_cast<std::size_t>(std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count)),
-                        [this](std::size_t count) { return members_head(actions, *colours_, count); });
+                        [this](std::size_t count) { return members_head(*colours_, count); });
     this->render();
   }
   void open_member(std::string id) {
@@ -402,7 +401,7 @@ struct info_panel : nodes::Stack, outbox {
         shown.status = group_view.status;
       }
     }
-    upper.show(shown, [this](const view& v) { return head(actions, this, v); });
+    upper.show(shown, [this](const view& v) { return head(this, v); });
     const bool list = shown.group && !shown.of_person;
     band_2.setVisible(list);
     members_header.setVisible(list);

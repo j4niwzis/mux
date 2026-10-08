@@ -55,7 +55,6 @@ export namespace mux::ui {
 // its settings beside the list.
 template <class Actions>
 struct account_entry : nodes::Stack, outbox {
-  Actions* actions = nullptr;
   std::string address;
   bool selected = false;
   struct parts_t {
@@ -66,7 +65,7 @@ struct account_entry : nodes::Stack, outbox {
   // Declared: its address over its protocol and state, on a plate lit
   // while it is the one chosen.
   account_entry(const ui_needs<Actions>& n, const config::account_t& saved, const model& now, bool is_selected)
-      : actions(n.actions), address(config::address_of(saved)), selected(is_selected),
+      : address(config::address_of(saved)), selected(is_selected),
         parts{.name = nodes::Text(address, 15.0f, n.colours->text, true), .state = nodes::Text("", 13.0f, n.colours->dim)} {
     const palette& colours = *n.colours;
     this->setGap(4.0f);
@@ -106,7 +105,7 @@ struct account_editor : nodes::Stack {
       widgets::Toggle<flip_account<Actions>> enabled;
       widgets::Button<remove_account<Actions>> remove;
     } parts;
-    head_row(const palette& colours, Actions* a, const config::account_t& saved)
+    head_row(const palette& colours, const config::account_t& saved)
         : parts{.heading = nodes::Text(config::address_of(saved), 20.0f, colours.text, true),
                 .enabled_label = nodes::Text("On", 13.0f, colours.dim),
                 .enabled = widgets::Toggle<flip_account<Actions>>(colours.widgets, flip_account<Actions>{{}, config::address_of(saved)}),
@@ -133,9 +132,9 @@ struct account_editor : nodes::Stack {
 
   account_editor(const ui_needs<Actions>& n, const config::account_t& saved)
       : colours_(n.colours),
-        parts{.head = head_row(*n.colours, n.actions, saved),
+        parts{.head = head_row(*n.colours, saved),
               .state = nodes::Text("", 13.0f, n.colours->dim),
-              .form = form_of(n.actions, *n.colours, saved)} {
+              .form = form_of(*n.colours, saved)} {
     fState.apply({.fill = true});
     this->setGap(6.0f);
     parts.state.setElided(true);
@@ -189,7 +188,6 @@ struct choose_account_page : outbox {
 template <class Actions>
 struct account_pages : nodes::Stack, outbox {
   using row = row_item<choose_account_page<Actions>>;
-  Actions* actions = nullptr;
   // The colours its protocol's rows are made in, as they change.
   const palette* colours_ = nullptr;
   struct parts_t {
@@ -201,13 +199,13 @@ struct account_pages : nodes::Stack, outbox {
     row proxy;
   } parts;
 
-  account_pages(const palette& colours, Actions* a)
-      : actions(a), colours_(&colours),
-        parts{.connection = row(colours, "Connection", {a, account_page::connection{}}, icon::sliders{}),
-              .privacy = row(colours, "Privacy", {a, account_page::privacy{}}, icon::eye{}),
-              .notifications = row(colours, "Notifications", {a, account_page::notifications{}}, icon::bell{}),
-              .chats = row(colours, "Chats", {a, account_page::chats{}}, icon::people{}),
-              .proxy = row(colours, "Proxy", {a, account_page::proxy{}}, icon::gear{})} {
+  account_pages(const palette& colours)
+      : colours_(&colours),
+        parts{.connection = row(colours, "Connection", {{}, account_page::connection{}}, icon::sliders{}),
+              .privacy = row(colours, "Privacy", {{}, account_page::privacy{}}, icon::eye{}),
+              .notifications = row(colours, "Notifications", {{}, account_page::notifications{}}, icon::bell{}),
+              .chats = row(colours, "Chats", {{}, account_page::chats{}}, icon::people{}),
+              .proxy = row(colours, "Proxy", {{}, account_page::proxy{}}, icon::gear{})} {
     fState.apply({.padding = {6.0f, 0.0f, 0.0f, 0.0f}});
     this->light(account_page::connection{});
   }
@@ -286,8 +284,8 @@ struct account_privacy : nodes::Stack {
   } parts;
 
   template <class... Rest>
-  account_privacy(const ui_needs<Actions>& n, Rest&&... rest) : account_privacy(*n.colours, n.actions, std::forward<Rest>(rest)...) {}
-  account_privacy(const palette& colours, Actions* a, bool receipts_on, std::string address, std::optional<bool> events_all = std::nullopt,
+  account_privacy(const ui_needs<Actions>& n, Rest&&... rest) : account_privacy(*n.colours, std::forward<Rest>(rest)...) {}
+  account_privacy(const palette& colours, bool receipts_on, std::string address, std::optional<bool> events_all = std::nullopt,
                   const std::optional<config::room_event_kinds>& kinds = std::nullopt, bool notify_on = true,
                   bool notify_sound_on = true, std::optional<bool> faces_on = std::nullopt,
                   std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt,
@@ -406,7 +404,7 @@ struct account_chats : nodes::Stack {
     choice_menu<pick_home> home;
     spaces_choices<Actions> places;
   } parts;
-  account_chats(Actions* a, const palette& colours, const looks_shown& looks, const ui_shared& shared, std::string address,
+  account_chats(const palette& colours, const looks_shown& looks, const ui_shared& shared, std::string address,
                 const chat_choice_values& chats, std::optional<bool> home_hides,
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
       : parts{.colour_title = section_title(colours, "COLOUR"),
@@ -415,13 +413,13 @@ struct account_chats : nodes::Stack {
               .title = section_title(colours, "CHATS"),
               .settings = account_chats_view(colours, std::move(address)),
               .looks_title = section_title(colours, "LOOKS"),
-              .looks = look_choices<Actions>(a, colours, looks, choice_level::account{}),
+              .looks = look_choices<Actions>(colours, looks, choice_level::account{}),
               .spaces_title = section_title(colours, "SPACES"),
               .home = choice_menu<pick_home>(colours, "Home",
                                              {"As above", "Every chat", "Without chats spaces hold",
                                               "Without those and direct messages"},
                                              !home_hides ? 0 : !*home_hides ? 1 : home_direct.value_or(false) ? 3 : 2, pick_home{}),
-              .places = spaces_choices<Actions>(a, colours, shared)} {
+              .places = spaces_choices<Actions>(colours, shared)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     for (nodes::Text* each : {&parts.title, &parts.looks_title, &parts.spaces_title})
@@ -453,7 +451,7 @@ struct account_proxy : nodes::Stack {
     manage_row manage;
   } parts;
 
-  account_proxy(Actions* a, const palette& colours, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
+  account_proxy(const palette& colours, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
       : parts{.title = section_title(colours, "PROXY"),
               .manage = manage_row(colours, "Manage proxies…", {}, icon::gear{})} {
     auto& choices = parts.choices;
@@ -510,9 +508,9 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
       account_pages<Actions>& pages = parts.pages;
       nodes::Text& message = parts.message;
       decltype(parts_t::list)& list = parts.list;
-      side_column(const palette& colours, Actions* a)
+      side_column(const palette& colours)
           : parts{.add = add_row(colours, "Add account", {}, icon::plus{}),
-                  .pages = account_pages<Actions>(colours, a),
+                  .pages = account_pages<Actions>(colours),
                   .message = nodes::Text("", 13.0f, colours.error)} {
         fState.apply({.fillY = true, .width = kListWidth, .background = colours.sidebar});
         pages.setVisible(false);
@@ -544,7 +542,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
       side_column side;
       detail_column main;
     } parts;
-    body_row(const palette& colours, Actions* a) : parts{.side = side_column(colours, a), .main = detail_column(colours)} {
+    body_row(const palette& colours) : parts{.side = side_column(colours), .main = detail_column(colours)} {
       this->setHorizontal();
       fState.apply({.fillX = true, .grow = scene::axes::kY});
     }
@@ -636,10 +634,9 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
 
   // What it was handed, for the panes it makes.
   ui_needs<Actions> needs_;
-  explicit accounts_panel(const ui_needs<Actions>& n) : accounts_panel(n, n.actions) {}
-  accounts_panel(const ui_needs<Actions>& n, Actions* a)
-      : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>>(a),
-        parts{.header = header_t(*n.colours, "Accounts", {}, {}, true, false), .body = body_row(*n.colours, a)},
+  accounts_panel(const ui_needs<Actions>& n)
+      : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>>(),
+        parts{.header = header_t(*n.colours, "Accounts", {}, {}, true, false), .body = body_row(*n.colours)},
         needs_(n) {
     this->fState.apply({.fill = true});
   }
@@ -693,7 +690,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
               detail.template emplace<6>(needs_, config::address_of(one));
             },
             [&](account_page::chats) {
-              detail.template emplace<5>(this->actions, *needs_.colours, *needs_.looks, *needs_.shared, config::address_of(one),
+              detail.template emplace<5>(*needs_.colours, *needs_.looks, *needs_.shared, config::address_of(one),
                                          chat_choice_values{.events_all = config::room_events_of(one),
                                                             .event_kinds = config::room_event_kinds_of(one),
                                                             .receipts = config::show_receipts_of(one),
@@ -703,10 +700,10 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
                                          config::home_hides_of(one), config::home_direct_of(one), config::colour_of(one),
                                          config::strip_of(one), theme);
             },
-            [&](account_page::proxy) { detail.template emplace<4>(this->actions, *needs_.colours, proxies, config::proxy_of(one)); },
+            [&](account_page::proxy) { detail.template emplace<4>(*needs_.colours, proxies, config::proxy_of(one)); },
             // A protocol's own: its node, made for the program's actions.
             [&]<class Page>(Page) {
-              detail.template emplace<typename decltype(page_type(Page{}, type_tag<Actions>{}))::type>(this->actions, *needs_.colours, *needs_.shared, one,
+              detail.template emplace<typename decltype(page_type(Page{}, type_tag<Actions>{}))::type>(*needs_.colours, *needs_.shared, one,
                                                                                                                  now);
             }},
         page);

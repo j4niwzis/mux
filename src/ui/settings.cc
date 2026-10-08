@@ -21,7 +21,6 @@ template <class Actions>
 struct settings_dialog : scene::Node, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{440.0f, 520.0f}}; }
-  Actions* actions = nullptr;
   // What it was handed, for the pages it makes.
   ui_needs<Actions> needs_;
   using page_t = spl::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
@@ -106,9 +105,8 @@ struct settings_dialog : scene::Node, outbox {
       this->invalidateLayout();
   }
 
-  explicit settings_dialog(const ui_needs<Actions>& n) : settings_dialog(n, n.actions) {}
-  settings_dialog(const ui_needs<Actions>& n, Actions* a)
-      : actions(a), needs_(n),
+  settings_dialog(const ui_needs<Actions>& n)
+      : needs_(n),
         parts{.scroll = nodes::ScrollContainer<page_t>(page_t(std::in_place_index<0>, n))} {
     fState.apply({.fill = true});
     parts.scroll.apply({.fill = true});

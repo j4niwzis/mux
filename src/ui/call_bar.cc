@@ -104,11 +104,11 @@ struct call_buttons : nodes::Stack {
     void operator()() { this->emit(::mux::ui::request::hang_up{}); }
   };
   // Over: called again, as Element's Call back; or put away.
-  struct call_back_it {
+  struct call_back_it : outbox {
     call_buttons* buttons;
-    void operator()() const {
+    void operator()() {
       if (buttons->in_)
-        buttons->actions_->start_call(*buttons->in_);
+        this->emit(::mux::ui::request::start_call{*buttons->in_});
     }
   };
   struct dismiss_it : outbox {
@@ -123,22 +123,20 @@ struct call_buttons : nodes::Stack {
     icon_button<dismiss_it> dismiss;
   } parts;
   const palette* colours_;
-  Actions* actions_;
   std::optional<conversation_id> in_;
   // Ended, it goes by itself in a moment: frames asked for until then, so
   // the program sees the moment come.
   bool ending_ = false;
   [[nodiscard]] bool wantsTick() const { return ending_; }
   void update(double) {}
-  call_buttons(const palette& colours, Actions* a, float size)
+  call_buttons(const palette& colours, float size)
       : parts{.mute = icon_button<mute_it>(colours, icon::microphone{}, {}),
               .decline = icon_button<decline_it>(colours, icon::hang_up{}, {}),
               .hang_up = icon_button<hang_up_it>(colours, icon::hang_up{}, {}),
               .accept = icon_button<accept_it>(colours, icon::phone{}, {}),
-              .call_back = icon_button<call_back_it>(colours, icon::phone{}, {this}),
+              .call_back = icon_button<call_back_it>(colours, icon::phone{}, {{}, this}),
               .dismiss = icon_button<dismiss_it>(colours, icon::close{}, {})},
-        colours_(&colours),
-        actions_(a) {
+        colours_(&colours) {
     this->setHorizontal();
     this->setGap(size / 2.0f);
     fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
@@ -185,7 +183,7 @@ struct call_panel : nodes::Stack {
       : parts{.face = avatar_mark(view.in.id, view.who, 88.0f),
               .who = nodes::Text(view.who, 18.0f, n.colours->text, true),
               .said = nodes::Text(said_of(view), 13.0f, n.colours->dim),
-              .buttons = call_buttons<Actions>(*n.colours, n.actions, 52.0f)} {
+              .buttons = call_buttons<Actions>(*n.colours, 52.0f)} {
     this->setGap(10.0f);
     fStack.justify = nodes::justify::middle{};
     fState.apply({.fillX = true, .height = 280.0f, .padding = {20.0f, 16.0f, 20.0f, 16.0f}, .background = n.colours->sidebar,
@@ -224,7 +222,7 @@ struct call_screen : nodes::Stack {
               .who = nodes::Text(view.who, 24.0f, n.colours->text, true),
               .said = nodes::Text(said_of(view), 15.0f, n.colours->dim),
               .below = nodes::Box<>(skia::SkColor{0}),
-              .buttons = call_buttons<Actions>(*n.colours, n.actions, 64.0f)} {
+              .buttons = call_buttons<Actions>(*n.colours, 64.0f)} {
     this->setGap(12.0f);
     fState.apply({.place = scene::anchor::kTopLeft, .fill = true, .padding = {24.0f, 24.0f, 48.0f, 24.0f},
                   .background = n.colours->sidebar});
@@ -277,7 +275,7 @@ struct call_bar : nodes::Stack {
   call_bar(const ui_needs<Actions>& n, const call_view& view)
       : parts{.face = avatar_mark(view.in.id, view.who, 40.0f),
               .lines = texts(*n.colours, view),
-              .buttons = call_buttons<Actions>(*n.colours, n.actions, 40.0f)} {
+              .buttons = call_buttons<Actions>(*n.colours, 40.0f)} {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.place = scene::anchor::kTopRight, .x = 12.0f, .y = 12.0f, .width = 360.0f, .autoSize = scene::axes::kY,

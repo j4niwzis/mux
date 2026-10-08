@@ -30,7 +30,6 @@ using namespace ::mux::ui;
 // state, by type, then by key, then the event; an event of any type sent.
 template <class Actions>
 struct devtools_box : nodes::Stack, outbox {
-  Actions* actions = nullptr;
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   struct close_it : outbox {
@@ -94,16 +93,14 @@ struct devtools_box : nodes::Stack, outbox {
   bool showing_state = false;
   std::optional<pick> pending;
 
-  devtools_box(Actions* a, const palette& colours, std::string title, std::string text)
-      : actions(a),
-        colours_(&colours),
+  devtools_box(const palette& colours, std::string title, std::string text)
+      : colours_(&colours),
         parts{.header = header_t(colours, std::move(title), {this}, {}, false, true), .reading = reading_of(colours)} {
     this->lay_out();
     this->show_text(std::move(text));
   }
-  devtools_box(Actions* a, const palette& colours, std::vector<proto::matrix::state_entry> entries)
-      : actions(a),
-        colours_(&colours),
+  devtools_box(const palette& colours, std::vector<proto::matrix::state_entry> entries)
+      : colours_(&colours),
         parts{.header = header_t(colours, "Room state", {this}, {}, false, true), .reading = reading_of(colours)},
         state(std::move(entries)) {
     this->lay_out();
@@ -114,9 +111,8 @@ struct devtools_box : nodes::Stack, outbox {
   [[nodiscard]] static nodes::ScrollContainer<nodes::Text> reading_of(const palette& colours) {
     return nodes::ScrollContainer<nodes::Text>(nodes::Text("", 13.0f, colours.text));
   }
-  devtools_box(Actions* a, const palette& colours, send_form_t)
-      : actions(a),
-        colours_(&colours),
+  devtools_box(const palette& colours, send_form_t)
+      : colours_(&colours),
         parts{.header = header_t(colours, "Send custom event", {this}, {}, false, true), .reading = reading_of(colours)} {
     this->lay_out();
     parts.sending.emplace(this);
@@ -255,12 +251,12 @@ struct uia_box : nodes::Stack {
     widgets::Button<open_again> again;
     dialog_buttons<cancel, go> buttons;
   } parts;
-  uia_box(Actions* a, const palette& colours, std::string what, std::string url)
+  uia_box(const palette& colours, std::string what, std::string url)
       : parts{.title = nodes::Text(std::move(what), 17.0f, colours.text, true),
               .about = nodes::Text("Your server asks you to confirm this in your browser: the page is open there. "
                                    "Once you have done what it asks, press Continue.",
                                    14.0f, colours.dim),
-              .again = widgets::Button<open_again>(colours.widgets, "Open the page again", {a, std::move(url)}),
+              .again = widgets::Button<open_again>(colours.widgets, "Open the page again", {{}, std::move(url)}),
               .buttons = dialog_buttons<cancel, go>(colours, "Continue", {}, {}, 120.0f)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
     this->setGap(10.0f);

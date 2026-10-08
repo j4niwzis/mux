@@ -52,14 +52,13 @@ template <class Actions>
 struct sticker_grid : nodes::Stack, outbox {
   static constexpr float kCell = 78.0f;
   struct cell : nodes::Stack, outbox {
-    Actions* actions;
     emoji_kept* kept_ = nullptr;
     emote sticker;
     struct parts_t {
       nodes::Image<from_avatars> picture;
     } parts;
-    cell(const palette& colours, emoji_kept& kept, Actions* a, emote one)
-        : actions(a), kept_(&kept), sticker(one), parts{.picture = nodes::Image<from_avatars>({one.url})} {
+    cell(const palette& colours, emoji_kept& kept, emote one)
+        : kept_(&kept), sticker(one), parts{.picture = nodes::Image<from_avatars>({one.url})} {
       fState.apply({.width = kCell, .height = kCell, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .padding = {4.0f, 4.0f, 4.0f, 4.0f},
                     .cornerRadius = 6.0f, .hoverBackground = colours.chosen});
       parts.picture.apply({.fill = true});
@@ -77,12 +76,12 @@ struct sticker_grid : nodes::Stack, outbox {
   };
   // A pack: its name over its stickers.
   struct section : cell_section<cell> {
-    section(const palette& colours, emoji_kept& kept, Actions* a, std::string name, const std::vector<emote>& stickers)
+    section(const palette& colours, emoji_kept& kept, std::string name, const std::vector<emote>& stickers)
         : cell_section<cell>(colours, std::move(name)) {
       auto& cells = this->each();
       cells.reserve(stickers.size());
       for (const emote& one : stickers)
-        cells.emplace_back(colours, kept, a, one);
+        cells.emplace_back(colours, kept, one);
     }
   };
   // A pack's tab in the footer: its picture -- the pack's own, else its
@@ -134,19 +133,17 @@ struct sticker_grid : nodes::Stack, outbox {
     // Over the rest: the sticker the mouse rests on, large.
     std::optional<emote_preview> preview;
   } parts;
-  Actions* actions = nullptr;
   std::optional<previewed> preview_of;
   bool searching = false;
   // The pictures of the packs' tabs, as show_all made them.
   std::vector<std::string> tab_pictures;
   [[nodiscard]] bool settling() const { return kept_->previewed_now != preview_of; }
 
-  sticker_grid(const palette& colours, emoji_kept& kept, Actions* a)
+  sticker_grid(const palette& colours, emoji_kept& kept)
       : colours_(&colours),
         kept_(&kept),
         parts{.field = field_t(colours.widgets, "Search stickers", {this}),
-              .empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, colours.dim)},
-        actions(a) {
+              .empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, colours.dim)} {
     auto& [field, empty, list, footer, preview] = parts;
     lay_out_picker(*this, field, list, footer);
     // Wrapped at the panel's width, not one line running past its edges.
@@ -176,19 +173,19 @@ struct sticker_grid : nodes::Stack, outbox {
                                   return std::ranges::contains(kept_->chat_stickers, one.url, &emote::url);
                                 }));
     if (!recent.empty()) {
-      all.emplace_back(*colours_, *kept_, actions, "Recently used", recent);
+      all.emplace_back(*colours_, *kept_, "Recently used", recent);
       tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u23F2");
     }
     // The favourites: whichever chat they came from -- a sticker is its
     // picture's URL, sent anywhere.
     if (!kept_->favourite_stickers.empty()) {
-      all.emplace_back(*colours_, *kept_, actions, "Favourites", kept_->favourite_stickers);
+      all.emplace_back(*colours_, *kept_, "Favourites", kept_->favourite_stickers);
       tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u2605");
     }
     for (auto& [name, stickers] : packs()) {
       const std::optional<std::string> picture = stickers.front().pack_avatar ? stickers.front().pack_avatar
                                                                               : std::optional<std::string>(stickers.front().url);
-      all.emplace_back(*colours_, *kept_, actions, name, stickers);
+      all.emplace_back(*colours_, *kept_, name, stickers);
       tabs.emplace_back(this, all.size() - 1, picture);
       if (picture)
         tab_pictures.push_back(*picture);
@@ -214,7 +211,7 @@ struct sticker_grid : nodes::Stack, outbox {
                                      }));
     auto& all = this->sections();
     all.clear();
-    all.emplace_back(*colours_, *kept_, actions, found.empty() ? std::string("Nothing found") : std::string("Search results"), found);
+    all.emplace_back(*colours_, *kept_, found.empty() ? std::string("Nothing found") : std::string("Search results"), found);
     searching = true;
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);

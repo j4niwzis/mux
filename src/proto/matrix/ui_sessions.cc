@@ -46,7 +46,6 @@ using namespace ::mux::ui;
 
 template <class Actions>
 struct account_sessions : nodes::Stack, outbox {
-  Actions* actions = nullptr;
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
   struct sign_out_one {
@@ -174,8 +173,8 @@ struct account_sessions : nodes::Stack, outbox {
   std::vector<std::string> others;
 
   // Its sessions asked of the server as it opens.
-  account_sessions(Actions* a, const palette& colours, const ui_shared&, const config::account_t&, const model&)
-      : actions(a), colours_(&colours), parts{.verification_title = section_title(colours, "DEVICE VERIFICATION"),
+  account_sessions(const palette& colours, const ui_shared&, const config::account_t&, const model&)
+      : colours_(&colours), parts{.verification_title = section_title(colours, "DEVICE VERIFICATION"),
               .verification_note = nodes::Text("To verify device identity and grant access to encrypted messages: cross-signing. " "Set it up here, or, where another session of yours has it, bring it back with " "your recovery key.", 13.0f, colours.dim),
               .set_up = set_up_row(colours, "Set up cross-signing\u2026", {}),
               .restore = restore_row(colours, "Restore with the recovery key\u2026", {}),
@@ -301,7 +300,7 @@ struct encryption_page : nodes::Stack {
     recovery_row recovery;
   } parts;
 
-  encryption_page(Actions* a, const palette& colours, const ui_shared& shared, const config::account_t& one, const model& now)
+  encryption_page(const palette& colours, const ui_shared& shared, const config::account_t& one, const model& now)
       : parts{.title = section_title(colours, "ENCRYPTION"),
               .only_verified = only_verified_row(colours, "Never send encrypted messages to unverified sessions", {}),
               .session_line = nodes::Text("", 13.0f, colours.dim),

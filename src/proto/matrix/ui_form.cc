@@ -32,7 +32,6 @@ template <class Actions>
 struct matrix_form : nodes::Stack, outbox {
   // What the add-account pane says of the protocol.
   static constexpr std::string_view note = "A user ID like @user:example.org, on a homeserver such as Synapse.";
-  Actions* actions = nullptr;
   std::optional<std::string> editing;
   // A new account, to be registered on the server first; and the user's
   // word that they agree to its terms, where it has some.
@@ -66,8 +65,8 @@ struct matrix_form : nodes::Stack, outbox {
     form_end<Actions> end;
   } parts;
 
-  matrix_form(Actions* a, const palette& colours, const std::optional<::mux::proto::matrix::kept>& from)
-      : actions(a), parts{.user_id = field(colours, "User ID", "@user:example.org"),
+  matrix_form(const palette& colours, const std::optional<::mux::proto::matrix::kept>& from)
+      : parts{.user_id = field(colours, "User ID", "@user:example.org"),
               .way = choice_menu<pick_way>(colours, "Sign in", {"With a password", "In the browser, on the server's page"},
                                            from && from->oauth.value_or(false) ? 1 : 0, pick_way{this}),
               .password = field(colours, "Password", "Password"),
@@ -77,7 +76,7 @@ struct matrix_form : nodes::Stack, outbox {
               .token = field(colours, "Registration token", "where the server registers by invitation"),
               .terms = choice_menu<pick_terms>(colours, "The server's terms", {"Not agreed to", "I agree to the server's terms"}, 0,
                                                pick_terms{this}),
-              .end = form_end<Actions>(colours, a, from.has_value())} {
+              .end = form_end<Actions>(colours, from.has_value())} {
     auto& [user_id, way, password, homeserver, device_name, mode, token, terms, end] = parts;
     in_browser = from && from->oauth.value_or(false);
     password.setVisible(!in_browser);

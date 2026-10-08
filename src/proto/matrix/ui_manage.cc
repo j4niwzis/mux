@@ -251,7 +251,7 @@ struct room_page : nodes::Stack {
   } parts;
   // At most this many of the account's rooms offered to be added.
   static constexpr std::size_t kMostAddable = 60;
-  room_page(Actions*, Box* box, const room_settings_facts& facts)
+  room_page(Box* box, const room_settings_facts& facts)
       : parts{.heading = tab_heading((*box->colours_), "Room"),
               .photo = avatar_mark(facts.id, facts.name, 88.0f),
               .name = field((*box->colours_), "Room Name", "", facts.name),
@@ -348,7 +348,7 @@ struct security_page : nodes::Stack {
     nodes::Text history_about;
     history_choice anyone, shared, invited, joined;
   } parts;
-  security_page(Actions*, Box* box, const room_settings_facts& facts)
+  security_page(Box* box, const room_settings_facts& facts)
       : parts{.heading = tab_heading((*box->colours_), "Security & Privacy"),
               .encryption = part_heading((*box->colours_), "Encryption"),
               .encryption_about = explained((*box->colours_), "Once enabled, encryption cannot be disabled."),
@@ -573,7 +573,7 @@ struct roles_page : nodes::Stack {
     nodes::Text add_event;
     new_event_row adding_event;
   } parts;
-  roles_page(Actions*, Box* box, const room_settings_facts& facts)
+  roles_page(Box* box, const room_settings_facts& facts)
       : parts{.heading = tab_heading((*box->colours_), "Roles & Permissions"),
               .privileged = part_heading((*box->colours_), "Privileged Users"),
               .none_privileged = explained((*box->colours_), "No users have specific privileges in this room."),
@@ -666,7 +666,7 @@ struct advanced_page : nodes::Stack {
     nodes::Text packs_heading;
     button_for<sends<::mux::ui::request::open_room_packs>> packs;
   } parts;
-  advanced_page(Actions* a, Box* box, const room_settings_facts& facts)
+  advanced_page(Box* box, const room_settings_facts& facts)
       : parts{.heading = tab_heading((*box->colours_), "Advanced"),
               .information = part_heading((*box->colours_), "Room information"),
               .id = copy_line((*box->colours_), "Internal room ID", facts.id),

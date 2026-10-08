@@ -73,9 +73,8 @@ struct avatar_mark : widgets::Avatar<from_avatars> {
 // info.
 template <class Actions>
 struct avatar_button : avatar_mark, outbox {
-  Actions* actions = nullptr;
-  avatar_button(Actions* a, std::string id, std::string shown, float size)
-      : avatar_mark(std::move(id), shown, size), actions(a) {
+  avatar_button(std::string id, std::string shown, float size)
+      : avatar_mark(std::move(id), shown, size) {
     fState.setCursor(scene::cursor::hand{});
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -308,14 +307,12 @@ struct menu_button : scene::Node, outbox {
   struct parts_t {
     nodes::Icon bars;
   } parts;
-  Actions* actions = nullptr;
 
-  menu_button(const palette& colours, Actions* a)
+  menu_button(const palette& colours)
       : parts{.bars = nodes::Icon(IconShape{{{nodes::mark::rect{-8.0f, -7.0f, 8.0f, -5.0f, 1.0f}, 0.0f, true},
                                              {nodes::mark::rect{-8.0f, -1.0f, 8.0f, 1.0f, 1.0f}, 0.0f, true},
                                              {nodes::mark::rect{-8.0f, 5.0f, 8.0f, 7.0f, 1.0f}, 0.0f, true}}},
-                                  colours.text)},
-        actions(a) {
+                                  colours.text)} {
     fState.apply({.width = 36.0f, .height = 36.0f, .cornerRadius = 8.0f, .hoverBackground = colours.chosen,
                   .focusBackground = colours.chosen});
     parts.bars.apply({.fill = true});
@@ -457,7 +454,7 @@ struct spaces_choices : nodes::Stack {
       nodes::Text name;
       choice_menu<pick_bars> where;
     } parts;
-    row(Actions* a, const palette& colours, const std::string& account, const space_item_shown& one)
+    row(const palette& colours, const std::string& account, const space_item_shown& one)
         : parts{.name = nodes::Text(one.name, 14.0f, colours.text),
                 .where = choice_menu<pick_bars>(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"},
                                                 one.side && !one.top   ? 0
@@ -472,12 +469,12 @@ struct spaces_choices : nodes::Stack {
   struct parts_t {
     std::vector<row> rows;
   } parts;
-  spaces_choices(Actions* a, const palette& colours, const ui_shared& shared) {
+  spaces_choices(const palette& colours, const ui_shared& shared) {
     this->setGap(2.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.rows.reserve(shared.space_items.size());
     for (const space_item_shown& one : shared.space_items)
-      parts.rows.emplace_back(a, colours, shared.space_account, one);
+      parts.rows.emplace_back(colours, shared.space_account, one);
   }
 };
 

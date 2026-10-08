@@ -52,14 +52,13 @@ struct insert_emoji_into : outbox {
 template <class Actions>
 struct gif_grid : nodes::Stack, outbox {
   struct gif_cell : nodes::Stack, outbox {
-    Actions* actions;
     std::string path;
     std::string key;
     struct parts_t {
       nodes::Image<from_moving_whole> picture;
     } parts;
-    gif_cell(const palette& colours, Actions* a, std::string p)
-        : actions(a), path(p), key("gif:" + p),
+    gif_cell(const palette& colours, std::string p)
+        : path(p), key("gif:" + p),
           parts{.picture = nodes::Image<from_moving_whole>({"gif:" + p})} {
       fState.apply({.width = 104.0f, .height = 104.0f, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .cornerRadius = 6.0f,
                     .background = colours.tile, .masking = true});
@@ -83,12 +82,11 @@ struct gif_grid : nodes::Stack, outbox {
     nodes::ScrollContainer<cells_t> list{
         cells_t({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {})};
   } parts;
-  Actions* actions = nullptr;
   // The colours its cells are made in, as they change.
   const palette* colours_ = nullptr;
 
-  gif_grid(const palette& colours, Actions* a)
-      : parts{.empty = nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, colours.dim)}, actions(a), colours_(&colours) {
+  gif_grid(const palette& colours)
+      : parts{.empty = nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, colours.dim)}, colours_(&colours) {
     auto& [empty, list] = parts;
     fState.apply({.padding = {4.0f, 4.0f, 4.0f, 4.0f}});
     empty.setWrapped(true);
@@ -102,7 +100,7 @@ struct gif_grid : nodes::Stack, outbox {
     cells.clear();
     cells.reserve(paths.size());
     for (const std::string& one : paths)
-      cells.emplace_back(*colours_, actions, one);
+      cells.emplace_back(*colours_, one);
     parts.empty.setVisible(paths.empty());
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
@@ -161,14 +159,12 @@ struct emoji_popup : scene::Node, outbox {
       sticker_grid<Actions> stickers;
       gif_grid<Actions> gifs;
     } parts;
-    Actions* actions = nullptr;
-    card_t(const palette& colours, emoji_kept& kept, Actions* a)
+    card_t(const palette& colours, emoji_kept& kept)
         : colours_(&colours),
           parts{.tabs = tabs_row(this),
                 .panel = panel_t(colours, kept, insert_emoji_into<Actions>{}),
-                .stickers = sticker_grid<Actions>(colours, kept, a),
-                .gifs = gif_grid<Actions>(colours, a)},
-          actions(a) {
+                .stickers = sticker_grid<Actions>(colours, kept),
+                .gifs = gif_grid<Actions>(colours)} {
       fState.apply({.width = 345.0f, .height = 360.0f, .cornerRadius = 8.0f, .background = colours.sidebar,
                     .border = scene::Border{colours.band, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
@@ -247,7 +243,6 @@ struct emoji_popup : scene::Node, outbox {
   struct parts_t {
     card_t card;
   } parts;
-  Actions* actions = nullptr;
   // Where the button that opened it is: its right, its top.
   float right = 0.0f, bottom = 0.0f;
   float placed_x = -1.0f, placed_y = -1.0f, placed_h = -1.0f;
@@ -256,7 +251,7 @@ struct emoji_popup : scene::Node, outbox {
   ui_shared* shared_ = nullptr;
 
   emoji_popup(const ui_needs<Actions>& n, float at_right, float at_bottom)
-      : parts{.card = card_t(*n.colours, *n.emoji, n.actions)}, actions(n.actions), right(at_right), bottom(at_bottom), shared_(n.shared) {
+      : parts{.card = card_t(*n.colours, *n.emoji)}, right(at_right), bottom(at_bottom), shared_(n.shared) {
     fState.apply({.fill = true});
   }
   void layoutChildren() {

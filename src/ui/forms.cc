@@ -76,7 +76,6 @@ struct link_box : nodes::Stack, outbox {
   struct cancel : outbox {
     void operator()() { this->emit(::mux::ui::request::close_link{}); }
   };
-  Actions* actions = nullptr;
   struct parts_t {
     nodes::Text title;
     field text;
@@ -85,8 +84,7 @@ struct link_box : nodes::Stack, outbox {
     widgets::Button<cancel> back;
   } parts;
   link_box(const ui_needs<Actions>& n, std::string text, std::string url)
-      : actions(n.actions),
-        parts{.title = nodes::Text(url.empty() ? "Add link" : "Edit link", 17.0f, n.colours->text, true),
+      : parts{.title = nodes::Text(url.empty() ? "Add link" : "Edit link", 17.0f, n.colours->text, true),
               .text = field(*n.colours, "Text", "Text", std::move(text)),
               .url = field(*n.colours, "URL", "https://", std::move(url)),
               .go = widgets::Button<done>(n.colours->widgets, "Done", {this}),
@@ -140,7 +138,6 @@ struct passphrase_box : nodes::Stack, outbox {
                                     box->parts.file.text()});
     }
   };
-  Actions* actions = nullptr;
   proto::passphrase_for_t purpose;
   struct parts_t {
     nodes::Text title;
@@ -153,9 +150,9 @@ struct passphrase_box : nodes::Stack, outbox {
     widgets::Button<submit> go;
   } parts;
 
-  passphrase_box(const ui_needs<Actions>& n, proto::passphrase_for_t why) : passphrase_box(*n.colours, n.actions, why) {}
-  passphrase_box(const palette& colours, Actions* a, proto::passphrase_for_t why)
-      : actions(a), purpose(why),
+  passphrase_box(const ui_needs<Actions>& n, proto::passphrase_for_t why) : passphrase_box(*n.colours, why) {}
+  passphrase_box(const palette& colours, proto::passphrase_for_t why)
+      : purpose(why),
         parts{.title = nodes::Text(std::string(said().title), 17.0f, colours.text, true),
               .note = nodes::Text(std::string(said().note), 14.0f, colours.dim),
               .file = field(colours, "Key file", "/home/you/element-keys.txt"),
@@ -220,7 +217,7 @@ struct form_end : nodes::Stack {
     button_row<submit_button, close_button> buttons;
   } parts;
 
-  form_end(const palette& colours, Actions* a, bool editing)
+  form_end(const palette& colours, bool editing)
       : colours_(&colours),
         parts{.message = nodes::Text("", 13.0f, colours.error),
               .buttons = button_row<submit_button, close_button>(submit_button(colours.widgets, editing ? "Save" : "Log in", {}),
@@ -267,10 +264,10 @@ using account_form = typename form_list<Actions, protocols>::type;
 
 // The form of an account's own protocol, filled in from what it keeps.
 template <class Actions>
-[[nodiscard]] account_form<Actions> form_of(Actions* a, const palette& colours, const config::account_t& saved) {
+[[nodiscard]] account_form<Actions> form_of(const palette& colours, const config::account_t& saved) {
   return spl::visit([&](const auto& kept) {
     using form = typename decltype(form_type_for(kept, type_tag<Actions>{}))::type;
-    return account_form<Actions>(std::in_place_type<form>, a, colours, std::optional(kept));
+    return account_form<Actions>(std::in_place_type<form>, colours, std::optional(kept));
   }, saved.own);
 }
 // A form laid out in the column under `top`.
@@ -288,8 +285,7 @@ void place_form(account_form<Actions>& form, const skia::SkRect& column, float t
 // first, as Back says.
 template <class Actions, class Back = sends<::mux::ui::request::pop_panel>>
 struct closes_on_escape : nodes::Stack, outbox {
-  Actions* actions = nullptr;
-  explicit closes_on_escape(Actions* a) : actions(a) {}
+  explicit closes_on_escape() {}
 
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {

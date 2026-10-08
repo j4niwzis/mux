@@ -46,8 +46,8 @@ struct settings_home : nodes::Stack {
     row_item<sends<::mux::ui::request::settings_proxies>> proxies;
   } parts;
 
-  explicit settings_home(const ui_needs<Actions>& n) : settings_home(*n.colours, n.actions) {}
-  settings_home(const palette& colours, Actions* a)
+  explicit settings_home(const ui_needs<Actions>& n) : settings_home(*n.colours) {}
+  settings_home(const palette& colours)
       : parts{.header = {colours, "Settings", {}, {}, false, true},
               .accounts = {colours, "Accounts", {}, icon::person{}},
               .animations = {colours, "Animations", {}, icon::motion{}},
@@ -124,8 +124,8 @@ struct animations_page : nodes::Stack {
     settings_t settings;
   } parts;
 
-  explicit animations_page(const ui_needs<Actions>& n) : animations_page(*n.colours, n.actions) {}
-  animations_page(const palette& colours, Actions* a)
+  explicit animations_page(const ui_needs<Actions>& n) : animations_page(*n.colours) {}
+  animations_page(const palette& colours)
       : parts{.header = header_t(colours, "Animations", {}, {}, true, true), .settings = motion_settings_view(colours)} {
     fState.apply({.fill = true});
   }
@@ -160,8 +160,8 @@ struct proxies_page : nodes::Stack {
 
   // With a way back to the settings' list where it was opened from there.
   proxies_page(const ui_needs<Actions>& n, const std::vector<config::proxy_settings>& all, bool with_back)
-      : proxies_page(*n.colours, n.actions, all, with_back) {}
-  proxies_page(const palette& colours, Actions* a, const std::vector<config::proxy_settings>& all, bool with_back)
+      : proxies_page(*n.colours, all, with_back) {}
+  proxies_page(const palette& colours, const std::vector<config::proxy_settings>& all, bool with_back)
       : parts{.header = header_t(colours, "Proxies", {}, {}, with_back, true),
               .add = add_row(colours, "Add proxy", {}, icon::plus{}),
               .empty = note_text(colours, "No proxies yet. Accounts connect directly.")} {
@@ -192,10 +192,10 @@ struct kind_switch : nodes::Stack {
   } parts;
   skiff::paint::Tween slide{0.0f, 180.0f, skiff::paint::movement::subtle{}};
 
-  kind_switch(const palette& colours, Actions* a)
+  kind_switch(const palette& colours)
       : parts{.highlight = nodes::Box<>(colours.accent),
-              .socks = kind_segment(colours, "SOCKS5", {a, config::proxy_kind::socks5{}}),
-              .http = kind_segment(colours, "HTTP", {a, config::proxy_kind::http{}})} {
+              .socks = kind_segment(colours, "SOCKS5", {{}, config::proxy_kind::socks5{}}),
+              .http = kind_segment(colours, "HTTP", {{}, config::proxy_kind::http{}})} {
     this->setHorizontal();
     this->setGap(1.0f);
     fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen});
@@ -247,13 +247,13 @@ struct proxy_editor : nodes::Stack {
   } parts;
 
   proxy_editor(const ui_needs<Actions>& n, const std::optional<config::proxy_settings>& from, int at)
-      : proxy_editor(*n.colours, n.actions, from, at) {}
-  proxy_editor(const palette& colours, Actions* a, const std::optional<config::proxy_settings>& from, int at)
+      : proxy_editor(*n.colours, from, at) {}
+  proxy_editor(const palette& colours, const std::optional<config::proxy_settings>& from, int at)
       : index(at),
         colours_(&colours),
         parts{.header = header_t(colours, from ? from->name : std::string("New proxy"), {}, {}, true, true),
               .name = field(colours, "Name", "Home, Tor, Work…"),
-              .kinds = kind_switch<Actions>(colours, a),
+              .kinds = kind_switch<Actions>(colours),
               .host = field(colours, "Host", "proxy.example.com"),
               .port = field(colours, "Port", "1080"),
               .username = field(colours, "User name", "none"),

@@ -155,7 +155,7 @@ struct window : scene::Node, outbox {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     }
   };
-  struct layers : scene::Node {
+  struct layers : scene::Node, outbox {
     using frame_t = widgets::SlideOver<with_drawer, panel_type>;
     struct parts_t {
       nodes::Box<> backdrop;
@@ -212,8 +212,6 @@ struct window : scene::Node, outbox {
       // A call on a phone: the whole window, as Element's phone apps.
       std::optional<call_screen<Actions>> call_whole;
     } parts;
-
-    Actions* actions_of = nullptr;
     // Where the pointer was last pressed, in the window: where a menu asked
     // by that press is put. A press off the text menu closes it, at once --
     // nothing of it is pressed.
@@ -225,7 +223,7 @@ struct window : scene::Node, outbox {
     void onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply&) {
       const auto off = std::exchange(press_off_emoji, std::nullopt);
       if (off && parts.emoji && std::hypot(lift.x - off->fX, lift.y - off->fY) < 8.0f)
-        actions_of->close_emoji();
+        this->emit(::mux::ui::request::close_emoji{});
     }
     void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
       last_press = {press.x, press.y};
@@ -259,7 +257,6 @@ struct window : scene::Node, outbox {
     void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
       if (press.key != scene::keys::kEscape)
         return;
-      Actions* a = actions_of;
       const auto closed = [&] { reply.handle(); };
       if (parts.text_menu_up) {
         parts.text_menu_up.reset();
@@ -268,59 +265,59 @@ struct window : scene::Node, outbox {
         return closed();
       }
       if (parts.menu)
-        return a->close_menu(), closed();
+        return this->emit(::mux::ui::request::close_menu{}), closed();
       if (parts.emoji)
-        return a->close_emoji(), closed();
+        return this->emit(::mux::ui::request::close_emoji{}), closed();
       if (parts.viewer)
-        return a->close_picture(), closed();
+        return this->emit(::mux::ui::request::close_picture{}), closed();
       // A verification: OK where it is over, Decline or Cancel where it
       // waits. Not while the emoji are compared: an answer is asked there.
       if (auto* box = parts.verifying.shown()) {
         if (box->parts.close.visible())
-          return a->close_verification(), closed();
+          return this->emit(::mux::ui::request::close_verification{}), closed();
         if (box->parts.decline.visible())
-          return a->verify_cancel_now(), closed();
+          return this->emit(::mux::ui::request::verify_cancel_now{}), closed();
       }
       // The dialogs, the one drawn last -- on top -- first.
       if (parts.sending.shown())
-        return a->close_send_box(), closed();
+        return this->emit(::mux::ui::request::close_send_box{}), closed();
       if (parts.tools.shown())
-        return a->close_dialog(), closed();
+        return this->emit(::mux::ui::request::close_dialog{}), closed();
       if (parts.explore.shown())
-        return a->close_explore(), closed();
+        return this->emit(::mux::ui::request::close_explore{}), closed();
       if (parts.wallpaper.shown())
-        return a->close_wallpaper(), closed();
+        return this->emit(::mux::ui::request::close_wallpaper{}), closed();
       if (parts.packs.shown())
-        return a->close_packs(), closed();
+        return this->emit(::mux::ui::request::close_packs{}), closed();
       if (parts.new_room.shown())
-        return a->close_new_room(), closed();
+        return this->emit(::mux::ui::request::close_new_room{}), closed();
       if (parts.new_chat.shown())
-        return a->close_new_chat(), closed();
+        return this->emit(::mux::ui::request::close_new_chat{}), closed();
       if (parts.forwarding.shown())
-        return a->close_forward(), closed();
+        return this->emit(::mux::ui::request::close_forward{}), closed();
       if (parts.manage.shown())
-        return a->close_manage(), closed();
+        return this->emit(::mux::ui::request::close_manage{}), closed();
       if (parts.marks.shown())
-        return a->close_marks(), closed();
+        return this->emit(::mux::ui::request::close_marks{}), closed();
       if (parts.leaving.shown())
-        return a->close_leave_space(), closed();
+        return this->emit(::mux::ui::request::close_leave_space{}), closed();
       if (parts.linking.shown())
-        return a->close_link(), closed();
+        return this->emit(::mux::ui::request::close_link{}), closed();
       if (parts.history.shown())
-        return a->close_edit_history(), closed();
+        return this->emit(::mux::ui::request::close_edit_history{}), closed();
       if (parts.reactions.shown())
-        return a->close_reactions(), closed();
+        return this->emit(::mux::ui::request::close_reactions{}), closed();
       if (parts.room.shown())
-        return a->close_room_card(), closed();
+        return this->emit(::mux::ui::request::close_room_card{}), closed();
       if (parts.person.shown())
-        return a->close_person_info(), closed();
+        return this->emit(::mux::ui::request::close_person_info{}), closed();
       if (parts.notice.shown())
-        return a->close_notice(), closed();
+        return this->emit(::mux::ui::request::close_notice{}), closed();
       // Settings: a page back to where its ← goes; home, closed.
       if (auto* box = parts.settings.shown()) {
         if (box->step_back())
           return closed();
-        return a->close_settings(), closed();
+        return this->emit(::mux::ui::request::close_settings{}), closed();
       }
       // The drawer, under every dialog.
       if (parts.frame.base().isOpen())
@@ -383,11 +380,9 @@ struct window : scene::Node, outbox {
       over_if(emoji, menu, viewer, text_menu_up, call_up, call_whole);
     }
 
-    explicit layers(const ui_needs<Actions>& n) : layers(n, n.actions) {}
-    layers(const ui_needs<Actions>& n, Actions* a)
+    layers(const ui_needs<Actions>& n)
         : parts{.backdrop = nodes::Box<>(n.colours->background),
-                .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n))},
-          actions_of(a) {
+                .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n))} {
       auto& [backdrop, behind, frame, ...over] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -401,8 +396,6 @@ struct window : scene::Node, outbox {
       (look_as_its_content(over, *n.colours), ...);
     }
   };
-
-  Actions* actions = nullptr;
   struct parts_t {
     std::optional<layers> now;
   } parts;
@@ -411,7 +404,7 @@ struct window : scene::Node, outbox {
 
   // What it was handed: the program's own objects, for the layers it makes.
   ui_needs<Actions> needs_;
-  explicit window(const ui_needs<Actions>& n) : actions(n.actions), needs_(n) {
+  explicit window(const ui_needs<Actions>& n) : needs_(n) {
     fState.apply({.fill = true});
     parts.now.emplace(n);
   }
@@ -629,12 +622,12 @@ struct window : scene::Node, outbox {
   void close_verification() { layer().verifying.close(); }
 
   void open_person(const account_id& account, const std::string& key, const person_facts& facts) {
-    layer().person.open(actions, *needs_.colours, *needs_.shared, account, key, facts);
+    layer().person.open(*needs_.colours, *needs_.shared, account, key, facts);
   }
   void close_person() { layer().person.close(); }
   // Opened again while up, it takes what is known now in place.
   void open_room_card(const std::string& asked, const room_preview& known) {
-    layer().room.open(actions, *needs_.colours, asked, known);
+    layer().room.open(*needs_.colours, asked, known);
   }
   void close_room_card() { layer().room.close(); }
   [[nodiscard]] bool room_card_up() { return layer().room.shown() != nullptr; }
@@ -657,11 +650,11 @@ struct window : scene::Node, outbox {
   [[nodiscard]] bool marks_up() { return layer().marks.shown() != nullptr; }
   void open_manage(const room_settings_facts& facts) { layer().manage.open(needs_, facts); }
   void close_manage() { layer().manage.close(); }
-  void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(actions, *needs_.colours, chats); }
+  void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(*needs_.colours, chats); }
   void close_forward() { layer().forwarding.close(); }
   void open_new_chat(std::vector<found_person> known, std::string own_link) {
     close_drawer();
-    layer().new_chat.open(actions, *needs_.colours, std::move(known), std::move(own_link));
+    layer().new_chat.open(*needs_.colours, std::move(known), std::move(own_link));
   }
   void close_new_chat() { layer().new_chat.close(); }
   void show_found_people(const std::vector<found_person>& people, const std::string& query) {
@@ -670,12 +663,12 @@ struct window : scene::Node, outbox {
   }
   void open_new_room(const std::string& own_server, std::optional<new_room_place> place = std::nullopt) {
     close_drawer();
-    layer().new_room.open(actions, *needs_.colours, own_server, std::move(place));
+    layer().new_room.open(*needs_.colours, own_server, std::move(place));
   }
   void close_new_room() { layer().new_room.close(); }
-  void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(actions, *needs_.colours, *needs_.shared, std::move(room), editable); }
+  void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(*needs_.colours, *needs_.shared, std::move(room), editable); }
   void close_packs() { layer().packs.close(); }
-  void open_wallpaper(choice_level_t level) { layer().wallpaper.open(actions, *needs_.colours, *needs_.looks, level); }
+  void open_wallpaper(choice_level_t level) { layer().wallpaper.open(*needs_.colours, *needs_.looks, level); }
   void close_wallpaper() { layer().wallpaper.close(); }
   void show_packs(std::vector<emote_pack> packs) {
     if (auto* up = layer().packs.shown())
@@ -711,7 +704,7 @@ struct window : scene::Node, outbox {
   void open_explore(const std::string& own_server) {
     close_drawer();
     layer().new_chat.close();
-    layer().explore.open(actions, *needs_.colours, own_server);
+    layer().explore.open(*needs_.colours, own_server);
   }
   void close_explore() { layer().explore.close(); }
   void explore_as_space(const std::string& room, const std::string& name) {
@@ -734,14 +727,14 @@ struct window : scene::Node, outbox {
   // A protocol's own dialog up (Node, one of its dialogs), made from args.
   template <class Node, class... Args>
   void open_dialog(Args&&... args) {
-    layer().tools.open(std::in_place_type<Node>, actions, *needs_.colours, std::forward<Args>(args)...);
+    layer().tools.open(std::in_place_type<Node>, *needs_.colours, std::forward<Args>(args)...);
   }
   void close_dialog() { layer().tools.close(); }
 
   template <std::ranges::input_range Saved>
   void show(const Saved& saved, const model& now) {
     const auto& current = layer().frame.base().base().current;
-    layer().frame.base().content().show(actions, saved, now, current ? std::string_view(current->address) : std::string_view());
+    layer().frame.base().content().show(saved, now, current ? std::string_view(current->address) : std::string_view());
   }
 
   // Its layers, each filling the window, as the default layout places them:

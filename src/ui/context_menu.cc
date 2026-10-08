@@ -48,7 +48,6 @@ struct seen_row : nodes::Stack, outbox {
   // A reader, as a line of the submenu: pressed, their card, as a name
   // pressed anywhere opens it.
   struct reader_row : nodes::Stack, outbox {
-    Actions* actions = nullptr;
     std::string id;
     struct lines_t : nodes::Stack {
       struct parts_t {
@@ -67,8 +66,8 @@ struct seen_row : nodes::Stack, outbox {
       avatar_mark face;
       lines_t lines;
     } parts;
-    reader_row(const palette& colours, Actions* a, const seen_reader& one)
-        : actions(a), id(one.id), parts{.face = avatar_mark(one.id, one.name, 30.0f), .lines = lines_t(colours, one)} {
+    reader_row(const palette& colours, const seen_reader& one)
+        : id(one.id), parts{.face = avatar_mark(one.id, one.name, 30.0f), .lines = lines_t(colours, one)} {
       this->setHorizontal();
       this->setGap(14.0f);  // the name at 13 + 30 + 14 = 57
       // 6 over and under: the name at 13 and the time at 12 are 31.25 high,
@@ -94,11 +93,11 @@ struct seen_row : nodes::Stack, outbox {
     struct parts_t {
       nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
     } parts;
-    submenu_t(const palette& colours, Actions* a, const std::vector<seen_reader>& readers) {
+    submenu_t(const palette& colours, const std::vector<seen_reader>& readers) {
       auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
       rows.reserve(readers.size());
       for (const seen_reader& one : readers)
-        rows.emplace_back(colours, a, one);
+        rows.emplace_back(colours, one);
       std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.list.apply({.fill = true});
       const float tall = height_for(readers.size());
@@ -107,7 +106,6 @@ struct seen_row : nodes::Stack, outbox {
                     .masking = true});
     }
   };
-  Actions* actions = nullptr;
   // The colours it is made in, for the readers' list it opens.
   const palette* colours_ = nullptr;
   std::vector<seen_reader> readers;
@@ -124,8 +122,8 @@ struct seen_row : nodes::Stack, outbox {
     nodes::Text label;
     std::vector<avatar_mark> faces;
   } parts;
-  seen_row(const palette& colours, Actions* a, std::vector<seen_reader> who)
-      : actions(a), colours_(&colours), readers(std::move(who)),
+  seen_row(const palette& colours, std::vector<seen_reader> who)
+      : colours_(&colours), readers(std::move(who)),
         parts{.mark = icon_mark(colours, icon::check{}),
               .label = nodes::Text(readers.empty()       ? std::string("Nobody Viewed")
                                    : readers.size() == 1 ? readers.front().name
@@ -165,7 +163,7 @@ struct seen_row : nodes::Stack, outbox {
     if (open == submenu->has_value())
       return;
     if (open) {
-      submenu->emplace(*colours_, actions, readers);
+      submenu->emplace(*colours_, readers);
       // Beside the menu, over its edge -- left of it where the window has
       // no room on the right. Its top at the row's, or higher where it would
       // pass the window's bottom -- as Telegram's, kept on the screen -- but
@@ -188,16 +186,15 @@ struct seen_row : nodes::Stack, outbox {
 
 template <class Actions>
 struct context_menu : scene::Node, outbox {
-  struct card : nodes::Stack {
+  struct card : nodes::Stack, outbox {
     // Quick reactions, as tdesktop's menu has them at its top.
     struct quick_reaction : nodes::Stack, outbox {
-      Actions* actions;
       std::string key;
       struct parts_t {
         nodes::Text face;
       } parts;
-      quick_reaction(const palette& colours, Actions* a, std::string k)
-          : actions(a), key(k), parts{.face = nodes::Text(std::move(k), 22.0f, colours.text)} {
+      quick_reaction(const palette& colours, std::string k)
+          : key(k), parts{.face = nodes::Text(std::move(k), 22.0f, colours.text)} {
         auto& face = parts.face;
         this->setHorizontal();
         fStack.justify = nodes::justify::middle{};
@@ -222,18 +219,17 @@ struct context_menu : scene::Node, outbox {
         std::vector<quick_reaction> each;
         icon_button<expand_emoji> more;
       } parts;
-      quick_row(const palette& colours, Actions* a, card* of) : parts{.more = icon_button<expand_emoji>(colours, icon::down{}, {of})} {
+      quick_row(const palette& colours, card* of) : parts{.more = icon_button<expand_emoji>(colours, icon::down{}, {of})} {
         auto& [each, more] = parts;
         // As wide as what is in it: the menu is sized by it, not it by the
         // menu -- a menu of a set width had the arrow run out past its edge.
         this->setHorizontal();
         fState.apply({.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}});
         for (const char* key : {"👍", "❤️", "😂", "😮", "😢", "🙏"})
-          each.emplace_back(colours, a, key);
+          each.emplace_back(colours, key);
         more.apply({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f});
       }
     };
-    Actions* actions_of = nullptr;
     // The colours it is made in, for the emoji it unrolls; and the emoji
     // kept, the program's.
     const palette* colours_ = nullptr;
@@ -305,7 +301,7 @@ struct context_menu : scene::Node, outbox {
       const float under = box.fBottom - quick_band.bounds().fBottom;
       rolled = std::max(under, kEmojiLeast);
       fState.apply({.minHeight = this->bounds().height() + (rolled - under)});
-      emoji.emplace(*colours_, *kept_, react_with<Actions>{actions_of});
+      emoji.emplace(*colours_, *kept_, react_with<Actions>{});
       emoji->apply({.place = scene::anchor::kTopLeft,
                      .y = quick_band.bounds().fBottom - box.fTop,
                      .fillX = true,
@@ -349,16 +345,15 @@ struct context_menu : scene::Node, outbox {
       if (press.key == keys::kUp || press.key == keys::kDown) {
         reply.moveFocus(press.key == keys::kUp);
       } else if (press.key == keys::kEscape) {
-        actions_of->close_menu();
+        this->emit(::mux::ui::request::close_menu{});
         reply.handle();
       }
     }
     // What does not apply to the message left out.
-    card(const palette& colours, emoji_kept& kept, Actions* a, const menu_facts& facts)
-        : actions_of(a),
-          colours_(&colours),
+    card(const palette& colours, emoji_kept& kept, const menu_facts& facts)
+        : colours_(&colours),
           kept_(&kept),
-          parts{.quick = quick_row(colours, a, this),
+          parts{.quick = quick_row(colours, this),
                 .quick_band = nodes::Box<>(colours.band),
                 .reply = reply_row(colours, "Reply", {}, icon::back{}),
                 .thread_reply = thread_row(colours, "Reply in thread", {}, icon::threads{}),
@@ -382,7 +377,7 @@ struct context_menu : scene::Node, outbox {
                 .select = select_row(colours, "Select", {}, icon::check{}),
                 .remove = delete_row(colours, "Delete", {}, icon::close{}),
                 .seen_band = nodes::Box<>(colours.band),
-                .seen = seen_row<Actions>(colours, a, facts.seen)} {
+                .seen = seen_row<Actions>(colours, facts.seen)} {
       fState.setFloats(true);  // over the chat: frosted live, where asked
       auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, history, select,
              remove, seen_band, seen, emoji] = parts;
@@ -449,12 +444,11 @@ struct context_menu : scene::Node, outbox {
     // menu is.
     std::optional<typename seen_row<Actions>::submenu_t> seen_list;
   } parts;
-  Actions* actions = nullptr;
 
   // Where it was asked for: the pointer.
   float at_x = 0.0f, at_y = 0.0f;
   context_menu(const ui_needs<Actions>& n, const menu_facts& facts)
-      : parts{.menu = card(*n.colours, *n.emoji, n.actions, facts)}, actions(n.actions), at_x(facts.x), at_y(facts.y) {
+      : parts{.menu = card(*n.colours, *n.emoji, facts)}, at_x(facts.x), at_y(facts.y) {
     fState.apply({.fill = true});
     parts.menu.parts.seen.window = &fState.fBounds;
     parts.menu.parts.seen.submenu = &parts.seen_list;

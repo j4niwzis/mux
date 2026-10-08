@@ -220,8 +220,8 @@ struct side_column : nodes::Stack, outbox {
       // Element's compass is.
       explore_button explore;
     } parts;
-    head_row(const palette& colours, Actions* a)
-        : parts{.menu = menu_button<Actions>(colours, a),
+    head_row(const palette& colours)
+        : parts{.menu = menu_button<Actions>(colours),
                 .name = nodes::Text("mux", 17.0f, colours.text, true),
                 .explore = explore_button(colours, icon::compass{}, {})} {
       this->setHorizontal();
@@ -264,7 +264,7 @@ struct side_column : nodes::Stack, outbox {
       // Its settings: it is in no bar, to be right-pressed.
       icon_button<sends<::mux::ui::request::manage_forum>> settings;
     } parts;
-    forum_head_t(const palette& colours, Actions* a)
+    forum_head_t(const palette& colours)
         : parts{.back = icon_button<sends<::mux::ui::request::close_forum>>(colours, icon::back{}, {}),
                 .name = nodes::Text("", 15.0f, colours.text, true),
                 .settings = icon_button<sends<::mux::ui::request::manage_forum>>(colours, icon::gear{}, {})} {
@@ -306,7 +306,7 @@ struct side_column : nodes::Stack, outbox {
       avatar_mark face;
       lines_t lines;
     } parts;
-    found_row(const palette& colours, Actions* a, const search_result& one)
+    found_row(const palette& colours, const search_result& one)
         : pick{{}, one.index}, parts{.face = avatar_mark(one.sender, one.name, 40.0f), .lines = lines_t(colours, one)} {
       this->setHorizontal();
       this->setGap(10.0f);
@@ -363,8 +363,8 @@ struct side_column : nodes::Stack, outbox {
       found_list_t found{nodes::Flow<std::vector<found_row>>({.spacingY = 0.0f, .wrap = false}, {})};
       elsewhere_t elsewhere;
     } parts;
-    rest_t(const palette& colours, Actions* a)
-        : parts{.forum_head = forum_head_t(colours, a),
+    rest_t(const palette& colours)
+        : parts{.forum_head = forum_head_t(colours),
                 .search = search_box(colours),
                 .no_chats = nodes::Text("No chats yet.", 13.0f, colours.dim),
                 .found_title = nodes::Text("", 13.0f, colours.dim, true),
@@ -395,7 +395,7 @@ struct side_column : nodes::Stack, outbox {
       nodes::ScrollContainer<space_icons<Pick>> side{space_icons<Pick>({.spacingY = 8.0f, .wrap = false, .crossAlign = scene::align::kMiddle}, {})};
       rest_t rest;
     } parts;
-    body_t(const palette& colours, Actions* a) : parts{.rest = rest_t(colours, a)} {
+    body_t(const palette& colours) : parts{.rest = rest_t(colours)} {
       this->setHorizontal();
       fState.apply({.fillX = true, .grow = scene::axes::kY});
       parts.side.apply({.fillY = true, .width = 56.0f});
@@ -482,10 +482,10 @@ struct side_column : nodes::Stack, outbox {
     } parts;
     // Its places: Copy to and Move to each other account. Listed here from
     // another, its way out of this list, and its strip.
-    chat_menu(const palette& colours, Actions* a, conversation_id id, std::string name, const account_id& listing,
+    chat_menu(const palette& colours, conversation_id id, std::string name, const account_id& listing,
               const std::vector<account_id>& accounts, const config::theme_t& theme)
         : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true),
-                .settings = widgets::Button<chat_settings_act>(colours.widgets, "Chat settings\u2026", {a, id})} {
+                .settings = widgets::Button<chat_settings_act>(colours.widgets, "Chat settings\u2026", {{}, id})} {
       as_popup(*this, colours);
       fState.apply({.width = 320.0f});
       parts.title.setElided(true);
@@ -525,17 +525,17 @@ struct side_column : nodes::Stack, outbox {
                                               [](const auto&) { return std::string(); }},
                            item);
     }
-    space_menu(const palette& colours, Actions* a, const std::string& account, const config::space_item_t& item, std::string name)
+    space_menu(const palette& colours, const std::string& account, const config::space_item_t& item, std::string name)
         : parts{.title = nodes::Text(name, 13.0f, colours.dim, true),
-                .explore = widgets::Button<explore_act>(colours.widgets, "Explore its rooms\u2026", {a, room_of(item)}),
-                .manage = widgets::Button<manage_act>(colours.widgets, "Space settings\u2026", {a, room_of(item)}),
-                .add_room = widgets::Button<create_in_act>(colours.widgets, "Create a room in it\u2026", {a, account, room_of(item), name, false}),
-                .add_space = widgets::Button<create_in_act>(colours.widgets, "Create a space in it\u2026", {a, account, room_of(item), name, true}),
-                .leave = widgets::Button<leave_act>(colours.widgets, "Leave space\u2026", {a, account, room_of(item)}),
-                .side = widgets::Button<set_bars_act>(colours.widgets, "Side bar only", {a, account, item, true, false}),
-                .top = widgets::Button<set_bars_act>(colours.widgets, "Top bar only", {a, account, item, false, true}),
-                .both = widgets::Button<set_bars_act>(colours.widgets, "Both bars", {a, account, item, true, true}),
-                .hide = widgets::Button<set_bars_act>(colours.widgets, "Hide", {a, account, item, false, false})} {
+                .explore = widgets::Button<explore_act>(colours.widgets, "Explore its rooms\u2026", {{}, room_of(item)}),
+                .manage = widgets::Button<manage_act>(colours.widgets, "Space settings\u2026", {{}, room_of(item)}),
+                .add_room = widgets::Button<create_in_act>(colours.widgets, "Create a room in it\u2026", {{}, account, room_of(item), name, false}),
+                .add_space = widgets::Button<create_in_act>(colours.widgets, "Create a space in it\u2026", {{}, account, room_of(item), name, true}),
+                .leave = widgets::Button<leave_act>(colours.widgets, "Leave space\u2026", {{}, account, room_of(item)}),
+                .side = widgets::Button<set_bars_act>(colours.widgets, "Side bar only", {{}, account, item, true, false}),
+                .top = widgets::Button<set_bars_act>(colours.widgets, "Top bar only", {{}, account, item, false, true}),
+                .both = widgets::Button<set_bars_act>(colours.widgets, "Both bars", {{}, account, item, true, true}),
+                .hide = widgets::Button<set_bars_act>(colours.widgets, "Hide", {{}, account, item, false, false})} {
       as_popup(*this, colours);
       parts.title.setElided(true);
       parts.title.apply({.fillX = true});
@@ -573,11 +573,10 @@ struct side_column : nodes::Stack, outbox {
   nodes::ScrollContainer<space_icons<Pick>>& side_bar = parts.body.parts.side;
   space_icons<Pick>& top_line = parts.head.parts.top.parts.line;
   space_icons<Pick>& side_line = std::get<0>(parts.body.parts.side.fChildren);
-  Actions* actions = nullptr;
   // Whose spaces the bars hold, as the screen says as it shows them.
   std::string account;
-  side_column(const palette& colours, Actions* a)
-      : colours_(&colours), parts{.head = head_row(colours, a), .body = body_t(colours, a)}, actions(a) {
+  side_column(const palette& colours)
+      : colours_(&colours), parts{.head = head_row(colours), .body = body_t(colours)} {
     fState.apply({.fillY = true, .background = colours.sidebar});
   }
 
@@ -738,7 +737,7 @@ struct side_column : nodes::Stack, outbox {
     if (!one && press.button == 3 && list.visible())
       for (const auto& row : std::get<0>(std::get<0>(list.fChildren).fChildren))
         if (list.toView(row.bounds()).contains(press.x, press.y)) {
-          parts.row_menu.emplace(*colours_, actions, row.id, row.parts.lines.parts.top.parts.name.text(),
+          parts.row_menu.emplace(*colours_, row.id, row.parts.lines.parts.top.parts.name.text(),
                                  current_account ? *current_account : row.id.account, accounts_known, theme_now);
           this->place_menu(*parts.row_menu, press.x, press.y, 320.0f, 260.0f);
           reply.handle();
@@ -748,7 +747,7 @@ struct side_column : nodes::Stack, outbox {
       return;
     // A right press: its menu, where it was pressed, kept in the column.
     if (press.button == 3) {
-      parts.menu.emplace(*colours_, actions, account, one->item, one->name);
+      parts.menu.emplace(*colours_, account, one->item, one->name);
       this->place_menu(*parts.menu, press.x, press.y, 190.0f, 180.0f);
       reply.handle();
       return;

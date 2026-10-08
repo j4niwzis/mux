@@ -68,7 +68,6 @@ constexpr auto composer_views_for(const State& state, type_tag<Actions> tag) {
 
 template <class Actions>
 struct conversations_screen : nodes::Stack, outbox {
-  Actions* actions = nullptr;
   // What it was handed, for the rows it makes.
   ui_needs<Actions> needs_;
   std::optional<conversation_id> chosen;
@@ -220,7 +219,7 @@ struct conversations_screen : nodes::Stack, outbox {
     rows.clear();
     rows.reserve(results.size());
     for (const search_result& one : results)
-      rows.emplace_back(*needs_.colours, actions, one);
+      rows.emplace_back(*needs_.colours, one);
     const bool on = count.has_value();
     side.found_title.setText(!count ? std::string() : *count == 0 ? std::string("No messages found")
                                     : *count == 1                ? std::string("1 message found")
@@ -256,11 +255,11 @@ struct conversations_screen : nodes::Stack, outbox {
     auto& rooms = std::get<0>(shown.parts.rooms.fChildren);
     rooms.clear();
     for (const directory_room& one : std::views::take(rooms_elsewhere, 30))
-      rooms.emplace_back(actions, *needs_.colours, one, std::string());
+      rooms.emplace_back(*needs_.colours, one, std::string());
     auto& people = std::get<0>(shown.parts.people.fChildren);
     people.clear();
     for (const found_person& one : std::views::take(people_elsewhere, 30))
-      people.emplace_back(actions, *needs_.colours, one);
+      people.emplace_back(*needs_.colours, one);
     shown.parts.rooms_title.setVisible(!rooms.empty());
     shown.parts.people_title.setVisible(!people.empty());
     const bool waiting = !rooms_came || !people_came;
@@ -648,7 +647,7 @@ struct conversations_screen : nodes::Stack, outbox {
         nodes::Text note;
         add_button add;
       } parts;
-      empty_state(const palette& colours, Actions* a)
+      empty_state(const palette& colours)
           : parts{.title = nodes::Text("No accounts yet", 22.0f, colours.text, true),
                   .note = nodes::Text("Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, colours.dim),
                   .add = add_button(colours.widgets, "Add account", {})} {
@@ -708,7 +707,6 @@ struct conversations_screen : nodes::Stack, outbox {
     composer_bar<Actions>& line = parts.line;
     empty_state& empty = parts.empty;
     select_hint& hint = parts.hint;
-    explicit chat_column(const ui_needs<Actions>& n) : chat_column(n, n.actions) {}
     // What it makes its call view with: a copy, as the window keeps one --
     // the needs it was made from were not always there by then.
     ui_needs<Actions> needs_{};
@@ -728,7 +726,7 @@ struct conversations_screen : nodes::Stack, outbox {
       this->invalidateLayout();
       this->markDamaged();
     }
-    chat_column(const ui_needs<Actions>& n, Actions* a)
+    chat_column(const ui_needs<Actions>& n)
         : parts{.search = search_bar<Actions>(n),
                 .selection = selection_bar<Actions>(n),
                 .area = timeline_area<Actions>(n),
@@ -736,7 +734,7 @@ struct conversations_screen : nodes::Stack, outbox {
                 .emojis = emoji_list(*n.colours),
                 .trust_warning = nodes::Text("", 13.0f, n.colours->text),
                 .line = composer_bar<Actions>(n),
-                .empty = empty_state(*n.colours, a)} {
+                .empty = empty_state(*n.colours)} {
       needs_ = n;
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
@@ -821,15 +819,13 @@ struct conversations_screen : nodes::Stack, outbox {
   int unseen = 0;
   composer_bar<Actions>& line = chat.line;
 
-  explicit conversations_screen(const ui_needs<Actions>& n) : conversations_screen(n, n.actions) {}
-  conversations_screen(const ui_needs<Actions>& n, Actions* a)
-      : actions(a),
-        needs_(n),
-        parts{.side = side_column(*n.colours, a),
+  conversations_screen(const ui_needs<Actions>& n)
+      : needs_(n),
+        parts{.side = side_column(*n.colours),
               .edge = side_edge(*n.colours, resize_sidebar_to<Actions>{}),
               .chat = chat_column(n),
               .info_edge = info_edge_t(*n.colours, resize_info_to<Actions>{}, false),
-              .info = info_panel<Actions>(a, *n.colours, *n.shared),
+              .info = info_panel<Actions>(*n.colours, *n.shared),
               .threads = threads_panel<Actions>(n)} {
     fState.apply({.fill = true});
     this->setHorizontal();

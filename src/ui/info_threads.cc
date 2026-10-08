@@ -46,7 +46,6 @@ export namespace mux::ui {
 // field to answer in it.
 template <class Actions>
 struct threads_panel : nodes::Stack, outbox {
-  Actions* actions = nullptr;
   std::optional<std::string> open;  // the thread open, else the list
   std::vector<message> shown;       // what the open thread shows now
   std::optional<std::string> answering;  // an answer in it, answered
@@ -76,7 +75,6 @@ struct threads_panel : nodes::Stack, outbox {
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
   struct thread_row : nodes::Stack, outbox {
-    Actions* actions;
     std::string root;
     struct lines_t : nodes::Stack {
       struct parts_t {
@@ -100,8 +98,8 @@ struct threads_panel : nodes::Stack, outbox {
       avatar_mark face;
       lines_t lines;
     } parts;
-    thread_row(Actions* a, const palette& colours, const conversation& chat, const message& said)
-        : actions(a), root(said.id),
+    thread_row(const palette& colours, const conversation& chat, const message& said)
+        : root(said.id),
           parts{.face = avatar_mark(said.sender, sender_name(chat, said.sender), 36.0f),
                 .lines = lines_t(colours, sender_name(chat, said.sender), flat(said.body.plain), meta_of(chat, said))} {
       this->setHorizontal();
@@ -153,10 +151,8 @@ struct threads_panel : nodes::Stack, outbox {
     timeline_area<Actions> answers;
     composer_bar<Actions, in_thread> line;
   } parts;
-  explicit threads_panel(const ui_needs<Actions>& n) : threads_panel(n, n.actions) {}
-  threads_panel(const ui_needs<Actions>& n, Actions* a)
-      : actions(a),
-        colours_(n.colours),
+  threads_panel(const ui_needs<Actions>& n)
+      : colours_(n.colours),
         parts{.head = head_t(*n.colours, "Threads", {}, {}, false, true),
               .divider = nodes::Box<>(n.colours->band),
               .empty = nodes::Text("No threads here yet.", 13.0f, n.colours->dim),
@@ -206,7 +202,7 @@ struct threads_panel : nodes::Stack, outbox {
       auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
       rows.clear();
       for (const message* one : roots)
-        rows.emplace_back(actions, *colours_, chat, *one);
+        rows.emplace_back(*colours_, chat, *one);
       parts.empty.setVisible(roots.empty());
       parts.list.invalidateLayout();
       shown.clear();

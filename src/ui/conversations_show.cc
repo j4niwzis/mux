@@ -1037,7 +1037,7 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
     chat.line.set_can_post(may.post);
     chat.line.set_replaced(proto::successor_of(protocol_state_of(*needs_.shared, one->id.account), *one).has_value());
     // Those knocking, for whoever may invite.
-    chat.line.show_knocks(actions, one->knocking, may.invite);
+    chat.line.show_knocks(one->knocking, may.invite);
     chat.line.show_unsent(std::ranges::any_of(one->timeline, [](const message& said) {
       return said.outgoing &&
              spl::visit(spl::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }},

@@ -176,7 +176,7 @@ struct app : kept_settings {
   mux::ui::palette colours;
   actions ask;
   skiff::scene::Scene<window_type> scene{std::in_place,
-                                         mux::ui::ui_needs<actions>{.actions = &ask, .sound = &speaker, .colours = &colours, .emoji = &shared.emoji, .looks = &shared.looks, .paint = &shared.paint, .shared = &shared.ui}};
+                                         mux::ui::ui_needs<actions>{.sound = &speaker, .colours = &colours, .emoji = &shared.emoji, .looks = &shared.looks, .paint = &shared.paint, .shared = &shared.ui}};
 
   // -- what the host asks
   skiff::scene::Scene<window_type>& window();

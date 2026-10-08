@@ -91,11 +91,11 @@ struct directory_row : nodes::Stack {
     texts_t texts;
     widgets::Button<directory_join<Actions>> join;
   } parts;
-  directory_row(Actions* a, const palette& colours, const directory_room& one, const std::string& server)
+  directory_row(const palette& colours, const directory_room& one, const std::string& server)
       : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
               .texts = texts_t(colours, one),
               .join = widgets::Button<directory_join<Actions>>(colours.widgets, one.space ? "Open" : "Join",
-                                                  {a, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
+                                                  {{}, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
                                                    one.name})} {
     this->setHorizontal();
     this->setGap(12.0f);
@@ -113,7 +113,6 @@ template <class Actions>
 struct explore_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{640.0f, 560.0f}}; }
-  Actions* actions = nullptr;
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   struct close_it : outbox {
@@ -200,9 +199,8 @@ struct explore_box : nodes::Stack, outbox {
   } parts;
   // The row's fields, by their names, for what reads them.
   field& query_field() { return parts.search.parts.query; }
-  explore_box(Actions* a, const palette& colours, const std::string& own_server)
-      : actions(a),
-        colours_(&colours),
+  explore_box(const palette& colours, const std::string& own_server)
+      : colours_(&colours),
         parts{.header = header_t(colours, "Explore rooms", {}, {}, false, true),
               .space_head = space_head_t(colours),
               .search = search_row(this, own_server),
@@ -261,7 +259,7 @@ struct explore_box : nodes::Stack, outbox {
     rows.clear();
     rows.reserve(rooms.size());
     for (const directory_room& one : rooms)
-      rows.emplace_back(actions, *colours_, one, server);
+      rows.emplace_back(*colours_, one, server);
     // Their pictures, asked for as a chat's are.
     for (const directory_room& one : rooms)
       if (one.avatar && !one.avatar->empty())

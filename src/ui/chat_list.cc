@@ -93,7 +93,6 @@ struct conversation_row : nodes::Stack, outbox {
       fState.apply({.autoSize = scene::axes::kBoth});
     }
   };
-  Actions* actions = nullptr;
   conversation_id id;
   bool chosen = false;
   bool muted = false;
@@ -219,7 +218,7 @@ struct conversation_row : nodes::Stack, outbox {
 
   conversation_row(const ui_needs<Actions>& n, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
                    const room_event_filter& events = {}, std::optional<skia::SkColor> strip = std::nullopt)
-      : actions(n.actions), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(*n.shared, one, is_chosen, is_muted, draft, events, strip)),
+      : id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(*n.shared, one, is_chosen, is_muted, draft, events, strip)),
         parts{.face = avatar_mark(one.id.id, display_name(one), 46.0f),
               .lines = lines_column(*n.colours, display_name(one), one.unread_here(events), is_chosen, is_muted)} {
     const palette& colours = *n.colours;

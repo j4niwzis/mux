@@ -347,7 +347,7 @@ struct pinned_view {
   friend bool operator==(const pinned_view&, const pinned_view&) = default;
 };
 template <class Press>
-struct pinned_bar : nodes::Stack {
+struct pinned_bar : skiff::compose::Stacked {
   Press press;
   struct parts_t {
     nodes::Box<> stripe;
@@ -356,18 +356,18 @@ struct pinned_bar : nodes::Stack {
   } parts;
   static constexpr float kHeight = 46.0f;
   pinned_bar(const palette& colours, Press what, const pinned_view& shown)
-      : press(std::move(what)),
-        parts{.stripe = nodes::Box<>(colours.accent),
-              .texts = two_lines(colours, shown.title, shown.line, 13.0f, 2.0f),
-              .divider = nodes::Box<>(colours.band)} {
-    this->setHorizontal();
-    this->setGap(10.0f);
-    fState.apply({.fill = true, .padding = {6.0f, 16.0f, 7.0f, 18.0f}, .background = colours.sidebar,
-                  .hoverBackground = colours.chosen});
+      : Stacked(skiff::compose::hbox(10.0f, {.fill = true, .padding = {6.0f, 16.0f, 7.0f, 18.0f}, .background = colours.sidebar,
+                                             .hoverBackground = colours.chosen})),
+        press(std::move(what)),
+        parts{.stripe = skiff::compose::styled({.fillY = true, .width = 2.0f, .cornerRadius = 1.0f}, nodes::Box<>(colours.accent)),
+              .texts = accent_named(colours, two_lines(colours, shown.title, shown.line, 13.0f, 2.0f)),
+              .divider = skiff::compose::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))} {
     fState.setCursor(scene::cursor::hand{});
-    parts.stripe.apply({.fillY = true, .width = 2.0f, .cornerRadius = 1.0f});
-    parts.texts.parts.name.setColour(colours.accent);
-    parts.divider.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
+  }
+  // Its title in the accent, as tdesktop's pinned bar.
+  [[nodiscard]] static two_lines accent_named(const palette& colours, two_lines texts) {
+    texts.parts.name.setColour(colours.accent);
+    return texts;
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -386,7 +386,7 @@ struct pinned_bar : nodes::Stack {
 // what can be done with them -- Forward, Copy, Delete -- and Cancel. Esc
 // cancels too.
 template <class Actions>
-struct selection_bar : nodes::Stack {
+struct selection_bar : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::selection_cancel;
   using forward_button = button_for<sends<::mux::ui::request::selection_forward>>;
@@ -401,22 +401,19 @@ struct selection_bar : nodes::Stack {
     cancel_button cancel;
     nodes::Box<> bottom_line;
   } parts;
+  // Its buttons: as high as one another, in the middle of the bar.
+  [[nodiscard]] static scene::Spec button_spec() { return {.height = 32.0f, .alignSelf = scene::align::kMiddle}; }
   explicit selection_bar(const ui_needs<Actions>& n)
-      : parts{.count = nodes::Text("", 15.0f, n.colours->text, true),
-              .forward = forward_button(n.colours->widgets, "Forward", {}),
-              .copy = copy_button(n.colours->widgets, "Copy", {}),
-              .remove = delete_button(n.colours->widgets, "Delete", {}),
-              .cancel = cancel_button(n.colours->widgets, "Cancel", {}),
-              .bottom_line = nodes::Box<>(n.colours->band)} {
-    auto& [count, forward, copy, remove, cancel, bottom_line] = parts;
-    this->setHorizontal();
-    this->setGap(8.0f);
-    fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
-                  .background = n.colours->sidebar});
-    bottom_line.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
-    count.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&forward, &copy, &remove, &cancel})
-      each->apply({.height = 32.0f, .alignSelf = scene::align::kMiddle});
+      : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
+                                            .background = n.colours->sidebar})),
+        parts{.count = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                              nodes::Text("", 15.0f, n.colours->text, true)),
+              .forward = skiff::compose::styled(button_spec(), forward_button(n.colours->widgets, "Forward", {})),
+              .copy = skiff::compose::styled(button_spec(), copy_button(n.colours->widgets, "Copy", {})),
+              .remove = skiff::compose::styled(button_spec(), delete_button(n.colours->widgets, "Delete", {})),
+              .cancel = skiff::compose::styled(button_spec(), cancel_button(n.colours->widgets, "Cancel", {})),
+              .bottom_line = skiff::compose::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f},
+                                                    nodes::Box<>(n.colours->band))} {
     this->setVisible(false);
   }
   // How many are selected, and which of what can be done with them is.

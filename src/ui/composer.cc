@@ -617,11 +617,11 @@ struct message_input : nodes::Stack {
 // says. The chat's own; a thread's is its panel's.
 template <class Actions>
 struct in_chat {
-  using cancel = ask<Actions, &Actions::cancel_compose>;
+  using cancel = sends<::mux::ui::request::cancel_compose>;
   using submit = submit_message<Actions>;
-  using attach = ask<Actions, &Actions::attach_files>;
-  using emoji = ask<Actions, &Actions::toggle_emoji>;
-  using send = ask<Actions, &Actions::send_typed>;
+  using attach = sends<::mux::ui::request::attach_files>;
+  using emoji = sends<::mux::ui::request::toggle_emoji>;
+  using send = sends<::mux::ui::request::send_typed>;
   static constexpr std::string_view placeholder = "Write a message…";
 };
 
@@ -672,7 +672,7 @@ struct composer_bar : nodes::Stack {
   using input_row = message_input<typename Where::submit, typename Where::attach, typename Where::emoji, typename Where::send>;
   // Element's bar over the field while messages here were not sent
   // (RoomStatusBar's): a warning, and "Delete all" and "Retry all".
-  using unsent_row = two_choice_bar<ask<Actions, &Actions::discard_unsent>, ask<Actions, &Actions::retry_unsent>>;
+  using unsent_row = two_choice_bar<sends<::mux::ui::request::discard_unsent>, sends<::mux::ui::request::retry_unsent>>;
   // Where the reader may not post: a row as high as the input's, its line
   // in the middle -- padded inside it, not by a margin the bar's height
   // leaves out.
@@ -691,7 +691,7 @@ struct composer_bar : nodes::Stack {
   // A tombstoned room's: "This room has been replaced and is no longer
   // active", and the room it goes on in, opened -- joined, where it is not
   // yet.
-  using go_on = ask<Actions, &Actions::open_replacement>;
+  using go_on = sends<::mux::ui::request::open_replacement>;
   struct replaced_row : nodes::Stack {
     struct parts_t {
       nodes::Text line;

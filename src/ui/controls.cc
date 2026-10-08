@@ -12,6 +12,7 @@ import skiff.nodes.icon;
 import skiff.nodes.text;
 import skiff.widgets.avatar;
 import skiff.widgets.button;
+import skiff.widgets.sliderbar;
 import skiff.model;
 import skiff.bind;
 import mux.core;
@@ -23,6 +24,14 @@ import :avatars;
 import :themes;
 
 export namespace mux::ui {
+
+// A skiff-widgets button or toggle for an act: the plain one where the act
+// sends events, which the walk takes from its action; else the one the
+// build erases its action in.
+template <class Act>
+using button_for = std::conditional_t<sending<Act>, widgets::internal::Button<Act>, widgets::Button<Act>>;
+template <class Act>
+using toggle_for = std::conditional_t<sending<Act>, widgets::internal::Toggle<Act>, widgets::Toggle<Act>>;
 
 // A line of a list or a menu, as wide as what holds it and square: an icon
 // on the left, its text, and a radio mark on the right where it is one of a
@@ -112,6 +121,12 @@ struct two_lines : nodes::Stack {
 template <class Act>
 struct row_item : pressable<nodes::Stack> {
   Act act;
+  // The events its act sent, where it sends them so.
+  auto takeEvents()
+    requires sending<Act>
+  {
+    return std::exchange(act.fEmitted, {});
+  }
   // Whether it is one of a choice, and the chosen one.
   std::optional<bool> radio;
   struct parts_t {
@@ -166,6 +181,12 @@ struct row_item : pressable<nodes::Stack> {
 template <class Act>
 struct icon_button : scene::Node {
   Act act;
+  // The events its act sent, where it sends them so.
+  auto takeEvents()
+    requires sending<Act>
+  {
+    return std::exchange(act.fEmitted, {});
+  }
   struct parts_t {
     nodes::Icon mark;
   } parts;
@@ -248,6 +269,12 @@ struct page_header : nodes::Stack {
 template <class Act>
 struct segment : pressable<nodes::Stack> {
   Act act;
+  // The events its act sent, where it sends them so.
+  auto takeEvents()
+    requires sending<Act>
+  {
+    return std::exchange(act.fEmitted, {});
+  }
   bool active = false;
   struct parts_t {
     nodes::Text label;
@@ -948,10 +975,10 @@ template <class Act>
 struct label_button_row : nodes::Stack {
   struct parts_t {
     nodes::Text label;
-    widgets::Button<Act> reset;
+    button_for<Act> reset;
   } parts;
   label_button_row(const palette& colours, std::string label, std::string button, Act act, bool shown)
-      : parts{.label = nodes::Text(std::move(label), 13.0f, colours.text), .reset = widgets::Button<Act>(colours.widgets, std::move(button), std::move(act))} {
+      : parts{.label = nodes::Text(std::move(label), 13.0f, colours.text), .reset = button_for<Act>(colours.widgets, std::move(button), std::move(act))} {
     this->setHorizontal();
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});

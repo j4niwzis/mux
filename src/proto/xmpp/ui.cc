@@ -28,7 +28,7 @@ using namespace ::mux::ui;
 // and PLAIN without TLS. Its height is what its last layout took.
 template <class Actions>
 struct xmpp_advanced : nodes::Stack {
-  using plain_toggle = widgets::Toggle<ask<Actions, &Actions::toggle_plain>>;
+  using plain_toggle = toggle_for<sends<::mux::ui::request::toggle_plain>>;
   // The switch and what it says, side by side.
   struct plain_row : nodes::Stack {
     struct parts_t {
@@ -187,7 +187,7 @@ struct xmpp_form : nodes::Stack {
     void operator()(std::size_t index) const { form->set_creating(index == 1); }
   };
 
-  using advanced_button_t = widgets::Button<ask<Actions, &Actions::toggle_advanced>>;
+  using advanced_button_t = button_for<sends<::mux::ui::request::toggle_advanced>>;
   struct parts_t {
     field address;
     field password;

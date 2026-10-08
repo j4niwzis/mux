@@ -212,8 +212,8 @@ struct button_row : nodes::Stack {
 // and its buttons. Enter in any of the form's fields submits it.
 template <class Actions>
 struct form_end : nodes::Stack {
-  using submit_button = widgets::Button<ask<Actions, &Actions::submit_login>>;
-  using close_button = widgets::Button<ask<Actions, &Actions::pop_panel>>;
+  using submit_button = button_for<sends<::mux::ui::request::submit_login>>;
+  using close_button = button_for<sends<::mux::ui::request::pop_panel>>;
   // The colours it is made in, for what it says later.
   const palette* colours_ = nullptr;
   struct parts_t {
@@ -287,7 +287,7 @@ void place_form(account_form<Actions>& form, const skia::SkRect& column, float t
 
 // Esc leaves a panel: back to what is under it, or a step back within it
 // first, as Back says.
-template <class Actions, class Back = ask<Actions, &Actions::pop_panel>>
+template <class Actions, class Back = sends<::mux::ui::request::pop_panel>>
 struct closes_on_escape : nodes::Stack {
   Actions* actions = nullptr;
   explicit closes_on_escape(Actions* a) : actions(a) {}

@@ -278,7 +278,7 @@ void app::take_page_input() {
     window_binding.invalidate();
     window_binding.refresh(root(), this->state);
   }
-  window_binding.drain(root(), this->state);
+  window_binding.drain(root(), this->state, &ask);
   this->settle_model();
 }
 // How the window looks, as the model holds it, put where the window's

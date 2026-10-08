@@ -58,7 +58,7 @@ struct add_account_pane : nodes::Stack {
   // The proxy the new account goes through: none, or one of the profiles --
   // and, always there, a way to make one.
   struct proxy_row : nodes::Stack {
-    using add_button = segment<ask<Actions, &Actions::manage_proxies>>;
+    using add_button = segment<sends<::mux::ui::request::manage_proxies>>;
     struct parts_t {
       nodes::Text title;
       std::vector<segment<choose_new_proxy<Actions>>> choices;

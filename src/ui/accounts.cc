@@ -160,12 +160,12 @@ template <class Act>
 struct switch_row : nodes::Stack {
   struct parts_t {
     nodes::Text label;
-    widgets::Toggle<Act> toggle;
+    toggle_for<Act> toggle;
   } parts;
 
   // Declared: the text taking the room, the switch at the end.
   switch_row(const palette& colours, std::string text, Act what)
-      : parts{.label = nodes::Text(std::move(text), 15.0f, colours.text), .toggle = widgets::Toggle<Act>(colours.widgets, std::move(what))} {
+      : parts{.label = nodes::Text(std::move(text), 15.0f, colours.text), .toggle = toggle_for<Act>(colours.widgets, std::move(what))} {
     this->setHorizontal();
     this->setGap(16.0f);
     fState.apply({.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
@@ -304,9 +304,9 @@ inline auto account_chats_view(const palette& colours, std::string address) {
 
 template <class Actions>
 struct account_privacy : nodes::Stack {
-  using receipts_row = switch_row<ask<Actions, &Actions::flip_account_receipts>>;
-  using mentions_shared_row = switch_row<ask<Actions, &Actions::flip_account_mentions_shared>>;
-  using mentions_sealed_row = switch_row<ask<Actions, &Actions::flip_account_mentions_sealed>>;
+  using receipts_row = switch_row<sends<::mux::ui::request::flip_account_receipts>>;
+  using mentions_shared_row = switch_row<sends<::mux::ui::request::flip_account_mentions_shared>>;
+  using mentions_sealed_row = switch_row<sends<::mux::ui::request::flip_account_mentions_sealed>>;
   struct parts_t {
     nodes::Text title;
     receipts_row receipts;
@@ -433,7 +433,7 @@ struct account_chats : nodes::Stack {
     // its chats listed in other accounts' lists, unless they chose another.
     nodes::Text colour_title;
     accent_circles<set_colour> colours;
-    switch_row<ask<Actions, &Actions::flip_account_strip>> strip;
+    switch_row<sends<::mux::ui::request::flip_account_strip>> strip;
     nodes::Text title;
     decltype(account_chats_view(std::declval<const palette&>(), std::string())) settings;
     nodes::Text looks_title;
@@ -447,7 +447,7 @@ struct account_chats : nodes::Stack {
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
       : parts{.colour_title = section_title(colours, "COLOUR"),
               .colours = accent_circles<set_colour>({a}, theme, false),
-              .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>(colours, "A strip on its chats in other lists", {a}),
+              .strip = switch_row<sends<::mux::ui::request::flip_account_strip>>(colours, "A strip on its chats in other lists", {a}),
               .title = section_title(colours, "CHATS"),
               .settings = account_chats_view(colours, std::move(address)),
               .looks_title = section_title(colours, "LOOKS"),
@@ -483,7 +483,7 @@ struct choose_account_proxy {
 // it connects through, or none; and the way to the profiles themselves.
 template <class Actions>
 struct account_proxy : nodes::Stack {
-  using manage_row = row_item<ask<Actions, &Actions::manage_proxies>>;
+  using manage_row = row_item<sends<::mux::ui::request::manage_proxies>>;
   struct parts_t {
     nodes::Text title;
     std::vector<row_item<choose_account_proxy<Actions>>> choices;
@@ -513,7 +513,7 @@ struct account_proxy : nodes::Stack {
 // The saved accounts down the side, and the chosen one's settings beside
 // them.
 template <class Actions>
-struct accounts_panel : closes_on_escape<Actions, ask<Actions, &Actions::accounts_back>> {
+struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>> {
   static constexpr int kTab = 2;
   static constexpr float kListWidth = 280.0f;
 
@@ -531,11 +531,11 @@ struct accounts_panel : closes_on_escape<Actions, ask<Actions, &Actions::account
   };
   // Its ← goes back from an account's pages to the list, and from the list
   // to the chats.
-  using header_t = page_header<ask<Actions, &Actions::accounts_back>, ask<Actions, &Actions::accounts_back>>;
+  using header_t = page_header<sends<::mux::ui::request::accounts_back>, sends<::mux::ui::request::accounts_back>>;
   // Under the header: the list down the side, and beside it what is chosen.
   struct body_row : nodes::Stack {
     struct side_column : nodes::Stack {
-      using add_row = row_item<ask<Actions, &Actions::open_new_account>>;
+      using add_row = row_item<sends<::mux::ui::request::open_new_account>>;
       struct parts_t {
         add_row add;
         account_pages<Actions> pages;
@@ -675,7 +675,7 @@ struct accounts_panel : closes_on_escape<Actions, ask<Actions, &Actions::account
   ui_needs<Actions> needs_;
   explicit accounts_panel(const ui_needs<Actions>& n) : accounts_panel(n, n.actions) {}
   accounts_panel(const ui_needs<Actions>& n, Actions* a)
-      : closes_on_escape<Actions, ask<Actions, &Actions::accounts_back>>(a),
+      : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>>(a),
         parts{.header = header_t(*n.colours, "Accounts", {a}, {a}, true, false), .body = body_row(*n.colours, a)},
         needs_(n) {
     this->fState.apply({.fill = true});

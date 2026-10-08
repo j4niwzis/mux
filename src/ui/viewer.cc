@@ -58,7 +58,7 @@ struct picture_viewer : nodes::Stack {
     void operator()() const { viewer->actions->press_loader(viewer->video.value_or(viewer->source)); }
   };
   struct top_bar : nodes::Stack {
-    using close_button = icon_button<ask<Actions, &Actions::close_picture>>;
+    using close_button = icon_button<sends<::mux::ui::request::close_picture>>;
     struct parts_t {
       avatar_mark face;
       two_lines texts;

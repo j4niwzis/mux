@@ -52,7 +52,7 @@ struct person_card : nodes::Stack {
       actions->close_person_info();
     }
   };
-  using close_act = ask<Actions, &Actions::close_person_info>;
+  using close_act = sends<::mux::ui::request::close_person_info>;
   using close_button = icon_button<close_act>;
   using top_bar = page_header<no_back, close_act>;
   // tdesktop's cover: 108 high, a 72 photo, the name and status beside it.
@@ -193,7 +193,7 @@ struct room_card : nodes::Stack {
     Actions* actions = nullptr;
     void operator()() const { actions->decline_room_card(); }
   };
-  using close_act = ask<Actions, &Actions::close_room_card>;
+  using close_act = sends<::mux::ui::request::close_room_card>;
   using close_button = icon_button<close_act>;
   using top_bar = page_header<no_back, close_act>;
   struct cover : nodes::Stack {

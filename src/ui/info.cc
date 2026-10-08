@@ -133,7 +133,7 @@ struct info_panel : nodes::Stack {
   // big avatar, the name, how it is; the chat's tiles or the member's; its ID.
   struct head : nodes::Stack {
     struct top_row : nodes::Stack {
-      using close_button = icon_button<ask<Actions, &Actions::toggle_info>>;
+      using close_button = icon_button<sends<::mux::ui::request::toggle_info>>;
       struct parts_t {
         icon_button<back_to_group> back;
         nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
@@ -149,9 +149,9 @@ struct info_panel : nodes::Stack {
       }
     };
     struct tiles_row : nodes::Stack {
-      using mute_tile = action_tile<ask<Actions, &Actions::toggle_mute>>;
-      using manage_tile = action_tile<ask<Actions, &Actions::open_manage>>;
-      using leave_tile = action_tile<ask<Actions, &Actions::leave_chat>>;
+      using mute_tile = action_tile<sends<::mux::ui::request::toggle_mute>>;
+      using manage_tile = action_tile<sends<::mux::ui::request::open_manage>>;
+      using leave_tile = action_tile<sends<::mux::ui::request::leave_chat>>;
       struct parts_t {
         mute_tile mute;
         manage_tile manage;

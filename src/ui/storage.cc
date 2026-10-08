@@ -117,10 +117,10 @@ struct limit_stepper : nodes::Stack {
 // seal, the clearing and every chat's choices are asked as before.
 template <class Actions>
 struct storage_page : nodes::Stack {
-  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
-  using clear_row = row_item<ask<Actions, &Actions::clear_stored>>;
-  using seal_row = switch_row<ask<Actions, &Actions::flip_local_encryption>>;
-  using change_row = row_item<ask<Actions, &Actions::change_passphrase>>;
+  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
+  using clear_row = row_item<sends<::mux::ui::request::clear_stored>>;
+  using seal_row = switch_row<sends<::mux::ui::request::flip_local_encryption>>;
+  using change_row = row_item<sends<::mux::ui::request::change_passphrase>>;
   // The seal: its switch, and the passphrase to change where it is on.
   struct seal_rows : nodes::Stack {
     struct parts_t {
@@ -215,7 +215,7 @@ inline auto notification_settings_view(const palette& colours) {
 }
 template <class Actions>
 struct notifications_page : nodes::Stack {
-  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(notification_settings_view(std::declval<const palette&>()));
   struct parts_t {
     header_t header;
@@ -245,7 +245,7 @@ inline auto files_settings_view(const palette& colours) {
 }
 template <class Actions>
 struct files_page : nodes::Stack {
-  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(files_settings_view(std::declval<const palette&>()));
   struct parts_t {
     header_t header;

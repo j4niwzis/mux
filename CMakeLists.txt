@@ -231,10 +231,10 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
-  GIT_TAG d384993bc14f718b6cf932bb7053a6c1f9210bf9)
+  GIT_TAG 59b47fa7cf07732cd72363dc0a26b71a70464efd)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG ab2acd18579e4c33d1f84acf869809678cec37e6)
+  GIT_TAG 34800247a1e6d2a388dd17c571cc432e1836b100)
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures

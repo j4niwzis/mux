@@ -278,7 +278,7 @@ inline auto frame_look_view(const palette& colours, bool see_through) {
 }
 template <class Actions>
 struct appearance_page : nodes::Stack {
-  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(skiff::compose::column(
       skiff::compose::vbox(), appearance_settings_view(std::declval<const palette&>(), std::declval<const config::theme_t&>()),
       std::declval<look_choices<Actions>>(), window_settings_view(std::declval<const palette&>()),
@@ -321,7 +321,7 @@ inline auto frame_settings_view(const palette& colours) {
 }
 template <class Actions>
 struct rendering_page : nodes::Stack {
-  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using choice = row_item<choose_renderer<Actions>>;
   // What is under the header: it scrolls where the dialog is too low for it.
   struct body : nodes::Stack {

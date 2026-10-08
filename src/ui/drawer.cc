@@ -71,11 +71,11 @@ struct drawer_account : nodes::Stack {
 // its icon.
 template <class Actions>
 struct drawer_panel : nodes::Stack {
-  using manage_row = row_item<ask<Actions, &Actions::open_accounts>>;
-  using new_chat_row = row_item<ask<Actions, &Actions::open_new_chat>>;
-  using new_room_row = row_item<ask<Actions, &Actions::open_new_room>>;
-  using settings_row = row_item<ask<Actions, &Actions::open_settings>>;
-  using quit_row = row_item<ask<Actions, &Actions::quit>>;
+  using manage_row = row_item<sends<::mux::ui::request::open_accounts>>;
+  using new_chat_row = row_item<sends<::mux::ui::request::open_new_chat>>;
+  using new_room_row = row_item<sends<::mux::ui::request::open_new_room>>;
+  using settings_row = row_item<sends<::mux::ui::request::open_settings>>;
+  using quit_row = row_item<sends<::mux::ui::request::quit>>;
   // What it was handed, for the accounts it lists.
   ui_needs<Actions> needs_;
   struct parts_t {

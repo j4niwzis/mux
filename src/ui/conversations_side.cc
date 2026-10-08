@@ -208,7 +208,7 @@ struct side_column : nodes::Stack {
   // All of the window across: one thing at a time (single, below).
   bool whole = false;
   struct head_row : nodes::Stack {
-    using explore_button = icon_button<ask<Actions, &Actions::open_explore>>;
+    using explore_button = icon_button<sends<::mux::ui::request::open_explore>>;
     struct parts_t {
       menu_button<Actions> menu;
       nodes::Text name;
@@ -259,15 +259,15 @@ struct side_column : nodes::Stack {
   // A forum open: its name, and the way back to the chats.
   struct forum_head_t : nodes::Stack {
     struct parts_t {
-      icon_button<ask<Actions, &Actions::close_forum>> back;
+      icon_button<sends<::mux::ui::request::close_forum>> back;
       nodes::Text name;
       // Its settings: it is in no bar, to be right-pressed.
-      icon_button<ask<Actions, &Actions::manage_forum>> settings;
+      icon_button<sends<::mux::ui::request::manage_forum>> settings;
     } parts;
     forum_head_t(const palette& colours, Actions* a)
-        : parts{.back = icon_button<ask<Actions, &Actions::close_forum>>(colours, icon::back{}, {a}),
+        : parts{.back = icon_button<sends<::mux::ui::request::close_forum>>(colours, icon::back{}, {a}),
                 .name = nodes::Text("", 15.0f, colours.text, true),
-                .settings = icon_button<ask<Actions, &Actions::manage_forum>>(colours, icon::gear{}, {a})} {
+                .settings = icon_button<sends<::mux::ui::request::manage_forum>>(colours, icon::gear{}, {a})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = 40.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f}});

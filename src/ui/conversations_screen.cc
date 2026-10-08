@@ -646,7 +646,7 @@ struct conversations_screen : nodes::Stack {
     using header_t = nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>;
     using pinned_t = nodes::Memo<pinned_view, pinned_bar<pinned_press>>;
     struct empty_state : nodes::Stack {
-      using add_button = widgets::Button<ask<Actions, &Actions::open_new_account>>;
+      using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
       struct parts_t {
         nodes::Text title;
         nodes::Text note;

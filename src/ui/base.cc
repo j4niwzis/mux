@@ -12,6 +12,8 @@ import skiff.nodes.box;
 import skiff.widgets.theme;
 import skiff.widgets.wallpaper;
 import skiff.widgets.motion;
+import skiff.bind;
+export import :requests;
 import mux.core;
 import mux.protocols;
 import mux.config;
@@ -399,14 +401,32 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void pop_panel()                 -- back from the top panel to what is under it
 //   void open_settings(), close_settings(), settings_home(), settings_animations()
 
-// A request with nothing to say but itself: `ask<Actions, &Actions::back>`.
+// A request sent as an event: kept until the walk that drains the window
+// takes it, the program taking those that nothing in the window does. Made
+// from the window's actions as an ask was, which it does not need.
+template <class E>
+struct sends {
+  E event{};
+  std::vector<E> fEmitted;
+  sends() = default;
+  template <class A>
+  sends(A*) {}
+  void operator()() {
+    fEmitted.push_back(event);
+    ++skiff::bind::pendingCount();
+  }
+};
+// Whether an act sends its events so.
+template <class Act>
+concept sending = requires(Act& a) { a.fEmitted; };
+// A request with nothing to say but itself: `sends<::mux::ui::request::back>`.
 template <class Actions, auto Method>
 struct ask {
   Actions* actions = nullptr;
   void operator()() const { (actions->*Method)(); }
 };
 // A protocol's own request with nothing to say but itself, as its UI asks
-// it: `asks<Actions, request::refresh_sessions>`, through the program's
+// it: `sends<request::refresh_sessions>`, through the program's
 // ask_for.
 template <class Actions, class Request>
 struct asks {

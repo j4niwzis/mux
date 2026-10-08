@@ -67,7 +67,7 @@ template <class Actions>
 struct reactions_box : nodes::Stack {
   // On the chat's colour: its bubbles, as in the chat.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{392.0f, 420.0f}}; }
-  using close_act = ask<Actions, &Actions::close_reactions>;
+  using close_act = sends<::mux::ui::request::close_reactions>;
   using close_button = icon_button<close_act>;
   using top_bar = page_header<no_back, close_act>;
   // A reaction as the chat would show it: a bubble from who reacted,
@@ -164,7 +164,7 @@ struct reactions_box : nodes::Stack {
 template <class Actions>
 struct edit_history_box : nodes::Stack {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 560.0f}}; }
-  using close_act = ask<Actions, &Actions::close_edit_history>;
+  using close_act = sends<::mux::ui::request::close_edit_history>;
   using top_bar = page_header<no_back, close_act>;
   struct row : nodes::Stack {
     struct parts_t {
@@ -227,7 +227,7 @@ template <class Actions>
 struct marks_box : nodes::Stack {
   // On the chat's colour: its bubbles, as in the chat.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 520.0f}}; }
-  using close_act = ask<Actions, &Actions::close_marks>;
+  using close_act = sends<::mux::ui::request::close_marks>;
   using close_button = icon_button<close_act>;
   using top_bar = page_header<no_back, close_act>;
   struct badge : nodes::Stack {

@@ -80,7 +80,7 @@ struct send_box : nodes::Stack {
       }
     }
   };
-  using buttons_row = dialog_buttons<ask<Actions, &Actions::close_send_box>, ask<Actions, &Actions::send_files>>;
+  using buttons_row = dialog_buttons<sends<::mux::ui::request::close_send_box>, sends<::mux::ui::request::send_files>>;
   // What a box of these says it sends.
   [[nodiscard]] static std::string title_of(const std::vector<pending_file>& all) {
     return all.size() == 1 ? std::string(all.front().image ? "Send a photo" : "Send a file")

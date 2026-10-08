@@ -39,7 +39,7 @@ template <class Actions>
 struct notice_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}}; }
-  using ok_button = widgets::Button<ask<Actions, &Actions::close_notice>>;
+  using ok_button = button_for<sends<::mux::ui::request::close_notice>>;
   struct parts_t {
     nodes::Text title;
     nodes::Text note;
@@ -230,11 +230,11 @@ struct chat_header : nodes::Stack {
 
   // The chat's avatar, its name over how it is, and the button to its info.
   struct head_row : nodes::Stack {
-    using find_button = icon_button<ask<Actions, &Actions::open_search>>;
-    using info_button = icon_button<ask<Actions, &Actions::toggle_info>>;
-    using threads_button = icon_button<ask<Actions, &Actions::toggle_threads>>;
-    using call_button = icon_button<ask<Actions, &Actions::call_chosen>>;
-    using back_button = icon_button<ask<Actions, &Actions::close_chat>>;
+    using find_button = icon_button<sends<::mux::ui::request::open_search>>;
+    using info_button = icon_button<sends<::mux::ui::request::toggle_info>>;
+    using threads_button = icon_button<sends<::mux::ui::request::toggle_threads>>;
+    using call_button = icon_button<sends<::mux::ui::request::call_chosen>>;
+    using back_button = icon_button<sends<::mux::ui::request::close_chat>>;
     // Shown one thing at a time, a tap on the chat's name or avatar opens
     // its info, as on Telegram's phones.
     Actions* actions = nullptr;
@@ -345,10 +345,10 @@ struct pinned_bar : nodes::Stack {
 template <class Actions>
 struct selection_bar : nodes::Stack {
   Actions* actions;
-  using forward_button = widgets::Button<ask<Actions, &Actions::selection_forward>>;
-  using copy_button = widgets::Button<ask<Actions, &Actions::selection_copy>>;
-  using delete_button = widgets::Button<ask<Actions, &Actions::selection_delete>>;
-  using cancel_button = widgets::Button<ask<Actions, &Actions::selection_cancel>>;
+  using forward_button = button_for<sends<::mux::ui::request::selection_forward>>;
+  using copy_button = button_for<sends<::mux::ui::request::selection_copy>>;
+  using delete_button = button_for<sends<::mux::ui::request::selection_delete>>;
+  using cancel_button = button_for<sends<::mux::ui::request::selection_cancel>>;
   struct parts_t {
     nodes::Text count;
     forward_button forward;
@@ -412,7 +412,7 @@ struct search_bar : nodes::Stack {
   Actions* actions;
   using field_t = widgets::TextBox<search_typed<Actions>>;
   using step_button = icon_button<search_step<Actions>>;
-  using close_button = icon_button<ask<Actions, &Actions::close_search>>;
+  using close_button = icon_button<sends<::mux::ui::request::close_search>>;
   struct parts_t {
     field_t field;
     nodes::Text found;

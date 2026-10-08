@@ -34,16 +34,16 @@ struct settings_home : nodes::Stack {
   // Its children, in the order they are shown: the header, then the lines,
   // one under another -- walked as they are declared.
   struct parts_t {
-    page_header<ask<Actions, &Actions::close_settings>, ask<Actions, &Actions::close_settings>> header;
-    row_item<ask<Actions, &Actions::open_accounts>> accounts;
-    row_item<ask<Actions, &Actions::settings_animations>> animations;
-    row_item<ask<Actions, &Actions::settings_appearance>> appearance;
-    row_item<ask<Actions, &Actions::open_packs>> packs;
-    row_item<ask<Actions, &Actions::settings_rendering>> rendering;
-    row_item<ask<Actions, &Actions::settings_notifications>> notifications;
-    row_item<ask<Actions, &Actions::settings_storage>> storage;
-    row_item<ask<Actions, &Actions::settings_files>> files;
-    row_item<ask<Actions, &Actions::settings_proxies>> proxies;
+    page_header<sends<::mux::ui::request::close_settings>, sends<::mux::ui::request::close_settings>> header;
+    row_item<sends<::mux::ui::request::open_accounts>> accounts;
+    row_item<sends<::mux::ui::request::settings_animations>> animations;
+    row_item<sends<::mux::ui::request::settings_appearance>> appearance;
+    row_item<sends<::mux::ui::request::open_packs>> packs;
+    row_item<sends<::mux::ui::request::settings_rendering>> rendering;
+    row_item<sends<::mux::ui::request::settings_notifications>> notifications;
+    row_item<sends<::mux::ui::request::settings_storage>> storage;
+    row_item<sends<::mux::ui::request::settings_files>> files;
+    row_item<sends<::mux::ui::request::settings_proxies>> proxies;
   } parts;
 
   explicit settings_home(const ui_needs<Actions>& n) : settings_home(*n.colours, n.actions) {}
@@ -117,7 +117,7 @@ inline auto motion_settings_view(const palette& colours) {
 }
 template <class Actions>
 struct animations_page : nodes::Stack {
-  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(motion_settings_view(std::declval<const palette&>()));
   struct parts_t {
     header_t header;
@@ -151,8 +151,8 @@ struct choose_proxy_kind {
 // to add one.
 template <class Actions>
 struct proxies_page : nodes::Stack {
-  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
-  using add_row = row_item<ask<Actions, &Actions::add_proxy>>;
+  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
+  using add_row = row_item<sends<::mux::ui::request::add_proxy>>;
   struct parts_t {
     header_t header;
     std::vector<row_item<edit_proxy<Actions>>> profiles;
@@ -231,9 +231,9 @@ struct proxy_editor : nodes::Stack {
   // The colours what it says is said in.
   const palette* colours_ = nullptr;
   config::proxy_kind_t kind = config::proxy_kind::socks5{};
-  using header_t = page_header<ask<Actions, &Actions::settings_proxies>, ask<Actions, &Actions::close_settings>>;
-  using save_button = widgets::Button<ask<Actions, &Actions::save_proxy_profile>>;
-  using delete_button = widgets::Button<ask<Actions, &Actions::delete_proxy_profile>>;
+  using header_t = page_header<sends<::mux::ui::request::settings_proxies>, sends<::mux::ui::request::close_settings>>;
+  using save_button = button_for<sends<::mux::ui::request::save_proxy_profile>>;
+  using delete_button = button_for<sends<::mux::ui::request::delete_proxy_profile>>;
   struct parts_t {
     header_t header;
     field name;

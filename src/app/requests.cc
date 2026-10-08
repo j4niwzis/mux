@@ -48,6 +48,13 @@ struct actions {
   mailbox_type* box = nullptr;
   int demo_sent = 0;
   std::vector<request_t> requests;
+  // A request the window sent as an event, which nothing in it took: taken
+  // as the program's sink, queued as one asked.
+  template <class E>
+    requires std::constructible_from<request_t, E>
+  void take(const E& one) {
+    requests.emplace_back(one);
+  }
 
   void choose(const mux::conversation_id& which) { requests.emplace_back(request::choose{which}); }
   void send(const mux::conversation_id& to, std::string text) {

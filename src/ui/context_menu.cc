@@ -238,25 +238,25 @@ struct context_menu : scene::Node {
     // kept, the program's.
     const palette* colours_ = nullptr;
     emoji_kept* kept_ = nullptr;
-    using reply_row = row_item<ask<Actions, &Actions::menu_reply>>;
-    using thread_row = row_item<ask<Actions, &Actions::menu_thread>>;
-    using quote_reply_row = row_item<ask<Actions, &Actions::menu_quote_reply>>;
-    using edit_row = row_item<ask<Actions, &Actions::menu_edit>>;
+    using reply_row = row_item<sends<::mux::ui::request::menu_reply>>;
+    using thread_row = row_item<sends<::mux::ui::request::menu_thread>>;
+    using quote_reply_row = row_item<sends<::mux::ui::request::menu_quote_reply>>;
+    using edit_row = row_item<sends<::mux::ui::request::menu_edit>>;
     using later_row = row_item<not_yet<Actions>>;
-    using copy_row = row_item<ask<Actions, &Actions::menu_copy>>;
-    using link_row = row_item<ask<Actions, &Actions::menu_copy_link>>;
-    using url_row = row_item<ask<Actions, &Actions::menu_copy_url>>;
-    using fave_row = row_item<ask<Actions, &Actions::menu_fave_sticker>>;
-    using copy_image_row = row_item<ask<Actions, &Actions::menu_copy_image>>;
-    using save_row = row_item<ask<Actions, &Actions::menu_save>>;
-    using gif_row = row_item<ask<Actions, &Actions::menu_save_gif>>;
-    using pin_row = row_item<ask<Actions, &Actions::menu_pin>>;
-    using reactions_row = row_item<ask<Actions, &Actions::menu_reactions>>;
-    using forward_row = row_item<ask<Actions, &Actions::menu_forward>>;
-    using source_row = row_item<ask<Actions, &Actions::menu_view_source>>;
-    using history_row = row_item<ask<Actions, &Actions::menu_edit_history>>;
-    using select_row = row_item<ask<Actions, &Actions::menu_select>>;
-    using delete_row = row_item<ask<Actions, &Actions::menu_delete>>;
+    using copy_row = row_item<sends<::mux::ui::request::menu_copy>>;
+    using link_row = row_item<sends<::mux::ui::request::menu_copy_link>>;
+    using url_row = row_item<sends<::mux::ui::request::menu_copy_url>>;
+    using fave_row = row_item<sends<::mux::ui::request::menu_fave_sticker>>;
+    using copy_image_row = row_item<sends<::mux::ui::request::menu_copy_image>>;
+    using save_row = row_item<sends<::mux::ui::request::menu_save>>;
+    using gif_row = row_item<sends<::mux::ui::request::menu_save_gif>>;
+    using pin_row = row_item<sends<::mux::ui::request::menu_pin>>;
+    using reactions_row = row_item<sends<::mux::ui::request::menu_reactions>>;
+    using forward_row = row_item<sends<::mux::ui::request::menu_forward>>;
+    using source_row = row_item<sends<::mux::ui::request::menu_view_source>>;
+    using history_row = row_item<sends<::mux::ui::request::menu_edit_history>>;
+    using select_row = row_item<sends<::mux::ui::request::menu_select>>;
+    using delete_row = row_item<sends<::mux::ui::request::menu_delete>>;
     // As tdesktop's, in its order: the quick reactions; every emoji, in
     // place of the rest once asked for; Reply, Edit, Pin, Copy, Copy
     // Message Link, Save As, Forward, Delete; and who has seen it -- how

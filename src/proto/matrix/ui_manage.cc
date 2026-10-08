@@ -661,10 +661,10 @@ struct advanced_page : nodes::Stack {
     field upgrade_to;
     widgets::Button<upgrade_press> upgrade;
     nodes::Text tools;
-    widgets::Button<asks<Actions, request::explore_state>> explore;
-    widgets::Button<asks<Actions, request::open_send_custom>> send_custom;
+    button_for<sends<request::explore_state>> explore;
+    button_for<sends<request::open_send_custom>> send_custom;
     nodes::Text packs_heading;
-    widgets::Button<ask<Actions, &Actions::open_room_packs>> packs;
+    button_for<sends<::mux::ui::request::open_room_packs>> packs;
   } parts;
   advanced_page(Actions* a, Box* box, const room_settings_facts& facts)
       : parts{.heading = tab_heading((*box->colours_), "Advanced"),
@@ -674,10 +674,10 @@ struct advanced_page : nodes::Stack {
               .upgrade_to = field((*box->colours_), "Upgrade to room version", "12", "12"),
               .upgrade = widgets::Button<upgrade_press>((*box->colours_).widgets, "Upgrade this room", {box, this}),
               .tools = part_heading((*box->colours_), "Developer tools"),
-              .explore = widgets::Button<asks<Actions, request::explore_state>>((*box->colours_).widgets, "Explore room state", {a}),
-              .send_custom = widgets::Button<asks<Actions, request::open_send_custom>>((*box->colours_).widgets, "Send custom event", {a}),
+              .explore = button_for<sends<request::explore_state>>((*box->colours_).widgets, "Explore room state", {a}),
+              .send_custom = button_for<sends<request::open_send_custom>>((*box->colours_).widgets, "Send custom event", {a}),
               .packs_heading = part_heading((*box->colours_), "Emojis & Stickers"),
-              .packs = widgets::Button<ask<Actions, &Actions::open_room_packs>>((*box->colours_).widgets, "Edit room packs", {a})} {
+              .packs = button_for<sends<::mux::ui::request::open_room_packs>>((*box->colours_).widgets, "Edit room packs", {a})} {
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom, &parts.packs, &parts.upgrade})

@@ -138,8 +138,8 @@ struct threads_panel : nodes::Stack {
   struct in_thread {
     using cancel = stop_answer;
     using submit = sent;
-    using attach = ask<Actions, &Actions::attach_in_thread>;
-    using emoji = ask<Actions, &Actions::toggle_thread_emoji>;
+    using attach = sends<::mux::ui::request::attach_in_thread>;
+    using emoji = sends<::mux::ui::request::toggle_thread_emoji>;
     using send = send_press;
     static constexpr std::string_view placeholder = "Reply in thread…";
   };

@@ -214,10 +214,10 @@ template <class Act>
 struct toggle_line : nodes::Stack {
   struct parts_t {
     nodes::Text label;
-    widgets::Toggle<Act> toggle;
+    toggle_for<Act> toggle;
   } parts;
   toggle_line(const palette& colours, std::string text, Act what, bool on, bool allowed)
-      : parts{.label = nodes::Text(std::move(text), 14.0f, colours.text), .toggle = widgets::Toggle<Act>(colours.widgets, std::move(what))} {
+      : parts{.label = nodes::Text(std::move(text), 14.0f, colours.text), .toggle = toggle_for<Act>(colours.widgets, std::move(what))} {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = !allowed});
@@ -536,7 +536,7 @@ struct room_settings : nodes::Stack {
       nodes::Text forum_about;
       toggle_line<flip_home_hide_act> home_hide;
       nodes::Text leave_heading;
-      widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
+      button_for<sends<::mux::ui::request::leave_chat>> leave;
     } parts;
     general_page(Actions* a, room_settings* box, const room_settings_facts& facts)
         : parts{.heading = tab_heading(*box->colours_, "General"),
@@ -550,7 +550,7 @@ struct room_settings : nodes::Stack {
                                              : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
                 .home_hide = toggle_line<flip_home_hide_act>(*box->colours_, "Its rooms not in Home", {a, facts.id}, facts.hidden_from_home, true),
                 .leave_heading = part_heading(*box->colours_, "Leave room"),
-                .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>(box->colours_->widgets, "Leave room", {a})} {
+                .leave = button_for<sends<::mux::ui::request::leave_chat>>(box->colours_->widgets, "Leave room", {a})} {
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.forum_heading, &parts.forum, &parts.forum_about})
         each->setVisible(facts.space);
       // A space's own: its rooms out of Home -- not one shown as one chat,

@@ -46,6 +46,16 @@ struct person_shown {
   std::string key;
   person_facts facts;
 };
+template <class Actions>
+auto person_cover(const palette& colours, const std::string& key, const person_facts& facts) {
+  return skiff::compose::row(
+      skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
+      avatar_button<Actions>(key, facts.name, 72.0f),
+      two_lines(colours, facts.name, facts.status, 17.0f, 6.0f, two_line_style{.selectable = true}));
+}
+template <class Actions>
+using person_cover_t = decltype(person_cover<Actions>(std::declval<const palette&>(), "", std::declval<const person_facts&>()));
+
 template <class Actions> struct person_card : skiff::compose::Stacked {
   // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
   // it shows, a 24th of the window down within 20 and 40.
@@ -59,22 +69,6 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
   using close_button = icon_button<close_act>;
   using top_bar = page_header_t<no_back, close_act>;
   // tdesktop's cover: 108 high, a 72 photo, the name and status beside it.
-  struct cover : skiff::compose::Stacked {
-    struct parts_t {
-      avatar_button<Actions> photo;
-      two_lines_t texts;
-    } parts;
-    cover(const palette &colours, const std::string &key,
-          const person_facts &facts)
-        : Stacked(skiff::compose::hbox(
-              16.0f, {.fillX = true,
-                      .height = 108.0f,
-                      .padding = {0.0f, 22.0f, 0.0f, 22.0f}})),
-          parts{.photo = avatar_button<Actions>(key, facts.name, 72.0f),
-                .texts =
-                    two_lines(colours, facts.name, facts.status, 17.0f, 6.0f, two_line_style{.selectable = true})} {
-    }
-  };
   // What a moderator does to them, as Element's user info offers it.
   struct to_them {
     using Answer = std::tuple<::mux::ui::request::room_act, ::mux::ui::request::close_person_info>;
@@ -103,7 +97,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
   const palette* colours_ = nullptr;
   struct parts_t {
     top_bar top;
-    cover face;
+    person_cover_t<Actions> face;
     nodes::Box<> band;
     id_line_t id;
     action_tile<message_them> message;
@@ -132,7 +126,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
                                         .padding = {0.0f, 0.0f, 16.0f, 0.0f}})),
         colours_(&colours),
         parts{.top = page_header<no_back, close_act>(colours, "User info", {}, {}, false, true),
-              .face = cover(colours, key, facts),
+              .face = person_cover<Actions>(colours, key, facts),
               .band = section_band(colours),
               .id = id_line(colours, key, ""),
               .message =
@@ -205,6 +199,14 @@ struct room_card_facts {
   std::string asked;
   room_preview known;
 };
+inline auto room_cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line) {
+  return skiff::compose::row(
+      skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
+      avatar_mark(key, name, 72.0f),
+      two_lines(colours, name, line, 17.0f, 6.0f, two_line_style{.selectable = true}));
+}
+using room_cover_t = decltype(room_cover(std::declval<const palette&>(), "", "", ""));
+
 template <class Actions> struct room_card : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
@@ -224,20 +226,6 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
   using close_act = sends<::mux::ui::request::close_room_card>;
   using close_button = icon_button<close_act>;
   using top_bar = page_header_t<no_back, close_act>;
-  struct cover : skiff::compose::Stacked {
-    struct parts_t {
-      avatar_mark photo;
-      two_lines_t texts;
-    } parts;
-    cover(const palette &colours, const std::string &key,
-          const std::string &name, const std::string &line)
-        : Stacked(skiff::compose::hbox(
-              16.0f, {.fillX = true,
-                      .height = 108.0f,
-                      .padding = {0.0f, 22.0f, 0.0f, 22.0f}})),
-          parts{.photo = avatar_mark(key, name, 72.0f),
-                .texts = two_lines(colours, name, line, 17.0f, 6.0f, two_line_style{.selectable = true})} {}
-  };
   // Its name, else its address, else what the link said.
   static std::string name_of(const std::string& asked, const room_preview& known) {
     return !known.name.empty() ? known.name : !known.alias.empty() ? known.alias : asked;
@@ -255,7 +243,7 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
   // closing the card and accepting or declining an invite stay in reach.
   struct details : skiff::compose::Stacked {
     struct parts_t {
-      cover face;
+      room_cover_t face;
       nodes::Box<> band;
       nodes::Text about;
       id_line_t id;
@@ -265,7 +253,7 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
             const room_preview &known)
         : Stacked(skiff::compose::vbox(
               0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.face = cover(colours, known.id.empty() ? asked : known.id,
+          parts{.face = room_cover(colours, known.id.empty() ? asked : known.id,
                               name_of(asked, known), line_of(asked, known)),
                 .band = section_band(colours),
                 .about = skiff::compose::styled(

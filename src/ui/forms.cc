@@ -23,14 +23,20 @@ import :themes;
 
 export namespace mux::ui {
 
-template <auto Member>
-auto model_field(const palette& colours, std::string label, std::string placeholder, bool masked = false,
+template <auto Member, class Caption>
+  requires std::derived_from<Caption, scene::Node>
+auto model_field(const palette& colours, Caption caption, std::string placeholder, bool masked = false,
                  scene::Margin margin = {}) {
   return skiff::compose::column(
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = margin}),
-      nodes::Text(std::move(label), 13.0f, colours.dim),
+      std::move(caption),
       skiff::compose::bound<skiff::model::Field<Member>>(skiff::compose::styled(
           {.fillX = true, .height = 36.0f}, widgets::TextField<std::string>(colours.widgets, std::move(placeholder), masked))));
+}
+template <auto Member>
+auto model_field(const palette& colours, std::string label, std::string placeholder, bool masked = false,
+                 scene::Margin margin = {}) {
+  return model_field<Member>(colours, nodes::Text(std::move(label), 13.0f, colours.dim), std::move(placeholder), masked, margin);
 }
 
 // ---- a form row: a caption and a field -----------------------------------
@@ -121,93 +127,80 @@ auto make_content(std::type_identity<link_box_t>, const Needs& needs, const link
 struct passphrase_facts {
   proto::passphrase_for_t why;
   std::optional<std::string> refused;
+  std::string current, fresh, again, file;
 };
-template <class Actions>
-struct passphrase_box : skiff::compose::Stacked {
-  // The dialog it is shown in.
-  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{420.0f}}; }
-  struct words {
-    std::string_view title, note, button;
-    bool current, fresh;  // the passphrase now asked; a new one, twice
-    bool file = false;    // a file's path asked too
-  };
-  static constexpr words words_of(config::passphrase_for::unlock) {
-    return {"Local data is encrypted", "Type its passphrase to open your settings, chats and keys.", "Unlock", true, false};
-  }
-  static constexpr words words_of(config::passphrase_for::encrypt) {
-    return {"Encrypt local data",
-            "Settings, passwords and tokens, chats kept, drafts and encryption keys are sealed under a passphrase, "
-            "asked for at every start. Forgotten, it cannot be recovered, and neither can they.",
-            "Encrypt", false, true};
-  }
-  static constexpr words words_of(config::passphrase_for::change) {
-    return {"Change the passphrase", "Everything kept is sealed again under the new one.", "Change", true, true};
-  }
-  // A protocol's own: as it words it (passphrase_text, by ADL).
-  template <class Purpose>
-  static constexpr words words_of(Purpose why) {
-    const proto::passphrase_words said = passphrase_text(why);
-    return {said.title, said.note, said.button, said.current, said.fresh, said.file};
-  }
-  static constexpr words words_of(config::passphrase_for::decrypt) {
-    return {"Stop encrypting local data", "Everything kept is written in the clear again, readable by whoever can read "
-                                          "these files.",
-            "Decrypt", true, false};
-  }
-  struct submit {
-    using Answer = ::mux::ui::request::give_passphrase;
-    passphrase_box* box;
-    Answer operator()() const {
-      return ::mux::ui::request::give_passphrase{box->purpose, box->parts.current.text(), box->parts.fresh.text(), box->parts.again.text(),
-                                    box->parts.file.text()};
-    }
-  };
-  proto::passphrase_for_t purpose;
-  struct parts_t {
-    nodes::Text title;
-    nodes::Text note;
-    field file;
-    field current;
-    field fresh;
-    field again;
-    nodes::Text error;
-    widgets::Button<submit> go;
-  } parts;
-
-  passphrase_box(const ui_needs<Actions>& n, const passphrase_facts& facts) : passphrase_box(*n.colours, facts.why) { this->show_page(facts); }
-  // Refused, as its facts say: why, under the fields.
-  void show_page(const passphrase_facts& facts) {
-    if (facts.refused)
-      this->say(*facts.refused);
-  }
-  // Not dismissed where it is asked at the start: the local data is locked
-  // until it is given.
-  [[nodiscard]] static bool dismissable(const passphrase_facts& facts) {
-    return spl::visit(spl::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, facts.why);
-  }
-  passphrase_box(const palette& colours, proto::passphrase_for_t why)
-      : Stacked(skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}})),
-        purpose(why),
-        parts{.title = skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::string(said().title), 17.0f, colours.text, true))),
-              .note = skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::string(said().note), 14.0f, colours.dim))),
-              .file = skiff::compose::visible(said().file, field(colours, "Key file", "/home/you/element-keys.txt")),
-              .current = skiff::compose::visible(said().current, field(colours, said().fresh ? "Passphrase now" : "Passphrase", "Passphrase").masked()),
-              .fresh = skiff::compose::visible(said().fresh, field(colours, "New passphrase", "New passphrase").masked()),
-              .again = skiff::compose::visible(said().fresh, field(colours, "The new one again", "New passphrase").masked()),
-              .error = skiff::compose::visible(false, skiff::compose::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.error)))),
-              .go = skiff::compose::styled({.width = 110.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},
-                                           primary(widgets::Button<submit>(colours.widgets, std::string(said().button), {this})))} {}
-  [[nodiscard]] words said() const {
-    return spl::visit([](auto why) { return words_of(why); }, purpose);
-  }
-  // Why it was not taken: said under the fields, which are emptied.
-  void say(std::string what) {
-    parts.error.setText(std::move(what));
-    parts.error.setVisible(true);
-    for (field* each : {&parts.current, &parts.fresh, &parts.again})
-      each->parts.box.setText("");
-  }
+struct passphrase_words {
+  std::string_view title, note, button;
+  bool current, fresh;  // the passphrase now asked; a new one, twice
+  bool file = false;    // a file's path asked too
 };
+inline constexpr passphrase_words words_of(config::passphrase_for::unlock) {
+  return {"Local data is encrypted", "Type its passphrase to open your settings, chats and keys.", "Unlock", true, false};
+}
+inline constexpr passphrase_words words_of(config::passphrase_for::encrypt) {
+  return {"Encrypt local data",
+          "Settings, passwords and tokens, chats kept, drafts and encryption keys are sealed under a passphrase, "
+          "asked for at every start. Forgotten, it cannot be recovered, and neither can they.",
+          "Encrypt", false, true};
+}
+inline constexpr passphrase_words words_of(config::passphrase_for::change) {
+  return {"Change the passphrase", "Everything kept is sealed again under the new one.", "Change", true, true};
+}
+// A protocol's own: as it words it (passphrase_text, by ADL).
+template <class Purpose>
+inline constexpr passphrase_words words_of(Purpose why) {
+  const proto::passphrase_words said = passphrase_text(why);
+  return {said.title, said.note, said.button, said.current, said.fresh, said.file};
+}
+inline constexpr passphrase_words words_of(config::passphrase_for::decrypt) {
+  return {"Stop encrypting local data", "Everything kept is written in the clear again, readable by whoever can read "
+                                        "these files.",
+          "Decrypt", true, false};
+}
+inline passphrase_words words_of(const proto::passphrase_for_t& purpose) {
+  return spl::visit([](auto why) { return words_of(why); }, purpose);
+}
+inline auto passphrase_box(const palette& colours) {
+  using purpose = skiff::model::Field<&passphrase_facts::why>;
+  using refused = skiff::model::Field<&passphrase_facts::refused>;
+  return skiff::compose::scoped<passphrase_facts>(skiff::compose::handlers(), skiff::compose::column(
+      skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+      skiff::compose::text_for<purpose>([](const auto& why) { return std::string(words_of(why).title); },
+          skiff::compose::styled({.fillX = true}, wrapped(nodes::Text("", 17.0f, colours.text, true)))),
+      skiff::compose::text_for<purpose>([](const auto& why) { return std::string(words_of(why).note); },
+          skiff::compose::styled({.fillX = true}, wrapped(nodes::Text("", 14.0f, colours.dim)))),
+      skiff::compose::shown_if<purpose>([](const auto& why) { return words_of(why).file; },
+          model_field<&passphrase_facts::file>(colours, "Key file", "/home/you/element-keys.txt")),
+      skiff::compose::shown_if<purpose>([](const auto& why) { return words_of(why).current; },
+          model_field<&passphrase_facts::current>(colours,
+              skiff::compose::text_for<purpose>([](const auto& why) {
+                return std::string(words_of(why).fresh ? "Passphrase now" : "Passphrase");
+              }, nodes::Text("", 13.0f, colours.dim)), "Passphrase", true)),
+      skiff::compose::shown_if<purpose>([](const auto& why) { return words_of(why).fresh; },
+          model_field<&passphrase_facts::fresh>(colours, "New passphrase", "New passphrase", true)),
+      skiff::compose::shown_if<purpose>([](const auto& why) { return words_of(why).fresh; },
+          model_field<&passphrase_facts::again>(colours, "The new one again", "New passphrase", true)),
+      skiff::compose::shown_if<refused>([](const auto& error) { return error.has_value(); },
+          skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              skiff::compose::text_for<refused>([](const auto& error) { return error.value_or(""); },
+                  skiff::compose::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.error)))))),
+      skiff::compose::projected<passphrase_facts>([](const passphrase_facts& facts) {
+            return std::pair{std::string(words_of(facts.why).button),
+                request::give_passphrase{facts.why, facts.current, facts.fresh, facts.again, facts.file}};
+          },
+          skiff::compose::styled({.width = 110.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},
+              primary(widgets::SendButton<request::give_passphrase>(colours.widgets, "", {}))))));
+}
+using passphrase_box_t = decltype(passphrase_box(std::declval<const palette&>()));
+inline dialog_look content_look(std::type_identity<passphrase_box_t>) { return {.size = dialog_size::fitting{420.0f}}; }
+inline bool content_persistent(std::type_identity<passphrase_box_t>) { return true; }
+inline bool content_dismissable(std::type_identity<passphrase_box_t>, const passphrase_facts& facts) {
+  return spl::visit(spl::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, facts.why);
+}
+template <class Needs>
+auto make_content(std::type_identity<passphrase_box_t>, const Needs& needs, const passphrase_facts&) {
+  return passphrase_box(*needs.colours);
+}
 
 // ---- the account forms ---------------------------------------------------------
 

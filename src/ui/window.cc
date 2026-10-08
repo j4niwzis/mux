@@ -137,6 +137,10 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
   void show_with(const Facts& facts)
     requires requires { make_content(std::type_identity<Content>{}, *needs, facts); }
   {
+    if constexpr (requires { content_persistent(std::type_identity<Content>{}); }) {
+      if (content_persistent(std::type_identity<Content>{}) && this->shown())
+        return;
+    }
     (void)this->open(make_content(std::type_identity<Content>{}, *needs, facts));
   }
   void show_with(const Facts& facts) { (void)this->open(*needs, facts); }
@@ -146,6 +150,11 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
     requires requires { Content::dismissable(facts); }
   {
     this->setDismissable(Content::dismissable(facts));
+  }
+  void dismissable_for(const Facts& facts)
+    requires requires { content_dismissable(std::type_identity<Content>{}, facts); }
+  {
+    this->setDismissable(content_dismissable(std::type_identity<Content>{}, facts));
   }
   void dismissable_for(const Facts&) {}
   auto onPress() { return skiff::bind::own(skiff::model::setTo(std::optional<Facts>{})); }
@@ -421,7 +430,7 @@ template <class Actions> struct window : skiff::compose::Specced {
       shown_in<send_box<Actions>, send_facts> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
-      shown_in<passphrase_box<Actions>, passphrase_facts> passphrase;
+      shown_in<passphrase_box_t, passphrase_facts> passphrase;
       // An emoji verification, as it goes.
       shown_in<verification_box<Actions>, verification_view> verifying;
       skiff::bind::Bound<std::optional<emoji_facts>, shown_layer<emoji_popup<Actions>, emoji_facts, ui_needs<Actions>>> emoji;
@@ -659,7 +668,7 @@ template <class Actions> struct window : skiff::compose::Specced {
                 .explore = shown_made<explore_box<Actions>, explore_facts>(n),
                 .sending = shown_made<send_box<Actions>, send_facts>(n),
                 .passphrase =
-                    shown_made<passphrase_box<Actions>, passphrase_facts>(n),
+                    shown_made<passphrase_box_t, passphrase_facts>(n),
                 .verifying =
                     shown_made<verification_box<Actions>, verification_view>(n),
                 .emoji = layer_for<emoji_popup<Actions>, emoji_facts>(n),

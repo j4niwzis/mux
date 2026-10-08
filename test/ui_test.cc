@@ -1159,3 +1159,42 @@ TEST(Forms, ExpressionDialogUsesItsFactoryAndDeclaredLook) {
   ASSERT_NE(dialog.shown(), nullptr);
   EXPECT_EQ(dialog.shown()->fModel.root().text, "Text");
 }
+
+TEST(Forms, PassphraseSubmissionReadsBoundModel) {
+  struct sink {
+    std::optional<mux::ui::request::give_passphrase> saved;
+    void take(const mux::ui::request::give_passphrase& request) { saved = request; }
+  } requests;
+  mux::ui::shown_model model;
+  mux::ui::passphrase_facts facts{mux::config::passphrase_for::change{}, std::nullopt};
+  facts.current = "old";
+  facts.fresh = facts.again = "new";
+  facts.file = "/tmp/keys";
+  mux::ui::show(model, std::optional(facts));
+  mux::ui::palette colours;
+  auto box = mux::ui::passphrase_box(colours);
+  skiff::bind::Binding<mux::ui::shown_model> binding;
+  binding.refresh(box, model);
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{7}, &requests));
+  ASSERT_TRUE(requests.saved.has_value());
+  EXPECT_EQ(requests.saved->current, "old");
+  EXPECT_EQ(requests.saved->fresh, "new");
+  EXPECT_EQ(requests.saved->again, "new");
+  EXPECT_EQ(requests.saved->file, "/tmp/keys");
+}
+TEST(Forms, PassphraseDialogRetainsContentOnModelRefresh) {
+  mux::ui::palette colours;
+  struct Needs { const mux::ui::palette* colours; } needs{&colours};
+  mux::ui::shown_dialog<mux::ui::passphrase_box_t, mux::ui::passphrase_facts, Needs> dialog(&needs);
+  mux::ui::look_as_its_content(dialog, colours);
+  mux::ui::passphrase_facts facts{mux::config::passphrase_for::unlock{}, std::nullopt};
+  dialog.read(std::optional(facts));
+  auto* original = dialog.shown();
+  ASSERT_NE(original, nullptr);
+  facts.refused = "Incorrect passphrase";
+  dialog.read(std::optional(facts));
+  EXPECT_EQ(dialog.shown(), original);
+  EXPECT_FALSE(content_dismissable(std::type_identity<mux::ui::passphrase_box_t>{}, facts));
+  facts.why = mux::config::passphrase_for::encrypt{};
+  EXPECT_TRUE(content_dismissable(std::type_identity<mux::ui::passphrase_box_t>{}, facts));
+}

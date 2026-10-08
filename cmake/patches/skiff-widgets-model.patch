@@ -1,5 +1,5 @@
 diff --git a/src/model.cc b/src/model.cc
-index 2936572..24cb34f 100644
+index 2936572..dabca49 100644
 --- a/src/model.cc
 +++ b/src/model.cc
 @@ -4,6 +4,8 @@ import std;
@@ -134,3 +134,71 @@ index 2936572..24cb34f 100644
  // A text area sending an E made of its text each time it is submitted --
  // a message from a composer -- and emptied for the next.
  template <class E> class SubmitArea : public internal::TextArea<Answers> {
+@@ -202,6 +289,12 @@ public:
+       : internal::Button<Sent<E>>(std::move(label), Sent<E>{std::move(event)}) {}
+   SendButton(Theme theme, std::string label, E event)
+       : internal::Button<Sent<E>>(std::move(theme), std::move(label), Sent<E>{std::move(event)}) {}
++  // A bound action follows model edits without replacing the focused button.
++  void read(E event) { this->action().fEvent = std::move(event); }
++  void read(std::pair<std::string, E> value) {
++    this->setLabel(std::move(value.first));
++    this->read(std::move(value.second));
++  }
+ };
+
+ } // namespace skiff::widgets
+diff --git a/test/src/widgets.cc b/test/src/widgets.cc
+index ccfdd22..8e9eeaa 100644
+--- a/test/src/widgets.cc
++++ b/test/src/widgets.cc
+@@ -6,6 +6,7 @@ import skiff.widgets.button;
+ import skiff.widgets.dropdown;
+ import skiff.widgets.sliderbar;
+ import skiff.widgets.textbox;
++import skiff.widgets.model;
+
+ #include "gtest/gtest-macros.h"
+
+@@ -335,3 +336,42 @@ TEST(Accessibility, SemanticActionsOperateWidgets) {
+ }
+
+ } // namespace
++
++TEST(ModelSlider, DiscreteChoicesHandleUnknownAndEmptyValues) {
++  widgets::ChoiceSliderField<int> slider(widgets::Theme{}, {50, 100, 150});
++  slider.read(100);
++  EXPECT_FLOAT_EQ(slider.fraction(), 0.5f);
++  slider.read(99);
++  EXPECT_FLOAT_EQ(slider.fraction(), 0.0f);
++  slider.setFraction(0.8f);
++  auto picked = slider.onPress();
++  ASSERT_TRUE(picked.has_value());
++  EXPECT_EQ(picked->fChange.fValue, 150);
++  widgets::ChoiceSliderField<int> empty(widgets::Theme{}, {});
++  empty.read(100);
++  EXPECT_FLOAT_EQ(empty.fraction(), 0.0f);
++  EXPECT_FALSE(empty.onPress().has_value());
++  widgets::ChoiceSliderField<int> single(widgets::Theme{}, {100});
++  single.setFraction(1.0f);
++  EXPECT_EQ(single.onPress()->fChange.fValue, 100);
++}
++
++TEST(ModelChoice, SelectionAndPressAgreeWithTheModel) {
++  widgets::ChoiceRowField<int> row(widgets::Theme{}, "Second", 2);
++  row.read(1);
++  EXPECT_FALSE(row.semantics().fSelected);
++  row.read(2);
++  EXPECT_TRUE(row.semantics().fSelected);
++  EXPECT_EQ(row.semantics().fLabel, "Second");
++  EXPECT_EQ(row.onPress().fChange.fValue, 2);
++}
++
++TEST(ModelButton, BoundEventAndLabelFollowModelEdits) {
++  struct event { int value; };
++  widgets::SendButton<event> button(widgets::Theme{}, "First", event{1});
++  button.read(std::pair{std::string("Second"), event{2}});
++  EXPECT_EQ(button.semantics().fLabel, "Second");
++  EXPECT_EQ(button.onPress().value, 2);
++  button.read(event{3});
++  EXPECT_EQ(button.onPress().value, 3);
++}

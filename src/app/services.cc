@@ -126,8 +126,12 @@ struct services {
   // The passphrase given refused: why, said in its box.
   void passphrase_refused(std::string why) const {
     mux::ui::change_shown<std::optional<mux::ui::passphrase_facts>>(*showing, [&](auto& now) {
-      if (now)
+      if (now) {
         now->refused = std::move(why);
+        now->current.clear();
+        now->fresh.clear();
+        now->again.clear();
+      }
     });
   }
   void close_notice() const { mux::ui::show<mux::ui::notice_facts>(*showing, std::nullopt); }

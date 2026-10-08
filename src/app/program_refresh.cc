@@ -37,7 +37,6 @@ void app::note_spaces() {
 // strips: each its own colour, else its account's; shown as it says, else
 // as its account.
 void app::show_placements() {
-  root().main().muted = this->chats_where<&mux::app::chat_choices::muted>();
   {
     auto& screen = root().main();
     screen.listed_in.clear();
@@ -92,29 +91,6 @@ void app::show_looks_now() {
     root().markDamaged();
     skiff::scene::work::mark(root().main().fState.fId);  // an ease ticked by the screen
   }
-}
-
-void app::show_space_bars() {
-  root().main().spaces_on = this->appearance().spaces;
-  root().main().top_bar_on = this->appearance().top_bar;
-  root().main().space_places = this->appearance().space_places;
-  root().main().forums = this->chats_where<&mux::app::chat_choices::forum>();
-  root().main().hidden_from_home = this->chats_where<&mux::app::chat_choices::hidden_from_home>();
-  // Home without what spaces hold: the account's own choice, else every one's.
-  root().main().home_hides_spaced = [&] {
-    if (const auto& by = root().main().current)
-      if (const auto* account = this->settings_of(by->address))
-        if (const auto& own = mux::config::home_hides_of(*account))
-          return *own;
-    return this->appearance().home_hides_spaced;
-  }();
-  root().main().home_hides_direct = [&] {
-    if (const auto& by = root().main().current)
-      if (const auto* account = this->settings_of(by->address))
-        if (const auto& own = mux::config::home_direct_of(*account))
-          return *own;
-    return this->appearance().home_hides_direct;
-  }();
 }
 
 // What each level holds of the looks and of room events, for the choices to

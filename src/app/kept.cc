@@ -14,44 +14,15 @@ import mux.config;
 import mux.protocols;
 import mux.logic.room_events;
 import skiff.model;
+import mux.kept_root;
 
 export namespace mux::app {
 
 using chat_choices = mux::config::chat_choices;
 
-// What was used lately, for the next start: the account shown last, by its
-// address; the emoji picked lately, newest first; the stickers sent lately,
-// and the favourites.
-struct recently_used {
-  std::optional<std::string> last_account;
-  std::vector<std::string> emoji;
-  std::vector<mux::emote> stickers, favourite_stickers;
-  friend bool operator==(const recently_used&, const recently_used&) = default;
-};
+using mux::recently_used;
+using mux::kept_root;
 
-// What is kept, as the model holds it: each chat's own choices, by the chat.
-struct kept_root {
-  // The accounts saved, by their addresses, in the order they are listed.
-  skiff::model::Keyed<std::string, mux::config::account_t> accounts;
-  skiff::model::Keyed<conversation_id, chat_choices> chats;
-  // What notifies, and how.
-  skiff::model::Tracked<mux::config::notification_settings> notifications;
-  // What is done to a picture dropped before it is sent.
-  skiff::model::Tracked<mux::config::sending_settings> sending;
-  // How frames are drawn.
-  skiff::model::Tracked<mux::config::frame_settings> frames;
-  // What is kept and shown of the history, for every chat that does not say.
-  skiff::model::Tracked<mux::config::history_settings> history;
-  // How much is kept, in memory and on disk.
-  skiff::model::Tracked<mux::config::cache_limits> limits;
-  // How the window looks.
-  skiff::model::Tracked<mux::config::look_settings> looks;
-  // The proxy profiles, in their order.
-  skiff::model::Tracked<std::vector<mux::config::proxy_settings>> proxies;
-  // The chats listed in other accounts' lists than their own.
-  skiff::model::Tracked<std::vector<mux::config::chat_placement>> placements;
-  skiff::model::Tracked<recently_used> recent;
-};
 // The file to be written again: one, however many changes asked for it.
 struct write_kept {
   [[nodiscard]] constexpr int key() const { return 0; }

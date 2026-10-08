@@ -233,7 +233,6 @@ struct app : kept_settings {
   void show_placements();
   void show_event_filters();
   void show_looks_now();
-  void show_space_bars();
   void show_levels();
   void show_backgrounds();
   void show_chat_choices();

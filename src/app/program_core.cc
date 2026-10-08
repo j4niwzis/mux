@@ -468,7 +468,6 @@ void app::refresh(std::source_location from) {
   this->show_placements();
   this->show_event_filters();
   this->show_looks_now();
-  this->show_space_bars();
   this->show_levels();
   this->show_backgrounds();
   this->show_chat_choices();

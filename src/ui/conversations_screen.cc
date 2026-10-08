@@ -19,6 +19,8 @@ import skiff.widgets.textarea;
 import mux.core;
 import mux.protocols;
 import mux.config;
+import mux.kept_root;
+import skiff.model;
 import :base;
 import :controls;
 import :themes;
@@ -1391,6 +1393,26 @@ struct conversations_screen : nodes::Stack, outbox {
   // only what the list lists changed (another space, a forum, the search),
   // the list alone: the chat's messages were reconciled again for nothing.
   void show(const model& now, bool with_chat = true);
+  // Read by the window's binding: what the settings say of the chats --
+  // which are muted, which shown as forums or out of Home -- and how the
+  // spaces show; the screen shown again where any of it moved.
+  template <class Reactions>
+  void refresh(const skiff::model::Model<kept_root, Reactions>& kept) {
+    const kept_root& root = kept.root();
+    const auto& looks = root.looks.fValue;
+    const config::account_t* own = current ? account_settings(root, current->address) : nullptr;
+    const auto own_or = [&](const std::optional<bool>& theirs, bool everyone) { return theirs.value_or(everyone); };
+    auto now = std::tuple{chats_where<&config::chat_choices::muted>(root), chats_where<&config::chat_choices::forum>(root),
+                          chats_where<&config::chat_choices::hidden_from_home>(root), looks.spaces, looks.top_bar, looks.space_places,
+                          own ? own_or(config::home_hides_of(*own), looks.home_hides_spaced) : looks.home_hides_spaced,
+                          own ? own_or(config::home_direct_of(*own), looks.home_hides_direct) : looks.home_hides_direct};
+    auto was = std::tie(muted, forums, hidden_from_home, spaces_on, top_bar_on, space_places, home_hides_spaced, home_hides_direct);
+    if (was == now)
+      return;
+    was = std::move(now);
+    if (last_model)
+      this->show(*last_model);
+  }
   // Read by the chats binding: the screen shown again from the model it was
   // last given, as the chats move.
   void refresh(const chats_model&) {

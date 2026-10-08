@@ -698,75 +698,12 @@ struct jump_search_choice : nodes::Stack {
   }
 };
 
-// A thing on or off, at one level: its two words (Show and Hide, Send and
-// Don't) and, where a level under decides for it, Default -- as a room event
-// kind's row. What it is says its label and words, what it is everywhere
-// when nothing was said, and how it is set: link previews, read receipts as
-// faces, typing notifications.
-template <class Actions, class Setting>
-struct show_hide_choice : nodes::Stack {
-  struct row;
-  struct choose {
-    row* in = nullptr;
-    std::optional<bool> show;
-    void operator()() const { in->chose(show); }
-  };
-  struct row : nodes::Stack {
-    Actions* actions = nullptr;
-    choice_level_t level;
-    struct parts_t {
-      nodes::Text label;
-      segment<choose> fallback, show, hide;
-    } parts;
-    row(Actions* a, const palette& colours, choice_level_t at, std::optional<bool> now)
-        : actions(a), level(at),
-          parts{.label = nodes::Text(std::string(Setting::label), 14.0f, colours.text),
-                .fallback = segment<choose>(colours, "Default", {this, std::nullopt}),
-                .show = segment<choose>(colours, std::string(Setting::yes), {this, true}),
-                .hide = segment<choose>(colours, std::string(Setting::no), {this, false})} {
-      const bool everywhere = !has_level_above(level);
-      lay_out_setting_row(*this, parts.label);
-      for (segment<choose>* each : {&parts.fallback, &parts.show, &parts.hide})
-        each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
-      parts.fallback.setVisible(!everywhere);
-      this->show_choice(everywhere ? std::optional<bool>(now.value_or(Setting::unsaid)) : now);
-    }
-    void show_choice(std::optional<bool> now) {
-      parts.fallback.set_active(!now);
-      parts.show.set_active(now == true);
-      parts.hide.set_active(now == false);
-    }
-    void chose(std::optional<bool> now) {
-      this->show_choice(now);
-      Setting::set(*actions, level, now);
-    }
-  };
-  // Made where it stays, apart from the page: its switches know it by its
-  // address, as event_kind_list's rows.
-  struct parts_t {
-    std::vector<row> rows;
-  } parts;
-  show_hide_choice(Actions* a, const palette& colours, choice_level_t at, std::optional<bool> now) {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.rows.reserve(1);
-    parts.rows.emplace_back(a, colours, at, now);
-  }
-  // Shown again as it is now: said at every chat's level, whatever was saved.
-  void show(std::optional<bool> now) {
-    auto& one = parts.rows.front();
-    one.show_choice(has_level_above(one.level) ? now : std::optional<bool>(now.value_or(Setting::unsaid)));
-  }
-};
 
 // Notifications, the same rows at every level: on, of mentions alone, the
-// sender's name, the text, a sound -- each chosen through set_notify_choice.
+// sender's name, the text, a sound -- each a row bound to its field.
 template <class Which>
 struct notify_setting_base {
   static constexpr bool unsaid = Which::unsaid;
-  template <class Actions>
-  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
-    actions.set_notify_choice(level, config::notify_setting_t{Which{}}, now);
-  }
 };
 struct notify_on_setting : notify_setting_base<config::notify_setting::on> {
   static constexpr std::string_view label = "Notifications";
@@ -788,53 +725,18 @@ struct notify_sound_setting : notify_setting_base<config::notify_setting::sound>
   static constexpr std::string_view label = "Sound";
   static constexpr std::string_view yes = "Play", no = "Silent";
 };
-template <class Actions>
-struct notify_choice_rows : nodes::Stack {
-  struct parts_t {
-    show_hide_choice<Actions, notify_on_setting> on;
-    show_hide_choice<Actions, notify_mentions_setting> mentions;
-    show_hide_choice<Actions, notify_name_setting> name;
-    show_hide_choice<Actions, notify_text_setting> text;
-    show_hide_choice<Actions, notify_sound_setting> sound;
-  } parts;
-  notify_choice_rows(Actions* a, const palette& colours, choice_level_t level, const config::notify_choices& now, float gap = 8.0f)
-      : parts{.on = {a, colours, level, now.on},
-              .mentions = {a, colours, level, now.mentions},
-              .name = {a, colours, level, now.name},
-              .text = {a, colours, level, now.text},
-              .sound = {a, colours, level, now.sound}} {
-    this->setGap(gap);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-  }
-  void show(const config::notify_choices& now) {
-    auto& [on, mentions, name, text, sound] = parts;
-    on.show(now.on);
-    mentions.show(now.mentions);
-    name.show(now.name);
-    text.show(now.text);
-    sound.show(now.sound);
-  }
-};
 
 // Link previews: shown, where nothing says otherwise.
 struct link_previews_setting {
   static constexpr std::string_view label = "Link previews";
   static constexpr std::string_view yes = "Show", no = "Hide";
   static constexpr bool unsaid = true;
-  template <class Actions>
-  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
-    actions.set_link_previews(level, now);
-  }
 };
 // Read receipts as faces: not, where nothing says otherwise.
 struct receipts_setting {
   static constexpr std::string_view label = "Read receipts as faces";
   static constexpr std::string_view yes = "Show", no = "Hide";
   static constexpr bool unsaid = false;
-  template <class Actions>
-  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
-    actions.set_receipts_shown(level, now);
-  }
 };
 // Link previews fetched from the sites themselves, through the account's
 // proxy, or through its server: the server, where nothing says
@@ -843,30 +745,14 @@ struct previews_direct_setting {
   static constexpr std::string_view label = "Fetch link previews";
   static constexpr std::string_view yes = "From site", no = "Server";
   static constexpr bool unsaid = false;
-  template <class Actions>
-  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
-    actions.set_previews_direct(level, now);
-  }
 };
-template <class Actions>
-using previews_direct_choice = show_hide_choice<Actions, previews_direct_setting>;
 // Others told one is typing -- never what: sent, where nothing says
 // otherwise.
 struct typing_setting {
   static constexpr std::string_view label = "Send typing notifications";
   static constexpr std::string_view yes = "Send", no = "Don't";
   static constexpr bool unsaid = true;
-  template <class Actions>
-  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
-    actions.set_typing_sent(level, now);
-  }
 };
-template <class Actions>
-using typing_choice = show_hide_choice<Actions, typing_setting>;
-template <class Actions>
-using previews_choice = show_hide_choice<Actions, link_previews_setting>;
-template <class Actions>
-using receipts_choice = show_hide_choice<Actions, receipts_setting>;
 
 // A setting at a level, as the model holds it: its row of Default (where
 // there is a level above), Show and Hide, bound to its part -- an optional
@@ -929,26 +815,6 @@ struct chat_choice_values {
   std::optional<bool> previews;
   std::optional<bool> previews_direct;
   std::optional<std::int64_t> jump_search;
-};
-template <class Actions>
-struct chat_choices : nodes::Stack {
-  struct parts_t {
-    event_kind_list<Actions> events;
-    receipts_choice<Actions> receipts;
-    previews_choice<Actions> previews;
-    previews_direct_choice<Actions> previews_direct;
-    jump_search_choice<Actions> jump_search;
-  } parts;
-  // Spaced as the page it is in spaces its rows.
-  chat_choices(Actions* a, const palette& colours, choice_level_t level, const chat_choice_values& now, float gap)
-      : parts{.events = event_kind_list<Actions>(a, colours, level, now.events_all, now.event_kinds),
-              .receipts = receipts_choice<Actions>(a, colours, level, now.receipts),
-              .previews = previews_choice<Actions>(a, colours, level, now.previews),
-              .previews_direct = previews_direct_choice<Actions>(a, colours, level, now.previews_direct),
-              .jump_search = jump_search_choice<Actions>(a, colours, level, now.jump_search)} {
-    this->setGap(gap);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-  }
 };
 
 // A notification as mux shows it itself, as Telegram Desktop's own: a card

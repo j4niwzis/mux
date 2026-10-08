@@ -160,44 +160,6 @@ class preferences_part {
     });
     s_->refresh_due = true;
   }
-  // A notification setting at a level: every chat's -- said, the client's
-  // own --, the chosen account's, or the chat or space being managed.
-  void apply(const request::set_notify_choice& one) {
-    spl::visit([&](auto which) { this->set_notify(one.level, which, one.value); }, one.which);
-    (void)k_->write();
-    s_->refresh_due = true;
-  }
-  template <class Setting>
-  void set_notify(const mux::choice_level_t& level, Setting which, std::optional<bool> value) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
-                                 auto next = k_->notifications();
-                                 Setting::set(next, value.value_or(Setting::unsaid));
-                                 k_->set_notifications(std::move(next));
-                               },
-                                     [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                         account.shared.*Setting::account = value;
-                                       });
-                                     },
-                                     [&](mux::choice_level::chat) {
-                                       if (const auto chosen = s_->managed())
-                                         this->set_chat_notify(*chosen, which, value);
-                                     }},
-                  level);
-  }
-  // A chat's (or space's): kept with its others, and none kept where all
-  // are as the level above.
-  template <class Setting>
-  void set_chat_notify(const mux::conversation_id& chat, Setting, std::optional<bool> value) {
-    auto own = k_->own_of<&mux::app::chat_choices::notify>(chat);
-    own.*Setting::chat = value;
-    k_->choose<&mux::app::chat_choices::notify>(chat, own);
-  }
-  // Notifications off is muted -- the chat list's mute, the same.
-  void set_chat_notify(const mux::conversation_id& chat, mux::config::notify_setting::on which, std::optional<bool> value) {
-    k_->choose<&mux::app::chat_choices::muted>(chat, value == false);
-    this->set_chat_notify<mux::config::notify_setting::on>(chat, which, value == true ? value : std::nullopt);
-  }
 
   // Which room events show, as chosen at a level: all of them, or one kind --
   // none said, as the level under says.
@@ -348,78 +310,6 @@ class preferences_part {
                                  if (!chosen)
                                    return;
                                  k_->choose<&mux::app::chat_choices::jump_search>(*chosen, one.most);
-                               }},
-               one.level);
-    (void)k_->write();
-    s_->refresh_due = true;
-  }
-  // Link previews, at a level.
-  void apply(const request::set_link_previews& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::history_settings::link_previews>(one.show.value_or(true)); },
-                               [&](mux::choice_level::account) {
-                                 s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                   mux::config::link_previews_in(account) = one.show;
-                                 });
-                               },
-                               [&](mux::choice_level::chat) {
-                                 const auto chosen = s_->managed();
-                                 if (!chosen)
-                                   return;
-                                 k_->choose<&mux::app::chat_choices::previews>(*chosen, one.show);
-                               }},
-               one.level);
-    (void)k_->write();
-    s_->refresh_due = true;
-  }
-  // Where link previews come from, at a level.
-  void apply(const request::set_previews_direct& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::history_settings::previews_direct>(one.direct.value_or(false)); },
-                                     [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                         mux::config::previews_direct_in(account) = one.direct;
-                                       });
-                                     },
-                                     [&](mux::choice_level::chat) {
-                                       const auto chosen = s_->managed();
-                                       if (!chosen)
-                                         return;
-                                       k_->choose<&mux::app::chat_choices::previews_direct>(*chosen, one.direct);
-                                     }},
-                  one.level);
-    (void)k_->write();
-    s_->refresh_due = true;
-  }
-  // Whether others are told one is typing, at a level.
-  void apply(const request::set_typing_sent& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::history_settings::send_typing>(one.send.value_or(true)); },
-                                     [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                         mux::config::send_typing_in(account) = one.send;
-                                       });
-                                     },
-                                     [&](mux::choice_level::chat) {
-                                       const auto chosen = s_->managed();
-                                       if (!chosen)
-                                         return;
-                                       k_->choose<&mux::app::chat_choices::typing>(*chosen, one.send);
-                                     }},
-                  one.level);
-    (void)k_->write();
-    s_->refresh_due = true;
-  }
-  // Who has read up to where, as faces, at a level.
-  void apply(const request::set_receipts_shown& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::history_settings::show_receipts>(one.show.value_or(false)); },
-                               [&](mux::choice_level::account) {
-                                 s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                   mux::config::show_receipts_in(account) = one.show;
-                                 });
-                               },
-                               [&](mux::choice_level::chat) {
-                                 const auto chosen = s_->managed();
-                                 if (!chosen)
-                                   return;
-                                 k_->choose<&mux::app::chat_choices::receipts>(*chosen, one.show);
                                }},
                one.level);
     (void)k_->write();

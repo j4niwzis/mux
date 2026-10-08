@@ -269,6 +269,31 @@ inline nodes::Text note_text(const palette& colours, std::string text) { return 
 // An account's Privacy page: whether it sends read receipts; whether it
 // tells others one is typing, as every account's until chosen here, and a
 // chat or space of it may choose again.
+// An account's own choices in the model, bound under a scope at it: typing
+// sent, on its Privacy page; receipts as faces, link previews and where
+// they come from, on its Chats page.
+inline auto account_typing_view(const palette& colours, std::string address) {
+  return skiff::compose::scoped<config::account_t>(
+      skiff::compose::handlers(),
+      skiff::compose::bound<skiff::model::Field<&config::account_shared::send_typing>>(
+          show_hide_field<typing_setting, std::optional<bool>>(colours, choice_level::account{})),
+      std::move(address));
+}
+inline auto account_chats_view(const palette& colours, std::string address) {
+  using shared = config::account_shared;
+  using skiff::compose::bound;
+  const choice_level_t level = choice_level::account{};
+  return skiff::compose::scoped<config::account_t>(
+      skiff::compose::handlers(),
+      skiff::compose::column(
+          skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          bound<skiff::model::Field<&shared::show_receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&shared::link_previews>>(show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&shared::previews_direct>>(
+              show_hide_field<previews_direct_setting, std::optional<bool>>(colours, level))),
+      std::move(address));
+}
+
 template <class Actions>
 struct account_privacy : nodes::Stack {
   using receipts_row = switch_row<ask<Actions, &Actions::flip_account_receipts>>;
@@ -277,7 +302,7 @@ struct account_privacy : nodes::Stack {
   struct parts_t {
     nodes::Text title;
     receipts_row receipts;
-    typing_choice<Actions> typing;
+    decltype(account_typing_view(std::declval<const palette&>(), std::string())) settings;
     nodes::Text note;
     // The mentions read, shared with the account's other sessions; sealed
     // there -- where its protocol can (Matrix's).
@@ -288,14 +313,14 @@ struct account_privacy : nodes::Stack {
 
   template <class... Rest>
   account_privacy(const ui_needs<Actions>& n, Rest&&... rest) : account_privacy(*n.colours, n.actions, std::forward<Rest>(rest)...) {}
-  account_privacy(const palette& colours, Actions* a, bool receipts_on, std::optional<bool> typing_on, std::optional<bool> events_all = std::nullopt,
+  account_privacy(const palette& colours, Actions* a, bool receipts_on, std::string address, std::optional<bool> events_all = std::nullopt,
                   const std::optional<config::room_event_kinds>& kinds = std::nullopt, bool notify_on = true,
                   bool notify_sound_on = true, std::optional<bool> faces_on = std::nullopt,
                   std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt,
                   std::optional<config::mentions_choice> mentions = std::nullopt)
       : parts{.title = section_title(colours, "PRIVACY"),
               .receipts = receipts_row(colours, "Send read receipts", {a}),
-              .typing = typing_choice<Actions>(a, colours, choice_level::account{}, typing_on),
+              .settings = account_typing_view(colours, std::move(address)),
               .note = note_text(colours, "Off, the people you talk to through this account are not told when you have read "
                                          "their messages, or that you are typing. Theirs are still shown, and receipts are "
                                          "still kept here."),
@@ -402,20 +427,25 @@ struct account_chats : nodes::Stack {
     accent_circles<set_colour> colours;
     switch_row<ask<Actions, &Actions::flip_account_strip>> strip;
     nodes::Text title;
-    chat_choices<Actions> chats;
+    event_kind_list<Actions> events;
+    decltype(account_chats_view(std::declval<const palette&>(), std::string())) settings;
+    jump_search_choice<Actions> jump_search;
     nodes::Text looks_title;
     look_choices<Actions> looks;
     nodes::Text spaces_title;
     choice_menu<pick_home> home;
     spaces_choices<Actions> places;
   } parts;
-  account_chats(Actions* a, const palette& colours, const looks_shown& looks, const ui_shared& shared, const chat_choice_values& chats, std::optional<bool> home_hides,
+  account_chats(Actions* a, const palette& colours, const looks_shown& looks, const ui_shared& shared, std::string address,
+                const chat_choice_values& chats, std::optional<bool> home_hides,
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
       : parts{.colour_title = section_title(colours, "COLOUR"),
               .colours = accent_circles<set_colour>({a}, theme, false),
               .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>(colours, "A strip on its chats in other lists", {a}),
               .title = section_title(colours, "CHATS"),
-              .chats = chat_choices<Actions>(a, colours, choice_level::account{}, chats, 8.0f),
+              .events = event_kind_list<Actions>(a, colours, choice_level::account{}, chats.events_all, chats.event_kinds),
+              .settings = account_chats_view(colours, std::move(address)),
+              .jump_search = jump_search_choice<Actions>(a, colours, choice_level::account{}, chats.jump_search),
               .looks_title = section_title(colours, "LOOKS"),
               .looks = look_choices<Actions>(a, colours, looks, choice_level::account{}),
               .spaces_title = section_title(colours, "SPACES"),
@@ -686,7 +716,7 @@ struct accounts_panel : closes_on_escape<Actions, ask<Actions, &Actions::account
               spl::get<1>(detail).show(one, now);
             },
             [&](account_page::privacy) {
-              detail.template emplace<3>(needs_, config::read_receipts_of(one), config::send_typing_of(one),
+              detail.template emplace<3>(needs_, config::read_receipts_of(one), config::address_of(one),
                                            config::room_events_of(one), config::room_event_kinds_of(one),
                                            config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true),
                                            config::show_receipts_of(one), config::jump_search_of(one),
@@ -696,7 +726,7 @@ struct accounts_panel : closes_on_escape<Actions, ask<Actions, &Actions::account
               detail.template emplace<6>(needs_, config::address_of(one));
             },
             [&](account_page::chats) {
-              detail.template emplace<5>(this->actions, *needs_.colours, *needs_.looks, *needs_.shared,
+              detail.template emplace<5>(this->actions, *needs_.colours, *needs_.looks, *needs_.shared, config::address_of(one),
                                          chat_choice_values{.events_all = config::room_events_of(one),
                                                             .event_kinds = config::room_event_kinds_of(one),
                                                             .receipts = config::show_receipts_of(one),

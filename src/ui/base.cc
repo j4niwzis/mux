@@ -341,7 +341,7 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void accounts_back()              -- ← on the accounts page
 //   void account_page(account_page_t) -- a page of the chosen account
 //   void flip_account_receipts(), flip_account_mentions_shared(), flip_account_mentions_sealed(), flip_only_verified(), accept_identity(who), flip_account_typing(), choose_account_proxy(int), manage_proxies()
-//   template <class Request> void ask_for(Request) -- a protocol's own request (asks<Actions, Request>)
+//   a protocol's own request: sends<Request>
 //   void typing(bool)                -- the composer has text in it, or not
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
 //        save_proxy_profile(), delete_proxy_profile()
@@ -409,18 +409,6 @@ template <class Act>
 using button_for = std::conditional_t<sending<Act>, widgets::internal::Button<Act>, widgets::Button<Act>>;
 template <class Act>
 using toggle_for = std::conditional_t<sending<Act>, widgets::internal::Toggle<Act>, widgets::Toggle<Act>>;
-// A request with nothing to say but itself: `sends<::mux::ui::request::back>`.
-template <class Actions, auto Method>
-struct ask : outbox {
-  void operator()() const { (actions->*Method)(); }
-};
-// A protocol's own request with nothing to say but itself, as its UI asks
-// it: `sends<request::refresh_sessions>`, through the program's
-// ask_for.
-template <class Actions, class Request>
-struct asks : outbox {
-  void operator()() { this->send(Request{}); }
-};
 // The requests about one saved account.
 template <class Actions>
 struct flip_account : outbox {

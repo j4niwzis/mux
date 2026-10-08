@@ -308,6 +308,25 @@ struct info_panel : nodes::Stack, outbox {
         });
     return {std::move(shown), std::move(how)};
   }
+  // The chat it is about, and the model it reads it from: told as the chat
+  // is chosen, then read again by the chats binding as the chats move --
+  // while it is open; shut, nothing of it is made.
+  const model* now_ = nullptr;
+  std::optional<conversation_id> chosen_;
+  bool muted_ = false;
+  void choose(const model& now, std::optional<conversation_id> chosen, bool muted) {
+    now_ = &now;
+    chosen_ = std::move(chosen);
+    muted_ = muted;
+    this->show_chosen();
+  }
+  void refresh(const chats_model&) { this->show_chosen(); }
+  void show_chosen() {
+    if (!this->visible() || now_ == nullptr || !chosen_)
+      return;
+    if (const conversation* one = now_->find(*chosen_))
+      this->show(*one, *now_, muted_);
+  }
   // The chat shown: its view worked out, its members reconciled.
   void show(const conversation& one, const model& now, bool muted) {
     if (one.id.id != key || one.id.account != account)

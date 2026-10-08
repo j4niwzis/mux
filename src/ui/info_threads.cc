@@ -173,6 +173,23 @@ struct threads_panel : nodes::Stack, outbox {
   }
   // Brought up to date with the chat: its threads listed, or the one open
   // shown -- made again only where what it shows changed.
+  // The chat whose threads it lists, and the model it reads them from:
+  // told as the chat is chosen, then read again by the chats binding as
+  // the chats move -- while it is open.
+  const model* now_ = nullptr;
+  std::optional<conversation_id> chosen_;
+  void choose(const model& now, std::optional<conversation_id> chosen) {
+    now_ = &now;
+    chosen_ = std::move(chosen);
+    this->show_chosen();
+  }
+  void refresh(const chats_model&) { this->show_chosen(); }
+  void show_chosen() {
+    if (!this->visible() || now_ == nullptr || !chosen_)
+      return;
+    if (const conversation* one = now_->find(*chosen_))
+      this->show(*one, now_);
+  }
   void show(const conversation& chat, const model* now) {
     seen_model = now;
     seen_chat = chat.id;

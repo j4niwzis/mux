@@ -1008,11 +1008,9 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
   }
   // Only while it is open: its members were made at every switch of chat,
   // the panel shut or not. Opened, it is shown then (toggle_info).
-  if (info.visible())
-    info.show(*one, now, muted.contains(one->id));
+  info.choose(now, chosen, muted.contains(one->id));
   chat.area.show_wallpaper(wallpaper);
-  if (parts.threads.visible())
-    parts.threads.show(*one, &now);
+  parts.threads.choose(now, chosen);
   // Whether the reader may post here, as the chat's protocol says (Matrix:
   // its power levels); and whether any message of theirs here was not sent.
   {

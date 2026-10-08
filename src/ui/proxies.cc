@@ -11,6 +11,9 @@ import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.widgets.button;
+import skiff.model;
+import skiff.compose;
+import skiff.bind;
 import mux.core;
 import mux.config;
 import :base;
@@ -58,44 +61,75 @@ struct settings_home : nodes::Stack {
     fState.apply({.fill = true});
   }
 
-  void show_motion(std::string_view) {}
   void show_receipts(bool) {}
 };
 
 
 
+// A value a row stands for, picked when it is pressed: kept until it is
+// taken, as a model's widget keeps what it did.
+template <class T>
+struct picks {
+  T value;
+  std::optional<T> picked;
+  void operator()() {
+    picked = value;
+    ++skiff::bind::pendingCount();
+  }
+};
+// Rows, one for each value a part can be, the one it is checked: bound to
+// the part, set to the row pressed.
+template <class T>
+struct choice_rows : nodes::Stack {
+  using row = row_item<picks<T>>;
+  struct parts_t {
+    std::vector<row> rows;
+  } parts;
+  choice_rows(const palette& colours, std::initializer_list<std::pair<std::string_view, T>> choices) {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.rows.reserve(choices.size());
+    for (const auto& [label, value] : choices)
+      parts.rows.emplace_back(colours, std::string(label), picks<T>{value, std::nullopt}, icon::none{}, false);
+  }
+  void read(const T& now) {
+    for (auto& one : parts.rows)
+      one.set_chosen(one.act.value == now);
+  }
+  std::vector<skiff::model::SetTo<T>> takeChanges() {
+    std::vector<skiff::model::SetTo<T>> out;
+    for (auto& one : parts.rows)
+      if (auto picked = std::exchange(one.act.picked, std::nullopt))
+        out.push_back(skiff::model::setTo(*picked));
+    return out;
+  }
+};
+
+// Settings' Animations page: how much the window moves, bound to it.
+inline auto motion_settings_view(const palette& colours) {
+  auto note = note_text(colours, "How much the window moves. Reduced keeps the small movements, such as a section "
+                                 "unfolding, and shows panels at once.");
+  note.setWrapped(true);
+  note.apply({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}});
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(note),
+      skiff::compose::bound<skiff::model::Field<&config::look_settings::motion>>(choice_rows<config::motion_t>(
+          colours, {{"Full", config::motion::full{}}, {"Reduced", config::motion::reduced{}}, {"None", config::motion::none{}}})));
+}
 template <class Actions>
 struct animations_page : nodes::Stack {
   using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
-  using choice = row_item<choose_motion<Actions>>;
+  using settings_t = decltype(motion_settings_view(std::declval<const palette&>()));
   struct parts_t {
     header_t header;
-    nodes::Text note;
-    choice full;
-    choice reduced;
-    choice none;
+    settings_t settings;
   } parts;
 
   explicit animations_page(const ui_needs<Actions>& n) : animations_page(*n.colours, n.actions) {}
   animations_page(const palette& colours, Actions* a)
-      : parts{.header = header_t(colours, "Animations", {a}, {a}, true, true),
-              .note = note_text(colours, "How much the window moves. Reduced keeps the small movements, such as a section "
-                                         "unfolding, and shows panels at once."),
-              .full = choice(colours, "Full", {a, kMotions[0]}, icon::none{}, false),
-              .reduced = choice(colours, "Reduced", {a, kMotions[1]}, icon::none{}, false),
-              .none = choice(colours, "None", {a, kMotions[2]}, icon::none{}, false)} {
-    parts.note.apply({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}});
+      : parts{.header = header_t(colours, "Animations", {a}, {a}, true, true), .settings = motion_settings_view(colours)} {
     fState.apply({.fill = true});
-    parts.note.setWrapped(true);
   }
-
   void show_receipts(bool) {}
-  void show_motion(std::string_view level) {
-    auto& [header, note, full, reduced, none] = parts;
-    full.set_chosen(level == kMotions[0]);
-    reduced.set_chosen(level == kMotions[1]);
-    none.set_chosen(level == kMotions[2]);
-  }
 };
 
 // A proxy profile opened from the list in Settings.
@@ -143,7 +177,6 @@ struct proxies_page : nodes::Stack {
                             edit_proxy<Actions>{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
     empty.setVisible(all.empty());
   }
-  void show_motion(std::string_view) {}
   void show_receipts(bool) {}
 };
 
@@ -287,7 +320,6 @@ struct proxy_editor : nodes::Stack {
     parts.message.setText(std::move(text));
     parts.message.setColour(error ? colours_->error : colours_->dim);
   }
-  void show_motion(std::string_view) {}
   void show_receipts(bool) {}
 };
 

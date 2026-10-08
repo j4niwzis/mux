@@ -87,6 +87,10 @@ struct opacity_chosen {
 struct deleted_shown {
   [[nodiscard]] constexpr int key() const { return 0; }
 };
+// How much moves chosen: the window's paint told.
+struct motion_chosen {
+  [[nodiscard]] constexpr int key() const { return 0; }
+};
 // A chat's choices changed or gone, or what notifies: the file is written
 // again. UnifiedPush turned on or off: its connector with it.
 struct kept_reactions {
@@ -112,6 +116,7 @@ struct kept_reactions {
   [[nodiscard]] restyle_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::wallpaper_behind>>, const auto&) const {
     return {};
   }
+  [[nodiscard]] motion_chosen on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::motion>>, const auto&) const { return {}; }
   [[nodiscard]] opacity_chosen on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::window_opacity>>, const auto&) const {
     return {};
   }
@@ -132,8 +137,6 @@ struct kept_settings {
   // The file's accounts of a protocol this build has not: written back as
   // they were, not lost.
   std::vector<mux::config::saved_account> foreign_accounts;
-  // How much moves, as read, to be written back as it was.
-  std::optional<std::string> motion;
   // The account shown last, by its address, for the next start.
   std::optional<std::string> last_account;
   // The emoji picked lately, newest first.
@@ -435,7 +438,7 @@ struct kept_settings {
     std::map<conversation_id, chat_choices> chats;
     this->saved = mux::config::accounts_of(saved);
     this->foreign_accounts = mux::config::foreign_of(saved);
-    this->motion = saved.motion;
+    looks_read.motion = mux::config::motion_of(saved.motion);
     // The account shown last, shown again once it is in the model: accounts
     // arrive after the first frame, and the first one there is not the one.
     this->last_account = saved.last_account;
@@ -522,7 +525,7 @@ struct kept_settings {
   }
   [[nodiscard]] mux::config::file file() const {
     auto out = mux::config::file_of(saved, foreign_accounts);
-    out.motion = motion;
+    out.motion = mux::config::word_of(this->appearance().motion);
     out.last_account = last_account;
     if (!recent_emoji.empty())
       out.recent_emoji = recent_emoji;

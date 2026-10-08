@@ -65,6 +65,19 @@ struct gold {
 }  // namespace accent
 using accent_t = spl::variant<accent::theme_own, accent::blue, accent::green, accent::pink, accent::orange,
                               accent::purple, accent::red, accent::grey, accent::gold>;
+// How much the window moves: all of it, the small movements only, nothing.
+namespace motion {
+struct full {
+  friend bool operator==(full, full) = default;
+};
+struct reduced {
+  friend bool operator==(reduced, reduced) = default;
+};
+struct none {
+  friend bool operator==(none, none) = default;
+};
+}  // namespace motion
+using motion_t = spl::variant<motion::full, motion::reduced, motion::none>;
 namespace renderer {
 struct opengl {
   friend bool operator==(opengl, opengl) = default;
@@ -111,6 +124,13 @@ template <class Variant>
       {"pink", accent::pink{}},     {"orange", accent::orange{}}, {"purple", accent::purple{}},
       {"red", accent::red{}},       {"grey", accent::grey{}},   {"gold", accent::gold{}}};
   return word_of<accent_t>(known, word, accent::theme_own{});
+}
+// How much moves, as the accounts file says it: full where it says nothing,
+// or what it says is none of these.
+[[nodiscard]] inline motion_t motion_of(const std::optional<std::string>& word) {
+  static const std::unordered_map<std::string_view, motion_t> known = {
+      {"full", motion::full{}}, {"reduced", motion::reduced{}}, {"none", motion::none{}}};
+  return word_of<motion_t>(known, word, motion::full{});
 }
 [[nodiscard]] inline renderer_t renderer_of(const std::optional<std::string>& word) {
   static const std::unordered_map<std::string_view, renderer_t> known = {{"software", renderer::software{}},
@@ -183,6 +203,9 @@ using notify_flag_t = spl::variant<notify_flag::desktop, notify_flag::show_name,
 [[nodiscard]] constexpr std::string_view word_of(accent::red) { return "red"; }
 [[nodiscard]] constexpr std::string_view word_of(accent::grey) { return "grey"; }
 [[nodiscard]] constexpr std::string_view word_of(accent::gold) { return "gold"; }
+[[nodiscard]] constexpr std::string_view word_of(motion::full) { return "full"; }
+[[nodiscard]] constexpr std::string_view word_of(motion::reduced) { return "reduced"; }
+[[nodiscard]] constexpr std::string_view word_of(motion::none) { return "none"; }
 [[nodiscard]] constexpr std::string_view word_of(renderer::opengl) { return "opengl"; }
 [[nodiscard]] constexpr std::string_view word_of(renderer::software) { return "software"; }
 [[nodiscard]] constexpr std::string_view word_of(proxy_kind::socks5) { return "socks5"; }

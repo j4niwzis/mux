@@ -20,17 +20,6 @@ export namespace mux::ui {
 
 // ---- the drawer -------------------------------------------------------------------
 
-// The levels of motion, as the accounts file names them.
-inline constexpr std::array<std::string_view, 3> kMotions{"full", "reduced", "none"};
-
-// A level of motion chosen in the settings.
-template <class Actions>
-struct choose_motion {
-  Actions* actions = nullptr;
-  std::string_view level;
-  void operator()() const { actions->set_motion(std::string(level)); }
-};
-
 // An account in the drawer: a round avatar with its initials, its address,
 // and its protocol and state. A press makes it the current account, whose
 // chats are the ones shown; the current one is lit and ticked.

@@ -151,6 +151,7 @@ struct look_settings {
   theme_t theme = theme::tinted{};
   accent_t accent = accent::theme_own{};
   renderer_t renderer = renderer::opengl{};
+  motion_t motion = motion::full{};
   int window_opacity = 100;
   bool wallpaper_behind = false;
   bool live_blur = false;

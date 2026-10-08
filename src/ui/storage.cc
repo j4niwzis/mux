@@ -188,7 +188,6 @@ struct storage_page : nodes::Stack {
       : parts{.header = header_t(colours, "Storage", {a}, {a}, true, true), .settings = settings_of(colours, a, history, sealed)} {
     fState.apply({.fill = true});
   }
-  void show_motion(std::string_view) {}
   void show_receipts(bool) {}
   void show_sealed(bool sealed) { std::get<1>(parts.settings.fParts).show_sealed(sealed); }
 };
@@ -229,7 +228,6 @@ struct notifications_page : nodes::Stack {
               .settings = notification_settings_view(colours)} {
     fState.apply({.fill = true});
   }
-  void show_motion(std::string_view) {}
   void show_receipts(bool) {}
 };
 
@@ -258,7 +256,6 @@ struct files_page : nodes::Stack {
       : parts{.header = header_t(colours, "Files", {a}, {a}, true, true), .settings = files_settings_view(colours)} {
     fState.apply({.fill = true});
   }
-  void show_motion(std::string_view) {}
   void show_receipts(bool) {}
 };
 

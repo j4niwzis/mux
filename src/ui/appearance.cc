@@ -300,7 +300,6 @@ struct appearance_page : nodes::Stack {
     std::get<1>(parts.settings.fParts).apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
     std::get<3>(parts.settings.fParts).setVisible(looks.window.spaces);
   }
-  void show_motion(std::string_view) {}
   void show_receipts(bool) {}
 };
 
@@ -363,7 +362,6 @@ struct rendering_page : nodes::Stack {
     rows.gpu.set_chosen(renderer == config::renderer_t{config::renderer::opengl{}});
     rows.cpu.set_chosen(renderer == config::renderer_t{config::renderer::software{}});
   }
-  void show_motion(std::string_view) {}
   void show_receipts(bool) {}
 };
 

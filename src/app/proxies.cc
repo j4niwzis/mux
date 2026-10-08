@@ -40,7 +40,7 @@ class proxies_part {
 
   // Settings opened on the proxies, from an account's page.
   void apply(const request::manage_proxies&) {
-    s_->root().open_settings(k_->motion.value_or("full"));
+    s_->root().open_settings();
     if (auto* up = s_->root().settings_up())
       up->show_proxies(k_->proxies, false);
   }

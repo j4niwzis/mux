@@ -24,7 +24,6 @@ struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
   // What it was handed, for the pages it makes.
   ui_needs<Actions> needs_;
-  std::string motion;
   using page_t = spl::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
                               appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>, files_page<Actions>,
                               notifications_page<Actions>>;
@@ -107,9 +106,9 @@ struct settings_dialog : scene::Node {
       this->invalidateLayout();
   }
 
-  settings_dialog(const ui_needs<Actions>& n, std::string level) : settings_dialog(n, n.actions, std::move(level)) {}
-  settings_dialog(const ui_needs<Actions>& n, Actions* a, std::string level)
-      : actions(a), needs_(n), motion(std::move(level)),
+  explicit settings_dialog(const ui_needs<Actions>& n) : settings_dialog(n, n.actions) {}
+  settings_dialog(const ui_needs<Actions>& n, Actions* a)
+      : actions(a), needs_(n),
         parts{.scroll = nodes::ScrollContainer<page_t>(page_t(std::in_place_index<0>, n))} {
     fState.apply({.fill = true});
     parts.scroll.apply({.fill = true});
@@ -125,7 +124,6 @@ struct settings_dialog : scene::Node {
   void show_animations() {
     this->page().template emplace<1>(needs_);
     this->begin_swap(1.0f);
-    this->show_motion(motion);
   }
   // Made again where it is up -- a choice on it changed -- where it was
   // scrolled to, not slid in again from its top. The request handler asks
@@ -189,10 +187,6 @@ struct settings_dialog : scene::Node {
     return spl::visit(spl::overloaded{[](proxy_editor<Actions>& one) { return &one; },
                                  [](auto&) -> proxy_editor<Actions>* { return nullptr; }},
                       this->page());
-  }
-  void show_motion(std::string level) {
-    motion = std::move(level);
-    spl::visit([this](auto& one) { one.show_motion(motion); }, this->page());
   }
 
 

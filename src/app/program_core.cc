@@ -302,6 +302,7 @@ void app::settle_model() {
   for (const auto& effect : this->take_effects())
     std::visit(spl::overloaded{[&](const write_kept&) { (void)this->write(); },
                                [&](const looks_changed&) { this->show_looks(); },
+                               [&](const motion_chosen&) { skiff::paint::motionLevel() = motion_of(this->appearance().motion); },
                                [&](const deleted_shown&) {
                                  model->show_deleted = this->history().show_deleted;
                                  shared.refresh_due = true;
@@ -514,8 +515,7 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   // UnifiedPush only where chosen; off by default.
   if (this->notifications().unified_push.value_or(false) && !demo)
     notices.start_push();
-  skiff::paint::motionLevel() = motion_of(saved.motion);
-  this->root().show_motion(saved.motion.value_or("full"));
+  skiff::paint::motionLevel() = motion_of(this->appearance().motion);
   this->config_error = std::move(error);
   this->refresh();
 }

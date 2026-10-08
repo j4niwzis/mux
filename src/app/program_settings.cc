@@ -40,7 +40,7 @@ void app::rebuild_in_theme() {
   after.info_width = info_width;
   after.info_open = info_open;
   this->refresh();
-  root().open_settings(motion.value_or("full"));
+  root().open_settings();
   if (auto* up = root().settings_up()) {
     up->show_appearance(this->appearance().theme, this->appearance().accent);
     up->keep_offset(settings_at);

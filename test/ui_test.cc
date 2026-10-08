@@ -36,7 +36,6 @@ struct stub {
   void flip_enabled(std::string) {}
   void remove_account(std::string) {}
   void open_drawer() {}
-  void set_motion(std::string) {}
   void quit() {}
   void open_settings() {}
   void close_settings() {}
@@ -876,7 +875,7 @@ TEST(Settings, OpeningAndChangingPagesStartsAtTheTop) {
     stub program;
     ui_state ui;
     scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
-    window.root().open_settings("none");
+    window.root().open_settings();
     auto* settings = window.root().settings_up();
     ASSERT_NE(settings, nullptr);
     double now = 1000.0;

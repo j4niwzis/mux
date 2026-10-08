@@ -33,17 +33,10 @@ class settings_part {
     s_->store->budget = static_cast<std::uintmax_t>(k_->limits().messages_on_disk_mb) << 20;
     s_->store->deleted_budget = static_cast<std::uintmax_t>(mux::config::deleted_on_disk_of(k_->limits())) << 20;
   }
-  // How much moves: set, shown, kept.
-  void set_motion(std::string level) {
-    skiff::paint::motionLevel() = motion_of(level);
-    s_->root().show_motion(level);
-    k_->motion = std::move(level);
-    (void)k_->write();
-  }
 
   void apply(const request::open_settings&) {
     s_->root().close_drawer();
-    s_->root().open_settings(k_->motion.value_or("full"));
+    s_->root().open_settings();
   }
   void apply(const request::close_settings&) { s_->root().close_settings(); }
   void apply(const request::settings_home&) {
@@ -54,7 +47,6 @@ class settings_part {
     if (auto* up = s_->root().settings_up())
       up->show_animations();
   }
-  void apply(const request::set_motion& one) { this->set_motion(one.level); }
 
   // Appearance and rendering.
   void apply(const request::settings_appearance&) {

@@ -471,7 +471,7 @@ struct window : scene::Node {
     layer().sending.dropClosed();
   }
 
-  void open_settings(std::string motion) { layer().settings.open(needs_, std::move(motion)); }
+  void open_settings() { layer().settings.open(needs_); }
   void open_picture(std::string source, std::string sender, std::string name, std::string when) {
     layer().viewer.emplace(needs_, std::move(source), std::move(sender), std::move(name), std::move(when));
   }
@@ -743,10 +743,6 @@ struct window : scene::Node {
   void show(const std::vector<config::account_t>& saved, const model& now) {
     const auto& current = layer().frame.base().base().current;
     layer().frame.base().content().show(actions, saved, now, current ? std::string_view(current->address) : std::string_view());
-  }
-  void show_motion(std::string_view level) {
-    if (auto* up = layer().settings.shown())
-      up->show_motion(std::string(level));
   }
 
   // Its layers, each filling the window, as the default layout places them:

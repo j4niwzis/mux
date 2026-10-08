@@ -349,7 +349,6 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void remove_account(std::string address)
 //   void open_drawer()
 //   void show_account(std::string address)  -- its settings, from the drawer
-//   void set_motion(std::string level)       -- "full", "reduced" or "none"
 //   void quit()
 //   void toggle_mute()               -- the chosen chat muted, or not
 //   void leave_chat()                -- the chosen chat left

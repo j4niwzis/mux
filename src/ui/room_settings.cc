@@ -360,6 +360,7 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          skiff::compose::bound<choices>(event_kinds_field<choices>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::previews>>(
               show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
@@ -528,7 +529,6 @@ struct room_settings : nodes::Stack {
     struct parts_t {
       nodes::Text heading;
       nodes::Text events_about;
-      event_kind_list<Actions> events;
       settings_t settings;
       jump_search_choice<Actions> jump_search;
       nodes::Text forum_heading;
@@ -541,7 +541,6 @@ struct room_settings : nodes::Stack {
     general_page(Actions* a, room_settings* box, const room_settings_facts& facts)
         : parts{.heading = tab_heading(*box->colours_, "General"),
                 .events_about = explained(*box->colours_, "Room events shown in this room, for you: Default is as your account's."),
-                .events = event_kind_list<Actions>(a, *box->colours_, choice_level::chat{}, facts.events_all, facts.event_kinds),
                 .settings = chat_settings_view(*box->colours_, facts.chat),
                 .jump_search = jump_search_choice<Actions>(a, *box->colours_, choice_level::chat{}, facts.jump_search),
                 .forum_heading = part_heading(*box->colours_, "Shown as"),

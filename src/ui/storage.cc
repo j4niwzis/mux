@@ -163,7 +163,7 @@ struct storage_page : nodes::Stack {
         setting_switch<&config::history_settings::show_deleted>(colours, "Show deleted messages"),
         bound<config::cache_limits>(limit_stepper<limit::deleted_on_disk>(colours, "On disk", "MB")),
         spaced_title(colours, "ROOM EVENTS"),
-        event_kind_list<Actions>(a, colours, choice_level::everywhere{}, history.show_room_events, history.room_event_kinds),
+        bound<config::history_settings>(event_kinds_field<config::history_settings>(colours, choice_level::everywhere{})),
         bound<skiff::model::Field<&config::history_settings::show_receipts>>(show_hide_field<receipts_setting, bool>(colours, choice_level::everywhere{})),
         bound<skiff::model::Field<&config::history_settings::link_previews>>(show_hide_field<link_previews_setting, bool>(colours, choice_level::everywhere{})),
         bound<skiff::model::Field<&config::history_settings::previews_direct>>(

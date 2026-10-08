@@ -161,48 +161,6 @@ class preferences_part {
     s_->refresh_due = true;
   }
 
-  // Which room events show, as chosen at a level: all of them, or one kind --
-  // none said, as the level under says.
-  void apply(const request::set_room_event_kind& one) {
-    const auto set_kind = [&](std::optional<mux::config::room_event_kinds>& kinds) {
-      if (!kinds)
-        kinds.emplace();
-      mux::logic::choice_in(*kinds, *one.kind) = one.show;
-    };
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
-                                 if (one.kind)
-                                 {
-                                   auto kinds = k_->history().room_event_kinds;
-                                   set_kind(kinds);
-                                   k_->choose_field<&mux::config::history_settings::room_event_kinds>(std::move(kinds));
-                                 }
-                                 else
-                                   k_->choose_field<&mux::config::history_settings::show_room_events>(one.show.value_or(true));
-                               },
-                               [&](mux::choice_level::account) {
-                                 s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                   if (one.kind)
-                                     set_kind(mux::config::room_event_kinds_in(account));
-                                   else
-                                     mux::config::room_events_in(account) = one.show;
-                                 });
-                               },
-                               [&](mux::choice_level::chat) {
-                                 const auto chosen = s_->managed();
-                                 if (!chosen)
-                                   return;
-                                 if (one.kind) {
-                                   auto kinds = k_->own_of<&mux::app::chat_choices::room_event_kinds>(*chosen).value_or(mux::config::room_event_kinds{});
-                                   mux::logic::choice_in(kinds, *one.kind) = one.show;
-                                   k_->choose<&mux::app::chat_choices::room_event_kinds>(*chosen, std::move(kinds));
-                                 } else {
-                                   k_->choose<&mux::app::chat_choices::room_events>(*chosen, one.show);
-                                 }
-                               }},
-               one.level);
-    (void)k_->write();
-    s_->refresh_due = true;
-  }
   // A bar's order, as a drag left it: its items put there in that order --
   // the one moved taken out of the bar it came from, and from hidden.
   void apply(const request::place_spaces& one) {
@@ -273,29 +231,6 @@ class preferences_part {
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
       up->show_appearance(k_->appearance().theme, k_->appearance().accent);
-  }
-  // How a level shows room events, as a whole: what it holds replaced.
-  void apply(const request::set_room_events& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
-                                       k_->choose_field<&mux::config::history_settings::show_room_events>(one.all.value_or(true));
-                                       k_->choose_field<&mux::config::history_settings::room_event_kinds>(one.kinds);
-                                     },
-                                     [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                         mux::config::room_events_in(account) = one.all;
-                                         mux::config::room_event_kinds_in(account) = one.kinds;
-                                       });
-                                     },
-                                     [&](mux::choice_level::chat) {
-                                       const auto chosen = s_->managed();
-                                       if (!chosen)
-                                         return;
-                                       k_->choose<&mux::app::chat_choices::room_events>(*chosen, one.all);
-                                       k_->choose<&mux::app::chat_choices::room_event_kinds>(*chosen, one.kinds);
-                                     }},
-                  one.level);
-    (void)k_->write();
-    s_->refresh_due = true;
   }
   // How far a jump's search pages back, at a level.
   void apply(const request::set_jump_search& one) {

@@ -516,30 +516,65 @@ inline void lay_out_setting_row(nodes::Stack& row, nodes::Text& label) {
   label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
 }
 
-template <class Actions>
-struct event_kind_list : nodes::Stack {
-  struct row;
-  struct choose {
-    row* in = nullptr;
+// What a level holds of room events -- all of them or messages only, and
+// each kind chosen apart -- in each part that keeps one: every chat's
+// history settings, an account's own, a chat's own.
+inline room_events_held events_of(const config::history_settings& every) { return {every.show_room_events, every.room_event_kinds}; }
+inline room_events_held events_of(const config::account_shared& account) { return {account.room_events, account.room_event_kinds}; }
+inline room_events_held events_of(const config::chat_choices& chat) { return {chat.room_events, chat.room_event_kinds}; }
+inline void events_in(config::history_settings& every, const room_events_held& now) {
+  every.show_room_events = now.all.value_or(true);
+  every.room_event_kinds = now.kinds;
+}
+inline void events_in(config::account_shared& account, const room_events_held& now) {
+  account.room_events = now.all;
+  account.room_event_kinds = now.kinds;
+}
+inline void events_in(config::chat_choices& chat, const room_events_held& now) {
+  chat.room_events = now.all;
+  chat.room_event_kinds = now.kinds;
+}
+// The ways a level can be, in the dropdown's order, from As above.
+inline constexpr std::size_t kEventsAbove = 0, kEventsAll = 1, kEventsMessages = 2, kEventsCustom = 3;
+[[nodiscard]] inline std::size_t events_way_of(const choice_level_t& level, const room_events_held& held) {
+  const bool custom = held.kinds && std::ranges::any_of(all_room_events, [&](const room_event_t& kind) {
+                        return logic::choice_of(held.kinds, kind).has_value();
+                      });
+  if (custom)
+    return kEventsCustom;
+  if (!held.all)
+    return has_level_above(level) ? kEventsAbove : kEventsAll;
+  return *held.all ? kEventsAll : kEventsMessages;
+}
+
+// Which room events show at a level, as the model holds it: a dropdown of
+// the ways it can be -- as above, all, messages only, custom -- and a row of
+// Show and Hide for each kind, chosen apart where it is custom; bound to the
+// part that keeps it (Owner), set whole.
+template <class Owner>
+struct event_kinds_field : nodes::Stack {
+  struct pick_kind {
     bool show = true;
-    void operator()() const { in->chose(show); }
+    bool pressed = false;
+    void operator()() {
+      pressed = true;
+      ++skiff::bind::pendingCount();
+    }
   };
   struct row : nodes::Stack {
-    Actions* actions = nullptr;
-    choice_level_t level;
     room_event_t kind;
     bool live = false;
     struct parts_t {
       nodes::Text label;
-      segment<choose> show, hide;
+      segment<pick_kind> show, hide;
     } parts;
-    row(Actions* a, const palette& colours, choice_level_t at, room_event_t which, std::string_view text)
-        : actions(a), level(at), kind(which),
+    row(const palette& colours, room_event_t which, std::string_view text)
+        : kind(which),
           parts{.label = nodes::Text(std::string(text), 14.0f, colours.text),
-                .show = segment<choose>(colours, "Show", {this, true}),
-                .hide = segment<choose>(colours, "Hide", {this, false})} {
+                .show = segment<pick_kind>(colours, "Show", {true}),
+                .hide = segment<pick_kind>(colours, "Hide", {false})} {
       lay_out_setting_row(*this, parts.label);
-      for (segment<choose>* each : {&parts.show, &parts.hide})
+      for (segment<pick_kind>* each : {&parts.show, &parts.hide})
         each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
     }
     void show_value(bool on) {
@@ -550,91 +585,82 @@ struct event_kind_list : nodes::Stack {
       live = on;
       fState.apply({.alpha = on ? 1.0f : 0.4f, .disabled = !on});
     }
-    void chose(bool on) {
-      if (!live)
-        return;
-      this->show_value(on);
-      actions->set_room_event_kind(level, kind, on);
-    }
   };
-  // The ways a level can be, in the dropdown's order, from As above.
-  static constexpr std::size_t kAbove = 0, kAll = 1, kMessages = 2, kCustom = 3;
-  [[nodiscard]] static std::size_t way_of(const choice_level_t& level, std::optional<bool> all,
-                                          const std::optional<config::room_event_kinds>& kinds) {
-    const bool custom = kinds && std::ranges::any_of(all_room_events, [&](const room_event_t& kind) {
-                          return logic::choice_of(kinds, kind).has_value();
-                        });
-    if (custom)
-      return kCustom;
-    if (!all)
-      return has_level_above(level) ? kAbove : kAll;
-    return *all ? kAll : kMessages;
-  }
-  // A way chosen: the rows shown so and let be chosen or not, and the
-  // program told what the level now holds.
   struct pick_way {
-    Actions* actions;
-    choice_level_t level;
-    row* first;
-    std::size_t count;
-    void operator()(std::size_t index) const {
-      const std::size_t way = index + (has_level_above(level) ? 0 : 1);
-      const room_event_filter now = events_in_effect(level);
-      std::optional<bool> all;
-      std::optional<config::room_event_kinds> kinds;
-      room_event_filter shown = now;
-      if (way == kAbove) {
-        shown = events_above(level);
-      } else if (way == kAll) {
-        all = true;
-        shown.shown.fill(true);
-      } else if (way == kMessages) {
-        all = false;
-        shown.shown.fill(false);
-      } else {
-        kinds.emplace();
-        for (const room_event_t& kind : all_room_events)
-          logic::choice_in(*kinds, kind) = now.shows(kind);
-      }
-      for (row& each : std::span(first, count)) {
-        each.show_value(shown.shows(each.kind));
-        each.set_live(way == kCustom);
-      }
-      actions->set_room_events(level, all, kinds);
+    std::optional<std::size_t> index;
+    void operator()(std::size_t at) {
+      index = at;
+      ++skiff::bind::pendingCount();
     }
   };
+  choice_level_t level;
+  Owner shown{};
+  std::vector<std::string> names;
   struct parts_t {
     std::optional<choice_menu<pick_way>> way;
     std::vector<row> rows;
   } parts;
-  event_kind_list(Actions* a, const palette& colours, choice_level_t level, std::optional<bool> all,
-                  const std::optional<config::room_event_kinds>& kinds) {
+  event_kinds_field(const palette& colours, choice_level_t at) : level(at) {
     this->setGap(4.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    // Made where they stay: each row's switches know it by its address,
-    // and the dropdown the rows by the first's.
     parts.rows.reserve(kRoomEventKinds);
-    const std::size_t way = way_of(level, all, kinds);
-    const room_event_filter shown = way == kAbove ? events_above(level)
-                                    : way == kCustom ? events_in_effect(level)
-                                                     : [&] {
-                                                         room_event_filter one;
-                                                         one.shown.fill(way == kAll);
-                                                         return one;
-                                                       }();
-    for (const room_event_t& kind : all_room_events) {
-      parts.rows.emplace_back(a, colours, level, kind, spl::visit([](auto one) { return label_of(one); }, kind));
-      parts.rows.back().show_value(shown.shows(kind));
-      parts.rows.back().set_live(way == kCustom);
-    }
-    std::vector<std::string> names;
+    for (const room_event_t& kind : all_room_events)
+      parts.rows.emplace_back(colours, kind, spl::visit([](auto one) { return label_of(one); }, kind));
     if (has_level_above(level))
       names.emplace_back("As above");
     for (const char* name : {"All events", "Messages only", "Custom"})
       names.emplace_back(name);
-    parts.way.emplace(colours, "Room events", names, way - (has_level_above(level) ? 0 : 1),
-                      pick_way{a, level, parts.rows.data(), parts.rows.size()});
+    parts.way.emplace(colours, "Room events", names, 0, pick_way{});
     parts.way->apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
+  }
+  [[nodiscard]] std::size_t offset() const { return has_level_above(level) ? 0 : 1; }
+  void read(const Owner& now) {
+    shown = now;
+    const room_events_held held = events_of(now);
+    room_events_at(level) = held;
+    const std::size_t way = events_way_of(level, held);
+    room_event_filter filter = way == kEventsAbove ? events_above(level) : events_in_effect(level);
+    if (way == kEventsAll || way == kEventsMessages)
+      filter.shown.fill(way == kEventsAll);
+    for (row& each : parts.rows) {
+      each.show_value(filter.shows(each.kind));
+      each.set_live(way == kEventsCustom);
+    }
+    parts.way->parts.head.parts.value.setText(names[way - this->offset()]);
+  }
+  std::vector<skiff::model::SetTo<Owner>> takeChanges() {
+    std::vector<skiff::model::SetTo<Owner>> out;
+    room_events_held held = events_of(shown);
+    bool changed = false;
+    if (const auto index = std::exchange(parts.way->choose.index, std::nullopt)) {
+      const std::size_t way = *index + this->offset();
+      const room_event_filter now = events_in_effect(level);
+      held = {};
+      if (way == kEventsAll)
+        held.all = true;
+      else if (way == kEventsMessages)
+        held.all = false;
+      else if (way == kEventsCustom) {
+        held.kinds.emplace();
+        for (const room_event_t& kind : all_room_events)
+          logic::choice_in(*held.kinds, kind) = now.shows(kind);
+      }
+      changed = true;
+    }
+    for (row& each : parts.rows)
+      for (segment<pick_kind>* side : {&each.parts.show, &each.parts.hide})
+        if (std::exchange(side->act.pressed, false) && each.live) {
+          if (!held.kinds)
+            held.kinds.emplace();
+          logic::choice_in(*held.kinds, each.kind) = side->act.show;
+          changed = true;
+        }
+    if (changed) {
+      Owner next = shown;
+      events_in(next, held);
+      out.push_back(skiff::model::setTo(std::move(next)));
+    }
+    return out;
   }
 };
 

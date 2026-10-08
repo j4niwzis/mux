@@ -174,8 +174,6 @@ struct stub {
   void mute_call() {}
   void settings_notifications() {}
   void set_chat_notify(mux::config::notify_mode_t) {}
-  void set_room_event_kind(mux::choice_level_t, std::optional<mux::room_event_t>, std::optional<bool>) {}
-  void set_room_events(mux::choice_level_t, std::optional<bool>, std::optional<mux::config::room_event_kinds>) {}
   void give_passphrase(mux::proto::passphrase_for_t, std::string, std::string, std::string, std::string) {}
   void verify_person(mux::conversation_id) {}
   void verify_accept_now() {}

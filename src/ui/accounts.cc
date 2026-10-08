@@ -287,6 +287,7 @@ inline auto account_chats_view(const palette& colours, std::string address) {
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          bound<shared>(event_kinds_field<shared>(colours, level)),
           bound<skiff::model::Field<&shared::show_receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
           bound<skiff::model::Field<&shared::link_previews>>(show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
           bound<skiff::model::Field<&shared::previews_direct>>(
@@ -427,7 +428,6 @@ struct account_chats : nodes::Stack {
     accent_circles<set_colour> colours;
     switch_row<ask<Actions, &Actions::flip_account_strip>> strip;
     nodes::Text title;
-    event_kind_list<Actions> events;
     decltype(account_chats_view(std::declval<const palette&>(), std::string())) settings;
     jump_search_choice<Actions> jump_search;
     nodes::Text looks_title;
@@ -443,7 +443,6 @@ struct account_chats : nodes::Stack {
               .colours = accent_circles<set_colour>({a}, theme, false),
               .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>(colours, "A strip on its chats in other lists", {a}),
               .title = section_title(colours, "CHATS"),
-              .events = event_kind_list<Actions>(a, colours, choice_level::account{}, chats.events_all, chats.event_kinds),
               .settings = account_chats_view(colours, std::move(address)),
               .jump_search = jump_search_choice<Actions>(a, colours, choice_level::account{}, chats.jump_search),
               .looks_title = section_title(colours, "LOOKS"),

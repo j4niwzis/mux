@@ -390,7 +390,6 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //        search_elsewhere(query)  -- the chat list's search, where nothing joined matches,
 //        create_room(name, topic, open, alias, federate, encrypted)  -- rooms found and made
 //   void settings_notifications(),
-//   void set_room_event_kind(choice_level_t, optional<room_event_t>, optional<bool>)  -- which room events show
 //   void toggle_emoji(), close_emoji(), insert_emoji(std::string text, std::string picture)  -- the input's emoji panel
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message

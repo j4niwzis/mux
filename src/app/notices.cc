@@ -94,13 +94,15 @@ class notices_part {
   // Notifications in Settings: the page, its switches, what shows them.
   void apply(const request::settings_notifications&) { this->show_page(); }
   void apply(const request::flip_notify& one) {
-    bool& flag = mux::config::flag_in(s_->kept->notifications, one.flag);
+    auto next = s_->kept->notifications();
+    bool& flag = mux::config::flag_in(next, one.flag);
     flag = !flag;
+    s_->kept->set_notifications(std::move(next));
     (void)s_->kept->write();
     this->show_page();
   }
   void apply(const request::set_notify_backend& one) {
-    s_->kept->notifications.backend = mux::config::word_of(one.backend);
+    s_->kept->choose_notification<&mux::config::notification_settings::backend>(std::string(mux::config::word_of(one.backend)));
     (void)s_->kept->write();
     this->show_page();
   }
@@ -108,9 +110,8 @@ class notices_part {
   // pusher as it hands an endpoint; off, the registration dropped with the
   // distributor, and the endpoint forgotten.
   void apply(const request::flip_unified_push&) {
-    auto& settings = s_->kept->notifications;
-    const bool on = !settings.unified_push.value_or(false);
-    settings.unified_push = on;
+    const bool on = !s_->kept->notifications().unified_push.value_or(false);
+    s_->kept->choose_notification<&mux::config::notification_settings::unified_push>(std::optional<bool>(on));
     if (on)
       this->start_push();
     else
@@ -120,11 +121,11 @@ class notices_part {
   }
 
   void start_push() {
-    auto& settings = s_->kept->notifications;
+    const auto& settings = s_->kept->notifications();
     if (push_thread_.joinable() || s_->kept->keeps_nothing)
       return;
     if (!settings.push_token) {
-      settings.push_token = mux::platform::push::new_token();
+      s_->kept->choose_notification<&mux::config::notification_settings::push_token>(std::optional<std::string>(mux::platform::push::new_token()));
       (void)s_->kept->write();
     }
     push_forget_ = std::make_shared<std::atomic<bool>>(false);
@@ -138,7 +139,7 @@ class notices_part {
   }
   void stop_push() {
     s_->net->set_push_endpoint(std::nullopt);
-    s_->kept->notifications.push_endpoint.reset();
+    s_->kept->choose_notification<&mux::config::notification_settings::push_endpoint>(std::optional<std::string>());
     if (!push_thread_.joinable())
       return;
     // Left to finish on its own -- it waits a second for the bus at a time,
@@ -155,12 +156,12 @@ class notices_part {
       std::lock_guard held(push_box_->lock);
       said = std::exchange(push_box_->pending, {});
     }
-    auto& settings = s_->kept->notifications;
+    const auto& settings = s_->kept->notifications();
     for (const auto& one : said)
       spl::visit(spl::overloaded{[&](const mux::platform::push::endpoint& given) {
                                          std::println(std::cerr, "[push] endpoint {}", given.url);
                                          if (settings.push_endpoint != given.url) {
-                                           settings.push_endpoint = given.url;
+                                           s_->kept->choose_notification<&mux::config::notification_settings::push_endpoint>(std::optional<std::string>(given.url));
                                            (void)s_->kept->write();
                                          }
                                          s_->net->set_push_endpoint(given.url);
@@ -168,7 +169,7 @@ class notices_part {
                                        [&](const mux::platform::push::message&) { s_->net->sync_now(); },
                                        [&](const mux::platform::push::unregistered&) {
                                          std::println(std::cerr, "[push] the distributor dropped the registration");
-                                         settings.push_endpoint.reset();
+                                         s_->kept->choose_notification<&mux::config::notification_settings::push_endpoint>(std::optional<std::string>());
                                          s_->net->set_push_endpoint(std::nullopt);
                                          (void)s_->kept->write();
                                        },
@@ -203,7 +204,7 @@ class notices_part {
                                        this->sound_only(sound);
                                        toasts_due_.push_back({in, in.id, std::move(title), std::move(text)});
                                      }},
-                  mux::config::notify_backend_of(s_->kept->notifications.backend));
+                  mux::config::notify_backend_of(s_->kept->notifications().backend));
   }
   // A sound with nothing shown, or with mux's own window: the chime.
   void sound_only(bool sound) {
@@ -212,7 +213,7 @@ class notices_part {
   }
   void show_page() {
     if (auto* up = s_->root().settings_up())
-      up->show_notifications(s_->kept->notifications);
+      up->show_notifications(s_->kept->notifications());
   }
 
   // UnifiedPush's connector, on a thread of its own: what it says put in a

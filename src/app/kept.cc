@@ -41,6 +41,8 @@ struct chat_choices {
 // What is kept, as the model holds it: each chat's own choices, by the chat.
 struct kept_root {
   skiff::model::Keyed<conversation_id, chat_choices> chats;
+  // What notifies, and how.
+  skiff::model::Tracked<mux::config::notification_settings> notifications;
 };
 // The file to be written again: one, however many changes asked for it.
 struct write_kept {
@@ -49,6 +51,10 @@ struct write_kept {
 // A chat's choices changed or gone: the file is written again.
 struct kept_reactions {
   [[nodiscard]] write_kept on(skiff::model::Changed<chat_choices>, const chat_choices&) const { return {}; }
+  [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::notification_settings>,
+                              const mux::config::notification_settings&) const {
+    return {};
+  }
   [[nodiscard]] write_kept on(skiff::model::Removed<chat_choices>, const chat_choices&, const conversation_id&) const {
     return {};
   }
@@ -213,8 +219,18 @@ struct kept_settings {
         return mux::config::wallpaper_of(std::string_view(*chosen));
     return wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}});
   }
-  // What notifies.
-  mux::config::notification_settings notifications;
+  // What notifies, as the model holds it; changed by its edits: one
+  // setting in its place, by its member pointer, or all of them at once.
+  [[nodiscard]] const mux::config::notification_settings& notifications() const { return model.root().notifications.fValue; }
+  template <auto M, class T>
+  void choose_notification(T now) {
+    using Part = std::remove_cvref_t<decltype(std::declval<mux::config::notification_settings&>().*M)>;
+    (void)model.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(),
+                                         skiff::model::setTo(Part(std::move(now)))));
+  }
+  void set_notifications(mux::config::notification_settings now) {
+    (void)model.apply(skiff::model::edit(skiff::model::placeOf<mux::config::notification_settings, kept_root>(), skiff::model::setTo(std::move(now))));
+  }
   std::vector<mux::config::proxy_settings> proxies;
   // Why the accounts file could not be read, when it could not: then it is
   // not written over either.
@@ -330,7 +346,7 @@ struct kept_settings {
     if (const mux::config::account_t* account = this->settings_of(chat.account.address))
       if (const std::optional<bool>& chosen = account->shared.*Setting::account)
         return *chosen;
-    return Setting::of(notifications);
+    return Setting::of(this->notifications());
   }
   [[nodiscard]] notify_decision notify_for(const conversation_id& chat, bool mentions_me) {
     namespace setting = mux::config::notify_setting;
@@ -406,7 +422,7 @@ struct kept_settings {
     this->sending = saved.sending.value_or(mux::config::sending_settings{});
     this->history = saved.history.value_or(mux::config::history_settings{});
     this->proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
-    this->notifications = saved.notifications.value_or(mux::config::notification_settings{});
+    const auto notifications_read = saved.notifications.value_or(mux::config::notification_settings{});
     for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
       chats[chat_of(one.account, one.conversation)].notify = mux::config::notify_choices{
               .on = one.on,
@@ -441,6 +457,7 @@ struct kept_settings {
     std::erase_if(chats, [](const auto& one) { return one.second == chat_choices{}; });
     kept_root root;
     root.chats.putAll(chats);
+    root.notifications.fValue = notifications_read;
     this->model = kept_model(std::move(root));
   }
   [[nodiscard]] mux::config::file file() const {
@@ -504,7 +521,7 @@ struct kept_settings {
     out.cache = limits;
     out.sending = sending;
     out.history = history;
-    out.notifications = notifications;
+    out.notifications = this->notifications();
     std::vector<mux::config::chat_notify> notify;
     std::vector<mux::config::room_events_choice> choices;
     std::vector<mux::config::muted_chat> muted;

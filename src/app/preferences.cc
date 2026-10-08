@@ -165,7 +165,11 @@ class preferences_part {
   }
   template <class Setting>
   void set_notify(const mux::choice_level_t& level, Setting which, std::optional<bool> value) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { Setting::set(k_->notifications, value.value_or(Setting::unsaid)); },
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
+                                 auto next = k_->notifications();
+                                 Setting::set(next, value.value_or(Setting::unsaid));
+                                 k_->set_notifications(std::move(next));
+                               },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                          account.shared.*Setting::account = value;

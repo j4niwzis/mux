@@ -241,9 +241,7 @@ struct sound {};
 using notify_flag_t = spl::variant<notify_flag::desktop, notify_flag::show_name, notify_flag::show_text, notify_flag::sound>;
 
 [[nodiscard]] inline proxy_kind_t proxy_kind_of(std::string_view word) {
-  static const std::unordered_map<std::string_view, proxy_kind_t> known = {{"http", proxy_kind::http{}},
-                                                                           {"socks5", proxy_kind::socks5{}}};
-  return word_of<proxy_kind_t>(known, word, proxy_kind::socks5{});
+  return word == "http" ? proxy_kind_t{proxy_kind::http{}} : proxy_kind_t{proxy_kind::socks5{}};
 }
 [[nodiscard]] constexpr std::string_view word_of(theme::classic) { return "classic"; }
 [[nodiscard]] constexpr std::string_view word_of(theme::day) { return "day"; }

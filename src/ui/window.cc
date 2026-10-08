@@ -41,9 +41,16 @@ export namespace mux::ui {
 // dialogs, bound to it, open and close as they read it.
 struct shown_root {
   skiff::model::Tracked<std::optional<marks_facts>> marks;
+  skiff::model::Tracked<std::optional<leave_space_facts>> leaving;
+  skiff::model::Tracked<std::optional<link_facts>> linking;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
+// A dialog shown with these facts, or closed: its part of what is shown set.
+template <class Facts>
+void show(shown_model& showing, std::optional<Facts> facts) {
+  (void)showing.apply(skiff::model::edit(skiff::model::placeOf<std::optional<Facts>, shown_root>(), skiff::model::setTo(std::move(facts))));
+}
 
 // A dialog open while the part it is bound to holds its facts -- made from
 // them, with what the program handed the window (Needs) -- and closed where
@@ -192,7 +199,13 @@ struct window : scene::Node {
     // What its handlers ask for, returned.
     using Answer = std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_reactions, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings>;
     using frame_t = widgets::SlideOver<with_drawer, panel_type>;
-    using marks_dialog = skiff::bind::Bound<std::optional<marks_facts>, shown_dialog<marks_box<Actions>, marks_facts, ui_needs<Actions>>>;
+    // A dialog of Content, bound to its Facts' part of what is shown.
+    template <class Content, class Facts>
+    using shown_in = skiff::bind::Bound<std::optional<Facts>, shown_dialog<Content, Facts, ui_needs<Actions>>>;
+    template <class Content, class Facts>
+    static shown_in<Content, Facts> shown_made(const ui_needs<Actions>& n) {
+      return shown_in<Content, Facts>(shown_dialog<Content, Facts, ui_needs<Actions>>(&n));
+    }
     struct parts_t {
       nodes::Box<> backdrop;
       // The chat's background behind all of the window, where it is so:
@@ -212,11 +225,11 @@ struct window : scene::Node {
       // A message's earlier versions, as AyuGram's edit history.
       widgets::Dialog<edit_history_box<Actions>> history;
       // A link put on what is selected in the message field: Ctrl+K's.
-      widgets::Dialog<link_box<Actions>> linking;
+      shown_in<link_box<Actions>, link_facts> linking;
       // Leaving a space, and which of its rooms with it.
-      widgets::Dialog<leave_space_box<Actions>> leaving;
+      shown_in<leave_space_box<Actions>, leave_space_facts> leaving;
       // The mentions or the reactions not yet seen, listed.
-      marks_dialog marks;
+      shown_in<marks_box<Actions>, marks_facts> marks;
       // A room's management.
       widgets::Dialog<room_settings<Actions>> manage;
       // Where a message is forwarded to.
@@ -428,7 +441,9 @@ struct window : scene::Node {
     layers(const ui_needs<Actions>& n)
         : parts{.backdrop = nodes::Box<>(n.colours->background),
                 .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n)),
-                .marks = marks_dialog(shown_dialog<marks_box<Actions>, marks_facts, ui_needs<Actions>>(&n))} {
+                .linking = shown_made<link_box<Actions>, link_facts>(n),
+                .leaving = shown_made<leave_space_box<Actions>, leave_space_facts>(n),
+                .marks = shown_made<marks_box<Actions>, marks_facts>(n)} {
       auto& [backdrop, behind, frame, ...over] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -744,10 +759,6 @@ struct window : scene::Node {
     layer().history.open(needs_, in, now, known);
   }
   void close_edit_history() { layer().history.close(); }
-  void open_link(std::string text, std::string url) { layer().linking.open(needs_, std::move(text), std::move(url)); }
-  void close_link() { layer().linking.close(); }
-  void open_leave_space(leave_space_facts facts) { layer().leaving.open(needs_, std::move(facts)); }
-  void close_leave_space() { layer().leaving.close(); }
   void open_manage(const room_settings_facts& facts) { layer().manage.open(needs_, facts); }
   void close_manage() { layer().manage.close(); }
   void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(*needs_.colours, chats); }

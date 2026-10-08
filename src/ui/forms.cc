@@ -65,6 +65,11 @@ struct field : nodes::Stack {
 // A link put on what is selected in the message field, as tdesktop's
 // EditLinkBox: its text and its URL, the forms' own fields; Done puts it on,
 // Esc or Cancel leaves the field as it was.
+// A link being put on what is selected: the text, and the link it has.
+struct link_facts {
+  std::string text;
+  std::string url;
+};
 template <class Actions>
 struct link_box : nodes::Stack {
   // The dialog it is shown in.
@@ -85,6 +90,7 @@ struct link_box : nodes::Stack {
     widgets::Button<done> go;
     widgets::Button<cancel> back;
   } parts;
+  link_box(const ui_needs<Actions>& n, const link_facts& facts) : link_box(n, facts.text, facts.url) {}
   link_box(const ui_needs<Actions>& n, std::string text, std::string url)
       : parts{.title = nodes::Text(url.empty() ? "Add link" : "Edit link", 17.0f, n.colours->text, true),
               .text = field(*n.colours, "Text", "Text", std::move(text)),

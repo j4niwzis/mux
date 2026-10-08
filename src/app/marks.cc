@@ -202,7 +202,7 @@ class marks_part {
       return entry;
     };
     const auto entries = std::ranges::to<std::vector>(std::views::transform(marks_of(*chat, one.kind), entry_of));
-    this->show(mux::ui::marks_facts{one.kind, in, entries, s_->model});
+    mux::ui::show(*s_->showing, std::optional(mux::ui::marks_facts{one.kind, in, entries, s_->model}));
     listed_ = one.kind;
   }
   // One of the list, gone to, and let go.
@@ -219,15 +219,10 @@ class marks_part {
   }
   void apply(const request::close_marks&) {
     listed_.reset();
-    this->show(std::nullopt);
+    mux::ui::show<mux::ui::marks_facts>(*s_->showing, std::nullopt);
   }
 
  private:
-  // The list open with these facts, or closed: what the window shows.
-  void show(std::optional<mux::ui::marks_facts> facts) {
-    (void)s_->showing->apply(skiff::model::edit(skiff::model::placeOf<std::optional<mux::ui::marks_facts>, mux::ui::shown_root>(),
-                                                skiff::model::setTo(std::move(facts))));
-  }
   [[nodiscard]] const mux::conversation* chosen() const {
     const auto& chosen = s_->root().main().chosen;
     return chosen ? s_->model->find(*chosen) : nullptr;

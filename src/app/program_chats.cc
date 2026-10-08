@@ -118,10 +118,10 @@ void app::apply(const request::open_leave_space& one) {
   for (const std::string& child : space->children)
     if (const mux::conversation* room = model->find(mux::conversation_id{one.space.account, child}))
       facts.rooms.push_back({child, room->name.empty() ? child : room->name});
-  root().open_leave_space(std::move(facts));
+  mux::ui::show(showing, std::optional(std::move(facts)));
 }
 void app::apply(const request::leave_space& one) {
-  root().close_leave_space();
+  mux::ui::show<mux::ui::leave_space_facts>(showing, std::nullopt);
   if (ask.demo)
     return;
   for (const std::string& room : one.rooms)
@@ -129,7 +129,7 @@ void app::apply(const request::leave_space& one) {
   net->leave(one.space);
   root().main().info_open = false;
 }
-void app::apply(const request::close_leave_space&) { root().close_leave_space(); }
+void app::apply(const request::close_leave_space&) { mux::ui::show<mux::ui::leave_space_facts>(showing, std::nullopt); }
 
 void app::apply(const request::back&) { this->show_conversations(); }
 

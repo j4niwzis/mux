@@ -10,6 +10,8 @@ import skiff.paint;
 import skiff.scene;
 import skiff.nodes.box;
 import skiff.widgets.theme;
+import skiff.widgets.sliderbar;
+import skiff.widgets.button;
 import skiff.widgets.wallpaper;
 import skiff.widgets.motion;
 import skiff.bind;
@@ -419,6 +421,14 @@ struct sends {
 // Whether an act sends its events so.
 template <class Act>
 concept sending = requires(Act& a) { a.fEmitted; };
+
+// A skiff-widgets button or toggle for an act: the plain one where the act
+// sends events, which the walk takes from its action; else the one the
+// build erases its action in.
+template <class Act>
+using button_for = std::conditional_t<sending<Act>, widgets::internal::Button<Act>, widgets::Button<Act>>;
+template <class Act>
+using toggle_for = std::conditional_t<sending<Act>, widgets::internal::Toggle<Act>, widgets::Toggle<Act>>;
 // A request with nothing to say but itself: `sends<::mux::ui::request::back>`.
 template <class Actions, auto Method>
 struct ask {

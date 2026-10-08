@@ -25,14 +25,6 @@ import :themes;
 
 export namespace mux::ui {
 
-// A skiff-widgets button or toggle for an act: the plain one where the act
-// sends events, which the walk takes from its action; else the one the
-// build erases its action in.
-template <class Act>
-using button_for = std::conditional_t<sending<Act>, widgets::internal::Button<Act>, widgets::Button<Act>>;
-template <class Act>
-using toggle_for = std::conditional_t<sending<Act>, widgets::internal::Toggle<Act>, widgets::Toggle<Act>>;
-
 // A line of a list or a menu, as wide as what holds it and square: an icon
 // on the left, its text, and a radio mark on the right where it is one of a
 // choice. It lights under the pointer; a press does `act`.

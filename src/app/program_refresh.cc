@@ -48,7 +48,6 @@ void app::show_placements() {
 
 // The chosen chat's bubbles and the panels' look, as its levels say.
 void app::show_looks_now() {
-  root().main().bubbles = root().main().chosen ? this->bubbles_of(*root().main().chosen) : mux::config::bubble_look{};
   // The panels' look, as the chosen chat's levels say, else every chat's:
   // the whole window repainted where it changes -- nothing made again.
   shared.looks.panels = root().main().chosen ? this->panels_of(*root().main().chosen)
@@ -100,11 +99,10 @@ void app::show_levels() {
 }
 
 void app::show_backgrounds() {
-  root().main().wallpaper = root().main().chosen ? this->wallpaper_of(*root().main().chosen)
-                                                 : mux::config::wallpaper_t{mux::config::wallpaper::theme{}};
   // Behind the whole window, where it is so: the chat's, else every chat's.
-  root().show_behind(root().main().chosen ? root().main().wallpaper
-                                          : this->appearance().wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}}));
+  const auto& chosen = root().main().chosen;
+  root().show_behind(chosen ? this->wallpaper_of(*chosen)
+                            : this->appearance().wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}}));
 }
 
 }  // namespace mux::app

@@ -1427,6 +1427,9 @@ struct conversations_screen : nodes::Stack, outbox {
                    std::views::transform(&conversation::id) | std::ranges::to<std::set>();
     jump_limits = all() | std::views::transform([&](const conversation& one) { return std::pair{one.id, reads.jump_search_of(one.id)}; }) |
                   std::ranges::to<std::map>();
+    // The chosen chat's bubbles and background, as its levels say.
+    bubbles = chosen ? reads.bubbles_of(*chosen) : config::bubble_look{};
+    wallpaper = chosen ? reads.wallpaper_of(*chosen) : config::wallpaper_t{config::wallpaper::theme{}};
   }
   template <class Reactions>
   void refresh(const skiff::model::Model<kept_root, Reactions>& kept) {

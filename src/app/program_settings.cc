@@ -33,6 +33,9 @@ void app::rebuild_in_theme() {
   accounts_screen.forget_login();
   shared.drawer_waits = false;
   root().rebuild();
+  // The dialogs made again: each reads what is shown afresh.
+  showing_binding.invalidate();
+  showing_binding.refresh(root(), showing);
   auto& after = root().main();
   after.chosen = chosen;
   after.current = current;

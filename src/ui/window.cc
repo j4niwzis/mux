@@ -14,6 +14,7 @@ import mux.core;
 import mux.config;
 import mux.kept_root;
 import skiff.model;
+import skiff.bind;
 import :base;
 import :controls;
 import :themes;
@@ -35,10 +36,36 @@ export namespace mux::ui {
 
 // ---- the window -------------------------------------------------------------------
 
+// What the window shows that the program opens and closes, as a model:
+// each dialog's facts, while it is open. The program edits it; the
+// dialogs, bound to it, open and close as they read it.
+struct shown_root {
+  skiff::model::Tracked<std::optional<marks_facts>> marks;
+};
+struct shown_reactions {};
+using shown_model = skiff::model::Model<shown_root, shown_reactions>;
+
+// A dialog open while the part it is bound to holds its facts -- made from
+// them, with what the program handed the window (Needs) -- and closed where
+// they are gone. Pressed off, or Esc: that part emptied.
+template <class Content, class Facts, class Needs>
+struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
+  const Needs* needs = nullptr;
+  explicit shown_dialog(const Needs* handed) : needs(handed) {}
+  void read(const std::optional<Facts>& now) {
+    if (now)
+      (void)this->open(*needs, *now);
+    else
+      this->close();
+  }
+  auto onPress() { return skiff::bind::own(skiff::model::setTo(std::optional<Facts>{})); }
+};
+
 // The conversations; over them the panel that is open, if one is, sliding in
 // from the right and back out when closed; and over both, the drawer, pulled
 // out from the left. All in this one window, switched by the program between
 // events.
+
 template <class Actions>
 struct window : scene::Node {
   using panel_type = spl::variant<accounts_panel<Actions>>;
@@ -165,6 +192,7 @@ struct window : scene::Node {
     // What its handlers ask for, returned.
     using Answer = std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_reactions, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings>;
     using frame_t = widgets::SlideOver<with_drawer, panel_type>;
+    using marks_dialog = skiff::bind::Bound<std::optional<marks_facts>, shown_dialog<marks_box<Actions>, marks_facts, ui_needs<Actions>>>;
     struct parts_t {
       nodes::Box<> backdrop;
       // The chat's background behind all of the window, where it is so:
@@ -188,7 +216,7 @@ struct window : scene::Node {
       // Leaving a space, and which of its rooms with it.
       widgets::Dialog<leave_space_box<Actions>> leaving;
       // The mentions or the reactions not yet seen, listed.
-      widgets::Dialog<marks_box<Actions>> marks;
+      marks_dialog marks;
       // A room's management.
       widgets::Dialog<room_settings<Actions>> manage;
       // Where a message is forwarded to.
@@ -399,7 +427,8 @@ struct window : scene::Node {
 
     layers(const ui_needs<Actions>& n)
         : parts{.backdrop = nodes::Box<>(n.colours->background),
-                .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n))} {
+                .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n)),
+                .marks = marks_dialog(shown_dialog<marks_box<Actions>, marks_facts, ui_needs<Actions>>(&n))} {
       auto& [backdrop, behind, frame, ...over] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -423,7 +452,8 @@ struct window : scene::Node {
   ui_needs<Actions> needs_;
   explicit window(const ui_needs<Actions>& n) : needs_(n) {
     fState.apply({.fill = true});
-    parts.now.emplace(n);
+    // From its own copy, which the layers' dialogs point at.
+    parts.now.emplace(needs_);
   }
   // Everything made again, in the colours of the theme now in place.
   void rebuild() {
@@ -718,11 +748,6 @@ struct window : scene::Node {
   void close_link() { layer().linking.close(); }
   void open_leave_space(leave_space_facts facts) { layer().leaving.open(needs_, std::move(facts)); }
   void close_leave_space() { layer().leaving.close(); }
-  void open_marks(mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now) {
-    layer().marks.open(needs_, kind, in, entries, now);
-  }
-  void close_marks() { layer().marks.close(); }
-  [[nodiscard]] bool marks_up() { return layer().marks.shown() != nullptr; }
   void open_manage(const room_settings_facts& facts) { layer().manage.open(needs_, facts); }
   void close_manage() { layer().manage.close(); }
   void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(*needs_.colours, chats); }

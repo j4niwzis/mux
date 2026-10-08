@@ -12,6 +12,7 @@ import knot;
 import mux.core;
 import mux.config;
 import mux.ui;
+import skiff.model;
 import mux.app.network;
 import mux.app.store;
 import mux.app.services;
@@ -138,7 +139,7 @@ class marks_part {
       s_->store->keep_marked(in, *said);
       return true;
     });
-    if (!listed_ || !s_->root().marks_up()) {
+    if (!listed_ || !s_->showing->root().marks.fValue) {
       listed_.reset();
       return;
     }
@@ -201,7 +202,7 @@ class marks_part {
       return entry;
     };
     const auto entries = std::ranges::to<std::vector>(std::views::transform(marks_of(*chat, one.kind), entry_of));
-    s_->root().open_marks(one.kind, *chat, entries, s_->model);
+    this->show(mux::ui::marks_facts{one.kind, in, entries, s_->model});
     listed_ = one.kind;
   }
   // One of the list, gone to, and let go.
@@ -218,10 +219,15 @@ class marks_part {
   }
   void apply(const request::close_marks&) {
     listed_.reset();
-    s_->root().close_marks();
+    this->show(std::nullopt);
   }
 
  private:
+  // The list open with these facts, or closed: what the window shows.
+  void show(std::optional<mux::ui::marks_facts> facts) {
+    (void)s_->showing->apply(skiff::model::edit(skiff::model::placeOf<std::optional<mux::ui::marks_facts>, mux::ui::shown_root>(),
+                                                skiff::model::setTo(std::move(facts))));
+  }
   [[nodiscard]] const mux::conversation* chosen() const {
     const auto& chosen = s_->root().main().chosen;
     return chosen ? s_->model->find(*chosen) : nullptr;

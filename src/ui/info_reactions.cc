@@ -218,6 +218,15 @@ struct mark_entry {
   std::string key;
 };
 
+// A list of marks open: of which kind, in which chat, what it lists, and
+// the chats it shows them from.
+struct marks_facts {
+  mark_kind_t kind;
+  conversation_id in;
+  std::vector<mark_entry> entries;
+  const model* now = nullptr;
+};
+
 // The mentions of the user or the reactions to theirs not yet seen, as a
 // list of the chat's bubbles: each its message -- a reaction's with who
 // reacted and with what on a badge at its bottom right. Pressed, gone to.
@@ -270,15 +279,19 @@ struct marks_box : nodes::Stack {
     top_bar top;
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
-  marks_box(const ui_needs<Actions>& n, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
+  // Made from what the list is of; its rows from the chat as the chats
+  // hold it now -- none where it is gone.
+  marks_box(const ui_needs<Actions>& n, const marks_facts& facts)
       : parts{.top = top_bar(*n.colours, spl::visit(spl::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
                                                    [](mark_kind::reaction) { return std::string("Reactions"); }},
-                                kind),
+                                facts.kind),
                              {}, {}, false, true)} {
     auto& rows = listed_rows(*this, parts.list, 520.0f);
-    rows.reserve(entries.size());
-    for (const mark_entry& one : entries)
-      rows.emplace_back(n, kind, in, one, now);
+    const conversation* in = facts.now == nullptr ? nullptr : facts.now->find(facts.in);
+    if (in == nullptr)
+      return;
+    rows.reserve(facts.entries.size());
+    std::ranges::for_each(facts.entries, [&](const mark_entry& one) { rows.emplace_back(n, facts.kind, *in, one, facts.now); });
   }
 };
 

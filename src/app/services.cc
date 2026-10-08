@@ -11,6 +11,7 @@ import mux.platform.dialogs;
 import mux.platform.audio;
 import mux.vault;
 import skiff.scene;
+import skiff.model;
 import mux.core;
 import mux.config;
 import mux.ui;
@@ -27,6 +28,8 @@ export namespace mux::app {
 
 struct services {
   mux::model* model = nullptr;
+  // What the window shows that the program opens and closes.
+  mux::ui::shown_model* showing = nullptr;
   // The emoji and stickers kept, as the window's panels show them.
   mux::ui::emoji_kept emoji;
   // The looks the window shows.

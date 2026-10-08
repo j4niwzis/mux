@@ -228,6 +228,10 @@ struct app : kept_settings {
   // The window bound to the model, and the pages with the model's widgets
   // it was last walked whole with.
   skiff::bind::Binding<kept_model> window_binding;
+  // What the window shows that the program opens and closes -- the dialogs'
+  // facts -- and the binding the dialogs read it through.
+  mux::ui::shown_model showing{mux::ui::shown_root{}};
+  skiff::bind::Binding<mux::ui::shown_model> showing_binding;
   std::array<const void*, 3> bound_pages{};
   // And to the chats, the window's other model.
   skiff::bind::Binding<mux::chats_model> chats_binding;

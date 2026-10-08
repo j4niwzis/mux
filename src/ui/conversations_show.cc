@@ -153,10 +153,10 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
       if (one.space)
         for (const std::string& child : one.children)
           if (const auto found = chats->find(child);
-              found != chats->end() && found->second.space && !this->shown_as_forum(found->second) && child != one.id.id &&
+              found != nullptr && found->space && !this->shown_as_forumfound->second && child != one.id.id &&
               !parent_of.contains(child)) {
             parent_of.emplace(child, one.id.id);
-            spaces_in[one.id.id].push_back(&found->second);
+            spaces_in[one.id.id].push_back(found);
           }
   std::set<std::string> open;
   if (const std::optional<std::string> chosen_room = space_of(folder))
@@ -691,7 +691,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
                              return false;
                            const auto& chats = now.accounts().at(*current).conversations;
                            const auto found = chats.find(s.room);
-                           return found != chats.end() && found->second.space;
+                           return found != nullptr && found->space;
                          },
                          [](const auto&) { return false; }},
       folder);
@@ -726,8 +726,8 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
         todo.pop_back();
         if (!seen.insert(at).second)
           continue;
-        if (const auto found = in->conversations.find(at); found != in->conversations.end())
-          for (const std::string& child : found->second.children) {
+        if (const auto found = in->conversations.find(at); found != nullptr)
+          for (const std::string& child : found->children) {
             in_space.insert(child);
             todo.push_back(child);
           }
@@ -831,8 +831,8 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
         const message* best = nullptr;
         std::string best_in;
         for (const std::string& child : one->children)
-          if (const auto found = in->conversations.find(child); found != in->conversations.end() && !found->second.space) {
-            const conversation& topic = found->second;
+          if (const auto found = in->conversations.find(child); found != nullptr && !found->space) {
+            const conversation& topic = *found;
             made.unread += topic.unread_here(events_of(&topic));
             made.highlights += topic.highlights;
             if (const message* last = newest(topic, events_of(&topic)); last && (!best || last->at > best->at)) {
@@ -843,9 +843,9 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
         if (best) {
           made.timeline.push_back(*best);
           // Said as tdesktop says a forum's newest: in which topic, by whom.
-          if (const auto found = in->conversations.find(best_in); found != in->conversations.end()) {
-            made.forum_topic = display_name(found->second);
-            made.members = found->second.members;
+          if (const auto found = in->conversations.find(best_in); found != nullptr) {
+            made.forum_topic = display_name(*found);
+            made.members = found->members;
           }
         }
         one = &forum_shown.insert_or_assign(one->id, std::move(made)).first->second;

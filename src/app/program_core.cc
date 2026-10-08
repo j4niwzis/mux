@@ -281,10 +281,15 @@ void app::take_page_input() {
     bound_pages = now;
     window_binding.invalidate();
     window_binding.refresh(root(), this->state);
-  chats_binding.refresh(root(), model->chats());
+    chats_binding.invalidate();
+    chats_binding.refresh(root(), model->chats());
   }
+  // Each model's widgets drained by its own binding: the second where the
+  // first found something to do, the count of it gone with the first.
+  const bool pending = skiff::bind::pendingCount() > 0;
   window_binding.drain(root(), this->state, &ask);
-  chats_binding.drain(root(), model->chats(), &ask);
+  if (pending)
+    skiff::bind::drain(root(), model->chats(), &ask);
   this->settle_model();
 }
 // How the window looks, as the model holds it, put where the window's

@@ -60,14 +60,14 @@ template <auto M>
 // The space each chat is in, by the chat, as the chats say: what a chat
 // has not chosen, its space's choice says.
 [[nodiscard]] inline std::map<conversation_id, conversation_id> space_above_of(const skiff::model::Keyed<account_id, account>& accounts) {
-  std::map<conversation_id, conversation_id> out;
-  std::ranges::for_each(accounts.values(), [&](const account& one) {
-    std::ranges::for_each(one.conversations.values() | std::views::filter(&conversation::space), [&](const conversation& space) {
-      std::ranges::for_each(space.children | std::views::filter([&](const std::string& child) { return child != space.id.id; }),
-                            [&](const std::string& child) { out.try_emplace(conversation_id{space.id.account, child}, space.id); });
-    });
-  });
-  return out;
+  // Each space's own rooms -- not itself -- by the room, the first space
+  // that holds one kept.
+  const auto rooms_of = [](const conversation& space) {
+    return space.children | std::views::filter([&space](const std::string& child) { return child != space.id.id; }) |
+           std::views::transform([&space](const std::string& child) { return std::pair{conversation_id{space.id.account, child}, space.id}; });
+  };
+  return accounts.values() | std::views::transform([](const account& one) { return one.conversations.values(); }) | std::views::join |
+         std::views::filter(&conversation::space) | std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::map>();
 }
 
 // What a chat's settings come to, read from what is kept and the spaces

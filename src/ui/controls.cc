@@ -86,6 +86,13 @@ struct avatar_button : avatar_mark {
     return ::mux::ui::request::open_avatar{key};
   }
 };
+// A button that is what its box is for: drawn as the primary one.
+template <class Button>
+[[nodiscard]] Button primary(Button button) {
+  button.setPrimary(true);
+  return button;
+}
+
 // A text cut where it runs out of room.
 [[nodiscard]] inline nodes::Text elided(nodes::Text text) {
   text.setElided(true);
@@ -165,7 +172,7 @@ struct row_item : pressable<skiff::compose::Stacked> {
 
 // A round button with only an icon in it: back, close.
 template <class Act>
-struct icon_button : scene::Node {
+struct icon_button : skiff::compose::Specced {
   Act act;
   struct parts_t {
     nodes::Icon mark;
@@ -173,14 +180,9 @@ struct icon_button : scene::Node {
 
   // Round, lit under the pointer or the keyboard's focus.
   icon_button(const palette& colours, icon_t mark, Act what)
-      : act(std::move(what)), parts{.mark = nodes::Icon(shape_of(mark), colours.text)} {
-    fState.apply({.width = 36.0f,
-                  .height = 36.0f,
-                  .cornerRadius = 18.0f,
-                  .hoverBackground = colours.chosen,
-                  .focusBackground = colours.chosen});
-    parts.mark.apply({.fill = true});
-  }
+      : Specced({.width = 36.0f, .height = 36.0f, .cornerRadius = 18.0f, .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
+        act(std::move(what)),
+        parts{.mark = skiff::compose::styled({.fill = true}, nodes::Icon(shape_of(mark), colours.text))} {}
   void set_colour(skia::SkColor colour) { parts.mark.setColour(colour); }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -308,7 +310,7 @@ struct sets_nth {
 // Three lines at the top-left of the conversation list: a press pulls the
 // drawer out.
 template <class Actions>
-struct menu_button : scene::Node {
+struct menu_button : skiff::compose::Specced {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::open_drawer;
   // Three bars, and a plate under them while it is hovered or focused.
@@ -317,14 +319,12 @@ struct menu_button : scene::Node {
   } parts;
 
   menu_button(const palette& colours)
-      : parts{.bars = nodes::Icon(IconShape{{{nodes::mark::rect{-8.0f, -7.0f, 8.0f, -5.0f, 1.0f}, 0.0f, true},
-                                             {nodes::mark::rect{-8.0f, -1.0f, 8.0f, 1.0f, 1.0f}, 0.0f, true},
-                                             {nodes::mark::rect{-8.0f, 5.0f, 8.0f, 7.0f, 1.0f}, 0.0f, true}}},
-                                  colours.text)} {
-    fState.apply({.width = 36.0f, .height = 36.0f, .cornerRadius = 8.0f, .hoverBackground = colours.chosen,
-                  .focusBackground = colours.chosen});
-    parts.bars.apply({.fill = true});
-  }
+      : Specced({.width = 36.0f, .height = 36.0f, .cornerRadius = 8.0f, .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
+        parts{.bars = skiff::compose::styled({.fill = true},
+                                             nodes::Icon(IconShape{{{nodes::mark::rect{-8.0f, -7.0f, 8.0f, -5.0f, 1.0f}, 0.0f, true},
+                                                                    {nodes::mark::rect{-8.0f, -1.0f, 8.0f, 1.0f, 1.0f}, 0.0f, true},
+                                                                    {nodes::mark::rect{-8.0f, 5.0f, 8.0f, 7.0f, 1.0f}, 0.0f, true}}},
+                                                         colours.text))} {}
 
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -919,20 +919,16 @@ struct count_badge : skiff::compose::Stacked {
 // A label, and a small button on its right that is there only where it
 // does something: an element's look over a way back to the bubbles'.
 template <class Act>
-struct label_button_row : nodes::Stack {
+struct label_button_row : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text label;
     button_for<Act> reset;
   } parts;
   label_button_row(const palette& colours, std::string label, std::string button, Act act, bool shown)
-      : parts{.label = nodes::Text(std::move(label), 13.0f, colours.text), .reset = button_for<Act>(colours.widgets, std::move(button), std::move(act))} {
-    this->setHorizontal();
-    this->setGap(6.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    parts.reset.apply({.width = 96.0f, .height = 26.0f});
-    parts.reset.setVisible(shown);
-  }
+      : Stacked(skiff::compose::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.label = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 13.0f, colours.text)),
+              .reset = skiff::compose::visible(shown, skiff::compose::styled({.width = 96.0f, .height = 26.0f},
+                                                                             button_for<Act>(colours.widgets, std::move(button), std::move(act))))} {}
 };
 
 
@@ -940,17 +936,17 @@ struct label_button_row : nodes::Stack {
 // the name, dim, over its cells, wrapped as wide as it is. The cells are put
 // in by what it is a section of.
 template <class Cell>
-struct cell_section : nodes::Stack {
+struct cell_section : skiff::compose::Stacked {
   using cells_t = nodes::Flow<std::vector<Cell>>;
   struct parts_t {
     nodes::Text title;
-    cells_t cells{{.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {}};
+    cells_t cells;
   } parts;
-  cell_section(const palette& colours, std::string name) : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true)} {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});
-    parts.cells.apply({.fillX = true, .autoSize = scene::axes::kY});
-  }
+  cell_section(const palette& colours, std::string name)
+      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.title = skiff::compose::styled({.margin = {10.0f, 0.0f, 6.0f, 7.0f}}, nodes::Text(std::move(name), 13.0f, colours.dim, true)),
+              .cells = skiff::compose::styled({.fillX = true, .autoSize = scene::axes::kY},
+                                              cells_t({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {}))} {}
   [[nodiscard]] std::vector<Cell>& each() { return std::get<0>(parts.cells.fChildren); }
 };
 
@@ -966,48 +962,38 @@ struct tab_strip : nodes::Stack {
 // A dialog's buttons, at its bottom right: Cancel, and what it does --
 // Send, Save, Create room -- the primary one.
 template <class Cancel, class Confirm>
-struct dialog_buttons : nodes::Stack {
+struct dialog_buttons : skiff::compose::Stacked {
   struct parts_t {
     widgets::Button<Cancel> cancel;
     widgets::Button<Confirm> confirm;
   } parts;
   dialog_buttons(const palette& colours, std::string confirm, Cancel cancel_it, Confirm confirm_it, float width = 96.0f)
-      : parts{.cancel = widgets::Button<Cancel>(colours.widgets, "Cancel", std::move(cancel_it)),
-              .confirm = widgets::Button<Confirm>(colours.widgets, std::move(confirm), std::move(confirm_it))} {
-    this->setHorizontal();
-    this->setGap(8.0f);
-    fStack.justify = nodes::justify::end{};
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}});
-    parts.confirm.setPrimary(true);
-    parts.cancel.apply({.width = width, .height = 36.0f});
-    parts.confirm.apply({.width = width, .height = 36.0f});
-  }
+      : Stacked(skiff::compose::justified(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}),
+                                          nodes::justify::end{})),
+        parts{.cancel = skiff::compose::styled({.width = width, .height = 36.0f}, widgets::Button<Cancel>(colours.widgets, "Cancel", std::move(cancel_it))),
+              .confirm = skiff::compose::styled({.width = width, .height = 36.0f},
+                                                primary(widgets::Button<Confirm>(colours.widgets, std::move(confirm), std::move(confirm_it))))} {}
 };
 
 
 // A row's top line, as a chat's in the list: the name, bold, as long as it
 // can be, and the time on the right.
-struct name_time_line : nodes::Stack {
+struct name_time_line : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text name;
     nodes::Text time;
   } parts;
   name_time_line(std::string name, std::string time, skia::SkColor name_colour, skia::SkColor time_colour, float time_size)
-      : parts{.name = nodes::Text(std::move(name), 13.0f, name_colour, true),
-              .time = nodes::Text(std::move(time), time_size, time_colour)} {
-    this->setHorizontal();
-    this->setGap(8.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.name.setElided(true);
-    parts.name.apply({.grow = scene::axes::kX});
-  }
+      : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.name = skiff::compose::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(name), 13.0f, name_colour, true))),
+              .time = nodes::Text(std::move(time), time_size, time_colour)} {}
 };
 
 
 // An accent's circle: its colour, a ring where it is the one in use; pressed,
 // Choose is told it.
 template <class Choose>
-struct accent_circle : scene::Node {
+struct accent_circle : skiff::compose::Specced {
   Choose choose;
   config::accent_t accent;
   bool chosen = false;
@@ -1017,10 +1003,12 @@ struct accent_circle : scene::Node {
     nodes::Box<> dot;
   } parts;
   accent_circle(Choose what, config::accent_t which, const config::theme_t& in)
-      : choose(std::move(what)), accent(which), shade(colour_of(which, in)), parts{.dot = nodes::Box<>(shade)} {
-    fState.apply({.width = 34.0f, .height = 34.0f, .cornerRadius = 17.0f});
-    parts.dot.apply({.place = scene::anchor::kCentre, .width = 24.0f, .height = 24.0f, .cornerRadius = 12.0f});
-  }
+      : Specced({.width = 34.0f, .height = 34.0f, .cornerRadius = 17.0f}),
+        choose(std::move(what)),
+        accent(which),
+        shade(colour_of(which, in)),
+        parts{.dot = skiff::compose::styled({.place = scene::anchor::kCentre, .width = 24.0f, .height = 24.0f, .cornerRadius = 12.0f},
+                                            nodes::Box<>(shade))} {}
   // A ring in its shade while it is the one in use.
   void set_chosen(bool on) {
     chosen = on;
@@ -1041,23 +1029,28 @@ struct accent_circle : scene::Node {
 // Telegram's eight accents in a row -- the theme's own first, where it is
 // one to choose: the window's accent, an account's colour.
 template <class Choose>
-struct accent_circles : nodes::Stack {
+struct accent_circles : skiff::compose::Stacked {
   struct parts_t {
     std::vector<accent_circle<Choose>> circles;
   } parts;
-  accent_circles(Choose choose, const config::theme_t& in, bool with_theme_own) {
-    this->setHorizontal();
-    this->setGap(4.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}});
+  // Telegram's eight, in its order -- after the theme's own, where it is
+  // one to choose.
+  [[nodiscard]] static std::vector<config::accent_t> accents_of(bool with_theme_own) {
+    std::vector<config::accent_t> all;
     if (with_theme_own)
-      parts.circles.emplace_back(choose, config::accent::theme_own{}, in);
-    for (const config::accent_t& one :
-         {config::accent_t{config::accent::blue{}}, config::accent_t{config::accent::green{}},
-          config::accent_t{config::accent::pink{}}, config::accent_t{config::accent::orange{}},
-          config::accent_t{config::accent::purple{}}, config::accent_t{config::accent::red{}},
-          config::accent_t{config::accent::grey{}}, config::accent_t{config::accent::gold{}}})
-      parts.circles.emplace_back(choose, one, in);
+      all.emplace_back(config::accent::theme_own{});
+    const std::initializer_list<config::accent_t> eight{
+        config::accent_t{config::accent::blue{}},   config::accent_t{config::accent::green{}},  config::accent_t{config::accent::pink{}},
+        config::accent_t{config::accent::orange{}}, config::accent_t{config::accent::purple{}}, config::accent_t{config::accent::red{}},
+        config::accent_t{config::accent::grey{}},   config::accent_t{config::accent::gold{}}};
+    all.insert(all.end(), eight.begin(), eight.end());
+    return all;
   }
+  accent_circles(Choose choose, const config::theme_t& in, bool with_theme_own)
+      : Stacked(skiff::compose::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}})),
+        parts{.circles = accents_of(with_theme_own) |
+                         std::views::transform([&](const config::accent_t& one) { return accent_circle<Choose>(choose, one, in); }) |
+                         std::ranges::to<std::vector>()} {}
   void show_chosen(const config::accent_t& now) {
     for (auto& circle : parts.circles)
       circle.set_chosen(circle.accent == now);

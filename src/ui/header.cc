@@ -49,12 +49,6 @@ struct notice_facts {
   line.apply({.fillX = true});
   return line;
 }
-// A button that is what the box is for: drawn as the primary one.
-template <class Button>
-[[nodiscard]] Button primary(Button button) {
-  button.setPrimary(true);
-  return button;
-}
 
 // A notice: its heading and its text over an OK at the end -- as high as
 // what it says, no room left empty under its button.

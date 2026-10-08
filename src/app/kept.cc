@@ -37,6 +37,23 @@ struct chat_choices {
   friend bool operator==(const chat_choices&, const chat_choices&) = default;
 };
 
+// What is kept, as the model holds it: each chat's own choices, by the chat.
+struct kept_root {
+  skiff::model::Keyed<conversation_id, chat_choices> chats;
+};
+// The file to be written again: one, however many changes asked for it.
+struct write_kept {
+  [[nodiscard]] constexpr int key() const { return 0; }
+};
+// A chat's choices changed or gone: the file is written again.
+struct kept_reactions {
+  [[nodiscard]] write_kept on(skiff::model::Changed<chat_choices>, const chat_choices&) const { return {}; }
+  [[nodiscard]] write_kept on(skiff::model::Removed<chat_choices>, const chat_choices&, const conversation_id&) const {
+    return {};
+  }
+};
+using kept_model = skiff::model::Model<kept_root, kept_reactions>;
+
 struct kept_settings {
   // What is kept is read and written through: the program's, given by main.
   mux::vault::vault* vault = nullptr;
@@ -93,7 +110,7 @@ struct kept_settings {
   std::optional<mux::config::bubble_look> panels;
   // What each chat -- or space -- chose for itself, by the chat: only those
   // that chose something.
-  std::map<conversation_id, chat_choices> chats;
+  kept_model model;
   // The space each chat is in -- the first found holding it -- set by the
   // program from the model at each refresh: a space's own choices are its
   // rooms', where they have none, nearest first, through spaces in spaces.
@@ -102,17 +119,27 @@ struct kept_settings {
   // A chat's own choice of one setting; as unsaid where it chose nothing.
   template <class Field>
   [[nodiscard]] decltype(Field::value) own_of(const conversation_id& chat, Field chat_choices::* field) const {
-    const auto found = chats.find(chat);
-    return found == chats.end() ? decltype(Field::value){} : (found->second.*field).value;
+    const chat_choices* found = model.root().chats.find(chat);
+    return found == nullptr ? decltype(Field::value){} : (found->*field).value;
   }
   // One setting of a chat's, chosen: the chat forgotten where it then has
   // nothing chosen.
   template <class Field>
   void choose(const conversation_id& chat, Field chat_choices::* field, decltype(Field::value) now) {
-    auto& own = chats[chat];
-    (own.*field).value = std::move(now);
-    if (own == chat_choices{})
-      chats.erase(chat);
+    const chat_choices* had = model.root().chats.find(chat);
+    chat_choices next = had == nullptr ? chat_choices{} : *had;
+    (next.*field).value = now;
+    if (next == chat_choices{}) {
+      if (had != nullptr)
+        (void)model.apply(skiff::model::take<chat_choices>(chat));
+    } else if (had == nullptr) {
+      (void)model.apply(skiff::model::put<chat_choices>(chat, std::move(next)));
+    } else {
+      // Only the one setting, in its place: what shows it is told, and
+      // nothing else.
+      (void)model.apply(skiff::model::edit(skiff::model::placeOf<Field, kept_root>(chat),
+                                           skiff::model::setTo(Field{std::move(now)})));
+    }
   }
   // A flag of a chat's, flipped.
   template <skiff::model::Name N>
@@ -123,9 +150,10 @@ struct kept_settings {
   template <skiff::model::Name N>
   [[nodiscard]] std::set<conversation_id> chats_where(skiff::model::Named<N, bool> chat_choices::* flag) const {
     std::set<conversation_id> out;
-    for (const auto& [chat, chosen] : chats)
-      if ((chosen.*flag).value)
-        out.insert(chat);
+    const auto& chats = model.root().chats;
+    for (std::size_t i = 0; i < chats.size(); ++i)
+      if ((chats.valueAt(i).*flag).value)
+        out.insert(chats.keyAt(i));
     return out;
   }
   // A chat's own choice of a setting, else the nearest space's above it.
@@ -330,6 +358,8 @@ struct kept_settings {
     const auto chat_of = [](const std::string& account, const std::string& conversation) {
       return mux::conversation_id{{mux::proto::protocol_of(account), account}, conversation};
     };
+    // Each chat's choices put together first, then the model made of them.
+    std::map<conversation_id, chat_choices> chats;
     this->saved = mux::config::accounts_of(saved);
     this->foreign_accounts = mux::config::foreign_of(saved);
     this->motion = saved.motion;
@@ -376,7 +406,7 @@ struct kept_settings {
     this->proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
     this->notifications = saved.notifications.value_or(mux::config::notification_settings{});
     for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
-      this->chats[chat_of(one.account, one.conversation)].notify.value = mux::config::notify_choices{
+      chats[chat_of(one.account, one.conversation)].notify.value = mux::config::notify_choices{
               .on = one.on,
               .mentions = spl::visit(spl::overloaded{[](mux::config::notify_mode::mentions) { return std::optional<bool>(true); },
                                                            [](mux::config::notify_mode::all) { return std::optional<bool>(false); },
@@ -386,7 +416,7 @@ struct kept_settings {
               .text = one.text,
               .sound = one.sound};
     for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{})) {
-      auto& chosen = this->chats[chat_of(one.account, one.conversation)];
+      auto& chosen = chats[chat_of(one.account, one.conversation)];
       chosen.room_events.value = one.show;
       chosen.room_event_kinds.value = one.kinds;
       chosen.receipts.value = one.receipts;
@@ -405,8 +435,11 @@ struct kept_settings {
     }
     this->placements = saved.placements.value_or(std::vector<mux::config::chat_placement>{});
     for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
-      this->chats[chat_of(one.account, one.conversation)].muted.value = true;
-    std::erase_if(this->chats, [](const auto& one) { return one.second == chat_choices{}; });
+      chats[chat_of(one.account, one.conversation)].muted.value = true;
+    std::erase_if(chats, [](const auto& one) { return one.second == chat_choices{}; });
+    kept_root root;
+    root.chats.putAll(chats);
+    this->model = kept_model(std::move(root));
   }
   [[nodiscard]] mux::config::file file() const {
     auto out = mux::config::file_of(saved, foreign_accounts);
@@ -473,7 +506,10 @@ struct kept_settings {
     std::vector<mux::config::chat_notify> notify;
     std::vector<mux::config::room_events_choice> choices;
     std::vector<mux::config::muted_chat> muted;
-    for (const auto& [chat, chosen] : chats) {
+    const auto& chats = model.root().chats;
+    for (std::size_t i = 0; i < chats.size(); ++i) {
+      const conversation_id& chat = chats.keyAt(i);
+      const chat_choices& chosen = chats.valueAt(i);
       if (const auto& own = chosen.notify.value; own != mux::config::notify_choices{})
         notify.push_back({.account = chat.account.address,
                           .conversation = chat.id,
@@ -513,7 +549,10 @@ struct kept_settings {
     return out;
   }
   // Written back: nothing, or why not.
-  [[nodiscard]] std::optional<std::string> write() const {
+  [[nodiscard]] std::optional<std::string> write() {
+    // What the model asked for is this: done here, by whoever changed it.
+    (void)model.outbox().drain();
+    (void)model.takeChanges();
     if (keeps_nothing)
       return std::nullopt;
     if (config_error)

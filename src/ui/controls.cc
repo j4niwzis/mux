@@ -256,7 +256,7 @@ struct page_header : nodes::Stack {
   bool step_back() {
     if (!parts.back.visible())
       return false;
-    parts.back.act();
+    (void)parts.back.onClick(0.0f, 0.0f);
     return true;
   }
 };

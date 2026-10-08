@@ -361,8 +361,13 @@ struct pinned_bar : nodes::Stack {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    press();
+    act_on(fState, press);
     return true;
+  }
+  auto onPress()
+    requires skiff::scene::Answering<Press>
+  {
+    return press();
   }
 };
 
@@ -426,9 +431,10 @@ struct search_typed : outbox {
   void operator()(std::string_view text) { this->emit(::mux::ui::request::search_typed{std::string(text)}); }
 };
 template <class Actions>
-struct search_step : outbox {
+struct search_step {
+  using Answer = ::mux::ui::request::search_step;
   bool older = true;
-  void operator()() { this->emit(::mux::ui::request::search_step{older}); }
+  ::mux::ui::request::search_step operator()() { return ::mux::ui::request::search_step{older}; }
 };
 template <class Actions>
 struct search_bar : nodes::Stack, outbox {
@@ -447,8 +453,8 @@ struct search_bar : nodes::Stack, outbox {
   search_bar(const palette& colours)
       : parts{.field = field_t(colours.widgets, "Search", {}),
                           .found = nodes::Text("", 13.0f, colours.dim),
-                          .newer = step_button(colours, icon::up{}, {{}, false}),
-                          .older = step_button(colours, icon::down{}, {{}, true}),
+                          .newer = step_button(colours, icon::up{}, {false}),
+                          .older = step_button(colours, icon::down{}, {true}),
                           .close = close_button(colours, icon::close{}, {}),
                           .bottom_line = nodes::Box<>(colours.band)} {
     auto& [field, found, newer, older, close, bottom_line] = parts;

@@ -442,8 +442,9 @@ template <class Actions>
 struct wallpaper_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{380.0f}}; }
-  struct close_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_wallpaper{}); }
+  struct close_it {
+    using Answer = ::mux::ui::request::close_wallpaper;
+    ::mux::ui::request::close_wallpaper operator()() { return ::mux::ui::request::close_wallpaper{}; }
   };
   using header_t = page_header<no_back, close_it>;
   struct parts_t {

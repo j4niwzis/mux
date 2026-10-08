@@ -192,9 +192,10 @@ struct panel_ease_t {
 };
 // A chat background's dialog, for a level.
 template <class Actions>
-struct open_wallpaper_at : outbox {
+struct open_wallpaper_at {
+  using Answer = ::mux::ui::request::open_wallpaper;
   choice_level_t level;
-  void operator()() { this->emit(::mux::ui::request::open_wallpaper{level}); }
+  ::mux::ui::request::open_wallpaper operator()() { return ::mux::ui::request::open_wallpaper{level}; }
 };
 // A background's picture, read from where mux keeps it and decoded once.
 inline skia::Sp<skia::SkImage> wallpaper_picture(const std::string& path) {
@@ -223,16 +224,34 @@ inline std::vector<std::pair<std::string, std::string>>& listed_avatars() {
 // Whether files may be sent into an account's chats: where its account
 // sends them, and its protocol allows it now.
 [[nodiscard]] inline bool may_send_files(const ui_shared& shared, const account_id& of);
+// An act done where a node is pressed: one that answers, said pressed --
+// its answer asked as the press is delivered (the node's onPress()); else
+// called at once.
+template <class Act>
+  requires skiff::scene::Answering<Act>
+void act_on(scene::State& pressed, Act&) {
+  skiff::scene::pressLater(pressed);
+}
+template <class Act>
+void act_on(scene::State&, Act& act) {
+  act();
+}
 // A node a press acts on -- a row, a tile, a tab: it takes the pointer, is
-// lit under it, and a click calls its act.
+// lit under it, and a click calls its act -- or, where the act answers,
+// says it was pressed, the answer asked as the press is delivered.
 template <class Base>
 struct pressable : Base {
   using Base::Base;
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(this auto& self, float, float) {
-    self.act();
+    act_on(self.fState, self.act);
     return true;
+  }
+  auto onPress(this auto& self)
+    requires skiff::scene::Answering<std::remove_cvref_t<decltype(self.act)>>
+  {
+    return self.act();
   }
 };
 // The emoji and stickers kept (emoji_kept), and how fills are painted
@@ -396,18 +415,7 @@ struct sends {
 // answer to a press (scene::Answering).
 template <class Act>
 concept sending = requires(Act& a) { a.fEmitted; } || skiff::scene::Answering<Act>;
-// An act done where a node is pressed: one that answers, said pressed --
-// its answer asked as the press is delivered (the node's onPress()); else
-// called at once.
-template <class Act>
-  requires skiff::scene::Answering<Act>
-void act_on(scene::State& pressed, Act&) {
-  skiff::scene::pressLater(pressed);
-}
-template <class Act>
-void act_on(scene::State&, Act& act) {
-  act();
-}
+
 
 // A skiff-widgets button or toggle for an act: the plain one where the act
 // sends events, which the walk takes from its action; else the one the
@@ -418,14 +426,16 @@ template <class Act>
 using toggle_for = std::conditional_t<sending<Act>, widgets::internal::Toggle<Act>, widgets::Toggle<Act>>;
 // The requests about one saved account.
 template <class Actions>
-struct flip_account : outbox {
+struct flip_account {
+  using Answer = ::mux::ui::request::flip_enabled;
   std::string address;
-  void operator()() { this->emit(::mux::ui::request::flip_enabled{address}); }
+  ::mux::ui::request::flip_enabled operator()() { return ::mux::ui::request::flip_enabled{address}; }
 };
 template <class Actions>
-struct remove_account : outbox {
+struct remove_account {
+  using Answer = ::mux::ui::request::remove_account;
   std::string address;
-  void operator()() { this->emit(::mux::ui::request::remove_account{address}); }
+  ::mux::ui::request::remove_account operator()() { return ::mux::ui::request::remove_account{address}; }
 };
 
 // ---- laying out ----------------------------------------------------------

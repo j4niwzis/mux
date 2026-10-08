@@ -245,7 +245,7 @@ struct info_panel : nodes::Stack, outbox {
     members_head(const palette& colours, std::size_t count)
         : parts{.people = icon_view(colours, icon::people{}),
                 .title = nodes::Text(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, colours.dim, true),
-                .add_member = add_button(colours, icon::add_person{}, {{}, "Adding members"})} {
+                .add_member = add_button(colours, icon::add_person{}, {"Adding members"})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}});

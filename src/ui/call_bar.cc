@@ -91,17 +91,21 @@ inline constexpr skia::SkColor kAnswerGreen = skia::colorSetARGB(255, 0x0D, 0xBD
 // none once it has ended.
 template <class Actions>
 struct call_buttons : nodes::Stack {
-  struct accept_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::accept_call{}); }
+  struct accept_it {
+    using Answer = ::mux::ui::request::accept_call;
+    ::mux::ui::request::accept_call operator()() { return ::mux::ui::request::accept_call{}; }
   };
-  struct decline_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::decline_call{}); }
+  struct decline_it {
+    using Answer = ::mux::ui::request::decline_call;
+    ::mux::ui::request::decline_call operator()() { return ::mux::ui::request::decline_call{}; }
   };
-  struct mute_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::mute_call{}); }
+  struct mute_it {
+    using Answer = ::mux::ui::request::mute_call;
+    ::mux::ui::request::mute_call operator()() { return ::mux::ui::request::mute_call{}; }
   };
-  struct hang_up_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::hang_up{}); }
+  struct hang_up_it {
+    using Answer = ::mux::ui::request::hang_up;
+    ::mux::ui::request::hang_up operator()() { return ::mux::ui::request::hang_up{}; }
   };
   // Over: called again, as Element's Call back; or put away.
   struct call_back_it : outbox {
@@ -111,8 +115,9 @@ struct call_buttons : nodes::Stack {
         this->emit(::mux::ui::request::start_call{*buttons->in_});
     }
   };
-  struct dismiss_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::dismiss_call{}); }
+  struct dismiss_it {
+    using Answer = ::mux::ui::request::dismiss_call;
+    ::mux::ui::request::dismiss_call operator()() { return ::mux::ui::request::dismiss_call{}; }
   };
   struct parts_t {
     icon_button<mute_it> mute;

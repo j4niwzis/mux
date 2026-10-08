@@ -46,9 +46,10 @@ struct picture_viewer : nodes::Stack, outbox {
     float factor;
     void operator()() const { viewer->zoom_to(viewer->zoom * factor); }
   };
-  struct save_it : outbox {
+  struct save_it {
+    using Answer = ::mux::ui::request::save_picture;
     std::string source;
-    void operator()() { this->emit(::mux::ui::request::save_picture{source}); }
+    ::mux::ui::request::save_picture operator()() { return ::mux::ui::request::save_picture{source}; }
   };
   // The loader pressed: the download stopped, or started again.
   struct press_loader {
@@ -72,7 +73,7 @@ struct picture_viewer : nodes::Stack, outbox {
                 .texts = two_lines(colours, name, when, 14.0f, 2.0f),
                 .smaller = icon_button<zoom_by>(colours, icon::minus{}, {viewer, 1.0f / 1.25f}),
                 .larger = icon_button<zoom_by>(colours, icon::plus{}, {viewer, 1.25f}),
-                .save = icon_button<save_it>(colours, icon::download{}, {{}, source}),
+                .save = icon_button<save_it>(colours, icon::download{}, {source}),
                 .close = close_button(colours, icon::close{}, {})} {
       this->setHorizontal();
       this->setGap(8.0f);
@@ -301,9 +302,14 @@ struct picture_viewer : nodes::Stack, outbox {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      act();
+      act_on(fState, act);
       viewer->close_menu_later();
       return true;
+    }
+    auto onPress()
+      requires skiff::scene::Answering<Do>
+    {
+      return act();
     }
   };
   struct picture_menu : nodes::Stack {

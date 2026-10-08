@@ -30,9 +30,10 @@ export namespace mux::ui {
 
 // A renderer chosen on the Rendering page.
 template <class Actions>
-struct choose_renderer : outbox {
+struct choose_renderer {
+  using Answer = ::mux::ui::request::set_renderer;
   config::renderer_t renderer;
-  void operator()() { this->emit(::mux::ui::request::set_renderer{renderer}); }
+  ::mux::ui::request::set_renderer operator()() { return ::mux::ui::request::set_renderer{renderer}; }
 };
 
 // A theme's card on the Appearance page: a small picture of it -- its
@@ -330,8 +331,8 @@ struct rendering_page : nodes::Stack {
       nodes::Text note;
     } parts;
     body(const palette& colours)
-        : parts{.gpu = choice(colours, "OpenGL (the graphics card)", {{}, config::renderer::opengl{}}, icon::none{}, false),
-                .cpu = choice(colours, "Software (the processor)", {{}, config::renderer::software{}}, icon::none{}, false),
+        : parts{.gpu = choice(colours, "OpenGL (the graphics card)", {config::renderer::opengl{}}, icon::none{}, false),
+                .cpu = choice(colours, "Software (the processor)", {config::renderer::software{}}, icon::none{}, false),
                 .note = note_text(colours, "Takes effect when mux starts again.")} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
       parts.note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});

@@ -709,13 +709,15 @@ struct composer_bar : nodes::Stack {
   // Those asking to join, for those who may let them in: the first
   // of them -- who, and why -- with Approve (an invite) and Deny (their
   // knock refused), and how many more.
-  struct approve_it : outbox {
+  struct approve_it {
+    using Answer = ::mux::ui::request::room_act;
     std::string user;
-    void operator()() { this->emit(::mux::ui::request::room_act{room_action::invite{user}}); }
+    ::mux::ui::request::room_act operator()() { return ::mux::ui::request::room_act{room_action::invite{user}}; }
   };
-  struct deny_it : outbox {
+  struct deny_it {
+    using Answer = ::mux::ui::request::room_act;
     std::string user;
-    void operator()() { this->emit(::mux::ui::request::room_act{room_action::kick{user}}); }
+    ::mux::ui::request::room_act operator()() { return ::mux::ui::request::room_act{room_action::kick{user}}; }
   };
   using knock_row = two_choice_bar<deny_it, approve_it>;
   [[nodiscard]] static std::string knock_said(const knock_request& one, std::size_t more) {
@@ -855,7 +857,7 @@ struct composer_bar : nodes::Stack {
       return;
     knocks_shown = key;
     parts.knocks.emplace(*colours_, knock_said(knocking.front(), knocking.size() - 1), colours_->text, "Deny",
-                         deny_it{{}, knocking.front().id}, "Approve", approve_it{{}, knocking.front().id});
+                         deny_it{knocking.front().id}, "Approve", approve_it{knocking.front().id});
     this->invalidateLayout();
   }
   std::string knocks_shown;

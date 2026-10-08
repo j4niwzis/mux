@@ -72,8 +72,9 @@ struct account_sessions : nodes::Stack, outbox {
     std::size_t row;
     void operator()() const { page->rename(row); }
   };
-  struct reload : outbox {
-    void operator()() { this->emit(request::refresh_sessions{}); }
+  struct reload {
+    using Answer = request::refresh_sessions;
+    request::refresh_sessions operator()() { return request::refresh_sessions{}; }
   };
   // One session: its name over its ID, when and where it was last seen;
   // Rename, and Sign out where it is not this one.

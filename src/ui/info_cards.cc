@@ -79,9 +79,10 @@ struct person_card : nodes::Stack {
     }
   };
   // Verified by comparing emoji with each of their devices that answers.
-  struct accept_them : outbox {
+  struct accept_them {
+    using Answer = ::mux::ui::request::accept_identity;
     conversation_id who;
-    void operator()() { this->emit(::mux::ui::request::accept_identity{who}); }
+    ::mux::ui::request::accept_identity operator()() { return ::mux::ui::request::accept_identity{who}; }
   };
   // A button of its protocol's own: its request asked.
   struct ask_protocol : outbox {
@@ -127,7 +128,7 @@ struct person_card : nodes::Stack {
               .id = id_line(colours, key, ""),
               .message = action_tile<message_them>(colours, "Message", icon::send{}, {{}, conversation_id{account, key}}),
               .verify = action_tile<verify_them>(colours, "Verify with emoji", icon::check{}, {{}, conversation_id{account, key}}),
-              .accept = action_tile<accept_them>(colours, "Withdraw verification", icon::close{}, {{}, conversation_id{account, key}}),
+              .accept = action_tile<accept_them>(colours, "Withdraw verification", icon::close{}, {conversation_id{account, key}}),
               .remove = action_tile<to_them>(colours, "Remove from room", icon::leave{}, {{}, room_action::kick{key}}),
               .ban = action_tile<to_them>(colours, "Ban from room", icon::close{}, {{}, room_action::ban{key}}),
               .sessions_title = nodes::Text("", 13.0f, colours.dim, true)} {
@@ -183,8 +184,9 @@ struct room_card : nodes::Stack {
         this->emit(::mux::ui::request::join_room_card{});
     }
   };
-  struct decline_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::decline_room_card{}); }
+  struct decline_it {
+    using Answer = ::mux::ui::request::decline_room_card;
+    ::mux::ui::request::decline_room_card operator()() { return ::mux::ui::request::decline_room_card{}; }
   };
   using close_act = sends<::mux::ui::request::close_room_card>;
   using close_button = icon_button<close_act>;

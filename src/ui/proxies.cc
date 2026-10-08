@@ -134,15 +134,17 @@ struct animations_page : nodes::Stack {
 
 // A proxy profile opened from the list in Settings.
 template <class Actions>
-struct edit_proxy : outbox {
+struct edit_proxy {
+  using Answer = ::mux::ui::request::edit_proxy;
   int index = 0;
-  void operator()() { this->emit(::mux::ui::request::edit_proxy{index}); }
+  ::mux::ui::request::edit_proxy operator()() { return ::mux::ui::request::edit_proxy{index}; }
 };
 // A kind of proxy chosen on a profile's page.
 template <class Actions>
-struct choose_proxy_kind : outbox {
+struct choose_proxy_kind {
+  using Answer = ::mux::ui::request::proxy_kind;
   config::proxy_kind_t kind;
-  void operator()() { this->emit(::mux::ui::request::proxy_kind{kind}); }
+  ::mux::ui::request::proxy_kind operator()() { return ::mux::ui::request::proxy_kind{kind}; }
 };
 
 // Settings' Proxies page, as Gajim's Manage Proxies: the profiles, and a way
@@ -172,7 +174,7 @@ struct proxies_page : nodes::Stack {
     for (std::size_t i = 0; i < all.size(); ++i)
       profiles.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(all[i].kind),
                                         all[i].host, all[i].port),
-                            edit_proxy<Actions>{{}, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
+                            edit_proxy<Actions>{static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
     empty.setVisible(all.empty());
   }
   void show_receipts(bool) {}
@@ -194,8 +196,8 @@ struct kind_switch : nodes::Stack {
 
   kind_switch(const palette& colours)
       : parts{.highlight = nodes::Box<>(colours.accent),
-              .socks = kind_segment(colours, "SOCKS5", {{}, config::proxy_kind::socks5{}}),
-              .http = kind_segment(colours, "HTTP", {{}, config::proxy_kind::http{}})} {
+              .socks = kind_segment(colours, "SOCKS5", {config::proxy_kind::socks5{}}),
+              .http = kind_segment(colours, "HTTP", {config::proxy_kind::http{}})} {
     this->setHorizontal();
     this->setGap(1.0f);
     fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen});

@@ -32,8 +32,9 @@ template <class Actions>
 struct devtools_box : nodes::Stack, outbox {
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
-  struct close_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_dialog{}); }
+  struct close_it {
+    using Answer = ::mux::ui::request::close_dialog;
+    ::mux::ui::request::close_dialog operator()() { return ::mux::ui::request::close_dialog{}; }
   };
   struct back_up {
     devtools_box* box;
@@ -235,15 +236,18 @@ struct devtools_box : nodes::Stack, outbox {
 // it is done there -- or Cancel.
 template <class Actions>
 struct uia_box : nodes::Stack {
-  struct open_again : outbox {
+  struct open_again {
+    using Answer = ::mux::ui::request::open_url;
     std::string url;
-    void operator()() { this->emit(::mux::ui::request::open_url{url}); }
+    ::mux::ui::request::open_url operator()() { return ::mux::ui::request::open_url{url}; }
   };
-  struct cancel : outbox {
-    void operator()() { this->emit(request::cancel_uia{}); }
+  struct cancel {
+    using Answer = request::cancel_uia;
+    request::cancel_uia operator()() { return request::cancel_uia{}; }
   };
-  struct go : outbox {
-    void operator()() { this->emit(request::continue_uia{}); }
+  struct go {
+    using Answer = request::continue_uia;
+    request::continue_uia operator()() { return request::continue_uia{}; }
   };
   struct parts_t {
     nodes::Text title;
@@ -256,7 +260,7 @@ struct uia_box : nodes::Stack {
               .about = nodes::Text("Your server asks you to confirm this in your browser: the page is open there. "
                                    "Once you have done what it asks, press Continue.",
                                    14.0f, colours.dim),
-              .again = widgets::Button<open_again>(colours.widgets, "Open the page again", {{}, std::move(url)}),
+              .again = widgets::Button<open_again>(colours.widgets, "Open the page again", {std::move(url)}),
               .buttons = dialog_buttons<cancel, go>(colours, "Continue", {}, {}, 120.0f)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
     this->setGap(10.0f);

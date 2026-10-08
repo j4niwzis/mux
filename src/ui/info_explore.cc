@@ -115,8 +115,9 @@ struct explore_box : nodes::Stack, outbox {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{640.0f, 560.0f}}; }
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
-  struct close_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_explore{}); }
+  struct close_it {
+    using Answer = ::mux::ui::request::close_explore;
+    ::mux::ui::request::close_explore operator()() { return ::mux::ui::request::close_explore{}; }
   };
   struct search_press {
     explore_box* box;

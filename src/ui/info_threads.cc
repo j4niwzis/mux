@@ -52,11 +52,13 @@ struct threads_panel : nodes::Stack, outbox {
   // The chat it is of, as last shown: names and powers for its menus.
   const model* seen_model = nullptr;
   std::optional<conversation_id> seen_chat;
-  struct close_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::toggle_threads{}); }
+  struct close_it {
+    using Answer = ::mux::ui::request::toggle_threads;
+    ::mux::ui::request::toggle_threads operator()() { return ::mux::ui::request::toggle_threads{}; }
   };
-  struct back_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_thread{}); }
+  struct back_it {
+    using Answer = ::mux::ui::request::close_thread;
+    ::mux::ui::request::close_thread operator()() { return ::mux::ui::request::close_thread{}; }
   };
   struct sent {
     threads_panel* panel;

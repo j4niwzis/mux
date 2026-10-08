@@ -22,9 +22,10 @@ export namespace mux::ui {
 
 // A proxy chosen for an account being added: -1 for none.
 template <class Actions>
-struct choose_new_proxy : outbox {
+struct choose_new_proxy {
+  using Answer = ::mux::ui::request::choose_new_proxy;
   int index = -1;
-  void operator()() { this->emit(::mux::ui::request::choose_new_proxy{index}); }
+  ::mux::ui::request::choose_new_proxy operator()() { return ::mux::ui::request::choose_new_proxy{index}; }
 };
 
 // Adding an account, beside the list of them: XMPP or Matrix at the top, and
@@ -33,9 +34,10 @@ template <class Actions>
 struct add_account_pane : nodes::Stack, outbox {
   // A segment a protocol, in a thin frame -- from the list, each named as
   // its protocol names itself.
-  struct pick_protocol : outbox {
+  struct pick_protocol {
+    using Answer = ::mux::ui::request::add_account_of;
     protocol_t speaks;
-    void operator()() { this->emit(::mux::ui::request::add_account_of{speaks}); }
+    ::mux::ui::request::add_account_of operator()() { return ::mux::ui::request::add_account_of{speaks}; }
   };
   struct protocol_switch : nodes::Stack {
     struct parts_t {
@@ -43,7 +45,7 @@ struct add_account_pane : nodes::Stack, outbox {
     } parts;
     template <class... Tags>
     void make(const palette& colours, protocol_list<Tags...>) {
-      (parts.each.emplace_back(colours, std::string(protocol_name(config::kept_of<Tags>{})), pick_protocol{{}, protocol_t{Tags{}}}), ...);
+      (parts.each.emplace_back(colours, std::string(protocol_name(config::kept_of<Tags>{})), pick_protocol{protocol_t{Tags{}}}), ...);
     }
     protocol_switch(const palette& colours) {
       this->make(colours, protocols{});
@@ -116,9 +118,9 @@ struct add_account_pane : nodes::Stack, outbox {
     const auto chosen = proxy;
     proxy_names = std::move(names);
     choices.clear();
-    choices.emplace_back(*colours_, "None", choose_new_proxy<Actions>{{}, -1});
+    choices.emplace_back(*colours_, "None", choose_new_proxy<Actions>{-1});
     for (std::size_t k = 0; k < proxy_names.size(); ++k)
-      choices.emplace_back(*colours_, proxy_names[k], choose_new_proxy<Actions>{{}, static_cast<int>(k)});
+      choices.emplace_back(*colours_, proxy_names[k], choose_new_proxy<Actions>{static_cast<int>(k)});
     const auto at = chosen ? std::ranges::find(proxy_names, *chosen) : proxy_names.end();
     this->set_proxy(at == proxy_names.end() ? -1 : static_cast<int>(at - proxy_names.begin()));
     this->invalidateLayout();

@@ -108,9 +108,9 @@ struct account_editor : nodes::Stack {
     head_row(const palette& colours, const config::account_t& saved)
         : parts{.heading = nodes::Text(config::address_of(saved), 20.0f, colours.text, true),
                 .enabled_label = nodes::Text("On", 13.0f, colours.dim),
-                .enabled = widgets::Toggle<flip_account<Actions>>(colours.widgets, flip_account<Actions>{{}, config::address_of(saved)}),
+                .enabled = widgets::Toggle<flip_account<Actions>>(colours.widgets, flip_account<Actions>{config::address_of(saved)}),
                 .remove = widgets::Button<remove_account<Actions>>(colours.widgets, 
-                    "Remove", remove_account<Actions>{{}, config::address_of(saved)})} {
+                    "Remove", remove_account<Actions>{config::address_of(saved)})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -177,9 +177,10 @@ struct switch_row : nodes::Stack {
 
 // A page of an account's settings chosen from its list.
 template <class Actions>
-struct choose_account_page : outbox {
+struct choose_account_page {
+  using Answer = ::mux::ui::request::account_page;
   account_page_t page = account_page::connection{};
-  void operator()() { this->emit(::mux::ui::request::account_page{page}); }
+  ::mux::ui::request::account_page operator()() { return ::mux::ui::request::account_page{page}; }
 };
 
 // An account's pages, in place of the list of accounts once one is chosen: a
@@ -201,18 +202,18 @@ struct account_pages : nodes::Stack, outbox {
 
   account_pages(const palette& colours)
       : colours_(&colours),
-        parts{.connection = row(colours, "Connection", {{}, account_page::connection{}}, icon::sliders{}),
-              .privacy = row(colours, "Privacy", {{}, account_page::privacy{}}, icon::eye{}),
-              .notifications = row(colours, "Notifications", {{}, account_page::notifications{}}, icon::bell{}),
-              .chats = row(colours, "Chats", {{}, account_page::chats{}}, icon::people{}),
-              .proxy = row(colours, "Proxy", {{}, account_page::proxy{}}, icon::gear{})} {
+        parts{.connection = row(colours, "Connection", {account_page::connection{}}, icon::sliders{}),
+              .privacy = row(colours, "Privacy", {account_page::privacy{}}, icon::eye{}),
+              .notifications = row(colours, "Notifications", {account_page::notifications{}}, icon::bell{}),
+              .chats = row(colours, "Chats", {account_page::chats{}}, icon::people{}),
+              .proxy = row(colours, "Proxy", {account_page::proxy{}}, icon::gear{})} {
     fState.apply({.padding = {6.0f, 0.0f, 0.0f, 0.0f}});
     this->light(account_page::connection{});
   }
   // A protocol's pages: each its title and icon, by its own overloads.
   template <class... Pages>
   void add(proto::account_page_list<Pages...>) {
-    (parts.own.emplace_back(*colours_, std::string(page_title(Pages{})), choose_account_page<Actions>{{}, account_page_t{Pages{}}},
+    (parts.own.emplace_back(*colours_, std::string(page_title(Pages{})), choose_account_page<Actions>{account_page_t{Pages{}}},
                             page_icon(Pages{})),
      ...);
   }
@@ -435,9 +436,10 @@ struct account_chats : nodes::Stack {
 
 // A proxy profile chosen for the chosen account: -1 for none.
 template <class Actions>
-struct choose_account_proxy : outbox {
+struct choose_account_proxy {
+  using Answer = ::mux::ui::request::choose_account_proxy;
   int index = -1;
-  void operator()() { this->emit(::mux::ui::request::choose_account_proxy{index}); }
+  ::mux::ui::request::choose_account_proxy operator()() { return ::mux::ui::request::choose_account_proxy{index}; }
 };
 
 // An account's Proxy page, as Gajim's: which of the program's proxy profiles
@@ -459,12 +461,12 @@ struct account_proxy : nodes::Stack {
     parts.manage.apply({.margin = {8.0f, 0.0f, 0.0f, 0.0f}});
     fState.apply({.fill = true});
     // An empty place where the dots are, so the names line up.
-    choices.emplace_back(colours, "No proxy", choose_account_proxy<Actions>{{}, -1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
+    choices.emplace_back(colours, "No proxy", choose_account_proxy<Actions>{-1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
                          !current.has_value());
     for (std::size_t i = 0; i < all.size(); ++i)
       choices.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(all[i].kind),
                                        all[i].host, all[i].port),
-                           choose_account_proxy<Actions>{{}, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)},
+                           choose_account_proxy<Actions>{static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)},
                            current && *current == all[i].name);
   }
   void show(bool) {}

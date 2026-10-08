@@ -61,8 +61,9 @@ struct packs_box : nodes::Stack, outbox {
   emote_pack draft;               // the pack open, as it is edited
   bool open = false;              // a pack open, not the list
   bool new_pack = false;          // the one open not yet saved
-  struct close_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_packs{}); }
+  struct close_it {
+    using Answer = ::mux::ui::request::close_packs;
+    ::mux::ui::request::close_packs operator()() { return ::mux::ui::request::close_packs{}; }
   };
   struct back_press {
     packs_box* box;
@@ -72,8 +73,9 @@ struct packs_box : nodes::Stack, outbox {
     packs_box* box;
     void operator()() const { box->open_pack(std::nullopt); }
   };
-  struct add_press : outbox {
-    void operator()() { this->emit(::mux::ui::request::pick_pack_images{}); }
+  struct add_press {
+    using Answer = ::mux::ui::request::pick_pack_images;
+    ::mux::ui::request::pick_pack_images operator()() { return ::mux::ui::request::pick_pack_images{}; }
   };
   struct save_press {
     packs_box* box;

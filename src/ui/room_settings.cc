@@ -270,8 +270,9 @@ struct leave_space_box : nodes::Stack, outbox {
     leave_space_box* box;
     void operator()() const { box->emit(::mux::ui::request::leave_space{box->facts.space, box->leaving()}); }
   };
-  struct cancel : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_leave_space{}); }
+  struct cancel {
+    using Answer = ::mux::ui::request::close_leave_space;
+    ::mux::ui::request::close_leave_space operator()() { return ::mux::ui::request::close_leave_space{}; }
   };
   struct parts_t {
     nodes::Text title;
@@ -516,9 +517,10 @@ struct room_settings : nodes::Stack, outbox {
   };
   // A space's rooms out of Home, or in it: a switch, for a space that is
   // not shown as one chat.
-  struct flip_home_hide_act : outbox {
+  struct flip_home_hide_act {
+    using Answer = ::mux::ui::request::flip_home_hide;
     std::string room;
-    void operator()() { this->emit(::mux::ui::request::flip_home_hide{room}); }
+    ::mux::ui::request::flip_home_hide operator()() { return ::mux::ui::request::flip_home_hide{room}; }
   };
   using settings_t = decltype(chat_settings_view(std::declval<const palette&>(), std::declval<const conversation_id&>()));
   struct general_page : nodes::Stack {
@@ -543,7 +545,7 @@ struct room_settings : nodes::Stack, outbox {
                 .forum_about = explained(*box->colours_, facts.holds_spaces
                                              ? "A space that holds spaces is shown as a space."
                                              : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
-                .home_hide = toggle_line<flip_home_hide_act>(*box->colours_, "Its rooms not in Home", {{}, facts.id}, facts.hidden_from_home, true),
+                .home_hide = toggle_line<flip_home_hide_act>(*box->colours_, "Its rooms not in Home", {facts.id}, facts.hidden_from_home, true),
                 .leave_heading = part_heading(*box->colours_, "Leave room"),
                 .leave = button_for<sends<::mux::ui::request::leave_chat>>(box->colours_->widgets, "Leave room", {})} {
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.forum_heading, &parts.forum, &parts.forum_about})
@@ -603,8 +605,9 @@ struct room_settings : nodes::Stack, outbox {
   };
 
   // ---- the dialog ---------------------------------------------------------------------
-  struct close_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_manage{}); }
+  struct close_it {
+    using Answer = ::mux::ui::request::close_manage;
+    ::mux::ui::request::close_manage operator()() { return ::mux::ui::request::close_manage{}; }
   };
   using header_t = page_header<no_back, close_it>;
   struct body_row : nodes::Stack {

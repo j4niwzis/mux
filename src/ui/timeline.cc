@@ -278,8 +278,9 @@ struct shown_how {
 template <class Actions>
 struct timeline_area : scene::Node, outbox {
   // The loader's cross: the message jumped to no longer looked for.
-  struct stop_jump : outbox {
-    void operator()() { this->emit(::mux::ui::request::stop_jump{}); }
+  struct stop_jump {
+    using Answer = ::mux::ui::request::stop_jump;
+    ::mux::ui::request::stop_jump operator()() { return ::mux::ui::request::stop_jump{}; }
   };
   struct parts_t {
     // Behind the messages: the theme's gradient, Telegram's pattern over it.

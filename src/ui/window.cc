@@ -53,14 +53,16 @@ struct window : scene::Node, outbox {
   // the field takes for it, given to it (it keeps the focus: a button takes
   // none).
   struct text_menu : nodes::Stack {
-    struct copy_it : outbox {
+    struct copy_it {
+      using Answer = ::mux::ui::request::copy_text;
       std::string text;
-      void operator()() { this->emit(::mux::ui::request::copy_text{text}); }
+      ::mux::ui::request::copy_text operator()() { return ::mux::ui::request::copy_text{text}; }
     };
-    struct key_it : outbox {
+    struct key_it {
+      using Answer = ::mux::ui::request::text_key;
       scene::Key key;
       bool shift = false;
-      void operator()() { this->emit(::mux::ui::request::text_key{key, shift}); }
+      ::mux::ui::request::text_key operator()() { return ::mux::ui::request::text_key{key, shift}; }
     };
     struct parts_t {
       std::optional<widgets::Button<copy_it>> copy;
@@ -82,16 +84,16 @@ struct window : scene::Node, outbox {
     } parts;
     // A selectable text's.
     text_menu(const ui_needs<Actions>& n, std::string text, std::optional<std::string> link) : text_menu(*n.colours) {
-      parts.copy.emplace(n.colours->widgets, "Copy", copy_it{{}, std::move(text)});
+      parts.copy.emplace(n.colours->widgets, "Copy", copy_it{std::move(text)});
       if (link)
-        parts.copy_link.emplace(n.colours->widgets, "Copy Link", copy_it{{}, std::move(*link)});
+        parts.copy_link.emplace(n.colours->widgets, "Copy Link", copy_it{std::move(*link)});
       this->rows();
     }
     // A field's.
     text_menu(const ui_needs<Actions>& n, const scene::text_menu::of_field& field) : text_menu(*n.colours) {
       const auto item = [&](std::optional<widgets::Button<key_it>>& button, std::string label, scene::Key key,
                             bool shift = false) {
-        button.emplace(n.colours->widgets, std::move(label), key_it{{}, key, shift});
+        button.emplace(n.colours->widgets, std::move(label), key_it{key, shift});
       };
       if (field.selection && !field.masked) {
         item(parts.cut, "Cut", scene::keys::kX);

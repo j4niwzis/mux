@@ -278,9 +278,10 @@ struct side_column : nodes::Stack, outbox {
     }
   };
   // A message found, in the list of them: who, when, and its words.
-  struct pick_found : outbox {
+  struct pick_found {
+    using Answer = ::mux::ui::request::search_pick;
     std::size_t index;
-    void operator()() { this->emit(::mux::ui::request::search_pick{index}); }
+    ::mux::ui::request::search_pick operator()() { return ::mux::ui::request::search_pick{index}; }
   };
   struct found_row : nodes::Stack {
     pick_found pick;
@@ -307,7 +308,7 @@ struct side_column : nodes::Stack, outbox {
       lines_t lines;
     } parts;
     found_row(const palette& colours, const search_result& one)
-        : pick{{}, one.index}, parts{.face = avatar_mark(one.sender, one.name, 40.0f), .lines = lines_t(colours, one)} {
+        : pick{one.index}, parts{.face = avatar_mark(one.sender, one.name, 40.0f), .lines = lines_t(colours, one)} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen});
@@ -316,8 +317,13 @@ struct side_column : nodes::Stack, outbox {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      pick();
+      act_on(fState, pick);
       return true;
+    }
+    auto onPress()
+      requires skiff::scene::Answering<pick_found>
+    {
+      return pick();
     }
   };
   using found_list_t = nodes::ScrollContainer<nodes::Flow<std::vector<found_row>>>;
@@ -403,24 +409,28 @@ struct side_column : nodes::Stack, outbox {
     }
   };
   // What a right press on an item offers: the bars it is in, or hidden.
-  struct set_bars_act : outbox {
+  struct set_bars_act {
+    using Answer = ::mux::ui::request::set_space_bars;
     std::string account;
     config::space_item_t item;
     bool side = true, top = false;
-    void operator()() { this->emit(::mux::ui::request::set_space_bars{account, item, side, top}); }
+    ::mux::ui::request::set_space_bars operator()() { return ::mux::ui::request::set_space_bars{account, item, side, top}; }
   };
-  struct explore_act : outbox {
+  struct explore_act {
+    using Answer = ::mux::ui::request::explore_space;
     std::string room;
-    void operator()() { this->emit(::mux::ui::request::explore_space{room}); }
+    ::mux::ui::request::explore_space operator()() { return ::mux::ui::request::explore_space{room}; }
   };
-  struct manage_act : outbox {
+  struct manage_act {
+    using Answer = ::mux::ui::request::manage_space;
     std::string room;
-    void operator()() { this->emit(::mux::ui::request::manage_space{room}); }
+    ::mux::ui::request::manage_space operator()() { return ::mux::ui::request::manage_space{room}; }
   };
-  struct leave_act : outbox {
+  struct leave_act {
+    using Answer = ::mux::ui::request::open_leave_space;
     std::string account;
     std::string room;
-    void operator()() { this->emit(::mux::ui::request::open_leave_space{conversation_id{account_id{protocol_of(account), account}, room}}); }
+    ::mux::ui::request::open_leave_space operator()() { return ::mux::ui::request::open_leave_space{conversation_id{account_id{protocol_of(account), account}, room}}; }
   };
   // A room, or a space, made in it -- Element's Add room and Add space.
   struct create_in_act : outbox {
@@ -448,23 +458,26 @@ struct side_column : nodes::Stack, outbox {
     }
   };
   // Listed in another account's list too, or moved there.
-  struct place_act : outbox {
+  struct place_act {
+    using Answer = ::mux::ui::request::place_chat;
     conversation_id chat;
     account_id to;
     bool moved;
-    void operator()() { this->emit(::mux::ui::request::place_chat{chat, to, moved}); }
+    ::mux::ui::request::place_chat operator()() { return ::mux::ui::request::place_chat{chat, to, moved}; }
   };
   // Out of this list, where it is another account's: back to its own
   // where it was moved.
-  struct unplace_act : outbox {
+  struct unplace_act {
+    using Answer = ::mux::ui::request::unplace_chat;
     conversation_id chat;
     account_id from;
-    void operator()() { this->emit(::mux::ui::request::unplace_chat{chat, from}); }
+    ::mux::ui::request::unplace_chat operator()() { return ::mux::ui::request::unplace_chat{chat, from}; }
   };
-  struct strip_act : outbox {
+  struct strip_act {
+    using Answer = ::mux::ui::request::flip_chat_strip;
     conversation_id chat;
     account_id in;
-    void operator()() { this->emit(::mux::ui::request::flip_chat_strip{chat, in}); }
+    ::mux::ui::request::flip_chat_strip operator()() { return ::mux::ui::request::flip_chat_strip{chat, in}; }
   };
   struct strip_colour_act : outbox {
     conversation_id chat;
@@ -493,12 +506,12 @@ struct side_column : nodes::Stack, outbox {
       parts.settings.apply({.fillX = true, .height = 30.0f});
       for (const account_id& to : accounts)
         if (to != id.account && to != listing) {
-          parts.places.emplace_back(colours.widgets, std::format("Copy to {}", to.address), place_act{{}, id, to, false});
-          parts.places.emplace_back(colours.widgets, std::format("Move to {}", to.address), place_act{{}, id, to, true});
+          parts.places.emplace_back(colours.widgets, std::format("Copy to {}", to.address), place_act{id, to, false});
+          parts.places.emplace_back(colours.widgets, std::format("Move to {}", to.address), place_act{id, to, true});
         }
       if (id.account != listing) {
-        parts.unplace.emplace(colours.widgets, "Remove from this list", unplace_act{{}, id, listing});
-        parts.strip.emplace(colours.widgets, "Strip on or off", strip_act{{}, id, listing});
+        parts.unplace.emplace(colours.widgets, "Remove from this list", unplace_act{id, listing});
+        parts.strip.emplace(colours.widgets, "Strip on or off", strip_act{id, listing});
         parts.strip_colours.emplace(strip_colour_act{{}, id, listing}, theme, false);
       }
       for (auto& each : parts.places)
@@ -527,15 +540,15 @@ struct side_column : nodes::Stack, outbox {
     }
     space_menu(const palette& colours, const std::string& account, const config::space_item_t& item, std::string name)
         : parts{.title = nodes::Text(name, 13.0f, colours.dim, true),
-                .explore = widgets::Button<explore_act>(colours.widgets, "Explore its rooms\u2026", {{}, room_of(item)}),
-                .manage = widgets::Button<manage_act>(colours.widgets, "Space settings\u2026", {{}, room_of(item)}),
+                .explore = widgets::Button<explore_act>(colours.widgets, "Explore its rooms\u2026", {room_of(item)}),
+                .manage = widgets::Button<manage_act>(colours.widgets, "Space settings\u2026", {room_of(item)}),
                 .add_room = widgets::Button<create_in_act>(colours.widgets, "Create a room in it\u2026", {{}, account, room_of(item), name, false}),
                 .add_space = widgets::Button<create_in_act>(colours.widgets, "Create a space in it\u2026", {{}, account, room_of(item), name, true}),
-                .leave = widgets::Button<leave_act>(colours.widgets, "Leave space\u2026", {{}, account, room_of(item)}),
-                .side = widgets::Button<set_bars_act>(colours.widgets, "Side bar only", {{}, account, item, true, false}),
-                .top = widgets::Button<set_bars_act>(colours.widgets, "Top bar only", {{}, account, item, false, true}),
-                .both = widgets::Button<set_bars_act>(colours.widgets, "Both bars", {{}, account, item, true, true}),
-                .hide = widgets::Button<set_bars_act>(colours.widgets, "Hide", {{}, account, item, false, false})} {
+                .leave = widgets::Button<leave_act>(colours.widgets, "Leave space\u2026", {account, room_of(item)}),
+                .side = widgets::Button<set_bars_act>(colours.widgets, "Side bar only", {account, item, true, false}),
+                .top = widgets::Button<set_bars_act>(colours.widgets, "Top bar only", {account, item, false, true}),
+                .both = widgets::Button<set_bars_act>(colours.widgets, "Both bars", {account, item, true, true}),
+                .hide = widgets::Button<set_bars_act>(colours.widgets, "Hide", {account, item, false, false})} {
       as_popup(*this, colours);
       parts.title.setElided(true);
       parts.title.apply({.fillX = true});

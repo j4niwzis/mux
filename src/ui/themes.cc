@@ -393,9 +393,10 @@ struct nothing {
 
 // A control whose action is still to come: it says so.
 template <class Actions>
-struct not_yet : outbox {
+struct not_yet {
+  using Answer = ::mux::ui::request::not_implemented;
   std::string_view what;
-  void operator()() { this->emit(::mux::ui::request::not_implemented{std::string(what)}); }
+  ::mux::ui::request::not_implemented operator()() { return ::mux::ui::request::not_implemented{std::string(what)}; }
 };
 
 // Between the sections of a panel: just darker than the panel.

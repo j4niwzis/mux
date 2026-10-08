@@ -62,8 +62,9 @@ struct forward_box : nodes::Stack, outbox {
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
   std::vector<forward_target> all;
-  struct close_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_forward{}); }
+  struct close_it {
+    using Answer = ::mux::ui::request::close_forward;
+    ::mux::ui::request::close_forward operator()() { return ::mux::ui::request::close_forward{}; }
   };
   struct typed {
     forward_box* box;
@@ -172,8 +173,9 @@ struct start_chat_box : nodes::Stack, outbox {
   std::vector<found_person> found;
   std::string query;
   std::string link;
-  struct close_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_new_chat{}); }
+  struct close_it {
+    using Answer = ::mux::ui::request::close_new_chat;
+    ::mux::ui::request::close_new_chat operator()() { return ::mux::ui::request::close_new_chat{}; }
   };
   struct typed {
     start_chat_box* box;
@@ -331,8 +333,9 @@ struct create_room_box : nodes::Stack, outbox {
   bool space_members = false;
   bool advanced = false;
   bool choosing = false;  // the list of who can join, open
-  struct close_it : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_new_room{}); }
+  struct close_it {
+    using Answer = ::mux::ui::request::close_new_room;
+    ::mux::ui::request::close_new_room operator()() { return ::mux::ui::request::close_new_room{}; }
   };
   struct create_press {
     create_room_box* box;
@@ -344,8 +347,9 @@ struct create_room_box : nodes::Stack, outbox {
                                   box->space_members, box->place && box->place->make_space});
     }
   };
-  struct cancel_press : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_new_room{}); }
+  struct cancel_press {
+    using Answer = ::mux::ui::request::close_new_room;
+    ::mux::ui::request::close_new_room operator()() { return ::mux::ui::request::close_new_room{}; }
   };
   struct flip_list {
     create_room_box* box;
@@ -427,8 +431,13 @@ struct create_room_box : nodes::Stack, outbox {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      press();
+      act_on(fState, press);
       return true;
+    }
+    auto onPress()
+      requires skiff::scene::Answering<std::remove_cvref_t<decltype(press)>>
+    {
+      return press();
     }
   };
   // One of the choices, in the open list: its name and what it means.
@@ -451,8 +460,13 @@ struct create_room_box : nodes::Stack, outbox {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      choose();
+      act_on(fState, choose);
       return true;
+    }
+    auto onPress()
+      requires skiff::scene::Answering<Choose>
+    {
+      return choose();
     }
   };
   // A switch with what it does: blocking other servers, encrypting.

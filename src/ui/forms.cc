@@ -73,8 +73,9 @@ struct link_box : nodes::Stack, outbox {
     link_box* box;
     void operator()() const { box->emit(::mux::ui::request::set_link{box->parts.text.text(), box->parts.url.text()}); }
   };
-  struct cancel : outbox {
-    void operator()() { this->emit(::mux::ui::request::close_link{}); }
+  struct cancel {
+    using Answer = ::mux::ui::request::close_link;
+    ::mux::ui::request::close_link operator()() { return ::mux::ui::request::close_link{}; }
   };
   struct parts_t {
     nodes::Text title;

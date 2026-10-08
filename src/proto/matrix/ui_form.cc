@@ -63,7 +63,7 @@ struct matrix_form : nodes::Stack, outbox {
     choice_menu<pick_mode> mode;
     field token;
     choice_menu<pick_terms> terms;
-    form_end end;
+    form_end<Actions> end;
   } parts;
 
   matrix_form(Actions* a, const palette& colours, const std::optional<::mux::proto::matrix::kept>& from)
@@ -77,7 +77,7 @@ struct matrix_form : nodes::Stack, outbox {
               .token = field(colours, "Registration token", "where the server registers by invitation"),
               .terms = choice_menu<pick_terms>(colours, "The server's terms", {"Not agreed to", "I agree to the server's terms"}, 0,
                                                pick_terms{this}),
-              .end = form_end(colours, a, from.has_value())} {
+              .end = form_end<Actions>(colours, a, from.has_value())} {
     auto& [user_id, way, password, homeserver, device_name, mode, token, terms, end] = parts;
     in_browser = from && from->oauth.value_or(false);
     password.setVisible(!in_browser);

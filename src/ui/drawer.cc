@@ -23,8 +23,9 @@ export namespace mux::ui {
 // An account in the drawer: a round avatar with its initials, its address,
 // and its protocol and state. A press makes it the current account, whose
 // chats are the ones shown; the current one is lit and ticked.
+template <class Actions>
 struct drawer_account : nodes::Stack, outbox {
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   std::string address;
   bool current = false;
   struct parts_t {
@@ -35,7 +36,7 @@ struct drawer_account : nodes::Stack, outbox {
   } parts;
 
   // Declared: the avatar, the address over its state, the tick.
-  drawer_account(const ui_needs& n, const config::account_t& saved, const model& now, bool is_current)
+  drawer_account(const ui_needs<Actions>& n, const config::account_t& saved, const model& now, bool is_current)
       : actions(n.actions), address(config::address_of(saved)), current(is_current),
         parts{.face = avatar_mark(address, address, 38.0f), .texts = two_lines(*n.colours, address, "", 14.0f, 3.0f),
               .tick = icon_mark(*n.colours, icon::check{})} {
@@ -68,6 +69,7 @@ struct drawer_account : nodes::Stack, outbox {
 // What the drawer holds, as Telegram's does: the accounts with Manage
 // accounts under them, then Settings and Quit, each a full-width line with
 // its icon.
+template <class Actions>
 struct drawer_panel : nodes::Stack {
   using manage_row = row_item<sends<::mux::ui::request::open_accounts>>;
   using new_chat_row = row_item<sends<::mux::ui::request::open_new_chat>>;
@@ -75,10 +77,10 @@ struct drawer_panel : nodes::Stack {
   using settings_row = row_item<sends<::mux::ui::request::open_settings>>;
   using quit_row = row_item<sends<::mux::ui::request::quit>>;
   // What it was handed, for the accounts it lists.
-  ui_needs needs_;
+  ui_needs<Actions> needs_;
   struct parts_t {
     nodes::Text title;
-    std::vector<drawer_account> accounts;
+    std::vector<drawer_account<Actions>> accounts;
     manage_row manage;
     nodes::Box<> rule_1;
     new_chat_row new_chat;
@@ -87,8 +89,8 @@ struct drawer_panel : nodes::Stack {
     quit_row quit;
   } parts;
 
-  explicit drawer_panel(const ui_needs& n) : drawer_panel(n, n.actions) {}
-  drawer_panel(const ui_needs& n, no_actions* a)
+  explicit drawer_panel(const ui_needs<Actions>& n) : drawer_panel(n, n.actions) {}
+  drawer_panel(const ui_needs<Actions>& n, Actions* a)
       : needs_(n),
         parts{.title = nodes::Text("mux", 20.0f, n.colours->text, true),
               .manage = manage_row(*n.colours, "Manage accounts", {a}, icon::person{}),
@@ -105,7 +107,7 @@ struct drawer_panel : nodes::Stack {
   }
 
   template <std::ranges::input_range Saved>
-  void show(no_actions*, const Saved& saved, const model& now, std::string_view current) {
+  void show(Actions*, const Saved& saved, const model& now, std::string_view current) {
     parts.accounts.clear();
     for (const config::account_t& one : saved)
       parts.accounts.emplace_back(needs_, one, now, config::address_of(one) == current);

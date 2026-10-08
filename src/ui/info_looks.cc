@@ -54,6 +54,7 @@ struct look_level {
   // And the colours the choices are made in.
   const palette* colours = nullptr;
 };
+template <class Actions>
 struct bubbles_picker : nodes::Stack {
   // The look at the level, as the UI knows it: every chat's, or the chat's
   // shown.
@@ -139,7 +140,7 @@ struct bubbles_picker : nodes::Stack {
       head_t head;
       widgets::SliderBar<scene::NoAction, element_done> bar;
     } parts;
-    element_row(no_actions* a, const look_level& level, std::string_view name, element_t which)
+    element_row(Actions* a, const look_level& level, std::string_view name, element_t which)
         : parts{.head = head_t(*level.colours, std::format("{}: {}%{}", name, element_opacity_of(current(level, config::look_part::bubbles{}), which),
                                            (current(level, config::look_part::bubbles{}).elements.*which) ? "" : " (as bubbles)"),
                                element_reset{a, level, which},
@@ -251,7 +252,7 @@ struct bubbles_picker : nodes::Stack {
       head_t head;
       widgets::SliderBar<scene::NoAction, element_blur_done> bar;
     } parts;
-    element_blur_row(no_actions* a, const look_level& level, std::string_view name, element_blur_t which)
+    element_blur_row(Actions* a, const look_level& level, std::string_view name, element_blur_t which)
         : parts{.head = head_t(*level.colours, std::format("{} blur: {:.1f}%{}", name,
                                            element_blur_of(current(level, config::look_part::bubbles{}), which, level.looks->window) * 100.0f,
                                            (current(level, config::look_part::bubbles{}).blurs.*which) ? "" : " (as bubbles)"),
@@ -268,7 +269,7 @@ struct bubbles_picker : nodes::Stack {
     struct parts_t {
       widgets::Button<pick_kind> solid, translucent, frosted, glass;
     } parts;
-    kinds_row(no_actions* a, const look_level& level, const config::look_part_t& part)
+    kinds_row(Actions* a, const look_level& level, const config::look_part_t& part)
         : parts{.solid = widgets::Button<pick_kind>(level.colours->widgets, "Solid", {a, level, part, config::bubbles::solid{}}),
                 .translucent = widgets::Button<pick_kind>(level.colours->widgets, "Translucent", {a, level, part, config::bubbles::translucent{}}),
                 .frosted = widgets::Button<pick_kind>(level.colours->widgets, "Frosted", {a, level, part, config::bubbles::frosted{}}),
@@ -300,7 +301,7 @@ struct bubbles_picker : nodes::Stack {
     // Those drawn frosted, where the bubbles are: each its blur.
     std::vector<element_blur_row> element_blurs;
   } parts;
-  bubbles_picker(no_actions* a, const look_level& level, const config::look_part_t& part = config::look_part::bubbles{})
+  bubbles_picker(Actions* a, const look_level& level, const config::look_part_t& part = config::look_part::bubbles{})
       : parts{.title = nodes::Text(spl::visit(spl::overloaded{[](config::look_part::bubbles) { return "MESSAGE BUBBLES"; },
                                                                     [](config::look_part::panels) { return "PANELS"; }},
                                                  part),
@@ -365,6 +366,7 @@ struct bubbles_picker : nodes::Stack {
 // What a chat looks like, at a level: its background, its bubbles, and the
 // panels round it -- in the dialog (every chat's, an account's) and in a
 // room's Manage (its own).
+template <class Actions>
 struct look_choices : nodes::Stack {
   struct pick_wallpaper_at : outbox {
     choice_level_t level;
@@ -407,8 +409,8 @@ struct look_choices : nodes::Stack {
     nodes::Text background_title;
     nodes::Text note;
     choice_menu<pick_wallpaper_at> background;
-    bubbles_picker bubbles;
-    bubbles_picker panels;
+    bubbles_picker<Actions> bubbles;
+    bubbles_picker<Actions> panels;
   } parts;
   [[nodiscard]] static std::string note_of(const looks_shown& looks, const choice_level_t& level) {
     const std::string where = looks.window.behind ? "Behind the whole window" : "Behind the messages";
@@ -417,13 +419,13 @@ struct look_choices : nodes::Stack {
                                             [&](choice_level::chat) { return where + ", in this chat."; }},
                          level);
   }
-  look_choices(no_actions* a, const palette& colours, const looks_shown& looks, choice_level_t level)
+  look_choices(Actions* a, const palette& colours, const looks_shown& looks, choice_level_t level)
       : parts{.background_title = nodes::Text("BACKGROUND", 13.0f, colours.dim, true),
               .note = nodes::Text(note_of(looks, level), 13.0f, colours.dim),
               .background = choice_menu<pick_wallpaper_at>(colours, "", background_names(looks, level), background_index(looks, level),
                                                            pick_wallpaper_at{a, level, has_level_above(level)}),
-              .bubbles = bubbles_picker(a, look_level{level, &looks, &colours}, config::look_part::bubbles{}),
-              .panels = bubbles_picker(a, look_level{level, &looks, &colours}, config::look_part::panels{})} {
+              .bubbles = bubbles_picker<Actions>(a, look_level{level, &looks, &colours}, config::look_part::bubbles{}),
+              .panels = bubbles_picker<Actions>(a, look_level{level, &looks, &colours}, config::look_part::panels{})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.background_title.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});
@@ -436,6 +438,7 @@ struct look_choices : nodes::Stack {
 };
 
 // A chat background and its looks chosen, at a level, in a dialog.
+template <class Actions>
 struct wallpaper_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{380.0f}}; }
@@ -445,11 +448,11 @@ struct wallpaper_box : nodes::Stack {
   using header_t = page_header<no_back, close_it>;
   struct parts_t {
     header_t header;
-    look_choices choices;
+    look_choices<Actions> choices;
   } parts;
-  wallpaper_box(no_actions* a, const palette& colours, const looks_shown& looks, choice_level_t level)
+  wallpaper_box(Actions* a, const palette& colours, const looks_shown& looks, choice_level_t level)
       : parts{.header = header_t(colours, "Chat background and looks", {}, {a}, false, true),
-              .choices = look_choices(a, colours, looks, level)} {
+              .choices = look_choices<Actions>(a, colours, looks, level)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
   }

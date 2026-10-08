@@ -65,6 +65,7 @@ struct field : nodes::Stack {
 // A link put on what is selected in the message field, as tdesktop's
 // EditLinkBox: its text and its URL, the forms' own fields; Done puts it on,
 // Esc or Cancel leaves the field as it was.
+template <class Actions>
 struct link_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{400.0f}}; }
@@ -75,7 +76,7 @@ struct link_box : nodes::Stack, outbox {
   struct cancel : outbox {
     void operator()() { this->send(::mux::ui::request::close_link{}); }
   };
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   struct parts_t {
     nodes::Text title;
     field text;
@@ -83,7 +84,7 @@ struct link_box : nodes::Stack, outbox {
     widgets::Button<done> go;
     widgets::Button<cancel> back;
   } parts;
-  link_box(const ui_needs& n, std::string text, std::string url)
+  link_box(const ui_needs<Actions>& n, std::string text, std::string url)
       : actions(n.actions),
         parts{.title = nodes::Text(url.empty() ? "Add link" : "Edit link", 17.0f, n.colours->text, true),
               .text = field(*n.colours, "Text", "Text", std::move(text)),
@@ -100,6 +101,7 @@ struct link_box : nodes::Stack, outbox {
 // nothing behind it is anything until it opens), to turn its encryption on
 // or off, or to change it. Its fields are the forms' own, masked; what each
 // purpose shows and says, by its type.
+template <class Actions>
 struct passphrase_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{420.0f}}; }
@@ -138,7 +140,7 @@ struct passphrase_box : nodes::Stack, outbox {
                                     box->parts.file.text()});
     }
   };
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   proto::passphrase_for_t purpose;
   struct parts_t {
     nodes::Text title;
@@ -151,8 +153,8 @@ struct passphrase_box : nodes::Stack, outbox {
     widgets::Button<submit> go;
   } parts;
 
-  passphrase_box(const ui_needs& n, proto::passphrase_for_t why) : passphrase_box(*n.colours, n.actions, why) {}
-  passphrase_box(const palette& colours, no_actions* a, proto::passphrase_for_t why)
+  passphrase_box(const ui_needs<Actions>& n, proto::passphrase_for_t why) : passphrase_box(*n.colours, n.actions, why) {}
+  passphrase_box(const palette& colours, Actions* a, proto::passphrase_for_t why)
       : actions(a), purpose(why),
         parts{.title = nodes::Text(std::string(said().title), 17.0f, colours.text, true),
               .note = nodes::Text(std::string(said().note), 14.0f, colours.dim),
@@ -207,6 +209,7 @@ struct button_row : nodes::Stack {
 
 // What every account form ends with: what went wrong or what is happening,
 // and its buttons. Enter in any of the form's fields submits it.
+template <class Actions>
 struct form_end : nodes::Stack {
   using submit_button = button_for<sends<::mux::ui::request::submit_login>>;
   using close_button = button_for<sends<::mux::ui::request::pop_panel>>;
@@ -217,7 +220,7 @@ struct form_end : nodes::Stack {
     button_row<submit_button, close_button> buttons;
   } parts;
 
-  form_end(const palette& colours, no_actions* a, bool editing)
+  form_end(const palette& colours, Actions* a, bool editing)
       : colours_(&colours),
         parts{.message = nodes::Text("", 13.0f, colours.error),
               .buttons = button_row<submit_button, close_button>(submit_button(colours.widgets, editing ? "Save" : "Log in", {a}),
@@ -248,28 +251,31 @@ struct form_end : nodes::Stack {
 }
 
 // Each protocol's account form -- its form_type(state), found by ADL where the
-// panels are made: a template on no_actions, made in the program, which imports
+// panels are made: a template on Actions, made in the program, which imports
 // mux.ui.proto -- and any of them, as the panels hold them, made from the
 // list of protocols.
-template <class Tag>
-using form_of_t = typename decltype(form_type(state_of<Tag>{}, type_tag<no_actions>{}))::type;
-template <class>
+template <class Tag, class Actions>
+using form_of_t = typename decltype(form_type(state_of<Tag>{}, type_tag<Actions>{}))::type;
+template <class Actions, class>
 struct form_list;
-template <class... Tags>
-struct form_list<protocol_list<Tags...>> {
-  using type = spl::variant<form_of_t<Tags>...>;
+template <class Actions, class... Tags>
+struct form_list<Actions, protocol_list<Tags...>> {
+  using type = spl::variant<form_of_t<Tags, Actions>...>;
 };
-using account_form = typename form_list<protocols>::type;
+template <class Actions>
+using account_form = typename form_list<Actions, protocols>::type;
 
 // The form of an account's own protocol, filled in from what it keeps.
-[[nodiscard]] account_form form_of(no_actions* a, const palette& colours, const config::account_t& saved) {
+template <class Actions>
+[[nodiscard]] account_form<Actions> form_of(Actions* a, const palette& colours, const config::account_t& saved) {
   return spl::visit([&](const auto& kept) {
-    using form = typename decltype(form_type_for(kept, type_tag<no_actions>{}))::type;
-    return account_form(std::in_place_type<form>, a, colours, std::optional(kept));
+    using form = typename decltype(form_type_for(kept, type_tag<Actions>{}))::type;
+    return account_form<Actions>(std::in_place_type<form>, a, colours, std::optional(kept));
   }, saved.own);
 }
 // A form laid out in the column under `top`.
-void place_form(account_form& form, const skia::SkRect& column, float top) {
+template <class Actions>
+void place_form(account_form<Actions>& form, const skia::SkRect& column, float top) {
   spl::visit(
       [&](auto& one) {
         one.fState.arrange(0.0f, 0.0f);
@@ -280,10 +286,10 @@ void place_form(account_form& form, const skia::SkRect& column, float top) {
 
 // Esc leaves a panel: back to what is under it, or a step back within it
 // first, as Back says.
-template <class Back = sends<::mux::ui::request::pop_panel>>
+template <class Actions, class Back = sends<::mux::ui::request::pop_panel>>
 struct closes_on_escape : nodes::Stack, outbox {
-  no_actions* actions = nullptr;
-  explicit closes_on_escape(no_actions* a) : actions(a) {}
+  Actions* actions = nullptr;
+  explicit closes_on_escape(Actions* a) : actions(a) {}
 
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {

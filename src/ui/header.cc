@@ -35,6 +35,7 @@ inline void lay_out_notice(nodes::Stack& box, nodes::Text& title, nodes::Text& n
   }
 }
 
+template <class Actions>
 struct notice_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}}; }
@@ -45,9 +46,9 @@ struct notice_box : nodes::Stack {
     ok_button ok;
   } parts;
 
-  notice_box(const ui_needs& n, std::string heading, std::string text)
+  notice_box(const ui_needs<Actions>& n, std::string heading, std::string text)
       : notice_box(*n.colours, n.actions, std::move(heading), std::move(text)) {}
-  notice_box(const palette& colours, no_actions* a, std::string heading, std::string text)
+  notice_box(const palette& colours, Actions* a, std::string heading, std::string text)
       : parts{.title = nodes::Text(std::move(heading), 17.0f, colours.text, true),
               .note = nodes::Text(std::move(text), 14.0f, colours.dim),
               .ok = ok_button(colours.widgets, "OK", {a})} {
@@ -68,6 +69,7 @@ struct verification_view {
   std::string device;
   verification_step_t step;
 };
+template <class Actions>
 struct verification_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}, .dismissable = false}; }
@@ -116,9 +118,9 @@ struct verification_box : nodes::Stack {
     close_button close;
   } parts;
 
-  verification_box(const ui_needs& n, const verification_view& view)
+  verification_box(const ui_needs<Actions>& n, const verification_view& view)
       : verification_box(*n.colours, n.actions, view) {}
-  verification_box(const palette& colours, no_actions* a, const verification_view& view)
+  verification_box(const palette& colours, Actions* a, const verification_view& view)
       : parts{.title = nodes::Text("Verify " + view.user, 17.0f, colours.text, true),
               .note = nodes::Text(note_of(view), 14.0f, colours.dim),
               .accept = accept_button(colours.widgets, "Accept", {a}),
@@ -172,6 +174,7 @@ struct verification_box : nodes::Stack {
 // What a chat says of itself, over its messages: its avatar, name and who
 // is in it or how they are, a line under it, and the button that opens its
 // info beside it.
+template <class Actions>
 struct chat_header : nodes::Stack {
   // What the head shows: the chat's key and name, and how it is -- or no
   // chat. The head is made from it, nothing set in it afterwards.
@@ -229,7 +232,7 @@ struct chat_header : nodes::Stack {
     using back_button = icon_button<sends<::mux::ui::request::close_chat>>;
     // Shown one thing at a time, a tap on the chat's name or avatar opens
     // its info, as on Telegram's phones.
-    no_actions* actions = nullptr;
+    Actions* actions = nullptr;
     bool taps_to_info = false;
     struct parts_t {
       back_button back;
@@ -242,7 +245,7 @@ struct chat_header : nodes::Stack {
       threads_button threads;
       info_button info;
     } parts;
-    head_row(const palette& colours, no_actions* a, const view& shown)
+    head_row(const palette& colours, Actions* a, const view& shown)
         : actions(a), taps_to_info(shown.back && shown.key.has_value()),
           parts{.back = back_button(colours, icon::back{}, {a}),
                 .face = avatar_mark(shown.key.value_or(""), shown.title, 38.0f),
@@ -283,7 +286,7 @@ struct chat_header : nodes::Stack {
   static constexpr float kHeight = 56.0f;
 
   // Declared: the row over a line dividing it from the messages.
-  chat_header(const ui_needs& n, const view& shown)
+  chat_header(const ui_needs<Actions>& n, const view& shown)
       : parts{.row = head_row(*n.colours, n.actions, shown), .divider = nodes::Box<>(n.colours->band)} {
     fState.apply({.fill = true, .background = n.colours->sidebar});
     parts.divider.apply({.fillX = true, .height = 1.0f});
@@ -334,8 +337,9 @@ struct pinned_bar : nodes::Stack {
 // Messages selected, as tdesktop's: in place of the head, how many, and
 // what can be done with them -- Forward, Copy, Delete -- and Cancel. Esc
 // cancels too.
+template <class Actions>
 struct selection_bar : nodes::Stack, outbox {
-  no_actions* actions;
+  Actions* actions;
   using forward_button = button_for<sends<::mux::ui::request::selection_forward>>;
   using copy_button = button_for<sends<::mux::ui::request::selection_copy>>;
   using delete_button = button_for<sends<::mux::ui::request::selection_delete>>;
@@ -348,7 +352,7 @@ struct selection_bar : nodes::Stack, outbox {
     cancel_button cancel;
     nodes::Box<> bottom_line;
   } parts;
-  explicit selection_bar(const ui_needs& n)
+  explicit selection_bar(const ui_needs<Actions>& n)
       : actions(n.actions),
         parts{.count = nodes::Text("", 15.0f, n.colours->text, true),
               .forward = forward_button(n.colours->widgets, "Forward", {n.actions}),
@@ -359,7 +363,7 @@ struct selection_bar : nodes::Stack, outbox {
     auto& [count, forward, copy, remove, cancel, bottom_line] = parts;
     this->setHorizontal();
     this->setGap(8.0f);
-    fState.apply({.fillX = true, .height = chat_header::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
+    fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
                   .background = n.colours->sidebar});
     bottom_line.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
     count.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
@@ -387,17 +391,20 @@ struct selection_bar : nodes::Stack, outbox {
 // a field with the magnifier, how many are found and which is shown ("3 of
 // 12"), the arrows to the newer and the older, and ✕. Enter goes to the
 // older one, Shift+Enter to the newer, Esc closes.
+template <class Actions>
 struct search_typed : outbox {
   void operator()(std::string_view text) { this->send(::mux::ui::request::search_typed{std::string(text)}); }
 };
+template <class Actions>
 struct search_step : outbox {
   bool older = true;
   void operator()() { this->send(::mux::ui::request::search_step{older}); }
 };
+template <class Actions>
 struct search_bar : nodes::Stack, outbox {
-  no_actions* actions;
-  using field_t = widgets::TextBox<search_typed>;
-  using step_button = icon_button<search_step>;
+  Actions* actions;
+  using field_t = widgets::TextBox<search_typed<Actions>>;
+  using step_button = icon_button<search_step<Actions>>;
   using close_button = icon_button<sends<::mux::ui::request::close_search>>;
   struct parts_t {
     field_t field;
@@ -407,8 +414,8 @@ struct search_bar : nodes::Stack, outbox {
     nodes::Box<> bottom_line;
   } parts;
 
-  explicit search_bar(const ui_needs& n) : search_bar(*n.colours, n.actions) {}
-  search_bar(const palette& colours, no_actions* a)
+  explicit search_bar(const ui_needs<Actions>& n) : search_bar(*n.colours, n.actions) {}
+  search_bar(const palette& colours, Actions* a)
       : actions(a), parts{.field = field_t(colours.widgets, "Search", {a}),
                           .found = nodes::Text("", 13.0f, colours.dim),
                           .newer = step_button(colours, icon::up{}, {a, false}),
@@ -418,7 +425,7 @@ struct search_bar : nodes::Stack, outbox {
     auto& [field, found, newer, older, close, bottom_line] = parts;
     this->setHorizontal();
     this->setGap(4.0f);
-    fState.apply({.fillX = true, .height = chat_header::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
+    fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
                   .background = colours.sidebar});
     bottom_line.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
     field.setSearchIcon(true);

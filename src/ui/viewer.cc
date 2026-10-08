@@ -26,8 +26,9 @@ export namespace mux::ui {
 // rest, zoomed by the wheel or the buttons, dragged about when larger than
 // the room. A press on the dark around it closes it; the whole picture
 // replaces its thumbnail when it has come.
+template <class Actions>
 struct picture_viewer : nodes::Stack, outbox {
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   // The colours its menu is made in.
   const palette* colours_ = nullptr;
   std::string source;
@@ -66,7 +67,7 @@ struct picture_viewer : nodes::Stack, outbox {
       icon_button<save_it> save;
       close_button close;
     } parts;
-    top_bar(const palette& colours, no_actions* a, picture_viewer* viewer, const std::string& source, const std::string& sender,
+    top_bar(const palette& colours, Actions* a, picture_viewer* viewer, const std::string& source, const std::string& sender,
             const std::string& name, const std::string& when)
         : parts{.face = avatar_mark(sender, name, 36.0f),
                 .texts = two_lines(colours, name, when, 14.0f, 2.0f),
@@ -349,9 +350,9 @@ struct picture_viewer : nodes::Stack, outbox {
     parts.view.invalidateLayout();
   }
 
-  picture_viewer(const ui_needs& n, std::string where, std::string sender, std::string name, std::string when)
+  picture_viewer(const ui_needs<Actions>& n, std::string where, std::string sender, std::string name, std::string when)
       : picture_viewer(n.colours, n.actions, std::move(where), std::move(sender), std::move(name), std::move(when)) {}
-  picture_viewer(const palette* colours, no_actions* a, std::string where, std::string sender, std::string name, std::string when)
+  picture_viewer(const palette* colours, Actions* a, std::string where, std::string sender, std::string name, std::string when)
       : actions(a), colours_(colours), source(std::move(where)),
         parts{.top = top_bar(*colours, a, this, source, sender, name, when), .view = stage(this), .bar = video_bar(this)} {
     fState.apply({.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)});

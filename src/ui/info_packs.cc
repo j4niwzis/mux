@@ -47,10 +47,11 @@ export namespace mux::ui {
 // (as emoji, as stickers), and its images, each with its shortcode and use,
 // removable; images added from files, uploaded as they are chosen; saved as
 // the room's state, or one's account data.
+template <class Actions>
 struct packs_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   // What the window's parts tell the program: the pictures shown.
@@ -234,7 +235,7 @@ struct packs_box : nodes::Stack, outbox {
       widgets::Button<back_press> back;
       widgets::Button<save_press> save;
     } parts;
-    edit_buttons(no_actions* a, packs_box* box)
+    edit_buttons(Actions* a, packs_box* box)
         : parts{.add = widgets::Button<add_press>(box->colours_->widgets, "Add images", {a}),
                 .remove = widgets::Button<delete_press>(box->colours_->widgets, "Delete pack", {box}),
                 .back = widgets::Button<back_press>(box->colours_->widgets, "Back", {box}),
@@ -265,7 +266,7 @@ struct packs_box : nodes::Stack, outbox {
     nodes::ScrollContainer<pictures_t> pictures{pictures_t({.spacingY = 0.0f, .wrap = false}, {})};
     edit_buttons edit_actions;
   } parts;
-  packs_box(no_actions* a, const palette& colours, ui_shared& shared, std::optional<std::string> in, bool editable)
+  packs_box(Actions* a, const palette& colours, ui_shared& shared, std::optional<std::string> in, bool editable)
       : actions(a), colours_(&colours), shared_(&shared), room(std::move(in)), may_edit(editable),
         parts{.header = header_t(colours, "Emojis & Stickers", {}, {a}, false, true),
               .note = nodes::Text("", 13.0f, colours.dim),

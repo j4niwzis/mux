@@ -63,6 +63,7 @@ template <class List>
   return std::get<0>(flow.fChildren);
 }
 
+template <class Actions>
 struct reactions_box : nodes::Stack {
   // On the chat's colour: its bubbles, as in the chat.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{392.0f, 420.0f}}; }
@@ -73,14 +74,14 @@ struct reactions_box : nodes::Stack {
   // saying what they reacted with, in runs as the chat's bubbles are.
   // Pressed, it is answered.
   struct row : nodes::Stack, outbox {
-    no_actions* actions;
+    Actions* actions;
     reaction_entry entry;
     struct parts_t {
-      message_bubble bubble;
+      message_bubble<Actions> bubble;
     } parts;
-    row(const ui_needs& n, const conversation& in, reaction_entry one, bool first, bool last, const model* now)
+    row(const ui_needs<Actions>& n, const conversation& in, reaction_entry one, bool first, bool last, const model* now)
         : actions(n.actions), entry(one),
-          parts{.bubble = message_bubble(spl::remapped<typename message_bubble::needs>(n), in, message_of(in, one), first, last, now)} {
+          parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, message_of(in, one), first, last, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
                     .hoverBackground = n.colours->chosen});
       fState.setCursor(scene::cursor::hand{});
@@ -103,7 +104,7 @@ struct reactions_box : nodes::Stack {
     void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
       if (press.button != 3)
         return;
-      const message_bubble& one = parts.bubble;
+      const message_bubble<Actions>& one = parts.bubble;
       menu_facts facts;
       facts.id = entry.event;
       facts.own = entry.mine;
@@ -124,7 +125,7 @@ struct reactions_box : nodes::Stack {
     }
     [[nodiscard]] bool onClick(float x, float y) {
       // A link's preview or card in it: followed, as in the chat.
-      const message_bubble& one = parts.bubble;
+      const message_bubble<Actions>& one = parts.bubble;
       if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y)) {
         this->send(::mux::ui::request::open_url{preview->url});
         return true;
@@ -147,7 +148,7 @@ struct reactions_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
 
-  reactions_box(const ui_needs& n, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
+  reactions_box(const ui_needs<Actions>& n, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
       : parts{.top = top_bar(*n.colours, "Reactions", {}, {n.actions}, false, true)} {
     auto& rows = listed_rows(*this, parts.list, 420.0f);
     rows.reserve(entries.size());
@@ -160,16 +161,17 @@ struct reactions_box : nodes::Stack {
 // A message's edit history, as AyuGram Desktop's: each version of it the
 // chat's own bubble, on the chat's colour, oldest first, each at the time
 // it was written -- the message as it is now last, the list scrolled to it.
+template <class Actions>
 struct edit_history_box : nodes::Stack {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 560.0f}}; }
   using close_act = sends<::mux::ui::request::close_edit_history>;
   using top_bar = page_header<no_back, close_act>;
   struct row : nodes::Stack {
     struct parts_t {
-      message_bubble bubble;
+      message_bubble<Actions> bubble;
     } parts;
-    row(const ui_needs& n, const conversation& in, const message& said, const model* now)
-        : parts{.bubble = message_bubble(spl::remapped<typename message_bubble::needs>(n), in, said, true, true, now)} {
+    row(const ui_needs<Actions>& n, const conversation& in, const message& said, const model* now)
+        : parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, said, true, true, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}});
     }
   };
@@ -198,7 +200,7 @@ struct edit_history_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
 
-  edit_history_box(const ui_needs& n, const conversation& in, const message& now, const model* known)
+  edit_history_box(const ui_needs<Actions>& n, const conversation& in, const message& now, const model* known)
       : parts{.top = top_bar(*n.colours, "Edit History", {}, {n.actions}, false, true)} {
     auto& rows = listed_rows(*this, parts.list, 560.0f);
     const auto versions = versions_of(now);
@@ -221,6 +223,7 @@ struct mark_entry {
 // The mentions of the user or the reactions to theirs not yet seen, as a
 // list of the chat's bubbles: each its message -- a reaction's with who
 // reacted and with what on a badge at its bottom right. Pressed, gone to.
+template <class Actions>
 struct marks_box : nodes::Stack {
   // On the chat's colour: its bubbles, as in the chat.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 520.0f}}; }
@@ -243,16 +246,16 @@ struct marks_box : nodes::Stack {
     }
   };
   struct row : nodes::Stack, outbox {
-    no_actions* actions = nullptr;
+    Actions* actions = nullptr;
     mark_kind_t kind;
     std::string event;
     struct parts_t {
-      message_bubble bubble;
+      message_bubble<Actions> bubble;
       std::optional<badge> reacted;
     } parts;
-    row(const ui_needs& n, mark_kind_t which, const conversation& in, const mark_entry& one, const model* now)
+    row(const ui_needs<Actions>& n, mark_kind_t which, const conversation& in, const mark_entry& one, const model* now)
         : actions(n.actions), kind(which), event(one.event),
-          parts{.bubble = message_bubble(spl::remapped<typename message_bubble::needs>(n), in, one.said, true, true, now)} {
+          parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, one.said, true, true, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 8.0f, 12.0f},
                     .hoverBackground = n.colours->chosen});
       fState.setCursor(scene::cursor::hand{});
@@ -272,7 +275,7 @@ struct marks_box : nodes::Stack {
     top_bar top;
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
-  marks_box(const ui_needs& n, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
+  marks_box(const ui_needs<Actions>& n, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
       : parts{.top = top_bar(*n.colours, spl::visit(spl::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
                                                    [](mark_kind::reaction) { return std::string("Reactions"); }},
                                 kind),

@@ -30,12 +30,14 @@ import :emoji_panels;
 
 export namespace mux::ui {
 // What the menu's emoji do: react with it.
+template <class Actions>
 struct react_with : outbox {
   // What is typed in its search, a reaction too: Matrix takes any text.
   [[nodiscard]] static constexpr bool takes_text() { return true; }
   void operator()(const std::string&, const std::string& key) { this->send(::mux::ui::request::menu_react{key}); }
 };
 // What the input's emoji do: go into what is written.
+template <class Actions>
 struct insert_emoji_into : outbox {
   [[nodiscard]] static constexpr bool takes_text() { return false; }
   // A glyph as itself; a custom emoji (its key its picture's, not its
@@ -47,15 +49,16 @@ struct insert_emoji_into : outbox {
 
 // The GIFs saved, as tdesktop's GIF tab shows them: a grid of them playing,
 // newest first; a press sends one into the chat.
+template <class Actions>
 struct gif_grid : nodes::Stack, outbox {
   struct gif_cell : nodes::Stack, outbox {
-    no_actions* actions;
+    Actions* actions;
     std::string path;
     std::string key;
     struct parts_t {
       nodes::Image<from_moving_whole> picture;
     } parts;
-    gif_cell(const palette& colours, no_actions* a, std::string p)
+    gif_cell(const palette& colours, Actions* a, std::string p)
         : actions(a), path(p), key("gif:" + p),
           parts{.picture = nodes::Image<from_moving_whole>({"gif:" + p})} {
       fState.apply({.width = 104.0f, .height = 104.0f, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .cornerRadius = 6.0f,
@@ -80,11 +83,11 @@ struct gif_grid : nodes::Stack, outbox {
     nodes::ScrollContainer<cells_t> list{
         cells_t({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {})};
   } parts;
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   // The colours its cells are made in, as they change.
   const palette* colours_ = nullptr;
 
-  gif_grid(const palette& colours, no_actions* a)
+  gif_grid(const palette& colours, Actions* a)
       : parts{.empty = nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, colours.dim)}, actions(a), colours_(&colours) {
     auto& [empty, list] = parts;
     fState.apply({.padding = {4.0f, 4.0f, 4.0f, 4.0f}});
@@ -110,9 +113,10 @@ struct gif_grid : nodes::Stack, outbox {
 // (emojiPanWidth), 278 to 640 high, rounded 8, its bottom right at the top
 // right of the button that opened it; a press off it closes it. It stays
 // open while emoji are picked, and the input keeps the keys.
+template <class Actions>
 struct emoji_popup : scene::Node, outbox {
   struct card_t : nodes::Stack, outbox {
-    using panel_t = emoji_panel<insert_emoji_into>;
+    using panel_t = emoji_panel<insert_emoji_into<Actions>>;
     // Emoji, stickers or GIFs, as tdesktop's tabs at the panel's top.
     struct tab : nodes::Stack {
       card_t* card;
@@ -154,16 +158,16 @@ struct emoji_popup : scene::Node, outbox {
     struct parts_t {
       tabs_row tabs;
       panel_t panel;
-      sticker_grid stickers;
-      gif_grid gifs;
+      sticker_grid<Actions> stickers;
+      gif_grid<Actions> gifs;
     } parts;
-    no_actions* actions = nullptr;
-    card_t(const palette& colours, emoji_kept& kept, no_actions* a)
+    Actions* actions = nullptr;
+    card_t(const palette& colours, emoji_kept& kept, Actions* a)
         : colours_(&colours),
           parts{.tabs = tabs_row(this),
-                .panel = panel_t(colours, kept, insert_emoji_into{a}),
-                .stickers = sticker_grid(colours, kept, a),
-                .gifs = gif_grid(colours, a)},
+                .panel = panel_t(colours, kept, insert_emoji_into<Actions>{a}),
+                .stickers = sticker_grid<Actions>(colours, kept, a),
+                .gifs = gif_grid<Actions>(colours, a)},
           actions(a) {
       fState.apply({.width = 345.0f, .height = 360.0f, .cornerRadius = 8.0f, .background = colours.sidebar,
                     .border = scene::Border{colours.band, 1.0f},
@@ -243,7 +247,7 @@ struct emoji_popup : scene::Node, outbox {
   struct parts_t {
     card_t card;
   } parts;
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   // Where the button that opened it is: its right, its top.
   float right = 0.0f, bottom = 0.0f;
   float placed_x = -1.0f, placed_y = -1.0f, placed_h = -1.0f;
@@ -251,7 +255,7 @@ struct emoji_popup : scene::Node, outbox {
   // What the window's parts tell one another: the docked panel's height.
   ui_shared* shared_ = nullptr;
 
-  emoji_popup(const ui_needs& n, float at_right, float at_bottom)
+  emoji_popup(const ui_needs<Actions>& n, float at_right, float at_bottom)
       : parts{.card = card_t(*n.colours, *n.emoji, n.actions)}, actions(n.actions), right(at_right), bottom(at_bottom), shared_(n.shared) {
     fState.apply({.fill = true});
   }

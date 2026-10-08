@@ -29,6 +29,7 @@ export namespace mux::ui {
 
 // Settings, as Telegram Desktop shows them: a box over the window, a list of
 // sections, and each section a page of the same box.
+template <class Actions>
 struct settings_home : nodes::Stack {
   // Its children, in the order they are shown: the header, then the lines,
   // one under another -- walked as they are declared.
@@ -45,8 +46,8 @@ struct settings_home : nodes::Stack {
     row_item<sends<::mux::ui::request::settings_proxies>> proxies;
   } parts;
 
-  explicit settings_home(const ui_needs& n) : settings_home(*n.colours, n.actions) {}
-  settings_home(const palette& colours, no_actions* a)
+  explicit settings_home(const ui_needs<Actions>& n) : settings_home(*n.colours, n.actions) {}
+  settings_home(const palette& colours, Actions* a)
       : parts{.header = {colours, "Settings", {a}, {a}, false, true},
               .accounts = {colours, "Accounts", {a}, icon::person{}},
               .animations = {colours, "Animations", {a}, icon::motion{}},
@@ -114,6 +115,7 @@ inline auto motion_settings_view(const palette& colours) {
       skiff::compose::bound<skiff::model::Field<&config::look_settings::motion>>(choice_rows<config::motion_t>(
           colours, {{"Full", config::motion::full{}}, {"Reduced", config::motion::reduced{}}, {"None", config::motion::none{}}})));
 }
+template <class Actions>
 struct animations_page : nodes::Stack {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(motion_settings_view(std::declval<const palette&>()));
@@ -122,8 +124,8 @@ struct animations_page : nodes::Stack {
     settings_t settings;
   } parts;
 
-  explicit animations_page(const ui_needs& n) : animations_page(*n.colours, n.actions) {}
-  animations_page(const palette& colours, no_actions* a)
+  explicit animations_page(const ui_needs<Actions>& n) : animations_page(*n.colours, n.actions) {}
+  animations_page(const palette& colours, Actions* a)
       : parts{.header = header_t(colours, "Animations", {a}, {a}, true, true), .settings = motion_settings_view(colours)} {
     fState.apply({.fill = true});
   }
@@ -131,11 +133,13 @@ struct animations_page : nodes::Stack {
 };
 
 // A proxy profile opened from the list in Settings.
+template <class Actions>
 struct edit_proxy : outbox {
   int index = 0;
   void operator()() { this->send(::mux::ui::request::edit_proxy{index}); }
 };
 // A kind of proxy chosen on a profile's page.
+template <class Actions>
 struct choose_proxy_kind : outbox {
   config::proxy_kind_t kind;
   void operator()() { this->send(::mux::ui::request::proxy_kind{kind}); }
@@ -143,20 +147,21 @@ struct choose_proxy_kind : outbox {
 
 // Settings' Proxies page, as Gajim's Manage Proxies: the profiles, and a way
 // to add one.
+template <class Actions>
 struct proxies_page : nodes::Stack {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using add_row = row_item<sends<::mux::ui::request::add_proxy>>;
   struct parts_t {
     header_t header;
-    std::vector<row_item<edit_proxy>> profiles;
+    std::vector<row_item<edit_proxy<Actions>>> profiles;
     add_row add;
     nodes::Text empty;
   } parts;
 
   // With a way back to the settings' list where it was opened from there.
-  proxies_page(const ui_needs& n, const std::vector<config::proxy_settings>& all, bool with_back)
+  proxies_page(const ui_needs<Actions>& n, const std::vector<config::proxy_settings>& all, bool with_back)
       : proxies_page(*n.colours, n.actions, all, with_back) {}
-  proxies_page(const palette& colours, no_actions* a, const std::vector<config::proxy_settings>& all, bool with_back)
+  proxies_page(const palette& colours, Actions* a, const std::vector<config::proxy_settings>& all, bool with_back)
       : parts{.header = header_t(colours, "Proxies", {a}, {a}, with_back, true),
               .add = add_row(colours, "Add proxy", {a}, icon::plus{}),
               .empty = note_text(colours, "No proxies yet. Accounts connect directly.")} {
@@ -167,7 +172,7 @@ struct proxies_page : nodes::Stack {
     for (std::size_t i = 0; i < all.size(); ++i)
       profiles.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
                                         all[i].host, all[i].port),
-                            edit_proxy{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
+                            edit_proxy<Actions>{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
     empty.setVisible(all.empty());
   }
   void show_receipts(bool) {}
@@ -175,10 +180,11 @@ struct proxies_page : nodes::Stack {
 
 // SOCKS5 | HTTP: two segments in a frame, the chosen one lit by a plate
 // that slides from one to the other.
+template <class Actions>
 struct kind_switch : nodes::Stack {
   // The highlight that slides from one to the other: under them, out of
   // their flow, shifted as far as the slide has come.
-  using kind_segment = segment<choose_proxy_kind>;
+  using kind_segment = segment<choose_proxy_kind<Actions>>;
   struct parts_t {
     nodes::Box<> highlight;
     kind_segment socks;
@@ -186,7 +192,7 @@ struct kind_switch : nodes::Stack {
   } parts;
   skiff::paint::Tween slide{0.0f, 180.0f, skiff::paint::movement::subtle{}};
 
-  kind_switch(const palette& colours, no_actions* a)
+  kind_switch(const palette& colours, Actions* a)
       : parts{.highlight = nodes::Box<>(colours.accent),
               .socks = kind_segment(colours, "SOCKS5", {a, config::proxy_kind::socks5{}}),
               .http = kind_segment(colours, "HTTP", {a, config::proxy_kind::http{}})} {
@@ -217,6 +223,7 @@ struct kind_switch : nodes::Stack {
 // One proxy profile's page: its name, SOCKS5 or HTTP, where, and who to be
 // there; saved or deleted with its buttons. Declared: a column of these,
 // nothing placed by hand.
+template <class Actions>
 struct proxy_editor : nodes::Stack {
   int index = -1;  // in the list; -1 for a new one
   // The colours what it says is said in.
@@ -228,7 +235,7 @@ struct proxy_editor : nodes::Stack {
   struct parts_t {
     header_t header;
     field name;
-    kind_switch kinds;
+    kind_switch<Actions> kinds;
     field host;
     field port;
     field username;
@@ -239,14 +246,14 @@ struct proxy_editor : nodes::Stack {
     button_row<save_button, delete_button> buttons;
   } parts;
 
-  proxy_editor(const ui_needs& n, const std::optional<config::proxy_settings>& from, int at)
+  proxy_editor(const ui_needs<Actions>& n, const std::optional<config::proxy_settings>& from, int at)
       : proxy_editor(*n.colours, n.actions, from, at) {}
-  proxy_editor(const palette& colours, no_actions* a, const std::optional<config::proxy_settings>& from, int at)
+  proxy_editor(const palette& colours, Actions* a, const std::optional<config::proxy_settings>& from, int at)
       : index(at),
         colours_(&colours),
         parts{.header = header_t(colours, from ? from->name : std::string("New proxy"), {a}, {a}, true, true),
               .name = field(colours, "Name", "Home, Tor, Work…"),
-              .kinds = kind_switch(colours, a),
+              .kinds = kind_switch<Actions>(colours, a),
               .host = field(colours, "Host", "proxy.example.com"),
               .port = field(colours, "Port", "1080"),
               .username = field(colours, "User name", "none"),

@@ -89,6 +89,7 @@ inline constexpr skia::SkColor kAnswerGreen = skia::colorSetARGB(255, 0x0D, 0xBD
 // The round buttons, the same in the view and in the card: the microphone
 // and hanging up during the call; Decline and Accept while it rings here;
 // none once it has ended.
+template <class Actions>
 struct call_buttons : nodes::Stack {
   struct accept_it : outbox {
     void operator()() { this->send(::mux::ui::request::accept_call{}); }
@@ -122,14 +123,14 @@ struct call_buttons : nodes::Stack {
     icon_button<dismiss_it> dismiss;
   } parts;
   const palette* colours_;
-  no_actions* actions_;
+  Actions* actions_;
   std::optional<conversation_id> in_;
   // Ended, it goes by itself in a moment: frames asked for until then, so
   // the program sees the moment come.
   bool ending_ = false;
   [[nodiscard]] bool wantsTick() const { return ending_; }
   void update(double) {}
-  call_buttons(const palette& colours, no_actions* a, float size)
+  call_buttons(const palette& colours, Actions* a, float size)
       : parts{.mute = icon_button<mute_it>(colours, icon::microphone{}, {a}),
               .decline = icon_button<decline_it>(colours, icon::hang_up{}, {a}),
               .hang_up = icon_button<hang_up_it>(colours, icon::hang_up{}, {a}),
@@ -172,18 +173,19 @@ struct call_buttons : nodes::Stack {
 };
 
 // The call, in its chat: under the head, as Element's call view.
+template <class Actions>
 struct call_panel : nodes::Stack {
   struct parts_t {
     avatar_mark face;
     nodes::Text who;
     nodes::Text said;
-    call_buttons buttons;
+    call_buttons<Actions> buttons;
   } parts;
-  call_panel(const ui_needs& n, const call_view& view)
+  call_panel(const ui_needs<Actions>& n, const call_view& view)
       : parts{.face = avatar_mark(view.in.id, view.who, 88.0f),
               .who = nodes::Text(view.who, 18.0f, n.colours->text, true),
               .said = nodes::Text(said_of(view), 13.0f, n.colours->dim),
-              .buttons = call_buttons(*n.colours, n.actions, 52.0f)} {
+              .buttons = call_buttons<Actions>(*n.colours, n.actions, 52.0f)} {
     this->setGap(10.0f);
     fStack.justify = nodes::justify::middle{};
     fState.apply({.fillX = true, .height = 280.0f, .padding = {20.0f, 16.0f, 20.0f, 16.0f}, .background = n.colours->sidebar,
@@ -206,6 +208,7 @@ struct call_panel : nodes::Stack {
 // single column -- as Element's phone apps show it: the whole window,
 // the other's picture large in its upper middle with their name and where
 // the call is under it, and the buttons along the bottom, larger.
+template <class Actions>
 struct call_screen : nodes::Stack {
   struct parts_t {
     nodes::Box<> above;
@@ -213,15 +216,15 @@ struct call_screen : nodes::Stack {
     nodes::Text who;
     nodes::Text said;
     nodes::Box<> below;
-    call_buttons buttons;
+    call_buttons<Actions> buttons;
   } parts;
-  call_screen(const ui_needs& n, const call_view& view)
+  call_screen(const ui_needs<Actions>& n, const call_view& view)
       : parts{.above = nodes::Box<>(skia::SkColor{0}),
               .face = avatar_mark(view.in.id, view.who, 128.0f),
               .who = nodes::Text(view.who, 24.0f, n.colours->text, true),
               .said = nodes::Text(said_of(view), 15.0f, n.colours->dim),
               .below = nodes::Box<>(skia::SkColor{0}),
-              .buttons = call_buttons(*n.colours, n.actions, 64.0f)} {
+              .buttons = call_buttons<Actions>(*n.colours, n.actions, 64.0f)} {
     this->setGap(12.0f);
     fState.apply({.place = scene::anchor::kTopLeft, .fill = true, .padding = {24.0f, 24.0f, 48.0f, 24.0f},
                   .background = n.colours->sidebar});
@@ -248,6 +251,7 @@ struct call_screen : nodes::Stack {
 
 // The call anywhere else, and ringing here: a card at the top of the
 // window, as Element's toast.
+template <class Actions>
 struct call_bar : nodes::Stack {
   struct texts : nodes::Stack {
     struct parts_t {
@@ -267,13 +271,13 @@ struct call_bar : nodes::Stack {
   struct parts_t {
     avatar_mark face;
     texts lines;
-    call_buttons buttons;
+    call_buttons<Actions> buttons;
   } parts;
 
-  call_bar(const ui_needs& n, const call_view& view)
+  call_bar(const ui_needs<Actions>& n, const call_view& view)
       : parts{.face = avatar_mark(view.in.id, view.who, 40.0f),
               .lines = texts(*n.colours, view),
-              .buttons = call_buttons(*n.colours, n.actions, 40.0f)} {
+              .buttons = call_buttons<Actions>(*n.colours, n.actions, 40.0f)} {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.place = scene::anchor::kTopRight, .x = 12.0f, .y = 12.0f, .width = 360.0f, .autoSize = scene::axes::kY,

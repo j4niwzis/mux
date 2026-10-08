@@ -31,6 +31,7 @@ struct pending_file {
   std::int64_t size = 0;
   bool image = false;
 };
+template <class Actions>
 struct send_box : nodes::Stack {
   // Sized as it is opened, by the files it is opened with.
   [[nodiscard]] static dialog_look look_of_dialog() { return {}; }
@@ -97,8 +98,8 @@ struct send_box : nodes::Stack {
     buttons_row buttons;
   } parts;
 
-  send_box(const ui_needs& n, const std::vector<pending_file>& all) : send_box(*n.colours, n.actions, all) {}
-  send_box(const palette& colours, no_actions* a, const std::vector<pending_file>& all)
+  send_box(const ui_needs<Actions>& n, const std::vector<pending_file>& all) : send_box(*n.colours, n.actions, all) {}
+  send_box(const palette& colours, Actions* a, const std::vector<pending_file>& all)
       : parts{.title = nodes::Text(title_of(all), 17.0f, colours.text, true),
               .previews = nodes::ScrollContainer<previews_column>(previews_column(colours, all)),
               .caption = widgets::TextArea<>(colours.widgets, "Add a caption…"),

@@ -105,7 +105,7 @@ struct room_settings_facts {
 // are what manage_tabs(state) lists, found by ADL in its folder (mux.ui.
 // proto.<protocol>); each tab type has its title, its icon and its page by
 // overloads of its own (tab_title, tab_icon, page_type). Asked where the
-// dialog is made -- a template on no_actions, made in the program, which
+// dialog is made -- a template on Actions, made in the program, which
 // imports every protocol's. A protocol with none: the default, no tabs.
 template <class... Tabs>
 struct manage_tab_list {};
@@ -243,10 +243,11 @@ struct all {};
 struct some {};
 }  // namespace leave_choice
 using leave_choice_t = spl::variant<leave_choice::none, leave_choice::all, leave_choice::some>;
+template <class Actions>
 struct leave_space_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}}; }
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   leave_space_facts facts;
   leave_choice_t choice = leave_choice::none{};
   std::set<std::string> chosen;  // the rooms to leave, where some are
@@ -280,7 +281,7 @@ struct leave_space_box : nodes::Stack, outbox {
     std::vector<toggle_line<flip_room>> rooms;
     dialog_buttons<cancel, go> buttons;
   } parts;
-  leave_space_box(const ui_needs& n, leave_space_facts what)
+  leave_space_box(const ui_needs<Actions>& n, leave_space_facts what)
       : actions(n.actions), facts(std::move(what)),
         parts{.title = nodes::Text("Leave " + facts.name, 17.0f, n.colours->text, true),
               .about = explained(*n.colours, facts.rooms.empty()
@@ -407,11 +408,12 @@ inline auto chat_notify_view(const palette& colours, const conversation_id& chat
       chat);
 }
 
+template <class Actions>
 struct room_settings : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{860.0f, 620.0f}}; }
-  using actions_type = no_actions;
-  no_actions* actions = nullptr;
+  using actions_type = Actions;
+  Actions* actions = nullptr;
   // The colours it and its pages are made in: what it was handed.
   const palette* colours_ = nullptr;
   // The looks shown: the program's.
@@ -533,7 +535,7 @@ struct room_settings : nodes::Stack, outbox {
       nodes::Text leave_heading;
       button_for<sends<::mux::ui::request::leave_chat>> leave;
     } parts;
-    general_page(no_actions* a, room_settings* box, const room_settings_facts& facts)
+    general_page(Actions* a, room_settings* box, const room_settings_facts& facts)
         : parts{.heading = tab_heading(*box->colours_, "General"),
                 .events_about = explained(*box->colours_, "Room events shown in this room, for you: Default is as your account's."),
                 .settings = chat_settings_view(*box->colours_, facts.chat),
@@ -564,7 +566,7 @@ struct room_settings : nodes::Stack, outbox {
       decltype(chat_notify_view(std::declval<const palette&>(), std::declval<const conversation_id&>())) settings;
       nodes::Text note;
     } parts;
-    notifications_page(no_actions*, room_settings* box, const room_settings_facts& facts)
+    notifications_page(Actions*, room_settings* box, const room_settings_facts& facts)
         : parts{.heading = tab_heading(*box->colours_, "Notifications"),
                 .settings = chat_notify_view(*box->colours_, facts.chat),
                 .note = nodes::Text(facts.space ? "For every chat in this space, unless the chat chooses again; Default is "
@@ -582,10 +584,10 @@ struct room_settings : nodes::Stack, outbox {
   struct looks_page : nodes::Stack {
     struct parts_t {
       nodes::Text heading;
-      look_choices choices;
+      look_choices<Actions> choices;
     } parts;
-    looks_page(no_actions* a, room_settings* box, const room_settings_facts&)
-        : parts{.heading = tab_heading(*box->colours_, "Appearance"), .choices = look_choices(a, *box->colours_, *box->looks_, choice_level::chat{})} {
+    looks_page(Actions* a, room_settings* box, const room_settings_facts&)
+        : parts{.heading = tab_heading(*box->colours_, "Appearance"), .choices = look_choices<Actions>(a, *box->colours_, *box->looks_, choice_level::chat{})} {
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     }
@@ -655,8 +657,8 @@ struct room_settings : nodes::Stack, outbox {
   bool rebuild_due = false;
   bool to_top = false;  // another tab: shown from its top
 
-  room_settings(const ui_needs& n, const room_settings_facts& shown) : room_settings(n.colours, n.looks, n.actions, shown) {}
-  room_settings(const palette* colours, const looks_shown* looks, no_actions* a, const room_settings_facts& shown)
+  room_settings(const ui_needs<Actions>& n, const room_settings_facts& shown) : room_settings(n.colours, n.looks, n.actions, shown) {}
+  room_settings(const palette* colours, const looks_shown* looks, Actions* a, const room_settings_facts& shown)
       : actions(a), colours_(colours), looks_(looks), facts(shown),
         parts{.header = header_t(*colours, "Room Settings - " + shown.name, {}, {a}, false, true),
               .body = body_row(this, page_t(std::in_place_index<0>, a, this, shown))} {

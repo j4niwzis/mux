@@ -24,11 +24,6 @@ import mux.platform.audio;
 
 export namespace mux::ui {
 
-// What the window's types were made for and handed along, before they sent
-// their requests as events: nothing, now -- named only by what still
-// passes it on, until that goes.
-struct no_actions {};
-
 namespace scene = skiff::scene;
 namespace nodes = skiff::nodes;
 namespace widgets = skiff::widgets;
@@ -196,6 +191,7 @@ struct panel_ease_t {
   float from = 1.0f, to = 1.0f;
 };
 // A chat background's dialog, for a level.
+template <class Actions>
 struct open_wallpaper_at : outbox {
   choice_level_t level;
   void operator()() { this->send(::mux::ui::request::open_wallpaper{level}); }
@@ -246,6 +242,7 @@ struct mux_paint;
 // What the window's nodes are handed down, from the root -- the program's
 // own objects, each a pointer of a type of its own: what a node reads, it is
 // given by its parent, and takes what it needs of it with spl::remapped<>.
+template <class Actions>
 struct ui_needs : outbox {
   // What plays voice messages: the program's.
   platform::audio::speaker* sound = nullptr;
@@ -413,10 +410,12 @@ using button_for = std::conditional_t<sending<Act>, widgets::internal::Button<Ac
 template <class Act>
 using toggle_for = std::conditional_t<sending<Act>, widgets::internal::Toggle<Act>, widgets::Toggle<Act>>;
 // The requests about one saved account.
+template <class Actions>
 struct flip_account : outbox {
   std::string address;
   void operator()() { this->send(::mux::ui::request::flip_enabled{address}); }
 };
+template <class Actions>
 struct remove_account : outbox {
   std::string address;
   void operator()() { this->send(::mux::ui::request::remove_account{address}); }

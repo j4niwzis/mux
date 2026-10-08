@@ -71,7 +71,8 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
 // A press on what is in a message -- a picture, a file, a reply's quote,
 // its sender -- as a click, wherever the message is shown: the timeline, a
 // thread. The press in the space its bubble is laid out in.
-[[nodiscard]] bool press_in_bubble(outbox& out, const message_bubble& one, float x, float y, const conversation* chat) {
+template <class Actions>
+[[nodiscard]] bool press_in_bubble(outbox& out, const message_bubble<Actions>& one, float x, float y, const conversation* chat) {
   const struct {
     float x, y;
   } press{x, y};
@@ -201,7 +202,8 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
 
 // What a message's menu offers, for a right press on it wherever it is
 // shown: the timeline, a thread.
-[[nodiscard]] menu_facts facts_of_bubble(const message_bubble& one, const conversation* chat, float x, float y) {
+template <class Actions>
+[[nodiscard]] menu_facts facts_of_bubble(const message_bubble<Actions>& one, const conversation* chat, float x, float y) {
   const struct {
     float x, y;
   } press{x, y};
@@ -273,6 +275,7 @@ struct shown_how {
   std::optional<std::string> unread_from;
 };
 
+template <class Actions>
 struct timeline_area : scene::Node, outbox {
   // The loader's cross: the message jumped to no longer looked for.
   struct stop_jump : outbox {
@@ -281,25 +284,25 @@ struct timeline_area : scene::Node, outbox {
   struct parts_t {
     // Behind the messages: the theme's gradient, Telegram's pattern over it.
     wallpaper_t wall;
-    nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
-        nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
-    jump_button jump;
-    back_button back;
-    mark_button mentions;
-    mark_button reactions;
+    nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble<Actions>>>> timeline{
+        nodes::Flow<std::vector<message_bubble<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+    jump_button<Actions> jump;
+    back_button<Actions> back;
+    mark_button<Actions> mentions;
+    mark_button<Actions> reactions;
     // While a message jumped to is being fetched: turning in the middle,
     // its cross stopping the search.
     widgets::RadialLoader<stop_jump> loading;
   } parts;
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   // What it was handed down, for the bubbles it makes.
-  ui_needs needs_;
-  explicit timeline_area(const ui_needs& n) : timeline_area(n, n.actions) {}
-  timeline_area(const ui_needs& n, no_actions* a)
-      : parts{.jump = jump_button(*n.colours, a),
-              .back = back_button(*n.colours, a),
-              .mentions = mark_button(*n.colours, a, mark_kind::mention{}, "@"),
-              .reactions = mark_button(*n.colours, a, mark_kind::reaction{}, "\u2665"),
+  ui_needs<Actions> needs_;
+  explicit timeline_area(const ui_needs<Actions>& n) : timeline_area(n, n.actions) {}
+  timeline_area(const ui_needs<Actions>& n, Actions* a)
+      : parts{.jump = jump_button<Actions>(*n.colours, a),
+              .back = back_button<Actions>(*n.colours, a),
+              .mentions = mark_button<Actions>(*n.colours, a, mark_kind::mention{}, "@"),
+              .reactions = mark_button<Actions>(*n.colours, a, mark_kind::reaction{}, "\u2665"),
               .loading = widgets::RadialLoader<stop_jump>(44.0f, {a})},
         actions(a),
         needs_(n) {
@@ -314,7 +317,7 @@ struct timeline_area : scene::Node, outbox {
     std::get<0>(parts.timeline.fChildren).apply(
         {.fillX = true,
          .autoSize = scene::axes::kY,
-         .padding = {8.0f, message_bubble::kListSide, 8.0f, message_bubble::kListSide}});
+         .padding = {8.0f, message_bubble<Actions>::kListSide, 8.0f, message_bubble<Actions>::kListSide}});
     parts.jump.setVisible(false);
     parts.loading.apply({.place = scene::anchor::kCentre});
     parts.loading.setVisible(false);
@@ -329,7 +332,7 @@ struct timeline_area : scene::Node, outbox {
     show_wallpaper_on(parts.wall, chosen, *needs_.colours, *needs_.looks);
   }
   // The bubbles in the list, as they are made.
-  [[nodiscard]] std::vector<message_bubble>& bubbles() {
+  [[nodiscard]] std::vector<message_bubble<Actions>>& bubbles() {
     return std::get<0>(std::get<0>(parts.timeline.fChildren).fChildren);
   }
   // The bubbles, as a function of the messages from first to last of
@@ -402,9 +405,9 @@ struct timeline_area : scene::Node, outbox {
     // are kept -- with a selection in them -- and only the new are made.
     if (nodes::reconcile(
             entries, std::views::iota(first_made, last_made),
-            [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
+            [&](std::size_t i) { return all[i].id; }, [](const message_bubble<Actions>& row) { return row.message_id; },
             [&](std::size_t i) {
-              message_bubble made(spl::remapped<typename message_bubble::needs>(needs_), one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
+              message_bubble<Actions> made(spl::remapped<typename message_bubble<Actions>::needs>(needs_), one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
                                   how.previews);
               made.quote_said = quote_body(i);
               if (how.unread_from && all[i].id == *how.unread_from)
@@ -415,7 +418,7 @@ struct timeline_area : scene::Node, outbox {
                 made.appear();
               return made;
             },
-            [&](const message_bubble& row, std::size_t i) {
+            [&](const message_bubble<Actions>& row, std::size_t i) {
               const bool quote_known = !all[i].replies_to || one.quoted.contains(*all[i].replies_to) ||
                                        std::ranges::find(all, *all[i].replies_to, &message::id) != all.end();
               const auto link = first_link_of(all[i]);
@@ -438,11 +441,11 @@ struct timeline_area : scene::Node, outbox {
   bool swipe_armed = false;
   float swipe_x = 0.0f, swipe_y = 0.0f;
   std::chrono::steady_clock::time_point swipe_pressed{};
-  message_bubble* swiped() {
+  message_bubble<Actions>* swiped() {
     if (!swiping)
       return nullptr;
     auto& entries = this->bubbles();
-    const auto it = std::ranges::find(entries, *swiping, &message_bubble::message_id);
+    const auto it = std::ranges::find(entries, *swiping, &message_bubble<Actions>::message_id);
     return it == entries.end() ? nullptr : &*it;
   }
   void swipe_down(const scene::pointer::down& press) {
@@ -452,7 +455,7 @@ struct timeline_area : scene::Node, outbox {
     swipe_pressed = std::chrono::steady_clock::now();
   }
   void swipe_move(const scene::pointer::move& at, scene::PointerReply& reply) {
-    if (message_bubble* one = this->swiped()) {
+    if (message_bubble<Actions>* one = this->swiped()) {
       one->swipe.jump(std::clamp(at.x - swipe_x, -120.0f, 0.0f));
       one->markDamaged();
       reply.handle();
@@ -473,7 +476,7 @@ struct timeline_area : scene::Node, outbox {
     if (dx >= 0.0f || std::abs(dx) < 2.0f * std::abs(dy) ||
         std::chrono::steady_clock::now() - swipe_pressed > std::chrono::milliseconds(250))
       return;
-    for (message_bubble& one : this->bubbles())
+    for (message_bubble<Actions>& one : this->bubbles())
       // The rows are laid out as if unscrolled: the press, where they are.
       if (parts.timeline.toView(one.bounds()).contains(swipe_x, swipe_y) && !one.message_id.empty()) {
         swiping = one.message_id;
@@ -486,8 +489,8 @@ struct timeline_area : scene::Node, outbox {
   }
   void swipe_up(scene::PointerReply& reply) {
     swipe_armed = false;
-    if (message_bubble* one = this->swiped()) {
-      if (one->swipe.value() <= -message_bubble::kSwipeToReply)
+    if (message_bubble<Actions>* one = this->swiped()) {
+      if (one->swipe.value() <= -message_bubble<Actions>::kSwipeToReply)
         this->send(::mux::ui::request::reply_to{one->message_id, one->plain});
       one->swipe.setTarget(0.0f);
       scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
@@ -498,7 +501,7 @@ struct timeline_area : scene::Node, outbox {
   }
   void swipe_cancel(scene::PointerReply& reply) {
     swipe_armed = false;
-    if (message_bubble* one = this->swiped()) {
+    if (message_bubble<Actions>* one = this->swiped()) {
       one->swipe.setTarget(0.0f);
       scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
       swiping.reset();
@@ -571,7 +574,7 @@ struct timeline_area : scene::Node, outbox {
   std::set<std::string> selected_ids;
   void set_selected(const std::set<std::string>& ids) {
     selected_ids = ids;
-    for (message_bubble& one : this->bubbles())
+    for (message_bubble<Actions>& one : this->bubbles())
       one.select(selected_ids.contains(one.message_id));
   }
   [[nodiscard]] bool onClick(float x, float y) {
@@ -580,14 +583,14 @@ struct timeline_area : scene::Node, outbox {
       float x, y;
     } press{x, y - parts.timeline.contentsShift()};
     if (!selected_ids.empty()) {
-      for (const message_bubble& one : this->bubbles())
+      for (const message_bubble<Actions>& one : this->bubbles())
         if (one.bounds().contains(press.x, press.y) && !one.message_id.empty()) {
           this->send(::mux::ui::request::toggle_selected{one.message_id});
           return true;
         }
       return false;
     }
-      for (const message_bubble& one : this->bubbles()) {
+      for (const message_bubble<Actions>& one : this->bubbles()) {
         if (press_in_bubble(*this, one, press.x, press.y, seen_chat_of()))
           return true;
       }
@@ -601,7 +604,7 @@ struct timeline_area : scene::Node, outbox {
     // Whichever message's row the press is in -- its text, its bubble or the
     // room beside it. What Copy takes is what is selected in it, if anything
     // is, and all of it if not.
-    for (const message_bubble& one : this->bubbles())
+    for (const message_bubble<Actions>& one : this->bubbles())
       if (parts.timeline.toView(one.bounds()).contains(press.x, press.y)) {
         menu_facts facts = facts_of_bubble(one, seen_chat_of(), press.x, press.y);
         facts.seen = this->seen_by(one.message_id, one.sender);

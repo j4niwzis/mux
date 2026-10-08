@@ -39,6 +39,7 @@ export namespace mux::ui {
 // A person's info, as tdesktop's profile layer: a box in the middle of the
 // window over the chats -- a bar with its title and ✕, their photo beside
 // their name and how they are, their ID to copy, and a message to them.
+template <class Actions>
 struct person_card : nodes::Stack {
   // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
   // it shows, a 24th of the window down within 20 and 40.
@@ -56,11 +57,11 @@ struct person_card : nodes::Stack {
   // tdesktop's cover: 108 high, a 72 photo, the name and status beside it.
   struct cover : nodes::Stack {
     struct parts_t {
-      avatar_button photo;
+      avatar_button<Actions> photo;
       two_lines texts;
     } parts;
-    cover(no_actions* a, const palette& colours, const std::string& key, const person_facts& facts)
-        : parts{.photo = avatar_button(a, key, facts.name, 72.0f),
+    cover(Actions* a, const palette& colours, const std::string& key, const person_facts& facts)
+        : parts{.photo = avatar_button<Actions>(a, key, facts.name, 72.0f),
                 .texts = two_lines(colours, facts.name, facts.status, 17.0f, 6.0f)} {
       parts.texts.parts.name.setSelectable(true);
       parts.texts.parts.state.setSelectable(true);
@@ -118,7 +119,7 @@ struct person_card : nodes::Stack {
     std::vector<action_tile<ask_protocol>> theirs;
   } parts;
 
-  person_card(no_actions* a, const palette& colours, const ui_shared& shared, const account_id& account, const std::string& key, const person_facts& facts)
+  person_card(Actions* a, const palette& colours, const ui_shared& shared, const account_id& account, const std::string& key, const person_facts& facts)
       : colours_(&colours),
         parts{.top = top_bar(colours, "User info", {}, {a}, false, true),
               .face = cover(a, colours, key, facts),
@@ -169,6 +170,7 @@ struct person_card : nodes::Stack {
 // photo beside its name and how many are in it, what it is about, its ID to
 // copy, and a button to join it. What its server says (/room_summary) fills
 // it when it comes; till then, or where it says nothing, the address alone.
+template <class Actions>
 struct room_card : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
@@ -244,7 +246,7 @@ struct room_card : nodes::Stack {
     std::optional<action_tile<decline_it>> decline;
   } parts;
 
-  room_card(no_actions* a, const palette& colours, const std::string& asked, const room_preview& known)
+  room_card(Actions* a, const palette& colours, const std::string& asked, const room_preview& known)
       : parts{.top = top_bar(colours, "Room info", {}, {a}, false, true),
               .scroll = nodes::ScrollContainer<details>(details(colours, asked, known)),
               .join = action_tile<join_it>(colours, known.invite ? "Accept" : known.knock ? "Ask to join" : "Join", icon::plus{},

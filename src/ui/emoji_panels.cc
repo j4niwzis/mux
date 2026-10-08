@@ -48,16 +48,17 @@ inline void lay_out_picker(nodes::Stack& panel, auto& field, auto& list, auto& f
   footer.apply({.fillX = true, .height = 36.0f});
 }
 
+template <class Actions>
 struct sticker_grid : nodes::Stack, outbox {
   static constexpr float kCell = 78.0f;
   struct cell : nodes::Stack, outbox {
-    no_actions* actions;
+    Actions* actions;
     emoji_kept* kept_ = nullptr;
     emote sticker;
     struct parts_t {
       nodes::Image<from_avatars> picture;
     } parts;
-    cell(const palette& colours, emoji_kept& kept, no_actions* a, emote one)
+    cell(const palette& colours, emoji_kept& kept, Actions* a, emote one)
         : actions(a), kept_(&kept), sticker(one), parts{.picture = nodes::Image<from_avatars>({one.url})} {
       fState.apply({.width = kCell, .height = kCell, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .padding = {4.0f, 4.0f, 4.0f, 4.0f},
                     .cornerRadius = 6.0f, .hoverBackground = colours.chosen});
@@ -76,7 +77,7 @@ struct sticker_grid : nodes::Stack, outbox {
   };
   // A pack: its name over its stickers.
   struct section : cell_section<cell> {
-    section(const palette& colours, emoji_kept& kept, no_actions* a, std::string name, const std::vector<emote>& stickers)
+    section(const palette& colours, emoji_kept& kept, Actions* a, std::string name, const std::vector<emote>& stickers)
         : cell_section<cell>(colours, std::move(name)) {
       auto& cells = this->each();
       cells.reserve(stickers.size());
@@ -133,14 +134,14 @@ struct sticker_grid : nodes::Stack, outbox {
     // Over the rest: the sticker the mouse rests on, large.
     std::optional<emote_preview> preview;
   } parts;
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   std::optional<previewed> preview_of;
   bool searching = false;
   // The pictures of the packs' tabs, as show_all made them.
   std::vector<std::string> tab_pictures;
   [[nodiscard]] bool settling() const { return kept_->previewed_now != preview_of; }
 
-  sticker_grid(const palette& colours, emoji_kept& kept, no_actions* a)
+  sticker_grid(const palette& colours, emoji_kept& kept, Actions* a)
       : colours_(&colours),
         kept_(&kept),
         parts{.field = field_t(colours.widgets, "Search stickers", {this}),

@@ -392,6 +392,7 @@ struct nothing {
 };
 
 // A control whose action is still to come: it says so.
+template <class Actions>
 struct not_yet : outbox {
   std::string_view what;
   void operator()() { this->send(::mux::ui::request::not_implemented{std::string(what)}); }

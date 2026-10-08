@@ -44,8 +44,9 @@ export namespace mux::ui {
 // room's threads -- each root, who wrote it and what, how many answers and
 // when the latest came -- and one opened: its root, its answers, and a
 // field to answer in it.
+template <class Actions>
 struct threads_panel : nodes::Stack, outbox {
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   std::optional<std::string> open;  // the thread open, else the list
   std::vector<message> shown;       // what the open thread shows now
   std::optional<std::string> answering;  // an answer in it, answered
@@ -75,7 +76,7 @@ struct threads_panel : nodes::Stack, outbox {
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
   struct thread_row : nodes::Stack, outbox {
-    no_actions* actions;
+    Actions* actions;
     std::string root;
     struct lines_t : nodes::Stack {
       struct parts_t {
@@ -99,7 +100,7 @@ struct threads_panel : nodes::Stack, outbox {
       avatar_mark face;
       lines_t lines;
     } parts;
-    thread_row(no_actions* a, const palette& colours, const conversation& chat, const message& said)
+    thread_row(Actions* a, const palette& colours, const conversation& chat, const message& said)
         : actions(a), root(said.id),
           parts{.face = avatar_mark(said.sender, sender_name(chat, said.sender), 36.0f),
                 .lines = lines_t(colours, sender_name(chat, said.sender), flat(said.body.plain), meta_of(chat, said))} {
@@ -149,18 +150,18 @@ struct threads_panel : nodes::Stack, outbox {
     // The thread open: the chat's own timeline, its root and answers in it
     // -- one renderer for both: runs, readers, quotes, presses,
     // menus, swipes, pictures, all as the chat has them.
-    timeline_area answers;
-    composer_bar<in_thread> line;
+    timeline_area<Actions> answers;
+    composer_bar<Actions, in_thread> line;
   } parts;
-  explicit threads_panel(const ui_needs& n) : threads_panel(n, n.actions) {}
-  threads_panel(const ui_needs& n, no_actions* a)
+  explicit threads_panel(const ui_needs<Actions>& n) : threads_panel(n, n.actions) {}
+  threads_panel(const ui_needs<Actions>& n, Actions* a)
       : actions(a),
         colours_(n.colours),
         parts{.head = head_t(*n.colours, "Threads", {a}, {a}, false, true),
               .divider = nodes::Box<>(n.colours->band),
               .empty = nodes::Text("No threads here yet.", 13.0f, n.colours->dim),
-              .answers = timeline_area(n),
-              .line = composer_bar<in_thread>(n, {this}, {this}, {a}, {a}, {this})} {
+              .answers = timeline_area<Actions>(n),
+              .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {a}, {a}, {this})} {
     fState.apply({.fillY = true, .background = n.colours->sidebar});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
@@ -234,7 +235,7 @@ struct threads_panel : nodes::Stack, outbox {
   // pressed. False where it is not one of its.
   bool scroll_to(const std::string& id) {
     auto& bubbles = parts.answers.bubbles();
-    const auto found = std::ranges::find(bubbles, id, &message_bubble::message_id);
+    const auto found = std::ranges::find(bubbles, id, &message_bubble<Actions>::message_id);
     if (found == bubbles.end())
       return false;
     parts.answers.parts.timeline.scrollTo(found->bounds().fTop - 8.0f);

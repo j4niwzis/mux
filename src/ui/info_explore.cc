@@ -44,6 +44,7 @@ import :info_packs;
 
 export namespace mux::ui {
 // Join a room; a space in a space's listing, opened -- its own listed.
+template <class Actions>
 struct directory_join : outbox {
   std::string room;
   std::string server;
@@ -59,6 +60,7 @@ struct directory_join : outbox {
 
 // A room of a directory: its picture, name, address, members and topic, and
 // Join -- in Explore, and in the chat list where nothing joined matches.
+template <class Actions>
 struct directory_row : nodes::Stack {
   struct texts_t : nodes::Stack {
     struct parts_t {
@@ -87,12 +89,12 @@ struct directory_row : nodes::Stack {
   struct parts_t {
     avatar_mark face;
     texts_t texts;
-    widgets::Button<directory_join> join;
+    widgets::Button<directory_join<Actions>> join;
   } parts;
-  directory_row(no_actions* a, const palette& colours, const directory_room& one, const std::string& server)
+  directory_row(Actions* a, const palette& colours, const directory_room& one, const std::string& server)
       : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
               .texts = texts_t(colours, one),
-              .join = widgets::Button<directory_join>(colours.widgets, one.space ? "Open" : "Join",
+              .join = widgets::Button<directory_join<Actions>>(colours.widgets, one.space ? "Open" : "Join",
                                                   {a, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
                                                    one.name})} {
     this->setHorizontal();
@@ -107,10 +109,11 @@ struct directory_row : nodes::Stack {
 // own, or another named -- each room with its picture, name, address, how
 // many are in it and what it is about, and Join. An address typed in is
 // gone to at once.
+template <class Actions>
 struct explore_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{640.0f, 560.0f}}; }
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   struct close_it : outbox {
@@ -159,8 +162,8 @@ struct explore_box : nodes::Stack, outbox {
       parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     }
   };
-  using join_press = directory_join;
-  using result_row = directory_row;
+  using join_press = directory_join<Actions>;
+  using result_row = directory_row<Actions>;
   using header_t = page_header<no_back, close_it>;
   struct search_row : nodes::Stack {
     struct parts_t {
@@ -197,7 +200,7 @@ struct explore_box : nodes::Stack, outbox {
   } parts;
   // The row's fields, by their names, for what reads them.
   field& query_field() { return parts.search.parts.query; }
-  explore_box(no_actions* a, const palette& colours, const std::string& own_server)
+  explore_box(Actions* a, const palette& colours, const std::string& own_server)
       : actions(a),
         colours_(&colours),
         parts{.header = header_t(colours, "Explore rooms", {}, {a}, false, true),

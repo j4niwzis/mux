@@ -36,36 +36,41 @@ export import :conversations_side;
 export namespace mux::ui {
 
 namespace head_view_defaults {
-constexpr proto::sticker_view_list<> head_views(const auto&, type_tag<no_actions>) {
+template <class Actions>
+constexpr proto::sticker_view_list<> head_views(const auto&, type_tag<Actions>) {
   return {};
 }
-constexpr std::nullopt_t make_head_view(const auto&, const conversation&, type_tag<no_actions>) {
+template <class Actions>
+constexpr std::nullopt_t make_head_view(const auto&, const conversation&, type_tag<Actions>) {
   return std::nullopt;
 }
 }  // namespace head_view_defaults
-template <class State>
-constexpr auto head_views_for(const State& state, type_tag<no_actions> tag) {
+template <class State, class Actions>
+constexpr auto head_views_for(const State& state, type_tag<Actions> tag) {
   using head_view_defaults::head_views;
   return head_views(state, tag);
 }
 namespace composer_view_defaults {
-constexpr proto::sticker_view_list<> composer_views(const auto&, type_tag<no_actions>) {
+template <class Actions>
+constexpr proto::sticker_view_list<> composer_views(const auto&, type_tag<Actions>) {
   return {};
 }
-constexpr std::nullopt_t make_composer_view(const auto&, const conversation&, type_tag<no_actions>) {
+template <class Actions>
+constexpr std::nullopt_t make_composer_view(const auto&, const conversation&, type_tag<Actions>) {
   return std::nullopt;
 }
 }  // namespace composer_view_defaults
-template <class State>
-constexpr auto composer_views_for(const State& state, type_tag<no_actions> tag) {
+template <class State, class Actions>
+constexpr auto composer_views_for(const State& state, type_tag<Actions> tag) {
   using composer_view_defaults::composer_views;
   return composer_views(state, tag);
 }
 
+template <class Actions>
 struct conversations_screen : nodes::Stack, outbox {
-  no_actions* actions = nullptr;
+  Actions* actions = nullptr;
   // What it was handed, for the rows it makes.
-  ui_needs needs_;
+  ui_needs<Actions> needs_;
   std::optional<conversation_id> chosen;
   // The account whose chats are listed.
   std::optional<account_id> current;
@@ -321,7 +326,7 @@ struct conversations_screen : nodes::Stack, outbox {
   // already laid out and recorded: coming back showing the same, a row is
   // taken back as it was, not made again. A few hundred at most.
   static constexpr std::size_t kRowsKept = 300;
-  std::map<conversation_id, conversation_row> rows_kept;
+  std::map<conversation_id, conversation_row<Actions>> rows_kept;
   float list_from = 1.0f;
   // Begun two frames on: the frame the list is made in -- its rows made,
   // laid out, their avatars scaled -- took its time out of the slide's
@@ -383,7 +388,7 @@ struct conversations_screen : nodes::Stack, outbox {
   }
   // What the head was last made from: made again with its back arrow, or
   // without, as the window goes single or not.
-  typename chat_header::view head_shown;
+  typename chat_header<Actions>::view head_shown;
   struct pick_folder {
     conversations_screen* screen;
     void operator()(const folder_t& which) const { screen->choose_folder(which); }
@@ -566,7 +571,7 @@ struct conversations_screen : nodes::Stack, outbox {
   // The side: its space bars' view and its column, picking folders here.
   using icons_t = space_icons<pick_folder>;
   using top_view = ui::top_view<pick_folder>;
-  using side_column = ui::side_column<pick_folder>;
+  using side_column = ui::side_column<Actions, pick_folder>;
   // The chat: its header, its messages, and where one writes; or, with no
   // account at all, what to do about it.
   // The pinned bar pressed: to the pinned message -- the bar then shows the
@@ -587,7 +592,7 @@ struct conversations_screen : nodes::Stack, outbox {
     }
   };
   // A node of the chat's protocol's own over the composer (a Telegram bot's
-  // keyboard): listed by composer_views(state, type_tag<no_actions>), made for
+  // keyboard): listed by composer_views(state, type_tag<Actions>), made for
   // a chat by make_composer_view, found by ADL; none by default.
   template <class List>
   struct view_nodes;
@@ -600,19 +605,19 @@ struct conversations_screen : nodes::Stack, outbox {
   template <class... Tags>
   struct protocol_composer_nodes<protocol_list<Tags...>> {
     using type = typename joined<
-        type_list<>, typename view_nodes<decltype(composer_views_for(::mux::state_of<Tags>{}, type_tag<no_actions>{}))>::type...>::type;
+        type_list<>, typename view_nodes<decltype(composer_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
   };
   using composer_view_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_composer_nodes<protocols>::type>::type>::type;
   // And under the chat's header, over its messages (an IRC channel's topic
   // and modes, a Telegram channel's join button): head_views(state,
-  // type_tag<no_actions>), made by make_head_view.
+  // type_tag<Actions>), made by make_head_view.
   template <class>
   struct protocol_head_nodes;
   template <class... Tags>
   struct protocol_head_nodes<protocol_list<Tags...>> {
     using type = typename joined<
-        type_list<>, typename view_nodes<decltype(head_views_for(::mux::state_of<Tags>{}, type_tag<no_actions>{}))>::type...>::type;
+        type_list<>, typename view_nodes<decltype(head_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
   };
   using head_view_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_head_nodes<protocols>::type>::type>::type;
@@ -637,7 +642,7 @@ struct conversations_screen : nodes::Stack, outbox {
   struct chat_column : nodes::Stack {
     // What the banner's button asks, while it is shown.
     std::optional<proto::any_request_t> banner_asks;
-    using header_t = nodes::Memo<typename chat_header::view, chat_header>;
+    using header_t = nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>;
     using pinned_t = nodes::Memo<pinned_view, pinned_bar<pinned_press>>;
     struct empty_state : nodes::Stack {
       using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
@@ -646,7 +651,7 @@ struct conversations_screen : nodes::Stack, outbox {
         nodes::Text note;
         add_button add;
       } parts;
-      empty_state(const palette& colours, no_actions* a)
+      empty_state(const palette& colours, Actions* a)
           : parts{.title = nodes::Text("No accounts yet", 22.0f, colours.text, true),
                   .note = nodes::Text("Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, colours.dim),
                   .add = add_button(colours.widgets, "Add account", {a})} {
@@ -679,15 +684,15 @@ struct conversations_screen : nodes::Stack, outbox {
     struct parts_t {
       // The head, as a function of the chat shown.
       header_t header;
-      search_bar search;
-      selection_bar selection;
+      search_bar<Actions> search;
+      selection_bar<Actions> selection;
       // The pinned message, under the head, where the chat has any.
       pinned_t pinned;
       // A call in this chat, as Element's call view: under the head.
-      std::optional<call_panel> call;
+      std::optional<call_panel<Actions>> call;
       // Its protocol's own node under the head (make_head_view).
       std::optional<head_view_holder> their_head;
-      timeline_area area;
+      timeline_area<Actions> area;
       mention_list mentions;
       emoji_list emojis;
       // Over the composer: what the chat's protocol says there -- Matrix's
@@ -695,21 +700,21 @@ struct conversations_screen : nodes::Stack, outbox {
       nodes::Text trust_warning;
       std::optional<widgets::Button<banner_press>> banner_button;
       std::optional<composer_view_holder> their_view;
-      composer_bar line;
+      composer_bar<Actions> line;
       empty_state empty;
       select_hint hint;
     } parts;
     // Its parts by their names, for what reads them: it is never moved.
     header_t& header = parts.header;
-    search_bar& search = parts.search;
-    timeline_area& area = parts.area;
-    composer_bar& line = parts.line;
+    search_bar<Actions>& search = parts.search;
+    timeline_area<Actions>& area = parts.area;
+    composer_bar<Actions>& line = parts.line;
     empty_state& empty = parts.empty;
     select_hint& hint = parts.hint;
-    explicit chat_column(const ui_needs& n) : chat_column(n, n.actions) {}
+    explicit chat_column(const ui_needs<Actions>& n) : chat_column(n, n.actions) {}
     // What it makes its call view with: a copy, as the window keeps one --
     // the needs it was made from were not always there by then.
-    ui_needs needs_{};
+    ui_needs<Actions> needs_{};
     // The call shown in it, or none.
     void show_call(const call_view& view) {
       if (parts.call)
@@ -726,20 +731,20 @@ struct conversations_screen : nodes::Stack, outbox {
       this->invalidateLayout();
       this->markDamaged();
     }
-    chat_column(const ui_needs& n, no_actions* a)
-        : parts{.search = search_bar(n),
-                .selection = selection_bar(n),
-                .area = timeline_area(n),
+    chat_column(const ui_needs<Actions>& n, Actions* a)
+        : parts{.search = search_bar<Actions>(n),
+                .selection = selection_bar<Actions>(n),
+                .area = timeline_area<Actions>(n),
                 .mentions = mention_list(*n.colours),
                 .emojis = emoji_list(*n.colours),
                 .trust_warning = nodes::Text("", 13.0f, n.colours->text),
-                .line = composer_bar(n),
+                .line = composer_bar<Actions>(n),
                 .empty = empty_state(*n.colours, a)} {
       needs_ = n;
-      header.apply({.fillX = true, .height = chat_header::kHeight});
+      header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
       parts.pinned.setVisible(false);
-      header.show({}, [&n](const auto& shown) { return chat_header(n, shown); });
+      header.show({}, [&n](const auto& shown) { return chat_header<Actions>(n, shown); });
       // A plain colour: the wallpaper is the messages' own -- the timeline's
       // Wallpaper -- not behind Select a chat, where Telegram has none.
       // Nothing, where the background is behind the whole window.
@@ -754,29 +759,29 @@ struct conversations_screen : nodes::Stack, outbox {
       parts.trust_warning.setVisible(false);
     }
   };
-  using side_edge = drag_edge<resize_sidebar_to>;
-  using info_edge_t = drag_edge<resize_info_to>;
+  using side_edge = drag_edge<resize_sidebar_to<Actions>>;
+  using info_edge_t = drag_edge<resize_info_to<Actions>>;
   struct parts_t {
     side_column side;
     side_edge edge;
     chat_column chat;
     info_edge_t info_edge;
-    info_panel info;
+    info_panel<Actions> info;
     // Threads, in the info's place while they are open.
-    threads_panel threads;
+    threads_panel<Actions> threads;
   } parts;
   // Its parts by their names, for what reads them: the screen is never moved.
   side_column& side = parts.side;
   side_edge& edge = parts.edge;
   chat_column& chat = parts.chat;
   info_edge_t& info_edge = parts.info_edge;
-  info_panel& info = parts.info;
+  info_panel<Actions>& info = parts.info;
 
   // The old names, for what is kept in the parts.
-  nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row>>>& list = side.list;
+  nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>& list = side.list;
   nodes::Text& no_chats = side.no_chats;
-  nodes::Memo<typename chat_header::view, chat_header>& header = chat.header;
-  search_bar& search = chat.search;
+  nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>& header = chat.header;
+  search_bar<Actions>& search = chat.search;
   // The keys of a chat, as tdesktop's -- what the input leaves to it:
   // Ctrl+F finds in it; Up in an empty input edits the last message sent;
   // Ctrl+Up answers the last message, and each Ctrl+Up after it the one
@@ -805,7 +810,7 @@ struct conversations_screen : nodes::Stack, outbox {
     }
     this->invalidateLayout();
   }
-  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.area.parts.timeline;
+  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble<Actions>>>>& timeline = chat.area.parts.timeline;
   // The chat whose messages are shown, how many, and how many came while
   // the view was above the newest.
   std::optional<conversation_id> shown_chat;
@@ -816,18 +821,18 @@ struct conversations_screen : nodes::Stack, outbox {
   // Where each chat was scrolled to when it was left: it comes back there.
   std::map<conversation_id, float> scrolled;
   int unseen = 0;
-  composer_bar& line = chat.line;
+  composer_bar<Actions>& line = chat.line;
 
-  explicit conversations_screen(const ui_needs& n) : conversations_screen(n, n.actions) {}
-  conversations_screen(const ui_needs& n, no_actions* a)
+  explicit conversations_screen(const ui_needs<Actions>& n) : conversations_screen(n, n.actions) {}
+  conversations_screen(const ui_needs<Actions>& n, Actions* a)
       : actions(a),
         needs_(n),
         parts{.side = side_column(*n.colours, a),
-              .edge = side_edge(*n.colours, resize_sidebar_to{a}),
+              .edge = side_edge(*n.colours, resize_sidebar_to<Actions>{a}),
               .chat = chat_column(n),
-              .info_edge = info_edge_t(*n.colours, resize_info_to{a}, false),
-              .info = info_panel(a, *n.colours, *n.shared),
-              .threads = threads_panel(n)} {
+              .info_edge = info_edge_t(*n.colours, resize_info_to<Actions>{a}, false),
+              .info = info_panel<Actions>(a, *n.colours, *n.shared),
+              .threads = threads_panel<Actions>(n)} {
     fState.apply({.fill = true});
     this->setHorizontal();
     needs_.shared->docked_panel_watcher = fState.fId;
@@ -920,7 +925,7 @@ struct conversations_screen : nodes::Stack, outbox {
     if (now != single || (now && box.width() != single_width)) {
       if (now != single) {
         head_shown.back = now;
-        header.show(head_shown, [this](const auto& shown) { return chat_header(needs_, shown); });
+        header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(needs_, shown); });
       }
       single = now;
       single_width = box.width();
@@ -1239,7 +1244,7 @@ struct conversations_screen : nodes::Stack, outbox {
     if (jumping_to)
       return out;
     const skia::SkRect view = timeline.bounds();
-    for (const message_bubble& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
+    for (const message_bubble<Actions>& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
       // Laid out as if unscrolled: where it is in the view.
       const skia::SkRect box = timeline.toView(row.bounds());
       if (!row.message_id.empty() && !box.isEmpty() && row.visible() && box.fBottom > view.fTop + 8.0f &&
@@ -1330,7 +1335,7 @@ struct conversations_screen : nodes::Stack, outbox {
   [[nodiscard]] std::size_t pin_above(const conversation& one) {
     const skia::SkRect view = timeline.bounds();
     const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    const auto first = std::ranges::find_if(entries, [&](const message_bubble& row) {
+    const auto first = std::ranges::find_if(entries, [&](const message_bubble<Actions>& row) {
       const skia::SkRect box = timeline.toView(row.bounds());
       return !row.message_id.empty() && row.visible() && !box.isEmpty() && box.fBottom > view.fTop + 8.0f;
     });

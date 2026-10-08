@@ -29,6 +29,7 @@ import skiff.bind;
 export namespace mux::ui {
 
 // A renderer chosen on the Rendering page.
+template <class Actions>
 struct choose_renderer : outbox {
   config::renderer_t renderer;
   void operator()() { this->send(::mux::ui::request::set_renderer{renderer}); }
@@ -274,25 +275,26 @@ inline auto frame_look_view(const palette& colours, bool see_through) {
                                          "Mutter) blends windows. Made see-through when mux starts again; from then on, "
                                          "changes here apply at once."));
 }
+template <class Actions>
 struct appearance_page : nodes::Stack {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(skiff::compose::column(
       skiff::compose::vbox(), appearance_settings_view(std::declval<const palette&>(), std::declval<const config::theme_t&>()),
-      std::declval<look_choices>(), window_settings_view(std::declval<const palette&>()),
-      std::declval<spaces_choices>(), frame_look_view(std::declval<const palette&>(), false)));
+      std::declval<look_choices<Actions>>(), window_settings_view(std::declval<const palette&>()),
+      std::declval<spaces_choices<Actions>>(), frame_look_view(std::declval<const palette&>(), false)));
   struct parts_t {
     header_t header;
     settings_t settings;
   } parts;
 
-  appearance_page(const ui_needs& n, const config::theme_t& theme, const config::accent_t&)
+  appearance_page(const ui_needs<Actions>& n, const config::theme_t& theme, const config::accent_t&)
       : appearance_page(*n.colours, *n.looks, *n.shared, n.actions, theme) {}
-  appearance_page(const palette& colours, const looks_shown& looks, const ui_shared& shared, no_actions* a, const config::theme_t& theme)
+  appearance_page(const palette& colours, const looks_shown& looks, const ui_shared& shared, Actions* a, const config::theme_t& theme)
       : parts{.header = header_t(colours, "Appearance", {a}, {a}, true, true),
               .settings = skiff::compose::column(
                   skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), appearance_settings_view(colours, theme),
-                  look_choices(a, colours, looks, choice_level::everywhere{}), window_settings_view(colours),
-                  spaces_choices(a, colours, shared), frame_look_view(colours, looks.window.see_through))} {
+                  look_choices<Actions>(a, colours, looks, choice_level::everywhere{}), window_settings_view(colours),
+                  spaces_choices<Actions>(a, colours, shared), frame_look_view(colours, looks.window.see_through))} {
     fState.apply({.fill = true});
     std::get<1>(parts.settings.fParts).apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
     std::get<3>(parts.settings.fParts).setVisible(looks.window.spaces);
@@ -316,9 +318,10 @@ inline auto frame_settings_view(const palette& colours) {
                               "soon as drawn. The counter shows frames a second and the last frame's time. All take "
                               "effect at once."));
 }
+template <class Actions>
 struct rendering_page : nodes::Stack {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
-  using choice = row_item<choose_renderer>;
+  using choice = row_item<choose_renderer<Actions>>;
   // What is under the header: it scrolls where the dialog is too low for it.
   struct body : nodes::Stack {
     struct parts_t {
@@ -326,7 +329,7 @@ struct rendering_page : nodes::Stack {
       choice cpu;
       nodes::Text note;
     } parts;
-    body(const palette& colours, no_actions* a)
+    body(const palette& colours, Actions* a)
         : parts{.gpu = choice(colours, "OpenGL (the graphics card)", {a, config::renderer::opengl{}}, icon::none{}, false),
                 .cpu = choice(colours, "Software (the processor)", {a, config::renderer::software{}}, icon::none{}, false),
                 .note = note_text(colours, "Takes effect when mux starts again.")} {
@@ -342,9 +345,9 @@ struct rendering_page : nodes::Stack {
     settings_t settings;
   } parts;
 
-  rendering_page(const ui_needs& n, const config::renderer_t& renderer)
+  rendering_page(const ui_needs<Actions>& n, const config::renderer_t& renderer)
       : rendering_page(*n.colours, n.actions, renderer) {}
-  rendering_page(const palette& colours, no_actions* a, const config::renderer_t& renderer)
+  rendering_page(const palette& colours, Actions* a, const config::renderer_t& renderer)
       : parts{.header = header_t(colours, "Rendering", {a}, {a}, true, true),
               .list = body(colours, a),
               .settings = frame_settings_view(colours)} {

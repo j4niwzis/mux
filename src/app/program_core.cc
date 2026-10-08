@@ -377,6 +377,11 @@ void app::after_event() {
   // scopes it is in; what nothing in the window takes, to the program.
   for (const auto& way : std::exchange(skiff::scene::hostWork().pressed, {}))
     (void)skiff::bind::press(root(), this->state, way, &ask);
+  // What handlers returned that they ask for, where the routing carried
+  // nothing down to send it with (a debug build's erased walks): sent up the
+  // scopes their nodes are in, along their paths.
+  for (const auto& kept : std::exchange(skiff::scene::hostWork().answers, {}))
+    (void)skiff::bind::answer(root(), this->state, kept, &ask);
   if (skiff::bind::pendingCount() == 0 && ask.requests.empty())
     return;
   this->take_page_input();

@@ -284,12 +284,6 @@ void app::take_page_input() {
     chats_binding.invalidate();
     chats_binding.refresh(root(), model->chats());
   }
-  // Each model's widgets drained by its own binding: the second where the
-  // first found something to do, the count of it gone with the first.
-  const bool pending = skiff::bind::pendingCount() > 0;
-  window_binding.drain(root(), this->state, &ask);
-  if (pending)
-    skiff::bind::drain(root(), model->chats(), &ask);
   this->settle_model();
 }
 // How the window looks, as the model holds it, put where the window's
@@ -390,14 +384,22 @@ void app::after_event() {
   // The nodes pressed that answer with what they ask for: each delivered
   // along the path the scene routed it on, its event sent at once up the
   // scopes it is in; what nothing in the window takes, to the program.
-  for (const auto& way : std::exchange(skiff::scene::hostWork().pressed, {}))
-    (void)skiff::bind::press(root(), this->state, way, &ask);
+  // Each in the window's state, else in the chats' model -- the one its
+  // node is bound in.
+  const auto ways = std::exchange(skiff::scene::hostWork().pressed, {});
+  const bool pressed = std::ranges::count_if(ways, [this](const auto& way) {
+                         return skiff::bind::press(root(), this->state, way, &ask) ||
+                                skiff::bind::press(root(), model->chats(), way, &ask);
+                       }) > 0;
   // What handlers returned that they ask for, where the routing carried
   // nothing down to send it with (a debug build's erased walks): sent up the
   // scopes their nodes are in, along their paths.
-  for (const auto& kept : std::exchange(skiff::scene::hostWork().answers, {}))
-    (void)skiff::bind::answer(root(), this->state, kept, &ask);
-  if (skiff::bind::pendingCount() == 0 && ask.requests.empty())
+  const auto kept = std::exchange(skiff::scene::hostWork().answers, {});
+  const bool answered = std::ranges::count_if(kept, [this](const auto& one) {
+                          return skiff::bind::answer(root(), this->state, one, &ask) ||
+                                 skiff::bind::answer(root(), model->chats(), one, &ask);
+                        }) > 0;
+  if (!pressed && !answered && ask.requests.empty())
     return;
   this->take_page_input();
   this->apply_asked();

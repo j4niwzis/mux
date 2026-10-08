@@ -82,29 +82,23 @@ struct theme_card : nodes::Stack {
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    choose(theme);
+    act_on(fState, choose, theme);
     return true;
   }
+  auto onPress()
+    requires skiff::scene::Answering<Choose>
+  {
+    return choose(theme);
+  }
 };
 
 
-// What was picked of a T in a row of nodes that each call one: kept until
-// it is taken, as a model's widget keeps what it did.
+// What was picked of a T in a row of nodes that each call one: the press
+// answered with it, set in the part the row's field binds.
 template <class T>
 struct pick {
-  std::optional<T> value;
-  void operator()(const T& one) {
-    value = one;
-    ++skiff::bind::pendingCount();
-  }
-};
-// Where a slider was let go, kept until it is taken.
-struct let_go {
-  std::optional<float> fraction;
-  void operator()(float at) {
-    fraction = at;
-    ++skiff::bind::pendingCount();
-  }
+  using Answer = skiff::bind::Own<skiff::model::SetTo<T>>;
+  Answer operator()(const T& one) const { return skiff::bind::own(skiff::model::setTo(one)); }
 };
 
 // The themes' cards, Telegram's, in its order, with its own pictures'
@@ -139,47 +133,31 @@ struct theme_field : side_scroll<theme_row> {
       card->set_chosen(card->theme == now);
     this->markDamaged();
   }
-  std::vector<skiff::model::SetTo<config::theme_t>> takeChanges() {
-    std::vector<skiff::model::SetTo<config::theme_t>> out;
-    auto& [classic, day, tinted, night] = parts.line.parts;
-    for (auto* card : {&classic, &day, &tinted, &night})
-      if (auto picked = std::exchange(card->choose.value, std::nullopt))
-        out.push_back(skiff::model::setTo(*picked));
-    return out;
-  }
 };
 // Telegram's accents, the theme's own first: bound to the accent the model
 // holds. Their shades are the theme's: the page is made again with it.
 struct accent_field : accent_circles<pick<config::accent_t>> {
   explicit accent_field(const config::theme_t& in) : accent_circles<pick<config::accent_t>>({}, in, true) {}
   void read(const config::accent_t& now) { this->show_chosen(now); }
-  std::vector<skiff::model::SetTo<config::accent_t>> takeChanges() {
-    std::vector<skiff::model::SetTo<config::accent_t>> out;
-    for (auto& circle : parts.circles)
-      if (auto picked = std::exchange(circle.choose.value, std::nullopt))
-        out.push_back(skiff::model::setTo(*picked));
-    return out;
-  }
 };
 // A slider over an int between its ends, set where it is let go: the
 // window's opacity, 20% to 100%; or the nearest of a list of them -- the
 // interface's scale, among kScales.
-struct opacity_field : widgets::internal::SliderBar<scene::NoAction, let_go> {
+struct opacity_field : widgets::internal::SliderBar<scene::NoAction, widgets::Answers> {
   explicit opacity_field(const palette& colours)
-      : widgets::internal::SliderBar<scene::NoAction, let_go>(colours.widgets, {}, {}) {
+      : widgets::internal::SliderBar<scene::NoAction, widgets::Answers>(colours.widgets, {}, widgets::Answers{}) {
     this->apply({.margin = {10.0f, 28.0f, 10.0f, 28.0f}});
   }
   void read(int percent) { this->setFraction(static_cast<float>(percent - 20) / 80.0f); }
-  std::vector<skiff::model::SetTo<int>> takeChanges() {
-    std::vector<skiff::model::SetTo<int>> out;
-    if (auto at = std::exchange(this->onDone().fraction, std::nullopt))
-      out.push_back(skiff::model::setTo(static_cast<int>(std::lround(20.0f + std::clamp(*at, 0.0f, 1.0f) * 80.0f))));
-    return out;
+  // Let go: the opacity it is at.
+  auto onPress() {
+    return skiff::bind::own(
+        skiff::model::setTo(static_cast<int>(std::lround(20.0f + std::clamp(this->fraction(), 0.0f, 1.0f) * 80.0f))));
   }
 };
-struct scale_field : widgets::internal::SliderBar<scene::NoAction, let_go> {
+struct scale_field : widgets::internal::SliderBar<scene::NoAction, widgets::Answers> {
   explicit scale_field(const palette& colours)
-      : widgets::internal::SliderBar<scene::NoAction, let_go>(colours.widgets, {}, {}) {
+      : widgets::internal::SliderBar<scene::NoAction, widgets::Answers>(colours.widgets, {}, widgets::Answers{}) {
     this->apply({.margin = {10.0f, 28.0f, 10.0f, 28.0f}});
   }
   void read(int percent) {
@@ -188,13 +166,11 @@ struct scale_field : widgets::internal::SliderBar<scene::NoAction, let_go> {
                           ? 0.0f
                           : static_cast<float>(chosen - kScales.begin()) / static_cast<float>(kScales.size() - 1));
   }
-  std::vector<skiff::model::SetTo<int>> takeChanges() {
-    std::vector<skiff::model::SetTo<int>> out;
-    if (auto at = std::exchange(this->onDone().fraction, std::nullopt)) {
-      const auto last = static_cast<float>(kScales.size() - 1);
-      out.push_back(skiff::model::setTo(kScales[static_cast<std::size_t>(std::lround(std::clamp(*at, 0.0f, 1.0f) * last))]));
-    }
-    return out;
+  // Let go: the nearest scale to where it is.
+  auto onPress() {
+    const auto last = static_cast<float>(kScales.size() - 1);
+    return skiff::bind::own(
+        skiff::model::setTo(kScales[static_cast<std::size_t>(std::lround(std::clamp(this->fraction(), 0.0f, 1.0f) * last))]));
   }
 };
 // A section's title saying a setting's value: the scale, the opacity.
@@ -208,14 +184,26 @@ struct percent_title : nodes::Text {
 // Home without direct messages: only where Home is without what spaces
 // hold, so it reads both, and is flipped only then.
 struct home_direct_switch : nodes::Stack {
+  // Pressed while Home is without what spaces hold: the looks with direct
+  // messages flipped.
+  struct toggle_t : widgets::internal::Toggle<widgets::Answers> {
+    config::look_settings shown;
+    using widgets::internal::Toggle<widgets::Answers>::Toggle;
+    auto onPress() -> std::optional<skiff::bind::Own<skiff::model::SetTo<config::look_settings>>> {
+      if (!shown.home_hides_spaced)
+        return std::nullopt;
+      auto next = shown;
+      next.home_hides_direct = !next.home_hides_direct;
+      return skiff::bind::own(skiff::model::setTo(std::move(next)));
+    }
+  };
   struct parts_t {
     nodes::Text label;
-    widgets::internal::Toggle<widgets::Pressed> toggle;
+    toggle_t toggle;
   } parts;
-  config::look_settings shown;
   explicit home_direct_switch(const palette& colours)
       : parts{.label = nodes::Text("And without direct messages", 15.0f, colours.text),
-              .toggle = widgets::internal::Toggle<widgets::Pressed>(colours.widgets, widgets::Pressed{})} {
+              .toggle = toggle_t(colours.widgets, widgets::Answers{})} {
     this->setHorizontal();
     this->setGap(16.0f);
     fState.apply({.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
@@ -224,18 +212,9 @@ struct home_direct_switch : nodes::Stack {
     parts.toggle.apply({.alignSelf = scene::align::kMiddle});
   }
   void read(const config::look_settings& now) {
-    shown = now;
+    parts.toggle.shown = now;
     parts.toggle.setOn(now.home_hides_direct);
     this->apply({.alpha = now.home_hides_spaced ? 1.0f : 0.4f, .disabled = !now.home_hides_spaced});
-  }
-  std::vector<skiff::model::SetTo<config::look_settings>> takeChanges() {
-    std::vector<skiff::model::SetTo<config::look_settings>> out;
-    if (std::exchange(parts.toggle.onToggle().fCount, 0) % 2 == 1 && shown.home_hides_spaced) {
-      auto next = shown;
-      next.home_hides_direct = !next.home_hides_direct;
-      out.push_back(skiff::model::setTo(std::move(next)));
-    }
-    return out;
   }
 };
 

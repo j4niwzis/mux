@@ -66,16 +66,12 @@ struct settings_home : nodes::Stack {
 
 
 
-// A value a row stands for, picked when it is pressed: kept until it is
-// taken, as a model's widget keeps what it did.
+// A value a row stands for: pressed, the part set to it.
 template <class T>
 struct picks {
+  using Answer = skiff::bind::Own<skiff::model::SetTo<T>>;
   T value;
-  std::optional<T> picked;
-  void operator()() {
-    picked = value;
-    ++skiff::bind::pendingCount();
-  }
+  Answer operator()() const { return skiff::bind::own(skiff::model::setTo(value)); }
 };
 // Rows, one for each value a part can be, the one it is checked: bound to
 // the part, set to the row pressed.
@@ -89,18 +85,11 @@ struct choice_rows : nodes::Stack {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.rows.reserve(choices.size());
     for (const auto& [label, value] : choices)
-      parts.rows.emplace_back(colours, std::string(label), picks<T>{value, std::nullopt}, icon::none{}, false);
+      parts.rows.emplace_back(colours, std::string(label), picks<T>{value}, icon::none{}, false);
   }
   void read(const T& now) {
     for (auto& one : parts.rows)
       one.set_chosen(one.act.value == now);
-  }
-  std::vector<skiff::model::SetTo<T>> takeChanges() {
-    std::vector<skiff::model::SetTo<T>> out;
-    for (auto& one : parts.rows)
-      if (auto picked = std::exchange(one.act.picked, std::nullopt))
-        out.push_back(skiff::model::setTo(*picked));
-    return out;
   }
 };
 

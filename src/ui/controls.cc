@@ -286,6 +286,28 @@ struct segment : pressable<nodes::Stack> {
   }
 };
 
+// What a press of a field's part sets the field's own part to: given it as
+// the field read the model -- nothing, where the part does nothing now.
+template <class T>
+struct sets {
+  using Answer = std::optional<skiff::bind::Own<skiff::model::SetTo<T>>>;
+  std::optional<T> next;
+  Answer operator()() const {
+    return next.transform([](const T& value) { return skiff::bind::own(skiff::model::setTo(value)); });
+  }
+};
+// The same for one of a menu's options: what each sets, in their order.
+template <class T>
+struct sets_nth {
+  using Answer = std::optional<skiff::bind::Own<skiff::model::SetTo<T>>>;
+  std::vector<T> nexts;
+  Answer operator()(std::size_t at) const {
+    if (at >= nexts.size())
+      return std::nullopt;
+    return skiff::bind::own(skiff::model::setTo(nexts[at]));
+  }
+};
+
 // ---- the drawer's button ------------------------------------------------------
 
 // Three lines at the top-left of the conversation list: a press pulls the
@@ -568,28 +590,20 @@ inline constexpr std::size_t kEventsAbove = 0, kEventsAll = 1, kEventsMessages =
 // part that keeps it (Owner), set whole.
 template <class Owner>
 struct event_kinds_field : nodes::Stack {
-  struct pick_kind {
-    bool show = true;
-    bool pressed = false;
-    void operator()() {
-      pressed = true;
-      ++skiff::bind::pendingCount();
-    }
-  };
   struct row : nodes::Stack {
     room_event_t kind;
     bool live = false;
     struct parts_t {
       nodes::Text label;
-      segment<pick_kind> show, hide;
+      segment<sets<Owner>> show, hide;
     } parts;
     row(const palette& colours, room_event_t which, std::string_view text)
         : kind(which),
           parts{.label = nodes::Text(std::string(text), 14.0f, colours.text),
-                .show = segment<pick_kind>(colours, "Show", {true}),
-                .hide = segment<pick_kind>(colours, "Hide", {false})} {
+                .show = segment<sets<Owner>>(colours, "Show", {}),
+                .hide = segment<sets<Owner>>(colours, "Hide", {})} {
       lay_out_setting_row(*this, parts.label);
-      for (segment<pick_kind>* each : {&parts.show, &parts.hide})
+      for (segment<sets<Owner>>* each : {&parts.show, &parts.hide})
         each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
     }
     void show_value(bool on) {
@@ -601,18 +615,10 @@ struct event_kinds_field : nodes::Stack {
       fState.apply({.alpha = on ? 1.0f : 0.4f, .disabled = !on});
     }
   };
-  struct pick_way {
-    std::optional<std::size_t> index;
-    void operator()(std::size_t at) {
-      index = at;
-      ++skiff::bind::pendingCount();
-    }
-  };
   choice_level_t level;
-  Owner shown{};
   std::vector<std::string> names;
   struct parts_t {
-    std::optional<choice_menu<pick_way>> way;
+    std::optional<choice_menu<sets_nth<Owner>>> way;
     std::vector<row> rows;
   } parts;
   event_kinds_field(const palette& colours, choice_level_t at) : level(at) {
@@ -625,57 +631,58 @@ struct event_kinds_field : nodes::Stack {
       names.emplace_back("As above");
     for (const char* name : {"All events", "Messages only", "Custom"})
       names.emplace_back(name);
-    parts.way.emplace(colours, "Room events", names, 0, pick_way{});
+    parts.way.emplace(colours, "Room events", names, 0, sets_nth<Owner>{});
     parts.way->apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
   }
   [[nodiscard]] std::size_t offset() const { return has_level_above(level) ? 0 : 1; }
   void read(const Owner& now) {
-    shown = now;
     const room_events_held held = events_of(now);
     room_events_at(level) = held;
     const std::size_t way = events_way_of(level, held);
     room_event_filter filter = way == kEventsAbove ? events_above(level) : events_in_effect(level);
     if (way == kEventsAll || way == kEventsMessages)
       filter.shown.fill(way == kEventsAll);
+    const auto with = [&](room_events_held next_held) {
+      Owner next = now;
+      events_in(next, next_held);
+      return next;
+    };
+    // A kind shown or hidden: the rest as they are, where it is custom.
+    const auto with_kind = [&](const room_event_t& kind, bool on) -> std::optional<Owner> {
+      if (way != kEventsCustom)
+        return std::nullopt;
+      room_events_held next_held = held;
+      if (!next_held.kinds)
+        next_held.kinds.emplace();
+      logic::choice_in(*next_held.kinds, kind) = on;
+      return with(std::move(next_held));
+    };
     for (row& each : parts.rows) {
       each.show_value(filter.shows(each.kind));
       each.set_live(way == kEventsCustom);
+      each.parts.show.act.next = with_kind(each.kind, true);
+      each.parts.hide.act.next = with_kind(each.kind, false);
     }
+    // A way chosen: all, messages only, or custom from what is in effect.
+    const room_event_filter in_effect = events_in_effect(level);
+    const auto held_for = [&](std::size_t chosen) {
+      room_events_held next_held;
+      if (chosen == kEventsAll)
+        next_held.all = true;
+      else if (chosen == kEventsMessages)
+        next_held.all = false;
+      else if (chosen == kEventsCustom)
+        next_held.kinds = std::ranges::fold_left(all_room_events, config::room_event_kinds{},
+                                                 [&](config::room_event_kinds kinds, const room_event_t& kind) {
+                                                   logic::choice_in(kinds, kind) = in_effect.shows(kind);
+                                                   return kinds;
+                                                 });
+      return next_held;
+    };
+    parts.way->choose.nexts = std::views::iota(std::size_t{0}, names.size()) |
+                              std::views::transform([&](std::size_t at) { return with(held_for(at + this->offset())); }) |
+                              std::ranges::to<std::vector>();
     parts.way->parts.head.parts.value.setText(names[way - this->offset()]);
-  }
-  std::vector<skiff::model::SetTo<Owner>> takeChanges() {
-    std::vector<skiff::model::SetTo<Owner>> out;
-    room_events_held held = events_of(shown);
-    bool changed = false;
-    if (const auto index = std::exchange(parts.way->choose.index, std::nullopt)) {
-      const std::size_t way = *index + this->offset();
-      const room_event_filter now = events_in_effect(level);
-      held = {};
-      if (way == kEventsAll)
-        held.all = true;
-      else if (way == kEventsMessages)
-        held.all = false;
-      else if (way == kEventsCustom) {
-        held.kinds.emplace();
-        for (const room_event_t& kind : all_room_events)
-          logic::choice_in(*held.kinds, kind) = now.shows(kind);
-      }
-      changed = true;
-    }
-    for (row& each : parts.rows)
-      for (segment<pick_kind>* side : {&each.parts.show, &each.parts.hide})
-        if (std::exchange(side->act.pressed, false) && each.live) {
-          if (!held.kinds)
-            held.kinds.emplace();
-          logic::choice_in(*held.kinds, each.kind) = side->act.show;
-          changed = true;
-        }
-    if (changed) {
-      Owner next = shown;
-      events_in(next, held);
-      out.push_back(skiff::model::setTo(std::move(next)));
-    }
-    return out;
   }
 };
 
@@ -692,13 +699,11 @@ inline std::optional<std::int64_t> count_of(std::optional<std::int64_t> chosen, 
 template <class T>
 struct jump_search_field : nodes::Stack {
   static constexpr std::array<std::int64_t, 4> kChoices{500, 5000, 50000, 0};
+  // A count pressed: set as the part holds it.
   struct pick {
+    using Answer = skiff::bind::Own<skiff::model::SetTo<T>>;
     std::optional<std::int64_t> most;
-    bool pressed = false;
-    void operator()() {
-      pressed = true;
-      ++skiff::bind::pendingCount();
-    }
+    Answer operator()() const { return skiff::bind::own(skiff::model::setTo(count_of(most, std::type_identity<T>{}))); }
   };
   struct parts_t {
     nodes::Text label;
@@ -728,15 +733,6 @@ struct jump_search_field : nodes::Stack {
     parts.fallback.set_active(!shown);
     for (std::size_t i = 0; i < kChoices.size(); ++i)
       parts.choices[i].set_active(shown == kChoices[i]);
-  }
-  std::vector<skiff::model::SetTo<T>> takeChanges() {
-    std::vector<skiff::model::SetTo<T>> out;
-    if (std::exchange(parts.fallback.act.pressed, false))
-      out.push_back(skiff::model::setTo(count_of(std::nullopt, std::type_identity<T>{})));
-    for (auto& each : parts.choices)
-      if (std::exchange(each.act.pressed, false))
-        out.push_back(skiff::model::setTo(count_of(each.act.most, std::type_identity<T>{})));
-    return out;
   }
 };
 
@@ -804,45 +800,42 @@ inline std::optional<bool> shown_of(bool now) { return now; }
 inline std::optional<bool> shown_of(const std::optional<bool>& now) { return now; }
 inline bool part_of(std::optional<bool> chosen, std::type_identity<bool>) { return chosen.value_or(false); }
 inline std::optional<bool> part_of(std::optional<bool> chosen, std::type_identity<std::optional<bool>>) { return chosen; }
-template <class Setting, class T>
+// Part: what a press sets -- the part shown, else one holding it, which
+// gives each segment what it sets as it reads the model.
+template <class Setting, class T, class Part = T>
 struct show_hide_field : nodes::Stack {
-  struct pick {
-    std::optional<bool> value;
-    bool pressed = false;
-    void operator()() {
-      pressed = true;
-      ++skiff::bind::pendingCount();
-    }
-  };
   struct parts_t {
     nodes::Text label;
-    segment<pick> fallback, show, hide;
+    segment<sets<Part>> fallback, show, hide;
   } parts;
   bool top = false;
   show_hide_field(const palette& colours, choice_level_t level)
       : parts{.label = nodes::Text(std::string(Setting::label), 14.0f, colours.text),
-              .fallback = segment<pick>(colours, "Default", {std::nullopt}),
-              .show = segment<pick>(colours, std::string(Setting::yes), {true}),
-              .hide = segment<pick>(colours, std::string(Setting::no), {false})},
+              .fallback = segment<sets<Part>>(colours, "Default", {}),
+              .show = segment<sets<Part>>(colours, std::string(Setting::yes), {}),
+              .hide = segment<sets<Part>>(colours, std::string(Setting::no), {})},
         top(!has_level_above(level)) {
     lay_out_setting_row(*this, parts.label);
-    for (segment<pick>* each : {&parts.fallback, &parts.show, &parts.hide})
+    for (segment<sets<Part>>* each : {&parts.fallback, &parts.show, &parts.hide})
       each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
     parts.fallback.setVisible(!top);
   }
-  void read(const T& now) {
-    const std::optional<bool> said = shown_of(now);
-    const std::optional<bool> shown = top ? std::optional<bool>(said.value_or(Setting::unsaid)) : said;
+  // Which is lit, and what each sets.
+  void show_value(std::optional<bool> shown) {
     parts.fallback.set_active(!shown);
     parts.show.set_active(shown == true);
     parts.hide.set_active(shown == false);
   }
-  std::vector<skiff::model::SetTo<T>> takeChanges() {
-    std::vector<skiff::model::SetTo<T>> out;
-    for (segment<pick>* each : {&parts.fallback, &parts.show, &parts.hide})
-      if (std::exchange(each->act.pressed, false))
-        out.push_back(skiff::model::setTo(part_of(each->act.value, std::type_identity<T>{})));
-    return out;
+  void set_nexts(Part fallback, Part show, Part hide) {
+    parts.fallback.act.next = std::move(fallback);
+    parts.show.act.next = std::move(show);
+    parts.hide.act.next = std::move(hide);
+  }
+  void read(const T& now) {
+    const std::optional<bool> said = shown_of(now);
+    this->show_value(top ? std::optional<bool>(said.value_or(Setting::unsaid)) : said);
+    constexpr std::type_identity<T> as{};
+    this->set_nexts(part_of(std::nullopt, as), part_of(true, as), part_of(false, as));
   }
 };
 

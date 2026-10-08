@@ -56,15 +56,7 @@ inline nodes::Text spaced_note(const palette& colours, std::string text) {
 // doubled within its bounds, the whole of the limits set again.
 template <class Which>
 struct limit_stepper : nodes::Stack {
-  struct step {
-    bool more = true;
-    int pressed = 0;
-    void operator()() {
-      ++pressed;
-      ++skiff::bind::pendingCount();
-    }
-  };
-  using step_button = icon_button<step>;
+  using step_button = icon_button<sets<config::cache_limits>>;
   struct parts_t {
     nodes::Text label;
     nodes::Text value;
@@ -72,12 +64,11 @@ struct limit_stepper : nodes::Stack {
     step_button more;
   } parts;
   std::string_view unit;
-  config::cache_limits shown;
   limit_stepper(const palette& colours, std::string what, std::string_view in)
       : parts{.label = nodes::Text(std::move(what), 15.0f, colours.text),
               .value = nodes::Text("", 14.0f, colours.accent, true),
-              .less = step_button(colours, icon::minus{}, {false}),
-              .more = step_button(colours, icon::plus{}, {true})},
+              .less = step_button(colours, icon::minus{}, {}),
+              .more = step_button(colours, icon::plus{}, {})},
         unit(in) {
     this->setHorizontal();
     this->setGap(6.0f);
@@ -87,25 +78,19 @@ struct limit_stepper : nodes::Stack {
     for (scene::Node* middle : std::initializer_list<scene::Node*>{&parts.value, &parts.less, &parts.more})
       middle->apply({.alignSelf = scene::align::kMiddle});
   }
+  // The limit shown; a step down halves it, up doubles it, within its bounds.
   void read(const config::cache_limits& now) {
-    shown = now;
     auto copy = now;
     parts.value.setText(std::format("{} {}", config::value_of(copy, Which{}), unit));
-  }
-  std::vector<skiff::model::SetTo<config::cache_limits>> takeChanges() {
-    std::vector<skiff::model::SetTo<config::cache_limits>> out;
-    int steps = std::exchange(parts.more.act.pressed, 0) - std::exchange(parts.less.act.pressed, 0);
-    if (steps == 0)
-      return out;
-    auto next = shown;
-    std::int64_t& value = config::value_of(next, Which{});
     const auto [low, high] = config::bounds_of(config::limit_t{Which{}});
-    for (; steps > 0; --steps)
-      value = std::clamp(value * 2, low, high);
-    for (; steps < 0; ++steps)
-      value = std::clamp(value / 2, low, high);
-    out.push_back(skiff::model::setTo(std::move(next)));
-    return out;
+    const auto stepped = [&](auto by) {
+      auto next = now;
+      std::int64_t& value = config::value_of(next, Which{});
+      value = std::clamp(by(value), low, high);
+      return next;
+    };
+    parts.less.act.next = stepped([](std::int64_t value) { return value / 2; });
+    parts.more.act.next = stepped([](std::int64_t value) { return value * 2; });
   }
 };
 

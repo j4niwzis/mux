@@ -374,22 +374,17 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
 // A chat's notifications on or off: off is muted -- the chat list's mute,
 // the same -- and on, said apart from it; Default, neither. So it reads
 // and sets the chat's choices whole.
-struct chat_on_field : show_hide_field<notify_on_setting, std::optional<bool>> {
-  config::chat_choices shown;
+struct chat_on_field : show_hide_field<notify_on_setting, std::optional<bool>, config::chat_choices> {
   explicit chat_on_field(const palette& colours) : show_hide_field(colours, choice_level::chat{}) {}
   void read(const config::chat_choices& now) {
-    shown = now;
-    show_hide_field::read(now.muted ? std::optional<bool>(false) : now.notify.on);
-  }
-  std::vector<skiff::model::SetTo<config::chat_choices>> takeChanges() {
-    std::vector<skiff::model::SetTo<config::chat_choices>> out;
-    for (auto& chosen : show_hide_field::takeChanges()) {
-      auto next = shown;
-      next.muted = chosen.fValue == false;
-      next.notify.on = chosen.fValue == true ? chosen.fValue : std::nullopt;
-      out.push_back(skiff::model::setTo(std::move(next)));
-    }
-    return out;
+    show_hide_field::show_value(now.muted ? std::optional<bool>(false) : now.notify.on);
+    const auto with = [&](std::optional<bool> on) {
+      auto next = now;
+      next.muted = on == false;
+      next.notify.on = on == true ? on : std::nullopt;
+      return next;
+    };
+    show_hide_field::set_nexts(with(std::nullopt), with(true), with(false));
   }
 };
 // A chat's notification rows, bound to its own choices in the model.

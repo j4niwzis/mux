@@ -29,6 +29,13 @@ export namespace mux::ui {
 template <class OnDrag>
 struct drag_edge : scene::Node {
   OnDrag on_drag;
+  // Where it was last dragged to, and what its act answers there.
+  float dragged_to = 0.0f;
+  auto onPress()
+    requires skiff::scene::Answering<OnDrag>
+  {
+    return on_drag(dragged_to);
+  }
   bool with_line = true;
   bool dragging = false;
 
@@ -56,7 +63,8 @@ struct drag_edge : scene::Node {
   void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
     if (!dragging)
       return;
-    on_drag(at.x);
+    dragged_to = at.x;
+    act_on(fState, on_drag, at.x);
     reply.handle();
   }
   void onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) {
@@ -72,12 +80,14 @@ struct drag_edge : scene::Node {
 
 // Where an edge was dragged to, asked of the program.
 template <class Actions>
-struct resize_sidebar_to : outbox {
-  void operator()(float x) { this->emit(::mux::ui::request::resize_sidebar{x}); }
+struct resize_sidebar_to {
+  using Answer = std::optional<::mux::ui::request::resize_sidebar>;
+  std::optional<::mux::ui::request::resize_sidebar> operator()(float x) { return ::mux::ui::request::resize_sidebar{x}; }
 };
 template <class Actions>
-struct resize_info_to : outbox {
-  void operator()(float x) { this->emit(::mux::ui::request::resize_info{x}); }
+struct resize_info_to {
+  using Answer = std::optional<::mux::ui::request::resize_info>;
+  std::optional<::mux::ui::request::resize_info> operator()(float x) { return ::mux::ui::request::resize_info{x}; }
 };
 
 // ---- the message field --------------------------------------------------------------

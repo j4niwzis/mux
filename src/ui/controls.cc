@@ -1085,8 +1085,13 @@ struct accent_circle : scene::Node {
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    choose(accent);
+    act_on(fState, choose, accent);
     return true;
+  }
+  auto onPress()
+    requires skiff::scene::Answering<Choose>
+  {
+    return choose(accent);
   }
 };
 

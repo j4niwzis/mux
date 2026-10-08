@@ -380,8 +380,9 @@ struct account_notifications : nodes::Stack {
 template <class Actions>
 struct account_chats : nodes::Stack {
   // Its colour chosen.
-  struct set_colour : outbox {
-    void operator()(const config::accent_t& one) { this->emit(::mux::ui::request::set_account_colour{one}); }
+  struct set_colour {
+    using Answer = std::optional<::mux::ui::request::set_account_colour>;
+    std::optional<::mux::ui::request::set_account_colour> operator()(const config::accent_t& one) { return ::mux::ui::request::set_account_colour{one}; }
   };
   // Home without what its spaces hold -- but direct messages -- or as every
   // account's.

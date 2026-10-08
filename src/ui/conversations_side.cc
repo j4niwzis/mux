@@ -480,10 +480,11 @@ struct side_column : nodes::Stack, outbox {
     account_id in;
     ::mux::ui::request::flip_chat_strip operator()() { return ::mux::ui::request::flip_chat_strip{chat, in}; }
   };
-  struct strip_colour_act : outbox {
+  struct strip_colour_act {
+    using Answer = std::optional<::mux::ui::request::set_chat_strip_colour>;
     conversation_id chat;
     account_id in;
-    void operator()(const config::accent_t& colour) { this->emit(::mux::ui::request::set_chat_strip_colour{chat, in, colour}); }
+    std::optional<::mux::ui::request::set_chat_strip_colour> operator()(const config::accent_t& colour) { return ::mux::ui::request::set_chat_strip_colour{chat, in, colour}; }
   };
   struct chat_menu : nodes::Stack {
     struct parts_t {
@@ -513,7 +514,7 @@ struct side_column : nodes::Stack, outbox {
       if (id.account != listing) {
         parts.unplace.emplace(colours.widgets, "Remove from this list", unplace_act{id, listing});
         parts.strip.emplace(colours.widgets, "Strip on or off", strip_act{id, listing});
-        parts.strip_colours.emplace(strip_colour_act{{}, id, listing}, theme, false);
+        parts.strip_colours.emplace(strip_colour_act{id, listing}, theme, false);
       }
       for (auto& each : parts.places)
         each.apply({.fillX = true, .height = 30.0f});

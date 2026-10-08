@@ -507,12 +507,14 @@ struct room_settings : nodes::Stack, outbox {
   // ---- General: the room as the client shows it -------------------------------------
   // A space as one chat, its rooms as topics: a switch, off for a space
   // that holds spaces.
-  struct flip_forum_act : outbox {
+  struct flip_forum_act {
+    using Answer = std::optional<::mux::ui::request::flip_forum>;
     std::string room;
     bool allowed = true;
-    void operator()() {
+    std::optional<::mux::ui::request::flip_forum> operator()() {
       if (allowed)
-        this->emit(::mux::ui::request::flip_forum{room});
+        return ::mux::ui::request::flip_forum{room};
+      return std::nullopt;
     }
   };
   // A space's rooms out of Home, or in it: a switch, for a space that is
@@ -540,7 +542,7 @@ struct room_settings : nodes::Stack, outbox {
                 .events_about = explained(*box->colours_, "Room events shown in this room, for you: Default is as your account's."),
                 .settings = chat_settings_view(*box->colours_, facts.chat),
                 .forum_heading = part_heading(*box->colours_, "Shown as"),
-                .forum = toggle_line<flip_forum_act>(*box->colours_, "One chat, its rooms as topics", {{}, facts.id, !facts.holds_spaces},
+                .forum = toggle_line<flip_forum_act>(*box->colours_, "One chat, its rooms as topics", {facts.id, !facts.holds_spaces},
                                                      facts.forum, !facts.holds_spaces),
                 .forum_about = explained(*box->colours_, facts.holds_spaces
                                              ? "A space that holds spaces is shown as a space."

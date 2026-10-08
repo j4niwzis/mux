@@ -26,6 +26,17 @@ export namespace mux::ui {
 // rest, zoomed by the wheel or the buttons, dragged about when larger than
 // the room. A press on the dark around it closes it; the whole picture
 // replaces its thumbnail when it has come.
+// A picture or a video open: its source (a video's thumbnail), who sent
+// it, its name, when; and a video's own source, played once it is there.
+struct viewer_facts {
+  std::string source;
+  std::string sender;
+  std::string name;
+  std::string when;
+  std::string video;
+  // The video's file, once it is there: played.
+  std::optional<std::filesystem::path> file;
+};
 template <class Actions>
 struct picture_viewer : nodes::Stack {
   // The colours its menu is made in.
@@ -361,6 +372,13 @@ struct picture_viewer : nodes::Stack {
     parts.view.invalidateLayout();
   }
 
+  // Made from what it shows; a video's file played once it is there.
+  picture_viewer(const ui_needs<Actions>& n, const viewer_facts& facts)
+      : picture_viewer(n, facts.source, facts.sender, facts.name, facts.when) {
+    video = facts.video;
+    if (facts.file)
+      this->start(*facts.file);
+  }
   picture_viewer(const ui_needs<Actions>& n, std::string where, std::string sender, std::string name, std::string when)
       : picture_viewer(n.colours, std::move(where), std::move(sender), std::move(name), std::move(when)) {}
   picture_viewer(const palette* colours, std::string where, std::string sender, std::string name, std::string when)

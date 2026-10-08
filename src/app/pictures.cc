@@ -148,7 +148,7 @@ class pictures_part {
                             std::error_code failed;
                             std::filesystem::create_directories(where.parent_path(), failed);
                             std::ofstream(where, std::ios::binary) << picture.bytes;
-                            s_->root().play_video(picture.source, where);
+                            this->play_video_file(picture.source, where);
                           },
                           // Saved where the dialog said, where it said; else into Downloads.
                           [&](const media_use::to_save& one) {
@@ -377,27 +377,35 @@ class pictures_part {
   // The viewer: over the window, with the thumbnail at once and the whole
   // picture when it comes -- from the disk, or from the account.
   void apply(const request::open_picture& one) {
-    s_->root().open_picture(one.source, one.sender, one.name, one.when);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::viewer_facts{one.source, one.sender, one.name, one.when, {}, std::nullopt}));
     const auto& chosen = s_->root().main().chosen;
     if (chosen)
       this->want_whole(chosen->account, one.source);
   }
-  void apply(const request::close_picture&) { s_->root().close_picture(); }
+  void apply(const request::close_picture&) { mux::ui::show<mux::ui::viewer_facts>(*s_->showing, std::nullopt); }
   // A video: the viewer on its thumbnail at once; the video from its file
   // where it was fetched before, else fetched, the loader showing how far.
   void apply(const request::open_video& one) {
-    s_->root().open_video(one.source, one.video, one.sender, one.name, one.when);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::viewer_facts{one.source, one.sender, one.name, one.when, one.video, std::nullopt}));
     videos_.insert(one.video);
     mux::ui::stopped_downloads().erase(one.video);
     this->watch(one.video);
   }
   void watch(const std::string& video) {
     if (const auto where = video_file(video); std::filesystem::exists(where)) {
-      s_->root().play_video(video, where);
+      this->play_video_file(video, where);
       return;
     }
     if (const auto& chosen = s_->root().main().chosen; chosen && videos_fetching_.insert(video).second)
       s_->net->fetch_media(chosen->account, video, media_use::to_watch{}, 0);
+  }
+  // A video's file come: played, where the viewer is still up for it.
+  void play_video_file(const std::string& video, const std::filesystem::path& file) {
+    auto now = s_->showing->root().viewer.fValue;
+    if (!now || now->video != video)
+      return;
+    now->file = file;
+    mux::ui::show(*s_->showing, std::move(now));
   }
   // Where a video is kept once fetched: a file of its own, named by it.
   [[nodiscard]] static std::filesystem::path video_file(std::string_view source) {

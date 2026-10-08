@@ -60,6 +60,7 @@ struct shown_root {
   skiff::model::Tracked<std::optional<verification_view>> verifying;
   skiff::model::Tracked<std::optional<proto::passphrase_for_t>> passphrase;
   skiff::model::Tracked<std::optional<menu_facts>> menu;
+  skiff::model::Tracked<std::optional<viewer_facts>> viewer;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -306,7 +307,7 @@ struct window : scene::Node {
       shown_in<verification_box<Actions>, verification_view> verifying;
       std::optional<emoji_popup<Actions>> emoji;
       skiff::bind::Bound<std::optional<menu_facts>, shown_layer<context_menu<Actions>, menu_facts, ui_needs<Actions>>> menu;
-      std::optional<picture_viewer<Actions>> viewer;
+      skiff::bind::Bound<std::optional<viewer_facts>, shown_layer<picture_viewer<Actions>, viewer_facts, ui_needs<Actions>>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
       std::optional<text_menu> text_menu_up;
       // A call, while there is one: over everything.
@@ -376,7 +377,7 @@ struct window : scene::Node {
         return closed(::mux::ui::request::close_menu{});
       if (parts.emoji)
         return closed(::mux::ui::request::close_emoji{});
-      if (parts.viewer)
+      if (parts.viewer.shown())
         return closed(::mux::ui::request::close_picture{});
       // A verification: OK where it is over, Decline or Cancel where it
       // waits. Not while the emoji are compared: an answer is asked there.
@@ -513,7 +514,8 @@ struct window : scene::Node {
                 .sending = shown_made<send_box<Actions>, send_facts>(n),
                 .passphrase = shown_made<passphrase_box<Actions>, proto::passphrase_for_t>(n),
                 .verifying = shown_made<verification_box<Actions>, verification_view>(n),
-                .menu = decltype(parts_t::menu)(shown_layer<context_menu<Actions>, menu_facts, ui_needs<Actions>>(&n))} {
+                .menu = decltype(parts_t::menu)(shown_layer<context_menu<Actions>, menu_facts, ui_needs<Actions>>(&n)),
+                .viewer = decltype(parts_t::viewer)(shown_layer<picture_viewer<Actions>, viewer_facts, ui_needs<Actions>>(&n))} {
       auto& [backdrop, behind, frame, ...over] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -654,21 +656,7 @@ struct window : scene::Node {
     layer().sending.dropClosed();
   }
 
-  void open_picture(std::string source, std::string sender, std::string name, std::string when) {
-    layer().viewer.emplace(needs_, std::move(source), std::move(sender), std::move(name), std::move(when));
-  }
   [[nodiscard]] send_box<Actions>* send_box_up() { return layer().sending.shown(); }
-  void close_picture() { layer().viewer.reset(); }
-  // A video: the viewer on its thumbnail, waiting for it; played once its
-  // file is there, where the viewer is still up for it.
-  void open_video(std::string thumbnail, std::string video, std::string sender, std::string name, std::string when) {
-    layer().viewer.emplace(needs_, std::move(thumbnail), std::move(sender), std::move(name), std::move(when));
-    layer().viewer->video = std::move(video);
-  }
-  void play_video(const std::string& video, const std::filesystem::path& file) {
-    if (auto& up = layer().viewer; up && up->video == video)
-      up->start(file);
-  }
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return layer().settings.shown(); }
   // A selectable text's menu, where the pointer was pressed, kept in the
   // window; and gone.

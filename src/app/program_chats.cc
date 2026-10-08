@@ -138,6 +138,16 @@ void app::apply(const request::back&) { this->show_conversations(); }
 void app::apply(const request::open_drawer&) { mux::ui::show(showing, mux::ui::drawer_shown{true}); }
 void app::apply(const request::close_drawer&) { mux::ui::show(showing, mux::ui::drawer_shown{false}); }
 
+// A banner's button, or a card's button of its protocol's own: what it asks
+// got again in the visit of its protocol's state, and done in that type.
+void app::apply(const request::banner_pressed& one) {
+  if (const mux::conversation* chat = model->find(one.in))
+    mux::proto::banner_asked(mux::ui::protocol_state_of(shared.ui, one.in.account), *chat, *model, taker{this});
+}
+void app::apply(const request::card_action& one) {
+  mux::proto::person_action_asked(mux::ui::protocol_state_of(shared.ui, one.by), one.by, one.who, one.index, taker{this});
+}
+
 void app::apply(const request::quit&) { mux::platform::events::request_quit(); }
 
 void app::apply(const request::toggle_info&) {

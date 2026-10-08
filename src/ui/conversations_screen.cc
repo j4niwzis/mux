@@ -584,10 +584,9 @@ struct conversations_screen : nodes::Stack {
   };
   // A banner's button pressed: its protocol's request, asked.
   struct banner_press {
-    // Its protocol's request, as the banner had it.
-    using Answer = std::optional<proto::any_request_t>;
-    const std::optional<proto::any_request_t>* asks;
-    Answer operator()() const { return *asks; }
+    using Answer = ::mux::ui::request::banner_pressed;
+    const conversations_screen* screen;
+    Answer operator()() const { return {*screen->chosen}; }
   };
   // A node of the chat's protocol's own over the composer (a Telegram bot's
   // keyboard): listed by composer_views(state, type_tag<Actions>), made for
@@ -638,8 +637,6 @@ struct conversations_screen : nodes::Stack {
     }
   };
   struct chat_column : nodes::Stack {
-    // What the banner's button asks, while it is shown.
-    std::optional<proto::any_request_t> banner_asks;
     using header_t = chat_head<Actions>;
     using pinned_t = nodes::Memo<pinned_view, pinned_bar<pinned_press>>;
     struct empty_state : nodes::Stack {

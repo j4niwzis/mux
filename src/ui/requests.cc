@@ -649,24 +649,19 @@ struct switch_account {
 struct close_settings {};
 struct settings_home {};
 struct settings_animations {};
+// A chat's banner's button pressed: what it asks is its protocol's, asked
+// again where the program knows which protocol it is.
+struct banner_pressed {
+  conversation_id in;
+};
+// One of a person's card's buttons of its protocol's own: by where it is
+// among them.
+struct card_action {
+  account_id by;
+  std::string who;
+  std::size_t index = 0;
+};
 }  // namespace request
-
-// Every protocol's own requests, as each lists them.
-template <class List>
-struct request_types;
-template <class... Requests>
-struct request_types<mux::proto::request_list<Requests...>> {
-  using type = type_list<Requests...>;
-};
-template <class>
-struct protocol_requests;
-template <class... Tags>
-struct protocol_requests<mux::protocol_list<Tags...>> {
-  using type = typename joined<
-      type_list<>, typename request_types<decltype(mux::proto::protocol_requests_of(::mux::state_of<Tags>{}))>::type...>::type;
-};
-// What the window asks: the client's requests, then each protocol's own.
-
 
 // What the window wants of the program as its state comes to want it, not
 // at any press: older history as the view nears the top, newer at the end

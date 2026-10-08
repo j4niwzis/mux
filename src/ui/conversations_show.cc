@@ -943,17 +943,16 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
 template <class Actions>
 void conversations_screen<Actions>::show_banners(const conversation* one, const model& now) {
   const auto banners = one ? proto::composer_banners(protocol_state_of(*needs_.shared, one->id.account), *one, now)
-                           : std::vector<proto::any_banner>{};
-  const std::string said = std::ranges::to<std::string>(std::views::join_with(std::views::transform(banners, &proto::any_banner::text), '\n'));
+                           : std::vector<proto::part::banner>{};
+  const std::string said = std::ranges::to<std::string>(std::views::join_with(std::views::transform(banners, &proto::part::banner::text), '\n'));
   // The first's button, where it has one.
   const std::string label = banners.empty() ? std::string() : banners.front().button;
-  chat.banner_asks = banners.empty() ? std::nullopt : banners.front().asks;
   auto& button = chat.parts.banner_button;
   if (label.empty() == button.has_value()) {
     if (label.empty())
       button.reset();
     else {
-      button.emplace(needs_.colours->widgets, label, banner_press{&chat.banner_asks});
+      button.emplace(needs_.colours->widgets, label, banner_press{this});
       button->apply({.width = 120.0f, .height = 30.0f, .alignSelf = scene::align::kEnd,
                      .margin = {4.0f, 14.0f, 6.0f, 14.0f}});
     }

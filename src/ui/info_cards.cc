@@ -86,11 +86,12 @@ struct person_card : nodes::Stack {
     conversation_id who;
     ::mux::ui::request::accept_identity operator()() { return ::mux::ui::request::accept_identity{who}; }
   };
-  // A button of its protocol's own: its request asked.
+  // A button of its protocol's own: which it is, its request asked again
+  // where the program knows the protocol.
   struct ask_protocol {
-    using Answer = proto::any_request_t;
-    proto::any_request_t asks;
-    Answer operator()() const { return asks; }
+    using Answer = ::mux::ui::request::card_action;
+    Answer pressed;
+    Answer operator()() const { return pressed; }
   };
   struct verify_them {
     using Answer = std::tuple<::mux::ui::request::verify_person, ::mux::ui::request::close_person_info>;
@@ -139,10 +140,10 @@ struct person_card : nodes::Stack {
     // Offered only where the user may: no button for what they cannot do.
     parts.remove.setVisible(facts.may_kick);
     parts.ban.setVisible(facts.may_ban);
-    std::ranges::for_each(proto::person_actions(protocol_state_of(shared, account), account, key), [&](proto::any_action& one) {
-      if (one.asks)
-        parts.theirs.emplace_back(colours, one.label, icon::check{}, ask_protocol{std::move(*one.asks)})
-            .apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
+    std::ranges::for_each(std::views::enumerate(proto::person_actions(protocol_state_of(shared, account), account, key)), [&](const auto& one) {
+      const auto& [index, label] = one;
+      parts.theirs.emplace_back(colours, label, icon::check{}, ask_protocol{{account, key, static_cast<std::size_t>(index)}})
+          .apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     });
     parts.sessions_title.setText(facts.devices.empty() ? std::string()
                                                        : std::format("SESSIONS ({})", facts.devices.size()));

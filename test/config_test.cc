@@ -43,7 +43,7 @@ TEST(Config, WhatIsSavedIsWhatIsLoaded) {
   const std::vector<mux::config::account_t> accounts{
       {.own = mux::config::kept_t{xmpp_account{.address = "alice@example.com", .password = "p\"ss\\word", .resource = "laptop",
                                                .host = "xmpp.example.com", .port = 5222, .plain_without_tls = true}},
-       .shared = {.colour = "pink"}},
+       .shared = {.colour = mux::config::accent_said_t{mux::config::accent::pink{}}}},
       {.own = mux::config::kept_t{matrix_account{.user_id = "@bob:example.org", .password = "секрет",
                                                  .homeserver = "https://matrix.example.org", .device_name = "desk"}},
        .shared = {.enabled = false}}};
@@ -206,7 +206,7 @@ TEST(Config, ProxiesAndTheirAccountsAreKept) {
   account.shared.proxy = "tor";
   mux::config::file kept = mux::config::file_of(std::vector{account});
   kept.proxies = std::vector<mux::config::proxy_settings>{
-      {.name = "tor", .kind = "socks5", .host = "127.0.0.1", .port = 9050}};
+      {.name = "tor", .kind = mux::config::proxy_kind::socks5{}, .host = "127.0.0.1", .port = 9050}};
   ASSERT_TRUE(mux::config::save(where, kept, vault).has_value());
   const auto got = mux::config::load(where, vault);
   ASSERT_TRUE(got.has_value()) << got.error();

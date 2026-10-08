@@ -465,7 +465,6 @@ void app::refresh(std::source_location from) {
     return;
   }
   this->note_spaces();
-  this->show_placements();
   this->show_looks_now();
   this->show_levels();
   this->show_backgrounds();

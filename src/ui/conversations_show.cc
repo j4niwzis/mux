@@ -839,6 +839,10 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   } else if (!current || !now.accounts().contains(*current)) {
     current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().keyAt(0));
   }
+  // What the chat list's menus offer: the account shown, and the accounts
+  // there are to move a chat to.
+  side.current_account = current;
+  side.accounts_known = now.accounts().keys() | std::ranges::to<std::vector>();
   // What is searched for, in any case: in a name or an address.
   constexpr auto lower = mux::logic::folded;
   const std::string wanted = lower(side.search.field.text());

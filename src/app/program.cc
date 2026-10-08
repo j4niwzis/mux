@@ -230,7 +230,6 @@ struct app : kept_settings {
   void refresh(std::source_location from = std::source_location::current());
   // Each thing the window shows of the settings, brought up to date.
   void note_spaces();
-  void show_placements();
   void show_looks_now();
   void show_levels();
   void show_backgrounds();

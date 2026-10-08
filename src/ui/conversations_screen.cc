@@ -1436,6 +1436,7 @@ struct conversations_screen : nodes::Stack, outbox {
     const kept_root& root = kept.root();
     kept_ = &root;
     const auto& looks = root.looks.fValue;
+    side.theme_now = looks.theme;
     const config::account_t* own = current ? account_settings(root, current->address) : nullptr;
     const auto own_or = [&](const std::optional<bool>& theirs, bool everyone) { return theirs.value_or(everyone); };
     // The chats listed in other accounts' lists, each with its strip: its

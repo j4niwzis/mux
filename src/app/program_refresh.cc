@@ -33,19 +33,6 @@ void app::note_spaces() {
             space_above.try_emplace(mux::conversation_id{one.id.account, child}, one.id);
 }
 
-// What the chat list's menus offer: the account shown, the theme, and the
-// accounts there are to move a chat to.
-void app::show_placements() {
-  {
-    auto& screen = root().main();
-    screen.side.current_account = screen.current;
-    screen.side.theme_now = this->appearance().theme;
-    screen.side.accounts_known.clear();
-    for (const auto& [id, account] : model->accounts())
-      screen.side.accounts_known.push_back(id);
-  }
-}
-
 // The chosen chat's bubbles and the panels' look, as its levels say.
 void app::show_looks_now() {
   // The panels' look, as the chosen chat's levels say, else every chat's:

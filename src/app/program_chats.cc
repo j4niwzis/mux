@@ -75,7 +75,7 @@ void app::apply(const request::choose& one) {
       chat && !ask.demo && chat->member_count > static_cast<std::int64_t>(chat->members.size()) &&
       members_fetched.insert(one.which).second)
     net->fetch_members(one.which);
-  root().main().chosen = one.which;
+  mux::ui::show(showing, mux::ui::chat_shown{one.which});
   this->show_chats_now();
 }
 
@@ -86,7 +86,7 @@ void app::apply(const request::close_chat&) {
   drafts.keep(*screen.chosen, screen.line.plain());
   screen.line.set_text({});
   screen.info_open = false;
-  screen.chosen.reset();
+  mux::ui::show(showing, mux::ui::chat_shown{});
   this->show_chats_now();
 }
 

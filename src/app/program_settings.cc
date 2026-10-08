@@ -22,7 +22,6 @@ namespace mux::app {
 
 void app::rebuild_in_theme() {
   auto& before = root().main();
-  const auto chosen = before.chosen;
   const auto current = before.current;
   const float side_width = before.side_width;
   const float info_width = before.info_width;
@@ -37,7 +36,6 @@ void app::rebuild_in_theme() {
   showing_binding.invalidate();
   this->refresh_shown();
   auto& after = root().main();
-  after.chosen = chosen;
   after.current = current;
   after.side_width = side_width;
   after.info_width = info_width;

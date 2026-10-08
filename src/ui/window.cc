@@ -39,12 +39,17 @@ export namespace mux::ui {
 // What the window shows that the program opens and closes, as a model:
 // each dialog's facts, while it is open. The program edits it; the
 // dialogs, bound to it, open and close as they read it.
+// The chat chosen, if one is.
+struct chat_shown {
+  std::optional<conversation_id> chosen;
+};
 // Whether the drawer is out.
 struct drawer_shown {
   bool out = false;
 };
 struct shown_root {
   skiff::model::Tracked<drawer_shown> drawer;
+  skiff::model::Tracked<chat_shown> chat;
   skiff::model::Tracked<std::optional<marks_facts>> marks;
   skiff::model::Tracked<std::optional<leave_space_facts>> leaving;
   skiff::model::Tracked<std::optional<link_facts>> linking;
@@ -70,9 +75,11 @@ struct shown_root {
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
-// The drawer out or pushed back.
-inline void show(shown_model& showing, drawer_shown drawer) {
-  (void)showing.apply(skiff::model::edit(skiff::model::placeOf<drawer_shown, shown_root>(), skiff::model::setTo(drawer)));
+// A part that is always there -- the drawer out or back, the chat chosen --
+// set.
+template <class Part>
+void show(shown_model& showing, Part part) {
+  (void)showing.apply(skiff::model::edit(skiff::model::placeOf<Part, shown_root>(), skiff::model::setTo(std::move(part))));
 }
 // A dialog shown with these facts, or closed: its part of what is shown set.
 template <class Facts>
@@ -104,6 +111,13 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
   }
   void dismissable_for(const Facts&) {}
   auto onPress() { return skiff::bind::own(skiff::model::setTo(std::optional<Facts>{})); }
+};
+
+// The chat screen, its chat the one what is shown says is chosen.
+template <class Screen>
+struct shown_screen : Screen {
+  using Screen::Screen;
+  void read(const chat_shown& now) { this->chosen = now.chosen; }
 };
 
 // The drawer, out while what is shown says so; pushed back -- the scrim
@@ -152,7 +166,8 @@ struct shown_layer : scene::Node {
 template <class Actions>
 struct window : scene::Node {
   using panel_type = spl::variant<accounts_panel<Actions>>;
-  using drawer_node = shown_drawer<conversations_screen<Actions>, drawer_panel<Actions>>;
+  using screen_node = skiff::bind::Bound<chat_shown, shown_screen<conversations_screen<Actions>>>;
+  using drawer_node = shown_drawer<screen_node, drawer_panel<Actions>>;
   using with_drawer = skiff::bind::Bound<drawer_shown, drawer_node>;
 
   // What the window holds, made anew when the theme changes: what is made
@@ -515,7 +530,7 @@ struct window : scene::Node {
 
     layers(const ui_needs<Actions>& n)
         : parts{.backdrop = nodes::Box<>(n.colours->background),
-                .frame = frame_t(with_drawer(drawer_node(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n)))),
+                .frame = frame_t(with_drawer(drawer_node(std::piecewise_construct, std::forward_as_tuple(std::in_place, n), std::forward_as_tuple(n)))),
                 .settings = shown_made<settings_dialog<Actions>, settings_facts>(n),
                 .notice = shown_made<notice_box<Actions>, notice_facts>(n),
                 .person = shown_made<person_card<Actions>, person_shown>(n),

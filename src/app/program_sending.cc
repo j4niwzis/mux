@@ -24,7 +24,7 @@ void app::apply(const request::switch_account& one) {
   auto& screen = root().main();
   screen.current = mux::account_id{mux::ui::protocol_of(one.address), one.address};
   screen.wanted.reset();
-  screen.chosen.reset();
+  mux::ui::show(showing, mux::ui::chat_shown{});
   this->change_part<recently_used>([&](recently_used& now) { now.last_account = one.address; });
   mux::ui::show(showing, mux::ui::drawer_shown{false});
   this->refresh();

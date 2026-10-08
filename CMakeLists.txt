@@ -231,7 +231,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
-  GIT_TAG 59b47fa7cf07732cd72363dc0a26b71a70464efd)
+  GIT_TAG 858dbd3ba342321efbd9e92eef31a14d2c83ea3b)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
   GIT_TAG 4e7ed1007a8a7c3f7ee38d6160243985781a495d)

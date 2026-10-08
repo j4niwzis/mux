@@ -131,11 +131,11 @@ class manage_part {
     // The spaces it is in: those of its account whose rooms list it. A
     // space's rooms, by their names; and the account's other rooms, by
     // name, to be added to it.
-    if (const auto account = s_->model->accounts().find(chat->id.account); account != s_->model->accounts().end()) {
+    if (const mux::account* account = s_->model->accounts().find(chat->id.account)) {
       const auto named = [](const std::string& id, const mux::conversation& one) {
         return mux::ui::room_settings_facts::named_room{id, one.name.empty() ? id : one.name};
       };
-      for (const auto& [id, one] : account->second.conversations) {
+      for (const auto& [id, one] : account->conversations) {
         if (one.space && std::ranges::contains(one.children, chat->id.id))
           facts.parents.push_back(named(id, one));
         if (!chat->space || id == chat->id.id)
@@ -147,7 +147,7 @@ class manage_part {
       }
       // The children the account is not in: by their IDs.
       for (const std::string& child : chat->children)
-        if (!account->second.conversations.contains(child))
+        if (!account->conversations.contains(child))
           facts.children.push_back({child, child});
       std::ranges::sort(facts.addable, {}, &mux::ui::room_settings_facts::named_room::name);
     }

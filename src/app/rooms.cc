@@ -36,8 +36,8 @@ class rooms_part {
     std::vector<mux::found_person> known;
     std::string link;
     if (current) {
-      if (const auto found = s_->model->accounts().find(*current); found != s_->model->accounts().end())
-        for (const auto& [key, chat] : found->second.conversations)
+      if (const mux::account* found = s_->model->accounts().find(*current))
+        for (const auto& [key, chat] : found->conversations)
           if (!mux::ui::is_group(chat))
             known.push_back({.id = mux::ui::contact_of(s_->ui, chat), .name = mux::ui::display_name(chat), .avatar = chat.avatar});
       link = mux::proto::share_link(mux::ui::protocol_state_of(s_->ui, *current), current->address).value_or(std::string());

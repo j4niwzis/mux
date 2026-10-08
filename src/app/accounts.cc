@@ -187,8 +187,8 @@ class accounts_part {
   [[nodiscard]] bool watch_login(Form& form) {
     if (!pending_login_)
       return false;
-    const auto found = s_->model->accounts().find(mux::account_id{mux::ui::protocol_of(*pending_login_), *pending_login_});
-    if (found == s_->model->accounts().end())
+    const mux::account* found = s_->model->accounts().find(mux::account_id{mux::ui::protocol_of(*pending_login_), *pending_login_});
+    if (found == nullptr)
       return false;
     return spl::visit(spl::overloaded{[&](const mux::connection::online&) {
                                               pending_login_.reset();
@@ -203,7 +203,7 @@ class accounts_part {
                                               form.say("Connecting\u2026", false);
                                               return false;
                                             }},
-                         found->second.state);
+                         found->state);
   }
   // A new account: saved, and started; the page waits to hear how it went.
   template <class Form>

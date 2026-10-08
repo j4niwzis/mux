@@ -36,8 +36,8 @@ export namespace mux::ui {
   const std::string& address = config::address_of(one);
   if (!config::enabled_of(one))
     return {"off", false};
-  const auto found = now.accounts().find(account_id{protocol_of(address), address});
-  if (found == now.accounts().end())
+  const account* found = now.accounts().find(account_id{protocol_of(address), address});
+  if (found == nullptr)
     return {"offline", false};
   bool failed = false;
   std::string said = spl::visit(spl::overloaded{[](const connection::offline&) { return std::string("offline"); },
@@ -47,7 +47,7 @@ export namespace mux::ui {
                                              failed = true;
                                              return "failed: " + why.error;
                                            }},
-                                found->second.state);
+                                found->state);
   return {std::move(said), failed};
 }
 

@@ -662,7 +662,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   if (wanted && now.accounts().contains(*wanted)) {
     current = std::exchange(wanted, std::nullopt);
   } else if (!current || !now.accounts().contains(*current)) {
-    current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().begin()->first);
+    current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().keyAt(0));
   }
   auto& rows = std::get<0>(std::get<0>(list.fChildren).fChildren);
   std::vector<const conversation*> chats;

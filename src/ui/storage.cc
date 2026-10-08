@@ -163,15 +163,14 @@ struct storage_page : nodes::Stack {
         setting_switch<&config::history_settings::show_deleted>(colours, "Show deleted messages"),
         bound<config::cache_limits>(limit_stepper<limit::deleted_on_disk>(colours, "On disk", "MB")),
         spaced_title(colours, "ROOM EVENTS"),
-        chat_choices<Actions>(a, colours, choice_level::everywhere{},
-                              {.events_all = history.show_room_events,
-                               .event_kinds = history.room_event_kinds,
-                               .receipts = history.show_receipts,
-                               .previews = history.link_previews,
-                               .previews_direct = history.previews_direct.value_or(false),
-                               .jump_search = history.jump_search},
-                              0.0f),
-        typing_choice<Actions>(a, colours, choice_level::everywhere{}, history.send_typing.value_or(true)),
+        event_kind_list<Actions>(a, colours, choice_level::everywhere{}, history.show_room_events, history.room_event_kinds),
+        bound<skiff::model::Field<&config::history_settings::show_receipts>>(show_hide_field<receipts_setting, bool>(colours, choice_level::everywhere{})),
+        bound<skiff::model::Field<&config::history_settings::link_previews>>(show_hide_field<link_previews_setting, bool>(colours, choice_level::everywhere{})),
+        bound<skiff::model::Field<&config::history_settings::previews_direct>>(
+            show_hide_field<previews_direct_setting, std::optional<bool>>(colours, choice_level::everywhere{})),
+        jump_search_choice<Actions>(a, colours, choice_level::everywhere{}, history.jump_search),
+        bound<skiff::model::Field<&config::history_settings::send_typing>>(
+            show_hide_field<typing_setting, std::optional<bool>>(colours, choice_level::everywhere{})),
         spaced_note(colours, "Deleted messages are kept on disk, apart from the rest and up to their own size, the "
                              "oldest going first past it. Shown, one stays where it was, with all it said and its "
                              "time, marked removed."));

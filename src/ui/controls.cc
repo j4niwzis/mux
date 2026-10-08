@@ -12,6 +12,8 @@ import skiff.nodes.icon;
 import skiff.nodes.text;
 import skiff.widgets.avatar;
 import skiff.widgets.button;
+import skiff.model;
+import skiff.bind;
 import mux.core;
 import mux.logic.room_events;
 import mux.config;
@@ -865,6 +867,56 @@ template <class Actions>
 using previews_choice = show_hide_choice<Actions, link_previews_setting>;
 template <class Actions>
 using receipts_choice = show_hide_choice<Actions, receipts_setting>;
+
+// A setting at a level, as the model holds it: its row of Default (where
+// there is a level above), Show and Hide, bound to its part -- an optional
+// bool, unsaid as the level above says; a bool, said at every chat's. At
+// every chat's level, an optional one shows what unsaid means there.
+inline std::optional<bool> shown_of(bool now) { return now; }
+inline std::optional<bool> shown_of(const std::optional<bool>& now) { return now; }
+inline bool part_of(std::optional<bool> chosen, std::type_identity<bool>) { return chosen.value_or(false); }
+inline std::optional<bool> part_of(std::optional<bool> chosen, std::type_identity<std::optional<bool>>) { return chosen; }
+template <class Setting, class T>
+struct show_hide_field : nodes::Stack {
+  struct pick {
+    std::optional<bool> value;
+    bool pressed = false;
+    void operator()() {
+      pressed = true;
+      ++skiff::bind::pendingCount();
+    }
+  };
+  struct parts_t {
+    nodes::Text label;
+    segment<pick> fallback, show, hide;
+  } parts;
+  bool top = false;
+  show_hide_field(const palette& colours, choice_level_t level)
+      : parts{.label = nodes::Text(std::string(Setting::label), 14.0f, colours.text),
+              .fallback = segment<pick>(colours, "Default", {std::nullopt}),
+              .show = segment<pick>(colours, std::string(Setting::yes), {true}),
+              .hide = segment<pick>(colours, std::string(Setting::no), {false})},
+        top(!has_level_above(level)) {
+    lay_out_setting_row(*this, parts.label);
+    for (segment<pick>* each : {&parts.fallback, &parts.show, &parts.hide})
+      each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
+    parts.fallback.setVisible(!top);
+  }
+  void read(const T& now) {
+    const std::optional<bool> said = shown_of(now);
+    const std::optional<bool> shown = top ? std::optional<bool>(said.value_or(Setting::unsaid)) : said;
+    parts.fallback.set_active(!shown);
+    parts.show.set_active(shown == true);
+    parts.hide.set_active(shown == false);
+  }
+  std::vector<skiff::model::SetTo<T>> takeChanges() {
+    std::vector<skiff::model::SetTo<T>> out;
+    for (segment<pick>* each : {&parts.fallback, &parts.show, &parts.hide})
+      if (std::exchange(each->act.pressed, false))
+        out.push_back(skiff::model::setTo(part_of(each->act.value, std::type_identity<T>{})));
+    return out;
+  }
+};
 
 // What a chat shows, at a level -- its room events, read receipts as faces,
 // link previews (and in direct messages), how far a jump looks back -- as

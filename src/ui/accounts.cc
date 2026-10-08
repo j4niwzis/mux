@@ -332,29 +332,30 @@ struct account_privacy : nodes::Stack {
   void say(std::string, bool) {}
 };
 
+// An account's notification rows, bound to the account's own choices in the model, under a scope
+// at the account.
+inline auto account_notify_view(const palette& colours, std::string address) {
+  using shared = config::account_shared;
+  using skiff::compose::bound;
+  const choice_level_t level = choice_level::account{};
+  return skiff::compose::scoped<config::account_t>(
+      skiff::compose::handlers(),
+      skiff::compose::column(
+          skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          bound<skiff::model::Field<&shared::notify>>(show_hide_field<notify_on_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&shared::notify_mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&shared::notify_name>>(show_hide_field<notify_name_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&shared::notify_text>>(show_hide_field<notify_text_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&shared::notify_sound>>(show_hide_field<notify_sound_setting, std::optional<bool>>(colours, level))),
+      std::move(address));
+}
+
 // An account's Notifications page: whether what comes through it is told --
 // a message, an invite -- and with sound; each chat of it may choose again
 // in its own settings.
 template <class Actions>
 struct account_notifications : nodes::Stack {
-  // Its rows, bound to the account's own choices in the model, under a scope
-  // at the account.
-  static auto settings_of(const palette& colours, std::string address) {
-    using shared = config::account_shared;
-    using skiff::compose::bound;
-    const choice_level_t level = choice_level::account{};
-    return skiff::compose::scoped<config::account_t>(
-        skiff::compose::handlers(),
-        skiff::compose::column(
-            skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-            bound<skiff::model::Field<&shared::notify>>(show_hide_field<notify_on_setting, std::optional<bool>>(colours, level)),
-            bound<skiff::model::Field<&shared::notify_mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>>(colours, level)),
-            bound<skiff::model::Field<&shared::notify_name>>(show_hide_field<notify_name_setting, std::optional<bool>>(colours, level)),
-            bound<skiff::model::Field<&shared::notify_text>>(show_hide_field<notify_text_setting, std::optional<bool>>(colours, level)),
-            bound<skiff::model::Field<&shared::notify_sound>>(show_hide_field<notify_sound_setting, std::optional<bool>>(colours, level))),
-        std::move(address));
-  }
-  using settings_t = decltype(settings_of(std::declval<const palette&>(), std::string()));
+  using settings_t = decltype(account_notify_view(std::declval<const palette&>(), std::string()));
   struct parts_t {
     nodes::Text title;
     settings_t settings;
@@ -362,7 +363,7 @@ struct account_notifications : nodes::Stack {
   } parts;
   account_notifications(const ui_needs<Actions>& n, std::string address)
       : parts{.title = section_title(*n.colours, "NOTIFICATIONS"),
-              .settings = settings_of(*n.colours, std::move(address)),
+              .settings = account_notify_view(*n.colours, std::move(address)),
               .note = note_text(*n.colours, "For messages and invites that come through this account; Default is as the "
                                             "Notifications settings say. A space, and a chat, can choose again in its own "
                                             "settings.")} {

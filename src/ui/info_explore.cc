@@ -203,7 +203,7 @@ struct explore_box : nodes::Stack, outbox {
   explore_box(Actions* a, const palette& colours, const std::string& own_server)
       : actions(a),
         colours_(&colours),
-        parts{.header = header_t(colours, "Explore rooms", {}, {a}, false, true),
+        parts{.header = header_t(colours, "Explore rooms", {}, {}, false, true),
               .space_head = space_head_t(colours),
               .search = search_row(this, own_server),
               .status = nodes::Text("", 13.0f, colours.dim),

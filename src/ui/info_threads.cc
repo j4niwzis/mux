@@ -157,11 +157,11 @@ struct threads_panel : nodes::Stack, outbox {
   threads_panel(const ui_needs<Actions>& n, Actions* a)
       : actions(a),
         colours_(n.colours),
-        parts{.head = head_t(*n.colours, "Threads", {a}, {a}, false, true),
+        parts{.head = head_t(*n.colours, "Threads", {}, {}, false, true),
               .divider = nodes::Box<>(n.colours->band),
               .empty = nodes::Text("No threads here yet.", 13.0f, n.colours->dim),
               .answers = timeline_area<Actions>(n),
-              .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {a}, {a}, {this})} {
+              .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {}, {}, {this})} {
     fState.apply({.fillY = true, .background = n.colours->sidebar});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});

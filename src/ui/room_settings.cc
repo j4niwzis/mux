@@ -660,7 +660,7 @@ struct room_settings : nodes::Stack, outbox {
   room_settings(const ui_needs<Actions>& n, const room_settings_facts& shown) : room_settings(n.colours, n.looks, n.actions, shown) {}
   room_settings(const palette* colours, const looks_shown* looks, Actions* a, const room_settings_facts& shown)
       : actions(a), colours_(colours), looks_(looks), facts(shown),
-        parts{.header = header_t(*colours, "Room Settings - " + shown.name, {}, {a}, false, true),
+        parts{.header = header_t(*colours, "Room Settings - " + shown.name, {}, {}, false, true),
               .body = body_row(this, page_t(std::in_place_index<0>, a, this, shown))} {
     fState.apply({.fill = true});
     parts.body.parts.tabs.show(tab);

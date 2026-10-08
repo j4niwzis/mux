@@ -144,7 +144,7 @@ struct storage_page : nodes::Stack {
   static auto settings_of(const palette& colours, Actions* a, const config::history_settings& history, bool sealed) {
     namespace limit = config::limit;
     using skiff::compose::bound;
-    auto clear = clear_row(colours, "Clear stored messages and pictures", {a}, icon::close{});
+    auto clear = clear_row(colours, "Clear stored messages and pictures", {}, icon::close{});
     return skiff::compose::column(
         skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
         spaced_title(colours, "ENCRYPTION"), seal_rows(colours, a, sealed),
@@ -185,7 +185,7 @@ struct storage_page : nodes::Stack {
   storage_page(const ui_needs<Actions>& n, const config::cache_limits&, const config::history_settings& history, bool sealed)
       : storage_page(*n.colours, n.actions, history, sealed) {}
   storage_page(const palette& colours, Actions* a, const config::history_settings& history, bool sealed)
-      : parts{.header = header_t(colours, "Storage", {a}, {a}, true, true), .settings = settings_of(colours, a, history, sealed)} {
+      : parts{.header = header_t(colours, "Storage", {}, {}, true, true), .settings = settings_of(colours, a, history, sealed)} {
     fState.apply({.fill = true});
   }
   void show_receipts(bool) {}
@@ -223,7 +223,7 @@ struct notifications_page : nodes::Stack {
   notifications_page(const ui_needs<Actions>& n, const config::notification_settings&)
       : notifications_page(*n.colours, n.actions) {}
   notifications_page(const palette& colours, Actions* a)
-      : parts{.header = header_t(colours, "Notifications", {a}, {a}, true, true),
+      : parts{.header = header_t(colours, "Notifications", {}, {}, true, true),
               .settings = notification_settings_view(colours)} {
     fState.apply({.fill = true});
   }
@@ -252,7 +252,7 @@ struct files_page : nodes::Stack {
   } parts;
   files_page(const ui_needs<Actions>& n, const config::sending_settings&) : files_page(*n.colours, n.actions) {}
   files_page(const palette& colours, Actions* a)
-      : parts{.header = header_t(colours, "Files", {a}, {a}, true, true), .settings = files_settings_view(colours)} {
+      : parts{.header = header_t(colours, "Files", {}, {}, true, true), .settings = files_settings_view(colours)} {
     fState.apply({.fill = true});
   }
   void show_receipts(bool) {}

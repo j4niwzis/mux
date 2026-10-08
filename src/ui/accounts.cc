@@ -410,7 +410,7 @@ struct account_chats : nodes::Stack {
                 const chat_choice_values& chats, std::optional<bool> home_hides,
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
       : parts{.colour_title = section_title(colours, "COLOUR"),
-              .colours = accent_circles<set_colour>({a}, theme, false),
+              .colours = accent_circles<set_colour>({}, theme, false),
               .strip = switch_row<sends<::mux::ui::request::flip_account_strip>>(colours, "A strip on its chats in other lists", {}),
               .title = section_title(colours, "CHATS"),
               .settings = account_chats_view(colours, std::move(address)),
@@ -455,7 +455,7 @@ struct account_proxy : nodes::Stack {
 
   account_proxy(Actions* a, const palette& colours, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
       : parts{.title = section_title(colours, "PROXY"),
-              .manage = manage_row(colours, "Manage proxies…", {a}, icon::gear{})} {
+              .manage = manage_row(colours, "Manage proxies…", {}, icon::gear{})} {
     auto& choices = parts.choices;
     parts.title.apply({.margin = {0.0f, 0.0f, 4.0f, 0.0f}});
     parts.manage.apply({.margin = {8.0f, 0.0f, 0.0f, 0.0f}});
@@ -511,7 +511,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
       nodes::Text& message = parts.message;
       decltype(parts_t::list)& list = parts.list;
       side_column(const palette& colours, Actions* a)
-          : parts{.add = add_row(colours, "Add account", {a}, icon::plus{}),
+          : parts{.add = add_row(colours, "Add account", {}, icon::plus{}),
                   .pages = account_pages<Actions>(colours, a),
                   .message = nodes::Text("", 13.0f, colours.error)} {
         fState.apply({.fillY = true, .width = kListWidth, .background = colours.sidebar});
@@ -639,7 +639,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   explicit accounts_panel(const ui_needs<Actions>& n) : accounts_panel(n, n.actions) {}
   accounts_panel(const ui_needs<Actions>& n, Actions* a)
       : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>>(a),
-        parts{.header = header_t(*n.colours, "Accounts", {a}, {a}, true, false), .body = body_row(*n.colours, a)},
+        parts{.header = header_t(*n.colours, "Accounts", {}, {}, true, false), .body = body_row(*n.colours, a)},
         needs_(n) {
     this->fState.apply({.fill = true});
   }

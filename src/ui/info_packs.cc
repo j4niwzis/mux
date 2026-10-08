@@ -268,7 +268,7 @@ struct packs_box : nodes::Stack, outbox {
   } parts;
   packs_box(Actions* a, const palette& colours, ui_shared& shared, std::optional<std::string> in, bool editable)
       : actions(a), colours_(&colours), shared_(&shared), room(std::move(in)), may_edit(editable),
-        parts{.header = header_t(colours, "Emojis & Stickers", {}, {a}, false, true),
+        parts{.header = header_t(colours, "Emojis & Stickers", {}, {}, false, true),
               .note = nodes::Text("", 13.0f, colours.dim),
               .list_actions = list_buttons(this),
               .name = field(colours, "Name", "Pack name"),

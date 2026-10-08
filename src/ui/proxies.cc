@@ -48,16 +48,16 @@ struct settings_home : nodes::Stack {
 
   explicit settings_home(const ui_needs<Actions>& n) : settings_home(*n.colours, n.actions) {}
   settings_home(const palette& colours, Actions* a)
-      : parts{.header = {colours, "Settings", {a}, {a}, false, true},
-              .accounts = {colours, "Accounts", {a}, icon::person{}},
-              .animations = {colours, "Animations", {a}, icon::motion{}},
-              .appearance = {colours, "Appearance", {a}, icon::eye{}},
-              .packs = {colours, "Emojis & Stickers", {a}, icon::smile{}},
-              .rendering = {colours, "Rendering", {a}, icon::sliders{}},
-              .notifications = {colours, "Notifications", {a}, icon::bell{}},
-              .storage = {colours, "Storage", {a}, icon::clip{}},
-              .files = {colours, "Files", {a}, icon::send{}},
-              .proxies = {colours, "Proxies", {a}, icon::gear{}}} {
+      : parts{.header = {colours, "Settings", {}, {}, false, true},
+              .accounts = {colours, "Accounts", {}, icon::person{}},
+              .animations = {colours, "Animations", {}, icon::motion{}},
+              .appearance = {colours, "Appearance", {}, icon::eye{}},
+              .packs = {colours, "Emojis & Stickers", {}, icon::smile{}},
+              .rendering = {colours, "Rendering", {}, icon::sliders{}},
+              .notifications = {colours, "Notifications", {}, icon::bell{}},
+              .storage = {colours, "Storage", {}, icon::clip{}},
+              .files = {colours, "Files", {}, icon::send{}},
+              .proxies = {colours, "Proxies", {}, icon::gear{}}} {
     fState.apply({.fill = true});
   }
 
@@ -126,7 +126,7 @@ struct animations_page : nodes::Stack {
 
   explicit animations_page(const ui_needs<Actions>& n) : animations_page(*n.colours, n.actions) {}
   animations_page(const palette& colours, Actions* a)
-      : parts{.header = header_t(colours, "Animations", {a}, {a}, true, true), .settings = motion_settings_view(colours)} {
+      : parts{.header = header_t(colours, "Animations", {}, {}, true, true), .settings = motion_settings_view(colours)} {
     fState.apply({.fill = true});
   }
   void show_receipts(bool) {}
@@ -162,8 +162,8 @@ struct proxies_page : nodes::Stack {
   proxies_page(const ui_needs<Actions>& n, const std::vector<config::proxy_settings>& all, bool with_back)
       : proxies_page(*n.colours, n.actions, all, with_back) {}
   proxies_page(const palette& colours, Actions* a, const std::vector<config::proxy_settings>& all, bool with_back)
-      : parts{.header = header_t(colours, "Proxies", {a}, {a}, with_back, true),
-              .add = add_row(colours, "Add proxy", {a}, icon::plus{}),
+      : parts{.header = header_t(colours, "Proxies", {}, {}, with_back, true),
+              .add = add_row(colours, "Add proxy", {}, icon::plus{}),
               .empty = note_text(colours, "No proxies yet. Accounts connect directly.")} {
     auto& [header, profiles, add, empty] = parts;
     empty.setWrapped(true);
@@ -251,7 +251,7 @@ struct proxy_editor : nodes::Stack {
   proxy_editor(const palette& colours, Actions* a, const std::optional<config::proxy_settings>& from, int at)
       : index(at),
         colours_(&colours),
-        parts{.header = header_t(colours, from ? from->name : std::string("New proxy"), {a}, {a}, true, true),
+        parts{.header = header_t(colours, from ? from->name : std::string("New proxy"), {}, {}, true, true),
               .name = field(colours, "Name", "Home, Tor, Work…"),
               .kinds = kind_switch<Actions>(colours, a),
               .host = field(colours, "Host", "proxy.example.com"),

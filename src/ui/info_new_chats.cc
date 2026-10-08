@@ -105,7 +105,7 @@ struct forward_box : nodes::Stack, outbox {
 
   forward_box(Actions* a, const palette& colours, const std::vector<forward_target>& chats)
       : actions(a), colours_(&colours), all(chats),
-        parts{.header = header_t(colours, "Forward to…", {}, {a}, false, true),
+        parts{.header = header_t(colours, "Forward to…", {}, {}, false, true),
               .field = widgets::TextBox<typed>(colours.widgets, "Search", {this})} {
     fState.apply({.fillX = true, .height = 520.0f});
     parts.field.setSearchIcon(true);
@@ -239,7 +239,7 @@ struct start_chat_box : nodes::Stack, outbox {
   } parts;
   start_chat_box(Actions* a, const palette& colours, std::vector<found_person> people, std::string own_link)
       : actions(a), colours_(&colours), known(std::move(people)), link(std::move(own_link)),
-        parts{.header = header_t(colours, "Start chat", {}, {a}, false, true),
+        parts{.header = header_t(colours, "Start chat", {}, {}, false, true),
               .intro = nodes::Text("Start a conversation with someone using their name or username (like @user:server).",
                                    14.0f, colours.text),
               .search = search_row(this),
@@ -500,7 +500,7 @@ struct create_room_box : nodes::Stack, outbox {
   } parts;
   create_room_box(Actions* a, const palette& colours, std::string own_server, std::optional<new_room_place> where = std::nullopt)
       : actions(a), colours_(&colours), server(std::move(own_server)), place(std::move(where)), space_members(place.has_value()),
-        parts{.header = header_t(colours, "Create a room", {}, {a}, false, true),
+        parts{.header = header_t(colours, "Create a room", {}, {}, false, true),
               .name = field(colours, "Name", ""),
               .topic = field(colours, "Topic (optional)", ""),
               .rule_caption = nodes::Text("Who can join", 13.0f, colours.dim),
@@ -521,7 +521,7 @@ struct create_room_box : nodes::Stack, outbox {
               .block_note = nodes::Text("You might enable this if the room will only be used for collaborating with internal "
                                         "teams on your server. This cannot be changed later.",
                                         12.0f, colours.dim),
-              .buttons = buttons_row(colours, "Create room", {a}, {this}, 120.0f)} {
+              .buttons = buttons_row(colours, "Create room", {}, {this}, 120.0f)} {
     this->setGap(8.0f);
     parts.topic.multi_line(4);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});

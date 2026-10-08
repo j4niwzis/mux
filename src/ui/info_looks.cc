@@ -451,7 +451,7 @@ struct wallpaper_box : nodes::Stack {
     look_choices<Actions> choices;
   } parts;
   wallpaper_box(Actions* a, const palette& colours, const looks_shown& looks, choice_level_t level)
-      : parts{.header = header_t(colours, "Chat background and looks", {}, {a}, false, true),
+      : parts{.header = header_t(colours, "Chat background and looks", {}, {}, false, true),
               .choices = look_choices<Actions>(a, colours, looks, level)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});

@@ -103,7 +103,7 @@ struct send_box : nodes::Stack {
       : parts{.title = nodes::Text(title_of(all), 17.0f, colours.text, true),
               .previews = nodes::ScrollContainer<previews_column>(previews_column(colours, all)),
               .caption = widgets::TextArea<>(colours.widgets, "Add a caption…"),
-              .buttons = buttons_row(colours, "Send", {a}, {})} {
+              .buttons = buttons_row(colours, "Send", {}, {})} {
     this->setGap(12.0f);
     // Sized by what it holds, not by the window: the dialog fits it (up to
     // most of the window, the previews scrolling past what fits of them).

@@ -121,7 +121,7 @@ struct person_card : nodes::Stack {
 
   person_card(Actions* a, const palette& colours, const ui_shared& shared, const account_id& account, const std::string& key, const person_facts& facts)
       : colours_(&colours),
-        parts{.top = top_bar(colours, "User info", {}, {a}, false, true),
+        parts{.top = top_bar(colours, "User info", {}, {}, false, true),
               .face = cover(a, colours, key, facts),
               .band = section_band(colours),
               .id = id_line(colours, key, ""),
@@ -247,7 +247,7 @@ struct room_card : nodes::Stack {
   } parts;
 
   room_card(Actions* a, const palette& colours, const std::string& asked, const room_preview& known)
-      : parts{.top = top_bar(colours, "Room info", {}, {a}, false, true),
+      : parts{.top = top_bar(colours, "Room info", {}, {}, false, true),
               .scroll = nodes::ScrollContainer<details>(details(colours, asked, known)),
               .join = action_tile<join_it>(colours, known.invite ? "Accept" : known.knock ? "Ask to join" : "Join", icon::plus{},
                                            {a, known.knock && !known.invite})} {

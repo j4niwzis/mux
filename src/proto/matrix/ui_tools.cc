@@ -97,14 +97,14 @@ struct devtools_box : nodes::Stack, outbox {
   devtools_box(Actions* a, const palette& colours, std::string title, std::string text)
       : actions(a),
         colours_(&colours),
-        parts{.header = header_t(colours, std::move(title), {this}, {a}, false, true), .reading = reading_of(colours)} {
+        parts{.header = header_t(colours, std::move(title), {this}, {}, false, true), .reading = reading_of(colours)} {
     this->lay_out();
     this->show_text(std::move(text));
   }
   devtools_box(Actions* a, const palette& colours, std::vector<proto::matrix::state_entry> entries)
       : actions(a),
         colours_(&colours),
-        parts{.header = header_t(colours, "Room state", {this}, {a}, false, true), .reading = reading_of(colours)},
+        parts{.header = header_t(colours, "Room state", {this}, {}, false, true), .reading = reading_of(colours)},
         state(std::move(entries)) {
     this->lay_out();
     this->show_types();
@@ -117,7 +117,7 @@ struct devtools_box : nodes::Stack, outbox {
   devtools_box(Actions* a, const palette& colours, send_form_t)
       : actions(a),
         colours_(&colours),
-        parts{.header = header_t(colours, "Send custom event", {this}, {a}, false, true), .reading = reading_of(colours)} {
+        parts{.header = header_t(colours, "Send custom event", {this}, {}, false, true), .reading = reading_of(colours)} {
     this->lay_out();
     parts.sending.emplace(this);
     parts.reading.setVisible(false);
@@ -261,7 +261,7 @@ struct uia_box : nodes::Stack {
                                    "Once you have done what it asks, press Continue.",
                                    14.0f, colours.dim),
               .again = widgets::Button<open_again>(colours.widgets, "Open the page again", {a, std::move(url)}),
-              .buttons = dialog_buttons<cancel, go>(colours, "Continue", {a}, {a}, 120.0f)} {
+              .buttons = dialog_buttons<cancel, go>(colours, "Continue", {}, {}, 120.0f)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
     this->setGap(10.0f);
     parts.about.setWrapped(true);

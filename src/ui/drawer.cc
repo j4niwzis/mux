@@ -93,12 +93,12 @@ struct drawer_panel : nodes::Stack {
   drawer_panel(const ui_needs<Actions>& n, Actions* a)
       : needs_(n),
         parts{.title = nodes::Text("mux", 20.0f, n.colours->text, true),
-              .manage = manage_row(*n.colours, "Manage accounts", {a}, icon::person{}),
+              .manage = manage_row(*n.colours, "Manage accounts", {}, icon::person{}),
               .rule_1 = nodes::Box<>(n.colours->chosen),
-              .new_chat = new_chat_row(*n.colours, "Start new chat", {a}, icon::person{}),
-              .new_room = new_room_row(*n.colours, "New room", {a}, icon::people{}),
-              .settings = settings_row(*n.colours, "Settings", {a}, icon::gear{}),
-              .quit = quit_row(*n.colours, "Quit", {a}, icon::power{})} {
+              .new_chat = new_chat_row(*n.colours, "Start new chat", {}, icon::person{}),
+              .new_room = new_room_row(*n.colours, "New room", {}, icon::people{}),
+              .settings = settings_row(*n.colours, "Settings", {}, icon::gear{}),
+              .quit = quit_row(*n.colours, "Quit", {}, icon::power{})} {
     parts.title.apply({.margin = {18.0f, 20.0f, 14.0f, 20.0f}});
     parts.manage.apply({.margin = {0.0f, 0.0f, 6.0f, 0.0f}});
     parts.rule_1.apply({.margin = {0.0f, 0.0f, 6.0f, 0.0f}});

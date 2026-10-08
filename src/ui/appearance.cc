@@ -290,7 +290,7 @@ struct appearance_page : nodes::Stack {
   appearance_page(const ui_needs<Actions>& n, const config::theme_t& theme, const config::accent_t&)
       : appearance_page(*n.colours, *n.looks, *n.shared, n.actions, theme) {}
   appearance_page(const palette& colours, const looks_shown& looks, const ui_shared& shared, Actions* a, const config::theme_t& theme)
-      : parts{.header = header_t(colours, "Appearance", {a}, {a}, true, true),
+      : parts{.header = header_t(colours, "Appearance", {}, {}, true, true),
               .settings = skiff::compose::column(
                   skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), appearance_settings_view(colours, theme),
                   look_choices<Actions>(a, colours, looks, choice_level::everywhere{}), window_settings_view(colours),
@@ -348,7 +348,7 @@ struct rendering_page : nodes::Stack {
   rendering_page(const ui_needs<Actions>& n, const config::renderer_t& renderer)
       : rendering_page(*n.colours, n.actions, renderer) {}
   rendering_page(const palette& colours, Actions* a, const config::renderer_t& renderer)
-      : parts{.header = header_t(colours, "Rendering", {a}, {a}, true, true),
+      : parts{.header = header_t(colours, "Rendering", {}, {}, true, true),
               .list = body(colours, a),
               .settings = frame_settings_view(colours)} {
     fState.apply({.fill = true});

@@ -176,7 +176,7 @@ struct storage_page : nodes::Stack {
                              "oldest going first past it. Shown, one stays where it was, with all it said and its "
                              "time, marked removed."));
   }
-  using settings_t = decltype(settings_of(std::declval<const palette&>(), nullptr, std::declval<const config::history_settings&>(), false));
+  using settings_t = decltype(settings_of(std::declval<const palette&>(), std::declval<const config::history_settings&>(), false));
   struct parts_t {
     header_t header;
     settings_t settings;

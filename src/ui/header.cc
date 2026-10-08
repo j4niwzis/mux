@@ -73,15 +73,11 @@ template <class Actions>
 struct verification_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}, .dismissable = false}; }
-  template <auto Member>
-  struct press : outbox {
-    void operator()() const { (actions->*Member)(); }
-  };
-  using accept_button = widgets::Button<press<&Actions::verify_accept_now>>;
-  using decline_button = widgets::Button<press<&Actions::verify_cancel_now>>;
-  using match_button = widgets::Button<press<&Actions::verify_match>>;
-  using mismatch_button = widgets::Button<press<&Actions::verify_mismatch>>;
-  using close_button = widgets::Button<press<&Actions::close_verification>>;
+  using accept_button = button_for<sends<request::verify_accept_now>>;
+  using decline_button = button_for<sends<request::verify_cancel_now>>;
+  using match_button = button_for<sends<request::verify_match>>;
+  using mismatch_button = button_for<sends<request::verify_mismatch>>;
+  using close_button = button_for<sends<request::close_verification>>;
   // One emoji, big, its name under it.
   struct emoji_cell : nodes::Stack {
     struct parts_t {

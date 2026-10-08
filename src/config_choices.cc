@@ -123,12 +123,15 @@ using proxy_kind_t = spl::variant<proxy_kind::socks5, proxy_kind::http>;
 namespace said {
 struct light {  // mux's own light theme, before: Day
   static constexpr std::string_view json_value = "light";
+  friend bool operator==(light, light) = default;
 };
 struct dark {  // and its dark: Night
   static constexpr std::string_view json_value = "dark";
+  friend bool operator==(dark, dark) = default;
 };
 struct cyan {  // an accent called so before: Blue
   static constexpr std::string_view json_value = "cyan";
+  friend bool operator==(cyan, cyan) = default;
 };
 }  // namespace said
 using theme_said_t = spl::variant<theme::classic, theme::day, theme::tinted, theme::night, said::light, said::dark, std::string>;

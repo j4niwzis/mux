@@ -12,6 +12,7 @@ import mux.platform.audio;
 import mux.vault;
 import skiff.scene;
 import skiff.model;
+import skiff.bind;
 import mux.core;
 import mux.config;
 import mux.ui;
@@ -30,6 +31,9 @@ struct services {
   mux::model* model = nullptr;
   // What the window shows that the program opens and closes.
   mux::ui::shown_model* showing = nullptr;
+  // And the binding the window reads it through: read at once only where
+  // nothing of the window is being answered -- what the network told.
+  skiff::bind::Binding<mux::ui::shown_model>* showing_binding = nullptr;
   // A message's menu asked for: focused once it is made.
   bool menu_focus_due = false;
   // The emoji and stickers kept, as the window's panels show them.

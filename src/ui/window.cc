@@ -80,6 +80,7 @@ struct shown_root {
   skiff::model::Tracked<std::optional<menu_facts>> menu;
   skiff::model::Tracked<std::optional<viewer_facts>> viewer;
   skiff::model::Tracked<std::optional<emoji_facts>> emoji;
+  skiff::model::Tracked<std::optional<panel_facts>> panel;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -175,6 +176,31 @@ struct shown_drawer : widgets::Drawer<Base, Content, widgets::dismiss::pressed> 
       this->setOpen(now.out);
   }
   auto onPress() { return skiff::bind::own(skiff::model::setTo(drawer_shown{false})); }
+};
+
+// The pages over the chats -- the accounts panel -- up while what is shown
+// holds its facts, and gone where they are not; what is beside its list
+// left due for the program to show as it brings the panel up to date.
+template <class Frame, class Panel, class Needs>
+struct shown_frame : Frame {
+  const Needs* needs = nullptr;
+  template <class... Args>
+  explicit shown_frame(const Needs* handed, Args&&... args) : Frame(std::forward<Args>(args)...), needs(handed) {}
+  void read(const std::optional<panel_facts>& now) {
+    if (!now) {
+      if (this->shown())
+        this->close();
+      return;
+    }
+    Panel* panel = this->shown() ? this->shown()->visit(spl::overloaded{[](Panel& one) -> Panel* { return &one; }, [](auto&) -> Panel* { return nullptr; }})
+                                 : nullptr;
+    if (panel == nullptr) {
+      panel = &spl::get<Panel>(this->open(std::in_place_type<Panel>, *needs));
+      if (now->note)
+        panel->say(*now->note);
+    }
+    panel->detail_due = now->detail;
+  }
 };
 
 // A layer holding Node while its part of what is shown holds its facts --
@@ -335,7 +361,8 @@ struct window : scene::Node {
   struct layers : scene::Node {
     // What its handlers ask for, returned.
     using Answer = std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_reactions, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer>;
-    using frame_t = widgets::SlideOver<with_drawer, panel_type>;
+    using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
+                                       shown_frame<widgets::SlideOver<with_drawer, panel_type>, accounts_panel<Actions>, ui_needs<Actions>>>;
     // A dialog of Content, bound to its Facts' part of what is shown.
     template <class Content, class Facts>
     using shown_in = skiff::bind::Bound<std::optional<Facts>, shown_dialog<Content, Facts, ui_needs<Actions>>>;
@@ -575,7 +602,7 @@ struct window : scene::Node {
 
     layers(const ui_needs<Actions>& n)
         : parts{.backdrop = nodes::Box<>(n.colours->background),
-                .frame = frame_t(with_drawer(drawer_node(std::piecewise_construct, std::forward_as_tuple(std::in_place, n), std::forward_as_tuple(n)))),
+                .frame = frame_t(std::in_place, &n, with_drawer(drawer_node(std::piecewise_construct, std::forward_as_tuple(std::in_place, n), std::forward_as_tuple(n)))),
                 .settings = shown_made<settings_dialog<Actions>, settings_facts>(n),
                 .notice = shown_made<notice_box<Actions>, notice_facts>(n),
                 .person = shown_made<person_card<Actions>, person_shown>(n),

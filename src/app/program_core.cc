@@ -243,6 +243,7 @@ void app::wire() {
   // the window was made pointing at -- made anew, it was all lost.
   shared.model = model;
   shared.showing = &showing;
+  shared.showing_binding = &showing_binding;
   shared.net = net;
   shared.store = &store;
   shared.box = box;
@@ -512,7 +513,8 @@ auto app::root() -> window_type& { return scene.root(); }
 void app::show_conversations() {
   mux::ui::show(showing, mux::ui::drawer_shown{false});
   accounts_screen.forget_login();
-  root().close();
+  mux::ui::show<mux::ui::panel_facts>(showing, std::nullopt);
+  this->refresh_shown();
   this->refresh();
 }
 

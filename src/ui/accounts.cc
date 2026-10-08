@@ -478,6 +478,25 @@ struct account_proxy : nodes::Stack {
 
 // The saved accounts down the side, and the chosen one's settings beside
 // them.
+// What the accounts panel shows beside its list: nothing chosen, an
+// account's pages, or an account being added.
+namespace panel_detail {
+struct none {};
+struct account {
+  std::string address;
+  // What its form says as it is made again -- "Saved.", what went wrong.
+  std::optional<std::string> said;
+  bool error = false;
+};
+struct adding {};
+}  // namespace panel_detail
+using panel_detail_t = spl::variant<panel_detail::none, panel_detail::account, panel_detail::adding>;
+// The accounts panel open: what is beside its list, and a word said at its
+// top as it opens, where there is one.
+struct panel_facts {
+  panel_detail_t detail = panel_detail::none{};
+  std::optional<std::string> note;
+};
 template <class Actions>
 struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>> {
   static constexpr int kTab = 2;
@@ -821,6 +840,10 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
     this->begin_swap();
   }
 
+  // What is to be beside the list, as what is shown said it last: done by
+  // the program as it brings the panel up to date, with what it has of the
+  // accounts.
+  std::optional<panel_detail_t> detail_due;
   void show_adding() {
     this->show_pages(false);
     selected.reset();

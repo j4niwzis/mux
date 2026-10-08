@@ -38,8 +38,8 @@ void program_told(App& app, const registration_asked& asked) {
                             "is made there, turn Create a new account off in its settings, and mux signs in to it.");
     return;
   }
-  auto& panel = app.accounts_screen.show_account(asked.account.address);
-  if (auto* editor = panel.editor())
+  auto* panel = app.accounts_screen.show_account_now(asked.account.address);
+  if (auto* editor = panel ? panel->editor() : nullptr)
     spl::visit([&](auto& form) { app_detail::show_in(form, asked); }, editor->parts.form);
 }
 // The account made: kept as one to sign in to from now on.

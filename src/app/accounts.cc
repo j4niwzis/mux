@@ -33,45 +33,56 @@ class accounts_part {
 
   // The accounts page. From the drawer, it comes in over it, and the drawer
   // goes once the page is in: not two things moving at once.
-  accounts& show_accounts() {
+  // What is beside the list said too; shown as the panel is brought up to
+  // date, at the next frame.
+  void show_accounts(mux::ui::panel_detail_t detail = mux::ui::panel_detail::none{}) {
     if (s_->root().drawer_open())
       s_->drawer_waits = true;
     mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt);
     pending_login_.reset();
-    auto& panel = s_->root().open<accounts>();
-    if (k_->config_error)
-      panel.say(*k_->config_error);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::panel_facts{std::move(detail), k_->config_error}));
     s_->refresh_due = true;
-    return panel;
   }
   // The accounts, with this one's settings up beside them.
-  accounts& show_account(const std::string& address) {
-    auto& panel = this->show_accounts();
-    if (const auto* found = k_->settings_of(address)) {
-      panel.select(*found, *s_->model);
-      panel.show(k_->accounts().values(), *s_->model);
-    }
+  void show_account(const std::string& address) { this->show_accounts(mux::ui::panel_detail::account{address, std::nullopt, false}); }
+  // At once, outside any event -- what the network told: the panel made and
+  // brought up to date now, for its form to be filled in.
+  accounts* show_account_now(const std::string& address) {
+    this->show_account(address);
+    s_->showing_binding->refresh(s_->root(), *s_->showing);
+    auto* up = s_->root().open_panel();
+    if (!up)
+      return nullptr;
+    accounts* panel = up->visit(spl::overloaded{[](accounts& one) -> accounts* { return &one; }});
+    (void)this->bring_up_to_date(*panel);
     return panel;
   }
   // Adding an account: beside the list, on the accounts page.
-  void show_adding() {
-    auto& panel = this->show_accounts();
-    panel.proxies = k_->proxies();
-    panel.show_adding();
-    s_->refresh_due = true;
-  }
+  void show_adding() { this->show_accounts(mux::ui::panel_detail::adding{}); }
   // The page brought up to date with the model and the settings. Whether
   // the account being added is in now -- the chats to be shown.
   [[nodiscard]] bool bring_up_to_date(accounts& panel) {
     panel.proxies = k_->proxies();
+    // What is beside the list as what is shown last said, shown.
+    if (auto due = std::exchange(panel.detail_due, std::nullopt))
+      spl::visit(spl::overloaded{[](mux::ui::panel_detail::none) {},
+                                 [&](const mux::ui::panel_detail::account& one) {
+                                   if (const auto* found = k_->settings_of(one.address)) {
+                                     panel.select(*found, *s_->model);
+                                     if (auto* editor = panel.editor(); editor && one.said)
+                                       editor->say(*one.said, one.error);
+                                   }
+                                 },
+                                 [&](mux::ui::panel_detail::adding) { panel.show_adding(); }},
+                 *due);
     panel.show(k_->accounts().values(), *s_->model);
     auto* pane = panel.adding();
     return pane && spl::visit([this](auto& form) { return this->watch_login(form); }, pane->parts.form);
   }
 
-  void apply(const request::open_accounts&) { (void)this->show_accounts(); }
+  void apply(const request::open_accounts&) { this->show_accounts(); }
   void apply(const request::open_new_account&) { this->show_adding(); }
-  void apply(const request::show_account& one) { (void)this->show_account(one.address); }
+  void apply(const request::show_account& one) { this->show_account(one.address); }
   // A protocol chosen for the account being added: its form.
   void apply(const request::add_account_of& one) {
     auto* up = s_->root().open_panel();
@@ -269,9 +280,7 @@ class accounts_part {
         s_->net->add(account, k_->proxies());
     }
     // The form is made again from what was saved: `form` is gone after this.
-    auto& panel = this->show_account(address);
-    if (auto* editor = panel.editor())
-      editor->say(failed ? *failed : std::string("Saved."), failed.has_value());
+    this->show_accounts(mux::ui::panel_detail::account{address, failed ? *failed : std::string("Saved."), failed.has_value()});
   }
   // Written, and what went wrong said on the accounts page.
   void save() {

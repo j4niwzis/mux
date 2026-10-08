@@ -170,7 +170,9 @@ struct asked_part : nodes::Stack {
 // An XMPP account's settings: its JID and password, and "Advanced" folds out
 // the rest. It fills the column it is given.
 template <class Actions>
-struct xmpp_form : nodes::Stack, outbox {
+struct xmpp_form : nodes::Stack {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::submit_login;
   // What the add-account pane says of the protocol.
   static constexpr std::string_view note = "An address like user@example.com, on a server such as Prosody or ejabberd.";
   // The address the account was saved under, when this is an edit of one.
@@ -285,11 +287,13 @@ struct xmpp_form : nodes::Stack, outbox {
   void say(std::string text, bool error) { parts.end.say(std::move(text), error); }
 
   using Node::onKey;
-  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    std::optional<Answer> answer;
     if (press.key == scene::keys::kEnter) {
-      this->emit(::mux::ui::request::submit_login{});
+      answer = ::mux::ui::request::submit_login{};
       reply.handle();
     }
+    return answer;
   }
 
 };

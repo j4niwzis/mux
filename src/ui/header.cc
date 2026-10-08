@@ -375,7 +375,9 @@ struct pinned_bar : nodes::Stack {
 // what can be done with them -- Forward, Copy, Delete -- and Cancel. Esc
 // cancels too.
 template <class Actions>
-struct selection_bar : nodes::Stack, outbox {
+struct selection_bar : nodes::Stack {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::selection_cancel;
   using forward_button = button_for<sends<::mux::ui::request::selection_forward>>;
   using copy_button = button_for<sends<::mux::ui::request::selection_copy>>;
   using delete_button = button_for<sends<::mux::ui::request::selection_delete>>;
@@ -414,11 +416,13 @@ struct selection_bar : nodes::Stack, outbox {
     this->invalidateLayout();
   }
   using Node::onKey;
-  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    std::optional<Answer> answer;
     if (press.key == scene::keys::kEscape) {
-      this->emit(::mux::ui::request::selection_cancel{});
+      answer = ::mux::ui::request::selection_cancel{};
       reply.handle();
     }
+    return answer;
   }
 };
 
@@ -438,7 +442,9 @@ struct search_step {
   ::mux::ui::request::search_step operator()() { return ::mux::ui::request::search_step{older}; }
 };
 template <class Actions>
-struct search_bar : nodes::Stack, outbox {
+struct search_bar : nodes::Stack {
+  // What its handlers ask for, returned.
+  using Answer = std::variant<::mux::ui::request::search_step, ::mux::ui::request::close_search>;
   using field_t = widgets::TextBox<search_typed<Actions>>;
   using step_button = icon_button<search_step<Actions>>;
   using close_button = icon_button<sends<::mux::ui::request::close_search>>;
@@ -478,20 +484,22 @@ struct search_bar : nodes::Stack, outbox {
     this->invalidateLayout();
   }
   using Node::onKey;
-  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    std::optional<Answer> answer;
     if (press.key == scene::keys::kEnter) {
-      this->emit(::mux::ui::request::search_step{!press.modifiers.template has<scene::modifier::shift>()});
+      answer = ::mux::ui::request::search_step{!press.modifiers.template has<scene::modifier::shift>()};
       reply.handle();
     } else if (press.key == scene::keys::kEscape) {
-      this->emit(::mux::ui::request::close_search{});
+      answer = ::mux::ui::request::close_search{};
       reply.handle();
     } else if (press.key == scene::keys::kUp) {
-      this->emit(::mux::ui::request::search_step{false});
+      answer = ::mux::ui::request::search_step{false};
       reply.handle();
     } else if (press.key == scene::keys::kDown) {
-      this->emit(::mux::ui::request::search_step{true});
+      answer = ::mux::ui::request::search_step{true};
       reply.handle();
     }
+    return answer;
   }
 };
 

@@ -123,7 +123,7 @@ template <class Actions> struct seen_row : skiff::compose::Stacked {
   std::optional<submenu_t>* submenu = nullptr;
   scene::Node* layer = nullptr;
   struct parts_t {
-    icon_mark mark;
+    icon_mark_t mark;
     nodes::Text label;
     std::vector<avatar_mark> faces;
   } parts;

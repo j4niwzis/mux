@@ -482,7 +482,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   struct tab_row : pressable<skiff::compose::Stacked> {
     pick_tab act;
     struct parts_t {
-      icon_mark mark;
+      icon_mark_t mark;
       nodes::Text label;
     } parts;
     tab_row(const palette &colours, std::string text, icon_t icon,

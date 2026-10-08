@@ -41,7 +41,7 @@ export namespace mux::ui {
 template <class Act> struct action_tile : pressable<skiff::compose::Stacked> {
   Act act;
   struct parts_t {
-    icon_mark mark;
+    icon_mark_t mark;
     nodes::Text label;
   } parts;
 

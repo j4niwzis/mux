@@ -33,7 +33,7 @@ template <class Actions> struct drawer_account : skiff::compose::Stacked {
     avatar_mark face;
     two_lines_t texts;
     // The account whose chats are shown: a tick at the end.
-    icon_mark tick;
+    icon_mark_t tick;
   } parts;
 
   static auto account_lines(const palette& colours, const config::account_t& saved, const model& now) {

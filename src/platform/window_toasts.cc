@@ -80,7 +80,7 @@ class toasts {
     chat_type chat;
     std::chrono::steady_clock::time_point until;
     one(sdl::SDL_Window* made, const typename App::toast_due& due, const auto& colours)
-        : window(made), target(made, true), scene(std::in_place, colours, due.key, due.title, due.text), chat(due.chat),
+        : window(made), target(made, true), scene(std::in_place, App::make_toast(colours, due.key, due.title, due.text)), chat(due.chat),
           until(std::chrono::steady_clock::now() + std::chrono::seconds(5)) {}
     one(const one&) = delete;
     one& operator=(const one&) = delete;

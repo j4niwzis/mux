@@ -30,15 +30,11 @@ export namespace mux::ui {
 // on the left, its text, and a radio mark on the right where it is one of a
 // choice. It lights under the pointer; a press does `act`.
 // An icon on its own, in a row: drawn, not pressed.
-struct icon_mark : nodes::Icon {
-  explicit icon_mark(const palette &colours, icon_t mark = icon::none{},
-                     float width = 28.0f, float height = 36.0f)
-      : nodes::Icon(
-            skiff::compose::styled({.width = width,
-                                    .height = height,
-                                    .alignSelf = scene::align::kMiddle},
-                                   nodes::Icon(shape_of(mark), colours.dim))) {}
-};
+inline auto icon_mark(const palette& colours, icon_t mark = icon::none{}, float width = 28.0f, float height = 36.0f) {
+  return skiff::compose::styled({.width = width, .height = height, .alignSelf = scene::align::kMiddle},
+                                nodes::Icon(shape_of(mark), colours.dim));
+}
+using icon_mark_t = decltype(icon_mark(std::declval<const palette&>()));
 // A radio's ring, with a dot in it while it is the one chosen.
 struct radio_mark : nodes::Icon {
   bool on = false;
@@ -131,7 +127,7 @@ struct row_item : pressable<skiff::compose::Stacked> {
   // Whether it is one of a choice, and the chosen one.
   std::optional<bool> radio;
   struct parts_t {
-    icon_mark mark;
+    icon_mark_t mark;
     nodes::Text label;
     radio_mark dot;
   } parts;
@@ -851,16 +847,13 @@ struct chat_choice_values {
 // A notification as mux shows it itself, as Telegram Desktop's own: a card
 // in a small window of its own -- the chat's avatar beside the title over
 // the text.
-struct toast_card : skiff::compose::Stacked {
-  struct parts_t {
-    avatar_mark face;
-    two_lines_t texts;
-  } parts;
-  toast_card(const palette& colours, std::string key, std::string title, std::string text)
-      : Stacked(skiff::compose::hbox(12.0f, {.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar,
-                                             .border = scene::Border{colours.band, 1.0f}})),
-        parts{.face = avatar_mark(key, title, 44.0f), .texts = two_lines(colours, title, std::move(text), 14.0f, 4.0f)} {}
-};
+inline auto toast_card(const palette& colours, std::string key, std::string title, std::string text) {
+  return skiff::compose::row(
+      skiff::compose::hbox(12.0f, {.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar,
+          .border = scene::Border{colours.band, 1.0f}}),
+      avatar_mark(key, title, 44.0f), two_lines(colours, title, std::move(text), 14.0f, 4.0f));
+}
+using toast_card_t = decltype(toast_card(std::declval<const palette&>(), "", "", ""));
 
 // What a message being written answers or edits, as shown over the field:
 // its icon, its title ("Reply to <name>", "Edit message"), a line of it.

@@ -385,7 +385,10 @@ struct app : kept_settings {
   // The notifications mux shows itself, for the host to put up; one pressed;
   // the window's focus -- the notices part's.
   using toast_due = notices_part::toast_due;
-  using toast_card = mux::ui::toast_card;
+  using toast_card = mux::ui::toast_card_t;
+  static auto make_toast(const mux::ui::palette& colours, std::string key, std::string title, std::string text) {
+    return mux::ui::toast_card(colours, std::move(key), std::move(title), std::move(text));
+  }
   [[nodiscard]] std::vector<toast_due> take_toasts() { return notices.take_toasts(); }
   void open_notified(const mux::conversation_id& chat) { this->open_chat(chat, std::nullopt); }
   void focus_changed(bool on) { notices.focus_changed(on); }

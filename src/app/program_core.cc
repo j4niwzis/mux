@@ -570,8 +570,8 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   this->keeps_nothing = demo;
   // What each protocol's account does, for the window to offer.
   mux::app::tell_protocol_ops(shared.ui, mux::protocols{});
-  // The settings, as kept.
-  this->take(saved);
+  // Load the saved settings through the base; app::take dispatches requests.
+  this->kept_settings::take(saved);
   // And what of them the window holds, put in place there.
   shared.emoji.recent_emoji = this->recent().emoji;
   shared.emoji.recent_stickers = this->recent().stickers;

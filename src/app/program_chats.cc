@@ -41,7 +41,7 @@ void app::apply(const request::choose& one) {
   // A space shown as a forum: its rooms listed in it, as tdesktop opens a
   // forum's topics -- no chat opened.
   if (root().main().is_forum(one.which)) {
-    root().main().open_forum(one.which.id);
+    mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.forum = one.which.id; });
     return;
   }
   // What was being written where the reader was: kept as its draft; and

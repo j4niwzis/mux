@@ -78,7 +78,9 @@ class manage_part {
     if (auto* managing = s_->root().manage_up())
       managing->show_tab(managing->tab);
   }
-  void apply(const request::close_forum&) { s_->root().main().close_forum(); }
+  void apply(const request::close_forum&) {
+    mux::ui::change_shown<mux::ui::chat_shown>(*s_->showing, [](mux::ui::chat_shown& now) { now.forum.reset(); });
+  }
   void apply(const request::manage_forum&) {
     if (const auto& open = s_->root().main().forum_open)
       this->apply(request::manage_space{*open});

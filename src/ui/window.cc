@@ -48,6 +48,8 @@ struct chat_shown {
   // The threads' panel open, and the thread open in it, if one is.
   bool threads_open = false;
   std::optional<std::string> thread;
+  // The space opened as a forum, its rooms listed: by its id.
+  std::optional<std::string> forum;
 };
 // Whether the drawer is out.
 struct drawer_shown {
@@ -140,7 +142,16 @@ struct shown_screen : Screen {
       this->set_info_open(now.info_open);
     if (this->threads_open != now.threads_open || this->parts.threads.open != now.thread)
       this->set_threads(now.threads_open, now.thread);
+    // A forum opened or left as the program says it, where that changed:
+    // one the screen let go itself -- its space gone -- stays gone.
+    if (std::exchange(forum_read, now.forum) != now.forum && this->forum_open != now.forum) {
+      if (now.forum)
+        this->open_forum(*now.forum);
+      else
+        this->close_forum();
+    }
   }
+  std::optional<std::string> forum_read;
 };
 
 // The drawer, out while what is shown says so; pushed back -- the scrim

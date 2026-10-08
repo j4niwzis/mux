@@ -122,7 +122,7 @@ template <class Actions>
   }
   // A reaction's chip: the user's own put or taken back.
   if (one.parts.body.parts.reactions)
-    for (const reaction_chip& chip : one.parts.body.parts.rethis->send(::mux::ui::request::chips{}))
+    for (const reaction_chip& chip : one.parts.body.parts.reactions->chips())
       if (chip.bounds().contains(press.x, press.y)) {
         this->send(::mux::ui::request::react{one.message_id, chip.key});
         return true;

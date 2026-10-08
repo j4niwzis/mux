@@ -45,6 +45,8 @@ struct kept_root {
   skiff::model::Tracked<mux::config::notification_settings> notifications;
   // What is done to a picture dropped before it is sent.
   skiff::model::Tracked<mux::config::sending_settings> sending;
+  // How frames are drawn.
+  skiff::model::Tracked<mux::config::frame_settings> frames;
 };
 // The file to be written again: one, however many changes asked for it.
 struct write_kept {
@@ -64,6 +66,7 @@ struct kept_reactions {
     return {};
   }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::sending_settings>, const mux::config::sending_settings&) const { return {}; }
+  [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::frame_settings>, const mux::config::frame_settings&) const { return {}; }
   [[nodiscard]] push_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::notification_settings::unified_push>>, const auto& at) const {
     return {skiff::model::part(at).value_or(false)};
   }
@@ -95,9 +98,6 @@ struct kept_settings {
   mux::config::renderer_t renderer = mux::config::renderer::opengl{};
   // Read by the host at each frame: only the damage repainted; and it
   // outlined.
-  bool partial_redraw = false;
-  bool flash_redraws = false;
-  bool vsync = true;
   int window_opacity = 100;
   bool wallpaper_behind = false;
   bool live_blur = false;
@@ -111,7 +111,6 @@ struct kept_settings {
   bool home_hides_spaced = false;
   bool home_hides_direct = false;  // and direct messages, where that is so
   std::vector<mux::config::space_placed> space_places;
-  bool show_fps = false;
   // The interface's scale, in percent of the display's: read by the host at
   // each frame.
   int interface_scale = 100;
@@ -119,6 +118,8 @@ struct kept_settings {
   mux::config::cache_limits limits;
   // What is done to a picture dropped before it is sent, as the model holds it.
   [[nodiscard]] const mux::config::sending_settings& sending() const { return model.root().sending.fValue; }
+  // How frames are drawn, as the model holds it: read by the host at each.
+  [[nodiscard]] const mux::config::frame_settings& frames() const { return model.root().frames.fValue; }
   // One setting of what the model keeps, chosen in its place by its member
   // pointer: a field of a part the root holds one of.
   template <auto M, class T>
@@ -426,9 +427,10 @@ struct kept_settings {
       this->panels = mux::config::bubble_look_of(*saved.panels);
     this->accent = mux::config::accent_of(saved.accent);
     this->renderer = mux::config::renderer_of(saved.renderer);
-    this->partial_redraw = saved.partial_redraw.value_or(false);
-    this->flash_redraws = saved.flash_redraws.value_or(false);
-    this->vsync = saved.vsync.value_or(true);
+    const mux::config::frame_settings frames_read{.partial_redraw = saved.partial_redraw.value_or(false),
+                                              .flash_redraws = saved.flash_redraws.value_or(false),
+                                              .vsync = saved.vsync.value_or(true),
+                                              .show_fps = saved.show_fps.value_or(false)};
     this->window_opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
     this->spaces = saved.spaces.value_or(true);
     this->top_bar = saved.top_bar.value_or(true);
@@ -439,7 +441,6 @@ struct kept_settings {
                                return mux::config::space_placed{one.account, mux::config::space_item_of(one.item),
                                                                 mux::config::space_bar_of(one.bar)};
                              }));
-    this->show_fps = saved.show_fps.value_or(false);
     this->interface_scale = saved.interface_scale.value_or(100);
     this->limits = saved.cache.value_or(mux::config::cache_limits{});
     const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
@@ -482,6 +483,7 @@ struct kept_settings {
     root.chats.putAll(chats);
     root.notifications.fValue = notifications_read;
     root.sending.fValue = sending_read;
+    root.frames.fValue = frames_read;
     this->model = kept_model(std::move(root));
   }
   [[nodiscard]] mux::config::file file() const {
@@ -510,11 +512,11 @@ struct kept_settings {
       out.panels = mux::config::word_of(*panels);
     out.accent = mux::config::word_of(accent);
     out.renderer = mux::config::word_of(renderer);
-    if (partial_redraw)
+    if (this->frames().partial_redraw)
       out.partial_redraw = true;
-    if (flash_redraws)
+    if (this->frames().flash_redraws)
       out.flash_redraws = true;
-    if (!vsync)
+    if (!this->frames().vsync)
       out.vsync = false;
     if (window_opacity != 100)
       out.window_opacity = window_opacity;
@@ -538,7 +540,7 @@ struct kept_settings {
                            return mux::config::space_place{one.account, mux::config::word_of(one.item),
                                                            std::string(mux::config::word_of(one.bar))};
                          }));
-    if (show_fps)
+    if (this->frames().show_fps)
       out.show_fps = true;
     if (interface_scale != 100)
       out.interface_scale = interface_scale;

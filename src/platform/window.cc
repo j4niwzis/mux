@@ -549,7 +549,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
                      one.x, one.y);
       shapes.show(scene.cursor());
       // Scroll views copied rather than repainted, where the frame is kept.
-      skiff::scene::blitScrolling() = app.partial_redraw;
+      skiff::scene::blitScrolling() = app.frames().partial_redraw;
       const skiff::scene::FrameResult frame = scene.finishFrame();
       const double damage_found = detail::now_ms();
       // Frames said, where MUX_TRACE_FRAMES is set: what each repaints, and
@@ -634,7 +634,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
           canvas->drawImage(pixels, static_cast<float>(at.fLeft), static_cast<float>(at.fTop));
           changed.push_back(at);
         }
-      if (app.partial_redraw) {
+      if (app.frames().partial_redraw) {
         // Else into a frame of its own kept between frames (the window's
         // buffers are not): only the damage repainted there, then the frame
         // shown whole.
@@ -903,7 +903,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
         }
       };
       // What this frame repainted, outlined, where that is asked for.
-      if (app.flash_redraws)
+      if (app.frames().flash_redraws)
         for (const skia::SkRect& piece : pieces) {
         if (piece.isEmpty())
           continue;
@@ -924,7 +924,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       // the top right corner: counted as shown, so an idle window stays at
       // what it last was.
       const double shown_at = detail::now_ms();
-      if (app.show_fps) {
+      if (app.frames().show_fps) {
         while (!shown_times.empty() && shown_at - shown_times.front() > 1000.0)
           shown_times.pop_front();
         const double since = shown_times.empty() ? 0.0 : shown_at - shown_times.back();
@@ -954,8 +954,8 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       shown_times.push_back(shown_at);
       if (shown_times.size() > 2000)
         shown_times.pop_front();
-      if (app.vsync != vsync_on) {
-        vsync_on = app.vsync;
+      if (app.frames().vsync != vsync_on) {
+        vsync_on = app.frames().vsync;
         target.set_vsync(vsync_on);
       }
       if (keeps && !show_all)

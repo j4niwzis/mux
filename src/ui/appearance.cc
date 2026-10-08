@@ -10,6 +10,9 @@ import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
+import skiff.model;
+import skiff.compose;
+import skiff.widgets.model;
 import mux.core;
 import mux.config;
 import :base;
@@ -19,6 +22,7 @@ import :themes;
 import :accounts;
 import :proxies;
 import :info;
+import :storage;
 import skiff.widgets.sliderbar;
 
 export namespace mux::ui {
@@ -250,77 +254,59 @@ struct appearance_page : nodes::Stack {
 };
 
 // Settings' Rendering page: what draws the window, from the next start.
+// The Rendering page's frames: a toggle bound to each of frame_settings'
+// fields, in effect at once -- the host reads them as it draws.
+inline auto frame_settings_view(const palette& colours) {
+  using frames = config::frame_settings;
+  return skiff::compose::column(
+      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+      spaced_title(colours, "FRAMES"), setting_switch<&frames::partial_redraw>(colours, "Partial redraw"),
+      setting_switch<&frames::flash_redraws>(colours, "Flash redrawn areas"), setting_switch<&frames::vsync>(colours, "Vsync"),
+      setting_switch<&frames::show_fps>(colours, "Show frames a second"),
+      spaced_note(colours, "Partial redraw repaints only what changed, into a frame kept between them; a part "
+                              "that forgets to say it changed then stays as it was. Flashing outlines what each "
+                              "frame repainted. Vsync shows frames in step with the screen; off, they are shown as "
+                              "soon as drawn. The counter shows frames a second and the last frame's time. All take "
+                              "effect at once."));
+}
 template <class Actions>
 struct rendering_page : nodes::Stack {
   using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
   using choice = row_item<choose_renderer<Actions>>;
-  using partial_row = switch_row<ask<Actions, &Actions::flip_partial_redraw>>;
-  using flash_row = switch_row<ask<Actions, &Actions::flip_flash_redraws>>;
-  using vsync_row = switch_row<ask<Actions, &Actions::flip_vsync>>;
-  using fps_row = switch_row<ask<Actions, &Actions::flip_show_fps>>;
   // What is under the header: it scrolls where the dialog is too low for it.
   struct body : nodes::Stack {
     struct parts_t {
       choice gpu;
       choice cpu;
       nodes::Text note;
-      nodes::Text frames_title;
-      partial_row partial;
-      flash_row flash;
-      vsync_row vsync;
-      fps_row fps;
-      nodes::Text frames_note;
     } parts;
-    body(const palette& colours, Actions* a, bool partial, bool flash, bool vsync, bool fps)
+    body(const palette& colours, Actions* a)
         : parts{.gpu = choice(colours, "OpenGL (the graphics card)", {a, config::renderer::opengl{}}, icon::none{}, false),
                 .cpu = choice(colours, "Software (the processor)", {a, config::renderer::software{}}, icon::none{}, false),
-                .note = note_text(colours, "Takes effect when mux starts again."),
-                .frames_title = section_title(colours, "FRAMES"),
-                .partial = partial_row(colours, "Partial redraw", {a}),
-                .flash = flash_row(colours, "Flash redrawn areas", {a}),
-                .vsync = vsync_row(colours, "Vsync", {a}),
-                .fps = fps_row(colours, "Show frames a second", {a}),
-                .frames_note = note_text(colours, "Partial redraw repaints only what changed, into a frame kept between them; a part "
-                              "that forgets to say it changed then stays as it was. Flashing outlines what each "
-                              "frame repainted. Vsync shows frames in step with the screen; off, they are shown as "
-                              "soon as drawn. The counter shows frames a second and the last frame's time. All take "
-                              "effect at once.")} {
+                .note = note_text(colours, "Takes effect when mux starts again.")} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
       parts.note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
-      parts.frames_title.apply({.margin = {14.0f, 0.0f, 4.0f, 20.0f}});
-      parts.frames_note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
       parts.note.setWrapped(true);
-      parts.frames_note.setWrapped(true);
-      parts.partial.parts.toggle.setOnNow(partial);
-      parts.flash.parts.toggle.setOnNow(flash);
-      parts.vsync.parts.toggle.setOnNow(vsync);
-      parts.fps.parts.toggle.setOnNow(fps);
     }
   };
+  using settings_t = decltype(frame_settings_view(std::declval<const palette&>()));
   struct parts_t {
     header_t header;
     body list;  // in the settings' own scroll view
+    settings_t settings;
   } parts;
 
-  rendering_page(const ui_needs<Actions>& n, const config::renderer_t& renderer, bool partial = false, bool flash = false,
-                 bool vsync = true, bool fps = false)
-      : rendering_page(*n.colours, n.actions, renderer, partial, flash, vsync, fps) {}
-  rendering_page(const palette& colours, Actions* a, const config::renderer_t& renderer, bool partial, bool flash, bool vsync,
-                 bool fps)
+  rendering_page(const ui_needs<Actions>& n, const config::renderer_t& renderer)
+      : rendering_page(*n.colours, n.actions, renderer) {}
+  rendering_page(const palette& colours, Actions* a, const config::renderer_t& renderer)
       : parts{.header = header_t(colours, "Rendering", {a}, {a}, true, true),
-              .list = body(colours, a, partial, flash, vsync, fps)} {
+              .list = body(colours, a),
+              .settings = frame_settings_view(colours)} {
     fState.apply({.fill = true});
     parts.list.apply({.fillX = true});
     this->show(renderer);
   }
   [[nodiscard]] body& content() { return parts.list; }
-  void show_frames(bool partial, bool flash, bool vsync, bool fps) {
-    auto& rows = this->content().parts;
-    rows.partial.parts.toggle.setOn(partial);
-    rows.flash.parts.toggle.setOn(flash);
-    rows.vsync.parts.toggle.setOn(vsync);
-    rows.fps.parts.toggle.setOn(fps);
-  }
   void show(const config::renderer_t& renderer) {
     auto& rows = this->content().parts;
     rows.gpu.set_chosen(renderer == config::renderer_t{config::renderer::opengl{}});

@@ -141,8 +141,8 @@ struct settings_dialog : scene::Node {
     this->page().template emplace<4>(needs_, theme, accent);
     this->begin_swap(1.0f);
   }
-  void show_rendering(const config::renderer_t& renderer, bool partial, bool flash, bool vsync, bool fps) {
-    this->page().template emplace<5>(needs_, renderer, partial, flash, vsync, fps);
+  void show_rendering(const config::renderer_t& renderer) {
+    this->page().template emplace<5>(needs_, renderer);
     this->begin_swap(1.0f);
   }
   void show_notifications(const config::notification_settings& now) {

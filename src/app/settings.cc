@@ -63,7 +63,7 @@ class settings_part {
   }
   void apply(const request::settings_rendering&) {
     if (auto* up = s_->root().settings_up())
-      up->show_rendering(k_->renderer, k_->partial_redraw, k_->flash_redraws, k_->vsync, k_->show_fps);
+      up->show_rendering(k_->renderer);
   }
   void apply(const request::set_theme& one) {
     k_->theme = one.theme;
@@ -80,18 +80,15 @@ class settings_part {
   // The renderer: for the next start, kept.
   // Taken at the next frame: the host reads them as it draws.
   void apply(const request::flip_partial_redraw&) {
-    k_->partial_redraw = !k_->partial_redraw;
-    this->show_frames();
+    k_->choose_field<&mux::config::frame_settings::partial_redraw>(!k_->frames().partial_redraw);
     (void)k_->write();
   }
   void apply(const request::flip_flash_redraws&) {
-    k_->flash_redraws = !k_->flash_redraws;
-    this->show_frames();
+    k_->choose_field<&mux::config::frame_settings::flash_redraws>(!k_->frames().flash_redraws);
     (void)k_->write();
   }
   void apply(const request::flip_vsync&) {
-    k_->vsync = !k_->vsync;
-    this->show_frames();
+    k_->choose_field<&mux::config::frame_settings::vsync>(!k_->frames().vsync);
     (void)k_->write();
   }
   // The window's opacity: kept, and shown chosen; in effect from the next
@@ -161,15 +158,8 @@ class settings_part {
       up->show_appearance(k_->theme, k_->accent);
   }
   void apply(const request::flip_show_fps&) {
-    k_->show_fps = !k_->show_fps;
-    this->show_frames();
+    k_->choose_field<&mux::config::frame_settings::show_fps>(!k_->frames().show_fps);
     (void)k_->write();
-  }
-  // The Rendering page's switches, moved to what is now so.
-  void show_frames() {
-    if (auto* up = s_->root().settings_up())
-      if (auto* page = up->rendering())
-        page->show_frames(k_->partial_redraw, k_->flash_redraws, k_->vsync, k_->show_fps);
   }
   void apply(const request::set_renderer& one) {
     k_->renderer = one.renderer;

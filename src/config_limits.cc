@@ -132,6 +132,17 @@ inline constexpr std::int64_t kDeletedOnDiskMb = 256;
   return spl::visit([](auto one) { return bounds_of(one); }, which);
 }
 
+// How frames are drawn, read by the host at each one: only the damage
+// repainted, and it outlined; in step with the display; the frames a
+// second counted.
+struct frame_settings {
+  bool partial_redraw = false;
+  bool flash_redraws = false;
+  bool vsync = true;
+  bool show_fps = false;
+  friend bool operator==(const frame_settings&, const frame_settings&) = default;
+};
+
 // What is done to a picture dropped on the window before it is sent.
 struct sending_settings {
   bool strip_metadata = true;  // its EXIF, XMP, text and the like cut out

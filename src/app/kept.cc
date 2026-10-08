@@ -17,26 +17,7 @@ import skiff.model;
 
 export namespace mux::app {
 
-// What a chat -- or a space, for its rooms -- chose for itself: each setting
-// a field, found in the model by its member pointer (Field<&chat_choices::
-// muted>); unsaid, as the level above.
-struct chat_choices {
-  bool muted = false;
-  std::optional<bool> room_events;
-  std::optional<mux::config::room_event_kinds> room_event_kinds;
-  std::optional<bool> receipts;
-  std::optional<bool> previews;
-  std::optional<bool> previews_direct;
-  std::optional<bool> typing;
-  std::optional<std::int64_t> jump_search;
-  std::optional<mux::config::wallpaper_t> wallpaper;
-  std::optional<mux::config::bubble_look> bubbles;
-  std::optional<mux::config::bubble_look> panels;
-  bool forum = false;
-  bool hidden_from_home = false;
-  mux::config::notify_choices notify;
-  friend bool operator==(const chat_choices&, const chat_choices&) = default;
-};
+using chat_choices = mux::config::chat_choices;
 
 // What was used lately, for the next start: the account shown last, by its
 // address; the emoji picked lately, newest first; the stickers sent lately,
@@ -364,6 +345,12 @@ struct kept_settings {
       return false;
     (void)state.apply(skiff::model::put<mux::config::account_t>(std::move(address), std::move(account)));
     return true;
+  }
+  // A chat's own choices there to be bound to: where it chose nothing yet,
+  // an empty one -- left out of the file while it stays empty.
+  void ensure_chat(const conversation_id& chat) {
+    if (this->state.root().chats.find(chat) == nullptr)
+      (void)state.apply(skiff::model::put<chat_choices>(chat, chat_choices{}));
   }
   bool remove_account(std::string_view address) {
     return this->settings_of(address) != nullptr && state.apply(skiff::model::take<mux::config::account_t>(std::string(address)));

@@ -143,6 +143,27 @@ struct frame_settings {
   friend bool operator==(const frame_settings&, const frame_settings&) = default;
 };
 
+// What a chat -- or a space, for its rooms -- chose for itself: each setting
+// a field, found in the model by its member pointer (Field<&chat_choices::
+// muted>); unsaid, as the level above.
+struct chat_choices {
+  bool muted = false;
+  std::optional<bool> room_events;
+  std::optional<room_event_kinds> room_event_kinds;
+  std::optional<bool> receipts;
+  std::optional<bool> previews;
+  std::optional<bool> previews_direct;
+  std::optional<bool> typing;
+  std::optional<std::int64_t> jump_search;
+  std::optional<wallpaper_t> wallpaper;
+  std::optional<bubble_look> bubbles;
+  std::optional<bubble_look> panels;
+  bool forum = false;
+  bool hidden_from_home = false;
+  notify_choices notify;
+  friend bool operator==(const chat_choices&, const chat_choices&) = default;
+};
+
 // How the window looks, for every account and chat that does not say: the
 // theme and its accent, the renderer for the next start, the window's
 // opacity, scale and blur, the space bars and where each item is put, and

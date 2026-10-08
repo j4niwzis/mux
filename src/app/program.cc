@@ -206,6 +206,13 @@ struct app : kept_settings {
   // for done, and the page shown the model again.
   skiff::bind::Binding<kept_model> page_binding;
   const void* bound_page = nullptr;
+  // And the room settings' page up, the same way.
+  skiff::bind::Binding<kept_model> manage_binding;
+  const void* bound_manage = nullptr;
+  template <class Page>
+  void bind_page(Page& page, skiff::bind::Binding<kept_model>& binding, const void*& bound);
+  template <class Page>
+  void refresh_page(Page& page, skiff::bind::Binding<kept_model>& binding);
   void take_page_input();
   void settle_model();
   void show_looks();

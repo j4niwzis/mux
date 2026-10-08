@@ -19,6 +19,8 @@ import skiff.nodes.text;
 import skiff.widgets.button;
 import skiff.widgets.sliderbar;
 import skiff.widgets.textarea;
+import skiff.model;
+import skiff.compose;
 import mux.core;
 import mux.config;
 import :base;
@@ -83,6 +85,8 @@ struct room_settings_facts {
     std::int64_t level = 0;
   };
   std::vector<person> privileged;
+  // The chat itself, its own choices kept by it in the model.
+  conversation_id chat{};
 };
 
 // Element's names for levels: 100 Admin, 50 Moderator, the default Default.
@@ -463,12 +467,31 @@ struct room_settings : nodes::Stack {
     std::string room;
     void operator()() const { actions->flip_home_hide(room); }
   };
+  // A chat's own choices, bound to them in the model: receipts, previews,
+  // where previews come from, typing sent -- Default as the level above.
+  static auto chat_settings_of(const palette& colours, const conversation_id& chat) {
+    using choices = config::chat_choices;
+    const choice_level_t level = choice_level::chat{};
+    return skiff::compose::scoped<choices>(
+        skiff::compose::handlers(),
+        skiff::compose::column(
+            skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+            skiff::compose::bound<skiff::model::Field<&choices::receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
+            skiff::compose::bound<skiff::model::Field<&choices::previews>>(
+                show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
+            skiff::compose::bound<skiff::model::Field<&choices::previews_direct>>(
+                show_hide_field<previews_direct_setting, std::optional<bool>>(colours, level)),
+            skiff::compose::bound<skiff::model::Field<&choices::typing>>(show_hide_field<typing_setting, std::optional<bool>>(colours, level))),
+        chat);
+  }
+  using settings_t = decltype(chat_settings_of(std::declval<const palette&>(), std::declval<const conversation_id&>()));
   struct general_page : nodes::Stack {
     struct parts_t {
       nodes::Text heading;
       nodes::Text events_about;
-      chat_choices<Actions> chats;
-      typing_choice<Actions> typing;
+      event_kind_list<Actions> events;
+      settings_t settings;
+      jump_search_choice<Actions> jump_search;
       nodes::Text forum_heading;
       toggle_line<flip_forum_act> forum;
       nodes::Text forum_about;
@@ -479,15 +502,9 @@ struct room_settings : nodes::Stack {
     general_page(Actions* a, room_settings* box, const room_settings_facts& facts)
         : parts{.heading = tab_heading(*box->colours_, "General"),
                 .events_about = explained(*box->colours_, "Room events shown in this room, for you: Default is as your account's."),
-                .chats = chat_choices<Actions>(a, *box->colours_, choice_level::chat{},
-                                               {.events_all = facts.events_all,
-                                                .event_kinds = facts.event_kinds,
-                                                .receipts = facts.receipts,
-                                                .previews = facts.previews,
-                                                .previews_direct = facts.previews_direct,
-                                                .jump_search = facts.jump_search},
-                                               6.0f),
-                .typing = typing_choice<Actions>(a, *box->colours_, choice_level::chat{}, facts.typing),
+                .events = event_kind_list<Actions>(a, *box->colours_, choice_level::chat{}, facts.events_all, facts.event_kinds),
+                .settings = chat_settings_of(*box->colours_, facts.chat),
+                .jump_search = jump_search_choice<Actions>(a, *box->colours_, choice_level::chat{}, facts.jump_search),
                 .forum_heading = part_heading(*box->colours_, "Shown as"),
                 .forum = toggle_line<flip_forum_act>(*box->colours_, "One chat, its rooms as topics", {a, facts.id, !facts.holds_spaces},
                                                      facts.forum, !facts.holds_spaces),

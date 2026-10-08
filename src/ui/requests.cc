@@ -634,8 +634,11 @@ struct add_proxy {};
 struct edit_proxy {
   int index = 0;
 };
-struct save_proxy_profile {};
-struct delete_proxy_profile {};
+struct save_proxy_profile {
+  std::expected<mux::config::proxy_settings, std::string> profile;
+  int index = -1;
+};
+struct delete_proxy_profile { int index = -1; };
 struct settings_appearance {};
 struct set_renderer {
   mux::config::renderer_t renderer;

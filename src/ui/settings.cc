@@ -70,8 +70,8 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{440.0f, 520.0f}}; }
   // What it was handed, for the pages it makes.
   ui_needs<Actions> needs_;
-  using page_t = spl::variant<settings_home_t, animations_page_t, proxies_page_t, proxy_editor<Actions>,
-                              appearance_page_t<Actions>, rendering_page_t, storage_page<Actions>, files_page_t,
+  using page_t = spl::variant<settings_home_t, animations_page_t, proxies_page_t, proxy_editor_t,
+                              appearance_page_t<Actions>, rendering_page_t, storage_page_t, files_page_t,
                               notifications_page_t>;
   // The page up: home, or one of its pages.
   // The page up, in a scroll view of the dialog's size: sized to what it
@@ -219,13 +219,8 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
     this->begin_swap(1.0f);
   }
   void show_storage(const config::cache_limits& limits, const config::history_settings& history, bool sealed) {
-    this->page().template emplace<6>(needs_, limits, history, sealed);
+    this->page().template emplace<6>(storage_page(*needs_.colours));
     this->begin_swap(1.0f);
-  }
-  [[nodiscard]] storage_page<Actions>* storage() {
-    return spl::visit(spl::overloaded{[](storage_page<Actions>& one) { return &one; },
-                                 [](auto&) -> storage_page<Actions>* { return nullptr; }},
-                      this->page());
   }
   [[nodiscard]] rendering_page_t* rendering() {
     return spl::visit(spl::overloaded{[](rendering_page_t& one) { return &one; },
@@ -242,13 +237,8 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
     this->begin_swap(1.0f);
   }
   void show_proxy(const std::optional<config::proxy_settings>& from, int index) {
-    this->page().template emplace<3>(needs_, from, index);
+    this->page().template emplace<3>(proxy_editor(*needs_.colours, from, index));
     this->begin_swap(1.0f);
-  }
-  [[nodiscard]] proxy_editor<Actions>* editor() {
-    return spl::visit(spl::overloaded{[](proxy_editor<Actions>& one) { return &one; },
-                                 [](auto&) -> proxy_editor<Actions>* { return nullptr; }},
-                      this->page());
   }
 
   void layoutChildren() {

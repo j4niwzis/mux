@@ -968,3 +968,49 @@ TEST(Appearance, ThemeCardPressEditsTheFieldAndRefreshesItsRing) {
   EXPECT_FLOAT_EQ(preview.fState.fBorder->width, 2.0f);
   EXPECT_EQ(preview.fState.fBorder->colour, colours.accent);
 }
+
+TEST(Proxies, DraftValidationPreservesCredentialsAndPortBounds) {
+  mux::ui::proxy_draft draft;
+  EXPECT_FALSE(mux::ui::proxy_profile(draft));
+  draft.name = "Home";
+  draft.host = "localhost";
+  for (const auto& port : {"", "0", "65536", "1080junk", "-1"}) {
+    draft.port = port;
+    EXPECT_FALSE(mux::ui::proxy_profile(draft));
+  }
+  draft.port = "65535";
+  draft.password = "secret";
+  const auto profile = mux::ui::proxy_profile(draft);
+  ASSERT_TRUE(profile);
+  EXPECT_EQ(profile->port, 65535);
+  EXPECT_EQ(profile->password, "secret");
+  EXPECT_FALSE(profile->username.has_value());
+}
+
+TEST(Proxies, RequestsCarryTheDraftAndProfileIndex) {
+  const mux::ui::proxy_draft draft{.index = 2, .name = "Work", .host = "localhost", .port = "1080"};
+  const mux::ui::proxy_draft_events events;
+  const auto saved = events.on(mux::ui::save_proxy_draft{}, draft);
+  ASSERT_TRUE(saved.profile);
+  EXPECT_EQ(saved.index, 2);
+  EXPECT_EQ(saved.profile->name, "Work");
+  EXPECT_EQ(events.on(mux::ui::delete_proxy_draft{}, draft).index, 2);
+}
+
+TEST(Storage, SealModelRefreshesControlsWithoutReplacingThem) {
+  mux::ui::shown_model model(mux::ui::shown_root{});
+  mux::ui::palette colours;
+  auto view = mux::ui::seal_settings_view(colours);
+  skiff::bind::Binding<mux::ui::shown_model> binding;
+  binding.refresh(view, model);
+  auto& toggle = std::get<1>(std::get<0>(view.fParts).fParts);
+  auto& change = std::get<1>(view.fParts);
+  const auto id = toggle.fState.id();
+  EXPECT_FALSE(toggle.on());
+  EXPECT_FALSE(change.visible());
+  mux::ui::show(model, mux::ui::local_seal{true});
+  binding.refresh(view, model);
+  EXPECT_TRUE(toggle.on());
+  EXPECT_TRUE(change.visible());
+  EXPECT_EQ(toggle.fState.id(), id);
+}

@@ -77,6 +77,8 @@ struct shown_root {
   skiff::model::Tracked<std::optional<packs_facts>> packs;
   skiff::model::Tracked<std::optional<explore_facts>> explore;
   skiff::model::Tracked<std::optional<settings_facts>> settings;
+  skiff::model::Tracked<proxy_notice> proxy_error;
+  skiff::model::Tracked<local_seal> seal;
   skiff::model::Tracked<std::optional<room_settings_facts>> manage;
   skiff::model::Tracked<std::optional<send_facts>> sending;
   skiff::model::Tracked<std::optional<verification_view>> verifying;

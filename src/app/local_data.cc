@@ -103,9 +103,7 @@ class local_data_part {
   // The passphrase asked for done: its dialog closed, Storage showing it.
   void done() {
     mux::ui::show<mux::ui::passphrase_facts>(*s_->showing, std::nullopt);
-    if (auto* up = s_->root().settings_up())
-      if (auto* page = up->storage())
-        page->show_sealed(s_->vault->on());
+    mux::ui::show(*s_->showing, mux::ui::local_seal{s_->vault->on()});
   }
   // Re-sealed, or why not said in the dialog: whether it was.
   template <class Turn>

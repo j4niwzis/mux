@@ -96,41 +96,30 @@ auto limit_stepper(const palette& colours, std::string what, std::string_view un
 // messages are shown, and how much of them is kept; and every chat's room
 // events. The limits and the history's switch are the model's widgets; the
 // seal, the clearing and every chat's choices are asked as before.
-template <class Actions> struct storage_page : skiff::compose::Stacked {
-  using header_t = page_header_t<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
-  using clear_row = row_item<sends<::mux::ui::request::clear_stored>>;
-  using seal_row = switch_row<sends<::mux::ui::request::flip_local_encryption>>;
-  using change_row = row_item<sends<::mux::ui::request::change_passphrase>>;
-  // The seal: its switch, and the passphrase to change where it is on.
-  struct seal_rows : skiff::compose::Stacked {
-    struct parts_t {
-      seal_row seal;
-      change_row change;
-    } parts;
-    seal_rows(const palette &colours, bool sealed)
-        : Stacked(skiff::compose::vbox(
-              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.seal = seal_row(colours, "Encrypt local data", {}),
-                .change = change_row(colours, "Change the passphrase", {})} {
-      this->show_sealed(sealed, true);
-    }
-    void show_sealed(bool sealed, bool at_once = false) {
-      if (at_once)
-        parts.seal.parts.toggle.setOnNow(sealed);
-      else
-        parts.seal.parts.toggle.setOn(sealed);
-      parts.change.setVisible(sealed);
-    }
-  };
-  static auto settings_of(const palette& colours, const config::history_settings& history, bool sealed) {
+struct local_seal { bool on = false; };
+inline auto seal_settings_view(const palette& colours) {
+  using field = skiff::model::Field<&local_seal::on>;
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::row(skiff::compose::hbox(16.0f, {.fillX = true, .height = row_item<nothing>::kHeight,
+          .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+          skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+              nodes::Text("Encrypt local data", 15.0f, colours.text)),
+          skiff::compose::bound<field>(skiff::compose::onClick(request::flip_local_encryption{},
+              skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::ToggleField<bool>(colours.widgets)),
+              "Encrypt local data"))),
+      skiff::compose::shown_if<field>([](bool on) { return on; },
+          settings_link(colours, "Change the passphrase", icon::pencil{}, request::change_passphrase{})));
+}
+inline auto storage_settings_view(const palette& colours) {
     namespace limit = config::limit;
     using skiff::compose::bound;
-    auto clear = clear_row(colours, "Clear stored messages and pictures", {}, icon::close{});
+    auto clear = settings_link(colours, "Clear stored messages and pictures", icon::close{}, request::clear_stored{});
     return skiff::compose::column(
         skiff::compose::vbox(0.0f, {.fillX = true,
                                     .autoSize = scene::axes::kY,
                                     .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
-        spaced_title(colours, "ENCRYPTION"), seal_rows(colours, sealed),
+        spaced_title(colours, "ENCRYPTION"), seal_settings_view(colours),
         spaced_note(colours, "Off by default. On, everything mux keeps on disk "
                              "is sealed under a passphrase asked for at "
                              "every start: settings with passwords and tokens, "
@@ -178,22 +167,13 @@ template <class Actions> struct storage_page : skiff::compose::Stacked {
                              "where it was, with all it said and its "
                              "time, marked removed."));
   }
-  using settings_t = decltype(settings_of(std::declval<const palette&>(), std::declval<const config::history_settings&>(), false));
-  struct parts_t {
-    header_t header;
-    settings_t settings;
-  } parts;
-
-  storage_page(const ui_needs<Actions>& n, const config::cache_limits&, const config::history_settings& history, bool sealed)
-      : storage_page(*n.colours, history, sealed) {}
-  storage_page(const palette &colours, const config::history_settings &history,
-               bool sealed)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>(colours, "Storage", {}, {}, true, true),
-              .settings = settings_of(colours, history, sealed)} {}
-  void show_receipts(bool) {}
-  void show_sealed(bool sealed) { std::get<1>(parts.settings.fParts).show_sealed(sealed); }
-};
+inline auto storage_page(const palette& colours) {
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Storage", {}, {}, true, true),
+      storage_settings_view(colours));
+}
+using storage_page_t = decltype(storage_page(std::declval<const palette&>()));
 
 inline auto notification_settings_view(const palette& colours) {
   using every = config::notification_settings;

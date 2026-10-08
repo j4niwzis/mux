@@ -74,8 +74,10 @@ class settings_part {
   // Storage: how much is kept, halved or doubled within its bounds; and all
   // of it cleared.
   void apply(const request::settings_storage&) {
-    if (auto* up = s_->root().settings_up())
+    if (s_->root().settings_up()) {
+      mux::ui::show(*s_->showing, mux::ui::local_seal{s_->vault->on()});
       s_->settings_page(mux::ui::settings_page::storage{k_->limits(), k_->history(), s_->vault->on()});
+    }
   }
   void apply(const request::clear_stored&) {
     std::error_code failed;

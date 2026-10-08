@@ -172,7 +172,7 @@ struct proxies_page : nodes::Stack {
     for (std::size_t i = 0; i < all.size(); ++i)
       profiles.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(all[i].kind),
                                         all[i].host, all[i].port),
-                            edit_proxy<Actions>{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
+                            edit_proxy<Actions>{{}, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
     empty.setVisible(all.empty());
   }
   void show_receipts(bool) {}

@@ -464,7 +464,7 @@ struct spaces_choices : nodes::Stack {
                                                 : one.top && !one.side ? 1
                                                 : one.side && one.top  ? 2
                                                                        : 3,
-                                                pick_bars{a, account, one.item})} {
+                                                pick_bars{{}, account, one.item})} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}});
     }

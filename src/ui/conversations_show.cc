@@ -962,7 +962,7 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
     if (label.empty())
       button.reset();
     else {
-      button.emplace(needs_.colours->widgets, label, banner_press{actions, &chat.banner_asks});
+      button.emplace(needs_.colours->widgets, label, banner_press{{}, &chat.banner_asks});
       button->apply({.width = 120.0f, .height = 30.0f, .alignSelf = scene::align::kEnd,
                      .margin = {4.0f, 14.0f, 6.0f, 14.0f}});
     }

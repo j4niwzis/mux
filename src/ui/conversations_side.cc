@@ -307,7 +307,7 @@ struct side_column : nodes::Stack, outbox {
       lines_t lines;
     } parts;
     found_row(const palette& colours, Actions* a, const search_result& one)
-        : pick{a, one.index}, parts{.face = avatar_mark(one.sender, one.name, 40.0f), .lines = lines_t(colours, one)} {
+        : pick{{}, one.index}, parts{.face = avatar_mark(one.sender, one.name, 40.0f), .lines = lines_t(colours, one)} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen});
@@ -493,13 +493,13 @@ struct side_column : nodes::Stack, outbox {
       parts.settings.apply({.fillX = true, .height = 30.0f});
       for (const account_id& to : accounts)
         if (to != id.account && to != listing) {
-          parts.places.emplace_back(colours.widgets, std::format("Copy to {}", to.address), place_act{a, id, to, false});
-          parts.places.emplace_back(colours.widgets, std::format("Move to {}", to.address), place_act{a, id, to, true});
+          parts.places.emplace_back(colours.widgets, std::format("Copy to {}", to.address), place_act{{}, id, to, false});
+          parts.places.emplace_back(colours.widgets, std::format("Move to {}", to.address), place_act{{}, id, to, true});
         }
       if (id.account != listing) {
-        parts.unplace.emplace(colours.widgets, "Remove from this list", unplace_act{a, id, listing});
-        parts.strip.emplace(colours.widgets, "Strip on or off", strip_act{a, id, listing});
-        parts.strip_colours.emplace(strip_colour_act{a, id, listing}, theme, false);
+        parts.unplace.emplace(colours.widgets, "Remove from this list", unplace_act{{}, id, listing});
+        parts.strip.emplace(colours.widgets, "Strip on or off", strip_act{{}, id, listing});
+        parts.strip_colours.emplace(strip_colour_act{{}, id, listing}, theme, false);
       }
       for (auto& each : parts.places)
         each.apply({.fillX = true, .height = 30.0f});

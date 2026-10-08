@@ -139,7 +139,7 @@ struct person_card : nodes::Stack {
     parts.ban.setVisible(facts.may_ban);
     std::ranges::for_each(proto::person_actions(protocol_state_of(shared, account), account, key), [&](proto::any_action& one) {
       if (one.asks)
-        parts.theirs.emplace_back(colours, one.label, icon::check{}, ask_protocol{a, std::move(*one.asks)})
+        parts.theirs.emplace_back(colours, one.label, icon::check{}, ask_protocol{{}, std::move(*one.asks)})
             .apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     });
     parts.sessions_title.setText(facts.devices.empty() ? std::string()

@@ -855,7 +855,7 @@ struct composer_bar : nodes::Stack {
       return;
     knocks_shown = key;
     parts.knocks.emplace(*colours_, knock_said(knocking.front(), knocking.size() - 1), colours_->text, "Deny",
-                         deny_it{a, knocking.front().id}, "Approve", approve_it{a, knocking.front().id});
+                         deny_it{{}, knocking.front().id}, "Approve", approve_it{{}, knocking.front().id});
     this->invalidateLayout();
   }
   std::string knocks_shown;

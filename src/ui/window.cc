@@ -78,16 +78,16 @@ struct window : scene::Node, outbox {
     } parts;
     // A selectable text's.
     text_menu(const ui_needs<Actions>& n, std::string text, std::optional<std::string> link) : text_menu(*n.colours) {
-      parts.copy.emplace(n.colours->widgets, "Copy", copy_it{n.actions, std::move(text)});
+      parts.copy.emplace(n.colours->widgets, "Copy", copy_it{{}, std::move(text)});
       if (link)
-        parts.copy_link.emplace(n.colours->widgets, "Copy Link", copy_it{n.actions, std::move(*link)});
+        parts.copy_link.emplace(n.colours->widgets, "Copy Link", copy_it{{}, std::move(*link)});
       this->rows();
     }
     // A field's.
     text_menu(const ui_needs<Actions>& n, const scene::text_menu::of_field& field) : text_menu(*n.colours) {
       const auto item = [&](std::optional<widgets::Button<key_it>>& button, std::string label, scene::Key key,
                             bool shift = false) {
-        button.emplace(n.colours->widgets, std::move(label), key_it{n.actions, key, shift});
+        button.emplace(n.colours->widgets, std::move(label), key_it{{}, key, shift});
       };
       if (field.selection && !field.masked) {
         item(parts.cut, "Cut", scene::keys::kX);

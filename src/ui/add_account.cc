@@ -44,7 +44,7 @@ struct add_account_pane : nodes::Stack, outbox {
     } parts;
     template <class... Tags>
     void make(const palette& colours, Actions* a, protocol_list<Tags...>) {
-      (parts.each.emplace_back(colours, std::string(protocol_name(config::kept_of<Tags>{})), pick_protocol{a, protocol_t{Tags{}}}), ...);
+      (parts.each.emplace_back(colours, std::string(protocol_name(config::kept_of<Tags>{})), pick_protocol{{}, protocol_t{Tags{}}}), ...);
     }
     protocol_switch(const palette& colours, Actions* a) {
       this->make(colours, a, protocols{});
@@ -120,9 +120,9 @@ struct add_account_pane : nodes::Stack, outbox {
     const auto chosen = proxy;
     proxy_names = std::move(names);
     choices.clear();
-    choices.emplace_back(*colours_, "None", choose_new_proxy<Actions>{actions, -1});
+    choices.emplace_back(*colours_, "None", choose_new_proxy<Actions>{{}, -1});
     for (std::size_t k = 0; k < proxy_names.size(); ++k)
-      choices.emplace_back(*colours_, proxy_names[k], choose_new_proxy<Actions>{actions, static_cast<int>(k)});
+      choices.emplace_back(*colours_, proxy_names[k], choose_new_proxy<Actions>{{}, static_cast<int>(k)});
     const auto at = chosen ? std::ranges::find(proxy_names, *chosen) : proxy_names.end();
     this->set_proxy(at == proxy_names.end() ? -1 : static_cast<int>(at - proxy_names.begin()));
     this->invalidateLayout();

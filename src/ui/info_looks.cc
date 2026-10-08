@@ -143,9 +143,9 @@ struct bubbles_picker : nodes::Stack {
     element_row(Actions* a, const look_level& level, std::string_view name, element_t which)
         : parts{.head = head_t(*level.colours, std::format("{}: {}%{}", name, element_opacity_of(current(level, config::look_part::bubbles{}), which),
                                            (current(level, config::look_part::bubbles{}).elements.*which) ? "" : " (as bubbles)"),
-                               element_reset{a, level, which},
+                               element_reset{{}, level, which},
                                (current(level, config::look_part::bubbles{}).elements.*which).has_value()),
-                .bar = widgets::SliderBar<scene::NoAction, element_done>(level.colours->widgets, {}, element_done{a, level, which})} {
+                .bar = widgets::SliderBar<scene::NoAction, element_done>(level.colours->widgets, {}, element_done{{}, level, which})} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.bar.setFraction(static_cast<float>(element_opacity_of(current(level, config::look_part::bubbles{}), which)) / 100.0f);
@@ -256,9 +256,9 @@ struct bubbles_picker : nodes::Stack {
         : parts{.head = head_t(*level.colours, std::format("{} blur: {:.1f}%{}", name,
                                            element_blur_of(current(level, config::look_part::bubbles{}), which, level.looks->window) * 100.0f,
                                            (current(level, config::look_part::bubbles{}).blurs.*which) ? "" : " (as bubbles)"),
-                               element_blur_reset{a, level, which},
+                               element_blur_reset{{}, level, which},
                                (current(level, config::look_part::bubbles{}).blurs.*which).has_value()),
-                .bar = widgets::SliderBar<scene::NoAction, element_blur_done>(level.colours->widgets, {}, element_blur_done{a, level, which})} {
+                .bar = widgets::SliderBar<scene::NoAction, element_blur_done>(level.colours->widgets, {}, element_blur_done{{}, level, which})} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.bar.setFraction(element_blur_of(current(level, config::look_part::bubbles{}), which, level.looks->window));
@@ -310,11 +310,11 @@ struct bubbles_picker : nodes::Stack {
                                  "window (Appearance \u2192 Chat background \u2192 Behind the whole window).",
                                  12.0f, level.colours->dim),
               .kinds = choice_menu<pick_kind_at>(*level.colours, "", kind_names(level), kind_index(level, part),
-                                                 pick_kind_at{a, level, part, has_level_above(level.level)}),
+                                                 pick_kind_at{{}, level, part, has_level_above(level.level)}),
               .opacity_label = nodes::Text("Opacity", 13.0f, level.colours->text),
-              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>(level.colours->widgets, {}, opacity_done{a, level, part}),
+              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>(level.colours->widgets, {}, opacity_done{{}, level, part}),
               .blur_label = nodes::Text(std::format("Blur: {:.1f}%", blur_of(current(level, part), level.looks->window) * 100.0f), 13.0f, level.colours->text),
-              .blur = widgets::SliderBar<scene::NoAction, blur_done>(level.colours->widgets, {}, blur_done{a, level, part}),
+              .blur = widgets::SliderBar<scene::NoAction, blur_done>(level.colours->widgets, {}, blur_done{{}, level, part}),
               .elements_title = nodes::Text("EVERYTHING ELSE IN A CHAT", 12.0f, level.colours->dim, true)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
@@ -423,7 +423,7 @@ struct look_choices : nodes::Stack {
       : parts{.background_title = nodes::Text("BACKGROUND", 13.0f, colours.dim, true),
               .note = nodes::Text(note_of(looks, level), 13.0f, colours.dim),
               .background = choice_menu<pick_wallpaper_at>(colours, "", background_names(looks, level), background_index(looks, level),
-                                                           pick_wallpaper_at{a, level, has_level_above(level)}),
+                                                           pick_wallpaper_at{{}, level, has_level_above(level)}),
               .bubbles = bubbles_picker<Actions>(a, look_level{level, &looks, &colours}, config::look_part::bubbles{}),
               .panels = bubbles_picker<Actions>(a, look_level{level, &looks, &colours}, config::look_part::panels{})} {
     this->setGap(8.0f);

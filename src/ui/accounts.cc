@@ -54,7 +54,7 @@ export namespace mux::ui {
 // One account in the list: its address, protocol and state. A click shows
 // its settings beside the list.
 template <class Actions>
-struct account_entry : nodes::Stack {
+struct account_entry : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::select_account;
   std::string address;
@@ -67,18 +67,16 @@ struct account_entry : nodes::Stack {
   // Declared: its address over its protocol and state, on a plate lit
   // while it is the one chosen.
   account_entry(const ui_needs<Actions>& n, const config::account_t& saved, const model& now, bool is_selected)
-      : address(config::address_of(saved)), selected(is_selected),
-        parts{.name = nodes::Text(address, 15.0f, n.colours->text, true), .state = nodes::Text("", 13.0f, n.colours->dim)} {
-    const palette& colours = *n.colours;
-    this->setGap(4.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {7.0f, 16.0f, 7.0f, 16.0f}, .background = colours.sidebar, .selectedBackground = colours.chosen, .selected = selected});
+      : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {7.0f, 16.0f, 7.0f, 16.0f},
+                                            .background = n.colours->sidebar, .selectedBackground = n.colours->chosen, .selected = is_selected})),
+        address(config::address_of(saved)),
+        selected(is_selected),
+        parts{.name = skiff::compose::styled({.fillX = true}, elided(nodes::Text(address, 15.0f, n.colours->text, true))),
+              .state = skiff::compose::styled({.fillX = true}, elided(state_line(*n.colours, saved, now)))} {}
+  // Its protocol and how it is: in the error colour where it failed.
+  [[nodiscard]] static nodes::Text state_line(const palette& colours, const config::account_t& saved, const model& now) {
     const auto [how, failed] = state_of(saved, now);
-    parts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
-    parts.state.setColour(failed ? colours.error : colours.dim);
-    for (nodes::Text* each : {&parts.name, &parts.state}) {
-      each->setElided(true);
-      each->apply({.fillX = true});
-    }
+    return nodes::Text(std::format("{} · {}", config::protocol_name(saved), how), 13.0f, failed ? colours.error : colours.dim);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -97,9 +95,9 @@ struct account_entry : nodes::Stack {
 
 // The chosen account: on or off, removed, and its own protocol's form.
 template <class Actions>
-struct account_editor : nodes::Stack {
+struct account_editor : skiff::compose::Stacked {
   // Its address, then on or off and Remove, in a line.
-  struct head_row : nodes::Stack {
+  struct head_row : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text heading;
       nodes::Text enabled_label;
@@ -107,21 +105,16 @@ struct account_editor : nodes::Stack {
       widgets::Button<remove_account<Actions>> remove;
     } parts;
     head_row(const palette& colours, const config::account_t& saved)
-        : parts{.heading = nodes::Text(config::address_of(saved), 20.0f, colours.text, true),
-                .enabled_label = nodes::Text("On", 13.0f, colours.dim),
-                .enabled = widgets::Toggle<flip_account<Actions>>(colours.widgets, flip_account<Actions>{config::address_of(saved)}),
-                .remove = widgets::Button<remove_account<Actions>>(colours.widgets, 
-                    "Remove", remove_account<Actions>{config::address_of(saved)})} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.heading.setElided(true);
-      parts.heading.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.enabled_label.apply({.alignSelf = scene::align::kMiddle});
-      parts.enabled.apply({.alignSelf = scene::align::kMiddle});
-      parts.enabled.setOnNow(config::enabled_of(saved));
-      parts.remove.apply({.width = 100.0f, .height = 32.0f});
-    }
+        : Stacked(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.heading = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                                  elided(nodes::Text(config::address_of(saved), 20.0f, colours.text, true))),
+                .enabled_label = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("On", 13.0f, colours.dim)),
+                .enabled = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                                  on_now(widgets::Toggle<flip_account<Actions>>(colours.widgets, flip_account<Actions>{config::address_of(saved)}),
+                                                         config::enabled_of(saved))),
+                .remove = skiff::compose::styled({.width = 100.0f, .height = 32.0f},
+                                                 widgets::Button<remove_account<Actions>>(colours.widgets, "Remove",
+                                                                                          remove_account<Actions>{config::address_of(saved)}))} {}
   };
   // The colours its state is said in as it changes.
   const palette* colours_ = nullptr;
@@ -132,15 +125,11 @@ struct account_editor : nodes::Stack {
   } parts;
 
   account_editor(const ui_needs<Actions>& n, const config::account_t& saved)
-      : colours_(n.colours),
+      : Stacked(skiff::compose::vbox(6.0f, {.fill = true})),
+        colours_(n.colours),
         parts{.head = head_row(*n.colours, saved),
-              .state = nodes::Text("", 13.0f, n.colours->dim),
-              .form = form_of<Actions>(*n.colours, saved)} {
-    fState.apply({.fill = true});
-    this->setGap(6.0f);
-    parts.state.setElided(true);
-    parts.state.apply({.fillX = true, .margin = {0.0f, 0.0f, 14.0f, 0.0f}});
-  }
+              .state = skiff::compose::styled({.fillX = true, .margin = {0.0f, 0.0f, 14.0f, 0.0f}}, elided(nodes::Text("", 13.0f, n.colours->dim))),
+              .form = form_of<Actions>(*n.colours, saved)} {}
 
   // What the model says of it now, kept current without touching the form.
   void show(const config::account_t& saved, const model& now) {
@@ -157,7 +146,7 @@ struct account_editor : nodes::Stack {
 
 // A line with a switch on its right: its text, and the switch.
 template <class Act>
-struct switch_row : nodes::Stack {
+struct switch_row : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text label;
     toggle_for<Act> toggle;
@@ -165,14 +154,9 @@ struct switch_row : nodes::Stack {
 
   // Declared: the text taking the room, the switch at the end.
   switch_row(const palette& colours, std::string text, Act what)
-      : parts{.label = nodes::Text(std::move(text), 15.0f, colours.text), .toggle = toggle_for<Act>(colours.widgets, std::move(what))} {
-    this->setHorizontal();
-    this->setGap(16.0f);
-    fState.apply({.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
-    parts.label.setElided(true);
-    parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    parts.toggle.apply({.alignSelf = scene::align::kMiddle});
-  }
+      : Stacked(skiff::compose::hbox(16.0f, {.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}})),
+        parts{.label = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(text), 15.0f, colours.text))),
+              .toggle = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(what)))} {}
 };
 
 
@@ -353,7 +337,7 @@ inline auto account_notify_view(const palette& colours, std::string address) {
 // a message, an invite -- and with sound; each chat of it may choose again
 // in its own settings.
 template <class Actions>
-struct account_notifications : nodes::Stack {
+struct account_notifications : skiff::compose::Stacked {
   using settings_t = decltype(account_notify_view(std::declval<const palette&>(), std::string()));
   struct parts_t {
     nodes::Text title;
@@ -361,16 +345,13 @@ struct account_notifications : nodes::Stack {
     nodes::Text note;
   } parts;
   account_notifications(const ui_needs<Actions>& n, std::string address)
-      : parts{.title = section_title(*n.colours, "NOTIFICATIONS"),
+      : Stacked(skiff::compose::vbox(8.0f, {.fill = true})),
+        parts{.title = section_title(*n.colours, "NOTIFICATIONS"),
               .settings = account_notify_view(*n.colours, std::move(address)),
-              .note = note_text(*n.colours, "For messages and invites that come through this account; Default is as the "
-                                            "Notifications settings say. A space, and a chat, can choose again in its own "
-                                            "settings.")} {
-    this->setGap(8.0f);
-    fState.apply({.fill = true});
-    parts.note.apply({.fillX = true, .margin = {10.0f, 0.0f, 0.0f, 0.0f}});
-    parts.note.setWrapped(true);
-  }
+              .note = skiff::compose::styled({.fillX = true, .margin = {10.0f, 0.0f, 0.0f, 0.0f}},
+                                             wrapped(note_text(*n.colours, "For messages and invites that come through this account; Default is as the "
+                                                                           "Notifications settings say. A space, and a chat, can choose again in its own "
+                                                                           "settings.")))} {}
   void say(std::string, bool) {}
 };
 

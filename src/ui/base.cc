@@ -38,6 +38,12 @@ template <class Button>
   text.setElided(true);
   return text;
 }
+// A switch set as it is made, with no slide.
+template <class Toggle>
+[[nodiscard]] Toggle on_now(Toggle toggle, bool on) {
+  toggle.setOnNow(on);
+  return toggle;
+}
 [[nodiscard]] inline skiff::nodes::Text wrapped(skiff::nodes::Text text) {
   text.setWrapped(true);
   return text;

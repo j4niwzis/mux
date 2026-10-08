@@ -99,15 +99,12 @@ export namespace mux::proto::matrix {
 // type keeps one (take_session).
 template <class App>
 void program_told(App& app, const session_given& given) {
-  const auto found = app.find(given.account.address);
-  if (found == app.saved.end())
-    return;
-  spl::visit([&](auto& one) {
-                  using kept_defaults::take_session;
-                  take_session(one, given);
-                },
-                found->own);
-  (void)app.write();
+  app.change_account(given.account.address, [&](mux::config::account_t& account) {
+    spl::visit([&](auto& one) {
+      using kept_defaults::take_session;
+      take_session(one, given);
+    }, account.own);
+  });
 }
 // A registration stage done on the server's own page: opened in the browser,
 // and said -- the registration carries on by itself once it is done there.

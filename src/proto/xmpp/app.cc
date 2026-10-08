@@ -45,11 +45,9 @@ void program_told(App& app, const registration_asked& asked) {
 // The account made: kept as one to sign in to from now on.
 template <class App>
 void program_told(App& app, const registered& made) {
-  const auto found = app.find(made.account.address);
-  if (found == app.saved.end())
-    return;
-  spl::visit(spl::overloaded{[](kept& one) { forget_registration(one); }, [](auto&) {}}, found->own);
-  (void)app.write();
+  app.change_account(made.account.address, [](mux::config::account_t& account) {
+    spl::visit(spl::overloaded{[](kept& one) { forget_registration(one); }, [](auto&) {}}, account.own);
+  });
 }
 
 }  // namespace mux::proto::xmpp

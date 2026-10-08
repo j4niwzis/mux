@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -37,8 +38,7 @@ import :timeline;  // a message's menu, for the reactions list's bubbles
 export namespace mux::ui {
 
 // One of the square buttons of a chat's info: its icon over its name.
-template <class Act>
-struct action_tile : pressable<nodes::Stack> {
+template <class Act> struct action_tile : pressable<skiff::compose::Stacked> {
   Act act;
   struct parts_t {
     icon_mark mark;
@@ -46,14 +46,24 @@ struct action_tile : pressable<nodes::Stack> {
   } parts;
 
   // Declared: the icon at the top, the name at the bottom.
-  action_tile(const palette& colours, std::string text, icon_t icon, Act what = {})
-      : act(std::move(what)), parts{.mark = icon_mark(colours, icon), .label = nodes::Text(std::move(text), 12.0f, colours.text)} {
+  action_tile(const palette &colours, std::string text, icon_t icon,
+              Act what = {})
+      : pressable<skiff::compose::Stacked>(skiff::compose::justified(
+            skiff::compose::vbox(0.0f, {.height = 58.0f,
+                                        .padding = {6.0f, 0.0f, 8.0f, 0.0f},
+                                        .cornerRadius = 8.0f,
+                                        .background = colours.tile,
+                                        .hoverBackground = colours.chosen,
+                                        .focusBackground = colours.chosen}),
+            nodes::justify::space_between{})),
+        act(std::move(what)),
+        parts{.mark = skiff::compose::styled({.height = 24.0f},
+                                             icon_mark(colours, icon)),
+              .label = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  nodes::Text(std::move(text), 12.0f, colours.text))} {
     auto& [mark, label] = parts;
-    fState.apply({.height = 58.0f, .padding = {6.0f, 0.0f, 8.0f, 0.0f}, .cornerRadius = 8.0f, .background = colours.tile, .hoverBackground = colours.chosen, .focusBackground = colours.chosen});
-    fStack.justify = nodes::justify::space_between{};
     mark.setColour(colours.text);
-    mark.apply({.height = 24.0f});
-    label.apply({.alignSelf = scene::align::kMiddle});
   }
 
   [[nodiscard]] bool focusChangesAppearance() const { return true; }
@@ -68,8 +78,7 @@ struct action_tile : pressable<nodes::Stack> {
 
 // Someone in a group, in its info: avatar, name, how they are, and their
 // role in a pill. Pressed, they are shown on a page of their own.
-template <class Open>
-struct member_row : nodes::Stack {
+template <class Open> struct member_row : skiff::compose::Stacked {
   // Who it shows and how they are: while the same, the row is kept.
   member who;
   std::string how_shown;
@@ -98,16 +107,24 @@ struct member_row : nodes::Stack {
   } parts;
 
   // Declared: the avatar, the name over how they are, the role at the end.
-  member_row(const palette& colours, const member& one, std::string how, Open what)
-      : who(one), how_shown(how), open(std::move(what)), id(one.id), role(one.role),
-        parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 40.0f),
-              .texts = texts_column(colours, one.name.empty() ? one.id : one.name, std::move(how)),
-              .pill = role_pill(one.role.value_or(""))} {
-    this->setHorizontal();
-    this->setGap(12.0f);
-    fState.apply({.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen});
+  member_row(const palette &colours, const member &one, std::string how,
+             Open what)
+      : Stacked(
+            skiff::compose::hbox(12.0f, {.fillX = true,
+                                         .height = 54.0f,
+                                         .padding = {0.0f, 16.0f, 0.0f, 16.0f},
+                                         .hoverBackground = colours.chosen})),
+        who(one), how_shown(how), open(std::move(what)), id(one.id),
+        role(one.role),
+        parts{
+            .face = avatar_mark(one.id, one.name.empty() ? one.id : one.name,
+                                40.0f),
+            .texts = texts_column(colours, one.name.empty() ? one.id : one.name,
+                                  std::move(how)),
+            .pill = skiff::compose::visible(one.role.has_value(),
+                                            role_pill(one.role.value_or("")))} {
+
     fState.setRecorded(true);  // played back as the list repaints around it
-    parts.pill.setVisible(one.role.has_value());
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -137,7 +154,7 @@ inline nodes::Box<> section_band(const palette& colours) {
 // Declared: a column of these, nothing placed by hand.
 // An ID, whole -- wrapped, never cut -- and copied when pressed: a chat's
 // or a person's.
-struct id_line : nodes::Stack {
+struct id_line : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text id;
     nodes::Text label;
@@ -145,14 +162,22 @@ struct id_line : nodes::Stack {
   std::string copied;
   bool a_link = false;  // what is copied is a link to it, not the ID
   std::string named;    // what it is: ID, Address
-  id_line(const palette& colours, std::string text, std::string link, std::string label = "ID")
-      : parts{.id = nodes::Text(text, 14.0f, colours.accent), .label = nodes::Text(label, 12.0f, colours.dim)},
-        copied(link.empty() ? text : link), a_link(!link.empty()), named(std::move(label)) {
-    this->setGap(2.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen, .focusBackground = colours.chosen});
+  id_line(const palette &colours, std::string text, std::string link,
+          std::string label = "ID")
+      : Stacked(
+            skiff::compose::vbox(2.0f, {.fillX = true,
+                                        .autoSize = scene::axes::kY,
+                                        .padding = {8.0f, 20.0f, 8.0f, 20.0f},
+                                        .hoverBackground = colours.chosen,
+                                        .focusBackground = colours.chosen})),
+        parts{.id = skiff::compose::styled(
+                  {.fillX = true},
+                  wrapped(nodes::Text(text, 14.0f, colours.accent))),
+              .label = nodes::Text(label, 12.0f, colours.dim)},
+        copied(link.empty() ? text : link), a_link(!link.empty()),
+        named(std::move(label)) {
     fState.setCursor(scene::cursor::hand{});
-    parts.id.setWrapped(true);
-    parts.id.apply({.fillX = true});
+
     // Selectable, as any text shown: a drag takes part of it, the right
     // button its Copy; a click still copies it whole.
     parts.id.setSelectable(true);

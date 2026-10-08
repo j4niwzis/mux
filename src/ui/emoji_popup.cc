@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.image;
@@ -51,9 +52,8 @@ struct insert_emoji_into {
 
 // The GIFs saved, as tdesktop's GIF tab shows them: a grid of them playing,
 // newest first; a press sends one into the chat.
-template <class Actions>
-struct gif_grid : nodes::Stack {
-  struct gif_cell : nodes::Stack {
+template <class Actions> struct gif_grid : skiff::compose::Stacked {
+  struct gif_cell : skiff::compose::Stacked {
     // What its handlers ask for, returned.
     using Answer = ::mux::ui::request::send_gif;
     std::string path;
@@ -61,13 +61,18 @@ struct gif_grid : nodes::Stack {
     struct parts_t {
       nodes::Image<from_moving_whole> picture;
     } parts;
-    gif_cell(const palette& colours, std::string p)
-        : path(p), key("gif:" + p),
-          parts{.picture = nodes::Image<from_moving_whole>({"gif:" + p})} {
-      fState.apply({.width = 104.0f, .height = 104.0f, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .cornerRadius = 6.0f,
-                    .background = colours.tile, .masking = true});
-      parts.picture.apply({.fill = true, .cornerRadius = 6.0f});
-    }
+    gif_cell(const palette &colours, std::string p)
+        : Stacked(
+              skiff::compose::vbox(0.0f, {.width = 104.0f,
+                                          .height = 104.0f,
+                                          .margin = {2.0f, 2.0f, 2.0f, 2.0f},
+                                          .cornerRadius = 6.0f,
+                                          .background = colours.tile,
+                                          .masking = true})),
+          path(p), key("gif:" + p),
+          parts{.picture = skiff::compose::styled(
+                    {.fill = true, .cornerRadius = 6.0f},
+                    nodes::Image<from_moving_whole>({"gif:" + p}))} {}
     [[nodiscard]] bool acceptsInput() const { return true; }
     std::optional<Answer> onClick(float, float) {
       return ::mux::ui::request::send_gif{path};
@@ -88,12 +93,17 @@ struct gif_grid : nodes::Stack {
   // The colours its cells are made in, as they change.
   const palette* colours_ = nullptr;
 
-  gif_grid(const palette& colours)
-      : parts{.empty = nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, colours.dim)}, colours_(&colours) {
+  gif_grid(const palette &colours)
+      : Stacked(
+            skiff::compose::vbox(0.0f, {.padding = {4.0f, 4.0f, 4.0f, 4.0f}})),
+        parts{.empty = skiff::compose::styled(
+                  {.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}},
+                  wrapped(nodes::Text(
+                      "No saved GIFs yet. Save one from a GIF's menu.", 13.0f,
+                      colours.dim)))},
+        colours_(&colours) {
     auto& [empty, list] = parts;
-    fState.apply({.padding = {4.0f, 4.0f, 4.0f, 4.0f}});
-    empty.setWrapped(true);
-    empty.apply({.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}});
+
     list.apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
   }
@@ -122,27 +132,32 @@ struct emoji_facts {
   // The GIFs saved, for its GIF tab, as the program has them.
   std::vector<std::string> gifs;
 };
-template <class Actions>
-struct emoji_popup : scene::Node {
-  struct card_t : nodes::Stack {
+template <class Actions> struct emoji_popup : skiff::compose::Specced {
+  struct card_t : skiff::compose::Stacked {
     // A swipe to the GIFs: what has been saved since, asked for.
     using Answer = ::mux::ui::request::show_gifs;
     using panel_t = emoji_panel<insert_emoji_into<Actions>>;
     // Emoji, stickers or GIFs, as tdesktop's tabs at the panel's top.
-    struct tab : nodes::Stack {
+    struct tab : skiff::compose::Stacked {
       using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::show_gifs>;
       card_t* card;
       popup_page_t page;
       struct parts_t {
         nodes::Text label;
       } parts;
-      tab(card_t* c, popup_page_t p, std::string name)
-          : card(c), page(p), parts{.label = nodes::Text(std::move(name), 13.0f, c->colours_->text, true)} {
-        this->setHorizontal();
-        fStack.justify = nodes::justify::middle{};
-        fState.apply({.width = 80.0f, .height = 28.0f, .cornerRadius = 6.0f, .hoverBackground = c->colours_->chosen,
-                      .selectedBackground = c->colours_->tile});
-        parts.label.apply({.alignSelf = scene::align::kMiddle});
+      tab(card_t *c, popup_page_t p, std::string name)
+          : Stacked(skiff::compose::justified(
+                skiff::compose::hbox(0.0f,
+                                     {.width = 80.0f,
+                                      .height = 28.0f,
+                                      .cornerRadius = 6.0f,
+                                      .hoverBackground = c->colours_->chosen,
+                                      .selectedBackground = c->colours_->tile}),
+                nodes::justify::middle{})),
+            card(c), page(p), parts{.label = skiff::compose::styled(
+                                        {.alignSelf = scene::align::kMiddle},
+                                        nodes::Text(std::move(name), 13.0f,
+                                                    c->colours_->text, true))} {
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
       std::optional<std::variant<::skiff::scene::Taken, ::mux::ui::request::show_gifs>> onClick(float, float) {
@@ -151,20 +166,20 @@ struct emoji_popup : scene::Node {
         return ::skiff::scene::Taken{};
       }
     };
-    struct tabs_row : nodes::Stack {
+    struct tabs_row : skiff::compose::Stacked {
       struct parts_t {
         tab emoji;
         tab stickers;
         tab gifs;
       } parts;
-      explicit tabs_row(card_t* c)
-          : parts{.emoji = tab(c, popup_page::emoji{}, "Emoji"),
+      explicit tabs_row(card_t *c)
+          : Stacked(skiff::compose::hbox(
+                4.0f, {.fillX = true,
+                       .height = 36.0f,
+                       .padding = {4.0f, 8.0f, 4.0f, 8.0f}})),
+            parts{.emoji = tab(c, popup_page::emoji{}, "Emoji"),
                   .stickers = tab(c, popup_page::stickers{}, "Stickers"),
-                  .gifs = tab(c, popup_page::gifs{}, "GIFs")} {
-        this->setHorizontal();
-        this->setGap(4.0f);
-        fState.apply({.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f}});
-      }
+                  .gifs = tab(c, popup_page::gifs{}, "GIFs")} {}
     };
     // The colours it is made in: its tabs read them from it.
     const palette* colours_ = nullptr;
@@ -174,18 +189,25 @@ struct emoji_popup : scene::Node {
       sticker_grid<Actions> stickers;
       gif_grid<Actions> gifs;
     } parts;
-    card_t(const palette& colours, emoji_kept& kept)
-        : colours_(&colours),
+    card_t(const palette &colours, emoji_kept &kept)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.width = 345.0f,
+                     .height = 360.0f,
+                     .cornerRadius = 8.0f,
+                     .background = colours.sidebar,
+                     .border = scene::Border{colours.band, 1.0f},
+                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0),
+                                             3.0f}})),
+          colours_(&colours),
           parts{.tabs = tabs_row(this),
-                .panel = panel_t(colours, kept, insert_emoji_into<Actions>{}),
-                .stickers = sticker_grid<Actions>(colours, kept),
-                .gifs = gif_grid<Actions>(colours)} {
-      fState.apply({.width = 345.0f, .height = 360.0f, .cornerRadius = 8.0f, .background = colours.sidebar,
-                    .border = scene::Border{colours.band, 1.0f},
-                    .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
-      parts.panel.apply({.fillX = true, .grow = scene::axes::kY});
-      parts.stickers.apply({.fillX = true, .grow = scene::axes::kY});
-      parts.gifs.apply({.fillX = true, .grow = scene::axes::kY});
+                .panel = panel_t(colours, kept, insert_emoji_into<Actions>{},
+                                 {.fillX = true, .grow = scene::axes::kY}),
+                .stickers = sticker_grid<Actions>(
+                    colours, kept, {.fillX = true, .grow = scene::axes::kY}),
+                .gifs = skiff::compose::styled(
+                    {.fillX = true, .grow = scene::axes::kY},
+                    gif_grid<Actions>(colours))} {
+
       (void)this->show(popup_page::emoji{});
     }
     // Docked as Telegram's apps have it, on a phone: across all of the window
@@ -269,10 +291,9 @@ struct emoji_popup : scene::Node {
   emoji_popup(const ui_needs<Actions>& n, const emoji_facts& facts) : emoji_popup(n, facts.right, facts.bottom) { this->show_page(facts); }
   // What it shows changed while it is up: the GIFs saved.
   void show_page(const emoji_facts& facts) { parts.card.parts.gifs.show(facts.gifs); }
-  emoji_popup(const ui_needs<Actions>& n, float at_right, float at_bottom)
-      : parts{.card = card_t(*n.colours, *n.emoji)}, right(at_right), bottom(at_bottom), shared_(n.shared) {
-    fState.apply({.fill = true});
-  }
+  emoji_popup(const ui_needs<Actions> &n, float at_right, float at_bottom)
+      : Specced({.fill = true}), parts{.card = card_t(*n.colours, *n.emoji)},
+        right(at_right), bottom(at_bottom), shared_(n.shared) {}
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
     constexpr float kMostWidth = 345.0f, kEdge = 10.0f;

@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -45,8 +46,7 @@ struct person_shown {
   std::string key;
   person_facts facts;
 };
-template <class Actions>
-struct person_card : nodes::Stack {
+template <class Actions> struct person_card : skiff::compose::Stacked {
   // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
   // it shows, a 24th of the window down within 20 and 40.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
@@ -59,19 +59,22 @@ struct person_card : nodes::Stack {
   using close_button = icon_button<close_act>;
   using top_bar = page_header<no_back, close_act>;
   // tdesktop's cover: 108 high, a 72 photo, the name and status beside it.
-  struct cover : nodes::Stack {
+  struct cover : skiff::compose::Stacked {
     struct parts_t {
       avatar_button<Actions> photo;
       two_lines texts;
     } parts;
-    cover(const palette& colours, const std::string& key, const person_facts& facts)
-        : parts{.photo = avatar_button<Actions>(key, facts.name, 72.0f),
-                .texts = two_lines(colours, facts.name, facts.status, 17.0f, 6.0f)} {
+    cover(const palette &colours, const std::string &key,
+          const person_facts &facts)
+        : Stacked(skiff::compose::hbox(
+              16.0f, {.fillX = true,
+                      .height = 108.0f,
+                      .padding = {0.0f, 22.0f, 0.0f, 22.0f}})),
+          parts{.photo = avatar_button<Actions>(key, facts.name, 72.0f),
+                .texts =
+                    two_lines(colours, facts.name, facts.status, 17.0f, 6.0f)} {
       parts.texts.parts.name.setSelectable(true);
       parts.texts.parts.state.setSelectable(true);
-      this->setHorizontal();
-      this->setGap(16.0f);
-      fState.apply({.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}});
     }
   };
   // What a moderator does to them, as Element's user info offers it.
@@ -122,24 +125,58 @@ struct person_card : nodes::Stack {
 
   person_card(const ui_needs<Actions>& n, const person_shown& shown)
       : person_card(*n.colours, *n.shared, shown.account, shown.key, shown.facts) {}
-  person_card(const palette& colours, const ui_shared& shared, const account_id& account, const std::string& key, const person_facts& facts)
-      : colours_(&colours),
+  person_card(const palette &colours, const ui_shared &shared,
+              const account_id &account, const std::string &key,
+              const person_facts &facts)
+      : Stacked(
+            skiff::compose::vbox(0.0f, {.fillX = true,
+                                        .autoSize = scene::axes::kY,
+                                        .padding = {0.0f, 0.0f, 16.0f, 0.0f}})),
+        colours_(&colours),
         parts{.top = top_bar(colours, "User info", {}, {}, false, true),
               .face = cover(colours, key, facts),
               .band = section_band(colours),
               .id = id_line(colours, key, ""),
-              .message = action_tile<message_them>(colours, "Message", icon::send{}, {conversation_id{account, key}}),
-              .verify = action_tile<verify_them>(colours, "Verify with emoji", icon::check{}, {conversation_id{account, key}}),
-              .accept = action_tile<accept_them>(colours, "Withdraw verification", icon::close{}, {conversation_id{account, key}}),
-              .remove = action_tile<to_them>(colours, "Remove from room", icon::leave{}, {room_action::kick{key}}),
-              .ban = action_tile<to_them>(colours, "Ban from room", icon::close{}, {room_action::ban{key}}),
-              .sessions_title = nodes::Text("", 13.0f, colours.dim, true)} {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
+              .message =
+                  action_tile<message_them>(colours, "Message", icon::send{},
+                                            {conversation_id{account, key}}),
+              .verify = skiff::compose::visible(
+                  proto::offers(protocol_state_of(shared, account),
+                                proto::feature::identity_verification{}) &&
+                      (!facts.trust ||
+                       !spl::visit(
+                           spl::overloaded{[](trust::verified) { return true; },
+                                           [](const auto &) { return false; }},
+                           *facts.trust)),
+                  action_tile<verify_them>(colours, "Verify with emoji",
+                                           icon::check{},
+                                           {conversation_id{account, key}})),
+              .accept = skiff::compose::visible(
+                  facts.trust &&
+                      spl::visit(
+                          spl::overloaded{[](trust::changed) { return true; },
+                                          [](const auto &) { return false; }},
+                          *facts.trust),
+                  action_tile<accept_them>(colours, "Withdraw verification",
+                                           icon::close{},
+                                           {conversation_id{account, key}})),
+              .remove = skiff::compose::visible(
+                  facts.may_kick, action_tile<to_them>(
+                                      colours, "Remove from room",
+                                      icon::leave{}, {room_action::kick{key}})),
+              .ban = skiff::compose::visible(
+                  facts.may_ban,
+                  action_tile<to_them>(colours, "Ban from room", icon::close{},
+                                       {room_action::ban{key}})),
+              .sessions_title = skiff::compose::styled(
+                  {.margin = {14.0f, 22.0f, 2.0f, 22.0f}},
+                  skiff::compose::visible(
+                      !facts.devices.empty(),
+                      nodes::Text("", 13.0f, colours.dim, true)))} {
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.verify, &parts.accept, &parts.remove, &parts.ban})
       each->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     // Offered only where the user may: no button for what they cannot do.
-    parts.remove.setVisible(facts.may_kick);
-    parts.ban.setVisible(facts.may_ban);
+
     std::ranges::for_each(std::views::enumerate(proto::person_actions(protocol_state_of(shared, account), account, key)), [&](const auto& one) {
       const auto& [index, label] = one;
       parts.theirs.emplace_back(colours, label, icon::check{}, ask_protocol{{account, key, static_cast<std::size_t>(index)}})
@@ -147,8 +184,7 @@ struct person_card : nodes::Stack {
     });
     parts.sessions_title.setText(facts.devices.empty() ? std::string()
                                                        : std::format("SESSIONS ({})", facts.devices.size()));
-    parts.sessions_title.setVisible(!facts.devices.empty());
-    parts.sessions_title.apply({.margin = {14.0f, 22.0f, 2.0f, 22.0f}});
+
     for (const change::device_view& one : facts.devices) {
       auto& line = parts.sessions.emplace_back(
           std::format("{} {}{}", one.verified ? "\u2713" : "\u26A0", one.name.empty() ? one.id : one.name,
@@ -157,15 +193,8 @@ struct person_card : nodes::Stack {
       line.setElided(true);
       line.apply({.fillX = true, .margin = {2.0f, 22.0f, 0.0f, 22.0f}});
     }
-    parts.accept.setVisible(facts.trust && spl::visit(spl::overloaded{[](trust::changed) { return true; },
-                                                                            [](const auto&) { return false; }},
-                                                         *facts.trust));
     // Verify where their protocol verifies people, and they are not, or not
     // any more: not for one verified.
-    parts.verify.setVisible(proto::offers(protocol_state_of(shared, account), proto::feature::identity_verification{}) &&
-                            (!facts.trust || !spl::visit(spl::overloaded{[](trust::verified) { return true; },
-                                                                               [](const auto&) { return false; }},
-                                                            *facts.trust)));
   }
 };
 
@@ -178,8 +207,7 @@ struct room_card_facts {
   std::string asked;
   room_preview known;
 };
-template <class Actions>
-struct room_card : nodes::Stack {
+template <class Actions> struct room_card : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
   struct join_it {
@@ -198,17 +226,19 @@ struct room_card : nodes::Stack {
   using close_act = sends<::mux::ui::request::close_room_card>;
   using close_button = icon_button<close_act>;
   using top_bar = page_header<no_back, close_act>;
-  struct cover : nodes::Stack {
+  struct cover : skiff::compose::Stacked {
     struct parts_t {
       avatar_mark photo;
       two_lines texts;
     } parts;
-    cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line)
-        : parts{.photo = avatar_mark(key, name, 72.0f), .texts = two_lines(colours, name, line, 17.0f, 6.0f)} {
-      this->setHorizontal();
-      this->setGap(16.0f);
-      fState.apply({.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}});
-    }
+    cover(const palette &colours, const std::string &key,
+          const std::string &name, const std::string &line)
+        : Stacked(skiff::compose::hbox(
+              16.0f, {.fillX = true,
+                      .height = 108.0f,
+                      .padding = {0.0f, 22.0f, 0.0f, 22.0f}})),
+          parts{.photo = avatar_mark(key, name, 72.0f),
+                .texts = two_lines(colours, name, line, 17.0f, 6.0f)} {}
   };
   // Its name, else its address, else what the link said.
   static std::string name_of(const std::string& asked, const room_preview& known) {
@@ -225,7 +255,7 @@ struct room_card : nodes::Stack {
   }
   // The details can be taller than the window. Only this column scrolls;
   // closing the card and accepting or declining an invite stay in reach.
-  struct details : nodes::Stack {
+  struct details : skiff::compose::Stacked {
     struct parts_t {
       cover face;
       nodes::Box<> band;
@@ -233,15 +263,24 @@ struct room_card : nodes::Stack {
       id_line id;
     } parts;
 
-    details(const palette& colours, const std::string& asked, const room_preview& known)
-        : parts{.face = cover(colours, known.id.empty() ? asked : known.id, name_of(asked, known), line_of(asked, known)),
+    details(const palette &colours, const std::string &asked,
+            const room_preview &known)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.face = cover(colours, known.id.empty() ? asked : known.id,
+                              name_of(asked, known), line_of(asked, known)),
                 .band = section_band(colours),
-                .about = nodes::Text(!known.topic.empty() ? known.topic : !known.note.empty() ? known.note : std::string("No description"), 14.0f,
-                                     known.topic.empty() ? colours.dim : colours.text),
-                .id = id_line(colours, known.id.empty() ? asked : known.id, "")} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.about.setWrapped(true);
-      parts.about.apply({.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}});
+                .about = skiff::compose::styled(
+                    {.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}},
+                    wrapped(nodes::Text(
+                        !known.topic.empty()  ? known.topic
+                        : !known.note.empty() ? known.note
+                                              : std::string("No description"),
+                        14.0f,
+                        known.topic.empty() ? colours.dim : colours.text))),
+                .id =
+                    id_line(colours, known.id.empty() ? asked : known.id, "")} {
+
       parts.about.setSelectable(true);
       parts.face.parts.texts.parts.name.setSelectable(true);
       parts.face.parts.texts.parts.state.setSelectable(true);
@@ -256,19 +295,29 @@ struct room_card : nodes::Stack {
   } parts;
 
   room_card(const ui_needs<Actions>& n, const room_card_facts& facts) : room_card(*n.colours, facts.asked, facts.known) {}
-  room_card(const palette& colours, const std::string& asked, const room_preview& known)
-      : parts{.top = top_bar(colours, "Room info", {}, {}, false, true),
-              .scroll = nodes::ScrollContainer<details>(details(colours, asked, known)),
-              .join = action_tile<join_it>(colours, known.invite ? "Accept" : known.knock ? "Ask to join" : "Join", icon::plus{},
-                                           {known.knock && !known.invite})} {
-    fState.apply({.fillX = true, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
-    parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
+  room_card(const palette &colours, const std::string &asked,
+            const room_preview &known)
+      : Stacked(skiff::compose::vbox(
+            0.0f, {.fillX = true, .padding = {0.0f, 0.0f, 16.0f, 0.0f}})),
+        parts{.top = top_bar(colours, "Room info", {}, {}, false, true),
+              .scroll = skiff::compose::styled(
+                  {.fillX = true, .grow = scene::axes::kY},
+                  nodes::ScrollContainer<details>(
+                      details(colours, asked, known))),
+              .join = skiff::compose::styled(
+                  {.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}},
+                  action_tile<join_it>(colours,
+                                       known.invite  ? "Accept"
+                                       : known.knock ? "Ask to join"
+                                                     : "Join",
+                                       icon::plus{},
+                                       {known.knock && !known.invite}))} {
+
     if (known.invite) {
       parts.top.parts.title.setText("Invite");
       parts.decline.emplace(colours, "Decline", icon::close{}, decline_it{});
       parts.decline->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     }
-    parts.join.apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
   }
 
   void measure(const skia::SkRect& parent) {

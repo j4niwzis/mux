@@ -10,4 +10,4 @@ diff --git a/providers/implementations/rands/seeding/rand_unix.c b/providers/imp
 +    && !(defined(__ANDROID__) && __ANDROID_API__ < 28)
  #if defined(__GNUC__) && __GNUC__ >= 2 && defined(__ELF__) && !defined(__hpux)
      extern int getentropy(void *buffer, size_t length) __attribute__((weak));
- 
+

@@ -4,6 +4,8 @@ import std;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.bind;
+import skiff.model;
 import mux.core;
 import mux.config;
 import mux.ui;
@@ -256,6 +258,12 @@ struct ui_state {
   mux::ui::looks_shown looks;
   mux::ui::ui_shared shared;
   mux::ui::mux_paint paint;
+  mux::ui::shown_model showing{mux::ui::shown_root{}};
+
+  template <class Node, class Part> void show(Node &node, Part now) {
+    mux::ui::show(showing, std::move(now));
+    skiff::bind::refresh(node, showing);
+  }
 
   ui_state() {
     paint.looks = &looks;
@@ -325,7 +333,7 @@ TEST(Drawer, SlidesOutAfterALongWhileOut) {
     (void)window.finishFrame();
   };
   frame(now);
-  window.root().open_drawer();
+  ui.show(window.root().layer().frame.base(), mux::ui::drawer_shown{true});
   for (int i = 0; i < 40; ++i)
     frame(now + 16.0);
   const auto& panel = window.root().layer().frame.base().content();
@@ -385,7 +393,8 @@ TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
 
   for (const bool invite : {false, true}) {
     preview.invite = invite;
-    window.root().open_room_card(preview.id, preview);
+    ui.show(window.root().layer().room,
+            std::optional{mux::ui::room_card_facts{preview.id, preview}});
     auto* card = window.root().layer().room.shown();
     ASSERT_NE(card, nullptr);
     auto& scroll = card->parts.scroll;
@@ -446,7 +455,8 @@ TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
   viewport = skia::SkRect::MakeWH(1000.0f, 720.0f);
   preview.topic = "A brief description.";
   preview.invite = false;
-  window.root().open_room_card(preview.id, preview);
+  ui.show(window.root().layer().room,
+          std::optional{mux::ui::room_card_facts{preview.id, preview}});
   frame();
   auto* card = window.root().layer().room.shown();
   ASSERT_NE(card, nullptr);
@@ -656,14 +666,15 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
   stub program;
   ui_state ui;
   scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
-  window.root().open_emoji(700.0f, 650.0f);
+  ui.show(window.root().layer().emoji,
+          std::optional{mux::ui::emoji_facts{700.0f, 650.0f, {}}});
   const skia::SkRect viewport = skia::SkRect::MakeWH(1100.0f, 720.0f);
   for (int i = 0; i < 4; ++i) {
     window.update(1000.0 + 16.0 * i);
     window.layoutIfNeeded(viewport);
     (void)window.finishFrame();
   }
-  auto& popup = *window.root().layer().emoji;
+  auto &popup = *window.root().layer().emoji.shown();
   auto& panel = popup.parts.card.parts.panel;
   auto& sections = panel.sections();
   ASSERT_FALSE(sections.empty());
@@ -817,7 +828,8 @@ TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
   skiff::paint::defaultFont() = &font;
   stub program;
   ui_state ui;
-  scene::Scene<mux::ui::settings_dialog<stub>> dialog{std::in_place, ui.needs(program), "none"};
+  scene::Scene<mux::ui::settings_dialog<stub>> dialog{std::in_place,
+                                                      ui.needs(program)};
   auto& settings = dialog.root();
   const mux::config::theme_t theme{};
   const mux::config::accent_t accent{};
@@ -867,7 +879,8 @@ TEST(Settings, OpeningAndChangingPagesStartsAtTheTop) {
     stub program;
     ui_state ui;
     scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
-    window.root().open_settings();
+    ui.show(window.root().layer().settings,
+            std::optional{mux::ui::settings_facts{}});
     auto* settings = window.root().settings_up();
     ASSERT_NE(settings, nullptr);
     double now = 1000.0;
@@ -894,3 +907,44 @@ TEST(Settings, OpeningAndChangingPagesStartsAtTheTop) {
 }
 
 }  // namespace
+
+TEST(Calls, PlacementFollowsTheModel) {
+  mux::ui::call_shown shown{mux::ui::call_view{}};
+  shown.now->phase = mux::ui::call_phase::ringing_in{};
+  shown.now->in_view = true;
+  EXPECT_TRUE(mux::ui::call_card_of{}(shown).has_value());
+  EXPECT_FALSE(mux::ui::call_panel_of{}(shown).has_value());
+  shown.now->phase = mux::ui::call_phase::connected{61};
+  EXPECT_FALSE(mux::ui::call_card_of{}(shown).has_value());
+  EXPECT_TRUE(mux::ui::call_panel_of{}(shown).has_value());
+  shown.now->whole = true;
+  EXPECT_FALSE(mux::ui::call_card_of{}(shown).has_value());
+  EXPECT_FALSE(mux::ui::call_panel_of{}(shown).has_value());
+  EXPECT_TRUE(mux::ui::call_screen_of{}(shown).has_value());
+  shown.now.reset();
+  EXPECT_FALSE(mux::ui::call_screen_of{}(shown).has_value());
+}
+
+TEST(Calls, TimerUpdatesTextWithoutRebuildingControls) {
+  stub program;
+  ui_state ui;
+  mux::ui::shown_root root;
+  root.call.fValue.now = mux::ui::call_view{};
+  root.call.fValue.now->phase = mux::ui::call_phase::connected{61};
+  root.call.fValue.now->encrypted = true;
+  auto shown = mux::ui::call_layer<mux::ui::call_bar<stub>>(
+      ui.needs(program), mux::ui::call_card_of{}, {.fill = true});
+  mux::ui::shown_model model(std::move(root));
+  skiff::bind::Binding<mux::ui::shown_model> binding;
+  binding.refresh(shown, model);
+  ASSERT_NE(shown.shown(), nullptr);
+  const auto id = shown.shown()->fState.id();
+  EXPECT_EQ(shown.shown()->parts.lines.parts.said.text(), "1:01");
+  auto next = *model.look<mux::ui::call_shown>();
+  next.now->phase = mux::ui::call_phase::connected{62};
+  mux::ui::show(model, std::move(next));
+  binding.refresh(shown, model);
+  ASSERT_NE(shown.shown(), nullptr);
+  EXPECT_EQ(shown.shown()->fState.id(), id);
+  EXPECT_EQ(shown.shown()->parts.lines.parts.said.text(), "1:02");
+}

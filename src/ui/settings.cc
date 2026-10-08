@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.scroll;
 import mux.core;
 import mux.config;
@@ -55,8 +56,7 @@ using settings_page_t = spl::variant<settings_page::home, settings_page::animati
 struct settings_facts {
   settings_page_t page = settings_page::home{};
 };
-template <class Actions>
-struct settings_dialog : scene::Node {
+template <class Actions> struct settings_dialog : skiff::compose::Specced {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{440.0f, 520.0f}}; }
   // What it was handed, for the pages it makes.
@@ -160,11 +160,11 @@ struct settings_dialog : scene::Node {
   void show_page_of(const settings_page::storage& page) { this->show_storage(page.limits, page.history, page.sealed); }
   void show_page_of(const settings_page::proxies& page) { this->show_proxies(page.all, page.with_back); }
   void show_page_of(const settings_page::proxy& page) { this->show_proxy(page.from, page.index); }
-  settings_dialog(const ui_needs<Actions>& n)
-      : needs_(n),
-        parts{.scroll = nodes::ScrollContainer<page_t>(page_t(std::in_place_index<0>, n))} {
-    fState.apply({.fill = true});
-    parts.scroll.apply({.fill = true});
+  settings_dialog(const ui_needs<Actions> &n)
+      : Specced({.fill = true}), needs_(n),
+        parts{.scroll = skiff::compose::styled(
+                  {.fill = true}, nodes::ScrollContainer<page_t>(
+                                      page_t(std::in_place_index<0>, n)))} {
     parts.scroll.setCopiesOnScroll(false);
     this->fit_page();
   }
@@ -241,7 +241,6 @@ struct settings_dialog : scene::Node {
                                  [](auto&) -> proxy_editor<Actions>* { return nullptr; }},
                       this->page());
   }
-
 
   void layoutChildren() {
     auto& scroll = parts.scroll;

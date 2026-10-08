@@ -26,16 +26,6 @@ export namespace mux::ui {
 // Something not there yet, said in a box over the window.
 // A notice's box: as high as what it says, its heading and text wrapped,
 // and selectable, to be copied.
-inline void lay_out_notice(nodes::Stack& box, nodes::Text& title, nodes::Text& note) {
-  box.fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
-  box.setGap(10.0f);
-  for (nodes::Text* each : {&title, &note}) {
-    each->setWrapped(true);
-    each->setSelectable(true);
-    each->apply({.fillX = true});
-  }
-}
-
 // What a notice says: its heading and its text.
 struct notice_facts {
   std::string heading;
@@ -70,7 +60,6 @@ struct notice_box : notice_box_of<Actions> {
             skiff::compose::styled({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},
                                    primary(ok_button(colours.widgets, "OK", {})))) {}
 };
-
 
 // An emoji verification, as Element shows it: with whom, and where it is --
 // asked of you (Accept, Decline), waiting on them (Cancel), the 7 emoji to
@@ -178,8 +167,7 @@ struct verification_box : verification_box_of<Actions> {
 // What a chat says of itself, over its messages: its avatar, name and who
 // is in it or how they are, a line under it, and the button that opens its
 // info beside it.
-template <class Actions>
-struct chat_header : nodes::Stack {
+template <class Actions> struct chat_header : skiff::compose::Stacked {
   // What the head shows: the chat's key and name, and how it is -- or no
   // chat. The head is made from it, nothing set in it afterwards.
   struct view {
@@ -228,7 +216,7 @@ struct chat_header : nodes::Stack {
   }
 
   // The chat's avatar, its name over how it is, and the button to its info.
-  struct head_row : nodes::Stack {
+  struct head_row : skiff::compose::Stacked {
     // What its handlers ask for, returned.
     using Answer = ::mux::ui::request::toggle_info;
     using find_button = icon_button<sends<::mux::ui::request::open_search>>;
@@ -250,29 +238,43 @@ struct chat_header : nodes::Stack {
       threads_button threads;
       info_button info;
     } parts;
-    head_row(const palette& colours, const view& shown)
-        : taps_to_info(shown.back && shown.key.has_value()),
-          parts{.back = back_button(colours, icon::back{}, {}),
-                .face = avatar_mark(shown.key.value_or(""), shown.title, 38.0f),
-                .texts = two_lines(colours, shown.title, shown.status, 15.0f, 3.0f),
-                .find = find_button(colours, icon::search{}, {}),
-                .call = call_button(colours, icon::phone{}, {}),
-                .threads = threads_button(colours, icon::threads{}, {}),
-                .info = info_button(colours, icon::info{}, {})} {
-      this->setHorizontal();
-      this->setGap(12.0f);
-      fState.apply({.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 16.0f, 0.0f, 22.0f}});
-      parts.find.apply({.alignSelf = scene::align::kMiddle});
-      parts.threads.apply({.alignSelf = scene::align::kMiddle});
-      parts.threads.setVisible(shown.key.has_value());
-      parts.call.apply({.alignSelf = scene::align::kMiddle});
-      parts.call.setVisible(shown.key.has_value() && shown.callable);
-      parts.info.apply({.alignSelf = scene::align::kMiddle});
-      parts.back.apply({.alignSelf = scene::align::kMiddle});
-      parts.back.setVisible(shown.back && shown.key.has_value());
-      parts.face.setVisible(shown.key.has_value());
-      parts.find.setVisible(shown.key.has_value());
-      parts.info.setVisible(shown.key.has_value());
+    head_row(const palette &colours, const view &shown)
+        : Stacked(skiff::compose::hbox(
+              12.0f, {.fillX = true,
+                      .grow = scene::axes::kY,
+                      .padding = {0.0f, 16.0f, 0.0f, 22.0f}})),
+          taps_to_info(shown.back && shown.key.has_value()),
+          parts{.back = skiff::compose::visible(
+                    shown.back && shown.key.has_value(),
+                    skiff::compose::styled(
+                        {.alignSelf = scene::align::kMiddle},
+                        back_button(colours, icon::back{}, {}))),
+                .face = skiff::compose::visible(
+                    shown.key.has_value(),
+                    avatar_mark(shown.key.value_or(""), shown.title, 38.0f)),
+                .texts =
+                    two_lines(colours, shown.title, shown.status, 15.0f, 3.0f),
+                .find = skiff::compose::visible(
+                    shown.key.has_value(),
+                    skiff::compose::styled(
+                        {.alignSelf = scene::align::kMiddle},
+                        find_button(colours, icon::search{}, {}))),
+                .call = skiff::compose::visible(
+                    shown.key.has_value() && shown.callable,
+                    skiff::compose::styled(
+                        {.alignSelf = scene::align::kMiddle},
+                        call_button(colours, icon::phone{}, {}))),
+                .threads = skiff::compose::visible(
+                    shown.key.has_value(),
+                    skiff::compose::styled(
+                        {.alignSelf = scene::align::kMiddle},
+                        threads_button(colours, icon::threads{}, {}))),
+                .info = skiff::compose::visible(
+                    shown.key.has_value(),
+                    skiff::compose::styled(
+                        {.alignSelf = scene::align::kMiddle},
+                        info_button(colours, icon::info{}, {})))} {
+
       parts.texts.parts.state.setVisible(shown.key.has_value());
     }
     [[nodiscard]] bool acceptsInput() const { return taps_to_info; }
@@ -290,11 +292,13 @@ struct chat_header : nodes::Stack {
   static constexpr float kHeight = 56.0f;
 
   // Declared: the row over a line dividing it from the messages.
-  chat_header(const ui_needs<Actions>& n, const view& shown)
-      : parts{.row = head_row(*n.colours, shown), .divider = nodes::Box<>(n.colours->band)} {
-    fState.apply({.fill = true, .background = n.colours->sidebar});
-    parts.divider.apply({.fillX = true, .height = 1.0f});
-  }
+  chat_header(const ui_needs<Actions> &n, const view &shown)
+      : Stacked(skiff::compose::vbox(
+            0.0f, {.fill = true, .background = n.colours->sidebar})),
+        parts{.row = head_row(*n.colours, shown),
+              .divider =
+                  skiff::compose::styled({.fillX = true, .height = 1.0f},
+                                         nodes::Box<>(n.colours->band))} {}
 };
 
 // The head as the chats model has it: the chosen chat's, read by the

@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -54,8 +55,7 @@ struct look_level {
   // And the colours the choices are made in.
   const palette* colours = nullptr;
 };
-template <class Actions>
-struct bubbles_picker : nodes::Stack {
+template <class Actions> struct bubbles_picker : skiff::compose::Stacked {
   // The look at the level, as the UI knows it: every chat's, or the chat's
   // shown.
   [[nodiscard]] static config::bubble_look current(const look_level& level, const config::look_part_t& part) {
@@ -138,7 +138,7 @@ struct bubbles_picker : nodes::Stack {
       return ::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}};
     }
   };
-  struct element_row : nodes::Stack {
+  struct element_row : skiff::compose::Stacked {
     struct head_t : label_button_row<element_reset> {
       head_t(const palette& colours, std::string label, element_reset reset, bool own)
           : label_button_row<element_reset>(colours, std::move(label), "As bubbles", reset, own) {}
@@ -147,16 +147,29 @@ struct bubbles_picker : nodes::Stack {
       head_t head;
       widgets::SliderBar<scene::NoAction, element_done> bar;
     } parts;
-    element_row(const look_level& level, std::string_view name, element_t which)
-        : parts{.head = head_t(*level.colours, std::format("{}: {}%{}", name, element_opacity_of(current(level, config::look_part::bubbles{}), which),
-                                           (current(level, config::look_part::bubbles{}).elements.*which) ? "" : " (as bubbles)"),
-                               element_reset{level, which},
-                               (current(level, config::look_part::bubbles{}).elements.*which).has_value()),
-                .bar = widgets::SliderBar<scene::NoAction, element_done>(level.colours->widgets, {}, element_done{level, which})} {
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    element_row(const look_level &level, std::string_view name, element_t which)
+        : Stacked(skiff::compose::vbox(
+              4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{
+              .head = head_t(
+                  *level.colours,
+                  std::format(
+                      "{}: {}%{}", name,
+                      element_opacity_of(
+                          current(level, config::look_part::bubbles{}), which),
+                      (current(level, config::look_part::bubbles{}).elements.*
+                       which)
+                          ? ""
+                          : " (as bubbles)"),
+                  element_reset{level, which},
+                  (current(level, config::look_part::bubbles{}).elements.*which)
+                      .has_value()),
+              .bar = skiff::compose::styled(
+                  {.margin = {4.0f, 8.0f, 6.0f, 8.0f}},
+                  widgets::SliderBar<scene::NoAction, element_done>(
+                      level.colours->widgets, {},
+                      element_done{level, which}))} {
       parts.bar.setFraction(static_cast<float>(element_opacity_of(current(level, config::look_part::bubbles{}), which)) / 100.0f);
-      parts.bar.apply({.margin = {4.0f, 8.0f, 6.0f, 8.0f}});
     }
   };
   [[nodiscard]] static std::vector<std::string> kind_names(const look_level& level) {
@@ -254,7 +267,7 @@ struct bubbles_picker : nodes::Stack {
     }
   };
   // An element drawn frosted: its blur, and a way back to the bubbles'.
-  struct element_blur_row : nodes::Stack {
+  struct element_blur_row : skiff::compose::Stacked {
     struct head_t : label_button_row<element_blur_reset> {
       head_t(const palette& colours, std::string label, element_blur_reset reset, bool own)
           : label_button_row<element_blur_reset>(colours, std::move(label), "As bubbles", reset, own) {}
@@ -263,31 +276,53 @@ struct bubbles_picker : nodes::Stack {
       head_t head;
       widgets::SliderBar<scene::NoAction, element_blur_done> bar;
     } parts;
-    element_blur_row(const look_level& level, std::string_view name, element_blur_t which)
-        : parts{.head = head_t(*level.colours, std::format("{} blur: {:.1f}%{}", name,
-                                           element_blur_of(current(level, config::look_part::bubbles{}), which, level.looks->window) * 100.0f,
-                                           (current(level, config::look_part::bubbles{}).blurs.*which) ? "" : " (as bubbles)"),
-                               element_blur_reset{level, which},
-                               (current(level, config::look_part::bubbles{}).blurs.*which).has_value()),
-                .bar = widgets::SliderBar<scene::NoAction, element_blur_done>(level.colours->widgets, {}, element_blur_done{level, which})} {
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    element_blur_row(const look_level &level, std::string_view name,
+                     element_blur_t which)
+        : Stacked(skiff::compose::vbox(
+              4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.head = head_t(
+                    *level.colours,
+                    std::format(
+                        "{} blur: {:.1f}%{}", name,
+                        element_blur_of(
+                            current(level, config::look_part::bubbles{}), which,
+                            level.looks->window) *
+                            100.0f,
+                        (current(level, config::look_part::bubbles{}).blurs.*
+                         which)
+                            ? ""
+                            : " (as bubbles)"),
+                    element_blur_reset{level, which},
+                    (current(level, config::look_part::bubbles{}).blurs.*which)
+                        .has_value()),
+                .bar = skiff::compose::styled(
+                    {.margin = {4.0f, 8.0f, 6.0f, 8.0f}},
+                    widgets::SliderBar<scene::NoAction, element_blur_done>(
+                        level.colours->widgets, {},
+                        element_blur_done{level, which}))} {
       parts.bar.setFraction(element_blur_of(current(level, config::look_part::bubbles{}), which, level.looks->window));
-      parts.bar.apply({.margin = {4.0f, 8.0f, 6.0f, 8.0f}});
     }
   };
-  struct kinds_row : nodes::Stack {
+  struct kinds_row : skiff::compose::Stacked {
     struct parts_t {
       widgets::Button<pick_kind> solid, translucent, frosted, glass;
     } parts;
-    kinds_row(const look_level& level, const config::look_part_t& part)
-        : parts{.solid = widgets::Button<pick_kind>(level.colours->widgets, "Solid", {level, part, config::bubbles::solid{}}),
-                .translucent = widgets::Button<pick_kind>(level.colours->widgets, "Translucent", {level, part, config::bubbles::translucent{}}),
-                .frosted = widgets::Button<pick_kind>(level.colours->widgets, "Frosted", {level, part, config::bubbles::frosted{}}),
-                .glass = widgets::Button<pick_kind>(level.colours->widgets, "Glass", {level, part, config::bubbles::glass{}})} {
-      this->setHorizontal();
-      this->setGap(6.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    kinds_row(const look_level &level, const config::look_part_t &part)
+        : Stacked(skiff::compose::hbox(
+              6.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.solid = widgets::Button<pick_kind>(
+                    level.colours->widgets, "Solid",
+                    {level, part, config::bubbles::solid{}}),
+                .translucent = widgets::Button<pick_kind>(
+                    level.colours->widgets, "Translucent",
+                    {level, part, config::bubbles::translucent{}}),
+                .frosted = widgets::Button<pick_kind>(
+                    level.colours->widgets, "Frosted",
+                    {level, part, config::bubbles::frosted{}}),
+                .glass = widgets::Button<pick_kind>(
+                    level.colours->widgets, "Glass",
+                    {level, part, config::bubbles::glass{}})} {
+
       const config::bubbles_t now = current(level, part).kind;
       for (widgets::Button<pick_kind>* each : {&parts.solid, &parts.translucent, &parts.frosted, &parts.glass})
         each->apply({.height = 32.0f, .grow = scene::axes::kX, .disabled = !usable(level, part)});
@@ -312,38 +347,63 @@ struct bubbles_picker : nodes::Stack {
     // Those drawn frosted, where the bubbles are: each its blur.
     std::vector<element_blur_row> element_blurs;
   } parts;
-  bubbles_picker(const look_level& level, const config::look_part_t& part = config::look_part::bubbles{})
-      : parts{.title = nodes::Text(spl::visit(spl::overloaded{[](config::look_part::bubbles) { return "MESSAGE BUBBLES"; },
-                                                                    [](config::look_part::panels) { return "PANELS"; }},
-                                                 part),
-                                   13.0f, level.colours->dim, true),
-              .why = nodes::Text("The chat list, the bars and the side panels: only over a background behind the whole "
-                                 "window (Appearance \u2192 Chat background \u2192 Behind the whole window).",
-                                 12.0f, level.colours->dim),
-              .kinds = choice_menu<pick_kind_at>(*level.colours, "", kind_names(level), kind_index(level, part),
-                                                 pick_kind_at{level, part, has_level_above(level.level)}),
-              .opacity_label = nodes::Text("Opacity", 13.0f, level.colours->text),
-              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>(level.colours->widgets, {}, opacity_done{level, part}),
-              .blur_label = nodes::Text(std::format("Blur: {:.1f}%", blur_of(current(level, part), level.looks->window) * 100.0f), 13.0f, level.colours->text),
-              .blur = widgets::SliderBar<scene::NoAction, blur_done>(level.colours->widgets, {}, blur_done{level, part}),
-              .elements_title = nodes::Text("EVERYTHING ELSE IN A CHAT", 12.0f, level.colours->dim, true)} {
-    this->setGap(8.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
-    parts.why.setWrapped(true);
-    parts.why.apply({.fillX = true});
-    parts.why.setVisible(spl::visit(spl::overloaded{[](config::look_part::panels) { return true; },
-                                                          [](const auto&) { return false; }},
-                                       part));
+  bubbles_picker(const look_level &level,
+                 const config::look_part_t &part = config::look_part::bubbles{})
+      : Stacked(skiff::compose::vbox(8.0f,
+                                     {.fillX = true,
+                                      .autoSize = scene::axes::kY,
+                                      .padding = {0.0f, 10.0f, 0.0f, 10.0f}})),
+        parts{
+            .title = nodes::Text(
+                spl::visit(spl::overloaded{[](config::look_part::bubbles) {
+                                             return "MESSAGE BUBBLES";
+                                           },
+                                           [](config::look_part::panels) {
+                                             return "PANELS";
+                                           }},
+                           part),
+                13.0f, level.colours->dim, true),
+            .why = skiff::compose::visible(
+                spl::visit(spl::overloaded{
+                               [](config::look_part::panels) { return true; },
+                               [](const auto &) { return false; }},
+                           part),
+                skiff::compose::styled(
+                    {.fillX = true},
+                    wrapped(nodes::Text(
+                        "The chat list, the bars and the side panels: only "
+                        "over a background behind the whole "
+                        "window (Appearance \u2192 Chat background \u2192 "
+                        "Behind the whole window).",
+                        12.0f, level.colours->dim)))),
+            .kinds = choice_menu<pick_kind_at>(
+                *level.colours, "", kind_names(level), kind_index(level, part),
+                pick_kind_at{level, part, has_level_above(level.level)}),
+            .opacity_label = nodes::Text("Opacity", 13.0f, level.colours->text),
+            .opacity = skiff::compose::styled(
+                {.margin = {4.0f, 8.0f, 8.0f, 8.0f}},
+                widgets::SliderBar<scene::NoAction, opacity_done>(
+                    level.colours->widgets, {}, opacity_done{level, part})),
+            .blur_label = nodes::Text(
+                std::format("Blur: {:.1f}%",
+                            blur_of(current(level, part), level.looks->window) *
+                                100.0f),
+                13.0f, level.colours->text),
+            .blur = skiff::compose::styled(
+                {.margin = {4.0f, 8.0f, 8.0f, 8.0f}},
+                widgets::SliderBar<scene::NoAction, blur_done>(
+                    level.colours->widgets, {}, blur_done{level, part})),
+            .elements_title = nodes::Text("EVERYTHING ELSE IN A CHAT", 12.0f,
+                                          level.colours->dim, true)} {
+
     const int opacity = current(level, part).opacity;
     parts.opacity_label.setText(std::format("Opacity: {}%", opacity));
     parts.opacity.setFraction(static_cast<float>(opacity - 10) / 90.0f);
-    parts.opacity.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
     const bool frosted = spl::visit(spl::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }},
                                        current(level, part).kind);
     parts.blur_label.setVisible(frosted);
     parts.blur.setVisible(frosted);
     parts.blur.setFraction(blur_of(current(level, part), level.looks->window));
-    parts.blur.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
     const bool bubbles = spl::visit(spl::overloaded{[](config::look_part::bubbles) { return true; },
                                                           [](const auto&) { return false; }},
                                        part);
@@ -377,8 +437,7 @@ struct bubbles_picker : nodes::Stack {
 // What a chat looks like, at a level: its background, its bubbles, and the
 // panels round it -- in the dialog (every chat's, an account's) and in a
 // room's Manage (its own).
-template <class Actions>
-struct look_choices : nodes::Stack {
+template <class Actions> struct look_choices : skiff::compose::Stacked {
   struct pick_wallpaper_at {
     using Answer = std::optional<::mux::ui::request::set_wallpaper>;
     choice_level_t level;
@@ -432,22 +491,31 @@ struct look_choices : nodes::Stack {
                                             [&](choice_level::chat) { return where + ", in this chat."; }},
                          level);
   }
-  look_choices(const palette& colours, const looks_shown& looks, choice_level_t level)
-      : parts{.background_title = nodes::Text("BACKGROUND", 13.0f, colours.dim, true),
-              .note = nodes::Text(note_of(looks, level), 13.0f, colours.dim),
-              .background = choice_menu<pick_wallpaper_at>(colours, "", background_names(looks, level), background_index(looks, level),
-                                                           pick_wallpaper_at{level, has_level_above(level)}),
-              .bubbles = bubbles_picker<Actions>(look_level{level, &looks, &colours}, config::look_part::bubbles{}),
-              .panels = bubbles_picker<Actions>(look_level{level, &looks, &colours}, config::look_part::panels{})} {
-    this->setGap(8.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.background_title.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});
-    parts.note.setWrapped(true);
-    parts.note.apply({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}});
-    parts.background.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});
-    parts.bubbles.apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
-    parts.panels.apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
-  }
+  look_choices(const palette &colours, const looks_shown &looks,
+               choice_level_t level)
+      : Stacked(skiff::compose::vbox(
+            8.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.background_title = skiff::compose::styled(
+                  {.margin = {0.0f, 10.0f, 0.0f, 10.0f}},
+                  nodes::Text("BACKGROUND", 13.0f, colours.dim, true)),
+              .note = skiff::compose::styled(
+                  {.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}},
+                  wrapped(
+                      nodes::Text(note_of(looks, level), 13.0f, colours.dim))),
+              .background = skiff::compose::styled(
+                  {.margin = {0.0f, 10.0f, 0.0f, 10.0f}},
+                  choice_menu<pick_wallpaper_at>(
+                      colours, "", background_names(looks, level),
+                      background_index(looks, level),
+                      pick_wallpaper_at{level, has_level_above(level)})),
+              .bubbles = skiff::compose::styled(
+                  {.margin = {10.0f, 0.0f, 0.0f, 0.0f}},
+                  bubbles_picker<Actions>(look_level{level, &looks, &colours},
+                                          config::look_part::bubbles{})),
+              .panels = skiff::compose::styled(
+                  {.margin = {10.0f, 0.0f, 0.0f, 0.0f}},
+                  bubbles_picker<Actions>(look_level{level, &looks, &colours},
+                                          config::look_part::panels{}))} {}
 };
 
 // A chat background and its looks chosen, at a level, in a dialog.
@@ -455,8 +523,7 @@ struct look_choices : nodes::Stack {
 struct wallpaper_facts {
   choice_level_t level;
 };
-template <class Actions>
-struct wallpaper_box : nodes::Stack {
+template <class Actions> struct wallpaper_box : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{380.0f}}; }
   struct close_it {
@@ -469,12 +536,15 @@ struct wallpaper_box : nodes::Stack {
     look_choices<Actions> choices;
   } parts;
   wallpaper_box(const ui_needs<Actions>& n, const wallpaper_facts& facts) : wallpaper_box(*n.colours, *n.looks, facts.level) {}
-  wallpaper_box(const palette& colours, const looks_shown& looks, choice_level_t level)
-      : parts{.header = header_t(colours, "Chat background and looks", {}, {}, false, true),
-              .choices = look_choices<Actions>(colours, looks, level)} {
-    this->setGap(8.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
-  }
+  wallpaper_box(const palette &colours, const looks_shown &looks,
+                choice_level_t level)
+      : Stacked(skiff::compose::vbox(8.0f,
+                                     {.fillX = true,
+                                      .autoSize = scene::axes::kY,
+                                      .padding = {0.0f, 12.0f, 18.0f, 12.0f}})),
+        parts{.header = header_t(colours, "Chat background and looks", {}, {},
+                                 false, true),
+              .choices = look_choices<Actions>(colours, looks, level)} {}
 };
 
 }  // namespace mux::ui

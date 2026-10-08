@@ -8,6 +8,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -53,8 +54,7 @@ struct packs_facts {
   std::optional<std::string> room;
   bool editable = false;
 };
-template <class Actions>
-struct packs_box : nodes::Stack {
+template <class Actions> struct packs_box : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
   // The colours it is made in, for its parts and the rows it makes later.
@@ -109,7 +109,7 @@ struct packs_box : nodes::Stack {
   };
   // A pack in the list: its picture, its name, how many images and what
   // for; pressed, opened.
-  struct pack_row : nodes::Stack {
+  struct pack_row : skiff::compose::Stacked {
     packs_box* box;
     std::size_t index;
     struct lines_t : two_lines {
@@ -125,17 +125,25 @@ struct packs_box : nodes::Stack {
       nodes::Image<from_avatars> face;
       lines_t lines;
     } parts;
-    pack_row(packs_box* b, std::size_t i, const emote_pack& one)
-        : box(b), index(i),
-          parts{.face = nodes::Image<from_avatars>(
-                    {one.avatar.value_or(one.pictures.empty() ? std::string() : one.pictures.front().url)}),
+    pack_row(packs_box *b, std::size_t i, const emote_pack &one)
+        : Stacked(skiff::compose::hbox(
+              12.0f, {.fillX = true,
+                      .height = 56.0f,
+                      .padding = {8.0f, 14.0f, 8.0f, 14.0f},
+                      .cornerRadius = 8.0f,
+                      .hoverBackground = b->colours_->chosen})),
+          box(b), index(i),
+          parts{.face = skiff::compose::styled(
+                    {.width = 40.0f,
+                     .height = 40.0f,
+                     .alignSelf = scene::align::kMiddle,
+                     .cornerRadius = 8.0f,
+                     .background = b->colours_->tile},
+                    nodes::Image<from_avatars>({one.avatar.value_or(
+                        one.pictures.empty() ? std::string()
+                                             : one.pictures.front().url)})),
                 .lines = lines_t(*b->colours_, one)} {
-      this->setHorizontal();
-      this->setGap(12.0f);
-      fState.apply({.fillX = true, .height = 56.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f,
-                    .hoverBackground = b->colours_->chosen});
-      parts.face.apply({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f,
-                        .background = b->colours_->tile});
+
       parts.face.keepBox();
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
@@ -147,7 +155,7 @@ struct packs_box : nodes::Stack {
   };
   // An image of the pack open: its picture, its shortcode to edit, its use,
   // and × to take it out.
-  struct picture_row : nodes::Stack {
+  struct picture_row : skiff::compose::Stacked {
     struct renamed {
       packs_box* box;
       std::size_t index;
@@ -180,23 +188,37 @@ struct packs_box : nodes::Stack {
       widgets::Toggle<flip_its_sticker> sticker;
       icon_button<remove_it> remove;
     } parts;
-    picture_row(packs_box* box, std::size_t index, const pack_picture& one)
-        : parts{.face = nodes::Image<from_avatars>({one.url}),
-                .shortcode = widgets::TextBox<renamed>(box->colours_->widgets, "shortcode", {box, index}),
+    picture_row(packs_box *box, std::size_t index, const pack_picture &one)
+        : Stacked(skiff::compose::hbox(
+              8.0f, {.fillX = true,
+                     .height = 52.0f,
+                     .padding = {6.0f, 10.0f, 6.0f, 10.0f}})),
+          parts{.face = skiff::compose::styled(
+                    {.width = 40.0f,
+                     .height = 40.0f,
+                     .alignSelf = scene::align::kMiddle,
+                     .cornerRadius = 6.0f,
+                     .background = box->colours_->tile},
+                    nodes::Image<from_avatars>({one.url})),
+                .shortcode = skiff::compose::styled(
+                    {.height = 32.0f,
+                     .relativeSize = scene::axes::kNone,
+                     .grow = scene::axes::kX,
+                     .alignSelf = scene::align::kMiddle},
+                    widgets::TextBox<renamed>(box->colours_->widgets,
+                                              "shortcode", {box, index})),
                 .emoji_label = nodes::Text("Emoji", 12.0f, box->colours_->dim),
-                .emoji = widgets::Toggle<flip_its_emoji>(box->colours_->widgets, {box, index}),
-                .sticker_label = nodes::Text("Sticker", 12.0f, box->colours_->dim),
-                .sticker = widgets::Toggle<flip_its_sticker>(box->colours_->widgets, {box, index}),
-                .remove = icon_button<remove_it>(*box->colours_, icon::close{}, {box, index})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .height = 52.0f, .padding = {6.0f, 10.0f, 6.0f, 10.0f}});
-      parts.face.apply({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
-                        .background = box->colours_->tile});
+                .emoji = widgets::Toggle<flip_its_emoji>(box->colours_->widgets,
+                                                         {box, index}),
+                .sticker_label =
+                    nodes::Text("Sticker", 12.0f, box->colours_->dim),
+                .sticker = widgets::Toggle<flip_its_sticker>(
+                    box->colours_->widgets, {box, index}),
+                .remove = icon_button<remove_it>(*box->colours_, icon::close{},
+                                                 {box, index})} {
+
       parts.face.keepBox();
       parts.shortcode.setText(one.shortcode);
-      parts.shortcode.apply({.height = 32.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX,
-                             .alignSelf = scene::align::kMiddle});
       parts.emoji.setOnNow(one.emoji);
       parts.sticker.setOnNow(one.sticker);
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.emoji_label, &parts.emoji, &parts.sticker_label,
@@ -204,39 +226,48 @@ struct packs_box : nodes::Stack {
         each->apply({.alignSelf = scene::align::kMiddle});
     }
   };
-  struct use_row : nodes::Stack {
+  struct use_row : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text emoji_label;
       widgets::Toggle<flip_emoji> emoji;
       nodes::Text sticker_label;
       widgets::Toggle<flip_sticker> sticker;
     } parts;
-    explicit use_row(packs_box* box)
-        : parts{.emoji_label = nodes::Text("Use as emoji", 13.0f, box->colours_->text),
-                .emoji = widgets::Toggle<flip_emoji>(box->colours_->widgets, {box}),
-                .sticker_label = nodes::Text("Use as stickers", 13.0f, box->colours_->text),
-                .sticker = widgets::Toggle<flip_sticker>(box->colours_->widgets, {box})} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}});
+    explicit use_row(packs_box *box)
+        : Stacked(skiff::compose::hbox(
+              10.0f, {.fillX = true,
+                      .autoSize = scene::axes::kY,
+                      .padding = {4.0f, 10.0f, 4.0f, 10.0f}})),
+          parts{.emoji_label =
+                    nodes::Text("Use as emoji", 13.0f, box->colours_->text),
+                .emoji =
+                    widgets::Toggle<flip_emoji>(box->colours_->widgets, {box}),
+                .sticker_label = skiff::compose::styled(
+                    {.margin = {0.0f, 0.0f, 0.0f, 14.0f}},
+                    nodes::Text("Use as stickers", 13.0f, box->colours_->text)),
+                .sticker = widgets::Toggle<flip_sticker>(box->colours_->widgets,
+                                                         {box})} {
+
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.emoji_label, &parts.emoji, &parts.sticker_label,
                                                                    &parts.sticker})
         each->apply({.alignSelf = scene::align::kMiddle});
-      parts.sticker_label.apply({.margin = {0.0f, 0.0f, 0.0f, 14.0f}});
     }
   };
-  struct list_buttons : nodes::Stack {
+  struct list_buttons : skiff::compose::Stacked {
     struct parts_t {
       widgets::Button<create_press> create;
     } parts;
-    explicit list_buttons(packs_box* box) : parts{.create = widgets::Button<create_press>(box->colours_->widgets, "Create pack", {box})} {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}});
-      parts.create.setPrimary(true);
-      parts.create.apply({.width = 140.0f, .height = 34.0f});
-    }
+    explicit list_buttons(packs_box *box)
+        : Stacked(skiff::compose::hbox(
+              0.0f, {.fillX = true,
+                     .autoSize = scene::axes::kY,
+                     .padding = {6.0f, 10.0f, 0.0f, 10.0f}})),
+          parts{.create = skiff::compose::styled(
+                    {.width = 140.0f, .height = 34.0f},
+                    primary(widgets::Button<create_press>(
+                        box->colours_->widgets, "Create pack", {box})))} {}
   };
-  struct edit_buttons : nodes::Stack {
+  struct edit_buttons : skiff::compose::Stacked {
     struct parts_t {
       widgets::Button<add_press> add;
       nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
@@ -244,16 +275,21 @@ struct packs_box : nodes::Stack {
       widgets::Button<back_press> back;
       widgets::Button<save_press> save;
     } parts;
-    edit_buttons(packs_box* box)
-        : parts{.add = widgets::Button<add_press>(box->colours_->widgets, "Add images", {}),
-                .remove = widgets::Button<delete_press>(box->colours_->widgets, "Delete pack", {box}),
-                .back = widgets::Button<back_press>(box->colours_->widgets, "Back", {box}),
-                .save = widgets::Button<save_press>(box->colours_->widgets, "Save", {box})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}});
+    edit_buttons(packs_box *box)
+        : Stacked(skiff::compose::hbox(
+              8.0f, {.fillX = true,
+                     .autoSize = scene::axes::kY,
+                     .padding = {6.0f, 10.0f, 0.0f, 10.0f}})),
+          parts{.add = widgets::Button<add_press>(box->colours_->widgets,
+                                                  "Add images", {}),
+                .remove = widgets::Button<delete_press>(box->colours_->widgets,
+                                                        "Delete pack", {box}),
+                .back = widgets::Button<back_press>(box->colours_->widgets,
+                                                    "Back", {box}),
+                .save = primary(widgets::Button<save_press>(
+                    box->colours_->widgets, "Save", {box}))} {
+
       parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
-      parts.save.setPrimary(true);
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.add, &parts.remove, &parts.back, &parts.save})
         each->apply({.width = 110.0f, .height = 34.0f});
     }
@@ -276,23 +312,31 @@ struct packs_box : nodes::Stack {
     edit_buttons edit_actions;
   } parts;
   packs_box(const ui_needs<Actions>& n, const packs_facts& facts) : packs_box(*n.colours, *n.shared, facts.room, facts.editable) {}
-  packs_box(const palette& colours, ui_shared& shared, std::optional<std::string> in, bool editable)
-      : colours_(&colours), shared_(&shared), room(std::move(in)), may_edit(editable),
-        parts{.header = header_t(colours, "Emojis & Stickers", {}, {}, false, true),
-              .note = nodes::Text("", 13.0f, colours.dim),
+  packs_box(const palette &colours, ui_shared &shared,
+            std::optional<std::string> in, bool editable)
+      : Stacked(skiff::compose::vbox(8.0f,
+                                     {.fillX = true,
+                                      .height = 600.0f,
+                                      .padding = {0.0f, 12.0f, 16.0f, 12.0f}})),
+        colours_(&colours), shared_(&shared), room(std::move(in)),
+        may_edit(editable),
+        parts{.header =
+                  header_t(colours, "Emojis & Stickers", {}, {}, false, true),
+              .note = skiff::compose::styled(
+                  {.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}},
+                  wrapped(nodes::Text("", 13.0f, colours.dim))),
               .list_actions = list_buttons(this),
               .name = field(colours, "Name", "Pack name"),
-              .attribution = field(colours, "Attribution (optional)", "Where its images are from"),
+              .attribution = field(colours, "Attribution (optional)",
+                                   "Where its images are from"),
               .use = use_row(this),
-              .images_heading = nodes::Text("Images", 13.0f, colours.dim, true),
+              .images_heading = skiff::compose::styled(
+                  {.margin = {6.0f, 10.0f, 0.0f, 10.0f}},
+                  nodes::Text("Images", 13.0f, colours.dim, true)),
               .edit_actions = edit_buttons(this)} {
-    this->setGap(8.0f);
-    fState.apply({.fillX = true, .height = 600.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}});
-    parts.note.setWrapped(true);
-    parts.note.apply({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}});
+
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.images_heading.apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
     parts.pictures.apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.pictures.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.note.setText("Loading…");

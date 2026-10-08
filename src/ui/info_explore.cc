@@ -8,6 +8,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -61,28 +62,32 @@ struct directory_join {
 
 // A room of a directory: its picture, name, address, members and topic, and
 // Join -- in Explore, and in the chat list where nothing joined matches.
-template <class Actions>
-struct directory_row : nodes::Stack {
-  struct texts_t : nodes::Stack {
+template <class Actions> struct directory_row : skiff::compose::Stacked {
+  struct texts_t : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text name;
       nodes::Text line;
       nodes::Text topic;
     } parts;
-    texts_t(const palette& colours, const directory_room& one)
-        : parts{.name = nodes::Text(one.name.empty() ? (one.alias.empty() ? one.id : one.alias) : one.name, 14.0f,
-                                    colours.text, true),
-                .line = nodes::Text(std::format("{}{}{} member{}", one.alias, one.alias.empty() ? "" : " \u00b7 ",
-                                                one.members, one.members == 1 ? "" : "s"),
-                                    12.0f, colours.dim),
-                .topic = nodes::Text(one.topic, 13.0f, colours.text)} {
-      this->setGap(2.0f);
-      fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .shrink = scene::axes::kX,
-                    .alignSelf = scene::align::kMiddle});
-      parts.name.setElided(true);
-      parts.line.setElided(true);
-      parts.topic.setElided(true);
-      parts.topic.setVisible(!one.topic.empty());
+    texts_t(const palette &colours, const directory_room &one)
+        : Stacked(
+              skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY,
+                                          .grow = scene::axes::kX,
+                                          .shrink = scene::axes::kX,
+                                          .alignSelf = scene::align::kMiddle})),
+          parts{.name = elided(nodes::Text(
+                    one.name.empty() ? (one.alias.empty() ? one.id : one.alias)
+                                     : one.name,
+                    14.0f, colours.text, true)),
+                .line = elided(nodes::Text(
+                    std::format("{}{}{} member{}", one.alias,
+                                one.alias.empty() ? "" : " \u00b7 ",
+                                one.members, one.members == 1 ? "" : "s"),
+                    12.0f, colours.dim)),
+                .topic = skiff::compose::visible(
+                    !one.topic.empty(),
+                    elided(nodes::Text(one.topic, 13.0f, colours.text)))} {
+
       for (nodes::Text* each : {&parts.name, &parts.line, &parts.topic})
         each->apply({.fillX = true});
     }
@@ -92,18 +97,24 @@ struct directory_row : nodes::Stack {
     texts_t texts;
     widgets::Button<directory_join<Actions>> join;
   } parts;
-  directory_row(const palette& colours, const directory_room& one, const std::string& server)
-      : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
+  directory_row(const palette &colours, const directory_room &one,
+                const std::string &server)
+      : Stacked(skiff::compose::hbox(12.0f,
+                                     {.fillX = true,
+                                      .autoSize = scene::axes::kY,
+                                      .padding = {8.0f, 16.0f, 8.0f, 16.0f}})),
+        parts{.face = avatar_mark(
+                  one.id, one.name.empty() ? one.alias : one.name, 40.0f),
               .texts = texts_t(colours, one),
-              .join = widgets::Button<directory_join<Actions>>(colours.widgets, one.space ? "Open" : "Join",
-                                                  {one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
-                                                   one.name})} {
-    this->setHorizontal();
-    this->setGap(12.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}});
-    parts.join.setPrimary(true);
-    parts.join.apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
-  }
+              .join = skiff::compose::styled(
+                  {.width = 70.0f,
+                   .height = 30.0f,
+                   .alignSelf = scene::align::kMiddle},
+                  primary(widgets::Button<directory_join<Actions>>(
+                      colours.widgets, one.space ? "Open" : "Join",
+                      {one.space ? one.id
+                                 : (one.alias.empty() ? one.id : one.alias),
+                       server, one.space, one.name})))} {}
 };
 
 // Element's Explore rooms: a server's public directory, searched -- one's
@@ -133,8 +144,7 @@ struct explore_facts {
   bool loading = false;
   std::optional<explore_space_shown> space;
 };
-template <class Actions>
-struct explore_box : nodes::Stack {
+template <class Actions> struct explore_box : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{640.0f, 560.0f}}; }
   // The colours it is made in, for its parts and the rows it makes later.
@@ -175,43 +185,54 @@ struct explore_box : nodes::Stack {
     }
   };
   // A space's name and picture, over what it holds.
-  struct space_head_t : nodes::Stack {
+  struct space_head_t : skiff::compose::Stacked {
     struct parts_t {
       std::optional<avatar_mark> face;
       nodes::Text name;
     } parts;
-    explicit space_head_t(const palette& colours) : parts{.name = nodes::Text("", 17.0f, colours.text, true)} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 8.0f, 10.0f}});
-      parts.name.setElided(true);
-      parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    }
+    explicit space_head_t(const palette &colours)
+        : Stacked(skiff::compose::hbox(
+              10.0f, {.fillX = true,
+                      .autoSize = scene::axes::kY,
+                      .padding = {0.0f, 10.0f, 8.0f, 10.0f}})),
+          parts{
+              .name = skiff::compose::styled(
+                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  elided(nodes::Text("", 17.0f, colours.text, true)))} {}
   };
   using join_press = directory_join<Actions>;
   using result_row = directory_row<Actions>;
   using header_t = page_header<no_back, close_it>;
-  struct search_row : nodes::Stack {
+  struct search_row : skiff::compose::Stacked {
     struct parts_t {
       field query;
       field server;
       widgets::Button<search_press> search;
     } parts;
-    search_row(explore_box* box, const std::string& own)
-        : parts{.query = field(*box->colours_, "Find a room", "Name, topic, or #address:server"),
-                .server = field(*box->colours_, "Server", own, own),
-                .search = widgets::Button<search_press>(box->colours_->widgets, "Search", {box})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 6.0f, 0.0f, 6.0f}});
+    search_row(explore_box *box, const std::string &own)
+        : Stacked(skiff::compose::hbox(8.0f,
+                                       {.fillX = true,
+                                        .autoSize = scene::axes::kY,
+                                        .padding = {0.0f, 6.0f, 0.0f, 6.0f}})),
+          parts{
+              .query = skiff::compose::styled(
+                  {.relativeSize = scene::axes::kNone, .grow = scene::axes::kX},
+                  field(*box->colours_, "Find a room",
+                        "Name, topic, or #address:server")),
+              .server = skiff::compose::styled(
+                  {.width = 170.0f, .relativeSize = scene::axes::kNone},
+                  field(*box->colours_, "Server", own, own)),
+              .search = skiff::compose::styled(
+                  {.width = 90.0f,
+                   .height = 34.0f,
+                   .alignSelf = scene::align::kEnd,
+                   .margin = {0.0f, 0.0f, 2.0f, 0.0f}},
+                  primary(widgets::Button<search_press>(box->colours_->widgets,
+                                                        "Search", {box})))} {
+
       // Their full-width default let go -- fillX = false says nothing -- or
       // the query, as wide as the row and growing too, lost its growing and
       // pushed the rest out past the dialog's right edge.
-      parts.query.apply({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX});
-      parts.server.apply({.width = 170.0f, .relativeSize = scene::axes::kNone});
-      parts.search.setPrimary(true);
-      parts.search.apply({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd,
-                          .margin = {0.0f, 0.0f, 2.0f, 0.0f}});
     }
   };
   using rows_t = nodes::Flow<std::vector<result_row>>;
@@ -239,20 +260,29 @@ struct explore_box : nodes::Stack {
     if (facts.listing)
       this->show(facts.listing->rooms, facts.listing->server, facts.listing->space, facts.listing->query, facts.listing->next, false);
   }
-  explore_box(const palette& colours, const std::string& own_server)
-      : colours_(&colours),
-        parts{.header = header_t(colours, "Explore rooms", {}, {}, false, true),
-              .space_head = space_head_t(colours),
-              .search = search_row(this, own_server),
-              .status = nodes::Text("", 13.0f, colours.dim),
-              .more = widgets::Button<more_press>(colours.widgets, "Load more", {this})} {
-    parts.more.apply({.fillX = true, .height = 32.0f, .margin = {6.0f, 10.0f, 0.0f, 10.0f}});
-    parts.more.setVisible(false);
-    fState.apply({.fillX = true, .height = 560.0f, .padding = {0.0f, 12.0f, 12.0f, 12.0f}});
-    parts.status.setWrapped(true);
-    parts.status.apply({.fillX = true, .margin = {6.0f, 10.0f, 4.0f, 10.0f}});
-    parts.status.setVisible(false);
-    parts.space_head.setVisible(false);
+  explore_box(const palette &colours, const std::string &own_server)
+      : Stacked(skiff::compose::vbox(0.0f,
+                                     {.fillX = true,
+                                      .height = 560.0f,
+                                      .padding = {0.0f, 12.0f, 12.0f, 12.0f}})),
+        colours_(&colours),
+        parts{
+            .header = header_t(colours, "Explore rooms", {}, {}, false, true),
+            .space_head = skiff::compose::visible(false, space_head_t(colours)),
+            .search = search_row(this, own_server),
+            .status = skiff::compose::visible(
+                false,
+                skiff::compose::styled(
+                    {.fillX = true, .margin = {6.0f, 10.0f, 4.0f, 10.0f}},
+                    wrapped(nodes::Text("", 13.0f, colours.dim)))),
+            .more = skiff::compose::visible(
+                false, skiff::compose::styled(
+                           {.fillX = true,
+                            .height = 32.0f,
+                            .margin = {6.0f, 10.0f, 0.0f, 10.0f}},
+                           widgets::Button<more_press>(colours.widgets,
+                                                       "Load more", {this})))} {
+
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
   }

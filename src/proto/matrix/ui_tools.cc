@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.nodes.scroll;
@@ -28,8 +29,7 @@ using namespace ::mux::ui;
 
 // The developer tools, as Element's: some JSON to read and copy; a room's
 // state, by type, then by key, then the event; an event of any type sent.
-template <class Actions>
-struct devtools_box : nodes::Stack {
+template <class Actions> struct devtools_box : skiff::compose::Stacked {
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   struct close_it {
@@ -59,7 +59,7 @@ struct devtools_box : nodes::Stack {
   };
   using entry_row = row_item<pick>;
   using rows_t = nodes::Flow<std::vector<entry_row>>;
-  struct form : nodes::Stack {
+  struct form : skiff::compose::Stacked {
     struct parts_t {
       field type;
       field key;
@@ -67,26 +67,46 @@ struct devtools_box : nodes::Stack {
       widgets::TextArea<> body;
       widgets::Button<send_press> send;
     } parts;
-    explicit form(devtools_box* box)
-        : parts{.type = field(*box->colours_, "Event type", "m.room.message"),
-                .key = field(*box->colours_, "State key (for a state event; empty for a timeline one)", ""),
-                .body_caption = nodes::Text("Content (a JSON object)", 13.0f, box->colours_->dim),
-                .body = widgets::TextArea<>(box->colours_->widgets, "{}"),
-                .send = widgets::Button<send_press>(box->colours_->widgets, "Send", {box})} {
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 12.0f, 12.0f}});
-      parts.body_caption.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});
-      parts.body.apply({.fillX = true, .height = 180.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f,
-                        .background = box->colours_->tile, .border = scene::Border{box->colours_->band, 1.0f}});
+    explicit form(devtools_box *box)
+        : Stacked(skiff::compose::vbox(
+              8.0f, {.fillX = true,
+                     .autoSize = scene::axes::kY,
+                     .padding = {0.0f, 12.0f, 12.0f, 12.0f}})),
+          parts{.type = field(*box->colours_, "Event type", "m.room.message"),
+                .key = field(
+                    *box->colours_,
+                    "State key (for a state event; empty for a timeline one)",
+                    ""),
+                .body_caption = skiff::compose::styled(
+                    {.margin = {0.0f, 10.0f, 0.0f, 10.0f}},
+                    nodes::Text("Content (a JSON object)", 13.0f,
+                                box->colours_->dim)),
+                .body = skiff::compose::styled(
+                    {.fillX = true,
+                     .height = 180.0f,
+                     .margin = {0.0f, 10.0f, 0.0f, 10.0f},
+                     .cornerRadius = 6.0f,
+                     .background = box->colours_->tile,
+                     .border = scene::Border{box->colours_->band, 1.0f}},
+                    widgets::TextArea<>(box->colours_->widgets, "{}")),
+                .send = skiff::compose::styled(
+                    {.width = 120.0f,
+                     .height = 34.0f,
+                     .margin = {0.0f, 10.0f, 0.0f, 10.0f}},
+                    primary(widgets::Button<send_press>(box->colours_->widgets,
+                                                        "Send", {box})))} {
+
       parts.body.setText("{\n  \n}");
-      parts.send.setPrimary(true);
-      parts.send.apply({.width = 120.0f, .height = 34.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
     }
   };
   struct parts_t {
     header_t header;
     nodes::ScrollContainer<nodes::Text> reading;
-    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+    nodes::ScrollContainer<rows_t> list{skiff::compose::styled(
+        {.fillX = true, .grow = scene::axes::kY},
+        nodes::ScrollContainer<rows_t>(skiff::compose::styled(
+            {.fillX = true, .autoSize = scene::axes::kY},
+            rows_t({.spacingY = 0.0f, .wrap = false}, {}))))};
     std::optional<form> sending;
   } parts;
   // What it shows: some text, or the state -- all its events -- at a level.
@@ -95,42 +115,41 @@ struct devtools_box : nodes::Stack {
   bool showing_state = false;
   std::optional<pick> pending;
 
-  devtools_box(const palette& colours, std::string title, std::string text)
-      : colours_(&colours),
-        parts{.header = header_t(colours, std::move(title), {this}, {}, false, true), .reading = reading_of(colours)} {
-    this->lay_out();
+  devtools_box(const palette &colours, std::string title, std::string text)
+      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 560.0f})),
+        colours_(&colours), parts{.header = header_t(colours, std::move(title),
+                                                     {this}, {}, false, true),
+                                  .reading = reading_of(colours)} {
     this->show_text(std::move(text));
   }
-  devtools_box(const palette& colours, std::vector<proto::matrix::state_entry> entries)
-      : colours_(&colours),
-        parts{.header = header_t(colours, "Room state", {this}, {}, false, true), .reading = reading_of(colours)},
+  devtools_box(const palette &colours,
+               std::vector<proto::matrix::state_entry> entries)
+      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 560.0f})),
+        colours_(&colours), parts{.header = header_t(colours, "Room state",
+                                                     {this}, {}, false, true),
+                                  .reading = reading_of(colours)},
         state(std::move(entries)) {
-    this->lay_out();
     this->show_types();
   }
   struct send_form_t {};
   // Where a text is read, in the colours it is made in.
   [[nodiscard]] static nodes::ScrollContainer<nodes::Text> reading_of(const palette& colours) {
-    return nodes::ScrollContainer<nodes::Text>(nodes::Text("", 13.0f, colours.text));
-  }
-  devtools_box(const palette& colours, send_form_t)
-      : colours_(&colours),
-        parts{.header = header_t(colours, "Send custom event", {this}, {}, false, true), .reading = reading_of(colours)} {
-    this->lay_out();
-    parts.sending.emplace(this);
-    parts.reading.setVisible(false);
-    parts.list.setVisible(false);
-  }
-  void lay_out() {
-    fState.apply({.fillX = true, .height = 560.0f});
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.reading, &parts.list})
-      each->apply({.fillX = true, .grow = scene::axes::kY});
-    auto& text = std::get<0>(parts.reading.fChildren);
-    text.setWrapped(true);
+    auto text = wrapped(nodes::Text("", 13.0f, colours.text));
     text.setSelectable(true);
-    // A margin, not padding: a text draws from its own edge.
-    text.apply({.fillX = true, .margin = {6.0f, 16.0f, 12.0f, 16.0f}});
-    std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    return skiff::compose::styled(
+        {.fillX = true, .grow = scene::axes::kY},
+        nodes::ScrollContainer<nodes::Text>(skiff::compose::styled(
+            {.fillX = true, .margin = {6.0f, 16.0f, 12.0f, 16.0f}},
+            std::move(text))));
+  }
+  devtools_box(const palette &colours, send_form_t)
+      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 560.0f})),
+        colours_(&colours),
+        parts{.header = header_t(colours, "Send custom event", {this}, {},
+                                 false, true),
+              .reading = skiff::compose::visible(false, reading_of(colours))} {
+    parts.sending.emplace(this);
+    parts.list.setVisible(false);
   }
   void show_text(std::string text) {
     std::get<0>(parts.reading.fChildren).setText(std::move(text));
@@ -237,8 +256,7 @@ struct devtools_box : nodes::Stack {
 // A step of interactive auth done in the browser, as Element's: what it is
 // for, its page opened there again where it was closed, and Continue once
 // it is done there -- or Cancel.
-template <class Actions>
-struct uia_box : nodes::Stack {
+template <class Actions> struct uia_box : skiff::compose::Stacked {
   struct open_again {
     using Answer = ::mux::ui::request::open_url;
     std::string url;
@@ -258,19 +276,26 @@ struct uia_box : nodes::Stack {
     widgets::Button<open_again> again;
     dialog_buttons<cancel, go> buttons;
   } parts;
-  uia_box(const palette& colours, std::string what, std::string url)
-      : parts{.title = nodes::Text(std::move(what), 17.0f, colours.text, true),
-              .about = nodes::Text("Your server asks you to confirm this in your browser: the page is open there. "
-                                   "Once you have done what it asks, press Continue.",
-                                   14.0f, colours.dim),
-              .again = widgets::Button<open_again>(colours.widgets, "Open the page again", {std::move(url)}),
-              .buttons = dialog_buttons<cancel, go>(colours, "Continue", {}, {}, 120.0f)} {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
-    this->setGap(10.0f);
-    parts.about.setWrapped(true);
-    parts.about.apply({.fillX = true});
-    parts.again.apply({.width = 200.0f, .height = 32.0f});
-  }
+  uia_box(const palette &colours, std::string what, std::string url)
+      : Stacked(skiff::compose::vbox(
+            10.0f, {.fillX = true,
+                    .autoSize = scene::axes::kY,
+                    .padding = {20.0f, 22.0f, 20.0f, 22.0f}})),
+        parts{.title = nodes::Text(std::move(what), 17.0f, colours.text, true),
+              .about = skiff::compose::styled(
+                  {.fillX = true},
+                  wrapped(nodes::Text(
+                      "Your server asks you to confirm this in your browser: "
+                      "the page is open there. "
+                      "Once you have done what it asks, press Continue.",
+                      14.0f, colours.dim))),
+              .again = skiff::compose::styled(
+                  {.width = 200.0f, .height = 32.0f},
+                  widgets::Button<open_again>(colours.widgets,
+                                              "Open the page again",
+                                              {std::move(url)})),
+              .buttons = dialog_buttons<cancel, go>(colours, "Continue", {}, {},
+                                                    120.0f)} {}
 };
 
 }  // namespace mux::proto::matrix::tools_detail

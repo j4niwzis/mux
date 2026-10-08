@@ -6,6 +6,7 @@ import std;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.image;
@@ -37,8 +38,7 @@ struct viewer_facts {
   // The video's file, once it is there: played.
   std::optional<std::filesystem::path> file;
 };
-template <class Actions>
-struct picture_viewer : nodes::Stack {
+template <class Actions> struct picture_viewer : skiff::compose::Stacked {
   // The colours its menu is made in.
   const palette* colours_ = nullptr;
   std::string source;
@@ -68,7 +68,7 @@ struct picture_viewer : nodes::Stack {
     picture_viewer* viewer;
     ::mux::ui::request::press_loader operator()() const { return ::mux::ui::request::press_loader{viewer->video.value_or(viewer->source)}; }
   };
-  struct top_bar : nodes::Stack {
+  struct top_bar : skiff::compose::Stacked {
     using close_button = icon_button<sends<::mux::ui::request::close_picture>>;
     struct parts_t {
       avatar_mark face;
@@ -79,17 +79,22 @@ struct picture_viewer : nodes::Stack {
       icon_button<save_it> save;
       close_button close;
     } parts;
-    top_bar(const palette& colours, picture_viewer* viewer, const std::string& source, const std::string& sender,
-            const std::string& name, const std::string& when)
-        : parts{.face = avatar_mark(sender, name, 36.0f),
-                .texts = two_lines(colours, name, when, 14.0f, 2.0f),
-                .smaller = icon_button<zoom_by>(colours, icon::minus{}, {viewer, 1.0f / 1.25f}),
-                .larger = icon_button<zoom_by>(colours, icon::plus{}, {viewer, 1.25f}),
-                .save = icon_button<save_it>(colours, icon::download{}, {source}),
-                .close = close_button(colours, icon::close{}, {})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}});
+    top_bar(const palette &colours, picture_viewer *viewer,
+            const std::string &source, const std::string &sender,
+            const std::string &name, const std::string &when)
+        : Stacked(skiff::compose::hbox(
+              8.0f, {.fillX = true,
+                     .height = 56.0f,
+                     .padding = {0.0f, 12.0f, 0.0f, 16.0f}})),
+          parts{
+              .face = avatar_mark(sender, name, 36.0f),
+              .texts = two_lines(colours, name, when, 14.0f, 2.0f),
+              .smaller = icon_button<zoom_by>(colours, icon::minus{},
+                                              {viewer, 1.0f / 1.25f}),
+              .larger =
+                  icon_button<zoom_by>(colours, icon::plus{}, {viewer, 1.25f}),
+              .save = icon_button<save_it>(colours, icon::download{}, {source}),
+              .close = close_button(colours, icon::close{}, {})} {
       parts.texts.parts.name.setColour(skia::colorSetARGB(255, 255, 255, 255));
       parts.texts.parts.state.setColour(skia::colorSetARGB(255, 200, 200, 200));
       parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
@@ -103,7 +108,7 @@ struct picture_viewer : nodes::Stack {
     }
   };
   // Where the picture is drawn: fitted, zoomed, moved.
-  struct stage : scene::Node {
+  struct stage : skiff::compose::Specced {
     // A press off the picture: closed.
     using Answer = ::mux::ui::request::close_picture;
     picture_viewer* viewer;
@@ -122,12 +127,13 @@ struct picture_viewer : nodes::Stack {
       nodes::Image<shown_picture> picture;
       widgets::RadialLoader<press_loader> loader;  // while the whole picture is coming
     } parts;
-    explicit stage(picture_viewer* v)
-        : viewer(v), parts{.picture = nodes::Image<typename parts_t::shown_picture>({v}),
-                           .loader = widgets::RadialLoader<press_loader>(44.0f, {v})} {
-      fState.apply({.fillX = true, .grow = scene::axes::kY, .masking = true});
-      parts.loader.apply({.place = scene::anchor::kCentre});
-    }
+    explicit stage(picture_viewer *v)
+        : Specced({.fillX = true, .grow = scene::axes::kY, .masking = true}),
+          viewer(v),
+          parts{.picture = nodes::Image<typename parts_t::shown_picture>({v}),
+                .loader = skiff::compose::styled(
+                    {.place = scene::anchor::kCentre},
+                    widgets::RadialLoader<press_loader>(44.0f, {v}))} {}
     // A video playing: frames while it plays.
     [[nodiscard]] bool settling() const { return viewer->playing && !viewer->playing->paused(); }
     void update(double now) {
@@ -241,16 +247,20 @@ struct picture_viewer : nodes::Stack {
   };
   // Under a video: how far it has played, a bar pressed to go elsewhere in
   // it, and its time, as tdesktop's player.
-  struct video_bar : nodes::Stack {
+  struct video_bar : skiff::compose::Stacked {
     picture_viewer* viewer;
-    struct track_t : nodes::Stack {
+    struct track_t : skiff::compose::Stacked {
       struct parts_t {
         nodes::Box<> played{skia::colorSetARGB(255, 255, 255, 255)};
       } parts;
-      track_t() {
-        this->setHorizontal();
-        fState.apply({.height = 4.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 2.0f,
-                      .background = skia::colorSetARGB(0x60, 255, 255, 255)});
+      track_t()
+          : Stacked(skiff::compose::hbox(
+                0.0f,
+                {.height = 4.0f,
+                 .grow = scene::axes::kX,
+                 .alignSelf = scene::align::kMiddle,
+                 .cornerRadius = 2.0f,
+                 .background = skia::colorSetARGB(0x60, 255, 255, 255)})) {
         parts.played.apply({.fillY = true, .width = 0.0f, .cornerRadius = 2.0f});
       }
     };
@@ -258,10 +268,12 @@ struct picture_viewer : nodes::Stack {
       track_t track;
       nodes::Text time{"", 13.0f, skia::colorSetARGB(255, 255, 255, 255)};
     } parts;
-    explicit video_bar(picture_viewer* v) : viewer(v) {
-      this->setHorizontal();
-      this->setGap(12.0f);
-      fState.apply({.fillX = true, .height = 44.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+    explicit video_bar(picture_viewer *v)
+        : Stacked(skiff::compose::hbox(
+              12.0f, {.fillX = true,
+                      .height = 44.0f,
+                      .padding = {0.0f, 20.0f, 0.0f, 20.0f}})),
+          viewer(v) {
       parts.time.apply({.alignSelf = scene::align::kMiddle});
       this->setVisible(false);
     }
@@ -304,18 +316,22 @@ struct picture_viewer : nodes::Stack {
     picture_viewer* viewer;
     ::mux::ui::request::save_picture operator()() const { return ::mux::ui::request::save_picture{viewer->source}; }
   };
-  template <class Do>
-  struct menu_row : nodes::Stack {
+  template <class Do> struct menu_row : skiff::compose::Stacked {
     picture_viewer* viewer;
     Do act;
     struct parts_t {
       nodes::Text label;
     } parts;
-    menu_row(picture_viewer* v, std::string label)
-        : viewer(v), act{v}, parts{.label = nodes::Text(std::move(label), 13.0f, v->colours_->text)} {
-      fState.apply({.fillX = true, .height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = v->colours_->chosen});
-      parts.label.apply({.alignSelf = scene::align::kMiddle});
-    }
+    menu_row(picture_viewer *v, std::string label)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.fillX = true,
+                     .height = 33.0f,
+                     .padding = {0.0f, 17.0f, 0.0f, 17.0f},
+                     .hoverBackground = v->colours_->chosen})),
+          viewer(v), act{v},
+          parts{.label = skiff::compose::styled(
+                    {.alignSelf = scene::align::kMiddle},
+                    nodes::Text(std::move(label), 13.0f, v->colours_->text))} {}
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
@@ -329,18 +345,26 @@ struct picture_viewer : nodes::Stack {
       return act();
     }
   };
-  struct picture_menu : nodes::Stack {
+  struct picture_menu : skiff::compose::Stacked {
     struct parts_t {
       menu_row<copy_it> copy;
       menu_row<save_this> save;
     } parts;
-    picture_menu(picture_viewer* v, float x, float y)
-        : parts{.copy = menu_row<copy_it>(v, "Copy Image"), .save = menu_row<save_this>(v, "Save As…")} {
-      fState.apply({.place = scene::anchor::kTopLeft, .x = x, .y = y, .width = 200.0f, .autoSize = scene::axes::kY,
-                    .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = v->colours_->sidebar,
-                    .border = scene::Border{v->colours_->band, 1.0f},
-                    .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
-    }
+    picture_menu(picture_viewer *v, float x, float y)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.place = scene::anchor::kTopLeft,
+                     .x = x,
+                     .y = y,
+                     .width = 200.0f,
+                     .autoSize = scene::axes::kY,
+                     .padding = {6.0f, 0.0f, 6.0f, 0.0f},
+                     .cornerRadius = 10.0f,
+                     .background = v->colours_->sidebar,
+                     .border = scene::Border{v->colours_->band, 1.0f},
+                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0),
+                                             3.0f}})),
+          parts{.copy = menu_row<copy_it>(v, "Copy Image"),
+                .save = menu_row<save_this>(v, "Save As…")} {}
     [[nodiscard]] bool acceptsInput() const { return true; }
   };
   struct parts_t {
@@ -381,11 +405,15 @@ struct picture_viewer : nodes::Stack {
   }
   picture_viewer(const ui_needs<Actions>& n, std::string where, std::string sender, std::string name, std::string when)
       : picture_viewer(n.colours, std::move(where), std::move(sender), std::move(name), std::move(when)) {}
-  picture_viewer(const palette* colours, std::string where, std::string sender, std::string name, std::string when)
-      : colours_(colours), source(std::move(where)),
-        parts{.top = top_bar(*colours, this, source, sender, name, when), .view = stage(this), .bar = video_bar(this)} {
-    fState.apply({.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)});
-  }
+  picture_viewer(const palette *colours, std::string where, std::string sender,
+                 std::string name, std::string when)
+      : Stacked(skiff::compose::vbox(
+            0.0f,
+            {.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)})),
+        colours_(colours), source(std::move(where)),
+        parts{.top = top_bar(*colours, this, source, sender, name, when),
+              .view = stage(this),
+              .bar = video_bar(this)} {}
   [[nodiscard]] bool acceptsInput() const { return true; }
   // Space: a video paused, or played on.
   using Node::onKey;

@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.nodes.scroll;
@@ -28,8 +29,7 @@ using namespace ::mux::ui;
 // A Matrix account's settings: its user ID and password, the homeserver
 // (found through the server's .well-known when left empty) and what this
 // device is called.
-template <class Actions>
-struct matrix_form : nodes::Stack {
+template <class Actions> struct matrix_form : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::submit_login;
   // What the add-account pane says of the protocol.
@@ -67,27 +67,39 @@ struct matrix_form : nodes::Stack {
     form_end<Actions> end;
   } parts;
 
-  matrix_form(const palette& colours, const std::optional<::mux::proto::matrix::kept>& from)
-      : parts{.user_id = field(colours, "User ID", "@user:example.org"),
-              .way = choice_menu<pick_way>(colours, "Sign in", {"With a password", "In the browser, on the server's page"},
-                                           from && from->oauth.value_or(false) ? 1 : 0, pick_way{this}),
-              .password = field(colours, "Password", "Password"),
-              .homeserver = field(colours, "Homeserver", "found through the server's .well-known"),
+  matrix_form(const palette &colours,
+              const std::optional<::mux::proto::matrix::kept> &from)
+      : Stacked(skiff::compose::vbox(
+            12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.user_id = field(colours, "User ID", "@user:example.org"),
+              .way = choice_menu<pick_way>(
+                  colours, "Sign in",
+                  {"With a password", "In the browser, on the server's page"},
+                  from && from->oauth.value_or(false) ? 1 : 0, pick_way{this}),
+              .password = skiff::compose::visible(
+                  !in_browser, field(colours, "Password", "Password")),
+              .homeserver = field(colours, "Homeserver",
+                                  "found through the server's .well-known"),
               .device_name = field(colours, "Device name", "mux", "mux"),
-              .mode = choice_menu<pick_mode>(colours, "Account", {"Sign in to an account", "Create a new account"}, 0, pick_mode{this}),
-              .token = field(colours, "Registration token", "where the server registers by invitation"),
-              .terms = choice_menu<pick_terms>(colours, "The server's terms", {"Not agreed to", "I agree to the server's terms"}, 0,
-                                               pick_terms{this}),
+              .mode = skiff::compose::visible(
+                  !from.has_value(),
+                  choice_menu<pick_mode>(
+                      colours, "Account",
+                      {"Sign in to an account", "Create a new account"}, 0,
+                      pick_mode{this})),
+              .token = skiff::compose::visible(
+                  false, field(colours, "Registration token",
+                               "where the server registers by invitation")),
+              .terms = skiff::compose::visible(
+                  false, choice_menu<pick_terms>(
+                             colours, "The server's terms",
+                             {"Not agreed to", "I agree to the server's terms"},
+                             0, pick_terms{this})),
               .end = form_end<Actions>(colours, from.has_value())} {
     auto& [user_id, way, password, homeserver, device_name, mode, token, terms, end] = parts;
     in_browser = from && from->oauth.value_or(false);
-    password.setVisible(!in_browser);
     // Editing an account kept: it is one already.
-    mode.setVisible(!from.has_value());
-    token.setVisible(false);
-    terms.setVisible(false);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    this->setGap(12.0f);
+
     password.parts.box.setMasked(true);
     if (from) {
       editing = from->user_id;
@@ -147,9 +159,7 @@ struct matrix_form : nodes::Stack {
     }
     return answer;
   }
-
 };
-
 
 }  // namespace mux::proto::matrix::form_detail
 

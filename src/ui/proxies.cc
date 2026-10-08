@@ -29,8 +29,7 @@ export namespace mux::ui {
 
 // Settings, as Telegram Desktop shows them: a box over the window, a list of
 // sections, and each section a page of the same box.
-template <class Actions>
-struct settings_home : nodes::Stack {
+template <class Actions> struct settings_home : skiff::compose::Stacked {
   // Its children, in the order they are shown: the header, then the lines,
   // one under another -- walked as they are declared.
   struct parts_t {
@@ -47,8 +46,9 @@ struct settings_home : nodes::Stack {
   } parts;
 
   explicit settings_home(const ui_needs<Actions>& n) : settings_home(*n.colours) {}
-  settings_home(const palette& colours)
-      : parts{.header = {colours, "Settings", {}, {}, false, true},
+  settings_home(const palette &colours)
+      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
+        parts{.header = {colours, "Settings", {}, {}, false, true},
               .accounts = {colours, "Accounts", {}, icon::person{}},
               .animations = {colours, "Animations", {}, icon::motion{}},
               .appearance = {colours, "Appearance", {}, icon::eye{}},
@@ -57,14 +57,10 @@ struct settings_home : nodes::Stack {
               .notifications = {colours, "Notifications", {}, icon::bell{}},
               .storage = {colours, "Storage", {}, icon::clip{}},
               .files = {colours, "Files", {}, icon::send{}},
-              .proxies = {colours, "Proxies", {}, icon::gear{}}} {
-    fState.apply({.fill = true});
-  }
+              .proxies = {colours, "Proxies", {}, icon::gear{}}} {}
 
   void show_receipts(bool) {}
 };
-
-
 
 // A value a row stands for: pressed, the part set to it.
 template <class T>
@@ -75,14 +71,15 @@ struct picks {
 };
 // Rows, one for each value a part can be, the one it is checked: bound to
 // the part, set to the row pressed.
-template <class T>
-struct choice_rows : nodes::Stack {
+template <class T> struct choice_rows : skiff::compose::Stacked {
   using row = row_item<picks<T>>;
   struct parts_t {
     std::vector<row> rows;
   } parts;
-  choice_rows(const palette& colours, std::initializer_list<std::pair<std::string_view, T>> choices) {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+  choice_rows(const palette &colours,
+              std::initializer_list<std::pair<std::string_view, T>> choices)
+      : Stacked(skiff::compose::vbox(
+            0.0f, {.fillX = true, .autoSize = scene::axes::kY})) {
     parts.rows.reserve(choices.size());
     for (const auto& [label, value] : choices)
       parts.rows.emplace_back(colours, std::string(label), picks<T>{value}, icon::none{}, false);
@@ -104,8 +101,7 @@ inline auto motion_settings_view(const palette& colours) {
       skiff::compose::bound<skiff::model::Field<&config::look_settings::motion>>(choice_rows<config::motion_t>(
           colours, {{"Full", config::motion::full{}}, {"Reduced", config::motion::reduced{}}, {"None", config::motion::none{}}})));
 }
-template <class Actions>
-struct animations_page : nodes::Stack {
+template <class Actions> struct animations_page : skiff::compose::Stacked {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(motion_settings_view(std::declval<const palette&>()));
   struct parts_t {
@@ -114,10 +110,10 @@ struct animations_page : nodes::Stack {
   } parts;
 
   explicit animations_page(const ui_needs<Actions>& n) : animations_page(*n.colours) {}
-  animations_page(const palette& colours)
-      : parts{.header = header_t(colours, "Animations", {}, {}, true, true), .settings = motion_settings_view(colours)} {
-    fState.apply({.fill = true});
-  }
+  animations_page(const palette &colours)
+      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
+        parts{.header = header_t(colours, "Animations", {}, {}, true, true),
+              .settings = motion_settings_view(colours)} {}
   void show_receipts(bool) {}
 };
 
@@ -138,8 +134,7 @@ struct choose_proxy_kind {
 
 // Settings' Proxies page, as Gajim's Manage Proxies: the profiles, and a way
 // to add one.
-template <class Actions>
-struct proxies_page : nodes::Stack {
+template <class Actions> struct proxies_page : skiff::compose::Stacked {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using add_row = row_item<sends<::mux::ui::request::add_proxy>>;
   struct parts_t {
@@ -152,27 +147,31 @@ struct proxies_page : nodes::Stack {
   // With a way back to the settings' list where it was opened from there.
   proxies_page(const ui_needs<Actions>& n, const std::vector<config::proxy_settings>& all, bool with_back)
       : proxies_page(*n.colours, all, with_back) {}
-  proxies_page(const palette& colours, const std::vector<config::proxy_settings>& all, bool with_back)
-      : parts{.header = header_t(colours, "Proxies", {}, {}, with_back, true),
+  proxies_page(const palette &colours,
+               const std::vector<config::proxy_settings> &all, bool with_back)
+      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
+        parts{.header = header_t(colours, "Proxies", {}, {}, with_back, true),
               .add = add_row(colours, "Add proxy", {}, icon::plus{}),
-              .empty = note_text(colours, "No proxies yet. Accounts connect directly.")} {
+              .empty = skiff::compose::visible(
+                  all.empty(),
+                  skiff::compose::styled(
+                      {.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}},
+                      wrapped(note_text(
+                          colours,
+                          "No proxies yet. Accounts connect directly."))))} {
     auto& [header, profiles, add, empty] = parts;
-    empty.setWrapped(true);
-    empty.apply({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}});
-    fState.apply({.fill = true});
+
     for (std::size_t i = 0; i < all.size(); ++i)
       profiles.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(all[i].kind),
                                         all[i].host, all[i].port),
                             edit_proxy<Actions>{static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
-    empty.setVisible(all.empty());
   }
   void show_receipts(bool) {}
 };
 
 // SOCKS5 | HTTP: two segments in a frame, the chosen one lit by a plate
 // that slides from one to the other.
-template <class Actions>
-struct kind_switch : nodes::Stack {
+template <class Actions> struct kind_switch : skiff::compose::Stacked {
   // The highlight that slides from one to the other: under them, out of
   // their flow, shifted as far as the slide has come.
   using kind_segment = segment<choose_proxy_kind<Actions>>;
@@ -183,14 +182,19 @@ struct kind_switch : nodes::Stack {
   } parts;
   skiff::paint::Tween slide{0.0f, 180.0f, skiff::paint::movement::subtle{}};
 
-  kind_switch(const palette& colours)
-      : parts{.highlight = nodes::Box<>(colours.accent),
-              .socks = kind_segment(colours, "SOCKS5", {config::proxy_kind::socks5{}}),
-              .http = kind_segment(colours, "HTTP", {config::proxy_kind::http{}})} {
-    this->setHorizontal();
-    this->setGap(1.0f);
-    fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen});
-    parts.highlight.apply({.place = scene::anchor::kTopLeft, .width = 92.0f, .height = 28.0f});
+  kind_switch(const palette &colours)
+      : Stacked(skiff::compose::hbox(1.0f, {.autoSize = scene::axes::kBoth,
+                                            .padding = {1.0f, 1.0f, 1.0f, 1.0f},
+                                            .background = colours.chosen})),
+        parts{.highlight =
+                  skiff::compose::styled({.place = scene::anchor::kTopLeft,
+                                          .width = 92.0f,
+                                          .height = 28.0f},
+                                         nodes::Box<>(colours.accent)),
+              .socks = kind_segment(colours, "SOCKS5",
+                                    {config::proxy_kind::socks5{}}),
+              .http =
+                  kind_segment(colours, "HTTP", {config::proxy_kind::http{}})} {
   }
   void show(const config::proxy_kind_t& kind, bool at_once) {
     const float to = spl::visit(spl::overloaded{[](config::proxy_kind::socks5) { return 0.0f; },
@@ -210,12 +214,10 @@ struct kind_switch : nodes::Stack {
   }
 };
 
-
 // One proxy profile's page: its name, SOCKS5 or HTTP, where, and who to be
 // there; saved or deleted with its buttons. Declared: a column of these,
 // nothing placed by hand.
-template <class Actions>
-struct proxy_editor : nodes::Stack {
+template <class Actions> struct proxy_editor : skiff::compose::Stacked {
   int index = -1;  // in the list; -1 for a new one
   // The colours what it says is said in.
   const palette* colours_ = nullptr;
@@ -239,27 +241,32 @@ struct proxy_editor : nodes::Stack {
 
   proxy_editor(const ui_needs<Actions>& n, const std::optional<config::proxy_settings>& from, int at)
       : proxy_editor(*n.colours, from, at) {}
-  proxy_editor(const palette& colours, const std::optional<config::proxy_settings>& from, int at)
-      : index(at),
+  proxy_editor(const palette &colours,
+               const std::optional<config::proxy_settings> &from, int at)
+      : Stacked(skiff::compose::vbox(8.0f, {.fill = true})), index(at),
         colours_(&colours),
-        parts{.header = header_t(colours, from ? from->name : std::string("New proxy"), {}, {}, true, true),
+        parts{.header = header_t(colours,
+                                 from ? from->name : std::string("New proxy"),
+                                 {}, {}, true, true),
               .name = field(colours, "Name", "Home, Tor, Work…"),
-              .kinds = kind_switch<Actions>(colours),
+              .kinds =
+                  skiff::compose::styled({.margin = {4.0f, 0.0f, 4.0f, 16.0f}},
+                                         kind_switch<Actions>(colours)),
               .host = field(colours, "Host", "proxy.example.com"),
               .port = field(colours, "Port", "1080"),
               .username = field(colours, "User name", "none"),
               .password = field(colours, "Password", "none"),
-              .resolver = field(colours, "XMPP SRV lookups: nameserver", "the system's; an IP address, or off"),
-              .message = nodes::Text("", 13.0f, colours.dim),
-              .buttons = button_row<save_button, delete_button>(save_button(colours.widgets, "Save", {}), delete_button(colours.widgets, "Delete", {}))} {
+              .resolver = field(colours, "XMPP SRV lookups: nameserver",
+                                "the system's; an IP address, or off"),
+              .message = wrapped(nodes::Text("", 13.0f, colours.dim)),
+              .buttons = button_row<save_button, delete_button>(
+                  save_button(colours.widgets, "Save", {}),
+                  delete_button(colours.widgets, "Delete", {}))} {
     auto& [header, name, kinds, host, port, username, password, resolver, message, buttons] = parts;
-    fState.apply({.fill = true});
-    this->setGap(8.0f);
     const auto inset = scene::Margin::horizontal(16.0f);
     for (field* one : {&name, &host, &port, &username, &password, &resolver})
       one->apply({.margin = inset});
-    kinds.apply({.margin = {4.0f, 0.0f, 4.0f, 16.0f}});
-    message.setWrapped(true);
+
     message.apply({.fillX = true, .margin = inset});
     buttons.apply({.margin = inset});
     auto& [save, remove] = buttons.parts.buttons;

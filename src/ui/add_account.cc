@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.text;
 import mux.core;
@@ -30,8 +31,7 @@ struct choose_new_proxy {
 
 // Adding an account, beside the list of them: XMPP or Matrix at the top, and
 // that protocol's form under it.
-template <class Actions>
-struct add_account_pane : nodes::Stack {
+template <class Actions> struct add_account_pane : skiff::compose::Stacked {
   // A segment a protocol, in a thin frame -- from the list, each named as
   // its protocol names itself.
   struct pick_protocol {
@@ -39,7 +39,7 @@ struct add_account_pane : nodes::Stack {
     protocol_t speaks;
     ::mux::ui::request::add_account_of operator()() { return ::mux::ui::request::add_account_of{speaks}; }
   };
-  struct protocol_switch : nodes::Stack {
+  struct protocol_switch : skiff::compose::Stacked {
     struct parts_t {
       std::vector<segment<pick_protocol>> each;
     } parts;
@@ -47,29 +47,30 @@ struct add_account_pane : nodes::Stack {
     void make(const palette& colours, protocol_list<Tags...>) {
       (parts.each.emplace_back(colours, std::string(protocol_name(config::kept_of<Tags>{})), pick_protocol{protocol_t{Tags{}}}), ...);
     }
-    protocol_switch(const palette& colours) {
+    protocol_switch(const palette &colours)
+        : Stacked(
+              skiff::compose::hbox(1.0f, {.autoSize = scene::axes::kBoth,
+                                          .padding = {1.0f, 1.0f, 1.0f, 1.0f},
+                                          .background = colours.chosen})) {
       this->make(colours, protocols{});
-      this->setHorizontal();
-      this->setGap(1.0f);
-      fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen});
     }
   };
   // The proxy the new account goes through: none, or one of the profiles --
   // and, always there, a way to make one.
-  struct proxy_row : nodes::Stack {
+  struct proxy_row : skiff::compose::Stacked {
     using add_button = segment<sends<::mux::ui::request::manage_proxies>>;
     struct parts_t {
       nodes::Text title;
       std::vector<segment<choose_new_proxy<Actions>>> choices;
       add_button add;
     } parts;
-    proxy_row(const palette& colours)
-        : parts{.title = nodes::Text("Proxy", 13.0f, colours.dim), .add = add_button(colours, "Add proxy\u2026", {})} {
-      this->setHorizontal();
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.title.apply({.alignSelf = scene::align::kMiddle});
-    }
+    proxy_row(const palette &colours)
+        : Stacked(skiff::compose::hbox(
+              4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.title = skiff::compose::styled(
+                    {.alignSelf = scene::align::kMiddle},
+                    nodes::Text("Proxy", 13.0f, colours.dim)),
+                .add = add_button(colours, "Add proxy\u2026", {})} {}
   };
   // The colours it is made in, for the proxies it lists as they change.
   const palette* colours_ = nullptr;
@@ -84,16 +85,18 @@ struct add_account_pane : nodes::Stack {
   // The form coming in when the protocol changes, fading in.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
 
-  add_account_pane(const ui_needs<Actions>& n, const std::vector<config::proxy_settings>& proxies)
-      : colours_(n.colours),
+  add_account_pane(const ui_needs<Actions> &n,
+                   const std::vector<config::proxy_settings> &proxies)
+      : Stacked(skiff::compose::vbox(12.0f, {.fill = true})),
+        colours_(n.colours),
         parts{.tabs = protocol_switch(*n.colours),
-              .note = nodes::Text("", 13.0f, n.colours->dim),
+              .note = skiff::compose::styled(
+                  {.fillX = true},
+                  wrapped(nodes::Text("", 13.0f, n.colours->dim))),
               .proxies_row = proxy_row(*n.colours),
-              .form = account_form<Actions>(std::in_place_index<0>, *n.colours, std::nullopt)} {
-    fState.apply({.fill = true});
-    this->setGap(12.0f);
-    parts.note.setWrapped(true);
-    parts.note.apply({.fillX = true});
+              .form = account_form<Actions>(std::in_place_index<0>, *n.colours,
+                                            std::nullopt)} {
+
     this->set_proxies(proxies);
     this->light();
   }

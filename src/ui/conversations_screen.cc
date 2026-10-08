@@ -9,6 +9,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.scroll;
@@ -68,8 +69,7 @@ constexpr auto composer_views_for(const State& state, type_tag<Actions> tag) {
   return composer_views(state, tag);
 }
 
-template <class Actions>
-struct conversations_screen : nodes::Stack {
+template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   // What its keys and its swipes ask for.
   using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of>;
   // What it was handed, for the rows it makes.
@@ -145,18 +145,23 @@ struct conversations_screen : nodes::Stack {
   // it shows at its start, its text beside it; lit while Up and Down are
   // on it, pressed to pick.
   template <class Pick, class Face>
-  struct suggestion_row : pressable<nodes::Stack> {
+  struct suggestion_row : pressable<skiff::compose::Stacked> {
     Pick act;
     struct parts_t {
       Face face;
       two_lines texts;
     } parts;
-    suggestion_row(const palette& colours, Pick what, Face face, std::string first, std::string second)
-        : act(what), parts{.face = std::move(face), .texts = two_lines(colours, std::move(first), std::move(second), 14.0f, 1.0f)} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .height = 44.0f, .padding = {0.0f, 14.0f, 0.0f, 14.0f},
-                    .hoverBackground = colours.chosen, .selectedBackground = colours.chosen});
+    suggestion_row(const palette &colours, Pick what, Face face,
+                   std::string first, std::string second)
+        : pressable<skiff::compose::Stacked>(skiff::compose::hbox(
+              10.0f, {.fillX = true,
+                      .height = 44.0f,
+                      .padding = {0.0f, 14.0f, 0.0f, 14.0f},
+                      .hoverBackground = colours.chosen,
+                      .selectedBackground = colours.chosen})),
+          act(what), parts{.face = std::move(face),
+                           .texts = two_lines(colours, std::move(first),
+                                              std::move(second), 14.0f, 1.0f)} {
     }
     void set_lit(bool on) { fState.apply({.selected = on}); }
   };
@@ -164,13 +169,14 @@ struct conversations_screen : nodes::Stack {
   using mention_row = suggestion_row<pick_mention, avatar_mark>;
   // One of the emoji list: the emoji, its name.
   using emoji_row = suggestion_row<pick_emoji, nodes::Text>;
-  template <class Row>
-  struct suggestion_list : nodes::Stack {
+  template <class Row> struct suggestion_list : skiff::compose::Stacked {
     struct parts_t {
       std::vector<Row> rows;
     } parts;
-    explicit suggestion_list(const palette& colours) {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = colours.sidebar});
+    explicit suggestion_list(const palette &colours)
+        : Stacked(skiff::compose::vbox(0.0f, {.fillX = true,
+                                              .autoSize = scene::axes::kY,
+                                              .background = colours.sidebar})) {
     }
   };
   using mention_list = suggestion_list<mention_row>;
@@ -183,7 +189,6 @@ struct conversations_screen : nodes::Stack {
   // window's size, until their edges are dragged.
   float side_width = 300.0f;
   float info_width = 340.0f;
-
 
   // The folder whose chats are listed.
   folder_t folder = folder::all{};
@@ -618,49 +623,56 @@ struct conversations_screen : nodes::Stack {
   };
   using head_view_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_head_nodes<protocols>::type>::type>::type;
-  struct head_view_holder : nodes::Stack {
+  struct head_view_holder : skiff::compose::Stacked {
     struct parts_t {
       head_view_t shown;
     } parts;
     template <class View>
-    explicit head_view_holder(View made) : parts{.shown = head_view_t(std::move(made))} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    }
+    explicit head_view_holder(View made)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.shown = head_view_t(std::move(made))} {}
   };
-  struct composer_view_holder : nodes::Stack {
+  struct composer_view_holder : skiff::compose::Stacked {
     struct parts_t {
       composer_view_t shown;
     } parts;
     template <class View>
-    explicit composer_view_holder(View made) : parts{.shown = composer_view_t(std::move(made))} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    }
+    explicit composer_view_holder(View made)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.shown = composer_view_t(std::move(made))} {}
   };
-  struct chat_column : nodes::Stack {
+  struct chat_column : skiff::compose::Stacked {
     using header_t = chat_head<Actions>;
     using pinned_t = nodes::Memo<pinned_view, pinned_bar<pinned_press>>;
-    struct empty_state : nodes::Stack {
+    struct empty_state : skiff::compose::Stacked {
       using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
       struct parts_t {
         nodes::Text title;
         nodes::Text note;
         add_button add;
       } parts;
-      empty_state(const palette& colours)
-          : parts{.title = nodes::Text("No accounts yet", 22.0f, colours.text, true),
-                  .note = nodes::Text("Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, colours.dim),
-                  .add = add_button(colours.widgets, "Add account", {})} {
-        this->setGap(12.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {120.0f, 48.0f, 0.0f, 48.0f}});
-        parts.note.setWrapped(true);
-        parts.note.apply({.fillX = true});
-        parts.add.setPrimary(true);
-        parts.add.apply({.width = 140.0f, .height = 36.0f});
-      }
+      empty_state(const palette &colours)
+          : Stacked(skiff::compose::vbox(
+                12.0f, {.fillX = true,
+                        .autoSize = scene::axes::kY,
+                        .padding = {120.0f, 48.0f, 0.0f, 48.0f}})),
+            parts{
+                .title =
+                    nodes::Text("No accounts yet", 22.0f, colours.text, true),
+                .note = skiff::compose::styled(
+                    {.fillX = true},
+                    wrapped(nodes::Text("Add an XMPP or a Matrix account, and "
+                                        "its chats will be here.",
+                                        14.0f, colours.dim))),
+                .add = skiff::compose::styled(
+                    {.width = 140.0f, .height = 36.0f},
+                    primary(add_button(colours.widgets, "Add account", {})))} {}
     };
     // No chat chosen: the wallpaper, and in its middle a small pill saying
     // what to do, as tdesktop's (its service message look).
-    struct select_hint : nodes::Stack {
+    struct select_hint : skiff::compose::Stacked {
       struct pill : widgets::Pill {
         pill()
             : widgets::Pill("Select a chat to start messaging",
@@ -671,10 +683,11 @@ struct conversations_screen : nodes::Stack {
       struct parts_t {
         pill shown;
       } parts;
-      select_hint() {
-        fStack.justify = nodes::justify::middle{};
-        fState.apply({.fillX = true, .grow = scene::axes::kY});
-      }
+      select_hint()
+          : Stacked(skiff::compose::justified(
+                skiff::compose::vbox(0.0f,
+                                     {.fillX = true, .grow = scene::axes::kY}),
+                nodes::justify::middle{})) {}
     };
     struct parts_t {
       // The head, as a function of the chat shown.
@@ -684,7 +697,7 @@ struct conversations_screen : nodes::Stack {
       // The pinned message, under the head, where the chat has any.
       pinned_t pinned;
       // A call in this chat, as Element's call view: under the head.
-      std::optional<call_panel<Actions>> call;
+      call_panel_t<Actions> call;
       // Its protocol's own node under the head (make_head_view).
       std::optional<head_view_holder> their_head;
       timeline_area<Actions> area;
@@ -706,35 +719,31 @@ struct conversations_screen : nodes::Stack {
     composer_bar<Actions>& line = parts.line;
     empty_state& empty = parts.empty;
     select_hint& hint = parts.hint;
-    // What it makes its call view with: a copy, as the window keeps one --
-    // the needs it was made from were not always there by then.
-    ui_needs<Actions> needs_{};
-    // The call shown in it, or none.
-    void show_call(const call_view& view) {
-      if (parts.call)
-        parts.call->show(view);
-      else
-        parts.call.emplace(needs_, view);
-      this->invalidateLayout();
-      this->markDamaged();
-    }
-    void hide_call() {
-      if (!parts.call)
-        return;
-      parts.call.reset();
-      this->invalidateLayout();
-      this->markDamaged();
-    }
-    chat_column(const ui_needs<Actions>& n)
-        : parts{.search = search_bar<Actions>(n),
-                .selection = selection_bar(n),
-                .area = timeline_area<Actions>(n),
-                .mentions = mention_list(*n.colours),
-                .emojis = emoji_list(*n.colours),
-                .trust_warning = nodes::Text("", 13.0f, n.colours->text),
-                .line = composer_bar<Actions>(n),
-                .empty = empty_state(*n.colours)} {
-      needs_ = n;
+    chat_column(const ui_needs<Actions> &n)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.fillY = true,
+                     .grow = scene::axes::kX,
+                     .background = n.looks->window.behind ? skia::SkColor{0}
+                                                          : n.colours->chat})),
+          parts{
+              .search = search_bar<Actions>(n),
+              .selection = selection_bar(n),
+              .call = call_layer<call_panel<Actions>>(
+                  n, call_panel_of{},
+                  {.fillX = true, .autoSize = scene::axes::kY}),
+              .area = timeline_area<Actions>(n),
+              .mentions =
+                  skiff::compose::visible(false, mention_list(*n.colours)),
+              .emojis = skiff::compose::visible(false, emoji_list(*n.colours)),
+              .trust_warning = skiff::compose::visible(
+                  false, skiff::compose::styled(
+                             {.fillX = true,
+                              .padding = {6.0f, 14.0f, 6.0f, 14.0f},
+                              .background = (n.colours->accent & 0x00FFFFFFu) |
+                                            (0x22u << 24)},
+                             wrapped(nodes::Text("", 13.0f, n.colours->text)))),
+              .line = composer_bar<Actions>(n),
+              .empty = empty_state(*n.colours)} {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
       parts.pinned.setVisible(false);
@@ -743,15 +752,7 @@ struct conversations_screen : nodes::Stack {
       // A plain colour: the wallpaper is the messages' own -- the timeline's
       // Wallpaper -- not behind Select a chat, where Telegram has none.
       // Nothing, where the background is behind the whole window.
-      fState.apply({.fillY = true, .grow = scene::axes::kX,
-                    .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat});
       area.apply({.fillX = true, .grow = scene::axes::kY});
-      parts.mentions.setVisible(false);
-      parts.emojis.setVisible(false);
-      parts.trust_warning.setWrapped(true);
-      parts.trust_warning.apply({.fillX = true, .padding = {6.0f, 14.0f, 6.0f, 14.0f},
-                                 .background = (n.colours->accent & 0x00FFFFFFu) | (0x22u << 24)});
-      parts.trust_warning.setVisible(false);
     }
   };
   using side_edge = drag_edge<resize_sidebar_to<Actions>>;
@@ -813,16 +814,15 @@ struct conversations_screen : nodes::Stack {
   int unseen = 0;
   composer_bar<Actions>& line = chat.line;
 
-  conversations_screen(const ui_needs<Actions>& n)
-      : needs_(n),
+  conversations_screen(const ui_needs<Actions> &n)
+      : Stacked(skiff::compose::hbox(0.0f, {.fill = true})), needs_(n),
         parts{.side = side_column(*n.colours),
               .edge = side_edge(*n.colours, resize_sidebar_to<Actions>{}),
               .chat = chat_column(n),
-              .info_edge = info_edge_t(*n.colours, resize_info_to<Actions>{}, false),
+              .info_edge =
+                  info_edge_t(*n.colours, resize_info_to<Actions>{}, false),
               .info = info_panel<Actions>(*n.colours, *n.shared),
               .threads = threads_panel<Actions>(n)} {
-    fState.apply({.fill = true});
-    this->setHorizontal();
     needs_.shared->docked_panel_watcher = fState.fId;
     // The edges take a pixel between the columns, their line, and are
     // wider than that over them to be caught.
@@ -831,7 +831,6 @@ struct conversations_screen : nodes::Stack {
     info.apply({.fillY = true, .width = info_width});
     this->show_info();
   }
-
 
   // The space bars of the account shown: Home, Direct messages, and its
   // spaces, each in the bars it is put in -- none said, the side one --
@@ -957,8 +956,6 @@ struct conversations_screen : nodes::Stack {
     if (last_model && chosen)
       info.choose(*last_model, chosen, muted.contains(*chosen));
   }
-
-
 
   // The model as it is now: the current account's chats, newest first, and
   // the chosen one.

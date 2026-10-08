@@ -8,6 +8,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -59,8 +60,7 @@ struct forward_target {
 struct forward_facts {
   std::vector<forward_target> chats;
 };
-template <class Actions>
-struct forward_box : nodes::Stack {
+template <class Actions> struct forward_box : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{400.0f, 520.0f}}; }
   // The colours it is made in, for the rows it makes later.
@@ -74,7 +74,7 @@ struct forward_box : nodes::Stack {
     forward_box* box;
     void operator()(std::string_view text) const { box->find(text); }
   };
-  struct row : nodes::Stack {
+  struct row : skiff::compose::Stacked {
     // What its handlers ask for, returned.
     using Answer = ::mux::ui::request::forward_to;
     conversation_id id;
@@ -82,16 +82,20 @@ struct forward_box : nodes::Stack {
       avatar_mark face;
       nodes::Text name;
     } parts;
-    row(const palette& colours, const forward_target& one)
-        : id(one.id), parts{.face = avatar_mark(one.id.id, one.name, 36.0f),
-                                        .name = nodes::Text(one.name, 15.0f, colours.text)} {
-      this->setHorizontal();
-      this->setGap(12.0f);
-      fState.apply({.fillX = true, .height = 50.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
-                    .hoverBackground = colours.chosen});
+    row(const palette &colours, const forward_target &one)
+        : Stacked(skiff::compose::hbox(12.0f,
+                                       {.fillX = true,
+                                        .height = 50.0f,
+                                        .padding = {0.0f, 20.0f, 0.0f, 20.0f},
+                                        .hoverBackground = colours.chosen})),
+          id(one.id),
+          parts{
+              .face = avatar_mark(one.id.id, one.name, 36.0f),
+              .name = skiff::compose::styled(
+                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  elided(nodes::Text(one.name, 15.0f, colours.text)))} {
+
       fState.setCursor(scene::cursor::hand{});
-      parts.name.setElided(true);
-      parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -108,13 +112,16 @@ struct forward_box : nodes::Stack {
   } parts;
 
   forward_box(const ui_needs<Actions>& n, const forward_facts& facts) : forward_box(*n.colours, facts.chats) {}
-  forward_box(const palette& colours, const std::vector<forward_target>& chats)
-      : colours_(&colours), all(chats),
+  forward_box(const palette &colours, const std::vector<forward_target> &chats)
+      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 520.0f})),
+        colours_(&colours), all(chats),
         parts{.header = header_t(colours, "Forward to…", {}, {}, false, true),
-              .field = widgets::TextBox<typed>(colours.widgets, "Search", {this})} {
-    fState.apply({.fillX = true, .height = 520.0f});
+              .field = skiff::compose::styled(
+                  {.fillX = true,
+                   .height = 34.0f,
+                   .margin = {0.0f, 16.0f, 8.0f, 16.0f}},
+                  widgets::TextBox<typed>(colours.widgets, "Search", {this}))} {
     parts.field.setSearchIcon(true);
-    parts.field.apply({.fillX = true, .height = 34.0f, .margin = {0.0f, 16.0f, 8.0f, 16.0f}});
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
     this->find({});
@@ -135,8 +142,7 @@ struct forward_box : nodes::Stack {
 
 // Someone found: their picture, name and ID; pressed, the chat with them --
 // in Start chat, and in the chat list where nothing joined matches.
-template <class Actions>
-struct found_person_row : nodes::Stack {
+template <class Actions> struct found_person_row : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::start_direct;
   std::string id;
@@ -147,15 +153,19 @@ struct found_person_row : nodes::Stack {
     avatar_mark face;
     lines_t lines;
   } parts;
-  found_person_row(const palette& colours, const found_person& one)
-      : id(one.id),
-        parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 36.0f), .lines = lines_t(colours, one)} {
-    this->setHorizontal();
-    this->setGap(12.0f);
-    fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f,
-                  .hoverBackground = colours.chosen});
-    parts.face.apply({.alignSelf = scene::align::kMiddle});
-  }
+  found_person_row(const palette &colours, const found_person &one)
+      : Stacked(
+            skiff::compose::hbox(12.0f, {.fillX = true,
+                                         .height = 52.0f,
+                                         .padding = {8.0f, 14.0f, 8.0f, 14.0f},
+                                         .cornerRadius = 8.0f,
+                                         .hoverBackground = colours.chosen})),
+        id(one.id),
+        parts{.face = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  avatar_mark(one.id, one.name.empty() ? one.id : one.name,
+                              36.0f)),
+              .lines = lines_t(colours, one)} {}
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   std::optional<Answer> onClick(float, float) {
@@ -176,8 +186,7 @@ struct new_chat_facts {
   std::vector<found_person> found;
   std::string query;
 };
-template <class Actions>
-struct start_chat_box : nodes::Stack {
+template <class Actions> struct start_chat_box : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
   // The colours it is made in, for its parts and the rows it makes later.
@@ -210,39 +219,53 @@ struct start_chat_box : nodes::Stack {
   using person_row = found_person_row<Actions>;
   using header_t = page_header<no_back, close_it>;
   using rows_t = nodes::Flow<std::vector<person_row>>;
-  struct search_row : nodes::Stack {
+  struct search_row : skiff::compose::Stacked {
     struct parts_t {
       widgets::TextBox<typed> field;
       widgets::Button<go_press> go;
     } parts;
-    explicit search_row(start_chat_box* box)
-        : parts{.field = widgets::TextBox<typed>(box->colours_->widgets, "Search", {box}),
-                .go = widgets::Button<go_press>(box->colours_->widgets, "Go", {box})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
+    explicit search_row(start_chat_box *box)
+        : Stacked(skiff::compose::hbox(
+              8.0f, {.fillX = true,
+                     .autoSize = scene::axes::kY,
+                     .padding = {0.0f, 10.0f, 0.0f, 10.0f}})),
+          parts{.field = skiff::compose::styled(
+                    {.height = 36.0f,
+                     .relativeSize = scene::axes::kNone,
+                     .grow = scene::axes::kX,
+                     .alignSelf = scene::align::kMiddle},
+                    widgets::TextBox<typed>(box->colours_->widgets, "Search",
+                                            {box})),
+                .go = skiff::compose::styled(
+                    {.width = 64.0f,
+                     .height = 34.0f,
+                     .alignSelf = scene::align::kMiddle},
+                    primary(widgets::Button<go_press>(box->colours_->widgets,
+                                                      "Go", {box})))} {
+
       parts.field.setSearchIcon(true);
-      parts.field.apply({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX,
-                         .alignSelf = scene::align::kMiddle});
-      parts.go.setPrimary(true);
-      parts.go.apply({.width = 64.0f, .height = 34.0f, .alignSelf = scene::align::kMiddle});
     }
   };
-  struct link_row : nodes::Stack {
+  struct link_row : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text link;
       widgets::Button<copy_press> copy;
     } parts;
-    link_row(start_chat_box* box, const std::string& link)
-        : parts{.link = nodes::Text(link, 13.0f, box->colours_->accent),
-                .copy = widgets::Button<copy_press>(box->colours_->widgets, "Copy", {box})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {2.0f, 10.0f, 0.0f, 10.0f}});
-      parts.link.setElided(true);
-      parts.link.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.copy.apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
-    }
+    link_row(start_chat_box *box, const std::string &link)
+        : Stacked(skiff::compose::hbox(
+              8.0f, {.fillX = true,
+                     .autoSize = scene::axes::kY,
+                     .padding = {2.0f, 10.0f, 0.0f, 10.0f}})),
+          parts{
+              .link = skiff::compose::styled(
+                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  elided(nodes::Text(link, 13.0f, box->colours_->accent))),
+              .copy = skiff::compose::styled(
+                  {.width = 70.0f,
+                   .height = 30.0f,
+                   .alignSelf = scene::align::kMiddle},
+                  widgets::Button<copy_press>(box->colours_->widgets, "Copy",
+                                              {box}))} {}
   };
   struct parts_t {
     header_t header;
@@ -254,25 +277,34 @@ struct start_chat_box : nodes::Stack {
     link_row share;
   } parts;
   start_chat_box(const ui_needs<Actions>& n, const new_chat_facts& facts) : start_chat_box(*n.colours, facts.people, facts.own_link) {}
-  start_chat_box(const palette& colours, std::vector<found_person> people, std::string own_link)
-      : colours_(&colours), known(std::move(people)), link(std::move(own_link)),
+  start_chat_box(const palette &colours, std::vector<found_person> people,
+                 std::string own_link)
+      : Stacked(skiff::compose::vbox(8.0f,
+                                     {.fillX = true,
+                                      .height = 560.0f,
+                                      .padding = {0.0f, 12.0f, 16.0f, 12.0f}})),
+        colours_(&colours), known(std::move(people)), link(std::move(own_link)),
         parts{.header = header_t(colours, "Start chat", {}, {}, false, true),
-              .intro = nodes::Text("Start a conversation with someone using their name or username (like @user:server).",
-                                   14.0f, colours.text),
+              .intro = skiff::compose::styled(
+                  {.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}},
+                  wrapped(
+                      nodes::Text("Start a conversation with someone using "
+                                  "their name or username (like @user:server).",
+                                  14.0f, colours.text))),
               .search = search_row(this),
-              .status = nodes::Text("Suggestions", 12.0f, colours.dim, true),
-              .note = nodes::Text("If you can't see who you're looking for, send them your invite link below.", 13.0f,
-                                  colours.dim),
+              .status = skiff::compose::styled(
+                  {.margin = {6.0f, 10.0f, 0.0f, 10.0f}},
+                  nodes::Text("Suggestions", 12.0f, colours.dim, true)),
+              .note = skiff::compose::styled(
+                  {.fillX = true, .margin = {6.0f, 10.0f, 0.0f, 10.0f}},
+                  wrapped(nodes::Text("If you can't see who you're looking "
+                                      "for, send them your invite link below.",
+                                      13.0f, colours.dim))),
               .share = link_row(this, link)} {
-    this->setGap(8.0f);
-    fState.apply({.fillX = true, .height = 560.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}});
-    parts.intro.setWrapped(true);
-    parts.intro.apply({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}});
-    parts.status.apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
+
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.note.setWrapped(true);
-    parts.note.apply({.fillX = true, .margin = {6.0f, 10.0f, 0.0f, 10.0f}});
+
     this->show_rows();
   }
   // Someone's whole address, as typed -- a person, as some protocol reads
@@ -347,8 +379,7 @@ struct new_room_facts {
   std::string own_server;
   std::optional<new_room_place> place;
 };
-template <class Actions>
-struct create_room_box : nodes::Stack {
+template <class Actions> struct create_room_box : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{480.0f}}; }
   // The colours it is made in, for its parts.
@@ -442,24 +473,32 @@ struct create_room_box : nodes::Stack {
     }
   };
   // Who can join, as Element's dropdown shows it: the choice and a chevron.
-  struct choice_button : nodes::Stack {
+  struct choice_button : skiff::compose::Stacked {
     flip_list press;
     struct parts_t {
       nodes::Text value;
       nodes::Icon chevron;
     } parts;
-    explicit choice_button(create_room_box* box)
-        : press{box},
-          parts{.value = nodes::Text("", 14.0f, box->colours_->text),
-                .chevron = nodes::Icon(shape_of(icon::down{}), box->colours_->dim)} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .height = 38.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
-                    .cornerRadius = 6.0f, .background = box->colours_->tile, .hoverBackground = box->colours_->chosen,
-                    .border = scene::Border{box->colours_->band, 1.0f}});
-      parts.value.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.chevron.apply({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle});
-    }
+    explicit choice_button(create_room_box *box)
+        : Stacked(skiff::compose::hbox(
+              8.0f, {.fillX = true,
+                     .height = 38.0f,
+                     .margin = {0.0f, 10.0f, 0.0f, 10.0f},
+                     .padding = {0.0f, 12.0f, 0.0f, 12.0f},
+                     .cornerRadius = 6.0f,
+                     .background = box->colours_->tile,
+                     .hoverBackground = box->colours_->chosen,
+                     .border = scene::Border{box->colours_->band, 1.0f}})),
+          press{box},
+          parts{
+              .value = skiff::compose::styled(
+                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  nodes::Text("", 14.0f, box->colours_->text)),
+              .chevron = skiff::compose::styled(
+                  {.width = 16.0f,
+                   .height = 16.0f,
+                   .alignSelf = scene::align::kMiddle},
+                  nodes::Icon(shape_of(icon::down{}), box->colours_->dim))} {}
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
@@ -473,22 +512,26 @@ struct create_room_box : nodes::Stack {
     }
   };
   // One of the choices, in the open list: its name and what it means.
-  template <class Choose>
-  struct option_row : nodes::Stack {
+  template <class Choose> struct option_row : skiff::compose::Stacked {
     Choose choose;
     struct parts_t {
       nodes::Text name;
       nodes::Text meaning;
     } parts;
-    option_row(create_room_box* box, std::string name, std::string meaning)
-        : choose{box}, parts{.name = nodes::Text(std::move(name), 14.0f, box->colours_->text, true),
-                             .meaning = nodes::Text(std::move(meaning), 12.0f, box->colours_->dim)} {
-      this->setGap(2.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 10.0f, 0.0f, 10.0f},
-                    .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = box->colours_->chosen});
-      parts.meaning.setWrapped(true);
-      parts.meaning.apply({.fillX = true});
-    }
+    option_row(create_room_box *box, std::string name, std::string meaning)
+        : Stacked(skiff::compose::vbox(
+              2.0f, {.fillX = true,
+                     .autoSize = scene::axes::kY,
+                     .margin = {0.0f, 10.0f, 0.0f, 10.0f},
+                     .padding = {8.0f, 12.0f, 8.0f, 12.0f},
+                     .cornerRadius = 6.0f,
+                     .hoverBackground = box->colours_->chosen})),
+          choose{box}, parts{.name = nodes::Text(std::move(name), 14.0f,
+                                                 box->colours_->text, true),
+                             .meaning = skiff::compose::styled(
+                                 {.fillX = true},
+                                 wrapped(nodes::Text(std::move(meaning), 12.0f,
+                                                     box->colours_->dim)))} {}
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
@@ -502,22 +545,24 @@ struct create_room_box : nodes::Stack {
     }
   };
   // A switch with what it does: blocking other servers, encrypting.
-  template <class Flip>
-  struct switch_row : nodes::Stack {
+  template <class Flip> struct switch_row : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text label;
       widgets::Toggle<Flip> toggle;
     } parts;
-    switch_row(create_room_box* box, std::string label)
-        : parts{.label = nodes::Text(std::move(label), 13.0f, box->colours_->text),
-                .toggle = widgets::Toggle<Flip>(box->colours_->widgets, {box})} {
-      this->setHorizontal();
-      this->setGap(12.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}});
-      parts.label.setWrapped(true);
-      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.toggle.apply({.alignSelf = scene::align::kMiddle});
-    }
+    switch_row(create_room_box *box, std::string label)
+        : Stacked(skiff::compose::hbox(
+              12.0f, {.fillX = true,
+                      .autoSize = scene::axes::kY,
+                      .padding = {4.0f, 10.0f, 4.0f, 10.0f}})),
+          parts{
+              .label = skiff::compose::styled(
+                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  wrapped(nodes::Text(std::move(label), 13.0f,
+                                      box->colours_->text))),
+              .toggle = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  widgets::Toggle<Flip>(box->colours_->widgets, {box}))} {}
   };
   using buttons_row = dialog_buttons<cancel_press, create_press>;
   using header_t = page_header<no_back, close_it>;
@@ -540,41 +585,65 @@ struct create_room_box : nodes::Stack {
     buttons_row buttons;
   } parts;
   create_room_box(const ui_needs<Actions>& n, const new_room_facts& facts) : create_room_box(*n.colours, facts.own_server, facts.place) {}
-  create_room_box(const palette& colours, std::string own_server, std::optional<new_room_place> where = std::nullopt)
-      : colours_(&colours), server(std::move(own_server)), place(std::move(where)), space_members(place.has_value()),
-        parts{.header = header_t(colours, "Create a room", {}, {}, false, true),
-              .name = field(colours, "Name", ""),
-              .topic = field(colours, "Topic (optional)", ""),
-              .rule_caption = nodes::Text("Who can join", 13.0f, colours.dim),
-              .rule = choice_button(this),
-              .private_option = option_row<choose_private>(this, "Private room (invite only)",
-                                                           "Only people invited will be able to find and join this room."),
-              .members_option = option_row<choose_members>(
-                  this, "Visible to space members",
-                  place ? "Anyone in " + place->name + " will be able to find and join." : std::string()),
-              .public_option = option_row<choose_public>(this, "Public room", "Anyone will be able to find and join this room."),
-              .rule_note = nodes::Text("", 13.0f, colours.dim),
-              .address = field(colours, "Address", std::format("#room-name:{}", server)),
-              .encryption = switch_row<flip_encrypted>(this, "Enable end-to-end encryption"),
-              .encryption_note = nodes::Text("", 12.0f, colours.dim),
-              .show_advanced = widgets::Button<flip_advanced>(colours.widgets, "Show advanced", {this}),
-              .block = switch_row<flip_federate>(
-                  this, std::format("Block anyone not part of {} from ever joining this room.", server)),
-              .block_note = nodes::Text("You might enable this if the room will only be used for collaborating with internal "
-                                        "teams on your server. This cannot be changed later.",
-                                        12.0f, colours.dim),
-              .buttons = buttons_row(colours, "Create room", {}, {this}, 120.0f)} {
-    this->setGap(8.0f);
+  create_room_box(const palette &colours, std::string own_server,
+                  std::optional<new_room_place> where = std::nullopt)
+      : Stacked(skiff::compose::vbox(8.0f,
+                                     {.fillX = true,
+                                      .autoSize = scene::axes::kY,
+                                      .padding = {0.0f, 12.0f, 18.0f, 12.0f}})),
+        colours_(&colours), server(std::move(own_server)),
+        place(std::move(where)), space_members(place.has_value()),
+        parts{
+            .header = header_t(colours, "Create a room", {}, {}, false, true),
+            .name = field(colours, "Name", ""),
+            .topic = field(colours, "Topic (optional)", ""),
+            .rule_caption = skiff::compose::styled(
+                {.margin = {4.0f, 10.0f, 0.0f, 10.0f}},
+                nodes::Text("Who can join", 13.0f, colours.dim)),
+            .rule = choice_button(this),
+            .private_option = option_row<choose_private>(
+                this, "Private room (invite only)",
+                "Only people invited will be able to find and join this room."),
+            .members_option = option_row<choose_members>(
+                this, "Visible to space members",
+                place ? "Anyone in " + place->name +
+                            " will be able to find and join."
+                      : std::string()),
+            .public_option = option_row<choose_public>(
+                this, "Public room",
+                "Anyone will be able to find and join this room."),
+            .rule_note = skiff::compose::styled(
+                {.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}},
+                wrapped(nodes::Text("", 13.0f, colours.dim))),
+            .address =
+                field(colours, "Address", std::format("#room-name:{}", server)),
+            .encryption = switch_row<flip_encrypted>(
+                this, "Enable end-to-end encryption"),
+            .encryption_note = skiff::compose::styled(
+                {.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}},
+                wrapped(nodes::Text("", 12.0f, colours.dim))),
+            .show_advanced = skiff::compose::styled(
+                {.width = 150.0f,
+                 .height = 30.0f,
+                 .margin = {4.0f, 10.0f, 0.0f, 10.0f}},
+                widgets::Button<flip_advanced>(colours.widgets, "Show advanced",
+                                               {this})),
+            .block = switch_row<flip_federate>(
+                this,
+                std::format(
+                    "Block anyone not part of {} from ever joining this room.",
+                    server)),
+            .block_note = skiff::compose::styled(
+                {.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}},
+                wrapped(nodes::Text(
+                    "You might enable this if the room will only be used for "
+                    "collaborating with internal "
+                    "teams on your server. This cannot be changed later.",
+                    12.0f, colours.dim))),
+            .buttons =
+                buttons_row(colours, "Create room", {}, {this}, 120.0f)} {
     parts.topic.multi_line(4);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
-    parts.rule_caption.apply({.margin = {4.0f, 10.0f, 0.0f, 10.0f}});
-    parts.rule_note.setWrapped(true);
-    parts.rule_note.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
-    parts.show_advanced.apply({.width = 150.0f, .height = 30.0f, .margin = {4.0f, 10.0f, 0.0f, 10.0f}});
-    parts.block_note.setWrapped(true);
-    parts.block_note.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
-    parts.encryption_note.setWrapped(true);
-    parts.encryption_note.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+
     this->show_choice();
   }
   // What is shown for the choices made: the list open or not, the address

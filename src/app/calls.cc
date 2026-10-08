@@ -52,7 +52,7 @@ class calls_part {
       return;
     ended_.reset();
     shown_.reset();
-    s_->root().hide_call();
+    mux::ui::show(*s_->showing, mux::ui::call_shown{});
   }
   void apply(const request::call_chosen&) {
     if (const auto& chosen = s_->root().main().chosen)
@@ -144,7 +144,7 @@ class calls_part {
     if (ended_ && std::chrono::steady_clock::now() > ended_->until) {
       ended_.reset();
       shown_.reset();
-      s_->root().hide_call();
+      mux::ui::show(*s_->showing, mux::ui::call_shown{});
     }
     if (!current_) {
       if (ended_)
@@ -277,7 +277,7 @@ class calls_part {
     if (ended_)
       this->show_view(ended_->view);
     else
-      s_->root().hide_call();
+      mux::ui::show(*s_->showing, mux::ui::call_shown{});
   }
   [[nodiscard]] mux::ui::call_view view_of(const call& now) const {
     const mux::conversation* chat = s_->model->find(now.in);
@@ -311,7 +311,7 @@ class calls_part {
     if (shown_ == view)
       return;
     shown_ = view;
-    s_->root().show_call(view);
+    mux::ui::show(*s_->showing, mux::ui::call_shown{view});
   }
   [[nodiscard]] static std::string new_call_id() {
     std::random_device entropy;

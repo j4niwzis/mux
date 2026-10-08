@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -44,8 +45,7 @@ export namespace mux::ui {
 // room's threads -- each root, who wrote it and what, how many answers and
 // when the latest came -- and one opened: its root, its answers, and a
 // field to answer in it.
-template <class Actions>
-struct threads_panel : nodes::Stack {
+template <class Actions> struct threads_panel : skiff::compose::Stacked {
   std::optional<std::string> open;  // the thread open, else the list
   std::vector<message> shown;       // what the open thread shows now
   std::optional<std::string> answering;  // an answer in it, answered
@@ -78,22 +78,26 @@ struct threads_panel : nodes::Stack {
   // the latest's time; pressed, opened.
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
-  struct thread_row : nodes::Stack {
+  struct thread_row : skiff::compose::Stacked {
     // What its handlers ask for, returned.
     using Answer = ::mux::ui::request::open_thread;
     std::string root;
-    struct lines_t : nodes::Stack {
+    struct lines_t : skiff::compose::Stacked {
       struct parts_t {
         nodes::Text name;
         nodes::Text said;
         nodes::Text meta;
       } parts;
-      lines_t(const palette& colours, std::string who, std::string words, std::string meta)
-          : parts{.name = nodes::Text(std::move(who), 13.0f, colours.accent, true),
+      lines_t(const palette &colours, std::string who, std::string words,
+              std::string meta)
+          : Stacked(skiff::compose::vbox(2.0f,
+                                         {.autoSize = scene::axes::kY,
+                                          .grow = scene::axes::kX,
+                                          .alignSelf = scene::align::kMiddle})),
+            parts{.name =
+                      nodes::Text(std::move(who), 13.0f, colours.accent, true),
                   .said = nodes::Text(std::move(words), 13.0f, colours.text),
                   .meta = nodes::Text(std::move(meta), 12.0f, colours.dim)} {
-        this->setGap(2.0f);
-        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
         for (nodes::Text* each : {&parts.name, &parts.said, &parts.meta}) {
           each->setElided(true);
           each->apply({.fillX = true});
@@ -104,16 +108,21 @@ struct threads_panel : nodes::Stack {
       avatar_mark face;
       lines_t lines;
     } parts;
-    thread_row(const palette& colours, const conversation& chat, const message& said)
-        : root(said.id),
-          parts{.face = avatar_mark(said.sender, sender_name(chat, said.sender), 36.0f),
-                .lines = lines_t(colours, sender_name(chat, said.sender), flat(said.body.plain), meta_of(chat, said))} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 8.0f,
-                    .hoverBackground = colours.chosen});
-      parts.face.apply({.alignSelf = scene::align::kStart});
-    }
+    thread_row(const palette &colours, const conversation &chat,
+               const message &said)
+        : Stacked(skiff::compose::hbox(10.0f,
+                                       {.fillX = true,
+                                        .autoSize = scene::axes::kY,
+                                        .padding = {8.0f, 12.0f, 8.0f, 12.0f},
+                                        .cornerRadius = 8.0f,
+                                        .hoverBackground = colours.chosen})),
+          root(said.id),
+          parts{.face = skiff::compose::styled(
+                    {.alignSelf = scene::align::kStart},
+                    avatar_mark(said.sender, sender_name(chat, said.sender),
+                                36.0f)),
+                .lines = lines_t(colours, sender_name(chat, said.sender),
+                                 flat(said.body.plain), meta_of(chat, said))} {}
     [[nodiscard]] static std::string flat(std::string text) {
       std::ranges::replace(text, '\n', ' ');
       return text;
@@ -156,16 +165,20 @@ struct threads_panel : nodes::Stack {
     timeline_area<Actions> answers;
     composer_bar<Actions, in_thread> line;
   } parts;
-  threads_panel(const ui_needs<Actions>& n)
-      : colours_(n.colours),
+  threads_panel(const ui_needs<Actions> &n)
+      : Stacked(skiff::compose::vbox(
+            0.0f, {.fillY = true, .background = n.colours->sidebar})),
+        colours_(n.colours),
         parts{.head = head_t(*n.colours, "Threads", {}, {}, false, true),
-              .divider = nodes::Box<>(n.colours->band),
-              .empty = nodes::Text("No threads here yet.", 13.0f, n.colours->dim),
+              .divider = skiff::compose::styled({.fillX = true, .height = 1.0f},
+                                                nodes::Box<>(n.colours->band)),
+              .empty = skiff::compose::styled(
+                  {.margin = {16.0f, 16.0f, 0.0f, 16.0f}},
+                  nodes::Text("No threads here yet.", 13.0f, n.colours->dim)),
               .answers = timeline_area<Actions>(n),
-              .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {}, {}, {this})} {
-    fState.apply({.fillY = true, .background = n.colours->sidebar});
-    parts.divider.apply({.fillX = true, .height = 1.0f});
-    parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
+              .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {},
+                                                       {}, {this})} {
+
     for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
       list->apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}});

@@ -32,65 +32,82 @@ export namespace mux::ui {
 // model, and what the model holds is what shows.
 template <auto Setting, class T = bool>
 auto setting_switch(const palette& colours, std::string text) {
-  auto label = nodes::Text(std::move(text), 15.0f, colours.text);
-  label.setElided(true);
-  label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-  auto toggle = skiff::compose::bound<skiff::model::Field<Setting>>(widgets::ToggleField<T>(colours.widgets));
-  toggle.apply({.alignSelf = scene::align::kMiddle});
-  return skiff::compose::row(skiff::compose::hbox(16.0f, {.fillX = true, .height = row_item<nothing>::kHeight,
-                                                          .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
-                             std::move(label), std::move(toggle));
+  return skiff::compose::row(
+      skiff::compose::hbox(16.0f, {.fillX = true,
+                                   .height = row_item<nothing>::kHeight,
+                                   .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+      skiff::compose::styled(
+          {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+          elided(nodes::Text(std::move(text), 15.0f, colours.text))),
+      skiff::compose::bound<skiff::model::Field<Setting>>(
+          skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                 widgets::ToggleField<T>(colours.widgets))));
 }
 inline nodes::Text spaced_title(const palette& colours, std::string text) {
-  auto title = section_title(colours, std::move(text));
-  title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
-  return title;
+  return skiff::compose::styled({.margin = {10.0f, 0.0f, 4.0f, 20.0f}},
+                                section_title(colours, std::move(text)));
 }
 inline nodes::Text spaced_note(const palette& colours, std::string text) {
-  auto note = note_text(colours, std::move(text));
-  note.setWrapped(true);
-  note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
-  return note;
+  return wrapped(skiff::compose::styled(
+      {.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}},
+      note_text(colours, std::move(text))));
 }
 // A limit, as the model holds it, shown with a step down and up: halved or
 // doubled within its bounds, the whole of the limits set again.
-template <class Which>
-struct limit_stepper : nodes::Stack {
-  using step_button = icon_button<sets<config::cache_limits>>;
+template <class Which> struct limit_change {
+  bool more = false;
+  config::cache_limits operator()(config::cache_limits now) const {
+    const auto [low, high] = config::bounds_of(config::limit_t{Which{}});
+    auto &value = config::value_of(now, Which{});
+    value = std::clamp(more ? value * 2 : value / 2, low, high);
+    return now;
+  }
+};
+template <class Which> struct limit_press {
+  using Answer = skiff::bind::Own<limit_change<Which>>;
+  bool more = false;
+  Answer operator()() const {
+    return skiff::bind::own(limit_change<Which>{more});
+  }
+};
+template <class Which> struct limit_words {
+  std::string_view unit;
+  std::string operator()(config::cache_limits now) const {
+    return std::format("{} {}", config::value_of(now, Which{}), unit);
+  }
+};
+template <class Which> struct limit_stepper : skiff::compose::Stacked {
+  using step_button =
+      skiff::bind::Bound<config::cache_limits, icon_button<limit_press<Which>>>;
+  using value_t = decltype(skiff::compose::text_for<config::cache_limits>(
+      limit_words<Which>{}, std::declval<nodes::Text>()));
   struct parts_t {
     nodes::Text label;
-    nodes::Text value;
+    value_t value;
     step_button less;
     step_button more;
   } parts;
-  std::string_view unit;
-  limit_stepper(const palette& colours, std::string what, std::string_view in)
-      : parts{.label = nodes::Text(std::move(what), 15.0f, colours.text),
-              .value = nodes::Text("", 14.0f, colours.accent, true),
-              .less = step_button(colours, icon::minus{}, {}),
-              .more = step_button(colours, icon::plus{}, {})},
-        unit(in) {
-    this->setHorizontal();
-    this->setGap(6.0f);
-    fState.apply({.fillX = true, .height = 50.0f, .padding = {0.0f, 12.0f, 0.0f, 20.0f}});
-    parts.label.setElided(true);
-    parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    for (scene::Node* middle : std::initializer_list<scene::Node*>{&parts.value, &parts.less, &parts.more})
-      middle->apply({.alignSelf = scene::align::kMiddle});
-  }
-  // The limit shown; a step down halves it, up doubles it, within its bounds.
-  void read(const config::cache_limits& now) {
-    auto copy = now;
-    parts.value.setText(std::format("{} {}", config::value_of(copy, Which{}), unit));
-    const auto [low, high] = config::bounds_of(config::limit_t{Which{}});
-    const auto stepped = [&](auto by) {
-      auto next = now;
-      std::int64_t& value = config::value_of(next, Which{});
-      value = std::clamp(by(value), low, high);
-      return next;
-    };
-    parts.less.act.next = stepped([](std::int64_t value) { return value / 2; });
-    parts.more.act.next = stepped([](std::int64_t value) { return value * 2; });
+  limit_stepper(const palette &colours, std::string what, std::string_view unit)
+      : Stacked(skiff::compose::hbox(6.0f,
+                                     {.fillX = true,
+                                      .height = 50.0f,
+                                      .padding = {0.0f, 12.0f, 0.0f, 20.0f}})),
+        parts{.label = skiff::compose::styled(
+                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  elided(nodes::Text(std::move(what), 15.0f, colours.text))),
+              .value = skiff::compose::text_for<config::cache_limits>(
+                  limit_words<Which>{unit},
+                  skiff::compose::styled(
+                      {.alignSelf = scene::align::kMiddle},
+                      nodes::Text("", 14.0f, colours.accent, true))),
+              .less = skiff::compose::bound<config::cache_limits>(
+                  skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                         icon_button<limit_press<Which>>(
+                                             colours, icon::minus{}, {false}))),
+              .more = skiff::compose::bound<config::cache_limits>(
+                  skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                         icon_button<limit_press<Which>>(
+                                             colours, icon::plus{}, {true})))} {
   }
 };
 
@@ -100,22 +117,22 @@ struct limit_stepper : nodes::Stack {
 // messages are shown, and how much of them is kept; and every chat's room
 // events. The limits and the history's switch are the model's widgets; the
 // seal, the clearing and every chat's choices are asked as before.
-template <class Actions>
-struct storage_page : nodes::Stack {
+template <class Actions> struct storage_page : skiff::compose::Stacked {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using clear_row = row_item<sends<::mux::ui::request::clear_stored>>;
   using seal_row = switch_row<sends<::mux::ui::request::flip_local_encryption>>;
   using change_row = row_item<sends<::mux::ui::request::change_passphrase>>;
   // The seal: its switch, and the passphrase to change where it is on.
-  struct seal_rows : nodes::Stack {
+  struct seal_rows : skiff::compose::Stacked {
     struct parts_t {
       seal_row seal;
       change_row change;
     } parts;
-    seal_rows(const palette& colours, bool sealed)
-        : parts{.seal = seal_row(colours, "Encrypt local data", {}),
+    seal_rows(const palette &colours, bool sealed)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.seal = seal_row(colours, "Encrypt local data", {}),
                 .change = change_row(colours, "Change the passphrase", {})} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       this->show_sealed(sealed, true);
     }
     void show_sealed(bool sealed, bool at_once = false) {
@@ -131,34 +148,55 @@ struct storage_page : nodes::Stack {
     using skiff::compose::bound;
     auto clear = clear_row(colours, "Clear stored messages and pictures", {}, icon::close{});
     return skiff::compose::column(
-        skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+        skiff::compose::vbox(0.0f, {.fillX = true,
+                                    .autoSize = scene::axes::kY,
+                                    .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
         spaced_title(colours, "ENCRYPTION"), seal_rows(colours, sealed),
-        spaced_note(colours, "Off by default. On, everything mux keeps on disk is sealed under a passphrase asked for at "
-                             "every start: settings with passwords and tokens, chats, drafts, encryption keys. Pictures "
+        spaced_note(colours, "Off by default. On, everything mux keeps on disk "
+                             "is sealed under a passphrase asked for at "
+                             "every start: settings with passwords and tokens, "
+                             "chats, drafts, encryption keys. Pictures "
                              "are not kept on disk then."),
         spaced_title(colours, "IN MEMORY"),
-        bound<config::cache_limits>(limit_stepper<limit::messages_in_memory>(colours, "Messages", "messages")),
-        bound<config::cache_limits>(limit_stepper<limit::pictures_in_memory>(colours, "Pictures", "MB")),
+        limit_stepper<limit::messages_in_memory>(colours, "Messages",
+                                                 "messages"),
+        limit_stepper<limit::pictures_in_memory>(colours, "Pictures", "MB"),
         spaced_title(colours, "ON DISK"),
-        bound<config::cache_limits>(limit_stepper<limit::messages_on_disk>(colours, "Messages", "MB")),
-        bound<config::cache_limits>(limit_stepper<limit::pictures_on_disk>(colours, "Pictures", "MB")), std::move(clear),
-        spaced_note(colours, "Memory holds the newest of the chats read lately; the disk holds the rest, and what is scrolled "
-                             "back to comes from there before the server. Past a limit, what was used longest ago goes first."),
+        limit_stepper<limit::messages_on_disk>(colours, "Messages", "MB"),
+        limit_stepper<limit::pictures_on_disk>(colours, "Pictures", "MB"),
+        std::move(clear),
+        spaced_note(colours,
+                    "Memory holds the newest of the chats read lately; the "
+                    "disk holds the rest, and what is scrolled "
+                    "back to comes from there before the server. Past a limit, "
+                    "what was used longest ago goes first."),
         spaced_title(colours, "DELETED MESSAGES"),
-        setting_switch<&config::history_settings::show_deleted>(colours, "Show deleted messages"),
-        bound<config::cache_limits>(limit_stepper<limit::deleted_on_disk>(colours, "On disk", "MB")),
+        setting_switch<&config::history_settings::show_deleted>(
+            colours, "Show deleted messages"),
+        limit_stepper<limit::deleted_on_disk>(colours, "On disk", "MB"),
         spaced_title(colours, "ROOM EVENTS"),
-        bound<config::history_settings>(event_kinds_field<config::history_settings>(colours, choice_level::everywhere{})),
-        bound<skiff::model::Field<&config::history_settings::show_receipts>>(show_hide_field<receipts_setting, bool>(colours, choice_level::everywhere{})),
-        bound<skiff::model::Field<&config::history_settings::link_previews>>(show_hide_field<link_previews_setting, bool>(colours, choice_level::everywhere{})),
+        bound<config::history_settings>(
+            event_kinds_field<config::history_settings>(
+                colours, choice_level::everywhere{})),
+        bound<skiff::model::Field<&config::history_settings::show_receipts>>(
+            show_hide_field<receipts_setting, bool>(
+                colours, choice_level::everywhere{})),
+        bound<skiff::model::Field<&config::history_settings::link_previews>>(
+            show_hide_field<link_previews_setting, bool>(
+                colours, choice_level::everywhere{})),
         bound<skiff::model::Field<&config::history_settings::previews_direct>>(
-            show_hide_field<previews_direct_setting, std::optional<bool>>(colours, choice_level::everywhere{})),
+            show_hide_field<previews_direct_setting, std::optional<bool>>(
+                colours, choice_level::everywhere{})),
         bound<skiff::model::Field<&config::history_settings::jump_search>>(
-            jump_search_field<std::int64_t>(colours, choice_level::everywhere{})),
+            jump_search_field<std::int64_t>(colours,
+                                            choice_level::everywhere{})),
         bound<skiff::model::Field<&config::history_settings::send_typing>>(
-            show_hide_field<typing_setting, std::optional<bool>>(colours, choice_level::everywhere{})),
-        spaced_note(colours, "Deleted messages are kept on disk, apart from the rest and up to their own size, the "
-                             "oldest going first past it. Shown, one stays where it was, with all it said and its "
+            show_hide_field<typing_setting, std::optional<bool>>(
+                colours, choice_level::everywhere{})),
+        spaced_note(colours, "Deleted messages are kept on disk, apart from "
+                             "the rest and up to their own size, the "
+                             "oldest going first past it. Shown, one stays "
+                             "where it was, with all it said and its "
                              "time, marked removed."));
   }
   using settings_t = decltype(settings_of(std::declval<const palette&>(), std::declval<const config::history_settings&>(), false));
@@ -169,10 +207,11 @@ struct storage_page : nodes::Stack {
 
   storage_page(const ui_needs<Actions>& n, const config::cache_limits&, const config::history_settings& history, bool sealed)
       : storage_page(*n.colours, history, sealed) {}
-  storage_page(const palette& colours, const config::history_settings& history, bool sealed)
-      : parts{.header = header_t(colours, "Storage", {}, {}, true, true), .settings = settings_of(colours, history, sealed)} {
-    fState.apply({.fill = true});
-  }
+  storage_page(const palette &colours, const config::history_settings &history,
+               bool sealed)
+      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
+        parts{.header = header_t(colours, "Storage", {}, {}, true, true),
+              .settings = settings_of(colours, history, sealed)} {}
   void show_receipts(bool) {}
   void show_sealed(bool sealed) { std::get<1>(parts.settings.fParts).show_sealed(sealed); }
 };
@@ -197,8 +236,7 @@ inline auto notification_settings_view(const palette& colours) {
                            "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
                            "of messages while it runs."));
 }
-template <class Actions>
-struct notifications_page : nodes::Stack {
+template <class Actions> struct notifications_page : skiff::compose::Stacked {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(notification_settings_view(std::declval<const palette&>()));
   struct parts_t {
@@ -207,11 +245,10 @@ struct notifications_page : nodes::Stack {
   } parts;
   notifications_page(const ui_needs<Actions>& n, const config::notification_settings&)
       : notifications_page(*n.colours) {}
-  notifications_page(const palette& colours)
-      : parts{.header = header_t(colours, "Notifications", {}, {}, true, true),
-              .settings = notification_settings_view(colours)} {
-    fState.apply({.fill = true});
-  }
+  notifications_page(const palette &colours)
+      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
+        parts{.header = header_t(colours, "Notifications", {}, {}, true, true),
+              .settings = notification_settings_view(colours)} {}
   void show_receipts(bool) {}
 };
 
@@ -227,8 +264,7 @@ inline auto files_settings_view(const palette& colours) {
       spaced_note(colours, "Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
                            "It is cut out of the file; the picture itself is sent as it is, not compressed again."));
 }
-template <class Actions>
-struct files_page : nodes::Stack {
+template <class Actions> struct files_page : skiff::compose::Stacked {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(files_settings_view(std::declval<const palette&>()));
   struct parts_t {
@@ -236,10 +272,10 @@ struct files_page : nodes::Stack {
     settings_t settings;
   } parts;
   files_page(const ui_needs<Actions>& n, const config::sending_settings&) : files_page(*n.colours) {}
-  files_page(const palette& colours)
-      : parts{.header = header_t(colours, "Files", {}, {}, true, true), .settings = files_settings_view(colours)} {
-    fState.apply({.fill = true});
-  }
+  files_page(const palette &colours)
+      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
+        parts{.header = header_t(colours, "Files", {}, {}, true, true),
+              .settings = files_settings_view(colours)} {}
   void show_receipts(bool) {}
 };
 

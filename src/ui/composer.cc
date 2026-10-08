@@ -41,8 +41,7 @@ export namespace mux::ui {
                   .border = scene::Border{colours.band, 1.0f}};
 }
 
-template <class OnDrag>
-struct drag_edge : scene::Node {
+template <class OnDrag> struct drag_edge : skiff::compose::Specced {
   OnDrag on_drag;
   // Where it was last dragged to, and what its act answers there.
   float dragged_to = 0.0f;
@@ -59,11 +58,14 @@ struct drag_edge : scene::Node {
     nodes::Box<> line;
   } parts;
 
-  drag_edge(const palette& colours, OnDrag what, bool line = true)
-      : on_drag(std::move(what)),
-        with_line(line),
-        parts{.line = skiff::compose::visible(line, skiff::compose::styled({.place = scene::anchor::kTopCentre, .fillY = true, .width = 1.0f},
-                                                                           nodes::Box<>(colours.band)))} {
+  drag_edge(const palette &colours, OnDrag what, bool line = true)
+      : Specced({}), on_drag(std::move(what)), with_line(line),
+        parts{.line = skiff::compose::visible(
+                  line,
+                  skiff::compose::styled({.place = scene::anchor::kTopCentre,
+                                          .fillY = true,
+                                          .width = 1.0f},
+                                         nodes::Box<>(colours.band)))} {
     fState.setCursor(scene::cursor::resize_horizontal{});
   }
 
@@ -127,7 +129,6 @@ struct submit_message {
   using Answer = ::mux::ui::request::submit_message;
   Answer operator()(std::string_view text) const { return ::mux::ui::request::submit_message{with_blocks_closed(text)}; }
 };
-
 
 // Where a message is written, across the bottom of a chat as in Telegram
 // Quotes in the field, as Telegram's: a paragraph starting "> " -- a "> "

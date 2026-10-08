@@ -68,10 +68,6 @@ class settings_part {
   }
   void apply(const request::set_renderer& one) {
     k_->choose_field<&mux::config::look_settings::renderer>(one.renderer);
-    if (auto* up = s_->root().settings_up()) {
-      if (auto* page = up->rendering())
-        page->show(k_->appearance().renderer);
-    }
     (void)k_->write();
   }
 

@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -54,8 +55,7 @@ export namespace mux::ui {
   return level > 0 ? std::format("Level {}", level) : std::string("Member");
 }
 
-template <class Actions>
-struct info_panel : nodes::Stack {
+template <class Actions> struct info_panel : skiff::compose::Stacked {
   // The colours it is made in, for what it makes later; and what the
   // window's parts share: the accounts' protocol states.
   const palette* colours_ = nullptr;
@@ -132,24 +132,27 @@ struct info_panel : nodes::Stack {
 
   // The upper part, made from its view: ← where a member is shown, ✕; the
   // big avatar, the name, how it is; the chat's tiles or the member's; its ID.
-  struct head : nodes::Stack {
-    struct top_row : nodes::Stack {
+  struct head : skiff::compose::Stacked {
+    struct top_row : skiff::compose::Stacked {
       using close_button = icon_button<sends<::mux::ui::request::toggle_info>>;
       struct parts_t {
         icon_button<back_to_group> back;
         nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
         close_button close;
       } parts;
-      top_row(info_panel* panel, bool with_back)
-          : parts{.back = icon_button<back_to_group>(*panel->colours_, icon::back{}, {panel}),
+      top_row(info_panel *panel, bool with_back)
+          : Stacked(skiff::compose::hbox(
+                0.0f, {.fillX = true,
+                       .autoSize = scene::axes::kY,
+                       .padding = {8.0f, 8.0f, 0.0f, 8.0f}})),
+            parts{.back = skiff::compose::visible(
+                      with_back, icon_button<back_to_group>(
+                                     *panel->colours_, icon::back{}, {panel})),
                   .close = close_button(*panel->colours_, icon::close{}, {})} {
-        this->setHorizontal();
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}});
         parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
-        parts.back.setVisible(with_back);
       }
     };
-    struct tiles_row : nodes::Stack {
+    struct tiles_row : skiff::compose::Stacked {
       using mute_tile = action_tile<sends<::mux::ui::request::toggle_mute>>;
       using manage_tile = action_tile<sends<::mux::ui::request::open_manage>>;
       using leave_tile = action_tile<sends<::mux::ui::request::leave_chat>>;
@@ -158,46 +161,58 @@ struct info_panel : nodes::Stack {
         manage_tile manage;
         leave_tile leave;
       } parts;
-      tiles_row(const palette& colours, bool muted, bool leavable)
-          : parts{.mute = mute_tile(colours, muted ? "Unmute" : "Mute", icon::bell{}, {}),
-                  .manage = manage_tile(colours, "Manage", icon::sliders{}, {}),
-                  .leave = leave_tile(colours, "Leave", icon::leave{}, {})} {
-        this->setHorizontal();
-        this->setGap(8.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
-        parts.mute.apply({.grow = scene::axes::kX});
-        parts.manage.apply({.grow = scene::axes::kX});
-        parts.leave.apply({.grow = scene::axes::kX});
-        parts.leave.setVisible(leavable);
-      }
+      tiles_row(const palette &colours, bool muted, bool leavable)
+          : Stacked(skiff::compose::hbox(
+                8.0f, {.fillX = true,
+                       .autoSize = scene::axes::kY,
+                       .margin = {16.0f, 16.0f, 4.0f, 16.0f}})),
+            parts{.mute = skiff::compose::styled(
+                      {.grow = scene::axes::kX},
+                      mute_tile(colours, muted ? "Unmute" : "Mute",
+                                icon::bell{}, {})),
+                  .manage = skiff::compose::styled(
+                      {.grow = scene::axes::kX},
+                      manage_tile(colours, "Manage", icon::sliders{}, {})),
+                  .leave = skiff::compose::visible(
+                      leavable,
+                      skiff::compose::styled(
+                          {.grow = scene::axes::kX},
+                          leave_tile(colours, "Leave", icon::leave{}, {})))} {}
     };
     // A member's own: a message to them.
-    struct person_row : nodes::Stack {
+    struct person_row : skiff::compose::Stacked {
       struct parts_t {
         action_tile<message_them> message;
       } parts;
-      person_row(info_panel* panel)
-          : parts{.message = action_tile<message_them>(*panel->colours_, "Message", icon::send{}, {panel})} {
-        this->setHorizontal();
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
-        parts.message.apply({.grow = scene::axes::kX});
-      }
+      person_row(info_panel *panel)
+          : Stacked(skiff::compose::hbox(
+                0.0f, {.fillX = true,
+                       .autoSize = scene::axes::kY,
+                       .margin = {16.0f, 16.0f, 4.0f, 16.0f}})),
+            parts{.message = skiff::compose::styled(
+                      {.grow = scene::axes::kX},
+                      action_tile<message_them>(*panel->colours_, "Message",
+                                                icon::send{}, {panel}))} {}
     };
     // What the chat is about, as Telegram's group description: its text,
     // links in it pressed as any, and what it is under it, dim.
-    struct about_block : nodes::Stack {
+    struct about_block : skiff::compose::Stacked {
       struct parts_t {
         nodes::Text text;
         nodes::Text label;
       } parts;
-      about_block(const palette& colours, const std::string& said)
-          : parts{.text = nodes::Text(said, 14.0f, colours.text), .label = nodes::Text("Description", 12.0f, colours.dim)} {
-        this->setGap(2.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}});
-        parts.text.setWrapped(true);
+      about_block(const palette &colours, const std::string &said)
+          : Stacked(skiff::compose::vbox(
+                2.0f, {.fillX = true,
+                       .autoSize = scene::axes::kY,
+                       .padding = {8.0f, 20.0f, 8.0f, 20.0f}})),
+            parts{.text = skiff::compose::styled(
+                      {.fillX = true},
+                      wrapped(nodes::Text(said, 14.0f, colours.text))),
+                  .label = nodes::Text("Description", 12.0f, colours.dim)} {
+
         parts.text.setSelectable(true);
         parts.text.setLinks(link_spans_in(said), colours.accent);
-        parts.text.apply({.fillX = true});
       }
     };
     struct parts_t {
@@ -213,20 +228,23 @@ struct info_panel : nodes::Stack {
       id_line id_text;
     } parts;
 
-    head(info_panel* panel, const view& shown)
-        : parts{.top = top_row(panel, shown.of_person),
+    head(info_panel *panel, const view &shown)
+        : Stacked(skiff::compose::vbox(
+              2.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.top = top_row(panel, shown.of_person),
                 .avatar = avatar_button<Actions>(shown.key, shown.name, 96.0f),
-                .name = nodes::Text(shown.name, 17.0f, panel->colours_->text, true),
-                .status = nodes::Text(shown.status, 13.0f, panel->colours_->dim),
+                .name =
+                    nodes::Text(shown.name, 17.0f, panel->colours_->text, true),
+                .status =
+                    nodes::Text(shown.status, 13.0f, panel->colours_->dim),
                 .band_1 = section_band(*panel->colours_),
-                .about = about_block(*panel->colours_, shown.topic),
+                .about = skiff::compose::visible(
+                    !shown.topic.empty(),
+                    about_block(*panel->colours_, shown.topic)),
                 .id_text = id_line(*panel->colours_, shown.key, shown.copied)} {
       auto& [top, avatar, name, status, tiles, person_tiles, band_1, about, addresses, id_text] = parts;
-      about.setVisible(!shown.topic.empty());
       for (const std::string& address : shown.addresses)
         addresses.emplace_back(*panel->colours_, address, "", "Address");
-      this->setGap(2.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       if (shown.of_person)
         person_tiles.emplace(panel);
       else
@@ -238,27 +256,31 @@ struct info_panel : nodes::Stack {
       }
     }
   };
-  struct members_head : nodes::Stack {
+  struct members_head : skiff::compose::Stacked {
     using add_button = icon_button<not_yet<Actions>>;
     struct parts_t {
       icon_view people;
       nodes::Text title;
       add_button add_member;
     } parts;
-    members_head(const palette& colours, std::size_t count)
-        : parts{.people = icon_view(colours, icon::people{}),
-                .title = nodes::Text(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, colours.dim, true),
-                .add_member = add_button(colours, icon::add_person{}, {"Adding members"})} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}});
-      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    members_head(const palette &colours, std::size_t count)
+        : Stacked(skiff::compose::hbox(
+              10.0f, {.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}})),
+          parts{
+              .people = icon_view(colours, icon::people{}),
+              .title = skiff::compose::styled(
+                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  nodes::Text(
+                      std::format("{} MEMBER{}", count, count == 1 ? "" : "S"),
+                      13.0f, colours.dim, true)),
+              .add_member =
+                  add_button(colours, icon::add_person{}, {"Adding members"})} {
     }
   };
   using member_rows = nodes::Flow<std::vector<member_row<open_person>>>;
   // All of it in one column that scrolls, as Telegram's profile: the head
   // -- however long its description and addresses -- then the members.
-  struct column : nodes::Stack {
+  struct column : skiff::compose::Stacked {
     struct parts_t {
       nodes::Memo<view, head> upper;
       nodes::Box<> band_2;
@@ -267,10 +289,10 @@ struct info_panel : nodes::Stack {
       // The members, reconciled: the rows kept while they show the same.
       member_rows members{{.spacingY = 0.0f, .wrap = false}, {}};
     } parts;
-    explicit column(const palette& colours) : parts{.band_2 = section_band(colours)} {
-      this->setGap(2.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    }
+    explicit column(const palette &colours)
+        : Stacked(skiff::compose::vbox(
+              2.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.band_2 = section_band(colours)} {}
   };
   struct parts_t {
     nodes::ScrollContainer<column> scroll;
@@ -286,10 +308,18 @@ struct info_panel : nodes::Stack {
 
   static constexpr float kWidth = 340.0f;
 
-  info_panel(const palette& colours, const ui_shared& shared) : colours_(&colours), shared_(&shared), parts{.scroll = nodes::ScrollContainer<column>(column(colours)), .edge = nodes::Box<>(colours.band)} {
-    fState.apply({.background = colours.sidebar, .masking = true});
-    parts.edge.apply({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f});
-    parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
+  info_panel(const palette &colours, const ui_shared &shared)
+      : Stacked(skiff::compose::vbox(
+            0.0f, {.background = colours.sidebar, .masking = true})),
+        colours_(&colours), shared_(&shared),
+        parts{.scroll = skiff::compose::styled(
+                  {.fillX = true, .grow = scene::axes::kY},
+                  nodes::ScrollContainer<column>(column(colours))),
+              .edge = skiff::compose::styled({.place = scene::anchor::kTopLeft,
+                                              .fillY = true,
+                                              .width = 1.0f},
+                                             nodes::Box<>(colours.band))} {
+
     upper.apply({.fillX = true, .autoSize = scene::axes::kY});
     members_header.apply({.fillX = true, .height = 48.0f});
     members.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -430,7 +460,6 @@ struct info_panel : nodes::Stack {
     members.setVisible(list);
     this->invalidateLayout();
   }
-
 };
 
 }  // namespace mux::ui

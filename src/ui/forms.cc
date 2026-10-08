@@ -288,10 +288,10 @@ void place_form(account_form<Actions>& form, const skia::SkRect& column, float t
 // Esc leaves a panel: back to what is under it, or a step back within it
 // first, as Back says.
 template <class Actions, class Back = sends<::mux::ui::request::pop_panel>>
-struct closes_on_escape : nodes::Stack {
+struct closes_on_escape : skiff::compose::Stacked {
   // Esc: what Back answers.
   using Answer = typename Back::Answer;
-  explicit closes_on_escape() {}
+  explicit closes_on_escape() : Stacked(skiff::compose::vbox(0.0f, {})) {}
 
   using Node::onKey;
   std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {

@@ -6,6 +6,7 @@ import std;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.widgets.pill;
@@ -67,8 +68,7 @@ constexpr auto row_views_for(const State& state, type_tag<Actions> tag) {
   return row_views(state, tag);
 }
 
-template <class Actions>
-struct conversation_row : nodes::Stack {
+template <class Actions> struct conversation_row : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::choose;
   template <class List>
@@ -86,26 +86,26 @@ struct conversation_row : nodes::Stack {
   };
   using row_view_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_row_nodes<protocols>::type>::type>::type;
-  struct row_view_holder : nodes::Stack {
+  struct row_view_holder : skiff::compose::Stacked {
     struct parts_t {
       row_view_t shown;
     } parts;
     template <class View>
-    explicit row_view_holder(View made) : parts{.shown = row_view_t(std::move(made))} {
-      fState.apply({.autoSize = scene::axes::kBoth});
-    }
+    explicit row_view_holder(View made)
+        : Stacked(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth})),
+          parts{.shown = row_view_t(std::move(made))} {}
   };
   conversation_id id;
   bool chosen = false;
   bool muted = false;
   // The name and the time over the last message and the unread count.
-  struct lines_column : nodes::Stack {
+  struct lines_column : skiff::compose::Stacked {
     struct top_line : name_time_line {
       top_line(const palette& colours, std::string shown, bool chosen)
           : name_time_line(std::move(shown), "", chosen ? colours.selected_text : colours.text,
                            chosen ? colours.selected_text : colours.dim, 13.0f) {}
     };
-    struct bottom_line : nodes::Stack {
+    struct bottom_line : skiff::compose::Stacked {
       // The chats' unread count, in a pill.
       struct badge : widgets::Pill {
         badge(const palette& colours, std::int64_t n, bool is_chosen, bool is_muted)
@@ -135,24 +135,30 @@ struct conversation_row : nodes::Stack {
         std::optional<row_view_holder> theirs;
         badge unread;
       } parts;
-      bottom_line(const palette& colours, std::int64_t count, bool chosen, bool muted)
-          : parts{.sender = nodes::Text("", 13.0f, chosen ? colours.selected_text : colours.accent),
-                  .preview = nodes::BasicText<message_pictures>("", 13.0f, chosen ? colours.selected_text : colours.dim),
-                  .unread = badge(colours, count, chosen, muted)} {
-        this->setHorizontal();
-        this->setGap(8.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-        this->setGap(4.0f);
-        parts.sender.apply({.alignSelf = scene::align::kMiddle});
-        parts.unread.apply({.margin = {0.0f, 0.0f, 0.0f, 4.0f}});
-        parts.sender.setVisible(false);
+      bottom_line(const palette &colours, std::int64_t count, bool chosen,
+                  bool muted)
+          : Stacked(skiff::compose::hbox(
+                4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+            parts{.sender = elided(skiff::compose::visible(
+                      false, skiff::compose::styled(
+                                 {.alignSelf = scene::align::kMiddle},
+                                 nodes::Text("", 13.0f,
+                                             chosen ? colours.selected_text
+                                                    : colours.accent)))),
+                  .preview = skiff::compose::styled(
+                      {.grow = scene::axes::kX,
+                       .alignSelf = scene::align::kMiddle},
+                      elided(nodes::BasicText<message_pictures>(
+                          "", 13.0f,
+                          chosen ? colours.selected_text : colours.dim))),
+                  .unread = skiff::compose::visible(
+                      count > 0, skiff::compose::styled(
+                                     {.margin = {0.0f, 0.0f, 0.0f, 4.0f}},
+                                     badge(colours, count, chosen, muted)))} {
+
         // A member's long name gives way too, cut with an ellipsis: not cut, it
         // pushed the unread count past the row's end once the preview had
         // given all it could.
-        parts.sender.setElided(true);
-        parts.preview.setElided(true);
-        parts.preview.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-        parts.unread.setVisible(count > 0);
       }
     };
     struct parts_t {
@@ -162,16 +168,20 @@ struct conversation_row : nodes::Stack {
       nodes::Text topic;
       bottom_line bottom;
     } parts;
-    lines_column(const palette& colours, std::string shown, std::int64_t count, bool chosen, bool muted)
-        : parts{.top = top_line(colours, std::move(shown), chosen),
-                .topic = nodes::Text("", 13.0f, chosen ? colours.selected_text : colours.text),
-                .bottom = bottom_line(colours, count, chosen, muted)} {
-      parts.topic.setElided(true);
-      parts.topic.apply({.fillX = true});
-      parts.topic.setVisible(false);
-      this->setGap(6.0f);
-      fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    }
+    lines_column(const palette &colours, std::string shown, std::int64_t count,
+                 bool chosen, bool muted)
+        : Stacked(
+              skiff::compose::vbox(6.0f, {.autoSize = scene::axes::kY,
+                                          .grow = scene::axes::kX,
+                                          .alignSelf = scene::align::kMiddle})),
+          parts{.top = top_line(colours, std::move(shown), chosen),
+                .topic = skiff::compose::visible(
+                    false, skiff::compose::styled(
+                               {.fillX = true},
+                               elided(nodes::Text("", 13.0f,
+                                                  chosen ? colours.selected_text
+                                                         : colours.text)))),
+                .bottom = bottom_line(colours, count, chosen, muted)} {}
   };
   struct parts_t {
     avatar_mark face;
@@ -218,11 +228,17 @@ struct conversation_row : nodes::Stack {
   }
   view shown;
 
-  conversation_row(const ui_needs<Actions>& n, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
-                   const room_event_filter& events = {}, std::optional<skia::SkColor> strip = std::nullopt)
-      : id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(*n.shared, one, is_chosen, is_muted, draft, events, strip)),
+  conversation_row(const ui_needs<Actions> &n, const conversation &one,
+                   bool is_chosen, bool is_muted, std::string draft = {},
+                   const room_event_filter &events = {},
+                   std::optional<skia::SkColor> strip = std::nullopt)
+      : Stacked(skiff::compose::hbox(12.0f, {})), id(one.id), chosen(is_chosen),
+        muted(is_muted), shown(view_of(*n.shared, one, is_chosen, is_muted,
+                                       draft, events, strip)),
         parts{.face = avatar_mark(one.id.id, display_name(one), 46.0f),
-              .lines = lines_column(*n.colours, display_name(one), one.unread_here(events), is_chosen, is_muted)} {
+              .lines =
+                  lines_column(*n.colours, display_name(one),
+                               one.unread_here(events), is_chosen, is_muted)} {
     const palette& colours = *n.colours;
     // Drawn once, played back as the list repaints around it.
     fState.setRecorded(true);
@@ -244,8 +260,6 @@ struct conversation_row : nodes::Stack {
         sender.setColour(colour);
       sender.setVisible(true);
     };
-    this->setHorizontal();
-    this->setGap(12.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen, .selectedBackground = colours.selected, .focusBackground = colours.chosen, .selected = chosen});
     parts.strip.setVisible(strip.has_value());
     if (strip)

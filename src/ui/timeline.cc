@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
@@ -90,14 +91,12 @@ template <class Actions>
   }
   if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
       one.said.attachment && one.said.attachment->video) {
-    
     const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
     return ::mux::ui::request::open_video{one.parts.body.parts.picture->source, *one.said.attachment->video, one.sender,
                         chat ? sender_name(*chat, one.sender) : one.sender,
                         std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))};
   }
   if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y)) {
-    
     const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
     return ::mux::ui::request::open_picture{one.parts.body.parts.picture->source, one.sender,
                           chat ? sender_name(*chat, one.sender) : one.sender,
@@ -108,7 +107,6 @@ template <class Actions>
     for (const auto& row : one.parts.body.parts.album->parts.rows)
       for (const picture_view& cell : row.parts.cells)
         if (cell.bounds().contains(press.x, press.y)) {
-          
           const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
           return ::mux::ui::request::open_picture{cell.source, one.sender, chat ? sender_name(*chat, one.sender) : one.sender,
                                 std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day},
@@ -265,8 +263,7 @@ struct shown_how {
   std::optional<std::string> unread_from;
 };
 
-template <class Actions>
-struct timeline_area : scene::Node {
+template <class Actions> struct timeline_area : skiff::compose::Specced {
   // What a press on the messages asks for: a message selected or not, one
   // replied to by a swipe, the menu of one, or what a press in a bubble asks.
   using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::toggle_selected, ::mux::ui::request::reply_to, menu_facts, bubble_press>;
@@ -290,12 +287,19 @@ struct timeline_area : scene::Node {
   } parts;
   // What it was handed down, for the bubbles it makes.
   ui_needs<Actions> needs_;
-  timeline_area(const ui_needs<Actions>& n)
-      : parts{.jump = jump_button<Actions>(*n.colours),
+  timeline_area(const ui_needs<Actions> &n)
+      : Specced({}),
+        parts{.jump = skiff::compose::visible(false,
+                                              jump_button<Actions>(*n.colours)),
               .back = back_button<Actions>(*n.colours),
-              .mentions = mark_button<Actions>(*n.colours, mark_kind::mention{}, "@"),
-              .reactions = mark_button<Actions>(*n.colours, mark_kind::reaction{}, "\u2665"),
-              .loading = widgets::RadialLoader<stop_jump>(44.0f, {})},
+              .mentions =
+                  mark_button<Actions>(*n.colours, mark_kind::mention{}, "@"),
+              .reactions = mark_button<Actions>(
+                  *n.colours, mark_kind::reaction{}, "\u2665"),
+              .loading = skiff::compose::visible(
+                  false, skiff::compose::styled(
+                             {.place = scene::anchor::kCentre},
+                             widgets::RadialLoader<stop_jump>(44.0f, {})))},
         needs_(n) {
     parts.wall.apply({.fill = true});
     this->show_wallpaper(config::wallpaper::theme{});
@@ -309,9 +313,6 @@ struct timeline_area : scene::Node {
         {.fillX = true,
          .autoSize = scene::axes::kY,
          .padding = {8.0f, message_bubble<Actions>::kListSide, 8.0f, message_bubble<Actions>::kListSide}});
-    parts.jump.setVisible(false);
-    parts.loading.apply({.place = scene::anchor::kCentre});
-    parts.loading.setVisible(false);
   }
   // The chat's background: the theme's gradient and Telegram's pattern, a
   // plain colour (what is behind showing), or a picture.

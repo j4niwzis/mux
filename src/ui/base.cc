@@ -34,7 +34,7 @@ template <class Button>
   button.setPrimary(true);
   return button;
 }
-[[nodiscard]] inline skiff::nodes::Text elided(skiff::nodes::Text text) {
+template <class Text> [[nodiscard]] Text elided(Text text) {
   text.setElided(true);
   return text;
 }
@@ -44,7 +44,7 @@ template <class Toggle>
   toggle.setOnNow(on);
   return toggle;
 }
-[[nodiscard]] inline skiff::nodes::Text wrapped(skiff::nodes::Text text) {
+template <class Text> [[nodiscard]] Text wrapped(Text text) {
   text.setWrapped(true);
   return text;
 }
@@ -441,7 +441,6 @@ struct sends {
 template <class Act>
 concept sending = skiff::scene::Answering<Act>;
 
-
 // A skiff-widgets button or toggle for an act: the plain one where the act
 // sends events, which the walk takes from its action; else the one the
 // build erases its action in.
@@ -485,7 +484,6 @@ struct column_stack {
   const float w = std::min(width, box.width() - 32.0f);
   return skia::SkRect::MakeXYWH(box.centerX() - w * 0.5f, box.fTop + top, w, std::max(0.0f, box.height() - top));
 }
-
 
 // A look's blur, 0 to 1: its own, else the window's Frosted blur.
 [[nodiscard]] inline float blur_of(const config::bubble_look& look, const window_look_t& window) {

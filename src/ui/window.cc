@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.widgets.motion;
 import skiff.widgets.wallpaper;
@@ -58,6 +59,7 @@ struct drawer_shown {
 struct shown_root {
   skiff::model::Tracked<drawer_shown> drawer;
   skiff::model::Tracked<chat_shown> chat;
+  skiff::model::Tracked<call_shown> call;
   skiff::model::Tracked<selection_shown> selection;
   skiff::model::Tracked<search_found> found;
   skiff::model::Tracked<std::optional<marks_facts>> marks;
@@ -208,36 +210,28 @@ struct shown_frame : Frame {
 // A layer holding Node while its part of what is shown holds its facts --
 // made from them, with what the program handed the window -- and nothing
 // where they are gone: a message's menu.
-template <class Content, class Facts, class Needs>
-struct shown_layer : scene::Node {
-  const Needs* needs = nullptr;
-  struct parts_t {
-    std::optional<Content> up;
-  } parts;
-  explicit shown_layer(const Needs* handed) : needs(handed) {
-    fState.apply({.fill = true});
-    fState.setFloats(true);
-    this->setVisible(false);
+template <class Needs> struct layer_arguments {
+  Needs needs;
+  template <class Facts> auto operator()(const Facts &facts) const {
+    return std::tie(needs, facts);
   }
-  void read(const std::optional<Facts>& now) {
-    if (now)
-      parts.up.emplace(*needs, *now);
-    else
-      parts.up.reset();
-    this->setVisible(now.has_value());
-    this->invalidateLayout();
-    this->markDamaged();
-  }
-  [[nodiscard]] Content* shown() { return parts.up ? &*parts.up : nullptr; }
 };
+template <class Content, class Facts, class Needs>
+using shown_layer =
+    skiff::compose::Mounted<Content, Facts, layer_arguments<Needs>>;
+template <class Content, class Facts, class Needs>
+auto layer_for(const Needs &needs) {
+  return skiff::compose::bound<std::optional<Facts>>(
+      skiff::compose::mount<Content, Facts>(layer_arguments<Needs>{needs},
+                                            {.fill = true}, true));
+}
 
 // The conversations; over them the panel that is open, if one is, sliding in
 // from the right and back out when closed; and over both, the drawer, pulled
 // out from the left. All in this one window, switched by the program between
 // events.
 
-template <class Actions>
-struct window : scene::Node {
+template <class Actions> struct window : skiff::compose::Specced {
   using panel_type = spl::variant<accounts_panel<Actions>>;
   using screen_node = skiff::bind::Bound<chat_shown, shown_screen<conversations_screen<Actions>>>;
   using drawer_node = shown_drawer<screen_node, drawer_panel<Actions>>;
@@ -251,7 +245,7 @@ struct window : scene::Node {
   // is selected and it is no password's, Paste, Select All -- each the key
   // the field takes for it, given to it (it keeps the focus: a button takes
   // none).
-  struct text_menu : nodes::Stack {
+  struct text_menu : skiff::compose::Stacked {
     struct copy_it {
       using Answer = ::mux::ui::request::copy_text;
       std::string text;
@@ -319,15 +313,20 @@ struct window : scene::Node {
     }
 
    private:
-    explicit text_menu(const palette& colours) {
-      fState.apply({.width = 150.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 6.0f, 6.0f, 6.0f}, .cornerRadius = 10.0f,
-                    .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
-                    .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
-    }
-    void rows() {
-      auto& [... row] = parts;
-      ((row ? (row->apply({.fillX = true, .height = 30.0f}), 0) : 0), ...);
-    }
+     explicit text_menu(const palette &colours)
+         : Stacked(skiff::compose::vbox(
+               0.0f, {.width = 150.0f,
+                      .autoSize = scene::axes::kY,
+                      .padding = {6.0f, 6.0f, 6.0f, 6.0f},
+                      .cornerRadius = 10.0f,
+                      .background = colours.popup(),
+                      .border = scene::Border{colours.band, 1.0f},
+                      .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0),
+                                              3.0f}})) {}
+     void rows() {
+       auto &[... row] = parts;
+       ((row ? (row->apply({.fillX = true, .height = 30.0f}), 0) : 0), ...);
+     }
   };
   // The dialogs protocols have of their own (dialogs(state), made by their
   // dialog_type, found by ADL where the window is made): one of them up at
@@ -349,18 +348,19 @@ struct window : scene::Node {
       typename joined<type_list<nodes::Text>, typename protocol_dialog_nodes<protocols>::type>::type>::type;
   // The dialog's content, a node: the protocol's dialog in it, as the room
   // settings hold their page.
-  struct tool_holder : nodes::Stack {
+  struct tool_holder : skiff::compose::Stacked {
     // The dialog it is shown in.
     [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{560.0f, 560.0f}}; }
     struct parts_t {
       tool_t shown;
     } parts;
     template <class Node, class... Args>
-    explicit tool_holder(std::in_place_type_t<Node> which, Args&&... args) : parts{.shown = tool_t(which, std::forward<Args>(args)...)} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    }
+    explicit tool_holder(std::in_place_type_t<Node> which, Args &&...args)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.shown = tool_t(which, std::forward<Args>(args)...)} {}
   };
-  struct layers : scene::Node {
+  struct layers : skiff::compose::Specced {
     // What its handlers ask for, returned.
     using Answer = std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_reactions, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer>;
     using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
@@ -423,9 +423,13 @@ struct window : scene::Node {
       // A selectable text's menu, where it was pressed with the right button.
       std::optional<text_menu> text_menu_up;
       // A call, while there is one: over everything.
-      std::optional<call_bar<Actions>> call_up;
+      decltype(call_layer<call_bar<Actions>>(
+          std::declval<const ui_needs<Actions> &>(), call_card_of{},
+          scene::Spec{}, true)) call_up;
       // A call on a phone: the whole window, as Element's phone apps.
-      std::optional<call_screen<Actions>> call_whole;
+      decltype(call_layer<call_screen<Actions>>(
+          std::declval<const ui_needs<Actions> &>(), call_screen_of{},
+          scene::Spec{}, true)) call_whole;
     } parts;
     // Where the pointer was last pressed, in the window: where a menu asked
     // by that press is put. A press off the text menu closes it, at once --
@@ -613,33 +617,52 @@ struct window : scene::Node {
       over_if(emoji, menu, viewer, text_menu_up, call_up, call_whole);
     }
 
-    layers(const ui_needs<Actions>& n)
-        : parts{.backdrop = nodes::Box<>(n.colours->background),
-                .frame = frame_t(std::in_place, &n, with_drawer(drawer_node(std::piecewise_construct, std::forward_as_tuple(std::in_place, n), std::forward_as_tuple(n)))),
-                .settings = shown_made<settings_dialog<Actions>, settings_facts>(n),
+    layers(const ui_needs<Actions> &n)
+        : Specced({.fill = true}),
+          parts{.backdrop = nodes::Box<>(n.colours->background),
+                .frame = frame_t(std::in_place, &n,
+                                 with_drawer(drawer_node(
+                                     std::piecewise_construct,
+                                     std::forward_as_tuple(std::in_place, n),
+                                     std::forward_as_tuple(n)))),
+                .settings =
+                    shown_made<settings_dialog<Actions>, settings_facts>(n),
                 .notice = shown_made<notice_box<Actions>, notice_facts>(n),
                 .person = shown_made<person_card<Actions>, person_shown>(n),
                 .room = shown_made<room_card<Actions>, room_card_facts>(n),
-                .reactions = shown_made<reactions_box<Actions>, reactions_facts>(n),
-                .history = shown_made<edit_history_box<Actions>, history_facts>(n),
+                .reactions =
+                    shown_made<reactions_box<Actions>, reactions_facts>(n),
+                .history =
+                    shown_made<edit_history_box<Actions>, history_facts>(n),
                 .linking = shown_made<link_box<Actions>, link_facts>(n),
-                .leaving = shown_made<leave_space_box<Actions>, leave_space_facts>(n),
+                .leaving =
+                    shown_made<leave_space_box<Actions>, leave_space_facts>(n),
                 .marks = shown_made<marks_box<Actions>, marks_facts>(n),
-                .manage = shown_made<room_settings<Actions>, room_settings_facts>(n),
-                .forwarding = shown_made<forward_box<Actions>, forward_facts>(n),
-                .new_chat = shown_made<start_chat_box<Actions>, new_chat_facts>(n),
-                .new_room = shown_made<create_room_box<Actions>, new_room_facts>(n),
+                .manage =
+                    shown_made<room_settings<Actions>, room_settings_facts>(n),
+                .forwarding =
+                    shown_made<forward_box<Actions>, forward_facts>(n),
+                .new_chat =
+                    shown_made<start_chat_box<Actions>, new_chat_facts>(n),
+                .new_room =
+                    shown_made<create_room_box<Actions>, new_room_facts>(n),
                 .packs = shown_made<packs_box<Actions>, packs_facts>(n),
-                .wallpaper = shown_made<wallpaper_box<Actions>, wallpaper_facts>(n),
+                .wallpaper =
+                    shown_made<wallpaper_box<Actions>, wallpaper_facts>(n),
                 .explore = shown_made<explore_box<Actions>, explore_facts>(n),
                 .sending = shown_made<send_box<Actions>, send_facts>(n),
-                .passphrase = shown_made<passphrase_box<Actions>, passphrase_facts>(n),
-                .verifying = shown_made<verification_box<Actions>, verification_view>(n),
-                .emoji = decltype(parts_t::emoji)(shown_layer<emoji_popup<Actions>, emoji_facts, ui_needs<Actions>>(&n)),
-                .menu = decltype(parts_t::menu)(shown_layer<context_menu<Actions>, menu_facts, ui_needs<Actions>>(&n)),
-                .viewer = decltype(parts_t::viewer)(shown_layer<picture_viewer<Actions>, viewer_facts, ui_needs<Actions>>(&n))} {
+                .passphrase =
+                    shown_made<passphrase_box<Actions>, passphrase_facts>(n),
+                .verifying =
+                    shown_made<verification_box<Actions>, verification_view>(n),
+                .emoji = layer_for<emoji_popup<Actions>, emoji_facts>(n),
+                .menu = layer_for<context_menu<Actions>, menu_facts>(n),
+                .viewer = layer_for<picture_viewer<Actions>, viewer_facts>(n),
+                .call_up = call_layer<call_bar<Actions>>(n, call_card_of{},
+                                                         {.fill = true}, true),
+                .call_whole = call_layer<call_screen<Actions>>(
+                    n, call_screen_of{}, {.fill = true}, true)} {
       auto& [backdrop, behind, frame, ...over] = parts;
-      fState.apply({.fill = true});
       backdrop.apply({.fill = true});
       behind.apply({.fill = true});
       behind.setVisible(n.looks->window.behind);
@@ -661,8 +684,8 @@ struct window : scene::Node {
 
   // What it was handed: the program's own objects, for the layers it makes.
   ui_needs<Actions> needs_;
-  explicit window(const ui_needs<Actions>& n) : needs_(n) {
-    fState.apply({.fill = true});
+  explicit window(const ui_needs<Actions> &n)
+      : Specced({.fill = true}), needs_(n) {
     // From its own copy, which the layers' dialogs point at.
     parts.now.emplace(needs_);
   }
@@ -759,8 +782,6 @@ struct window : scene::Node {
   void drop_closed() {
     if (std::exchange(text_menu_close_due, false))
       this->close_text_menu_now();
-    if (std::exchange(call_hide_due, false))
-      this->hide_call_now();
     layer().frame.dropClosed();
     layer().settings.dropClosed();
     layer().notice.dropClosed();
@@ -806,59 +827,6 @@ struct window : scene::Node {
   // A call, as the call is now: in its chat, where that is the one shown
   // and it does not ring here; else the card at the top of the window. And
   // gone, with the call.
-  void show_call(const call_view& view) {
-    call_hide_due = false;
-    auto& now = *parts.now;
-    // A phone's: the whole window, whatever it rings or is in.
-    if (view.whole) {
-      this->hide_call_card();
-      this->main().chat.hide_call();
-      if (now.parts.call_whole)
-        now.parts.call_whole->show(view);
-      else
-        now.parts.call_whole.emplace(needs_, view);
-      now.invalidateLayout();
-      now.markDamaged();
-      return;
-    }
-    this->hide_call_screen();
-    if (view.in_view && !rings_here(view)) {
-      this->hide_call_card();
-      this->main().chat.show_call(view);
-      return;
-    }
-    this->main().chat.hide_call();
-    if (now.parts.call_up)
-      now.parts.call_up->show(view);
-    else
-      now.parts.call_up.emplace(needs_, view);
-    now.invalidateLayout();
-    now.markDamaged();
-  }
-  // The call gone: between events, not now -- its Hang up is still being
-  // answered as the program says so.
-  void hide_call() { call_hide_due = true; }
-  void hide_call_now() {
-    this->main().chat.hide_call();
-    this->hide_call_card();
-    this->hide_call_screen();
-  }
-  void hide_call_screen() {
-    auto& now = *parts.now;
-    if (!now.parts.call_whole)
-      return;
-    now.parts.call_whole.reset();
-    now.invalidateLayout();
-    now.markDamaged();
-  }
-  void hide_call_card() {
-    auto& now = *parts.now;
-    if (!now.parts.call_up)
-      return;
-    now.parts.call_up.reset();
-    now.invalidateLayout();
-    now.markDamaged();
-  }
   // A message's menu up: the right press was its.
   [[nodiscard]] bool context_menu_up() { return layer().menu.shown() != nullptr; }
   // Closed between events, not now: the program asks it as it does what
@@ -876,7 +844,6 @@ struct window : scene::Node {
     }
   }
   bool text_menu_close_due = false;
-  bool call_hide_due = false;
   [[nodiscard]] room_settings<Actions>* manage_up() { return layer().manage.shown(); }
 
   void close_drawer_now() { layer().frame.base().closeNow(); }
@@ -904,7 +871,6 @@ struct window : scene::Node {
     auto* up = layer().menu.shown();
     return up ? &up->parts.menu : nullptr;
   }
-
 
   void show_packs(std::vector<emote_pack> packs) {
     if (auto* up = layer().packs.shown())
@@ -943,7 +909,6 @@ struct window : scene::Node {
     layer().tools.open(std::in_place_type<Node>, *needs_.colours, std::forward<Args>(args)...);
   }
   void close_dialog() { layer().tools.close(); }
-
 
   // Its layers, each filling the window, as the default layout places them:
   // nothing placed by hand.

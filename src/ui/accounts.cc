@@ -159,7 +159,6 @@ struct switch_row : skiff::compose::Stacked {
               .toggle = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(what)))} {}
 };
 
-
 // A page of an account's settings chosen from its list.
 template <class Actions>
 struct choose_account_page {
@@ -171,8 +170,7 @@ struct choose_account_page {
 // An account's pages, in place of the list of accounts once one is chosen: a
 // line for each page of its settings, the one shown lit -- the client's, and
 // after Chats its protocol's own.
-template <class Actions>
-struct account_pages : nodes::Stack {
+template <class Actions> struct account_pages : skiff::compose::Stacked {
   using row = row_item<choose_account_page<Actions>>;
   // The colours its protocol's rows are made in, as they change.
   const palette* colours_ = nullptr;
@@ -185,14 +183,21 @@ struct account_pages : nodes::Stack {
     row proxy;
   } parts;
 
-  account_pages(const palette& colours)
-      : colours_(&colours),
-        parts{.connection = row(colours, "Connection", {account_page::connection{}}, icon::sliders{}),
-              .privacy = row(colours, "Privacy", {account_page::privacy{}}, icon::eye{}),
-              .notifications = row(colours, "Notifications", {account_page::notifications{}}, icon::bell{}),
-              .chats = row(colours, "Chats", {account_page::chats{}}, icon::people{}),
-              .proxy = row(colours, "Proxy", {account_page::proxy{}}, icon::gear{})} {
-    fState.apply({.padding = {6.0f, 0.0f, 0.0f, 0.0f}});
+  account_pages(const palette &colours)
+      : Stacked(
+            skiff::compose::vbox(0.0f, {.padding = {6.0f, 0.0f, 0.0f, 0.0f}})),
+        colours_(&colours),
+        parts{
+            .connection = row(colours, "Connection",
+                              {account_page::connection{}}, icon::sliders{}),
+            .privacy =
+                row(colours, "Privacy", {account_page::privacy{}}, icon::eye{}),
+            .notifications = row(colours, "Notifications",
+                                 {account_page::notifications{}}, icon::bell{}),
+            .chats =
+                row(colours, "Chats", {account_page::chats{}}, icon::people{}),
+            .proxy =
+                row(colours, "Proxy", {account_page::proxy{}}, icon::gear{})} {
     this->light(account_page::connection{});
   }
   // A protocol's pages: each its title and icon, by its own overloads.
@@ -252,8 +257,7 @@ inline auto account_chats_view(const palette& colours, std::string address) {
       std::move(address));
 }
 
-template <class Actions>
-struct account_privacy : nodes::Stack {
+template <class Actions> struct account_privacy : skiff::compose::Stacked {
   using receipts_row = switch_row<sends<::mux::ui::request::flip_account_receipts>>;
   using mentions_shared_row = switch_row<sends<::mux::ui::request::flip_account_mentions_shared>>;
   using mentions_sealed_row = switch_row<sends<::mux::ui::request::flip_account_mentions_sealed>>;
@@ -271,31 +275,43 @@ struct account_privacy : nodes::Stack {
 
   template <class... Rest>
   account_privacy(const ui_needs<Actions>& n, Rest&&... rest) : account_privacy(*n.colours, std::forward<Rest>(rest)...) {}
-  account_privacy(const palette& colours, bool receipts_on, std::string address, std::optional<bool> events_all = std::nullopt,
-                  const std::optional<config::room_event_kinds>& kinds = std::nullopt, bool notify_on = true,
-                  bool notify_sound_on = true, std::optional<bool> faces_on = std::nullopt,
-                  std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt,
-                  std::optional<config::mentions_choice> mentions = std::nullopt)
-      : parts{.title = section_title(colours, "PRIVACY"),
+  account_privacy(
+      const palette &colours, bool receipts_on, std::string address,
+      std::optional<bool> events_all = std::nullopt,
+      const std::optional<config::room_event_kinds> &kinds = std::nullopt,
+      bool notify_on = true, bool notify_sound_on = true,
+      std::optional<bool> faces_on = std::nullopt,
+      std::optional<std::int64_t> jump_most = std::nullopt,
+      std::optional<bool> previews_on = std::nullopt,
+      std::optional<config::mentions_choice> mentions = std::nullopt)
+      : Stacked(skiff::compose::vbox(8.0f, {.fill = true})),
+        parts{.title = section_title(colours, "PRIVACY"),
               .receipts = receipts_row(colours, "Send read receipts", {}),
               .settings = account_typing_view(colours, std::move(address)),
-              .note = note_text(colours, "Off, the people you talk to through this account are not told when you have read "
-                                         "their messages, or that you are typing. Theirs are still shown, and receipts are "
-                                         "still kept here."),
-              .mentions_shared = mentions_shared_row(colours, "Sync read mentions between sessions", {}),
-              .mentions_sealed = mentions_sealed_row(colours, "Encrypt them (with the recovery key)", {}),
-              .mentions_note = note_text(colours, "Which mentions you have read, kept with your account on its server, so "
-                                                  "your other sessions take them as read too. Encrypted, the server cannot "
-                                                  "read them; a session gets the key when it is restored with the "
-                                                  "recovery key.")} {
+              .note = wrapped(skiff::compose::styled(
+                  {.fillX = true},
+                  note_text(colours, "Off, the people you talk to through this "
+                                     "account are not told when you have read "
+                                     "their messages, or that you are typing. "
+                                     "Theirs are still shown, and receipts are "
+                                     "still kept here."))),
+              .mentions_shared = mentions_shared_row(
+                  colours, "Sync read mentions between sessions", {}),
+              .mentions_sealed = mentions_sealed_row(
+                  colours, "Encrypt them (with the recovery key)", {}),
+              .mentions_note = wrapped(skiff::compose::styled(
+                  {.fillX = true},
+                  note_text(colours, "Which mentions you have read, kept with "
+                                     "your account on its server, so "
+                                     "your other sessions take them as read "
+                                     "too. Encrypted, the server cannot "
+                                     "read them; a session gets the key when "
+                                     "it is restored with the "
+                                     "recovery key.")))} {
     (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on, (void)notify_on, (void)notify_sound_on;
-    this->setGap(8.0f);
-    parts.note.apply({.fillX = true});
-    fState.apply({.fill = true});
-    parts.note.setWrapped(true);
+
     parts.receipts.parts.toggle.setOnNow(receipts_on);
-    parts.mentions_note.apply({.fillX = true});
-    parts.mentions_note.setWrapped(true);
+
     for (scene::Node* one : std::initializer_list<scene::Node*>{&parts.mentions_shared, &parts.mentions_sealed, &parts.mentions_note})
       one->setVisible(mentions.has_value());
     if (mentions) {
@@ -359,8 +375,7 @@ struct account_notifications : skiff::compose::Stacked {
 // who has read up to where, link previews, how far a jump looks back, their
 // looks, and its spaces in the bars. Each as every account's, until chosen
 // here; a chat of it may choose again.
-template <class Actions>
-struct account_chats : nodes::Stack {
+template <class Actions> struct account_chats : skiff::compose::Stacked {
   // Its colour chosen.
   struct set_colour {
     using Answer = std::optional<::mux::ui::request::set_account_colour>;
@@ -389,24 +404,34 @@ struct account_chats : nodes::Stack {
     choice_menu<pick_home> home;
     spaces_choices<Actions> places;
   } parts;
-  account_chats(const palette& colours, const looks_shown& looks, const ui_shared& shared, std::string address,
-                const chat_choice_values& chats, std::optional<bool> home_hides,
-                std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
-      : parts{.colour_title = section_title(colours, "COLOUR"),
-              .colours = accent_circles<set_colour>({}, theme, false),
-              .strip = switch_row<sends<::mux::ui::request::flip_account_strip>>(colours, "A strip on its chats in other lists", {}),
-              .title = section_title(colours, "CHATS"),
-              .settings = account_chats_view(colours, std::move(address)),
-              .looks_title = section_title(colours, "LOOKS"),
-              .looks = look_choices<Actions>(colours, looks, choice_level::account{}),
-              .spaces_title = section_title(colours, "SPACES"),
-              .home = choice_menu<pick_home>(colours, "Home",
-                                             {"As above", "Every chat", "Without chats spaces hold",
-                                              "Without those and direct messages"},
-                                             !home_hides ? 0 : !*home_hides ? 1 : home_direct.value_or(false) ? 3 : 2, pick_home{}),
-              .places = spaces_choices<Actions>(colours, shared)} {
-    this->setGap(8.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+  account_chats(const palette &colours, const looks_shown &looks,
+                const ui_shared &shared, std::string address,
+                const chat_choice_values &chats, std::optional<bool> home_hides,
+                std::optional<bool> home_direct, const config::accent_t &colour,
+                bool strip_on, const config::theme_t &theme)
+      : Stacked(skiff::compose::vbox(
+            8.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{
+            .colour_title = section_title(colours, "COLOUR"),
+            .colours = accent_circles<set_colour>({}, theme, false),
+            .strip = switch_row<sends<::mux::ui::request::flip_account_strip>>(
+                colours, "A strip on its chats in other lists", {}),
+            .title = section_title(colours, "CHATS"),
+            .settings = account_chats_view(colours, std::move(address)),
+            .looks_title = section_title(colours, "LOOKS"),
+            .looks =
+                look_choices<Actions>(colours, looks, choice_level::account{}),
+            .spaces_title = section_title(colours, "SPACES"),
+            .home = choice_menu<pick_home>(
+                colours, "Home",
+                {"As above", "Every chat", "Without chats spaces hold",
+                 "Without those and direct messages"},
+                !home_hides                   ? 0
+                : !*home_hides                ? 1
+                : home_direct.value_or(false) ? 3
+                                              : 2,
+                pick_home{}),
+            .places = spaces_choices<Actions>(colours, shared)} {
     for (nodes::Text* each : {&parts.title, &parts.looks_title, &parts.spaces_title})
       each->apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
     this->show_colour(colour, strip_on);
@@ -428,8 +453,7 @@ struct choose_account_proxy {
 
 // An account's Proxy page, as Gajim's: which of the program's proxy profiles
 // it connects through, or none; and the way to the profiles themselves.
-template <class Actions>
-struct account_proxy : nodes::Stack {
+template <class Actions> struct account_proxy : skiff::compose::Stacked {
   using manage_row = row_item<sends<::mux::ui::request::manage_proxies>>;
   struct parts_t {
     nodes::Text title;
@@ -437,13 +461,18 @@ struct account_proxy : nodes::Stack {
     manage_row manage;
   } parts;
 
-  account_proxy(const palette& colours, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
-      : parts{.title = section_title(colours, "PROXY"),
-              .manage = manage_row(colours, "Manage proxies…", {}, icon::gear{})} {
+  account_proxy(const palette &colours,
+                const std::vector<config::proxy_settings> &all,
+                const std::optional<std::string> &current)
+      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
+        parts{.title =
+                  skiff::compose::styled({.margin = {0.0f, 0.0f, 4.0f, 0.0f}},
+                                         section_title(colours, "PROXY")),
+              .manage = skiff::compose::styled(
+                  {.margin = {8.0f, 0.0f, 0.0f, 0.0f}},
+                  manage_row(colours, "Manage proxies…", {}, icon::gear{}))} {
     auto& choices = parts.choices;
-    parts.title.apply({.margin = {0.0f, 0.0f, 4.0f, 0.0f}});
-    parts.manage.apply({.margin = {8.0f, 0.0f, 0.0f, 0.0f}});
-    fState.apply({.fill = true});
+
     // An empty place where the dots are, so the names line up.
     choices.emplace_back(colours, "No proxy", choose_account_proxy<Actions>{-1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
                          !current.has_value());
@@ -502,8 +531,8 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   // to the chats.
   using header_t = page_header<sends<::mux::ui::request::accounts_back>, sends<::mux::ui::request::accounts_back>>;
   // Under the header: the list down the side, and beside it what is chosen.
-  struct body_row : nodes::Stack {
-    struct side_column : nodes::Stack {
+  struct body_row : skiff::compose::Stacked {
+    struct side_column : skiff::compose::Stacked {
       using add_row = row_item<sends<::mux::ui::request::open_new_account>>;
       struct parts_t {
         add_row add;
@@ -516,11 +545,14 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
       account_pages<Actions>& pages = parts.pages;
       nodes::Text& message = parts.message;
       decltype(parts_t::list)& list = parts.list;
-      side_column(const palette& colours)
-          : parts{.add = add_row(colours, "Add account", {}, icon::plus{}),
+      side_column(const palette &colours)
+          : Stacked(
+                skiff::compose::vbox(0.0f, {.fillY = true,
+                                            .width = kListWidth,
+                                            .background = colours.sidebar})),
+            parts{.add = add_row(colours, "Add account", {}, icon::plus{}),
                   .pages = account_pages<Actions>(colours),
                   .message = nodes::Text("", 13.0f, colours.error)} {
-        fState.apply({.fillY = true, .width = kListWidth, .background = colours.sidebar});
         pages.setVisible(false);
         pages.apply({.fillX = true, .autoSize = scene::axes::kY});
         message.setWrapped(true);
@@ -534,26 +566,31 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
         type_list<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>, account_proxy<Actions>,
                   account_chats<Actions>, account_notifications<Actions>>,
         typename page_nodes<typename protocol_account_pages<protocols>::type>::type>::type>::type;
-    struct detail_column : nodes::Stack {
+    struct detail_column : skiff::compose::Stacked {
       // No account chosen, or the chosen one, or adding one.
       struct parts_t {
         // In a scroll view: a page taller than the window scrolls.
         nodes::ScrollContainer<detail_t> scroll;
       } parts;
-      explicit detail_column(const palette& colours)
-          : parts{.scroll = nodes::ScrollContainer<detail_t>(detail_t{std::in_place_index<0>, "Choose an account.", 15.0f, colours.dim})} {
-        fState.apply({.fillY = true, .grow = scene::axes::kX, .padding = {24.0f, 28.0f, 24.0f, 28.0f}});
-        parts.scroll.apply({.fill = true});
-      }
+      explicit detail_column(const palette &colours)
+          : Stacked(skiff::compose::vbox(
+                0.0f, {.fillY = true,
+                       .grow = scene::axes::kX,
+                       .padding = {24.0f, 28.0f, 24.0f, 28.0f}})),
+            parts{.scroll = skiff::compose::styled(
+                      {.fill = true},
+                      nodes::ScrollContainer<detail_t>(
+                          detail_t{std::in_place_index<0>, "Choose an account.",
+                                   15.0f, colours.dim}))} {}
     };
     struct parts_t {
       side_column side;
       detail_column main;
     } parts;
-    body_row(const palette& colours) : parts{.side = side_column(colours), .main = detail_column(colours)} {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .grow = scene::axes::kY});
-    }
+    body_row(const palette &colours)
+        : Stacked(skiff::compose::hbox(
+              0.0f, {.fillX = true, .grow = scene::axes::kY})),
+          parts{.side = side_column(colours), .main = detail_column(colours)} {}
     // Narrow -- a phone's -- one column at a time, all of the width, side by
     // side as wide: the accounts (or a chosen one's pages, its settings), or
     // the page chosen from them; the header's arrow a step back. Nothing of

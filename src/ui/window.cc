@@ -12,7 +12,11 @@ import skiff.widgets.motion;
 import skiff.widgets.wallpaper;
 import mux.core;
 import mux.config;
+import mux.kept_root;
+import skiff.model;
 import :base;
+import :controls;
+import :themes;
 import :forms;
 import :header;
 import :info;
@@ -417,6 +421,60 @@ struct window : scene::Node, outbox {
   }
 
   [[nodiscard]] conversations_screen<Actions>& main() { return layer().frame.base().base(); }
+  // What is kept, as the window's binding last read it.
+  const kept_root* kept_ = nullptr;
+  // Read by the window's binding as what is kept moves, and by the chats
+  // binding as the chats -- or the chat chosen -- do: the looks in effect.
+  template <class Reactions>
+  void refresh(const skiff::model::Model<kept_root, Reactions>& kept) {
+    kept_ = &kept.root();
+    this->read_looks();
+  }
+  void refresh(const chats_model&) { this->read_looks(); }
+  // The looks in effect, as what is kept says for the chat chosen: what each
+  // level holds of the looks and of room events, for the choices to show
+  // what is in effect; the panels' look, the window repainted where it
+  // changes; and the background behind the window -- the chat's, else
+  // every chat's.
+  void read_looks() {
+    auto& screen = this->main();
+    if (kept_ == nullptr || screen.last_model == nullptr)
+      return;
+    const auto& looks = kept_->looks.fValue;
+    const auto& history = kept_->history.fValue;
+    const auto space = space_above_of(screen.last_model->accounts());
+    const chat_settings reads{kept_, &space};
+    const std::optional<conversation_id>& chosen = screen.chosen;
+    looks_shown& shown = *needs_.looks;
+    looks_held account_held, chat_held;
+    room_events_held account_events, chat_events;
+    if (chosen) {
+      chat_held = {reads.own_of<&config::chat_choices::wallpaper>(*chosen), reads.own_of<&config::chat_choices::bubbles>(*chosen),
+                   reads.own_of<&config::chat_choices::panels>(*chosen)};
+      chat_events = {reads.own_of<&config::chat_choices::room_events>(*chosen), reads.own_of<&config::chat_choices::room_event_kinds>(*chosen)};
+      if (const config::account_t* account = reads.settings_of(chosen->account.address)) {
+        if (const auto& word = config::wallpaper_of(*account))
+          account_held.wallpaper = config::wallpaper_of(std::string_view(*word));
+        if (const auto& word = config::bubbles_of(*account))
+          account_held.bubbles = config::bubble_look_of(*word);
+        if (const auto& word = config::panels_of(*account))
+          account_held.panels = config::bubble_look_of(*word);
+        account_events = {config::room_events_of(*account), config::room_event_kinds_of(*account)};
+      }
+    }
+    shown.at(choice_level::everywhere{}) = {looks.wallpaper, looks.bubbles, looks.panels};
+    shown.at(choice_level::account{}) = std::move(account_held);
+    shown.at(choice_level::chat{}) = std::move(chat_held);
+    room_events_at(choice_level::everywhere{}) = {history.show_room_events, history.room_event_kinds};
+    room_events_at(choice_level::account{}) = std::move(account_events);
+    room_events_at(choice_level::chat{}) = std::move(chat_events);
+    shown.panels = chosen ? reads.panels_of(*chosen) : looks.panels.value_or(config::bubble_look{});
+    if (show_panels(*needs_.paint, shown.panels, shown.window, *needs_.colours)) {
+      this->markDamaged();
+      scene::work::mark(screen.fState.fId);  // an ease ticked by the screen
+    }
+    this->show_behind(chosen ? reads.wallpaper_of(*chosen) : looks.wallpaper.value_or(config::wallpaper_t{config::wallpaper::theme{}}));
+  }
   // The background behind the whole window, where it is so.
   void show_behind(const config::wallpaper_t& chosen) {
     if (needs_.looks->window.behind)

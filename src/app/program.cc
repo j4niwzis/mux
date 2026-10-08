@@ -205,6 +205,8 @@ struct app : kept_settings {
   // it was last walked whole with.
   skiff::bind::Binding<kept_model> window_binding;
   std::array<const void*, 3> bound_pages{};
+  // And to the chats, the window's other model.
+  skiff::bind::Binding<mux::chats_model> chats_binding;
   void take_page_input();
   void settle_model();
   void show_looks();

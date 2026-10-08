@@ -41,6 +41,9 @@ void app::woken() {
   // Deletions of what is not held in memory, by chat: looked for on disk on
   // a worker, each chat's file read once for all of its (mark_deleted_on_disk).
   std::map<mux::conversation_id, std::vector<std::string>> deleted_on_disk;
+  // One batch of edits for all that came: what binds to the chats told
+  // once, after.
+  model->chats().beginBatch();
   for (const auto& one : changes) {
     // What the program itself does with a change, besides the model: a
     // session kept, a picture shown.
@@ -142,6 +145,7 @@ void app::woken() {
     model->apply(one);
     paging.keep(one);
   }
+  model->chats().endBatch();
   for (auto& [in, ids] : deleted_on_disk)
     work.run([this, in, ids = std::move(ids)]() -> workers::done_t {
       store.mark_deleted_on_disk(in, ids);
@@ -277,8 +281,10 @@ void app::take_page_input() {
     bound_pages = now;
     window_binding.invalidate();
     window_binding.refresh(root(), this->state);
+  chats_binding.refresh(root(), model->chats());
   }
   window_binding.drain(root(), this->state, &ask);
+  chats_binding.drain(root(), model->chats(), &ask);
   this->settle_model();
 }
 // How the window looks, as the model holds it, put where the window's
@@ -335,6 +341,7 @@ void app::settle_model() {
                                }},
                effect);
   window_binding.refresh(root(), this->state);
+  chats_binding.refresh(root(), model->chats());
 }
 
 void app::before_frame() {

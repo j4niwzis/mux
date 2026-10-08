@@ -9,6 +9,7 @@ import std;
 import splice;
 import mux.core;
 import mux.config;
+import mux.protocols;
 import mux.proto.kept;
 import mux.proto.matrix.changes;
 import mux.proto.matrix.requests;

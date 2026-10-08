@@ -126,7 +126,7 @@ TEST(Config, AnOldFilesAccountsAreReadAsTheyAreNow) {
   ASSERT_EQ(all.size(), 2u);
   EXPECT_EQ(mux::config::address_of(all[0]), "a@b.c");
   EXPECT_EQ(mux::config::protocol_name(all[0]), "XMPP");
-  EXPECT_EQ(all[0].shared.colour, std::optional<std::string>("red"));
+  EXPECT_EQ(mux::config::colour_of(all[0]), mux::config::accent_t{mux::config::accent::red{}});
   EXPECT_EQ(mux::config::address_of(all[1]), "@d:e.f");
   EXPECT_EQ(mux::config::protocol_name(all[1]), "Matrix");
   EXPECT_FALSE(mux::config::enabled_of(all[1]));

@@ -948,3 +948,23 @@ TEST(Calls, TimerUpdatesTextWithoutRebuildingControls) {
   EXPECT_EQ(shown.shown()->fState.id(), id);
   EXPECT_EQ(shown.shown()->parts.lines.parts.said.text(), "1:02");
 }
+
+TEST(Appearance, ThemeCardPressEditsTheFieldAndRefreshesItsRing) {
+  struct root { skiff::model::Tracked<mux::config::look_settings> looks; };
+  using model_t = skiff::model::Model<root, skiff::bind::NoReactions>;
+  using field = skiff::model::Field<&mux::config::look_settings::theme>;
+  model_t kept(root{});
+  const mux::ui::palette colours;
+  const mux::config::theme_t chosen = mux::config::theme::night{};
+  auto card = mux::ui::theme_card(colours, chosen, "Night", colours.background, colours.bubble, colours.bubble);
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(card, kept);
+  auto& preview = std::get<1>(card.fParts);
+  ASSERT_TRUE(preview.fState.fBorder.has_value());
+  EXPECT_FLOAT_EQ(preview.fState.fBorder->width, 0.0f);
+  ASSERT_TRUE(skiff::bind::press(card, kept, scene::Path{}));
+  binding.refresh(card, kept);
+  EXPECT_EQ(*kept.look<field>(), chosen);
+  EXPECT_FLOAT_EQ(preview.fState.fBorder->width, 2.0f);
+  EXPECT_EQ(preview.fState.fBorder->colour, colours.accent);
+}

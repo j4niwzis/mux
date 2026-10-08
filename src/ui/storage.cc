@@ -76,40 +76,19 @@ template <class Which> struct limit_words {
     return std::format("{} {}", config::value_of(now, Which{}), unit);
   }
 };
-template <class Which> struct limit_stepper : skiff::compose::Stacked {
-  using step_button =
-      skiff::bind::Bound<config::cache_limits, icon_button<limit_press<Which>>>;
-  using value_t = decltype(skiff::compose::text_for<config::cache_limits>(
-      limit_words<Which>{}, std::declval<nodes::Text>()));
-  struct parts_t {
-    nodes::Text label;
-    value_t value;
-    step_button less;
-    step_button more;
-  } parts;
-  limit_stepper(const palette &colours, std::string what, std::string_view unit)
-      : Stacked(skiff::compose::hbox(6.0f,
-                                     {.fillX = true,
-                                      .height = 50.0f,
-                                      .padding = {0.0f, 12.0f, 0.0f, 20.0f}})),
-        parts{.label = skiff::compose::styled(
-                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                  elided(nodes::Text(std::move(what), 15.0f, colours.text))),
-              .value = skiff::compose::text_for<config::cache_limits>(
-                  limit_words<Which>{unit},
-                  skiff::compose::styled(
-                      {.alignSelf = scene::align::kMiddle},
-                      nodes::Text("", 14.0f, colours.accent, true))),
-              .less = skiff::compose::bound<config::cache_limits>(
-                  skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                         icon_button<limit_press<Which>>(
-                                             colours, icon::minus{}, {false}))),
-              .more = skiff::compose::bound<config::cache_limits>(
-                  skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                         icon_button<limit_press<Which>>(
-                                             colours, icon::plus{}, {true})))} {
-  }
-};
+template <class Which>
+auto limit_stepper(const palette& colours, std::string what, std::string_view unit) {
+  return skiff::compose::row(
+      skiff::compose::hbox(6.0f, {.fillX = true, .height = 50.0f, .padding = {0.0f, 12.0f, 0.0f, 20.0f}}),
+      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                             elided(nodes::Text(std::move(what), 15.0f, colours.text))),
+      skiff::compose::text_for<config::cache_limits>(limit_words<Which>{unit},
+          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 14.0f, colours.accent, true))),
+      skiff::compose::bound<config::cache_limits>(skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+          icon_button<limit_press<Which>>(colours, icon::minus{}, {false}))),
+      skiff::compose::bound<config::cache_limits>(skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+          icon_button<limit_press<Which>>(colours, icon::plus{}, {true}))));
+}
 
 // Settings' Storage page: whether what mux keeps on disk is sealed; how
 // much is kept in memory and on disk, each a line with its number and a

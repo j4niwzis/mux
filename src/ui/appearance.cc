@@ -28,99 +28,29 @@ import skiff.bind;
 
 export namespace mux::ui {
 
-// A renderer chosen on the Rendering page.
-template <class Actions>
-struct choose_renderer {
-  using Answer = ::mux::ui::request::set_renderer;
-  config::renderer_t renderer;
-  ::mux::ui::request::set_renderer operator()() { return ::mux::ui::request::set_renderer{renderer}; }
-};
-
-// A theme's card on the Appearance page: a small picture of it -- its
-// background, a bubble of each side -- its name, and a ring where it is the
-// one in use. Its colours are its own, not the theme up.
-template <class Choose> struct theme_card : skiff::compose::Stacked {
-  Choose choose;
-  config::theme_t theme;
-  skia::SkColor back, bubble, mine;
-  // A small picture of it: its background, a bubble of each side, and a
-  // ring round it while it is the one in use -- plates placed on the card.
-  struct picture_t : skiff::compose::Specced {
-    struct parts_t {
-      nodes::Box<> incoming;
-      nodes::Box<> outgoing;
-    } parts;
-    // The ring it is lit with as it is the one chosen.
-    skia::SkColor ring = 0;
-    picture_t(skia::SkColor back, skia::SkColor in, skia::SkColor out,
-              skia::SkColor lit)
-        : Specced({.place = scene::anchor::kTopLeft,
-                   .y = -62.0f,
-                   .fillX = true,
-                   .height = 56.0f,
-                   .cornerRadius = 8.0f,
-                   .background = back}),
-          parts{.incoming =
-                    skiff::compose::styled({.place = scene::anchor::kTopLeft,
-                                            .x = 6.0f,
-                                            .y = 8.0f,
-                                            .width = 44.0f,
-                                            .height = 14.0f,
-                                            .cornerRadius = 7.0f},
-                                           nodes::Box<>(in)),
-                .outgoing =
-                    skiff::compose::styled({.place = scene::anchor::kTopRight,
-                                            .x = -6.0f,
-                                            .y = 30.0f,
-                                            .width = 44.0f,
-                                            .height = 14.0f,
-                                            .cornerRadius = 7.0f},
-                                           nodes::Box<>(out))},
-          ring(lit) {}
-  };
-  struct ring_of {
-    config::theme_t theme;
-    skia::SkColor colour;
-    scene::Spec operator()(const config::theme_t &now) const {
-      const bool selected = theme == now;
-      return {.border = scene::Border{selected ? colour : 0u,
-                                      selected ? 2.0f : 0.0f}};
-    }
-  };
-  using picture_field =
-      decltype(skiff::compose::spec_for<
-               skiff::model::Field<&config::look_settings::theme>>(
-          ring_of{}, std::declval<picture_t>()));
-  struct parts_t {
-    nodes::Text name;
-    picture_field picture;
-  } parts;
-  theme_card(const palette &colours, Choose what, config::theme_t which,
-             std::string label, skia::SkColor b, skia::SkColor in,
-             skia::SkColor out)
-      : Stacked(
-            skiff::compose::vbox(0.0f, {.width = 92.0f,
-                                        .height = 92.0f,
-                                        .padding = {66.0f, 6.0f, 0.0f, 6.0f}})),
-        choose(std::move(what)), theme(which), back(b), bubble(in), mine(out),
-        parts{.name = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  nodes::Text(std::move(label), 12.0f, colours.dim)),
-              .picture = skiff::compose::spec_for<
-                  skiff::model::Field<&config::look_settings::theme>>(
-                  ring_of{which, colours.accent},
-                  picture_t(b, in, out, colours.accent))} {}
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    act_on(fState, choose, theme);
-    return true;
-  }
-  auto onPress()
-    requires skiff::scene::Answering<Choose>
-  {
-    return choose(theme);
-  }
-};
+// Theme cards are expressions: the press edits the bound theme, and the
+// preview's ring is a projection of that same field.
+inline auto theme_card(const palette& colours, config::theme_t theme, std::string label,
+                       skia::SkColor back, skia::SkColor incoming, skia::SkColor outgoing) {
+  using field = skiff::model::Field<&config::look_settings::theme>;
+  return skiff::compose::bound<field>(skiff::compose::onClick(
+      skiff::bind::own(skiff::model::setTo(theme)),
+      skiff::compose::column(
+          skiff::compose::vbox(0.0f, {.width = 92.0f, .height = 92.0f, .padding = {66.0f, 6.0f, 0.0f, 6.0f}}),
+          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 12.0f, colours.dim)),
+          skiff::compose::spec_for<field>(
+              [theme, ring = colours.accent](const config::theme_t& now) -> scene::Spec {
+                const bool selected = theme == now;
+                return {.border = scene::Border{selected ? ring : 0u, selected ? 2.0f : 0.0f}};
+              },
+              skiff::compose::column(
+                  skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .y = -62.0f, .fillX = true,
+                                             .height = 56.0f, .cornerRadius = 8.0f, .background = back}),
+                  skiff::compose::styled({.place = scene::anchor::kTopLeft, .x = 6.0f, .y = 8.0f,
+                                         .width = 44.0f, .height = 14.0f, .cornerRadius = 7.0f}, nodes::Box<>(incoming)),
+                  skiff::compose::styled({.place = scene::anchor::kTopRight, .x = -6.0f, .y = 30.0f,
+                                         .width = 44.0f, .height = 14.0f, .cornerRadius = 7.0f}, nodes::Box<>(outgoing)))))));
+}
 
 // What was picked of a T in a row of nodes that each call one: the press
 // answered with it, set in the part the row's field binds.
@@ -133,36 +63,22 @@ struct pick {
 // The themes' cards, Telegram's, in its order, with its own pictures'
 // colours -- the wallpaper, a bubble received, one sent: bound to the
 // theme the model holds, the one in use ringed.
-struct theme_row : skiff::compose::Stacked {
-  using card = theme_card<pick<config::theme_t>>;
-  struct parts_t {
-    card classic, day, tinted, night;
-  } parts;
-  explicit theme_row(const palette &colours)
-      : Stacked(skiff::compose::hbox(6.0f, {.autoSize = scene::axes::kBoth})),
-        parts{.classic = card(colours, {}, config::theme::classic{}, "Classic",
-                              skia::colorSetARGB(255, 155, 212, 148),
-                              skia::colorSetARGB(255, 255, 255, 255),
-                              skia::colorSetARGB(255, 234, 255, 220)),
-              .day = card(colours, {}, config::theme::day{}, "Day",
-                          skia::colorSetARGB(255, 126, 196, 234),
-                          skia::colorSetARGB(255, 255, 255, 255),
-                          skia::colorSetARGB(255, 215, 240, 255)),
-              .tinted = card(colours, {}, config::theme::tinted{}, "Tinted",
-                             skia::colorSetARGB(255, 72, 87, 97),
-                             skia::colorSetARGB(255, 107, 128, 141),
-                             skia::colorSetARGB(255, 92, 167, 212)),
-              .night = card(colours, {}, config::theme::night{}, "Night",
-                            skia::colorSetARGB(255, 72, 87, 97),
-                            skia::colorSetARGB(255, 107, 128, 141),
-                            skia::colorSetARGB(255, 117, 191, 181))} {}
-};
-// Moved along where the page is narrower than they are -- a phone's --
-// rather than cut off at its edge.
-struct theme_field : side_scroll<theme_row> {
-  explicit theme_field(const palette& colours) : side_scroll<theme_row>(theme_row(colours)) {}
-  void read(const config::theme_t &) {}
-};
+inline auto theme_row(const palette& colours) {
+  return skiff::compose::row(
+      skiff::compose::hbox(6.0f, {.autoSize = scene::axes::kBoth}),
+      theme_card(colours, config::theme::classic{}, "Classic", skia::colorSetARGB(255, 155, 212, 148),
+                 skia::colorSetARGB(255, 255, 255, 255), skia::colorSetARGB(255, 234, 255, 220)),
+      theme_card(colours, config::theme::day{}, "Day", skia::colorSetARGB(255, 126, 196, 234),
+                 skia::colorSetARGB(255, 255, 255, 255), skia::colorSetARGB(255, 215, 240, 255)),
+      theme_card(colours, config::theme::tinted{}, "Tinted", skia::colorSetARGB(255, 72, 87, 97),
+                 skia::colorSetARGB(255, 107, 128, 141), skia::colorSetARGB(255, 92, 167, 212)),
+      theme_card(colours, config::theme::night{}, "Night", skia::colorSetARGB(255, 72, 87, 97),
+                 skia::colorSetARGB(255, 107, 128, 141), skia::colorSetARGB(255, 117, 191, 181)));
+}
+// The themes move sideways in narrow pages; each card binds its own edit.
+inline auto theme_field(const palette& colours) {
+  return side_scroll<decltype(theme_row(colours))>(theme_row(colours));
+}
 // Telegram's accents, the theme's own first: bound to the accent the model
 // holds. Their shades are the theme's: the page is made again with it.
 inline auto accent_view(const config::theme_t &theme) {
@@ -198,30 +114,14 @@ inline auto percent_heading(const palette &colours, std::string_view what) {
 }
 // Home without direct messages: only where Home is without what spaces
 // hold, so it reads both, and is flipped only then.
-struct home_direct_switch : skiff::compose::Stacked {
-  using toggle_t =
-      decltype(skiff::compose::bound<
-               skiff::model::Field<&config::look_settings::home_hides_direct>>(
-          widgets::ToggleField<bool>(std::declval<widgets::Theme>())));
-  struct parts_t {
-    nodes::Text label;
-    toggle_t toggle;
-  } parts;
-  explicit home_direct_switch(const palette &colours)
-      : Stacked(skiff::compose::hbox(16.0f,
-                                     {.fillX = true,
-                                      .height = row_item<nothing>::kHeight,
-                                      .padding = {0.0f, 20.0f, 0.0f, 20.0f}})),
-        parts{.label = skiff::compose::styled(
-                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                  elided(nodes::Text("And without direct messages", 15.0f,
-                                     colours.text))),
-              .toggle = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  skiff::compose::bound<skiff::model::Field<
-                      &config::look_settings::home_hides_direct>>(
-                      widgets::ToggleField<bool>(colours.widgets)))} {}
-};
+inline auto home_direct_switch(const palette& colours) {
+  return skiff::compose::row(
+      skiff::compose::hbox(16.0f, {.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                             elided(nodes::Text("And without direct messages", 15.0f, colours.text))),
+      skiff::compose::bound<skiff::model::Field<&config::look_settings::home_hides_direct>>(
+          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::ToggleField<bool>(colours.widgets))));
+}
 
 // Settings' Appearance page, as Telegram's: the themes as cards, and the
 // accents as circles -- either changes at once -- every chat's looks, the
@@ -234,8 +134,7 @@ inline auto appearance_settings_view(const palette& colours, const config::theme
       {.fillX = true,
        .autoSize = scene::axes::kY,
        .margin = {4.0f, 16.0f, 8.0f, 16.0f}},
-      skiff::compose::bound<skiff::model::Field<&looks::theme>>(
-          theme_field(colours)));
+      theme_field(colours));
   return skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       spaced_title(colours, "THEME"), std::move(themes),

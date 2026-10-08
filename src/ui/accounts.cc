@@ -54,7 +54,9 @@ export namespace mux::ui {
 // One account in the list: its address, protocol and state. A click shows
 // its settings beside the list.
 template <class Actions>
-struct account_entry : nodes::Stack, outbox {
+struct account_entry : nodes::Stack {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::select_account;
   std::string address;
   bool selected = false;
   struct parts_t {
@@ -80,9 +82,8 @@ struct account_entry : nodes::Stack, outbox {
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    this->emit(::mux::ui::request::select_account{address});
-    return true;
+  std::optional<Answer> onClick(float, float) {
+    return ::mux::ui::request::select_account{address};
   }
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;

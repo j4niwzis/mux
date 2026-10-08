@@ -68,7 +68,9 @@ constexpr auto row_views_for(const State& state, type_tag<Actions> tag) {
 }
 
 template <class Actions>
-struct conversation_row : nodes::Stack, outbox {
+struct conversation_row : nodes::Stack {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::choose;
   template <class List>
   struct view_nodes;
   template <class... Vs>
@@ -302,9 +304,8 @@ struct conversation_row : nodes::Stack, outbox {
 
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    this->emit(::mux::ui::request::choose{id});
-    return true;
+  std::optional<Answer> onClick(float, float) {
+    return ::mux::ui::request::choose{id};
   }
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;

@@ -976,7 +976,9 @@ struct mark_button : scene::Node, outbox {
 
 // "↓": back to the newest, with how many came while one read above them.
 template <class Actions>
-struct jump_button : scene::Node, outbox {
+struct jump_button : scene::Node {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::jump_to_end;
   int unseen = 0;
   // A round plate with a chevron down, and over its top the count of what
   // came while the reader was above, on a badge in the accent.
@@ -1007,16 +1009,17 @@ struct jump_button : scene::Node, outbox {
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    this->emit(::mux::ui::request::jump_to_end{});
-    return true;
+  std::optional<Answer> onClick(float, float) {
+    return ::mux::ui::request::jump_to_end{};
   }
 };
 
 // Back to the chat a jump came from -- a link or a reply into another chat
 // -- over "↓", as Telegram's: the chat as it was left.
 template <class Actions>
-struct back_button : scene::Node, outbox {
+struct back_button : scene::Node {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::return_to_chat;
   struct parts_t {
     nodes::Icon mark;
   } parts;
@@ -1037,9 +1040,8 @@ struct back_button : scene::Node, outbox {
   void show(bool up, int slot) { place_in_corner(*this, up, slot); }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    this->emit(::mux::ui::request::return_to_chat{});
-    return true;
+  std::optional<Answer> onClick(float, float) {
+    return ::mux::ui::request::return_to_chat{};
   }
 };
 

@@ -70,7 +70,9 @@ struct forward_box : nodes::Stack, outbox {
     forward_box* box;
     void operator()(std::string_view text) const { box->find(text); }
   };
-  struct row : nodes::Stack, outbox {
+  struct row : nodes::Stack {
+    // What its handlers ask for, returned.
+    using Answer = ::mux::ui::request::forward_to;
     conversation_id id;
     struct parts_t {
       avatar_mark face;
@@ -89,9 +91,8 @@ struct forward_box : nodes::Stack, outbox {
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      this->emit(::mux::ui::request::forward_to{id});
-      return true;
+    std::optional<Answer> onClick(float, float) {
+      return ::mux::ui::request::forward_to{id};
     }
   };
   using rows_t = nodes::Flow<std::vector<row>>;
@@ -130,7 +131,9 @@ struct forward_box : nodes::Stack, outbox {
 // Someone found: their picture, name and ID; pressed, the chat with them --
 // in Start chat, and in the chat list where nothing joined matches.
 template <class Actions>
-struct found_person_row : nodes::Stack, outbox {
+struct found_person_row : nodes::Stack {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::start_direct;
   std::string id;
   struct lines_t : two_lines {
     lines_t(const palette& colours, const found_person& one) : two_lines(colours, one.name.empty() ? one.id : one.name, one.id, 14.0f, 2.0f) {}
@@ -150,9 +153,8 @@ struct found_person_row : nodes::Stack, outbox {
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    this->emit(::mux::ui::request::start_direct{id});
-    return true;
+  std::optional<Answer> onClick(float, float) {
+    return ::mux::ui::request::start_direct{id};
   }
 };
 

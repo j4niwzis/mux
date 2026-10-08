@@ -308,7 +308,9 @@ struct segment : pressable<nodes::Stack> {
 // Three lines at the top-left of the conversation list: a press pulls the
 // drawer out.
 template <class Actions>
-struct menu_button : scene::Node, outbox {
+struct menu_button : scene::Node {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::open_drawer;
   // Three bars, and a plate under them while it is hovered or focused.
   struct parts_t {
     nodes::Icon bars;
@@ -328,9 +330,8 @@ struct menu_button : scene::Node, outbox {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool focusChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    this->emit(::mux::ui::request::open_drawer{});
-    return true;
+  std::optional<Answer> onClick(float, float) {
+    return ::mux::ui::request::open_drawer{};
   }
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;

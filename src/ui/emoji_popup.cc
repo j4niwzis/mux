@@ -51,7 +51,9 @@ struct insert_emoji_into : outbox {
 // newest first; a press sends one into the chat.
 template <class Actions>
 struct gif_grid : nodes::Stack, outbox {
-  struct gif_cell : nodes::Stack, outbox {
+  struct gif_cell : nodes::Stack {
+    // What its handlers ask for, returned.
+    using Answer = ::mux::ui::request::send_gif;
     std::string path;
     std::string key;
     struct parts_t {
@@ -65,9 +67,8 @@ struct gif_grid : nodes::Stack, outbox {
       parts.picture.apply({.fill = true, .cornerRadius = 6.0f});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      this->emit(::mux::ui::request::send_gif{path});
-      return true;
+    std::optional<Answer> onClick(float, float) {
+      return ::mux::ui::request::send_gif{path};
     }
     // Drawn again each frame while it moves, for its next frame.
     [[nodiscard]] bool settling() const { return animations().has(key); }

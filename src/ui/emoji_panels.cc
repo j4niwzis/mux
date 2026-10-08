@@ -51,7 +51,9 @@ inline void lay_out_picker(nodes::Stack& panel, auto& field, auto& list, auto& f
 template <class Actions>
 struct sticker_grid : nodes::Stack, outbox {
   static constexpr float kCell = 78.0f;
-  struct cell : nodes::Stack, outbox {
+  struct cell : nodes::Stack {
+    // What its handlers ask for, returned.
+    using Answer = ::mux::ui::request::send_sticker;
     emoji_kept* kept_ = nullptr;
     emote sticker;
     struct parts_t {
@@ -69,9 +71,8 @@ struct sticker_grid : nodes::Stack, outbox {
     void update(double now) { resting.step(this->hovered(), now, {sticker.url, ":" + sticker.shortcode + ":", true}, *kept_); }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      this->emit(::mux::ui::request::send_sticker{sticker});
-      return true;
+    std::optional<Answer> onClick(float, float) {
+      return ::mux::ui::request::send_sticker{sticker};
     }
   };
   // A pack: its name over its stickers.

@@ -224,7 +224,9 @@ struct chat_header : nodes::Stack {
   }
 
   // The chat's avatar, its name over how it is, and the button to its info.
-  struct head_row : nodes::Stack, outbox {
+  struct head_row : nodes::Stack {
+    // What its handlers ask for, returned.
+    using Answer = ::mux::ui::request::toggle_info;
     using find_button = icon_button<sends<::mux::ui::request::open_search>>;
     using info_button = icon_button<sends<::mux::ui::request::toggle_info>>;
     using threads_button = icon_button<sends<::mux::ui::request::toggle_threads>>;
@@ -270,11 +272,10 @@ struct chat_header : nodes::Stack {
       parts.texts.parts.state.setVisible(shown.key.has_value());
     }
     [[nodiscard]] bool acceptsInput() const { return taps_to_info; }
-    [[nodiscard]] bool onClick(float, float) {
+    std::optional<Answer> onClick(float, float) {
       if (!taps_to_info)
-        return false;
-      this->emit(::mux::ui::request::toggle_info{});
-      return true;
+        return std::nullopt;
+      return ::mux::ui::request::toggle_info{};
     }
   };
   struct parts_t {

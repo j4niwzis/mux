@@ -188,7 +188,9 @@ template <class Actions>
 struct context_menu : scene::Node, outbox {
   struct card : nodes::Stack, outbox {
     // Quick reactions, as tdesktop's menu has them at its top.
-    struct quick_reaction : nodes::Stack, outbox {
+    struct quick_reaction : nodes::Stack {
+      // What its handlers ask for, returned.
+      using Answer = ::mux::ui::request::menu_react;
       std::string key;
       struct parts_t {
         nodes::Text face;
@@ -204,9 +206,8 @@ struct context_menu : scene::Node, outbox {
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
       [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-      [[nodiscard]] bool onClick(float, float) {
-        this->emit(::mux::ui::request::menu_react{key});
-        return true;
+      std::optional<Answer> onClick(float, float) {
+        return ::mux::ui::request::menu_react{key};
       }
     };
     // The six, and at their end the way to every emoji, as tdesktop's.

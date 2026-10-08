@@ -24,7 +24,9 @@ export namespace mux::ui {
 // and its protocol and state. A press makes it the current account, whose
 // chats are the ones shown; the current one is lit and ticked.
 template <class Actions>
-struct drawer_account : nodes::Stack, outbox {
+struct drawer_account : nodes::Stack {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::switch_account;
   std::string address;
   bool current = false;
   struct parts_t {
@@ -52,9 +54,8 @@ struct drawer_account : nodes::Stack, outbox {
 
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    this->emit(::mux::ui::request::switch_account{address});
-    return true;
+  std::optional<Answer> onClick(float, float) {
+    return ::mux::ui::request::switch_account{address};
   }
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;

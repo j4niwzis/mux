@@ -76,7 +76,9 @@ struct threads_panel : nodes::Stack, outbox {
   // the latest's time; pressed, opened.
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
-  struct thread_row : nodes::Stack, outbox {
+  struct thread_row : nodes::Stack {
+    // What its handlers ask for, returned.
+    using Answer = ::mux::ui::request::open_thread;
     std::string root;
     struct lines_t : nodes::Stack {
       struct parts_t {
@@ -125,9 +127,8 @@ struct threads_panel : nodes::Stack, outbox {
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      this->emit(::mux::ui::request::open_thread{root});
-      return true;
+    std::optional<Answer> onClick(float, float) {
+      return ::mux::ui::request::open_thread{root};
     }
   };
   using head_t = page_header<back_it, close_it>;

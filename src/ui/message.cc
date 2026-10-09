@@ -919,7 +919,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       body.parts.quote.emplace(quote_row(*colours_, known ? avatar_colour(found->sender) : colours_->accent,
                          known ? (found->outgoing ? std::string("You") : sender_name(in, found->sender))
                                : std::string("A message"),
-                         std::move(line), header_quote ? std::nullopt : std::move(picture), header_quote.has_value(), known && found->attachment && found->attachment->sticker));
+                         std::move(line), header_quote ? std::nullopt : std::move(picture), header_quote.has_value(), known && found->sticker));
       // The quote spans its bubble, as tdesktop's; the bubble is at least as
       // wide as the quote asks -- its name and its line, the line counted up
       // to maxSignatureSize (240), so that a short answer to a long message

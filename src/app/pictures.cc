@@ -318,20 +318,20 @@ class pictures_part {
             if (said.attachment && is_picture(said.attachment->kind)) {
               // A video with no thumbnail: nothing to fetch as a picture --
               // its file is the video, its plate shown as it is.
-              if (said.attachment->sticker)
+              if (said.sticker)
                 this->want_emote(id, said.attachment->source, moves(said.attachment->kind), emote_kind::sticker);
               else if (said.attachment->video != said.attachment->source)
                 this->want_thumbnail(id, said.attachment->source);
-              if (!said.attachment->sticker)
+              if (!said.sticker)
                 this->make_preview(*said.attachment);
               // One that moves: the whole of it, for its frames.
-              if (!said.attachment->sticker && moves(said.attachment->kind))
+              if (!said.sticker && moves(said.attachment->kind))
                 this->want_whole(id, said.attachment->source);
             }
             // An album's pictures, each as one alone.
             for (const attachment& item : said.album)
               if (is_picture(item.kind)) {
-                if (item.sticker)
+                if (said.sticker)
                   this->want_emote(id, item.source, moves(item.kind), emote_kind::sticker);
                 else {
                   this->want_thumbnail(id, item.source);

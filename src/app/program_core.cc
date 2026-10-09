@@ -572,6 +572,9 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   mux::app::tell_protocol_ops(shared.ui, mux::protocols{});
   // Load the saved settings through the base; app::take dispatches requests.
   this->kept_settings::take(saved);
+  // Loading replaces the model, including its revision. A previous read
+  // of the defaults must not suppress the saved settings' first read.
+  window_binding.invalidate();
   // And what of them the window holds, put in place there.
   shared.emoji.recent_emoji = this->recent().emoji;
   shared.emoji.recent_stickers = this->recent().stickers;

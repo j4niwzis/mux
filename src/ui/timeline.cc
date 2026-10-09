@@ -415,7 +415,8 @@ template <class Actions> struct timeline_area : skiff::compose::Specced {
                                        std::ranges::find(all, *all[i].replies_to, &message::id) != all.end();
               const auto link = first_link_of(all[i]);
               const bool preview_known = link && now.previews.contains(*link);
-              return row.said == all[i] && row.quote_said == quote_body(i) && row.first == first_of_run(i) &&
+              return row.frost_shown == needs_.looks->window.frost &&
+                     row.said == all[i] && row.quote_said == quote_body(i) && row.first == first_of_run(i) &&
                      row.last == last_of_run(i) &&
                      row.quote_known == quote_known && row.events_shown == shows(all[i]) && row.unread_start == (how.unread_from && all[i].id == *how.unread_from) &&
                      row.preview_known == preview_known && row.readers_shown == readers_of(i) &&

@@ -632,6 +632,9 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
   const palette* colours_ = nullptr;
   // The looks shown: the program's.
   const looks_shown* looks_ = nullptr;
+  // The inherited blur used to make the panes: changing the window's
+  // Frosted setting changes a row even when its message stays the same.
+  double frost_shown = 10.0;
   // What the window's parts share: the accounts' protocol states.
   const ui_shared* shared_ = nullptr;
   struct parts_t {
@@ -698,7 +701,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       : Stacked(skiff::compose::hbox(8.0f, {})), said(said),
         first(first_of_run), last(last_of_run), message_id(said.id),
         plain(said.body.plain), outgoing(said.outgoing), sender(said.sender),
-        colours_(n.colours), looks_(n.looks), shared_(n.shared),
+        colours_(n.colours), looks_(n.looks), frost_shown(n.looks->window.frost), shared_(n.shared),
         parts{.face = skiff::compose::styled(
                   {.place = scene::anchor::kBottomLeft,
                    .x = -(kAvatar + 8.0f),

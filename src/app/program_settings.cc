@@ -31,6 +31,10 @@ void app::rebuild_in_theme() {
   accounts_screen.forget_login();
   shared.drawer_waits = false;
   root().rebuild();
+  // The new tree has not read the saved settings or chats, even when the
+  // models' revisions match what the old tree last read.
+  window_binding.invalidate();
+  chats_binding.invalidate();
   // Rebuild the page that was already open; a look change from a space's
   // menu must not open Settings or switch an unrelated settings page.
   mux::ui::change_shown<std::optional<mux::ui::settings_facts>>(showing, [&](auto& now) {

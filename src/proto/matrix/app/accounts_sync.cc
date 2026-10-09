@@ -27,7 +27,7 @@ template void account<mux::app::post_change>::say(connection_t state);
 template auto account<mux::app::post_change>::homeserver() -> std::optional<http::url>;
 template void account<mux::app::post_change>::run();
 template auto account<mux::app::post_change>::kept_file() const -> std::filesystem::path;
-template void account<mux::app::post_change>::save_kept() const;
+template bool account<mux::app::post_change>::save_kept() const;
 template void account<mux::app::post_change>::load_kept();
 template void account<mux::app::post_change>::tell(const loom::cs::sync::response& got);
 template auto account<mux::app::post_change>::avatar_of(const std::string& room, const loom::client::joined_room& kept) const -> std::optional<std::string>;

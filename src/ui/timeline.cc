@@ -125,10 +125,8 @@ template <class Actions>
         return ::mux::ui::request::react{one.message_id, chip.key};
       }
   // A card of a link to a room or a message: followed.
-  for (const link_card& card : one.parts.body.parts.cards)
-    if (card.bounds().contains(press.x, press.y)) {
-      return ::mux::ui::request::open_url{card.url};
-    }
+  if (const auto url = message_link_at(one.parts.body.parts.blocks, press.x, press.y))
+    return ::mux::ui::request::open_url{*url};
   // A link's preview: the link, followed.
   if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(press.x, press.y)) {
     return ::mux::ui::request::open_url{preview->url};

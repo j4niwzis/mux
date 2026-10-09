@@ -658,6 +658,46 @@ TEST(Timeline, AShortReplyToALongMessageIsNarrow) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+TEST(MessageLinks, RepeatedMessageCardsStayBetweenTheirSurroundingText) {
+  const mux::conversation chat{};
+  const std::string url = "https://matrix.to/#/!room:example.org/$message";
+  const std::string original = "Before " + url + " between " + url + " after";
+  const auto shown = mux::ui::with_mentions(original, mux::ui::link_spans_in(original), chat, nullptr);
+  ASSERT_EQ(shown.cards.size(), 2u);
+  const auto pieces = mux::ui::pieces_of(shown.text, shown.links, shown.styles, shown.cards);
+  ASSERT_EQ(pieces.size(), 5u);
+  EXPECT_EQ(pieces[0].text, "Before ");
+  ASSERT_TRUE(pieces[1].card);
+  EXPECT_EQ(pieces[1].card->url, url);
+  EXPECT_EQ(pieces[2].text, " between ");
+  ASSERT_TRUE(pieces[3].card);
+  EXPECT_EQ(pieces[3].card->url, url);
+  EXPECT_EQ(pieces[4].text, " after");
+}
+
+TEST(MessageLinks, CardsKeepTheirOrderWithMentionsFormattingAndCode) {
+  const mux::conversation chat{};
+  const std::string first = "https://matrix.to/#/!room:example.org/$first";
+  const std::string second = "https://matrix.to/#/!room:example.org/$second";
+  auto html = mux::ui::read_html("<a href=\"https://matrix.to/#/@alice:example.org\">Alice</a> before "
+      "<a href=\"" + first + "\">first</a> <strong>between</strong><pre>code</pre>"
+      "<a href=\"" + second + "\">second</a> after");
+  const auto shown = mux::ui::with_mentions(std::move(html.text), std::move(html.spans), chat, nullptr, std::move(html.styles));
+  ASSERT_EQ(shown.cards.size(), 2u);
+  const auto pieces = mux::ui::pieces_of(shown.text, shown.links, shown.styles, shown.cards);
+  ASSERT_EQ(pieces.size(), 7u);
+  EXPECT_TRUE(pieces[0].text.ends_with(" before "));
+  ASSERT_TRUE(pieces[1].card);
+  EXPECT_EQ(pieces[1].card->url, first);
+  EXPECT_TRUE(pieces[2].text.contains("between"));
+  EXPECT_FALSE(pieces[2].styles.empty());
+  EXPECT_TRUE(pieces[3].code);
+  EXPECT_EQ(pieces[3].text, "code");
+  ASSERT_TRUE(pieces[5].card);
+  EXPECT_EQ(pieces[5].card->url, second);
+  EXPECT_TRUE(pieces[6].text.ends_with("after"));
+}
+
 // The input's emoji panel, as tdesktop's: the emoji side by side in rows,
 // the list taller than the card, and scrolled by the wheel.
 TEST(Emoji, ThePanelHasRowsAndScrolls) {

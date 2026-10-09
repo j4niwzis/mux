@@ -37,60 +37,25 @@ export namespace mux::ui {
   return said.redacted ? std::string("removed ") : said.edited ? std::string("edited ") : std::string();
 }
 
-// A link to a room or to a message in one, under the message that has it,
-// as a card: a bar in the accent, the room's avatar, its name -- or
-// "Message from" it -- over a second line: what the room is, or who said
-// the message and a line of it where it is here. A press on it is seen by
-// the messages' list, which follows it.
-struct link_card : skiff::compose::Stacked {
-  std::string url;
-  struct bar : skiff::compose::Specced {
-    explicit bar(const palette &colours)
-        : Specced({.width = 3.0f,
-                   .height = 36.0f,
-                   .cornerRadius = 1.5f,
-                   .background = colours.accent}) {}
+// A protocol link's card, composed from its stripe, avatar and two lines.
+inline auto link_card(const palette& colours, std::string where, std::string avatar_id,
+                      std::string avatar_name, std::string title, std::string said) {
+  namespace c = skiff::compose;
+  const auto line = [](std::string text, skia::SkColor colour, bool bold) {
+    auto node = nodes::Text(std::move(text), 13.0f, colour, bold);
+    node.setElided(true);
+    node.setMaxWidth(360.0f);
+    return node;
   };
-  struct texts_column : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text title;
-      nodes::Text said;
-    } parts;
-    texts_column(const palette &colours, std::string t, std::string s)
-        : Stacked(
-              skiff::compose::vbox(1.0f, {.autoSize = scene::axes::kBoth,
-                                          .alignSelf = scene::align::kMiddle})),
-          parts{.title = nodes::Text(std::move(t), 13.0f, colours.accent, true),
-                .said = nodes::Text(std::move(s), 13.0f, colours.dim)} {
-      for (nodes::Text* each : {&parts.title, &parts.said}) {
-        each->setElided(true);
-        each->setMaxWidth(360.0f);
-      }
-    }
-  };
-  struct parts_t {
-    bar line;
-    avatar_mark face;
-    texts_column texts;
-  } parts;
-  link_card(const palette &colours, std::string where, std::string avatar_id,
-            std::string avatar_name, std::string title, std::string said)
-      : Stacked(
-            skiff::compose::hbox(8.0f, {.autoSize = scene::axes::kBoth,
-                                        .margin = {4.0f, 0.0f, 2.0f, 0.0f}})),
-        url(std::move(where)),
-        parts{.line = bar(colours),
-              .face = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  avatar_mark(std::move(avatar_id), std::move(avatar_name),
-                              32.0f)),
-              .texts =
-                  texts_column(colours, std::move(title), std::move(said))} {
-
-    fState.setCursor(scene::cursor::hand{});
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-};
+  return c::onClick(request::open_url{std::move(where)},
+      c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth, .margin = {4.0f, 0.0f, 2.0f, 0.0f}}),
+          c::styled({.width = 3.0f, .height = 36.0f, .cornerRadius = 1.5f}, nodes::Box<>(colours.accent)),
+          c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(std::move(avatar_id), std::move(avatar_name), 32.0f)),
+          c::column(c::vbox(1.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+              line(std::move(title), colours.accent, true), line(std::move(said), colours.dim, false))),
+      "Open linked room or message");
+}
+using link_card_t = decltype(link_card(std::declval<const palette&>(), "", "", "", "", ""));
 
 // The first link a message's text has: what its preview is of.
 [[nodiscard]] inline std::optional<std::string> first_link_of(const message& said) {

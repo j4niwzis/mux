@@ -59,6 +59,11 @@ struct mentioned;
                   chevron::escaped(std::string_view(said.body.plain).substr(name.size()));
   return out;
 }
+struct mentioned_card {
+  std::size_t at;
+  std::string url;
+  logic::link_t where;
+};
 struct mentioned {
   // Rooms named in it whose picture is still to come, and rooms not known
   // to be there: made again when the one comes or the other is found.
@@ -66,7 +71,7 @@ struct mentioned {
   std::vector<std::string> unknown;
   std::string text;
   std::vector<nodes::Text::Link> links;
-  std::vector<std::pair<std::string, logic::link_t>> cards;  // the link, and the place it is to
+  std::vector<mentioned_card> cards;
   std::vector<nodes::Text::Styled> styles;
 };
 [[nodiscard]] inline mentioned with_mentions(std::string text, std::vector<nodes::Text::Link> links,
@@ -107,6 +112,13 @@ struct mentioned {
   std::vector<nodes::Text::Link> kept;
   mentioned out;
   for (auto& link : links) {
+    // Code stays literal, including protocol links inside it.
+    if (std::ranges::any_of(styles, [&](const auto& style) {
+          return style.block && link.first < style.last && link.last > style.first;
+        })) {
+      kept.push_back(std::move(link));
+      continue;
+    }
     const auto what = logic::link_of(link.target);
     const std::string_view label = std::string_view(text).substr(link.first, link.last - link.first);
     const bool bare = label == link.target;  // the URL itself, not words over it
@@ -121,7 +133,7 @@ struct mentioned {
                           [&](const logic::mention::place& one) {
                             if (bare || one.event) {
                               spans.push_back({link.first, link.last, std::nullopt});
-                              out.cards.emplace_back(link.target, *what);
+                              out.cards.push_back({link.first, link.target, *what});
                             } else {
                               spans.push_back({link.first, link.last, what});
                             }
@@ -202,6 +214,9 @@ struct mentioned {
     const std::ptrdiff_t grew =
         static_cast<std::ptrdiff_t>(shown.size()) - static_cast<std::ptrdiff_t>(span.last - span.first);
     text.replace(span.first, span.last - span.first, shown);
+    for (auto& card : out.cards)
+      if (card.at >= span.last)
+        card.at = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(card.at) + grew);
     for (auto* list : {&kept, &out.links})
       for (auto& link : *list)
         if (link.first >= span.last) {
@@ -228,6 +243,9 @@ struct mentioned {
     style.last = std::min(style.last, text.size());
   std::erase_if(styles, [](const auto& style) { return style.first >= style.last; });
   out.styles = std::move(styles);
+  for (auto& card : out.cards)
+    card.at = std::min(card.at, text.size());
+  std::ranges::stable_sort(out.cards, {}, &mentioned_card::at);
   out.text = std::move(text);
   return out;
 }
@@ -280,6 +298,9 @@ struct mentioned {
   };
   moved(shown.links);
   moved(shown.styles);
+  std::erase_if(shown.cards, [cut](const auto& card) { return card.at < cut; });
+  for (auto& card : shown.cards)
+    card.at -= cut;
   while (!quoted.empty() && std::isspace(static_cast<unsigned char>(quoted.back())))
     quoted.pop_back();
   std::ranges::replace(quoted, '\n', ' ');
@@ -305,7 +326,7 @@ struct mentioned {
 
 // A card for a link to a room, or to a message in one: as the chat it is of
 // is known here, or as a room not joined.
-[[nodiscard]] inline link_card card_of(const palette& colours, const std::string& url, const logic::link_t& where, const model* now) {
+[[nodiscard]] inline link_card_t card_of(const palette& colours, const std::string& url, const logic::link_t& where, const model* now) {
   const logic::mention::place room = spl::visit(
       spl::overloaded{[](const logic::mention::place& one) { return one; }, [](const auto&) { return logic::mention::place{}; }},
       logic::mention_in(where));
@@ -422,16 +443,18 @@ struct code_block : skiff::compose::Stacked {
     parts.code.setShrinksToLines(true);
   }
 };
-// A message's text cut at its blocks of code: words, a block, words...
+// A message's text split around code blocks and positioned link cards.
 struct text_piece {
   bool code = false;
   std::string text;
   std::string language;
   std::vector<nodes::Text::Link> links;
   std::vector<nodes::Text::Styled> styles;
+  std::optional<mentioned_card> card;
 };
 [[nodiscard]] inline std::vector<text_piece> pieces_of(const std::string& text, const std::vector<nodes::Text::Link>& links,
-                                                      const std::vector<nodes::Text::Styled>& styles) {
+                                                      const std::vector<nodes::Text::Styled>& styles,
+                                                      const std::vector<mentioned_card>& cards = {}) {
   std::vector<nodes::Text::Styled> blocks =
       std::ranges::to<std::vector>(std::views::filter(styles, [](const nodes::Text::Styled& one) { return one.block; }));
   std::ranges::sort(blocks, {}, &nodes::Text::Styled::first);
@@ -457,40 +480,75 @@ struct text_piece {
   };
   std::vector<text_piece> out;
   std::size_t at = 0;
+  std::size_t next_card = 0;
+  const auto add_cards = [&](std::size_t until) {
+    while (next_card < cards.size() && cards[next_card].at <= until) {
+      const auto& card = cards[next_card++];
+      if (card.at < at)
+        continue;
+      out.push_back(words(at, card.at));
+      out.push_back(text_piece{.card = card});
+      at = card.at;
+    }
+  };
   for (const nodes::Text::Styled& block : blocks) {
     if (block.first < at)
       continue;
+    add_cards(block.first);
     out.push_back(words(at, block.first));
     out.push_back(text_piece{.code = true, .text = text.substr(block.first, block.last - block.first), .language = block.language});
     at = block.last;
   }
+  add_cards(text.size());
   out.push_back(words(at, text.size()));
   return out;
 }
-// After the first words: a block, then the words after it, as many times
-// as the text has blocks.
-struct code_piece : skiff::compose::Stacked {
-  struct parts_t {
-    code_block block;
-    std::optional<nodes::BasicText<message_pictures>> after;
-  } parts;
-  code_piece(const palette &colours, const text_piece &code,
-             const text_piece *words, skia::SkColor colour, skia::SkColor quote,
-             skia::SkColor text)
-      : Stacked(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth})),
-        parts{.block =
-                  code_block(colours, code.text, code.language, colour, text)} {
-    if (words && !words->text.empty()) {
-      parts.after.emplace(words->text, 13.0f, text);
-      parts.after->setWrapped(true);
-      parts.after->setSelectable(true);
-      parts.after->setSelectionColour((colours.accent & 0x00FFFFFFu) | (110u << 24));
-      parts.after->setLinks(words->links, colours.accent);
-      parts.after->setStyles(words->styles, quote);
-      parts.after->setShrinksToLines(true);
-    }
+// A code block and the words after it, composed in their text order.
+inline auto code_piece(const palette& colours, const text_piece& code, const text_piece& words,
+                       skia::SkColor colour, skia::SkColor quote, skia::SkColor text) {
+  auto after = nodes::BasicText<message_pictures>(words.text, 13.0f, text);
+  after.setWrapped(true);
+  after.setSelectable(true);
+  after.setSelectionColour((colours.accent & 0x00FFFFFFu) | (110u << 24));
+  after.setLinks(words.links, colours.accent);
+  after.setStyles(words.styles, quote);
+  after.setShrinksToLines(true);
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+      code_block(colours, code.text, code.language, colour, text),
+      skiff::compose::visible(!words.text.empty(), std::move(after)));
+}
+using code_piece_t = decltype(code_piece(std::declval<const palette&>(), std::declval<const text_piece&>(),
+    std::declval<const text_piece&>(), skia::SkColor{}, skia::SkColor{}, skia::SkColor{}));
+
+// A card and the words after it are one composed part of the message,
+// interleaved with code blocks rather than appended below them.
+inline auto link_piece(const palette& colours, const mentioned_card& card, const text_piece& words,
+                       const model* now, skia::SkColor quote) {
+  auto after = nodes::BasicText<message_pictures>(words.text, 13.0f, colours.text);
+  after.setWrapped(true);
+  after.setSelectable(true);
+  after.setSelectionColour((colours.accent & 0x00FFFFFFu) | (110u << 24));
+  after.setLinks(words.links, colours.accent);
+  after.setStyles(words.styles, quote);
+  after.setShrinksToLines(true);
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+      card_of(colours, card.url, card.where, now), skiff::compose::visible(!words.text.empty(), std::move(after)));
+}
+using link_piece_t = decltype(link_piece(std::declval<const palette&>(), std::declval<const mentioned_card&>(),
+    std::declval<const text_piece&>(), nullptr, skia::SkColor{}));
+using message_piece = spl::variant<code_piece_t, link_piece_t>;
+[[nodiscard]] inline std::optional<std::string> message_link_at(const std::vector<message_piece>& pieces, float x, float y) {
+  for (const auto& piece : pieces) {
+    const auto url = spl::visit(spl::overloaded{[](const code_piece_t&) -> std::optional<std::string> { return std::nullopt; },
+        [&](const link_piece_t& link) -> std::optional<std::string> {
+          const auto& card = std::get<0>(link.fParts);
+          return card.bounds().contains(x, y) ? std::optional{card.fEvent.url} : std::nullopt;
+        }}, piece);
+    if (url)
+      return url;
   }
-};
+  return std::nullopt;
+}
 
 // A forward's line over its message, as Telegram's: "Forwarded from" and
 // the sender -- a person's pill, its avatar drawn by the message's pictures,

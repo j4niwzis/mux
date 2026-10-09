@@ -150,10 +150,8 @@ template <class Actions> struct reactions_box : skiff::compose::Stacked {
       const message_bubble<Actions>& one = parts.bubble;
       if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y))
         return ::mux::ui::request::open_url{preview->url};
-      const auto& cards = one.parts.body.parts.cards;
-      if (const auto card = std::ranges::find_if(cards, [&](const link_card& each) { return each.bounds().contains(x, y); });
-          card != cards.end())
-        return ::mux::ui::request::open_url{card->url};
+      if (const auto url = message_link_at(one.parts.body.parts.blocks, x, y))
+        return ::mux::ui::request::open_url{*url};
       // Answered, where it is an event of its own to answer; the list closed.
       std::optional<::mux::ui::request::reply_to> answered;
       if (!entry.event.empty())

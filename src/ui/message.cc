@@ -273,9 +273,8 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       std::optional<album_view> album;
       std::optional<file_view> file;
       nodes::BasicText<message_pictures> text;
-      // Its blocks of code, each with the words after it.
-      std::vector<code_piece> blocks;
-      std::vector<link_card> cards;
+      // Code blocks and link cards in text order, each with the words after it.
+      std::vector<message_piece> blocks;
       std::optional<page_preview> preview;
       std::optional<reaction_row> reactions;
       // A thread's root: its summary -- how many answers, the latest -- as
@@ -407,7 +406,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
       // A sticker's time is over it, and nowhere else: placed beside its
       // reactions too, it was shown twice.
       if (picture && picture->sticker) {
@@ -443,7 +442,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
         }
         return;
       }
-      if (!blocks.empty() || !cards.empty() || preview || (!text.visible() && !reactions)) {
+      if (!blocks.empty() || preview || (!text.visible() && !reactions)) {
         time_placed = true;  // under it, as it is
         return;
       }
@@ -522,7 +521,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -589,7 +588,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
                         nodes::Text(when, 11.0f,
                                     mine ? colours.sent_time : colours.dim)))},
           plate(plate_of(colours, looks.bubbles, mine)) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
       // Frosted: what is behind blurred under the tint; glass: a light edge.
@@ -915,17 +914,20 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       // The quote's colour: the accent on theirs; on one's own, the text's,
       // as tdesktop's outgoing blockquote -- not the accent on its accent.
       const skia::SkColor quote_colour = outgoing ? colours_->text : colours_->accent;
-      // Cut at its blocks of code: the first words here, each block with the
-      // words after it below.
-      const std::vector<text_piece> pieces = pieces_of(shown.text, shown.links, shown.styles);
+      // Keep words, code blocks and link cards in their original order.
+      const std::vector<text_piece> pieces = pieces_of(shown.text, shown.links, shown.styles, shown.cards);
       body.parts.text.setText(pieces.front().text);
       body.parts.text.setLinks(pieces.front().links, colours_->accent);
       body.parts.text.setStyles(pieces.front().styles, quote_colour);
       body.parts.text.setVisible(!pieces.front().text.empty());
-      for (std::size_t i = 1; i + 1 < pieces.size(); i += 2)
-        body.parts.blocks.emplace_back(*colours_, pieces[i], &pieces[i + 1], quote_colour, quote_colour, colours_->text);
-      for (const auto& [url, room] : shown.cards)
-        body.parts.cards.push_back(card_of(*colours_, url, room, now));
+      for (std::size_t i = 1; i + 1 < pieces.size(); i += 2) {
+        if (pieces[i].card)
+          body.parts.blocks.emplace_back(std::in_place_type<link_piece_t>,
+              link_piece(*colours_, *pieces[i].card, pieces[i + 1], now, quote_colour));
+        else
+          body.parts.blocks.emplace_back(std::in_place_type<code_piece_t>,
+              code_piece(*colours_, pieces[i], pieces[i + 1], quote_colour, quote_colour, colours_->text));
+      }
     }
     // The last of a run: its bottom corner on the sender's side squared and
     // a tail grown from it, as Telegram draws one -- not for a line of what

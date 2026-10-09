@@ -137,7 +137,7 @@ inline auto emoji_footer(const palette& colours, Panel* panel) {
   return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       tab_strip<tab>(c::hbox(0.0f, {.fillX = true, .height = 36.0f})),
       c::row(c::hbox(0.0f, {.fillX = true, .height = 30.0f}), arrow(false),
-          tab_strip<tab>(c::justified(c::hbox(0.0f, {.grow = scene::axes::kX, .height = 30.0f}), nodes::justify::middle{})),
+          tab_strip<tab>(c::justified(c::hbox(0.0f, {.height = 30.0f, .grow = scene::axes::kX}), nodes::justify::middle{})),
           arrow(true)));
 }
 template <class Footer> auto& emoji_category_tabs(Footer& footer) { return std::get<0>(footer.fParts).fParts; }

@@ -240,7 +240,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts and elapsed-time animation fixes from this revision.
-set(mux_skiff_pin 31dcd6a9f6b7c04d4ac2c6718ee75b748c33b016)
+set(mux_skiff_pin b95064bc55e91d38ad6a409e113fafd70359bfc6)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin})

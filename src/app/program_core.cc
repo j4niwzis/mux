@@ -78,11 +78,17 @@ void app::woken() {
                                // People found: in Start chat, while it asks for them.
                                // A person's profile: their picture asked for, where they have one.
                                [&](const mux::change::profile_found& found) {
+                                 pictures.avatar_changed(found.user, found.avatar);
                                  pictures.profile_avatars.insert_or_assign(found.user, found.avatar);
                                  pictures.ask();
                                },
+                               [&](const mux::change::members_changed& changed) {
+                                 for (const auto& member : changed.members)
+                                   pictures.avatar_changed(member.id, member.avatar);
+                               },
                                // An invite come: said once a run.
                                [&](const mux::change::conversation_updated& updated) {
+                                 pictures.avatar_changed(updated.id.id, updated.avatar);
                                  if (updated.invite)
                                    notices.invite_came(updated.id, *updated.invite, updated.name);
                                },

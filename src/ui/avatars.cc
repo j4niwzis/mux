@@ -83,8 +83,30 @@ class avatar_cache {
   skiff::scene::Waiters waiting;
   void clear() {
     images_.clear();
+    sources_.clear();
     order_.clear();
     bytes_ = 0;
+  }
+
+  [[nodiscard]] bool source_known(std::string_view key) const { return sources_.contains(key); }
+  // Identity is stable, but its avatar URL is not. A removed avatar is a
+  // source change too; keep that tombstone to reject an older download.
+  bool use_source(const std::string& key, const std::optional<std::string>& source) {
+    const auto known = sources_.find(key);
+    if (known != sources_.end() && known->second == source)
+      return false;
+    sources_.insert_or_assign(key, source);
+    if (const auto found = images_.find(key); found != images_.end()) {
+      bytes_ -= found->second.bytes;
+      order_.erase(found->second.used);
+      images_.erase(found);
+    }
+    waiting.wake();
+    return true;
+  }
+  [[nodiscard]] bool accepts_source(std::string_view key, std::string_view source) const {
+    const auto known = sources_.find(key);
+    return known == sources_.end() || (known->second && *known->second == source);
   }
 
   // A picture, counted as used now: in this frame.
@@ -138,6 +160,7 @@ class avatar_cache {
   };
   std::list<std::string> order_;  // the most recently used first
   std::map<std::string, entry, std::less<>> images_;
+  std::map<std::string, std::optional<std::string>, std::less<>> sources_;
   std::size_t bytes_ = 0;
 };
 using image_cache = avatar_cache;

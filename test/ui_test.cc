@@ -1776,3 +1776,22 @@ TEST(Images, AnimatedAttachmentDoesNotRequestContinuousSceneAnimation) {
   EXPECT_TRUE(std::isfinite(picture.parts.picture.wakeAt()));
   frames.clear();
 }
+
+TEST(Images, AvatarSourceChangeInvalidatesCachedImageAndRejectsStaleDownloads) {
+  auto surface = skia::Raster(skia::SkImageInfo::MakeN32Premul(8, 8));
+  ASSERT_TRUE(surface);
+  mux::ui::avatar_cache cache;
+  EXPECT_TRUE(cache.use_source("user", "mxc://old"));
+  cache.put("user", surface->makeImageSnapshot());
+  EXPECT_FALSE(cache.use_source("user", "mxc://old"));
+  EXPECT_TRUE(cache.has("user"));
+  EXPECT_TRUE(cache.use_source("user", "mxc://new"));
+  EXPECT_FALSE(cache.has("user"));
+  EXPECT_FALSE(cache.accepts_source("user", "mxc://old"));
+  EXPECT_TRUE(cache.accepts_source("user", "mxc://new"));
+  cache.put("user", surface->makeImageSnapshot());
+  EXPECT_TRUE(cache.use_source("user", std::nullopt));
+  EXPECT_FALSE(cache.has("user"));
+  EXPECT_FALSE(cache.accepts_source("user", "mxc://new"));
+  EXPECT_FALSE(cache.use_source("user", std::nullopt));
+}

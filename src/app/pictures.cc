@@ -74,6 +74,13 @@ class pictures_part {
  public:
   explicit pictures_part(services& shared) : s_(&shared) {}
 
+  void avatar_changed(const std::string& key, const std::optional<std::string>& source) {
+    auto& cache = mux::ui::avatar_images();
+    if (cache.source_known(key) || cache.has(key))
+      cache.use_source(key, source);
+    s_->ui.pictures_due = true;
+  }
+
   // How much is kept: in memory by the caches, on disk by the files.
   void set_limits(const mux::config::cache_limits& limits) {
     // The pictures of messages under the limit set, their thumbnails and the
@@ -107,7 +114,7 @@ class pictures_part {
         auto image = skia::decodeImageAtMost(bytes->data(), bytes->size(), most);
         return [this, image = std::move(image), bytes, target, key, use, source, fresh]() mutable {
           const bool made = static_cast<bool>(image);
-          if (made)
+          if (made && target->accepts_source(key, source))
             target->put(key, std::move(image));
           this->decoded(use, source, *bytes, made, fresh);
         };
@@ -192,6 +199,7 @@ class pictures_part {
     if (s_->demo())
       return;
     const auto want = [&](const account_id& of, const std::optional<std::string>& source, const std::string& key) {
+      mux::ui::avatar_images().use_source(key, source);
       // Shown already, or being decoded: nothing to do.
       if (!source || source->empty() || mux::ui::avatar_images().has(key) || decoding_.contains(*source))
         return;

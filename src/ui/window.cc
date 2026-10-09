@@ -800,7 +800,7 @@ template <class Actions> struct window : skiff::compose::Specced {
   void drop_closed() {
     if (std::exchange(text_menu_close_due, false))
       this->close_text_menu_now();
-    if (auto formatting = std::exchange(text_formatting_due, std::nullopt); formatting && text_menu_field && layer().parts.text_menu_up)
+    if (auto formatting = std::exchange(text_formatting_due, std::nullopt); formatting && text_menu_field && layer().text_menu_up)
       this->put_text_menu(field_menu_items(*text_menu_field, *formatting));
     layer().frame.dropClosed();
     layer().settings.dropClosed();

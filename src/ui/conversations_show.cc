@@ -76,15 +76,13 @@ auto conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
   } else if (press.key == keys::kUp && !any && line.text().empty()) {
     asked = ::mux::ui::request::edit_last{};
   } else if (press.key == keys::kC && control) {
-    auto& bubbles = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    const auto selected = std::ranges::find_if(bubbles, [](message_bubble<Actions>& one) { return one.parts.body.parts.text.hasSelection(); });
-    // Not in a message: what any text shows selected -- View source's.
-    if (selected == bubbles.end()) {
-      if (!scene::selectedText().empty())
-        skiff::scene::setClipboardText(scene::selectedText());
+    // Text nodes publish an owned copy of their selection as it changes.
+    // Copy that snapshot without walking message widgets that may have
+    // been replaced by a model refresh since the selection was made.
+    const std::string selected = scene::selectedText();
+    if (selected.empty())
       return asked;
-    }
-    skiff::scene::setClipboardText(selected->parts.body.parts.text.selected());
+    skiff::scene::setClipboardText(selected);
   } else if (press.key == keys::kEscape && !any && chat.parts.selection.visible()) {
     // Messages selected, the focus elsewhere than their bar: let go first.
     asked = ::mux::ui::request::selection_cancel{};

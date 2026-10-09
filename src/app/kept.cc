@@ -407,6 +407,11 @@ struct kept_settings {
                                               .vsync = saved.vsync.value_or(true),
                                               .show_fps = saved.show_fps.value_or(false)};
     looks_read.window_opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
+    looks_read.wallpaper_behind = saved.wallpaper_behind.value_or(false);
+    looks_read.live_blur = saved.live_blur.value_or(false);
+    looks_read.frost_blur = std::clamp(
+        saved.frost.value_or(saved.frost_blur ? static_cast<double>(*saved.frost_blur) / 3.0 : 10.0),
+        0.0, 100.0);
     looks_read.spaces = saved.spaces.value_or(true);
     looks_read.top_bar = saved.top_bar.value_or(true);
     looks_read.home_hides_spaced = saved.home_hides_spaced.value_or(false);

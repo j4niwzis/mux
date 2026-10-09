@@ -143,7 +143,9 @@ auto account<Sink>::id() const noexcept -> const account_id& { return id_; }
 
 template <class Sink>
 void account<Sink>::start() {
-  this->spawn_guarded([this] { run(); });
+  // Login and typed sync responses need more stack than small request
+  // fibers, especially with debug builds retaining temporary objects.
+  this->spawn_guarded([this] { run(); }, 8 * 1024 * 1024);
 }
 
 template <class Sink>

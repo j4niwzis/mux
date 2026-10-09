@@ -18,6 +18,33 @@ import mux.app.requests;
 
 export namespace mux::app {
 
+// Keep the variant and its alternatives outside the controller being parsed.
+// Clang was reported crashing while instantiating the nested call-state
+// variant at the call's state member, before calls_part was complete.
+namespace call_state {
+  struct starting {};       // the servers asked for
+  struct ringing_out {};    // invited, not answered yet
+  struct ringing_in {};     // invited by them
+  struct connecting {};     // answered: the connection being made
+  struct connected {
+    std::chrono::steady_clock::time_point since;
+  };
+}
+using call_state_t = spl::variant<call_state::starting, call_state::ringing_out, call_state::ringing_in,
+                                call_state::connecting, call_state::connected>;
+struct active_call {
+  conversation_id in;
+  std::string id;
+  bool outgoing = false;
+  call_state_t state;
+  std::string their_party;
+  calls::session_description offer;
+  std::vector<calls::ice_candidate> early;
+  std::vector<calls::ice_candidate> candidates_out;
+  std::chrono::steady_clock::time_point ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+  std::unique_ptr<calls::media_session<wake_window>> media;
+};
+
 class calls_part {
  public:
   explicit calls_part(services& shared) : s_(&shared) {}
@@ -39,7 +66,7 @@ class calls_part {
       return;
     }
     ended_.reset();
-    current_.emplace(call{.in = one.in, .id = new_call_id(), .outgoing = true, .state = state::starting{}});
+    current_.emplace(active_call{.in = one.in, .id = new_call_id(), .outgoing = true, .state = call_state::starting{}});
     // The microphone asked for now, where the system asks the user: the
     // sound opens once it is given (mux.calls.media tries again).
     (void)platform::permissions::microphone();
@@ -59,9 +86,9 @@ class calls_part {
       this->apply(request::start_call{*chosen});
   }
   void apply(const request::accept_call&) {
-    if (!current_ || !holds<state::ringing_in>())
+    if (!current_ || !holds<call_state::ringing_in>())
       return;
-    current_->state = state::starting{};
+    current_->state = call_state::starting{};
     (void)platform::permissions::microphone();
     s_->net->call_servers(current_->in.account);
     this->show();
@@ -123,16 +150,16 @@ class calls_part {
                   one.said);
   }
   void take(const change::call_servers& one) {
-    if (!current_ || current_->in.account != one.account || !holds<state::starting>())
+    if (!current_ || current_->in.account != one.account || !holds<call_state::starting>())
       return;
     current_->media = std::make_unique<session>(one.servers, *s_->wake);
     std::ranges::for_each(std::exchange(current_->early, {}), [&](const auto& each) { current_->media->add_candidate(each); });
     if (current_->outgoing) {
       current_->media->offer();
-      current_->state = state::ringing_out{};
+      current_->state = call_state::ringing_out{};
     } else {
       current_->media->answer(current_->offer);
-      current_->state = state::connecting{};
+      current_->state = call_state::connecting{};
     }
     this->show();
   }
@@ -156,9 +183,9 @@ class calls_part {
     if (current_ && !current_->candidates_out.empty())
       s_->net->call(current_->in, current_->id,
                     change::call_said_t{change::call_said::candidates{std::exchange(current_->candidates_out, {})}});
-    if (current_ && holds<state::ringing_in>() && std::chrono::steady_clock::now() > current_->ring_until)
+    if (current_ && holds<call_state::ringing_in>() && std::chrono::steady_clock::now() > current_->ring_until)
       this->end("Missed call");
-    if (current_ && holds<state::ringing_out>() && std::chrono::steady_clock::now() > current_->ring_until) {
+    if (current_ && holds<call_state::ringing_out>() && std::chrono::steady_clock::now() > current_->ring_until) {
       s_->net->call(current_->in, current_->id,
                     change::call_said_t{change::call_said::hangup{change::call_end_t{change::call_end::timed_out{}}}});
       this->end("No answer");
@@ -171,29 +198,6 @@ class calls_part {
 
  private:
   using session = calls::media_session<wake_window>;
-  // Where a call is.
-  struct state {
-    struct starting {};      // the servers asked for
-    struct ringing_out {};   // invited, not answered yet
-    struct ringing_in {};    // invited by them
-    struct connecting {};    // answered: the connection being made
-    struct connected {
-      std::chrono::steady_clock::time_point since;
-    };
-  };
-  using state_t = spl::variant<state::starting, state::ringing_out, state::ringing_in, state::connecting, state::connected>;
-  struct call {
-    conversation_id in;
-    std::string id;
-    bool outgoing = false;
-    state_t state;
-    std::string their_party;
-    calls::session_description offer;  // theirs, where they called
-    std::vector<calls::ice_candidate> early;           // theirs, come before the connection
-    std::vector<calls::ice_candidate> candidates_out;  // ours, not sent yet
-    std::chrono::steady_clock::time_point ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
-    std::unique_ptr<session> media;
-  };
 
   template <class State>
   [[nodiscard]] bool holds() const {
@@ -216,7 +220,7 @@ class calls_part {
     if (std::chrono::system_clock::now() > one.at + invite.lifetime)
       return;
     ended_.reset();
-    current_.emplace(call{.in = one.in, .id = one.call, .outgoing = false, .state = state::ringing_in{},
+    current_.emplace(active_call{.in = one.in, .id = one.call, .outgoing = false, .state = call_state::ringing_in{},
                           .their_party = one.party, .offer = invite.offer});
     current_->ring_until = std::chrono::steady_clock::now() +
                            std::chrono::duration_cast<std::chrono::steady_clock::duration>(invite.lifetime);
@@ -231,12 +235,12 @@ class calls_part {
         this->end("Answered on another device");
       return;
     }
-    if (!current_->outgoing || !holds<state::ringing_out>() || !current_->media)
+    if (!current_->outgoing || !holds<call_state::ringing_out>() || !current_->media)
       return;
     current_->their_party = one.party;
     current_->media->answered(answer.it);
     s_->net->call(current_->in, current_->id, change::call_said_t{change::call_said::select_answer{one.party}});
-    current_->state = state::connecting{};
+    current_->state = call_state::connecting{};
     this->show();
   }
   void connection_said(const calls::said_t& said) {
@@ -253,7 +257,7 @@ class calls_part {
                                      },
                                      [&](const calls::said::candidate& ours) { current_->candidates_out.push_back(ours.it); },
                                      [&](calls::said::connected) {
-                                       current_->state = state::connected{std::chrono::steady_clock::now()};
+                                       current_->state = call_state::connected{std::chrono::steady_clock::now()};
                                        this->show();
                                      },
                                      [&](calls::said::failed) {
@@ -279,14 +283,14 @@ class calls_part {
     else
       mux::ui::show(*s_->showing, mux::ui::call_shown{});
   }
-  [[nodiscard]] mux::ui::call_view view_of(const call& now) const {
+  [[nodiscard]] mux::ui::call_view view_of(const active_call& now) const {
     const mux::conversation* chat = s_->model->find(now.in);
     const auto phase = spl::visit(
-        spl::overloaded{[](state::starting) -> mux::ui::call_phase_t { return mux::ui::call_phase::connecting{}; },
-                           [](state::ringing_out) -> mux::ui::call_phase_t { return mux::ui::call_phase::ringing_out{}; },
-                           [](state::ringing_in) -> mux::ui::call_phase_t { return mux::ui::call_phase::ringing_in{}; },
-                           [](state::connecting) -> mux::ui::call_phase_t { return mux::ui::call_phase::connecting{}; },
-                           [](const state::connected& since) -> mux::ui::call_phase_t {
+        spl::overloaded{[](call_state::starting) -> mux::ui::call_phase_t { return mux::ui::call_phase::connecting{}; },
+                           [](call_state::ringing_out) -> mux::ui::call_phase_t { return mux::ui::call_phase::ringing_out{}; },
+                           [](call_state::ringing_in) -> mux::ui::call_phase_t { return mux::ui::call_phase::ringing_in{}; },
+                           [](call_state::connecting) -> mux::ui::call_phase_t { return mux::ui::call_phase::connecting{}; },
+                           [](const call_state::connected& since) -> mux::ui::call_phase_t {
                              return mux::ui::call_phase::connected{
                                  std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - since.since)
                                      .count()};
@@ -323,7 +327,7 @@ class calls_part {
     std::chrono::steady_clock::time_point until;
   };
   services* s_;
-  std::optional<call> current_;
+  std::optional<active_call> current_;
   std::optional<ended_call> ended_;
   std::optional<mux::ui::call_view> shown_;
   std::string own_party_;

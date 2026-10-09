@@ -381,10 +381,14 @@ inline auto reaction_chip(const palette& colours, const looks_shown& looks,
   label.setLinks(std::move(words.spans), colour);
   label.setSelectable(false);
   label.setMaxWidth(240.0f);
-  auto avatars = people | std::views::take(faces ? people.size() : 0) | std::views::transform([&](const auto& person) {
-    return c::styled({.margin = {0.0f, 0.0f, 0.0f, -6.0f}, .border = scene::Border{own ? colours.accent : colours.tile, 1.5f}},
-                     avatar_mark(person.first, person.second, 20.0f));
-  }) | std::ranges::to<std::vector>();
+  auto avatars = std::ranges::to<std::vector>(std::views::transform(
+      std::views::enumerate(std::views::take(people, faces ? people.size() : 0)), [&](const auto& item) {
+        const auto& [index, person] = item;
+        // Overlap faces with one another, never with the reaction label.
+        return c::styled({.margin = {0.0f, 0.0f, 0.0f, index == 0 ? 0.0f : -6.0f},
+                          .border = scene::Border{own ? colours.accent : colours.tile, 1.5f}},
+                         avatar_mark(person.first, person.second, 20.0f));
+      }));
   const auto tint = at_opacity(own ? colours.accent : colours.tile,
       element_opacity_of(looks.bubbles, &config::element_opacity::reactions));
   std::optional<frost_pane> frost;
@@ -398,7 +402,9 @@ inline auto reaction_chip(const palette& colours, const looks_shown& looks,
                     .cornerRadius = 13.0f, .background = frost ? skia::SkColor{0} : tint}),
       std::move(frost), c::row(c::hbox(4.0f, {.height = 26.0f, .autoSize = scene::axes::kX,
                         .padding = {0.0f, 9.0f, 0.0f, 9.0f}}),
-        c::styled({.alignSelf = scene::align::kMiddle}, elided(std::move(label))), c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(avatars)))));
+        c::styled({.alignSelf = scene::align::kMiddle}, elided(std::move(label))),
+        c::visible(faces, c::many(c::hbox(0.0f, {.height = 20.0f, .autoSize = scene::axes::kX,
+                                               .alignSelf = scene::align::kMiddle}), std::move(avatars))))));
 }
 using reaction_chip_t = decltype(reaction_chip(std::declval<const palette&>(), std::declval<const looks_shown&>(),
     std::string{}, std::string{}, std::size_t{}, bool{}, std::declval<const std::vector<emote>&>()));

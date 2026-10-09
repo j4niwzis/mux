@@ -889,9 +889,8 @@ int run(App& app, const options& how, const events::kinds& kinds) {
         // All of it drawn: what blurs live and was not drawn is not shown.
         std::erase_if(skiff::scene::detail::liveBackdrops(),
                       [](const auto& one) { return one.second.frame != skiff::scene::work::frameNumber(); });
-        if (!whole)
-          repainted = skia::SkRect::MakeLTRB(frame.fDamage.fLeft * scale, frame.fDamage.fTop * scale,
-                                             frame.fDamage.fRight * scale, frame.fDamage.fBottom * scale);
+        // The full-redraw fallback painted every pixel. Its damage overlay
+        // must report that work rather than the smaller scene damage.
         pieces = {repainted};
       }
       // What is drawn over the frame, where the window keeps its pixels:

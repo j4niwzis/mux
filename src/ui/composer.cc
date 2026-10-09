@@ -446,6 +446,7 @@ struct field_quotes {
                                       [](const run_style::strike&) { return widgets::RunLook{.strike = true}; },
                                       [](const run_style::spoiler&) { return widgets::RunLook{.plate = true}; },
                                       [](const run_style::code&) { return widgets::RunLook{.monospace = true, .accent = true}; },
+                                      [](const run_style::custom_emoji&) { return widgets::RunLook{}; },
                                       [](const run_style::link&) { return widgets::RunLook{.underline = true, .accent = true}; }},
                       style);
   }
@@ -795,8 +796,17 @@ struct composer_bar : skiff::compose::Stacked {
   }
   // How what is written is formatted, by offsets in plain(): sent with it.
   [[nodiscard]] std::vector<mux::styled_run> styles() const {
-    return std::ranges::to<std::vector<mux::styled_run>>(std::views::transform(
-        parts.input.parts.field.plainSpans(), [](const auto& one) { return mux::styled_run{one.first, one.last, one.format}; }));
+    const auto& field = parts.input.parts.field;
+    auto runs = std::ranges::to<std::vector<mux::styled_run>>(std::views::transform(
+        field.plainSpans(), [](const auto& one) { return mux::styled_run{one.first, one.last, one.format}; }));
+    std::ptrdiff_t shift = 0;
+    for (const auto& atom : field.atoms()) {
+      const auto first = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(atom.first) + shift);
+      if (atom.picture)
+        runs.push_back({first, first + atom.plain.size(), run_style::custom_emoji{atom.target}});
+      shift += static_cast<std::ptrdiff_t>(atom.plain.size()) - static_cast<std::ptrdiff_t>(atom.last - atom.first);
+    }
+    return runs;
   }
   // What is selected, and the link on it where it has one: what Ctrl+K's
   // box starts with.

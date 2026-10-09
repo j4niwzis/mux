@@ -407,7 +407,7 @@ auto selection_bar(const ui_needs<Actions>& n) {
                                .padding = {0.0f, 12.0f, 1.0f, 12.0f}, .background = colours.sidebar}),
               c::shown_if<selection_shown>([](const selection_shown& now) { return now.forwardable; },
                   selected_action(::mux::ui::request::selection_forward{}, "Forward")),
-              c::shown_if<selection_shown>([](const selection_shown& now) { return now.deletable; },
+              c::spec_for<selection_shown>([](const selection_shown& now) { return scene::Spec{.disabled = !now.deletable}; },
                   selected_action(::mux::ui::request::selection_delete{}, "Delete")),
               c::styled({.grow = scene::axes::kX}, nodes::Box<>(skia::SkColor{0})),
               c::onClick(::mux::ui::request::selection_cancel{},

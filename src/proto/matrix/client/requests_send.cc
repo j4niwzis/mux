@@ -239,7 +239,7 @@ void account<Sink>::leave(std::string room) {
 // and the room's custom emoji in that; else the emoji alone, where it names
 // any; else nothing -- the text as it is.
 // A run's tags in Matrix's HTML: what each style is written as.
-[[nodiscard]] inline mux::logic::html_run html_run_of(const styled_run& run) {
+[[nodiscard]] inline mux::logic::html_run html_run_of(const styled_run& run, std::string_view body) {
   const auto tags = [&](std::string open, std::string close) {
     return mux::logic::html_run{run.first, run.last, std::move(open), std::move(close)};
   };
@@ -249,6 +249,11 @@ void account<Sink>::leave(std::string room) {
                                     [&](const run_style::strike&) { return tags("<del>", "</del>"); },
                                     [&](const run_style::spoiler&) { return tags("<span data-mx-spoiler>", "</span>"); },
                                     [&](const run_style::code&) { return tags("<code>", "</code>"); },
+                                    [&](const run_style::custom_emoji& one) {
+                                      return mux::logic::html_run{run.first, run.last, {}, {},
+                                          std::format(R"(<img data-mx-emoticon src="{}" alt="{}" height="32">)",
+                                              chevron::escaped(one.url), chevron::escaped(body.substr(run.first, run.last - run.first)))};
+                                    },
                                     [&](const run_style::link& one) {
                                       return tags("<a href=\"" + chevron::escaped(one.url) + "\">", "</a>");
                                     }},
@@ -256,8 +261,11 @@ void account<Sink>::leave(std::string room) {
 }
 [[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes,
                                                         const std::vector<styled_run>& styles) {
+  const auto valid = std::views::filter(styles, [&](const styled_run& run) {
+    return run.first < run.last && run.last <= body.size();
+  });
   const std::vector<mux::logic::html_run> runs =
-      std::ranges::to<std::vector<mux::logic::html_run>>(std::views::transform(styles, html_run_of));
+      std::ranges::to<std::vector<mux::logic::html_run>>(std::views::transform(valid, [&](const styled_run& run) { return html_run_of(run, body); }));
   if (auto marked = mux::logic::markdown_html(body, runs))
     return emotes.empty() ? *marked : emotes_in_html(*marked, emotes);
   return with_emotes(body, emotes);

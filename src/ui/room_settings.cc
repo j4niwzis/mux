@@ -330,7 +330,7 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          skiff::compose::bound<choices>(event_kinds_field<choices>(colours, level)),
+          event_kinds_field<choices>(colours, level),
           skiff::compose::bound<skiff::model::Field<&choices::receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::previews>>(
               show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),

@@ -21,6 +21,7 @@ import mux.protocols;
 import :base;
 import :names;
 import :message;
+import :emoji_kept;
 import :composer;
 import :themes;
 
@@ -229,6 +230,7 @@ template <class Actions>
   else if (const auto& preview = one.parts.body.parts.preview;
            preview && preview->fState.fBounds.contains(press.x, press.y))
     facts.pressed_link = preview->url;
+  facts.emoji = copied_emoji_at(facts.pressed_link);
   // A sticker: what sending it again takes.
   if (one.said.sticker && one.said.attachment)
     facts.sticker = emote{.shortcode = one.said.attachment->name,

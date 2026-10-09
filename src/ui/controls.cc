@@ -13,6 +13,7 @@ import skiff.nodes.icon;
 import skiff.nodes.text;
 import skiff.widgets.avatar;
 import skiff.widgets.button;
+import skiff.widgets.model;
 import skiff.widgets.sliderbar;
 import skiff.model;
 import skiff.bind;
@@ -588,104 +589,87 @@ inline constexpr std::size_t kEventsAbove = 0, kEventsAll = 1, kEventsMessages =
   return *held.all ? kEventsAll : kEventsMessages;
 }
 
-// Which room events show at a level, as the model holds it: a dropdown of
-// the ways it can be -- as above, all, messages only, custom -- and a row of
-// Show and Hide for each kind, chosen apart where it is custom; bound to the
-// part that keeps it (Owner), set whole.
-template <class Owner> struct event_kinds_field : skiff::compose::Stacked {
-  struct row : skiff::compose::Stacked {
-    room_event_t kind;
-    bool live = false;
-    struct parts_t {
-      nodes::Text label;
-      segment<sets<Owner>> show, hide;
-    } parts;
-    row(const palette& colours, room_event_t which, std::string_view text)
-        : Stacked(setting_row()),
-          kind(which),
-          parts{.label = setting_label(nodes::Text(std::string(text), 14.0f, colours.text)),
-                .show = setting_choice(70.0f, segment<sets<Owner>>(colours, "Show", {})),
-                .hide = setting_choice(70.0f, segment<sets<Owner>>(colours, "Hide", {}))} {}
-    void show_value(bool on) {
-      parts.show.set_active(on);
-      parts.hide.set_active(!on);
-    }
-    void set_live(bool on) {
-      live = on;
-      fState.apply({.alpha = on ? 1.0f : 0.4f, .disabled = !on});
-    }
-  };
-  choice_level_t level;
-  std::vector<std::string> names;
-  struct parts_t {
-    std::optional<choice_menu<sets_nth<Owner>>> way;
-    std::vector<row> rows;
-  } parts;
-  event_kinds_field(const palette &colours, choice_level_t at)
-      : Stacked(skiff::compose::vbox(
-            4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        level(at) {
-    parts.rows.reserve(kRoomEventKinds);
-    for (const room_event_t& kind : all_room_events)
-      parts.rows.emplace_back(colours, kind, spl::visit([](auto one) { return label_of(one); }, kind));
-    if (has_level_above(level))
-      names.emplace_back("As above");
-    for (const char* name : {"All events", "Messages only", "Custom"})
-      names.emplace_back(name);
-    parts.way.emplace(colours, "Room events", names, 0, sets_nth<Owner>{});
-    parts.way->apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
-  }
-  [[nodiscard]] std::size_t offset() const { return has_level_above(level) ? 0 : 1; }
-  void read(const Owner& now) {
-    const room_events_held held = events_of(now);
-    room_events_at(level) = held;
-    const std::size_t way = events_way_of(level, held);
-    room_event_filter filter = way == kEventsAbove ? events_above(level) : events_in_effect(level);
-    if (way == kEventsAll || way == kEventsMessages)
-      filter.shown.fill(way == kEventsAll);
-    const auto with = [&](room_events_held next_held) {
-      Owner next = now;
-      events_in(next, next_held);
-      return next;
-    };
-    // A kind shown or hidden: the rest as they are, where it is custom.
-    const auto with_kind = [&](const room_event_t& kind, bool on) -> std::optional<Owner> {
-      if (way != kEventsCustom)
-        return std::nullopt;
-      room_events_held next_held = held;
-      if (!next_held.kinds)
-        next_held.kinds.emplace();
-      logic::choice_in(*next_held.kinds, kind) = on;
-      return with(std::move(next_held));
-    };
-    for (row& each : parts.rows) {
-      each.show_value(filter.shows(each.kind));
-      each.set_live(way == kEventsCustom);
-      each.parts.show.act.next = with_kind(each.kind, true);
-      each.parts.hide.act.next = with_kind(each.kind, false);
-    }
-    // A way chosen: all, messages only, or custom from what is in effect.
-    const room_event_filter in_effect = events_in_effect(level);
-    const auto held_for = [&](std::size_t chosen) {
-      room_events_held next_held;
-      if (chosen == kEventsAll)
-        next_held.all = true;
-      else if (chosen == kEventsMessages)
-        next_held.all = false;
-      else if (chosen == kEventsCustom)
-        next_held.kinds = std::ranges::fold_left(all_room_events, config::room_event_kinds{},
-                                                 [&](config::room_event_kinds kinds, const room_event_t& kind) {
-                                                   logic::choice_in(kinds, kind) = in_effect.shows(kind);
-                                                   return kinds;
-                                                 });
-      return next_held;
-    };
-    parts.way->choose.nexts = std::views::iota(std::size_t{0}, names.size()) |
-                              std::views::transform([&](std::size_t at) { return with(held_for(at + this->offset())); }) |
-                              std::ranges::to<std::vector>();
-    parts.way->parts.head.parts.value.setText(names[way - this->offset()]);
-  }
-};
+// Typed choices are handled in the model's scope, rather than routed by
+// a dropdown's manual hit testing.
+struct choose_events_way { std::size_t way; };
+struct choose_event_kind { room_event_t kind; bool show; };
+
+template <class Owner>
+inline Owner with_events_way(const Owner& now, const choice_level_t& level, std::size_t way) {
+  room_events_at(level) = events_of(now);
+  const auto effective = events_in_effect(level);
+  room_events_held held;
+  if (way == kEventsAll) held.all = true;
+  else if (way == kEventsMessages) held.all = false;
+  else if (way == kEventsCustom)
+    held.kinds = std::ranges::fold_left(all_room_events, config::room_event_kinds{},
+        [&](config::room_event_kinds kinds, const room_event_t& kind) {
+          logic::choice_in(kinds, kind) = effective.shows(kind);
+          return kinds;
+        });
+  Owner next = now;
+  events_in(next, held);
+  return next;
+}
+template <class Owner>
+inline bool event_kind_shown(const Owner& now, const choice_level_t& level, const room_event_t& kind) {
+  room_events_at(level) = events_of(now);
+  return events_in_effect(level).shows(kind);
+}
+template <class Owner>
+inline auto events_way_row(const palette& colours, choice_level_t level, std::string name, std::size_t way) {
+  namespace c = skiff::compose;
+  return c::projected<Owner>([level, way](const Owner& now) {
+    return events_way_of(level, events_of(now)) == way;
+  }, c::onClick(choose_events_way{way}, widgets::ChoiceRowField<bool>(colours.widgets, std::move(name), true)));
+}
+template <class Owner>
+inline auto event_kind_button(const palette& colours, choice_level_t level, room_event_t kind, bool show) {
+  namespace c = skiff::compose;
+  return c::spec_for<Owner>([level, kind, show](const Owner& now) {
+    return scene::Spec{.selected = event_kind_shown(now, level, kind) == show};
+  }, c::onClick(choose_event_kind{kind, show}, c::column(
+      c::justified(c::vbox(0.0f, {.width = 70.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle,
+          .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen}), nodes::justify::middle{}),
+      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(show ? "Show" : "Hide", 13.0f, colours.text))), show ? "Show" : "Hide"));
+}
+template <class Owner>
+inline auto event_kind_row(const palette& colours, choice_level_t level, room_event_t kind) {
+  namespace c = skiff::compose;
+  return c::spec_for<Owner>([level](const Owner& now) {
+    const bool custom = events_way_of(level, events_of(now)) == kEventsCustom;
+    return scene::Spec{.alpha = custom ? 1.0f : 0.4f, .disabled = !custom};
+  }, c::row(setting_row(),
+      setting_label(nodes::Text(spl::visit([](auto one) { return std::string(label_of(one)); }, kind), 14.0f, colours.text)),
+      event_kind_button<Owner>(colours, level, kind, true), event_kind_button<Owner>(colours, level, kind, false)));
+}
+template <class Owner>
+inline auto event_kinds_field(const palette& colours, choice_level_t level) {
+  namespace c = skiff::compose;
+  auto rows = std::ranges::to<std::vector>(std::views::transform(all_room_events, [&](const room_event_t& kind) {
+    return event_kind_row<Owner>(colours, level, kind);
+  }));
+  return c::scoped<Owner>(c::handlers(
+      c::handle<choose_events_way>([level](const choose_events_way& event, const Owner& now) {
+        return skiff::model::setTo(with_events_way(now, level, event.way));
+      }),
+      c::handle<choose_event_kind>([level](const choose_event_kind& event, const Owner& now) {
+        Owner next = now;
+        auto held = events_of(now);
+        if (events_way_of(level, held) == kEventsCustom) {
+          if (!held.kinds) held.kinds.emplace();
+          logic::choice_in(*held.kinds, event.kind) = event.show;
+          events_in(next, held);
+        }
+        return skiff::model::setTo(std::move(next));
+      })), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::styled({.margin = {0.0f, 20.0f, 0.0f, 20.0f}}, nodes::Text("Room events", 14.0f, colours.text, true)),
+          c::visible(has_level_above(level), events_way_row<Owner>(colours, level, "As above", kEventsAbove)),
+          events_way_row<Owner>(colours, level, "All events", kEventsAll),
+          events_way_row<Owner>(colours, level, "Messages only", kEventsMessages),
+          events_way_row<Owner>(colours, level, "Custom", kEventsCustom),
+          c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
+}
 
 // How far a search for a message jumped to pages back, at one level, as
 // the model holds it: a few numbers of events and No limit, and, where a

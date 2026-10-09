@@ -33,12 +33,13 @@ import :context_menu;
 import :call_bar;
 import :sending;
 import :viewer;
+import :emoji_kept;
 
 export namespace mux::ui {
 
 // Text editing commands are data; the menu is composed from ordinary rows.
 // Keep the editor's focus so a command still reaches its original selection.
-using text_menu_action = spl::variant<request::copy_text, request::text_key, request::text_formatting,
+using text_menu_action = spl::variant<request::favourite_emoji, request::copy_text, request::text_key, request::text_formatting,
     request::selection_copy, request::selection_forward, request::selection_delete, request::selection_cancel>;
 struct text_menu_item {
   std::string label;
@@ -832,8 +833,11 @@ template <class Actions> struct window : skiff::compose::Specced {
     text_menu_origin = parts.now->last_press;
     text_menu_field.reset();
     std::vector<text_menu_item> items{{"Copy", "", request::copy_text{std::move(text)}}};
-    if (link)
+    if (link) {
+      if (const auto emoji = copied_emoji_at(*link))
+        items.push_back({needs_.emoji->emoji_is_favourite(emoji->url) ? "Remove from favorites" : "Add to favorites", "", request::favourite_emoji{*emoji}});
       items.push_back({"Copy Link", "", request::copy_text{std::move(*link)}});
+    }
     this->put_text_menu(items);
   }
   void show_selection_menu(std::size_t count, bool forwardable, bool deletable) {

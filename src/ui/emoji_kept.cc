@@ -42,9 +42,19 @@ struct previewed {
 };
 // The emoji and stickers kept, as the program holds them: handed to the
 // window with its colours (ui_needs), and from it to the panels.
+inline std::optional<emote> copied_emoji_at(std::string_view target) {
+  const auto& copied = skiff::scene::clipboardCandidate();
+  if (!copied) return std::nullopt;
+  const auto found = std::ranges::find_if(copied->atoms, [&](const auto& atom) { return atom.picture && atom.target == target; });
+  if (found == copied->atoms.end()) return std::nullopt;
+  std::string code = found->plain;
+  if (code.starts_with(':') && code.ends_with(':') && code.size() > 2) code = code.substr(1, code.size() - 2);
+  return emote{.shortcode = std::move(code), .url = found->target, .body = found->plain};
+}
 struct emoji_kept {
   // The emoji picked lately, newest first, as tdesktop keeps them (at most 42).
   std::vector<std::string> recent_emoji;
+  std::vector<emote> favourite_emoji;
   // The custom emoji and stickers of the chat the panel is opened over.
   std::vector<emote> chat_emotes, chat_stickers;
   std::optional<account_id> pack_account;
@@ -56,6 +66,12 @@ struct emoji_kept {
   // The emoji or sticker the mouse rests on, shown large over its panel.
   std::optional<previewed> previewed_now;
 
+  [[nodiscard]] bool emoji_is_favourite(std::string_view url) const { return std::ranges::contains(favourite_emoji, url, &emote::url); }
+  void flip_emoji_favourite(const emote& one) {
+    if (emoji_is_favourite(one.url)) std::erase_if(favourite_emoji, [&](const emote& each) { return each.url == one.url; });
+    else favourite_emoji.insert(favourite_emoji.begin(), one);
+    emoji_changed = true;
+  }
   void remember_emoji(const std::string& glyph) {
     constexpr std::size_t kKept = 42;
     std::erase(recent_emoji, glyph);

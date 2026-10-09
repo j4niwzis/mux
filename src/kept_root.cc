@@ -18,7 +18,7 @@ export namespace mux {
 struct recently_used {
   std::optional<std::string> last_account;
   std::vector<std::string> emoji;
-  std::vector<mux::emote> stickers, favourite_stickers;
+  std::vector<mux::emote> stickers, favourite_stickers, favourite_emoji;
   friend bool operator==(const recently_used&, const recently_used&) = default;
 };
 

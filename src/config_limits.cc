@@ -245,6 +245,7 @@ struct file {
   // The stickers sent lately, newest first; and those made favourites.
   std::optional<std::vector<sticker_kept>> recent_stickers;
   std::optional<std::vector<sticker_kept>> favourite_stickers;
+  std::optional<std::vector<sticker_kept>> favourite_emoji;
   std::optional<std::vector<muted_chat>> muted;
   // The chats listed in other accounts' lists than their own.
   std::optional<std::vector<chat_placement>> placements;

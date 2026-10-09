@@ -214,12 +214,12 @@ struct mentioned {
         // its protocol says is no name (a Matrix room's !id): by the name.
         const bool by_address =
             span.as_written && proto::id_reads_as_name(state_before(protocol_of(*span.as_written)), *span.as_written);
-        shown = (pictured ? std::string("\u2002\u2002") : std::string()) + (by_address ? words : name);
+        shown = (pictured ? std::string("\u2003\u2002") : std::string()) + (by_address ? words : name);
         pill = nodes::Text::Link{span.first, span.first + shown.size(), opens, true};
       }
     } else if (span.pill) {
       const auto [name, target] = name_of(*span.pill);
-      shown = "\u2002\u2002" + name;  // room for its avatar
+      shown = "\u2003\u2002" + name;  // room for its avatar
       pill = nodes::Text::Link{span.first, span.first + shown.size(), opens, true};
     }
     const std::ptrdiff_t grew =
@@ -349,8 +349,8 @@ struct mentioned {
     shown = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
   }
   std::string out = std::move(shown.text);
-  for (std::size_t at = out.find("\u2002\u2002"); at != std::string::npos; at = out.find("\u2002\u2002", at))
-    out.erase(at, std::string_view("\u2002\u2002").size());
+  for (std::size_t at = out.find("\u2003\u2002"); at != std::string::npos; at = out.find("\u2003\u2002", at))
+    out.erase(at, std::string_view("\u2003\u2002").size());
   return out;
 }
 

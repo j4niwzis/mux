@@ -392,7 +392,8 @@ struct kept_settings {
     const recently_used recent_read{.last_account = saved.last_account,
                                     .emoji = saved.recent_emoji.value_or(std::vector<std::string>{}),
                                     .stickers = emotes_of(saved.recent_stickers),
-                                    .favourite_stickers = emotes_of(saved.favourite_stickers)};
+                                    .favourite_stickers = emotes_of(saved.favourite_stickers),
+                                    .favourite_emoji = emotes_of(saved.favourite_emoji)};
     looks_read.theme = mux::config::theme_of(saved.theme);
     if (saved.wallpaper)
       looks_read.wallpaper = mux::config::wallpaper_of(std::string_view(*saved.wallpaper));
@@ -492,6 +493,8 @@ struct kept_settings {
       out.recent_stickers = kept_of(this->recent().stickers);
     if (!this->recent().favourite_stickers.empty())
       out.favourite_stickers = kept_of(this->recent().favourite_stickers);
+    if (!this->recent().favourite_emoji.empty())
+      out.favourite_emoji = kept_of(this->recent().favourite_emoji);
     if (!this->proxies().empty())
       out.proxies = this->proxies();
     out.theme = mux::config::said_of<mux::config::theme_said_t>(this->appearance().theme);

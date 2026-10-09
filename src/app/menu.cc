@@ -77,7 +77,7 @@ void part_apply(menu_part& self, const request::message_menu& one) {
     if (chat && !chosen.empty()) {
       const auto now = mux::ui::protocol_state_of(self.s_->ui, chat->id.account);
       self.s_->root().show_selection_menu(chosen.size(), mux::ui::ops_of(self.s_->ui, chat->id.account).forward,
-          std::ranges::all_of(chosen, [&](const message* item) { return proto::may_delete(now, *chat, item->outgoing); }));
+          std::ranges::any_of(chosen, [&](const message* item) { return proto::may_delete(now, *chat, item->outgoing); }));
       return;
     }
   }
@@ -323,12 +323,13 @@ void part_apply(menu_part& self, const request::selection_copy&) {
 void part_apply(menu_part& self, const request::selection_delete&) {
   self.s_->root().close_text_menu();
   const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
-  const auto chosen = selected_messages(self);
+  auto chosen = selected_messages(self);
   if (!chat || chosen.empty())
     return;
   const auto now = mux::ui::protocol_state_of(self.s_->ui, chat->id.account);
-  if (!proto::available(now) || !std::ranges::all_of(chosen, [&](const message* one) { return proto::may_delete(now, *chat, one->outgoing); }))
-    return;
+  if (!proto::available(now)) return;
+  std::erase_if(chosen, [&](const message* one) { return !proto::may_delete(now, *chat, one->outgoing); });
+  if (chosen.empty()) return;
   self.deleting_ = std::pair{chat->id, std::ranges::to<std::vector>(std::views::transform(chosen, [](const message* one) { return one->id; }))};
   mux::ui::show(*self.s_->showing, std::optional(mux::ui::notice_facts{
       "Delete messages?", std::format("Delete {} selected messages for everyone? This cannot be undone.", chosen.size()), true}));
@@ -353,11 +354,9 @@ void part_apply(menu_part& self, const request::selection_delete_confirm&) {
       self.s_->box->push(change_t{change::message_redacted{chat->id, id}});
     else
       self.s_->net->remove_message(chat->id, id);
+    if (self.selected_chat_ == pending->first) self.selected_.erase(id);
   });
-  if (self.selected_chat_ == pending->first) {
-    self.selected_.clear();
-    show_selection(self);
-  }
+  if (self.selected_chat_ == pending->first) show_selection(self);
 }
 
 void part_apply(menu_part& self, const request::selection_forward&) {
@@ -473,7 +472,7 @@ void show_selection(menu_part& self) {
   const auto chosen = selected_messages(self);
   const auto now = chat ? mux::ui::protocol_state_of(self.s_->ui, chat->id.account) : mux::protocol_state_t{};
   const bool available = chat && proto::available(now);
-  const bool deletable = available && !chosen.empty() && std::ranges::all_of(chosen, [&](const message* one) { return proto::may_delete(now, *chat, one->outgoing); });
+  const bool deletable = available && std::ranges::any_of(chosen, [&](const message* one) { return proto::may_delete(now, *chat, one->outgoing); });
   const mux::ui::selection_shown shown{chosen.size(), available && ops.forward, deletable};
   if (*self.s_->showing->look<mux::ui::selection_shown>() != shown)
     mux::ui::show(*self.s_->showing, shown);

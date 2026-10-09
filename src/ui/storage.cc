@@ -143,9 +143,7 @@ inline auto storage_settings_view(const palette& colours) {
             colours, "Show deleted messages"),
         limit_stepper<limit::deleted_on_disk>(colours, "On disk", "MB"),
         spaced_title(colours, "ROOM EVENTS"),
-        bound<config::history_settings>(
-            event_kinds_field<config::history_settings>(
-                colours, choice_level::everywhere{})),
+        event_kinds_field<config::history_settings>(colours, choice_level::everywhere{}),
         bound<skiff::model::Field<&config::history_settings::show_receipts>>(
             show_hide_field<receipts_setting, bool>(
                 colours, choice_level::everywhere{})),

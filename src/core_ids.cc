@@ -559,9 +559,13 @@ struct link {
   std::string url;
   friend bool operator==(const link&, const link&) = default;
 };
+struct custom_emoji {
+  std::string url;
+  friend bool operator==(const custom_emoji&, const custom_emoji&) = default;
+};
 }  // namespace run_style
 using run_style_t = spl::variant<run_style::bold, run_style::italic, run_style::underline, run_style::strike,
-                                 run_style::spoiler, run_style::code, run_style::link>;
+                                 run_style::spoiler, run_style::code, run_style::link, run_style::custom_emoji>;
 // A run of what is sent, by byte offsets in its text, and how it is formatted.
 struct styled_run {
   std::size_t first = 0;

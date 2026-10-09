@@ -63,6 +63,7 @@ struct menu_facts {
   std::size_t reaction_count = 0;  // how many reactions it has, of anyone
   std::string link;  // a link to it, where it has one
   std::string pressed_link;  // the link pressed on: in its text, or its preview
+  std::optional<emote> emoji;
   std::optional<emote> sticker;  // a sticker's: what making it a favourite keeps
   // A reaction's: the message it is on, and its key -- the menu's reactions
   // change it to another, where it is one's own.
@@ -169,6 +170,7 @@ struct return_to_chat {};
 struct menu_copy_link {};
 struct menu_copy_url {};
 struct menu_fave_sticker {};
+struct favourite_emoji { emote emoji; };
 struct react {
   std::string id;
   std::string key;

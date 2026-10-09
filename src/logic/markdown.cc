@@ -18,6 +18,7 @@ struct html_run {
   std::size_t last = 0;
   std::string open;
   std::string close;
+  std::optional<std::string> replacement;
 };
 // The runs a line is written with: they, and where the whole text they
 // count in starts -- the line a view into it.
@@ -42,7 +43,7 @@ struct runs_in {
   // The runs at `here`, opened, and those that ended closed.
   const auto sync = [&](std::size_t here) {
     std::vector<std::size_t> now = std::ranges::to<std::vector<std::size_t>>(std::views::filter(
-        std::views::iota(std::size_t{0}, runs.size()), [&](std::size_t i) { return runs[i].first <= here && here < runs[i].last; }));
+        std::views::iota(std::size_t{0}, runs.size()), [&](std::size_t i) { return !runs[i].replacement && runs[i].first <= here && here < runs[i].last; }));
     if (now == open_runs)
       return;
     for (const std::size_t i : std::views::reverse(open_runs))
@@ -66,6 +67,14 @@ struct runs_in {
   };
   while (at < line.size()) {
     sync(base + at);
+    if (const auto found = std::ranges::find_if(runs, [&](const html_run& run) {
+          return run.replacement && run.first == base + at && run.last <= base + line.size();
+        }); found != runs.end()) {
+      out += *found->replacement;
+      at = found->last - base;
+      marked = true;
+      continue;
+    }
     const std::string_view rest = line.substr(at);
     if (rest.starts_with("`")) {
       if (const auto end = closing(at + 1, "`"); end != std::string_view::npos && whole(at, end + 1)) {

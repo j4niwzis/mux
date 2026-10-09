@@ -506,7 +506,7 @@ void app::before_frame() {
   if (std::exchange(shared.ui.pictures_due, false))
     pictures.ask();
   if (std::exchange(shared.emoji.emoji_changed, false)) {
-    this->change_part<recently_used>([&](recently_used& now) { now.emoji = shared.emoji.recent_emoji; });
+    this->change_part<recently_used>([&](recently_used& now) { now.emoji = shared.emoji.recent_emoji; now.favourite_emoji = shared.emoji.favourite_emoji; });
   }
   if (std::exchange(shared.emoji.stickers_changed, false)) {
     this->change_part<recently_used>([&](recently_used& now) {
@@ -595,6 +595,7 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   shared.emoji.recent_emoji = this->recent().emoji;
   shared.emoji.recent_stickers = this->recent().stickers;
   shared.emoji.favourite_stickers = this->recent().favourite_stickers;
+  shared.emoji.favourite_emoji = this->recent().favourite_emoji;
   if (saved.last_account)
     this->root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
   // Read the loaded appearance just as a later settings change does.

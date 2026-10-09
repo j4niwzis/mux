@@ -193,6 +193,13 @@ template <class Actions> struct seen_row : skiff::compose::Stacked {
   }
 };
 
+inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, const std::optional<emote>& emoji) {
+  namespace c = skiff::compose;
+  return c::visible(emoji.has_value(), c::onClick(request::favourite_emoji{emoji.value_or(emote{})},
+      c::row(c::hbox(0.0f, {.fillX = true, .height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = colours.chosen}),
+          c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(emoji && kept.emoji_is_favourite(emoji->url)
+              ? "Remove from favorites" : "Add to favorites", 13.0f, colours.text)))));
+}
 template <class Actions> struct context_menu : skiff::compose::Specced {
   // Child references and handlers require a fixed address.
   context_menu(const context_menu&) = delete;
@@ -298,6 +305,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
       url_row copy_url;
       // A sticker: made a favourite, or no longer one.
       fave_row fave;
+      decltype(emoji_favourite_row(std::declval<const palette&>(), std::declval<const emoji_kept&>(), std::optional<emote>{})) fave_emoji;
       copy_image_row copy_image;
       save_row save;
       gif_row save_gif;
@@ -314,7 +322,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
       std::optional<emoji_panel<react_with<Actions>>> emoji;
     } parts;
     void expand() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, history, select,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, fave_emoji, copy_image, save, save_gif, reactions, forward, source, history, select,
              remove, seen_band, seen, emoji] = parts;
       if (emoji)
         return;
@@ -341,9 +349,9 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
     // The items, once the list is down over them: gone, the menu keeping
     // its size by its least height.
     void hide_items() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, history, select, remove,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, fave_emoji, copy_image, save, save_gif, reactions, forward, source, history, select, remove,
              seen_band, seen, emoji] = parts;
-      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_url, &fave, &copy_image, &save,
+      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_url, &fave, &fave_emoji, &copy_image, &save,
                                                                    &save_gif, &reactions, &forward, &source,
                                                                    &remove, &seen_band, &seen})
         item->setVisible(false);
@@ -440,6 +448,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
                                ? "Remove from Favourites"
                                : "Add to Favourites",
                            {}, icon::check{}, std::nullopt, menu_row_look)),
+              .fave_emoji = emoji_favourite_row(colours, kept, facts.emoji),
               .copy_image = skiff::compose::visible(
                   facts.picture.has_value(),
                   copy_image_row(colours, "Copy Image", {}, icon::clip{},
@@ -485,7 +494,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
                                          nodes::Box<>(colours.band)),
               .seen = seen_row<Actions>(colours, facts.seen)} {
       fState.setFloats(true);  // over the chat: frosted live, where asked
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, history, select,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, fave_emoji, copy_image, save, save_gif, reactions, forward, source, history, select,
              remove, seen_band, seen, emoji] = parts;
       // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
       // 13px normalFont's line -- 33 high -- the icon 15 in, the text 54 in.

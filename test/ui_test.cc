@@ -12,6 +12,7 @@ import mux.core;
 import mux.config;
 import mux.ui;
 import mux.protocols;
+import mux.logic.room_events;
 import mux.ui.proto;
 import gtest;
 
@@ -1782,7 +1783,8 @@ TEST(Selection, TelegramActionsHaveWidthAndDispatchOnDesktopAndPhone) {
     ui.show(window.root(), mux::ui::selection_shown{3, true, false});
     window.layoutIfNeeded(skia::SkRect::MakeWH(width, 60.0f));
     EXPECT_TRUE(forward.visible());
-    EXPECT_FALSE(remove.visible());
+    EXPECT_TRUE(remove.visible());
+    EXPECT_TRUE(remove.fState.disabled());
     EXPECT_EQ(std::get<0>(forward.fParts).text(), "Forward 3");
     ui.show(window.root(), mux::ui::selection_shown{});
     EXPECT_FALSE(window.root().visible());
@@ -1972,4 +1974,25 @@ TEST(Reactions, MixedCustomEmojiKeepTheOriginalReactionKeyWhenClicked) {
       {{.shortcode = "party", .url = "mxc://example/party"}});
   EXPECT_EQ(chip.onPress().id, "$message");
   EXPECT_EQ(chip.onPress().key, "a reaction :party:");
+}
+
+TEST(Controls, RoomEventChoicesDispatchTypedModelEdits) {
+  mux::config::chat_choices initial;
+  initial.typing = false;
+  skiff::model::Model<mux::config::chat_choices, skiff::bind::NoReactions> model(initial);
+  mux::ui::palette colours;
+  auto field = mux::ui::event_kinds_field<mux::config::chat_choices>(colours, mux::ui::choice_level::chat{});
+  skiff::bind::Binding<decltype(model)> binding;
+  binding.refresh(field, model);
+  ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{3}));
+  EXPECT_EQ(model.root().room_events, false);
+  EXPECT_EQ(model.root().typing, false);
+  binding.refresh(field, model);
+  ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{4}));
+  ASSERT_TRUE(model.root().room_event_kinds.has_value());
+  EXPECT_EQ(mux::ui::events_way_of(mux::ui::choice_level::chat{}, mux::ui::events_of(model.root())), mux::ui::kEventsCustom);
+  binding.refresh(field, model);
+  ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{5, 0, 1}));
+  EXPECT_EQ(mux::logic::choice_of(model.root().room_event_kinds, mux::all_room_events.front()), true);
+  EXPECT_EQ(model.root().typing, false);
 }

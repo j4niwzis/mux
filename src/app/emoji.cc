@@ -25,6 +25,7 @@ void part_apply(emoji_part& self, const request::toggle_emoji&);
 void part_apply(emoji_part& self, const request::toggle_thread_emoji&);
 void part_apply(emoji_part& self, const request::close_emoji&);
 void part_apply(emoji_part& self, const request::insert_emoji& one);
+void part_apply(emoji_part& self, const request::favourite_emoji& one);
 void open_at(emoji_part& self, float right, float top);
 
 void part_apply(emoji_part& self, const request::toggle_emoji&) {
@@ -48,6 +49,12 @@ void part_apply(emoji_part& self, const request::toggle_thread_emoji&) {
 }
 
 void part_apply(emoji_part& self, const request::close_emoji&) { self.s_->close_emoji(); }
+
+void part_apply(emoji_part& self, const request::favourite_emoji& one) {
+  self.s_->emoji.flip_emoji_favourite(one.emoji);
+  self.s_->root().close_text_menu();
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+}
 
 void part_apply(emoji_part& self, const request::insert_emoji& one) {
   auto& screen = self.s_->root().main();

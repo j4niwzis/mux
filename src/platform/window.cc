@@ -49,7 +49,9 @@ struct options {
 namespace detail {
 
 inline double now_ms() {
-  return static_cast<double>(sdl::SDL_GetTicksNS()) / 1'000'000.0;
+  // Media frame deadlines use this clock too; SDL's ticks have a different
+  // epoch and made a nearby animation deadline look hours away.
+  return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 }  // namespace detail

@@ -580,6 +580,11 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
       all.push_back(make_section(this, "Recently used", shown));
       tabs.push_back(picker_tab(*colours_, this, all.size() - 1, std::nullopt));
     }
+    if (!kept_->favourite_emoji.empty()) {
+      all.push_back(make_section(this, "Favorites", kept_->favourite_emoji));
+      pack_icons.push_back(kept_->favourite_emoji.front().url);
+      packs.push_back(picker_tab(*colours_, this, all.size() - 1, pack_icons.back()));
+    }
     std::ranges::for_each(grouped_emotes(kept_->chat_emotes, "Custom emoji"), [&](const auto& pack) {
       const auto& [name, images] = pack;
       all.push_back(make_section(this, name, images));
@@ -607,7 +612,10 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     all.clear();
     all.push_back(make_section(this, "Search results", logic::emoji_found(query)));
     const std::string wanted = logic::folded(query);
-    const auto custom = std::ranges::to<std::vector>(std::views::filter(kept_->chat_emotes, [&](const emote& one) {
+    auto available = kept_->chat_emotes;
+    for (const auto& one : kept_->favourite_emoji)
+      if (std::ranges::none_of(available, [&](const emote& other) { return other.url == one.url; })) available.push_back(one);
+    const auto custom = std::ranges::to<std::vector>(std::views::filter(available, [&](const emote& one) {
       return logic::folded(one.shortcode).contains(wanted) || logic::folded(one.body).contains(wanted) || logic::folded(one.pack).contains(wanted);
     }));
     std::ranges::for_each(grouped_emotes(custom, "Custom emoji"), [&](const auto& pack) {

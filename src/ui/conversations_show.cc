@@ -379,9 +379,13 @@ void conversations_screen<Actions>::update(double now_ms) {
       info.wants_show = false;
       info.show(*one, *last_model, muted.contains(one->id));
     }
+  // The restored offset is unclamped until the destination list's first
+  // layout; virtualize at that offset rather than the previous list's limit.
+  if (restoring_list_at && list.fState.fLayoutValid)
+    restoring_list_at.reset();
   // The list scrolled past the rows made: those for where it is now made,
   // those far from it let go.
-  if (last_model && list.visible() && this->chats_window() != std::pair{chats_from, chats_made})
+  if (last_model && list.visible() && !restoring_list_at && this->chats_window() != std::pair{chats_from, chats_made})
     this->show_rows(*last_model);
   // The panels' opacity on its way to the chat's.
   if (auto& ease = needs_.paint->ease; ease.t.step(now_ms)) {
@@ -901,6 +905,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   side.forum_head.setVisible(forum != nullptr);
   if (forum)
     side.forum_head.parts.name.setText(display_name(*forum));
+  this->restore_list_position();
   // The chats listed, as the model has them now, made into rows.
   listing = this->listing_of(now);
   this->show_rows(now);

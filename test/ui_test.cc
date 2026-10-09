@@ -744,6 +744,63 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+TEST(ChatList, LeavingSpacesAndForumsRestoresThePreviousScrollPosition) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct restore_font { ~restore_font() { skiff::paint::defaultFont() = nullptr; } } reset;
+  stub program;
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
+  mux::model model;
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.com"};
+  const mux::conversation_id space{alice, "!space:example.com"};
+  model.apply(mux::change::connection_changed{alice, mux::connection::online{}});
+  std::vector<std::string> children;
+  for (int i = 0; i < 100; ++i) {
+    const std::string id = "!room" + std::to_string(i) + ":example.com";
+    model.apply(mux::change::conversation_updated{.id = {alice, id}, .name = "Room " + std::to_string(i)});
+    if (i < 2)
+      children.push_back(id);
+  }
+  model.apply(mux::change::conversation_updated{.id = space, .name = "Space", .space = true, .children = children});
+  auto& screen = window.root().main();
+  screen.show(model);
+  double clock = 1000.0;
+  const auto settle = [&] {
+    for (int i = 0; i < 40; ++i) {
+      window.update(clock += 16.0);
+      window.layoutIfNeeded(skia::SkRect::MakeWH(1100.0f, 720.0f));
+      (void)window.finishFrame();
+    }
+  };
+  settle();
+  EXPECT_FLOAT_EQ(screen.list.current(), 0.0f);
+  for (const float position : {0.0f, 3000.0f}) {
+    screen.list.setCurrent(position);
+    settle();
+    ASSERT_NEAR(screen.list.current(), position, 1.0f);
+    screen.choose_folder(mux::ui::folder::space{space.id});
+    settle();
+    EXPECT_FLOAT_EQ(screen.list.current(), 0.0f);
+    screen.choose_folder(mux::ui::folder::all{});
+    settle();
+    EXPECT_NEAR(screen.list.current(), position, 1.0f);
+    EXPECT_LT(screen.list.current(), screen.list.extent());
+    screen.forums.insert(space);
+    screen.show(model);
+    settle();
+    screen.open_forum(space.id);
+    settle();
+    EXPECT_FLOAT_EQ(screen.list.current(), 0.0f);
+    screen.close_forum();
+    settle();
+    EXPECT_NEAR(screen.list.current(), position, 1.0f);
+    screen.forums.erase(space);
+    screen.show(model);
+    settle();
+  }
+}
+
 TEST(Frames, TypingAndScrollingKeepUnchangedPanesOutsideDamage) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;

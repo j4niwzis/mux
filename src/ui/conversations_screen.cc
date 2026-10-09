@@ -195,6 +195,29 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   // The folders the tabs were made for, and the one chosen then.
   std::vector<std::pair<std::string, folder_t>> shown_folders;
   folder_t shown_folder = folder::all{};
+  // Each list keeps its own offset; a short space list must not make Home
+  // follow its end when Home's longer contents are restored.
+  using list_place = std::tuple<std::optional<account_id>, folder_t, std::optional<std::string>>;
+  std::optional<list_place> listed_place;
+  std::vector<std::pair<list_place, float>> list_positions;
+  std::optional<float> restoring_list_at;
+  void restore_list_position() {
+    const list_place next{current, folder, forum_open};
+    if (listed_place && *listed_place == next)
+      return;
+    if (listed_place) {
+      const auto saved = std::ranges::find(list_positions, *listed_place, &std::pair<list_place, float>::first);
+      if (saved != list_positions.end())
+        saved->second = list.current();
+      else
+        list_positions.emplace_back(*listed_place, list.current());
+    }
+    listed_place = next;
+    const auto saved = std::ranges::find(list_positions, next, &std::pair<list_place, float>::first);
+    restoring_list_at = saved == list_positions.end() ? 0.0f : saved->second;
+    list.setCurrent(*restoring_list_at);
+  }
+
   // The space bars, as the program says: at all, the top one, and where
   // each item is put; and what they were made for, not made again unchanged.
   bool spaces_on = true;
@@ -319,7 +342,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     if (tops.size() != count + 1 || count == 0)
       return {0, std::min(kChatsFirst, count)};
     const float view = std::max(list.bounds().height(), 400.0f);
-    const float at = list.current();
+    const float at = restoring_list_at.value_or(list.current());
     const auto index_at = [&](float y) {
       const auto past = std::ranges::upper_bound(tops, y);
       return std::min(count, static_cast<std::size_t>(std::max<std::ptrdiff_t>(0, past - tops.begin() - 1)));

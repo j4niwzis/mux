@@ -33,7 +33,10 @@ const std::string first_sync = R"({"next_batch":"s1","rooms":{"join":{"!r:x.org"
    "content":{"msgtype":"m.text","body":"* hello there","m.new_content":{"msgtype":"m.text","body":"hello there"},
               "m.relates_to":{"rel_type":"m.replace","event_id":"$m1"}}},
   {"type":"m.reaction","event_id":"$r1","sender":"@a:x.org","origin_server_ts":13,
-   "content":{"m.relates_to":{"rel_type":"m.annotation","event_id":"$m1","key":"👍"}}}]},
+   "content":{"m.relates_to":{"rel_type":"m.annotation","event_id":"$m1","key":"👍"}}},
+  {"type":"m.room.member","state_key":"@renamed:x.org","event_id":"$renamed","sender":"@renamed:x.org","origin_server_ts":14,
+   "content":{"membership":"join","displayname":"New"},
+   "unsigned":{"prev_content":{"membership":"join","displayname":"Old <&>"}}}]},
  "ephemeral":{"events":[{"type":"m.typing","content":{"user_ids":["@b:x.org"]}}]},
  "unread_notifications":{"highlight_count":0,"notification_count":2}}}}})";
 
@@ -200,6 +203,13 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   EXPECT_EQ(room->timeline[1].id, "$m2");
   EXPECT_EQ(room->timeline[1].replies_to, "$m1");
   EXPECT_TRUE(room->timeline[1].outgoing);
+  // Historical names remain literal text even when the person pill resolves
+  // to the current member name; HTML must escape the previous content.
+  const auto renamed = std::ranges::find(room->timeline, "$renamed", &mux::message::id);
+  ASSERT_NE(renamed, room->timeline.end());
+  EXPECT_EQ(renamed->body.plain, "New changed their display name from Old <&> to New");
+  ASSERT_TRUE(renamed->body.html.has_value());
+  EXPECT_NE(renamed->body.html->find(" changed their display name from Old &lt;&amp;&gt; to New"), std::string::npos);
   // Sent from here: known by its event id once the server answered.
   const auto sent_one = std::find_if(room->timeline.begin(), room->timeline.end(),
                                      [](const mux::message& one) { return one.body.plain == "from mux"; });

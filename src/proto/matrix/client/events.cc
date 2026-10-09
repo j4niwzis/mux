@@ -514,7 +514,6 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
           [&](const member_content& content) {
             const std::string target_id = one.state_key.value_or(one.sender);
             const std::string target = content.displayname.value_or(name_in(in.id, target_id));
-            // What it was: the content before, as the server gives it beside.
             // What it was: the content before, as the server gives it beside --
             // read by knot as the event's own type, from the event's type.
             std::optional<member_content> before;
@@ -547,7 +546,9 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                                               person(target_id, shown) + chevron::escaped(line));
                                     };
                                     if (old_name && new_name && *old_name != *new_name) {
-                                      named(*old_name, " changed their display name to " + *new_name);
+                                      // Person pills resolve to the current member name. Keep
+                                      // the historical names in the text as well as the link.
+                                      named(target, std::format(" changed their display name from {} to {}", *old_name, *new_name));
                                       return;
                                     }
                                     if (old_name && !new_name) {

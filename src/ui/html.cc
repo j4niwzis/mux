@@ -281,6 +281,31 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
   return out;
 }
 
+// Reaction labels may mix text, pack shortcodes and MSC4027 media URLs.
+// Build the same inline images for panel bubbles and timeline event rows.
+[[nodiscard]] inline mux::body reaction_body_of(std::string_view key, const std::vector<emote>& emotes,
+                                               const std::optional<std::string>& shortcode = std::nullopt) {
+  auto words = emoji_text_of(key, emotes);
+  if (words.spans.empty()) return {std::string(key), std::nullopt};
+  if (shortcode && words.spans.size() == 1 && words.spans.front().first == 0 && words.spans.front().last == words.text.size())
+    words.spans.front().plain = *shortcode;
+  std::string plain, html;
+  std::size_t from = 0;
+  for (const auto& image : words.spans) {
+    const auto before = std::string_view(words.text).substr(from, image.first - from);
+    plain += before;
+    html += chevron::escaped(before);
+    plain += image.plain;
+    html += std::format(R"(<img data-mx-emoticon src="{}" alt="{}" height="32">)",
+                        chevron::escaped(image.target), chevron::escaped(image.plain));
+    from = image.last;
+  }
+  const auto tail = std::string_view(words.text).substr(from);
+  plain += tail;
+  html += chevron::escaped(tail);
+  return {std::move(plain), std::move(html)};
+}
+
 [[nodiscard]] inline std::vector<nodes::Text::Link> link_spans_in(std::string_view text);
 
 [[nodiscard]] inline formatted read_html(std::string_view html) {

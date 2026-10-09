@@ -42,3 +42,32 @@ TEST(Store, DirectMessageReadMarkersAndReceiptTimesSurviveReopening) {
   EXPECT_EQ(legacy.me, std::optional<std::string>("$old"));
   EXPECT_TRUE(legacy.times.empty());
 }
+
+TEST(Store, EditEventIdsSurviveReopening) {
+  const mux::account_id account{mux::protocol::matrix{},
+      std::format("@edit-test-{}:example.org", std::chrono::steady_clock::now().time_since_epoch().count())};
+  const mux::conversation_id room{account, "!room:example.org"};
+  const auto directory = mux::config::state_path("messages") / mux::config::file_name_of(account.address);
+  struct clean { std::filesystem::path directory; ~clean() {
+    std::error_code ignored; std::filesystem::remove_all(directory, ignored);
+  } } cleanup{directory};
+  mux::vault::vault vault;
+  mux::message original{.in = room, .id = "$original", .sender = account.address,
+      .body = {"latest", std::nullopt}, .edited = true};
+  original.versions = {{{"first", std::nullopt}, {}, "$original"}, {{"second", std::nullopt}, {}, "$edit1"}};
+  original.latest_edit_event = "$edit2";
+  {
+    mux::app::message_store store;
+    store.vault = &vault;
+    store.record(original);
+  }
+  mux::app::message_store reopened;
+  reopened.vault = &vault;
+  const auto saved = reopened.read(room);
+  ASSERT_TRUE(saved.contains("$original"));
+  const auto& restored = saved.at("$original");
+  ASSERT_EQ(restored.versions.size(), 2u);
+  EXPECT_EQ(restored.versions[0].event, "$original");
+  EXPECT_EQ(restored.versions[1].event, "$edit1");
+  EXPECT_EQ(restored.latest_edit_event, "$edit2");
+}

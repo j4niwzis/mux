@@ -1997,3 +1997,61 @@ TEST(Controls, RoomEventChoicesDispatchTypedModelEdits) {
   EXPECT_EQ(mux::logic::choice_of(model.root().room_event_kinds, mux::all_room_events.front()), true);
   EXPECT_EQ(model.root().typing, false);
 }
+
+TEST(Reactions, Msc4027ImagesAndTextRenderTogetherInPanelBodies) {
+  const auto body = mux::ui::reaction_body_of("before mxc://example/one mxc://example/two mxc://example/one after", {});
+  ASSERT_TRUE(body.html.has_value());
+  const auto read = mux::ui::read_html(*body.html);
+  ASSERT_EQ(read.spans.size(), 3u);
+  EXPECT_TRUE(read.text.starts_with("before "));
+  EXPECT_TRUE(read.text.ends_with(" after"));
+  EXPECT_EQ(read.spans[0].target, "mxc://example/one");
+  EXPECT_EQ(read.spans[1].target, "mxc://example/two");
+  EXPECT_EQ(read.spans[2].target, "mxc://example/one");
+}
+TEST(Reactions, PanelRowsTargetTheReactionAndOfferNestedMenus) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct cleanup { ~cleanup() { skiff::paint::defaultFont() = nullptr; } } clear;
+  stub program;
+  ui_state ui;
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.org"};
+  const mux::conversation_id room{alice, "!room:example.org"};
+  ui.shared.protocol_ops[alice.speaks] = {.react = true};
+  ui.shared.protocol_states[alice] = mux::proto::matrix::state{.online = true};
+  mux::model known;
+  known.apply(mux::change::message_added{mux::message{.in = room, .id = "$reaction", .sender = "@bob:example.org",
+      .body = {"👍", std::nullopt}, .replies_to = "$original", .reaction = true, .reaction_key = "👍"}});
+  known.apply(mux::change::reaction_changed{room, "$reaction", "❤️", alice.address, true, "$nested"});
+  const auto* chat = known.find(room);
+  mux::ui::reaction_entry entry{"$reaction", "@bob:example.org", "Bob", "👍", {}, false, "$original"};
+  auto row = mux::ui::reaction_event_row(ui.needs(program), *chat, entry, true, true, &known);
+  scene::PointerReply reply;
+  const auto answer = row.onPointer(scene::phase::bubble{}, scene::pointer::down{.button = 3}, reply);
+  ASSERT_TRUE(answer.has_value());
+  const auto& facts = std::get<mux::ui::menu_facts>(*answer);
+  EXPECT_EQ(facts.id, "$reaction");
+  EXPECT_TRUE(facts.can.react);
+  EXPECT_EQ(facts.reaction_count, 1u);
+  ASSERT_TRUE(facts.reaction.has_value());
+  EXPECT_EQ(facts.reaction->to, "$original");
+  mux::ui::context_menu<stub> menu(ui.needs(program), facts);
+  EXPECT_TRUE(menu.parts.menu.parts.quick.visible());
+  EXPECT_TRUE(menu.parts.menu.parts.reactions.visible());
+}
+TEST(History, ReactionsTargetEachEditAndNeverGuessMissingEditIds) {
+  mux::message message{.id = "$original", .body = {"third", std::nullopt}, .edited = true};
+  message.versions = {{{"first", std::nullopt}, {}, "$original"}, {{"second", std::nullopt}, {}, "$edit1"}};
+  message.latest_edit_event = "$edit2";
+  const auto versions = mux::ui::edit_versions_of(message);
+  ASSERT_EQ(versions.size(), 3u);
+  EXPECT_EQ(versions[0].id, "$original");
+  EXPECT_EQ(versions[1].id, "$edit1");
+  EXPECT_EQ(versions[2].id, "$edit2");
+  message.versions[1].event.clear();
+  message.latest_edit_event.clear();
+  const auto legacy = mux::ui::edit_versions_of(message);
+  EXPECT_EQ(legacy[0].id, "$original");
+  EXPECT_TRUE(legacy[1].id.empty());
+  EXPECT_TRUE(legacy[2].id.empty());
+}

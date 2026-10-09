@@ -204,6 +204,7 @@ struct message_edited {
   // When it was edited, where the protocol says: what replaced the text
   // before it, in the message's edit history. Now, where it does not.
   std::chrono::sys_time<std::chrono::milliseconds> at{};
+  std::string event;  // the replacement event, not the original message
 };
 
 // A message that came encrypted and was read so.
@@ -734,7 +735,16 @@ class model {
         (!show_deleted || one.message.outgoing ||
          (one.message.body.plain.empty() && !one.message.body.html && !one.message.attachment)))
       return;
-    this->in_chat(one.message.in, [&](conversation& where) { this->add_to(where, one); });
+    this->in_chat(one.message.in, [&](conversation& where) {
+      auto merged = one;
+      if (const auto quoted = where.quoted.find(one.message.id); quoted != where.quoted.end()) {
+        for (const auto& [key, who] : quoted->second.reactions)
+          merged.message.reactions[key].insert(who.begin(), who.end());
+        for (const auto& event : quoted->second.reaction_events)
+          if (!std::ranges::contains(merged.message.reaction_events, event)) merged.message.reaction_events.push_back(event);
+      }
+      this->add_to(where, merged);
+    });
   }
   static bool pending(const message& one) {
     return spl::visit(spl::overloaded{[](const delivery::sending&) { return true; }, [](const auto&) { return false; }},
@@ -872,21 +882,26 @@ class model {
     if (message* kept = message_in(where, one.id)) {
       if ((one.by && *one.by != kept->sender) || (one.plain && kept->encrypted))
         return;
-      // What it said until now, kept in its edit history: once for each edit
-      // that changed it -- the same edit come again changes nothing.
-      if (kept->body != one.now)
-        kept->versions.push_back(
-            {kept->body, one.at != std::chrono::sys_time<std::chrono::milliseconds>{}
-                             ? one.at
-                             : std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())});
+      // Keep each distinct edit event, including an edit with unchanged
+      // text. A local optimistic edit has no event ID until its echo arrives.
+      const bool changed = kept->body != one.now;
+      const bool another_event = !one.event.empty() && one.event != kept->latest_edit_event &&
+          (kept->versions.empty() || !kept->latest_edit_event.empty());
+      if (changed || another_event) {
+        const std::string previous = kept->versions.empty() ? kept->id : kept->latest_edit_event;
+        kept->versions.push_back({kept->body, one.at != std::chrono::sys_time<std::chrono::milliseconds>{}
+            ? one.at : std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()), previous});
+      }
       kept->body = one.now;
       kept->edited = true;
+      if (changed || !one.event.empty()) kept->latest_edit_event = one.event;
     }
     in_latest(where, one.id, [&](message& kept) {
       if ((one.by && *one.by != kept.sender) || (one.plain && kept.encrypted))
         return;
       kept.body = one.now;
       kept.edited = true;
+      if (!one.event.empty()) kept.latest_edit_event = one.event;
     });
     // And the copy fetched aside for the replies quoting it: what they quote
     // is what it says now.
@@ -895,6 +910,7 @@ class model {
         !(one.plain && aside->second.encrypted)) {
       aside->second.body = one.now;
       aside->second.edited = true;
+      if (!one.event.empty()) aside->second.latest_edit_event = one.event;
     }
   });
   }
@@ -971,9 +987,14 @@ class model {
       where.latest.reset();
   });
   }
+  static message* reaction_target(conversation& where, std::string_view id) {
+    if (auto* event = message_in(where, id)) return event;
+    if (const auto quoted = where.quoted.find(std::string(id)); quoted != where.quoted.end()) return &quoted->second;
+    return nullptr;
+  }
   void on(const change::reaction_changed& one) {
     this->in_chat(one.in, [&](conversation& where) {
-    if (message_in(where, one.id) == nullptr) {
+    if (reaction_target(where, one.id) == nullptr) {
       auto& waiting = waiting_reactions_[{one.in, one.id}];
       if (one.added) {
         if (waiting.size() < kReactionsWaiting)
@@ -983,7 +1004,7 @@ class model {
       }
       return;
     }
-    if (message* kept = message_in(where, one.id)) {
+    if (message* kept = reaction_target(where, one.id)) {
       auto& who = kept->reactions[one.key];
       // Taken back: its mark too -- a reaction changed for another was
       // counted twice by the heart, the one taken back still in it.

@@ -233,6 +233,7 @@ inline std::string direct_contact(const auto&, const conversation& one) { return
 constexpr bool can_pin(const auto&, std::string_view) { return false; }
 // One's own messages, and no one else's: what every protocol allows.
 inline bool may_delete(const auto&, const conversation&, bool outgoing) { return outgoing; }
+inline bool may_react(const auto&, const conversation&, const message& event) { return !event.id.empty() && !event.redacted; }
 // Any of one's own messages edited.
 inline own_messages edit_rule(const auto&) { return {}; }
 }  // namespace mux::proto::defaults
@@ -559,6 +560,17 @@ inline constexpr struct can_pin_t {
     }, state);
   }
 } can_pin{};
+
+inline constexpr struct may_react_t {
+  template <class State>
+  bool operator()(const State& state, const conversation& chat, const message& event) const {
+    return spl::visit([&](const auto& now) {
+      using defaults::available;
+      using defaults::may_react;
+      return available(now) && may_react(now, chat, event);
+    }, state);
+  }
+} may_react{};
 
 inline constexpr struct may_delete_t {
   template <class State>

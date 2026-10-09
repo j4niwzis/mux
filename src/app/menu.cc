@@ -27,6 +27,7 @@ struct menu_part {
   std::optional<conversation_id> selected_chat_;
   std::optional<std::pair<conversation_id, std::vector<std::string>>> forwarding_;
   std::optional<std::pair<conversation_id, std::vector<std::string>>> deleting_;
+  std::vector<mux::ui::reactions_facts> reaction_pages_;
 };
 
 void part_apply(menu_part& self, const request::message_menu& one);
@@ -45,6 +46,7 @@ void part_apply(menu_part& self, const request::menu_save&);
 void part_apply(menu_part& self, const request::menu_pin&);
 void part_apply(menu_part& self, const request::menu_reactions&);
 void part_apply(menu_part& self, const request::close_reactions&);
+void part_apply(menu_part& self, const request::back_reactions&);
 void part_apply(menu_part& self, const request::close_edit_history&);
 void part_apply(menu_part& self, const request::menu_forward&);
 void forward_from(menu_part& self, const conversation_id& chosen, std::vector<std::string> events);
@@ -83,6 +85,12 @@ void part_apply(menu_part& self, const request::message_menu& one) {
   }
   const auto& chosen = self.s_->root().main().chosen;
   const conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
+  // History and reaction rows may refer to events retained only as typed
+  // metadata. Hold the displayed event before acting on its own ID.
+  if (chat && one.event && one.event->id == one.id && !mux::ui::held_message(*chat, one.id)) {
+    self.s_->model->apply(change::message_added{*one.event, placement::aside{}});
+    chat = self.s_->model->find(*chosen);
+  }
   self.s_->emoji.pack_account = chosen ? std::optional(chosen->account) : std::nullopt;
   self.s_->emoji.chat_emotes = chat ? chat->emotes : std::vector<emote>{};
   mux::ui::show(*self.s_->showing, std::optional(one));
@@ -223,7 +231,7 @@ void part_apply(menu_part& self, const request::menu_reactions&) {
   for (const auto& one : events)
     entries.push_back(
         {one.event, one.who, mux::ui::sender_name(*chat, one.who), one.key, one.at, one.who == chat->id.account.address,
-         self.target_.id});
+         self.target_.id, one.shortcode});
   // Those whose reaction came without its event -- read back from the
   // history -- listed too, at the message's time.
   for (const auto& [key, who] : said->reactions)
@@ -231,10 +239,33 @@ void part_apply(menu_part& self, const request::menu_reactions&) {
       if (std::ranges::none_of(events, [&](const auto& one) { return one.key == key && one.who == user; }))
         entries.push_back({std::string(), user, mux::ui::sender_name(*chat, user), key, said->at,
                            user == chat->id.account.address, self.target_.id});
-  mux::ui::show(*self.s_->showing, std::optional(mux::ui::reactions_facts{chat->id, std::move(entries), &*self.s_->model}));
+  const auto& current = *self.s_->showing->look<std::optional<mux::ui::reactions_facts>>();
+  if (current && current->in == chat->id && current->event != self.target_.id)
+    self.reaction_pages_.push_back(*current);
+  else if (!current || current->in != chat->id)
+    self.reaction_pages_.clear();
+  mux::ui::show(*self.s_->showing, std::optional(mux::ui::reactions_facts{chat->id, std::move(entries), &*self.s_->model,
+      self.target_.id, !self.reaction_pages_.empty()}));
 }
 
-void part_apply(menu_part& self, const request::close_reactions&) { mux::ui::show<mux::ui::reactions_facts>(*self.s_->showing, std::nullopt); }
+void part_apply(menu_part& self, const request::close_reactions&) {
+  self.reaction_pages_.clear();
+  mux::ui::show<mux::ui::reactions_facts>(*self.s_->showing, std::nullopt);
+}
+void part_apply(menu_part& self, const request::back_reactions&) {
+  if (self.reaction_pages_.empty()) return;
+  auto page = std::move(self.reaction_pages_.back());
+  self.reaction_pages_.pop_back();
+  // Rebuild from the event so reactions received since it opened are included.
+  self.target_.id = page.event;
+  mux::ui::show<mux::ui::reactions_facts>(*self.s_->showing, std::nullopt);
+  auto parents = std::move(self.reaction_pages_);
+  part_apply(self, request::menu_reactions{});
+  self.reaction_pages_ = std::move(parents);
+  mux::ui::change_shown<std::optional<mux::ui::reactions_facts>>(*self.s_->showing, [&](auto& shown) {
+    if (shown) shown->back = !self.reaction_pages_.empty();
+  });
+}
 
 void part_apply(menu_part& self, const request::close_edit_history&) { mux::ui::show<mux::ui::history_facts>(*self.s_->showing, std::nullopt); }
 
@@ -446,7 +477,8 @@ void part_apply(menu_part& self, const request::react& one) {
   if (!chat)
     return;
   const message* said = mux::ui::held_message(*chat, one.id);
-  if (!said)
+  if (!said || !mux::ui::ops_of(self.s_->ui, chosen->account).react ||
+      (!self.s_->demo() && !proto::may_react(mux::ui::protocol_state_of(self.s_->ui, chosen->account), *chat, *said)))
     return;
   const std::string& me = chosen->account.address;
   const bool on = logic::reaction_turns_on(*said, one.key, me);

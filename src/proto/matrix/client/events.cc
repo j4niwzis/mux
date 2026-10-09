@@ -110,10 +110,14 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         sink_(change::message_edited{in, *relates->event_id,
                                      body_of(content.m_new_content->body.value_or(""), content.m_new_content->format,
                                              content.m_new_content->formatted_body),
-                                     one.sender, !sealed, at});
-      // Nothing shows an edit under its own id: what waits for it there --
-      // a mark made of it before edits were told apart -- let go.
-      sink_(change::event_missing{in, one.event_id, relates->event_id});
+                                     one.sender, !sealed, at, one.event_id});
+      // Keep the edit as an event too. Edit history and nested reactions
+      // target this ID, independently of the original message it replaced.
+      if (content.m_new_content)
+        this->added(message{.in = in, .id = one.event_id, .sender = one.sender, .at = at,
+            .body = body_of(content.m_new_content->body.value_or(""), content.m_new_content->format,
+                            content.m_new_content->formatted_body),
+            .outgoing = one.sender == id_.address}, placement::aside{}, sealed);
       // An edit that mentions the user, by another: the message it edits
       // marked as mentioning them, as tdesktop counts a mention added by an
       // edit -- the @ to go to, and no notification.

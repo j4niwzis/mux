@@ -315,9 +315,11 @@ struct message {
   struct version {
     mux::body body;
     std::chrono::sys_time<std::chrono::milliseconds> until{};
+    std::string event;  // the event that wrote this version, where known
     friend bool operator==(const version&, const version&) = default;
   };
   std::vector<version> versions;
+  std::string latest_edit_event;
   bool redacted = false;
   // Came end-to-end encrypted, and was read: in an encrypted room, one that
   // did not is marked as such -- a server or anyone in the room can put a

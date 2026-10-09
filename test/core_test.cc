@@ -271,3 +271,41 @@ TEST(Model, DirectMessageReceiptsNeverMoveBackOrLoseTheirTimestamp) {
   EXPECT_EQ(kept.find(with_juliet)->read_by.at(with_juliet.id), "outside-window");
   EXPECT_EQ(kept.find(with_juliet)->receipt_times.at(with_juliet.id), time(300));
 }
+
+TEST(Model, ReactionsOnAsideEventsDrainAndSurviveTimelinePromotion) {
+  model kept;
+  kept.apply(change::reaction_changed{with_juliet, "$reaction", "👍", romeo.address, true, "$nested"});
+  auto event = said("$reaction", "reaction");
+  kept.apply(change::message_added{event, placement::aside{}});
+  ASSERT_TRUE(kept.find(with_juliet)->quoted.at("$reaction").reactions.contains("👍"));
+  kept.apply(change::message_added{event});
+  ASSERT_EQ(kept.find(with_juliet)->timeline.size(), 1u);
+  EXPECT_TRUE(kept.find(with_juliet)->timeline[0].reactions.contains("👍"));
+  kept.apply(change::reaction_changed{with_juliet, "$reaction", "👍", romeo.address, false});
+  EXPECT_TRUE(kept.find(with_juliet)->timeline[0].reactions.empty());
+}
+TEST(Model, EachEditVersionRetainsTheEventThatWroteIt) {
+  model kept;
+  kept.apply(change::message_added{said("$original", "first")});
+  kept.apply(change::message_edited{with_juliet, "$original", {"second", std::nullopt}, std::nullopt, false, {}, "$edit1"});
+  kept.apply(change::message_edited{with_juliet, "$original", {"third", std::nullopt}, std::nullopt, false, {}, "$edit2"});
+  const auto& message = kept.find(with_juliet)->timeline.front();
+  ASSERT_EQ(message.versions.size(), 2u);
+  EXPECT_EQ(message.versions[0].event, "$original");
+  EXPECT_EQ(message.versions[1].event, "$edit1");
+  EXPECT_EQ(message.latest_edit_event, "$edit2");
+}
+
+TEST(Model, OptimisticEditEchoAssignsItsIdWithoutInventingAnotherVersion) {
+  model kept;
+  kept.apply(change::message_added{said("$original", "first")});
+  kept.apply(change::message_edited{with_juliet, "$original", {"second", std::nullopt}});
+  kept.apply(change::message_edited{with_juliet, "$original", {"second", std::nullopt}, std::nullopt, false, {}, "$edit1"});
+  ASSERT_EQ(kept.find(with_juliet)->timeline.front().versions.size(), 1u);
+  EXPECT_EQ(kept.find(with_juliet)->timeline.front().latest_edit_event, "$edit1");
+  kept.apply(change::message_edited{with_juliet, "$original", {"second", std::nullopt}, std::nullopt, false, {}, "$edit2"});
+  const auto& latest = kept.find(with_juliet)->timeline.front();
+  ASSERT_EQ(latest.versions.size(), 2u);
+  EXPECT_EQ(latest.versions[1].event, "$edit1");
+  EXPECT_EQ(latest.latest_edit_event, "$edit2");
+}

@@ -848,12 +848,26 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
     // its links are the URLs in it.
     // Its links in its text, where they stand: an <a>'s label going where
     // its href says, and the addresses in a plain text.
+    mux::body readable = said.body;
+    if (!said.reaction_key.empty() && said.service) {
+      std::optional<std::string> label;
+      if (said.replies_to)
+        if (const auto* parent = held_message(in, *said.replies_to))
+          if (const auto event = std::ranges::find(parent->reaction_events, said.id, &message::reaction_event::event);
+              event != parent->reaction_events.end()) label = event->shortcode;
+      auto reaction = reaction_body_of(said.reaction_key, in.emotes, label);
+      if (reaction.html) {
+        readable.plain = sender_name(in, said.sender) + " reacted " + reaction.plain;
+        readable.html = std::format(R"(<a href="https://matrix.to/#/{}">{}</a> reacted )",
+            chevron::escaped(said.sender), chevron::escaped(sender_name(in, said.sender))) + *reaction.html;
+      }
+    }
     mentioned shown;
-    if (said.body.html) {
-      auto read = read_html(*said.body.html);
+    if (readable.html) {
+      auto read = read_html(*readable.html);
       shown = with_mentions(std::move(read.text), std::move(read.spans), in, now, std::move(read.styles), std::move(read.disclosures));
     } else {
-      shown = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
+      shown = with_mentions(readable.plain, link_spans_in(readable.plain), in, now);
     }
     rooms_waiting = std::move(shown.waiting);
     rooms_unknown = std::move(shown.unknown);

@@ -50,11 +50,13 @@ struct message_line {
   std::optional<std::string> reply;
   std::optional<std::string> thread;
   std::optional<bool> edited;
+  std::optional<std::string> latest_edit_event;
   // Its edit history: what it said before each edit, and until when.
   struct version_line {
     std::optional<std::string> plain;
     std::optional<std::string> html;
     std::optional<std::int64_t> until;
+    std::optional<std::string> event;
     friend consteval auto json_schema(knot::type<version_line>) { return knot::schema<version_line>(); }
   };
   std::optional<std::vector<version_line>> versions;
@@ -429,9 +431,10 @@ class message_store {
       one.replies_to = std::move(o.reply);
       one.thread = std::move(o.thread);
       one.edited = o.edited.value_or(false);
+      one.latest_edit_event = o.latest_edit_event.value_or("");
       one.versions = std::ranges::to<std::vector>(std::views::transform(o.versions.value_or(std::vector<store_file::message_line::version_line>{}), [&](const store_file::message_line::version_line& v) {
                        return mux::message::version{mux::body{v.plain.value_or(""), v.html},
-                                                    time_point(std::chrono::milliseconds(v.until.value_or(0)))};
+                                                    time_point(std::chrono::milliseconds(v.until.value_or(0))), v.event.value_or("")};
                      }));
       one.encrypted = o.encrypted.value_or(false);
       one.unverified = o.unverified.value_or(false);
@@ -502,11 +505,13 @@ class message_store {
         .reply = one.replies_to,
         .thread = one.thread,
         .edited = store_file::flag(one.edited),
+        .latest_edit_event = one.latest_edit_event.empty() ? std::nullopt : std::optional(one.latest_edit_event),
         .versions = one.versions.empty()
                         ? std::nullopt
                         : std::optional(std::ranges::to<std::vector>(std::views::transform(one.versions, [](const mux::message::version& v) {
                                           return store_file::message_line::version_line{
-                                              v.body.plain, v.body.html, static_cast<std::int64_t>(v.until.time_since_epoch().count())};
+                                              v.body.plain, v.body.html, static_cast<std::int64_t>(v.until.time_since_epoch().count()),
+                                              v.event.empty() ? std::nullopt : std::optional(v.event)};
                                         }))),
         .redacted = store_file::flag(one.redacted),
         .out = store_file::flag(one.outgoing),

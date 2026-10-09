@@ -193,6 +193,27 @@ template <class Actions> struct seen_row : skiff::compose::Stacked {
   }
 };
 
+inline auto quick_reaction(const palette& colours, std::string key) {
+  namespace c = skiff::compose;
+  const auto request = ::mux::ui::request::menu_react{key};
+  return c::onClick(request, c::column(c::justified(
+      c::vbox(0.0f, {.width = 36.0f, .height = 32.0f, .cornerRadius = 16.0f,
+          .hoverBackground = colours.chosen}), nodes::justify::middle{}),
+      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(key), 22.0f, colours.text))));
+}
+template <class Expand>
+auto quick_reactions(const palette& colours, Expand expand) {
+  namespace c = skiff::compose;
+  const std::array<std::string_view, 6> keys{"👍", "❤️", "😂", "😮", "😢", "🙏"};
+  auto each = std::ranges::to<std::vector>(std::views::transform(keys, [&](auto key) {
+    return quick_reaction(colours, std::string(key));
+  }));
+  return c::row(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}}),
+      c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(each)),
+      c::onPress(std::move(expand), c::styled({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f,
+          .hoverBackground = colours.chosen}, nodes::Icon(shape_of(icon::down{}), colours.text)), "All emoji"));
+}
+
 inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, const std::optional<emote>& emoji) {
   namespace c = skiff::compose;
   return c::visible(emoji.has_value(), c::onClick(request::favourite_emoji{emoji.value_or(emote{})},
@@ -211,57 +232,11 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
   using Answer = ::mux::ui::request::close_menu;
   struct card : skiff::compose::Stacked {
     using Answer = ::mux::ui::request::close_menu;
-    // Quick reactions, as tdesktop's menu has them at its top.
-    struct quick_reaction : skiff::compose::Stacked {
-      // What its handlers ask for, returned.
-      using Answer = ::mux::ui::request::menu_react;
-      std::string key;
-      struct parts_t {
-        nodes::Text face;
-      } parts;
-      quick_reaction(const palette &colours, std::string k)
-          : Stacked(skiff::compose::justified(
-                skiff::compose::hbox(0.0f, {.width = 36.0f,
-                                            .height = 32.0f,
-                                            .cornerRadius = 16.0f,
-                                            .hoverBackground = colours.chosen}),
-                nodes::justify::middle{})),
-            key(k), parts{.face = skiff::compose::styled(
-                              {.alignSelf = scene::align::kMiddle},
-                              nodes::Text(std::move(k), 22.0f, colours.text))} {
-        auto& face = parts.face;
-        // tdesktop's reactionCornerSize (36 by 32) and reactionCornerImage (22).
-      }
-      [[nodiscard]] bool acceptsInput() const { return true; }
-      [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-      std::optional<Answer> onClick(float, float) {
-        return ::mux::ui::request::menu_react{key};
-      }
-    };
-    // The six, and at their end the way to every emoji, as tdesktop's.
     struct expand_emoji {
       card* of;
-      void operator()() const { of->expand(); }
+      scene::Taken operator()() const { of->expand(); return {}; }
     };
-    struct quick_row : skiff::compose::Stacked {
-      struct parts_t {
-        std::vector<quick_reaction> each;
-        icon_button<expand_emoji> more;
-      } parts;
-      quick_row(const palette &colours, card *of)
-          : Stacked(skiff::compose::hbox(
-                0.0f, {.autoSize = scene::axes::kBoth,
-                       .padding = {2.0f, 6.0f, 4.0f, 6.0f}})),
-            parts{.more = skiff::compose::styled(
-                      {.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f},
-                      icon_button<expand_emoji>(colours, icon::down{}, {of}))} {
-        auto& [each, more] = parts;
-        // As wide as what is in it: the menu is sized by it, not it by the
-        // menu -- a menu of a set width had the arrow run out past its edge.
-        for (const char* key : {"👍", "❤️", "😂", "😮", "😢", "🙏"})
-          each.emplace_back(colours, key);
-      }
-    };
+    using quick_row = decltype(quick_reactions(std::declval<const palette&>(), expand_emoji{nullptr}));
     // The colours it is made in, for the emoji it unrolls; and the emoji
     // kept, the program's.
     const palette* colours_ = nullptr;
@@ -343,7 +318,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
                      .masking = true});
       unroll.jump(0.0f);
       unroll.setTarget(rolled);
-      quick.parts.more.setVisible(false);
+      std::get<1>(quick.fParts).setVisible(false);
       this->invalidateLayout();
     }
     // The items, once the list is down over them: gone, the menu keeping
@@ -400,9 +375,9 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
           colours_(&colours), kept_(&kept),
           parts{
               .quick = skiff::compose::visible(
-                  !facts.reaction && facts.can.react, quick_row(colours, this)),
+                  facts.can.react, quick_reactions(colours, expand_emoji{this})),
               .quick_band = skiff::compose::visible(
-                  !facts.reaction && facts.can.react,
+                  facts.can.react,
                   skiff::compose::styled({.fillX = true,
                                           .height = 1.0f,
                                           .margin = {0.0f, 0.0f, 4.0f, 0.0f}},
@@ -462,12 +437,12 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
                   gif_row(colours, "Save GIF", {}, icon::check{}, std::nullopt,
                           menu_row_look)),
               .reactions = skiff::compose::visible(
-                  facts.reaction_count > 0,
+                  !facts.id.empty() && (facts.can.react || facts.reaction_count > 0),
                   reactions_row(
                       colours,
-                      facts.reaction_count == 1
-                          ? std::string("1 reaction")
-                          : std::format("{} reactions", facts.reaction_count),
+                      facts.reaction_count == 0 ? std::string("Reactions")
+                      : facts.reaction_count == 1 ? std::string("1 reaction")
+                                                 : std::format("{} reactions", facts.reaction_count),
                       {}, icon::people{}, std::nullopt, menu_row_look)),
               .forward = skiff::compose::visible(
                   facts.can.forward,
@@ -499,7 +474,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
       // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
       // 13px normalFont's line -- 33 high -- the icon 15 in, the text 54 in.
       // One's own text, or one's own picture's caption, as Element edits it.
-      // A reaction is neither edited nor reacted to: Matrix changes none.
+      // Reactions can receive nested reactions; their relation itself is not edited.
       // Reactions where the account sends them.
 
       // A message the server named, where the account has threads, and its

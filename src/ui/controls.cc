@@ -650,18 +650,20 @@ inline auto event_kinds_field(const palette& colours, choice_level_t level) {
     return event_kind_row<Owner>(colours, level, kind);
   }));
   return c::scoped<Owner>(c::handlers(
-      c::handle<choose_events_way>([level](const choose_events_way& event, const Owner& now) {
-        return skiff::model::setTo(with_events_way(now, level, event.way));
+      c::handle<choose_events_way>([level](const choose_events_way& event, const auto&) {
+        return skiff::model::over<Owner>([level, event](Owner& now) {
+          now = with_events_way(now, level, event.way);
+        });
       }),
-      c::handle<choose_event_kind>([level](const choose_event_kind& event, const Owner& now) {
-        Owner next = now;
-        auto held = events_of(now);
-        if (events_way_of(level, held) == kEventsCustom) {
-          if (!held.kinds) held.kinds.emplace();
-          logic::choice_in(*held.kinds, event.kind) = event.show;
-          events_in(next, held);
-        }
-        return skiff::model::setTo(std::move(next));
+      c::handle<choose_event_kind>([level](const choose_event_kind& event, const auto&) {
+        return skiff::model::over<Owner>([level, event](Owner& now) {
+          auto held = events_of(now);
+          if (events_way_of(level, held) == kEventsCustom) {
+            if (!held.kinds) held.kinds.emplace();
+            logic::choice_in(*held.kinds, event.kind) = event.show;
+            events_in(now, held);
+          }
+        });
       })), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           c::styled({.margin = {0.0f, 20.0f, 0.0f, 20.0f}}, nodes::Text("Room events", 14.0f, colours.text, true)),
           c::visible(has_level_above(level), events_way_row<Owner>(colours, level, "As above", kEventsAbove)),

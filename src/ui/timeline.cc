@@ -190,6 +190,7 @@ template <class Actions>
   } press{x, y};
   menu_facts facts;
   facts.id = one.message_id;
+  if (chat && !facts.id.empty() && !held_message(*chat, facts.id)) facts.event = one.said;
   facts.own = one.outgoing;
   facts.text = one.plain;
   facts.selection = one.parts.body.parts.text.hasSelection();
@@ -203,19 +204,22 @@ template <class Actions>
     facts.captioned = is_picture(one.said.attachment->kind) && !one.said.attachment->video;
   }
   if (chat) {
+    const message* held = held_message(*chat, one.message_id);
+    const message& current = held ? *held : one.said;
     facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
     const protocol_state_t now = protocol_state_of(*one.shared_, chat->id.account);
     // What its account does, offered only where anything may be done now.
     if (proto::available(now))
       facts.can = ops_of(*one.shared_, chat->id.account);
+    facts.can.react = facts.can.react && proto::may_react(now, *chat, current);
     facts.pinnable = proto::can_pin(now, one.message_id);
     // Edited as its protocol's rule allows: any of one's own, or the last.
-    facts.editable = proto::may_edit(now, *chat, one.said);
+    facts.editable = !one.said.service && !one.said.reaction && proto::may_edit(now, *chat, one.said);
     facts.history = !one.said.versions.empty();
     // Delete as the protocol allows it -- Matrix: as the room's power levels do.
     facts.deletable = proto::may_delete(now, *chat, one.outgoing);
-    facts.reaction_events = !one.said.reaction_events.empty();
-    for (const auto& [key, who] : one.said.reactions)
+    facts.reaction_events = !current.reaction_events.empty();
+    for (const auto& [key, who] : current.reactions)
       facts.reaction_count += who.size();
   }
   // The message's link, where its protocol has one.

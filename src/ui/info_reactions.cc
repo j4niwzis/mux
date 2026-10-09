@@ -46,7 +46,8 @@ struct reaction_entry {
   std::string key;
   std::chrono::sys_time<std::chrono::milliseconds> at{};
   bool mine = false;
-  std::string to;  // the message reacted to
+  std::string to;  // the event reacted to
+  std::optional<std::string> shortcode;
 };
 
 // A message's reactions as events, as Matrix has them: a box in the middle,
@@ -78,107 +79,74 @@ struct reactions_facts {
   conversation_id in;
   std::vector<reaction_entry> entries;
   const model* now = nullptr;
+  std::string event;
+  bool back = false;
 };
-template <class Actions> struct reactions_box : skiff::compose::Stacked {
-  // On the chat's colour: its bubbles, as in the chat.
-  [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{392.0f, 420.0f}}; }
-  using close_act = sends<::mux::ui::request::close_reactions>;
-  using close_button = icon_button<close_act>;
-  using top_bar = page_header_t<no_back, close_act>;
-  // A reaction as the chat would show it: a bubble from who reacted,
-  // saying what they reacted with, in runs as the chat's bubbles are.
-  // Pressed, it is answered.
-  struct row : skiff::compose::Stacked {
-    // Its menu; a link in it followed; else it answered, and the list closed.
-    using Answer = std::variant<menu_facts, ::mux::ui::request::open_url, std::tuple<std::optional<::mux::ui::request::reply_to>, ::mux::ui::request::close_reactions>>;
-    reaction_entry entry;
-    struct parts_t {
-      message_bubble<Actions> bubble;
-    } parts;
-    row(const ui_needs<Actions> &n, const conversation &in, reaction_entry one,
-        bool first, bool last, const model *now)
-        : Stacked(skiff::compose::vbox(0.0f,
-                                       {.fillX = true,
-                                        .autoSize = scene::axes::kY,
-                                        .padding = {0.0f, 12.0f, 0.0f, 12.0f},
-                                        .hoverBackground = n.colours->chosen})),
-          entry(one),
-          parts{.bubble = message_bubble<Actions>(
-                    spl::remapped<typename message_bubble<Actions>::needs>(n),
-                    in, message_of(in, one), first, last, now)} {
-      fState.setCursor(scene::cursor::hand{});
-    }
-    // What it said, as a message: its key; a picture's, as a custom emoji
-    // in HTML, as a message would carry it.
-    [[nodiscard]] static message message_of(const conversation& in, const reaction_entry& one) {
-      message out{.in = in.id, .id = one.event, .sender = one.who, .at = one.at, .body = {one.key, std::nullopt},
-                  .outgoing = one.mine};
-      if (proto::is_media(one.key))
-        out.body = {":emoji:", std::format("<img data-mx-emoticon src=\"{}\" alt=\":emoji:\" height=\"32\">", one.key)};
-      return out;
-    }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    // Its menu, as a message's in the chat: Copy -- what is selected, the
-    // link under the pointer, the preview's -- and, one's own, the reaction
-    // changed to another from the menu's reactions, or taken back.
-    using scene::Node::onPointer;
-    std::optional<Answer> onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
-      if (press.button != 3)
-        return std::nullopt;
-      const message_bubble<Actions>& one = parts.bubble;
-      menu_facts facts;
-      facts.id = entry.event;
-      facts.own = entry.mine;
-      facts.text = one.plain;
-      facts.selection = one.parts.body.parts.text.hasSelection();
-      facts.copied = facts.selection ? one.parts.body.parts.text.selected() : one.plain;
-      facts.deletable = entry.mine && !entry.event.empty();
-      if (auto pressed = skiff::scene::pressedLink())
-        facts.pressed_link = std::move(*pressed);
-      else if (const auto& preview = one.parts.body.parts.preview; preview && preview->fState.fBounds.contains(press.x, press.y))
-        facts.pressed_link = preview->url;
-      if (!entry.event.empty() && !entry.to.empty())
-        facts.reaction = menu_facts::reaction_facts{entry.to, entry.key};
-      facts.x = press.x;
-      facts.y = press.y;
-      reply.handle();
-      return Answer{std::move(facts)};
-    }
-    std::optional<Answer> onClick(float x, float y) {
-      // A link's preview or card in it: followed, as in the chat.
-      const message_bubble<Actions>& one = parts.bubble;
-      if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y))
-        return ::mux::ui::request::open_url{preview->url};
-      if (const auto url = message_link_at(one.parts.body.parts.blocks, x, y))
-        return ::mux::ui::request::open_url{*url};
-      // Answered, where it is an event of its own to answer; the list closed.
-      std::optional<::mux::ui::request::reply_to> answered;
-      if (!entry.event.empty())
-        answered = ::mux::ui::request::reply_to{entry.event, std::format("{} reacted {}", entry.name, entry.key)};
-      return std::tuple{answered, ::mux::ui::request::close_reactions{}};
-    }
-  };
-  using rows_t = nodes::Flow<std::vector<row>>;
-  struct parts_t {
-    top_bar top;
-    nodes::ScrollContainer<rows_t> list{
-        dialog_list(rows_t({.spacingY = 0.0f, .wrap = false}, {}))};
-  } parts;
+// Panel rows use the actual reaction event as their menu target. Inherit its
+// nested reactions when known; the parent event is only the reply reference.
+[[nodiscard]] inline message reaction_message_of(const conversation& in, const reaction_entry& entry) {
+  message out;
+  if (const message* held = held_message(in, entry.event)) out = *held;
+  out.in = in.id;
+  out.id = entry.event;
+  out.sender = entry.who;
+  out.at = entry.at;
+  out.body = reaction_body_of(entry.key, in.emotes, entry.shortcode);
+  out.outgoing = entry.mine;
+  out.service = false;
+  out.reaction = true;
+  out.reaction_key = entry.key;
+  out.replies_to = entry.to.empty() ? std::nullopt : std::optional(entry.to);
+  return out;
+}
+using reaction_row_answer = std::variant<menu_facts, request::open_url,
+    std::tuple<std::optional<request::reply_to>, request::close_reactions>>;
 
-  reactions_box(const ui_needs<Actions>& n, const reactions_facts& facts)
-      : reactions_box(n, chat_or_none(facts.now, facts.in), facts.entries, facts.now) {}
-  reactions_box(const ui_needs<Actions> &n, const conversation &in,
-                const std::vector<reaction_entry> &entries, const model *now)
-      : Stacked(list_dialog(420.0f)),
-        parts{.top = page_header<no_back, close_act>(*n.colours, "Reactions", {}, {}, false, true)} {
-    auto &rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
-    rows.reserve(entries.size());
-    for (std::size_t i = 0; i < entries.size(); ++i)
-      rows.emplace_back(n, in, entries[i], i == 0 || entries[i - 1].who != entries[i].who,
-                        i + 1 == entries.size() || entries[i + 1].who != entries[i].who, now);
-  }
-};
+template <class Actions>
+auto reaction_event_row(const ui_needs<Actions>& n, const conversation& in, const reaction_entry& entry,
+                        bool first, bool last, const model* known) {
+  namespace c = skiff::compose;
+  auto bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n),
+                                        in, reaction_message_of(in, entry), first, last, known);
+  auto row = c::onClick(std::tuple{entry.event.empty() ? std::optional<request::reply_to>{}
+        : std::optional(request::reply_to{entry.event, std::format("{} reacted {}", entry.name, entry.key)}), request::close_reactions{}},
+      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
+          .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .hoverBackground = n.colours->chosen}), std::move(bubble)), "Reply to reaction");
+  return c::onPointer<reaction_row_answer>([in_id = in.id, known](auto& row, const scene::pointer::down& press,
+                                                                scene::PointerReply& reply) -> std::optional<reaction_row_answer> {
+    if (press.button != 3) return std::nullopt;
+    const auto& bubble = std::get<0>(row.fParts);
+    const auto* chat = known ? known->find(in_id) : nullptr;
+    auto facts = facts_of_bubble(bubble, chat, press.x, press.y);
+    // Legacy cached reactions without an event ID cannot be targeted.
+    if (facts.id.empty()) { facts.can.react = false; facts.deletable = false; }
+    reply.handle();
+    return reaction_row_answer{std::move(facts)};
+  }, std::move(row));
+}
+template <class Actions>
+auto reactions_panel(const ui_needs<Actions>& n, const reactions_facts& facts) {
+  namespace c = skiff::compose;
+  const auto& chat = chat_or_none(facts.now, facts.in);
+  const auto& entries = facts.entries;
+  auto rows = std::ranges::to<std::vector>(std::views::transform(std::views::iota(std::size_t{0}, entries.size()),
+      [&](std::size_t i) { return reaction_event_row(n, chat, entries[i],
+          i == 0 || entries[i - 1].who != entries[i].who,
+          i + 1 == entries.size() || entries[i + 1].who != entries[i].who, facts.now); }));
+  return c::column(list_dialog(420.0f),
+      page_header<sends<request::back_reactions>, sends<request::close_reactions>>(*n.colours, "Reactions", {}, {}, facts.back, true),
+      dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
+}
+template <class Actions>
+using reactions_box = decltype(reactions_panel(std::declval<const ui_needs<Actions>&>(), std::declval<const reactions_facts&>()));
+template <class Actions>
+auto make_content(std::type_identity<reactions_box<Actions>>, const ui_needs<Actions>& n, const reactions_facts& facts) {
+  return reactions_panel(n, facts);
+}
+template <class Content>
+inline dialog_look content_look(std::type_identity<Content>, std::type_identity<reactions_facts>) {
+  return {.sheet = sheet::chat{}, .size = dialog_size::fixed{392.0f, 420.0f}};
+}
 
 // A message's edit history, as AyuGram Desktop's: each version of it the
 // chat's own bubble, on the chat's colour, oldest first, each at the time
@@ -189,64 +157,71 @@ struct history_facts {
   message said;
   const model* known = nullptr;
 };
-template <class Actions> struct edit_history_box : skiff::compose::Stacked {
-  [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 560.0f}}; }
-  using close_act = sends<::mux::ui::request::close_edit_history>;
-  using top_bar = page_header_t<no_back, close_act>;
-  struct row : skiff::compose::Stacked {
-    struct parts_t {
-      message_bubble<Actions> bubble;
-    } parts;
-    row(const ui_needs<Actions> &n, const conversation &in, const message &said,
-        const model *now)
-        : Stacked(skiff::compose::vbox(
-              0.0f, {.fillX = true,
-                     .autoSize = scene::axes::kY,
-                     .padding = {4.0f, 12.0f, 4.0f, 12.0f}})),
-          parts{.bubble = message_bubble<Actions>(
-                    spl::remapped<typename message_bubble<Actions>::needs>(n),
-                    in, said, true, true, now)} {}
-  };
-  // Each version as a message of its own: what it said then, at the time it
-  // was written -- the first when the message was sent, each after it when
-  // the one before was replaced -- and none of it marked edited.
-  [[nodiscard]] static std::vector<message> versions_of(const message& now) {
-    const auto written = [&](std::size_t at) { return at == 0 ? now.at : now.versions[at - 1].until; };
-    const auto as_message = [&](const mux::body& said, std::chrono::sys_time<std::chrono::milliseconds> when) {
-      message out = now;
-      out.body = said;
-      out.at = when;
-      out.versions.clear();
-      out.edited = false;
-      return out;
-    };
-    auto out = std::ranges::to<std::vector<message>>(std::views::transform(std::views::iota(std::size_t{0}, now.versions.size()), [&](std::size_t at) {
-                 return as_message(now.versions[at].body, written(at));
-               }));
-    out.push_back(as_message(now.body, written(now.versions.size())));
+// Version IDs are the events that wrote their bodies. Legacy histories
+// without edit IDs remain readable, but do not guess a reaction target.
+[[nodiscard]] inline std::vector<message> edit_versions_of(const message& now, const conversation* chat = nullptr) {
+  const auto as_message = [&](const mux::body& body, auto at, std::string id) {
+    message out = now;
+    out.id = std::move(id);
+    out.body = body;
+    out.at = at;
+    out.versions.clear();
+    out.latest_edit_event.clear();
+    out.edited = false;
+    out.reactions.clear();
+    out.reaction_events.clear();
+    if (chat)
+      if (const auto* event = held_message(*chat, out.id)) {
+        out.reactions = event->reactions;
+        out.reaction_events = event->reaction_events;
+        out.redacted = event->redacted;
+      }
     return out;
-  }
-  using rows_t = nodes::Flow<std::vector<row>>;
-  struct parts_t {
-    top_bar top;
-    nodes::ScrollContainer<rows_t> list{
-        dialog_list(rows_t({.spacingY = 0.0f, .wrap = false}, {}))};
-  } parts;
-
-  edit_history_box(const ui_needs<Actions>& n, const history_facts& facts)
-      : edit_history_box(n, chat_or_none(facts.known, facts.in), facts.said, facts.known) {}
-  edit_history_box(const ui_needs<Actions> &n, const conversation &in,
-                   const message &now, const model *known)
-      : Stacked(list_dialog(560.0f)),
-        parts{.top = page_header<no_back, close_act>(*n.colours, "Edit History", {}, {}, false, true)} {
-    auto &rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
-    const auto versions = versions_of(now);
-    // Made where they stay: a bubble knows its parts by their addresses.
-    rows.reserve(versions.size());
-    std::ranges::for_each(versions, [&](const message& one) { rows.emplace_back(n, in, one, known); });
-    parts.list.scrollToEnd(false);
-  }
-};
+  };
+  auto versions = std::ranges::to<std::vector>(std::views::transform(std::views::iota(std::size_t{0}, now.versions.size()),
+      [&](std::size_t i) { return as_message(now.versions[i].body, i == 0 ? now.at : now.versions[i - 1].until,
+          now.versions[i].event.empty() && i == 0 ? now.id : now.versions[i].event); }));
+  versions.push_back(as_message(now.body, now.versions.empty() ? now.at : now.versions.back().until,
+      now.latest_edit_event.empty() && now.versions.empty() ? now.id : now.latest_edit_event));
+  return versions;
+}
+template <class Actions>
+auto edit_history_row(const ui_needs<Actions>& n, const conversation& in, const message& event, const model* known) {
+  namespace c = skiff::compose;
+  return c::onPointer<menu_facts>([in_id = in.id, known](auto& row, const scene::pointer::down& press,
+                                                      scene::PointerReply& reply) -> std::optional<menu_facts> {
+    if (press.button != 3) return std::nullopt;
+    auto facts = facts_of_bubble(std::get<0>(row.fParts), known ? known->find(in_id) : nullptr, press.x, press.y);
+    facts.editable = false;
+    facts.history = false;
+    reply.handle();
+    return facts;
+  }, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
+      message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, event, true, true, known)));
+}
+template <class Actions>
+auto edit_history_panel(const ui_needs<Actions>& n, const history_facts& facts) {
+  namespace c = skiff::compose;
+  const auto& chat = chat_or_none(facts.known, facts.in);
+  const auto versions = edit_versions_of(facts.said, &chat);
+  auto rows = std::ranges::to<std::vector>(std::views::transform(versions, [&](const message& event) {
+    return edit_history_row(n, chat, event, facts.known);
+  }));
+  auto list = dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)));
+  list.scrollToEnd(false);
+  return c::column(list_dialog(560.0f),
+      page_header<no_back, sends<request::close_edit_history>>(*n.colours, "Edit History", {}, {}, false, true), std::move(list));
+}
+template <class Actions>
+using edit_history_box = decltype(edit_history_panel(std::declval<const ui_needs<Actions>&>(), std::declval<const history_facts&>()));
+template <class Actions>
+auto make_content(std::type_identity<edit_history_box<Actions>>, const ui_needs<Actions>& n, const history_facts& facts) {
+  return edit_history_panel(n, facts);
+}
+template <class Content>
+inline dialog_look content_look(std::type_identity<Content>, std::type_identity<history_facts>) {
+  return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 560.0f}};
+}
 
 // What a mark list shows of each: the message, and for a reaction to it who
 // reacted and with what.

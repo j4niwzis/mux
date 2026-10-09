@@ -63,6 +63,7 @@ struct menu_facts {
   std::size_t reaction_count = 0;  // how many reactions it has, of anyone
   std::string link;  // a link to it, where it has one
   std::string pressed_link;  // the link pressed on: in its text, or its preview
+  std::optional<message> event;  // a known history/panel event not held in the timeline
   std::optional<emote> emoji;
   std::optional<emote> sticker;  // a sticker's: what making it a favourite keeps
   // A reaction's: the message it is on, and its key -- the menu's reactions
@@ -596,6 +597,7 @@ struct room_act {
   mux::room_action_t action;
 };
 struct close_reactions {};
+struct back_reactions {};
 struct close_edit_history {};
 struct show_gifs {};
 struct send_gif {

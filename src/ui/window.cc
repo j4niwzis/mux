@@ -828,6 +828,7 @@ template <class Actions> struct window : skiff::compose::Specced {
   // A selectable text's menu, where the pointer was pressed, kept in the
   // window; and gone.
   void show_text_menu(std::string text, std::optional<std::string> link = std::nullopt) {
+    text_menu_origin = parts.now->last_press;
     text_menu_field.reset();
     std::vector<text_menu_item> items{{"Copy", "", request::copy_text{std::move(text)}}};
     if (link)
@@ -835,6 +836,7 @@ template <class Actions> struct window : skiff::compose::Specced {
     this->put_text_menu(items);
   }
   void show_selection_menu(std::size_t count, bool forwardable, bool deletable) {
+    text_menu_origin = parts.now->last_press;
     text_menu_field.reset();
     this->put_text_menu({
         {std::format("Copy {} messages", count), "Ctrl+C", request::selection_copy{}},
@@ -844,6 +846,7 @@ template <class Actions> struct window : skiff::compose::Specced {
   }
   // A field's: Paste and the rest, for the field with the focus.
   void show_field_menu(const scene::text_menu::of_field& field) {
+    text_menu_origin = parts.now->last_press;
     text_menu_field = field;
     this->put_text_menu(field_menu_items(field, false));
   }
@@ -855,8 +858,8 @@ template <class Actions> struct window : skiff::compose::Specced {
     const skia::SkRect box = fState.fBounds;
     const float tall = std::min(text_menu_height(items), box.height());
     menu.apply({.place = scene::anchor::kTopLeft,
-                .x = std::clamp(now.last_press.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 260.0f)),
-                .y = std::clamp(now.last_press.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - tall)), .width = std::min(260.0f, box.width()), .height = tall});
+                .x = std::clamp(text_menu_origin.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 260.0f)),
+                .y = std::clamp(text_menu_origin.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - tall)), .width = std::min(260.0f, box.width()), .height = tall});
     now.invalidateLayout();
     now.markDamaged();
   }
@@ -880,6 +883,7 @@ template <class Actions> struct window : skiff::compose::Specced {
     }
   }
   bool text_menu_close_due = false;
+  skia::SkPoint text_menu_origin = skia::SkPoint::Make(0.0f, 0.0f);
   std::optional<scene::text_menu::of_field> text_menu_field;
   std::optional<bool> text_formatting_due;
   [[nodiscard]] room_settings<Actions>* manage_up() { return layer().manage.shown(); }

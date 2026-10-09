@@ -71,6 +71,7 @@ void show_selection(menu_part& self);
 void part_apply(menu_part& self, const request::message_menu& one) {
   self.target_ = one;
   if (self.selected_chat_ == self.s_->root().main().chosen && self.selected_.contains(one.id)) {
+    skiff::scene::textMenusAsked().clear();
     const auto chosen = selected_messages(self);
     const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
     if (chat && !chosen.empty()) {

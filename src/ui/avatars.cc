@@ -197,7 +197,8 @@ class animation_cache {
     if (frames.size() < 2)
       return;
     animation made;
-    for (const skia::Frame& one : frames) {
+    for (skia::Frame& one : frames) {
+      one.durationMs = std::max(one.durationMs, 1);
       made.total_ms += one.durationMs;
       made.bytes += static_cast<std::size_t>(one.image->width()) * static_cast<std::size_t>(one.image->height()) * 4u;
     }
@@ -233,6 +234,21 @@ class animation_cache {
       into -= each.durationMs;
     }
     return &one.frames.back().image;
+  }
+  // Absolute deadline on the same steady clock used to choose the frame.
+  // Frame durations may differ within one animation.
+  [[nodiscard]] double next_frame_at(std::string_view key, double ms) const {
+    const auto found = all_.find(key);
+    if (found == all_.end() || found->second.total_ms <= 0)
+      return std::numeric_limits<double>::infinity();
+    const animation& one = found->second;
+    double into = std::fmod(ms, static_cast<double>(one.total_ms));
+    for (const skia::Frame& each : one.frames) {
+      if (into < each.durationMs)
+        return ms + each.durationMs - into;
+      into -= each.durationMs;
+    }
+    return ms + one.frames.front().durationMs;
   }
   void clear() {
     all_.clear();
@@ -287,6 +303,7 @@ struct from_emotes {
     return emote_images(kind).find(key);
   }
   [[nodiscard]] bool animated() const { return emote_animations(kind).has(key); }
+  [[nodiscard]] double wakeAt() const { return emote_animations(kind).next_frame_at(key, animation_clock()); }
   skiff::scene::Waiters& waiters() const { return emote_images(kind).waiting; }
 };
 struct from_previews {  // blurred, from a blurhash, until the picture comes
@@ -303,6 +320,10 @@ struct from_thumbnails {
 struct from_moving_thumbnail {
   std::string key;
   bool emote = false;
+  [[nodiscard]] bool animated() const { return (emote ? sticker_animations() : animations()).has(key); }
+  [[nodiscard]] double wakeAt() const {
+    return (emote ? sticker_animations() : animations()).next_frame_at(key, animation_clock());
+  }
   picture_ptr operator()() const {
     if (emote) {
       if (picture_ptr moving = sticker_animations().at(key, animation_clock()))
@@ -321,6 +342,8 @@ struct from_moving_thumbnail {
 // Where it moves, the frame for now; else it whole.
 struct from_moving_whole {
   std::string key;
+  [[nodiscard]] bool animated() const { return animations().has(key); }
+  [[nodiscard]] double wakeAt() const { return animations().next_frame_at(key, animation_clock()); }
   picture_ptr operator()() const {
     if (picture_ptr moving = animations().at(key, animation_clock()))
       return moving;

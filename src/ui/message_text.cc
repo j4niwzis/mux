@@ -372,6 +372,7 @@ struct message_pictures {
     return skiff::scene::PillPicture{avatar_images().find(id), top, bottom, initials_of(id)};
   }
   static bool animated(std::string_view target) { return emoji_animations().has(target); }
+  static double wakeAt(std::string_view target) { return emoji_animations().next_frame_at(target, animation_clock()); }
   static const skia::Sp<skia::SkImage>* picture(std::string_view target) {
     if (const auto* moving = emoji_animations().at(target, animation_clock()))
       return moving;

@@ -948,6 +948,14 @@ TEST(Stickers, PackTabsStayWithinTheFooterAndAllRemainReachable) {
   }
 }
 
+namespace {
+struct gif_tab_requests {
+  bool asked = false;
+  void take(const mux::ui::request::show_gifs&) { asked = true; }
+  template <class Event> void take(const Event&) { ADD_FAILURE() << "Unexpected request from the GIF tab"; }
+};
+}
+
 TEST(Emoji, GifTabReceivesPointerPressesOnDesktopAndPhone) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;
@@ -971,10 +979,7 @@ TEST(Emoji, GifTabReceivesPointerPressesOnDesktopAndPhone) {
     router.setLayers(layers);
     router.pointer(scene::PointerEvent{scene::pointer::down{tab.centerX(), tab.centerY()}});
     router.pointer(scene::PointerEvent{scene::pointer::up{tab.centerX(), tab.centerY()}});
-    struct sink {
-      bool asked = false;
-      void take(const mux::ui::request::show_gifs&) { asked = true; }
-    } requests;
+    gif_tab_requests requests;
     const auto presses = std::exchange(scene::hostWork().pressed, {});
     ASSERT_FALSE(presses.empty());
     for (const auto& path : presses)
@@ -1025,12 +1030,15 @@ TEST(Images, AnimatedEmotesTakePriorityOverTheirStillThumbnail) {
     image.keepBox();
     image.update(0.0);
     EXPECT_TRUE(image.wantsTick());
+    EXPECT_TRUE(std::isfinite(image.wakeAt()));
     if (kind == mux::emote_kind::emoji) {
       skiff::nodes::BasicText<mux::ui::message_pictures> text(" ", 14.0f, skia::SkColor{0});
       text.setLinks({{.first = 0, .last = 1, .target = "animation-test", .picture = true}}, skia::SkColor{0});
       text.update(0.0);
       EXPECT_TRUE(text.wantsTick());
+      EXPECT_TRUE(std::isfinite(text.wakeAt()));
       frames.clear();
+      EXPECT_FALSE(std::isfinite(text.wakeAt()));
       EXPECT_FALSE(text.wantsTick());
     }
     frames.clear();
@@ -1736,4 +1744,20 @@ TEST(Selection, TelegramActionsHaveWidthAndDispatchOnDesktopAndPhone) {
     EXPECT_FALSE(window.root().visible());
   }
   skiff::paint::defaultFont() = nullptr;
+}
+
+TEST(Images, AnimationDeadlinesFollowVariableFrameDurationsAndLoop) {
+  auto surface = skia::Raster(skia::SkImageInfo::MakeN32Premul(8, 8));
+  ASSERT_TRUE(surface);
+  mux::ui::animation_cache frames;
+  frames.put("timed", {{surface->makeImageSnapshot(), 40}, {surface->makeImageSnapshot(), 100}});
+  EXPECT_DOUBLE_EQ(frames.next_frame_at("timed", 0.0), 40.0);
+  EXPECT_DOUBLE_EQ(frames.next_frame_at("timed", 39.5), 40.0);
+  EXPECT_DOUBLE_EQ(frames.next_frame_at("timed", 40.0), 140.0);
+  EXPECT_DOUBLE_EQ(frames.next_frame_at("timed", 139.0), 140.0);
+  EXPECT_DOUBLE_EQ(frames.next_frame_at("timed", 140.0), 180.0);
+  EXPECT_DOUBLE_EQ(frames.next_frame_at("timed", 184.0), 280.0);
+  EXPECT_FALSE(std::isfinite(frames.next_frame_at("missing", 10.0)));
+  frames.clear();
+  EXPECT_FALSE(std::isfinite(frames.next_frame_at("timed", 10.0)));
 }

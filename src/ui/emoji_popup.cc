@@ -57,7 +57,7 @@ inline auto gif_cell(const palette& colours, std::string path) {
   auto image = nodes::Image<from_moving_whole>({key});
   image.keepBox();
   return skiff::compose::onClick(
-      [path = std::move(path)] { return ::mux::ui::request::send_gif{path}; },
+      ::mux::ui::request::send_gif{std::move(path)},
       skiff::compose::row(
           skiff::compose::vbox(0.0f, {.width = 104.0f,
                                      .height = 104.0f,

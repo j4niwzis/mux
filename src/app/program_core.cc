@@ -277,14 +277,13 @@ void app::wire() {
 // settings dialog's, the room settings', the accounts panel's -- the tree
 // was changed by hand, and is walked whole once; else only what changed.
 template <class Page>
-const void* bound_part_of(Page& page) {
-  if constexpr (requires { page.parts.settings; })
-    return &page.parts.settings;
-  else
-    return nullptr;
+skiff::scene::NodeId bound_part_of(Page& page) {
+  // Combinator pages have no named settings member. Their node identity
+  // changes whenever a page is replaced, even at the same address.
+  return page.fState.fId;
 }
 void app::take_page_input() {
-  std::array<const void*, 3> now{};
+  std::array<skiff::scene::NodeId, 3> now{};
   if (auto* up = root().settings_up())
     now[0] = spl::visit([](auto& page) { return bound_part_of(page); }, up->page());
   if (auto* managing = root().manage_up())

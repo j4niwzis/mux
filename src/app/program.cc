@@ -278,7 +278,7 @@ struct app : kept_settings {
   // What is shown read by the dialogs and layers bound to it; a menu just
   // made, given the keys.
   void refresh_shown();
-  std::array<const void*, 3> bound_pages{};
+  std::array<skiff::scene::NodeId, 3> bound_pages{};
   // And to the chats, the window's other model.
   skiff::bind::Binding<mux::chats_model> chats_binding;
   // What the window wants of the program as its state comes to want it.

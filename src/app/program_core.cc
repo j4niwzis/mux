@@ -432,7 +432,11 @@ void app::after_event() {
   this->refresh_shown();
 }
 
+double app::wake_in() const { return model->typing_wake_in(); }
+
 void app::before_frame() {
+  if (model->expire_typing())
+    chats_binding.refresh(root(), model->chats());
   store.flush_reads();
   ++mux::ui::image_cache::frame();
   // What the model's widgets did: edits of the model, before the frame.

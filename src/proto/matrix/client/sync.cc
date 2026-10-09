@@ -52,6 +52,31 @@ std::optional<std::string> rule_text(const Content* content, Rule Content::* rul
   return content ? std::optional<std::string>(loom::client::choice_text(content->*rule)) : std::nullopt;
 }
 
+// Ephemeral-only responses do not change room metadata or the saved snapshot.
+inline bool room_metadata_changed(const loom::cs::sync::response::rooms_t::joined_room_t& part) {
+  const auto has_events = [](const auto& section) {
+    return section && section->events && !section->events->empty();
+  };
+  return has_events(part.state) || has_events(part.state_after) || has_events(part.account_data) ||
+         part.summary.has_value() || part.unread_notifications.has_value() ||
+         (part.timeline && std::ranges::any_of(part.timeline->events, [](const auto& event) {
+           return event.state_key.has_value();
+         }));
+}
+inline bool sync_changes_snapshot(const loom::cs::sync::response& got) {
+  if (got.account_data && got.account_data->events && !got.account_data->events->empty())
+    return true;
+  if (!got.rooms)
+    return false;
+  if (got.rooms->leave && !got.rooms->leave->empty())
+    return true;
+  return got.rooms->join && std::ranges::any_of(*got.rooms->join, [](const auto& room) {
+    const auto& part = room.second;
+    return room_metadata_changed(part) || (part.timeline &&
+        (!part.timeline->events.empty() || part.timeline->prev_batch || part.timeline->limited.value_or(false)));
+  });
+}
+
 template <class Sink>
 void account<Sink>::say(connection_t state) { sink_(change::connection_changed{id_, std::move(state)}); }
 
@@ -665,16 +690,20 @@ void account<Sink>::run() {
         if (part.timeline && part.timeline->limited.value_or(false) && part.timeline->prev_batch)
           if (const auto had = state_.joined.find(room); had != state_.joined.end() && !had->second.timeline.empty())
             gaps.emplace_back(room, *part.timeline->prev_batch, had->second.timeline.back().event_id);
+    snapshot_dirty_ = snapshot_dirty_ || sync_changes_snapshot(*got) ||
+        (got->rooms && got->rooms->join && std::ranges::any_of(*got->rooms->join, [&](const auto& room) {
+          return !state_.joined.contains(room.first);
+        }));
     state_.apply(*got);
     telling_history_ = first || sliding_first;
     tell(*got);
     telling_history_ = false;
     for (auto& [room, from, until] : gaps)
       this->catch_up(std::move(room), std::move(from), std::move(until));
-    // Written every half a minute, and at the end: a restart goes on from
-    // at most that far back.
-    if (first || std::chrono::steady_clock::now() - saved_at > std::chrono::seconds(30)) {
-      this->save_kept();
+    // Checkpoint persistent changes, not typing, presence or empty long polls.
+    // The older token safely replays those transient deltas after a restart.
+    if (first || (snapshot_dirty_ && std::chrono::steady_clock::now() - saved_at > std::chrono::seconds(30))) {
+      snapshot_dirty_ = !this->save_kept();
       saved_at = std::chrono::steady_clock::now();
     }
   }
@@ -692,9 +721,9 @@ auto account<Sink>::kept_file() const -> std::filesystem::path {
 }
 
 template <class Sink>
-void account<Sink>::save_kept() const {
+bool account<Sink>::save_kept() const {
   if (!state_.since)
-    return;
+    return false;
   using response = loom::cs::sync::response;
   using joined_t = response::rooms_t::joined_room_t;
   response out;
@@ -726,8 +755,11 @@ void account<Sink>::save_kept() const {
   // Through the vault: the rooms' events and state, sealed where local data
   // is encrypted.
   const std::filesystem::path where = this->kept_file();
-  if (!how_.vault->write_file(where, knot::to_json_string(out)))
+  if (!how_.vault->write_file(where, knot::to_json_string(out))) {
     log(id_, "the sync could not be kept in {}", where.string());
+    return false;
+  }
+  return true;
 }
 
 template <class Sink>
@@ -789,12 +821,21 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
   };
   const bool account_packs = got.account_data && got.account_data->events && std::ranges::any_of(*got.account_data->events, affects_packs);
   const bool room_packs = got.rooms && got.rooms->join && std::ranges::any_of(*got.rooms->join, [&](const auto& room) {
-    return room.second.state && room.second.state->events && std::ranges::any_of(*room.second.state->events, affects_packs);
+    const auto has_packs = [&](const auto& section) {
+      return section && section->events && std::ranges::any_of(*section->events, affects_packs);
+    };
+    return has_packs(room.second.state) || has_packs(room.second.state_after) ||
+           (room.second.timeline && std::ranges::any_of(room.second.timeline->events, affects_packs));
   });
   // A space pack or an account subscription changes other rooms too, even
   // when those rooms have no events in this sync response.
-  if (account_packs || room_packs)
-    std::ranges::for_each(state_.joined, [&](const auto& room) { conversation(conversation_id{id_, room.first}, room.second); });
+  const bool account_metadata = got.account_data && got.account_data->events &&
+      std::ranges::any_of(*got.account_data->events, [](const auto& event) { return event.type == "m.direct"; });
+  const bool all_metadata = account_metadata || account_packs || room_packs;
+  if (all_metadata)
+    std::ranges::for_each(state_.joined, [&](const auto& room) {
+      conversation(conversation_id{id_, room.first}, room.second);
+    });
   if (!got.rooms)
     return;
   const auto& rooms = *got.rooms;
@@ -804,8 +845,17 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       if (found == state_.joined.end())
         continue;
       const conversation_id in{id_, room};
-      conversation(in, found->second);
-      members(in, found->second);
+      const bool first_seen = announced_.insert(room).second;
+      if (!all_metadata && (first_seen || room_metadata_changed(part)))
+        conversation(in, found->second);
+      const auto has_state = [](const auto& section) {
+        return section && section->events && !section->events->empty();
+      };
+      if (first_seen || has_state(part.state) || has_state(part.state_after) ||
+          (part.timeline && std::ranges::any_of(part.timeline->events, [](const auto& event) {
+            return event.state_key.has_value();
+          })))
+        members(in, found->second);
       // Where to page back from: the first time a room is seen -- and every
       // time its timeline comes cut short (limited: more was sent than the
       // sync gives), for between what came before and this is a gap the
@@ -820,10 +870,15 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
           event(in, one);
       // Who is typing, but the account itself: its own typing, from this or
       // another device, is not news to it (as in Telegram).
-      std::vector<std::string> typing;
-      std::ranges::copy_if(found->second.typing, std::back_inserter(typing),
-                           [&](const std::string& who) { return who != id_.address; });
-      sink_(change::typing_changed{in, std::move(typing)});
+      if (part.ephemeral && part.ephemeral->events &&
+          std::ranges::any_of(*part.ephemeral->events, [](const auto& event) {
+            return event.content.template is<loom::ev::m_typing_content_t>();
+          })) {
+        std::vector<std::string> typing;
+        std::ranges::copy_if(found->second.typing, std::back_inserter(typing),
+                             [&](const std::string& who) { return who != id_.address; });
+        sink_(change::typing_changed{in, std::move(typing)});
+      }
       // The mentions read in another session of this account (theirs, in
       // the room's account data): seen here too.
       if (part.account_data && part.account_data->events)
@@ -893,8 +948,10 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       sink_(std::move(made));
     }
   if (rooms.leave)
-    for (const auto& [room, part] : *rooms.leave)
+    for (const auto& [room, part] : *rooms.leave) {
+      announced_.erase(room);
       sink_(change::conversation_removed{{id_, room}});
+    }
 }
 
 using power_levels_content = loom::ev::m_room_power_levels_content_t;

@@ -516,6 +516,29 @@ class model {
     spl::visit([this](const auto& one) { on(one); }, what);
   }
 
+  // Typing is transient. Schedule its expiry without polling or drawing frames.
+  [[nodiscard]] double typing_wake_in() const {
+    if (typing_until_.empty())
+      return std::numeric_limits<double>::infinity();
+    const auto next = std::ranges::min_element(typing_until_, {}, [](const auto& one) { return one.second; });
+    return std::max(0.0, std::chrono::duration<double, std::milli>(next->second - std::chrono::steady_clock::now()).count());
+  }
+  bool expire_typing(std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now()) {
+    bool changed = false;
+    for (auto it = typing_until_.begin(); it != typing_until_.end();) {
+      if (it->second > now) {
+        ++it;
+        continue;
+      }
+      if (const auto* chat = find(it->first); chat && !chat->typing.empty()) {
+        this->in_chat(it->first, [](conversation& chat) { chat.typing.clear(); });
+        changed = true;
+      }
+      it = typing_until_.erase(it);
+    }
+    return changed;
+  }
+
   // The user has read a chat up to a message: kept, sent or not.
   void read_up_to(const conversation_id& id, std::string message) {
     if (this->chat_in(id) != nullptr)
@@ -643,7 +666,10 @@ class model {
   void on(const change::connection_changed& one) {
     this->in_account(one.account, [&](account& kept) { kept.state = one.state; });
   }
-  void on(const change::account_removed& one) { (void)chats_.apply(skiff::model::take<account>(one.account)); }
+  void on(const change::account_removed& one) {
+    std::erase_if(typing_until_, [&](const auto& pending) { return pending.first.account == one.account; });
+    (void)chats_.apply(skiff::model::take<account>(one.account));
+  }
   void on(const change::conversation_updated& one) {
     this->in_chat(one.id, [&](conversation& kept) {
     kept.kind = one.kind;
@@ -668,6 +694,7 @@ class model {
   });
   }
   void on(const change::conversation_removed& one) {
+    typing_until_.erase(one.id);
     if (this->accounts().contains(one.id.account))
       this->in_account(one.id.account, [&](account& kept) { (void)kept.conversations.take(one.id.id); });
   }
@@ -700,10 +727,25 @@ class model {
       return;
     this->in_chat(one.message.in, [&](conversation& where) { this->add_to(where, one); });
   }
+  static bool pending(const message& one) {
+    return spl::visit(spl::overloaded{[](const delivery::sending&) { return true; }, [](const auto&) { return false; }},
+                      one.delivery);
+  }
+  static bool message_before(const message& a, const message& b) {
+    if (pending(a) != pending(b))
+      return !pending(a);
+    return a.at < b.at;
+  }
   void add_to(conversation& where, const change::message_added& one) {
+    if (spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, one.where)) {
+      std::erase(where.typing, one.message.sender);
+      if (where.typing.empty())
+        typing_until_.erase(one.message.in);
+    }
     if (message* kept = one.message.id.empty() ? nullptr : message_in(where, one.message.id)) {
       // Come again -- a page, the disk, a window around it: its reactions
       // kept, which what came may not carry.
+      const bool moved = kept->at != one.message.at || pending(*kept) != pending(one.message);
       auto reactions = std::move(kept->reactions);
       auto reaction_events = std::move(kept->reaction_events);
       *kept = one.message;
@@ -719,6 +761,8 @@ class model {
       if (one.message.thread)
         if (const auto found = where.threads.find(*one.message.thread); found != where.threads.end())
           std::ranges::stable_sort(found->second, {}, &message::at);
+      if (!one.message.thread && moved)
+        std::ranges::stable_sort(where.timeline, message_before);
       return;
     }
     // An answer in a thread: with the thread's, in time's order, not in the
@@ -733,41 +777,19 @@ class model {
     }
     // In the timeline now: what was fetched for a quote is not needed.
     where.quoted.erase(one.message.id);
-    // In the timeline by its time, wherever it was said to go: the newest at
-    // the end as they come, history before the rest -- but one that is older
-    // than its place says (a sliding sync sending a room's last events again
-    // as it is followed, a page arriving after newer ones) goes where its
-    // time puts it, not after the newest, shown as new until the chat was
-    // made again.
-    const auto in_time = [&](auto at) {
+    // Both history and live events use the same chronological insertion.
+    // A linear search also tolerates clock-skewed entries from an older client;
+    // upper_bound requires a sorted range. Unconfirmed local echoes stay last.
+    const auto in_time = [&] {
       auto& timeline = where.timeline;
-      // Answered already by something shown -- come late, after the reply to
-      // it (a sync giving a room's newest first, the rest after): before the
-      // first answer, whatever the clocks say. Within the minutes allowed
-      // for clocks it went at the end, below the reply that quoted it.
-      if (const auto answer = std::ranges::find_if(timeline, [&](const message& said) {
-            return said.replies_to == one.message.id;
-          });
-          answer != timeline.end()) {
-        timeline.insert(answer, one.message);
+      if (timeline.empty() || !message_before(one.message, timeline.back())) {
+        timeline.push_back(one.message);
         return;
       }
-      const auto by_time = [&] {
-        timeline.insert(std::ranges::upper_bound(timeline, one.message.at, {}, &message::at), one.message);
-      };
-      // Live, a little older than the newest: as the server sends it, after
-      // it. Each server stamps its own users' messages by its own clock, and
-      // a reply from one a few seconds behind went above what it answered.
-      // Only what is older by more than any clock is off goes by its time.
-      constexpr std::chrono::minutes kClocksDiffer{2};
-      if (timeline.empty())
-        timeline.push_back(one.message);
-      else if (at == timeline.end() && one.message.at + kClocksDiffer >= timeline.back().at)
-        timeline.push_back(one.message);
-      else if (at == timeline.begin() && one.message.at <= timeline.front().at)
-        timeline.insert(timeline.begin(), one.message);
-      else
-        by_time();
+      const auto at = std::ranges::find_if(timeline, [&](const message& said) {
+        return message_before(one.message, said);
+      });
+      timeline.insert(at, one.message);
     };
     spl::visit(spl::overloaded{[&](placement::at_end) {
                             if (!where.latest || one.message.at >= where.latest->at)
@@ -786,28 +808,10 @@ class model {
                               where.timeline.push_back(one.message);
                               return;
                             }
-                            // One's own, from the server, while some of one's
-                            // own are still being sent: before the first of
-                            // those -- it was sent before them. After them, a
-                            // message sent a second before another, its copy
-                            // come by the sync unmatched to its echo, stood
-                            // below the next one until that one's came too.
-                            if (one.message.outgoing) {
-                              const auto pending = std::ranges::find_if(where.timeline, [](const message& said) {
-                                return said.outgoing &&
-                                       spl::visit(spl::overloaded{[](const delivery::sending&) { return true; },
-                                                                        [](const auto&) { return false; }},
-                                                     said.delivery);
-                              });
-                              if (pending != where.timeline.end()) {
-                                where.timeline.insert(pending, one.message);
-                                return;
-                              }
-                            }
-                            in_time(where.timeline.end());
+                            in_time();
                           },
-                          [&](placement::at_start) { in_time(where.timeline.begin()); },
-                          [&](placement::in_window) { in_time(where.timeline.end()); },
+                          [&](placement::at_start) { in_time(); },
+                          [&](placement::in_window) { in_time(); },
                           [&](placement::aside) {
                             // Held to a number: what nothing here quotes or
                             // pins goes first, then one more -- never all at
@@ -931,13 +935,23 @@ class model {
     if (message* kept = message_in(where, one.local_id)) {
       kept->id = one.id;
       kept->delivery = delivery::sent{};
+      if (kept->thread) {
+        if (const auto found = where.threads.find(*kept->thread); found != where.threads.end())
+          std::ranges::stable_sort(found->second, {}, &message::at);
+      } else {
+        std::ranges::stable_sort(where.timeline, message_before);
+      }
     }
   });
   }
   void on(const change::delivery_changed& one) {
     this->in_chat(one.in, [&](conversation& where) {
-    if (message* kept = message_in(where, one.id))
+    if (message* kept = message_in(where, one.id)) {
+      const bool was_pending = pending(*kept);
       kept->delivery = one.now;
+      if (!kept->thread && was_pending != pending(*kept))
+        std::ranges::stable_sort(where.timeline, message_before);
+    }
     in_latest(where, one.id, [&](message& kept) { kept.delivery = one.now; });
   });
   }
@@ -1066,7 +1080,14 @@ class model {
     }
   });
   }
+  std::map<conversation_id, std::chrono::steady_clock::time_point> typing_until_;
   void on(const change::typing_changed& one) {
+    if (one.who.empty())
+      typing_until_.erase(one.in);
+    else
+      typing_until_.insert_or_assign(one.in, std::chrono::steady_clock::now() + std::chrono::seconds(30));
+    if (const auto* chat = find(one.in); chat && chat->typing == one.who)
+      return;
     this->in_chat(one.in, [&](conversation& where) { where.typing = one.who; });
   }
   void on(const change::history_position& one) {

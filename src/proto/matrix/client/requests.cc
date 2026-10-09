@@ -733,6 +733,7 @@ void account<Sink>::adopt_pack(emote_pack pack) {
       sink_(change::refused{id_, "The pack could not be added to your account."});
       return;
     }
+    snapshot_dirty_ = true;
     state_.account_data.insert_or_assign("im.ponies.emote_rooms", loom::ev::account_data_event{
         .content = loom::ev::other_content{std::move(chosen)}, .type = "im.ponies.emote_rooms"});
     std::ranges::for_each(state_.joined, [&](const auto& room) { conversation(conversation_id{id_, room.first}, room.second); });

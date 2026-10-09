@@ -232,7 +232,10 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       sdl::SDL_Event event;
       const double hold_in = held && !held->fired ? held->since + kHoldMs - detail::now_ms()
                                                   : std::numeric_limits<double>::infinity();
-      const double wake_in = std::min(wake_at - detail::now_ms(), hold_in);
+      double wake_in = std::min(wake_at - detail::now_ms(), hold_in);
+      if constexpr (requires { app.wake_in(); })
+        if (on_screen)
+          wake_in = std::min(wake_in, app.wake_in());
       bool got = (redraw || animating)       ? sdl::SDL_WaitEventTimeout(&event, 16)
                  : std::isfinite(wake_in) ? sdl::SDL_WaitEventTimeout(&event, static_cast<std::int32_t>(
                                                                     std::clamp(wake_in, 1.0, 60000.0)))

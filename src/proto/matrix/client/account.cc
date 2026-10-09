@@ -692,7 +692,7 @@ class account {
   // its timeline since its last gap and where that pages back from, its
   // summary, unread counts and data; the account's data; and the token to
   // go on from. Read back, it is applied as an answer is.
-  void save_kept() const;
+  bool save_kept() const;
   void load_kept();
 
   // What the rooms a sync named look like now, and what their timelines
@@ -801,8 +801,10 @@ class account {
   std::optional<std::string> token_;
   // The rooms whose place to page back from was told.
   std::set<std::string> paged_;
+  std::set<std::string> announced_;
   http::pool* api_ = nullptr;
   loom::client::state state_;
+  bool snapshot_dirty_ = false;
   // Simplified sliding sync (MSC4186), where the server has it: whether it
   // is used, where its last answer left off, and how many rooms its list
   // holds.

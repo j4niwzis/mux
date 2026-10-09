@@ -274,6 +274,7 @@ struct app : kept_settings {
   // A link pressed in a message's text: routed as a link is.
   void open_link(std::string url) { this->take(mux::ui::request::open_url{std::move(url)}); }
   void before_frame();
+  [[nodiscard]] double wake_in() const;
   void after_event();
   // The window bound to the model, and the pages with the model's widgets
   // it was last walked whole with.

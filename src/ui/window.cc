@@ -83,6 +83,7 @@ inline std::vector<text_menu_item> field_menu_items(const scene::text_menu::of_f
             {"Strikethrough", "Ctrl+Shift+X", request::text_key{scene::keys::kX, true}, selected},
             {"Monospace", "Ctrl+Shift+M", request::text_key{scene::keys::kM, true}, selected},
             {"Spoiler", "Ctrl+Shift+P", request::text_key{scene::keys::kP, true}, selected},
+            {"Quote", "Ctrl+Shift+.", request::text_key{scene::keys::kPeriod, true}, selected},
             {"Link…", "Ctrl+K", request::text_key{scene::keys::kK}, selected},
             {"Plain text", "Ctrl+Shift+N", request::text_key{scene::keys::kN, true}, selected, true}};
   std::vector<text_menu_item> items{

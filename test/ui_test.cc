@@ -1652,6 +1652,17 @@ TEST(TextMenu, FormattingAndHistoryFollowTheFieldCapabilities) {
   EXPECT_TRUE(selected[0].enabled);
   EXPECT_TRUE(selected[2].enabled);
   EXPECT_EQ(selected.back().label, "Formatting ›");
+  const auto formats = mux::ui::field_menu_items({.selection = true, .formats = true}, true);
+  const auto quote = std::ranges::find(formats, "Quote", &mux::ui::text_menu_item::label);
+  ASSERT_NE(quote, formats.end());
+  EXPECT_TRUE(quote->enabled);
+  EXPECT_EQ(quote->shortcut, "Ctrl+Shift+.");
+  bool quote_key = false;
+  spl::visit(spl::overloaded{[&](const mux::ui::request::text_key& key) {
+                              quote_key = key.key == scene::keys::kPeriod && key.shift && key.control;
+                            }, [](const auto&) {}}, quote->action);
+  EXPECT_TRUE(quote_key);
+
   const auto masked = mux::ui::field_menu_items({.selection = true, .masked = true, .formats = true}, false);
   EXPECT_FALSE(masked[2].enabled);
   EXPECT_FALSE(masked[3].enabled);

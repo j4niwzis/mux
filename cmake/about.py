@@ -89,6 +89,18 @@ def generate(args):
         record["version"] = record["version"] or record["revision"] or "Not reported by installed package"
     records += crates
     records = sorted({r["name"]: r for r in records}.values(), key=lambda r: r["label"].casefold())
+    # Keep only the current build's direct libraries and their dependencies;
+    # provider/lock bookkeeping can contain unrelated inventory entries.
+    inventory = {r["name"]: r for r in records}
+    pending = [r["name"] for r in records if r.get("primary", False)]
+    current = set()
+    while pending:
+        name = pending.pop()
+        if name in current:
+            continue
+        current.add(name)
+        pending.extend(inventory[name]["dependencies"])
+    records = [r for r in records if r["name"] in current]
     commit = git(args.source, "rev-parse", "HEAD") or "Unknown"
     branch = git(args.source, "describe", "--tags", "--exact-match") or git(args.source, "symbolic-ref", "--short", "HEAD")
     # CI checkouts are detached: retain the ref that actually selected HEAD.

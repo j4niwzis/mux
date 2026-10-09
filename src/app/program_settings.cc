@@ -3,6 +3,7 @@
 module mux.app.program;
 
 import std;
+import splice;
 import knot;
 import skia;
 import mux.core;

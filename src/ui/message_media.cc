@@ -141,21 +141,14 @@ struct picture_view : skiff::compose::Specced {
 
     parts.loader.apply({.place = scene::anchor::kCentre});
   }
-  // The loader while the picture has not come; where it moves, drawn again
-  // each frame for the next of its frames.
-  [[nodiscard]] bool settling() const { return (sticker ? sticker_animations() : animations()).has(source); }
-  // Ticked while the picture is coming or moves. Its thumbnail coming is
-  // seen by the picture itself, which marks this; every picture message
-  // was ticked at every frame for as long as its whole picture was not
-  // fetched -- that is, nearly always.
-  [[nodiscard]] bool wantsTick() const { return parts.loader.visible() || (sticker ? sticker_animations() : animations()).has(source); }
+  // The image schedules its own frames. This wrapper only follows loading
+  // state; marking the image every display frame bypasses its frame rate.
+  [[nodiscard]] bool wantsTick() const { return parts.loader.visible(); }
   void update(double) {
     const bool moving = (sticker ? sticker_animations() : animations()).has(source);
     const bool coming = has_thumbnail && !moving && !(sticker ? sticker_images().has(source) : thumbnails().has(source) || whole_pictures().has(source));
     if (coming != parts.loader.visible())
       parts.loader.setVisible(coming);
-    if (moving)
-      parts.picture.markDamaged();
   }
   void show_time(std::string when) {
     parts.time.parts.label.setText(when);

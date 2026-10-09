@@ -52,39 +52,24 @@ struct insert_emoji_into {
 
 // The GIFs saved, as tdesktop's GIF tab shows them: a grid of them playing,
 // newest first; a press sends one into the chat.
+inline auto gif_cell(const palette& colours, std::string path) {
+  const std::string key = "gif:" + path;
+  auto image = nodes::Image<from_moving_whole>({key});
+  image.keepBox();
+  return skiff::compose::onClick(
+      [path = std::move(path)] { return ::mux::ui::request::send_gif{path}; },
+      skiff::compose::row(
+          skiff::compose::vbox(0.0f, {.width = 104.0f,
+                                     .height = 104.0f,
+                                     .margin = {2.0f, 2.0f, 2.0f, 2.0f},
+                                     .cornerRadius = 6.0f,
+                                     .background = colours.tile,
+                                     .masking = true}),
+          skiff::compose::styled({.fill = true, .cornerRadius = 6.0f}, std::move(image))));
+}
 template <class Actions> struct gif_grid : skiff::compose::Stacked {
-  struct gif_cell : skiff::compose::Stacked {
-    // What its handlers ask for, returned.
-    using Answer = ::mux::ui::request::send_gif;
-    std::string path;
-    std::string key;
-    struct parts_t {
-      nodes::Image<from_moving_whole> picture;
-    } parts;
-    gif_cell(const palette &colours, std::string p)
-        : Stacked(
-              skiff::compose::vbox(0.0f, {.width = 104.0f,
-                                          .height = 104.0f,
-                                          .margin = {2.0f, 2.0f, 2.0f, 2.0f},
-                                          .cornerRadius = 6.0f,
-                                          .background = colours.tile,
-                                          .masking = true})),
-          path(p), key("gif:" + p),
-          parts{.picture = skiff::compose::styled(
-                    {.fill = true, .cornerRadius = 6.0f},
-                    nodes::Image<from_moving_whole>({"gif:" + p}))} {}
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    std::optional<Answer> onClick(float, float) {
-      return ::mux::ui::request::send_gif{path};
-    }
-    // Drawn again each frame while it moves, for its next frame.
-    [[nodiscard]] bool settling() const { return animations().has(key); }
-    void update(double) {
-      if (animations().has(key))
-        parts.picture.markDamaged();
-    }
-  };
-  using cells_t = nodes::Flow<std::vector<gif_cell>>;
+  using cell_t = decltype(gif_cell(std::declval<const palette&>(), std::string{}));
+  using cells_t = nodes::Flow<std::vector<cell_t>>;
   struct parts_t {
     nodes::Text empty;
     nodes::ScrollContainer<cells_t> list{
@@ -113,7 +98,7 @@ template <class Actions> struct gif_grid : skiff::compose::Stacked {
     cells.clear();
     cells.reserve(paths.size());
     for (const std::string& one : paths)
-      cells.emplace_back(*colours_, one);
+      cells.push_back(gif_cell(*colours_, one));
     parts.empty.setVisible(paths.empty());
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);

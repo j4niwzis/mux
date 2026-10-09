@@ -1761,3 +1761,18 @@ TEST(Images, AnimationDeadlinesFollowVariableFrameDurationsAndLoop) {
   frames.clear();
   EXPECT_FALSE(std::isfinite(frames.next_frame_at("timed", 10.0)));
 }
+
+TEST(Images, AnimatedAttachmentDoesNotRequestContinuousSceneAnimation) {
+  auto surface = skia::Raster(skia::SkImageInfo::MakeN32Premul(8, 8));
+  ASSERT_TRUE(surface);
+  auto& frames = mux::ui::animations();
+  frames.put("attachment-timing", {{surface->makeImageSnapshot(), 40}, {surface->makeImageSnapshot(), 100}});
+  mux::ui::palette colours;
+  mux::ui::picture_view picture(colours, "attachment-timing", 8, 8);
+  picture.update(0.0);
+  EXPECT_FALSE(picture.settling());
+  EXPECT_FALSE(picture.wantsTick());
+  EXPECT_TRUE(picture.parts.picture.wantsTick());
+  EXPECT_TRUE(std::isfinite(picture.parts.picture.wakeAt()));
+  frames.clear();
+}

@@ -30,6 +30,17 @@ void app::rebuild_in_theme() {
   accounts_screen.forget_login();
   shared.drawer_waits = false;
   root().rebuild();
+  // Rebuild the page that was already open; a look change from a space's
+  // menu must not open Settings or switch an unrelated settings page.
+  mux::ui::change_shown<std::optional<mux::ui::settings_facts>>(showing, [&](auto& now) {
+    if (now)
+      spl::visit(spl::overloaded{
+          [&](mux::ui::settings_page::appearance& page) {
+            page.theme = this->appearance().theme;
+            page.accent = this->appearance().accent;
+          },
+          [](auto&) {}}, now->page);
+  });
   // The dialogs made again: each reads what is shown afresh.
   showing_binding.invalidate();
   this->refresh_shown();
@@ -37,8 +48,6 @@ void app::rebuild_in_theme() {
   after.side_width = side_width;
   after.info_width = info_width;
   this->refresh();
-  mux::ui::show(showing, std::optional(mux::ui::settings_facts{mux::ui::settings_page::appearance{this->appearance().theme, this->appearance().accent}}));
-  this->refresh_shown();
   if (auto* up = root().settings_up())
     up->keep_offset(settings_at);
 }

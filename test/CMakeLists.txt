@@ -60,6 +60,10 @@ add_test(NAME notifications COMMAND mux-notifications-test)
 
 # The window's screens, pressed and typed into, with no window.
 if(MUX_UI)
+  add_executable(mux-store-test store_test.cc)
+  target_link_libraries(mux-store-test PRIVATE mux_app ${mux_gtest})
+  add_test(NAME store COMMAND mux-store-test)
+
   add_executable(mux-ui-test ui_test.cc)
   target_link_libraries(mux-ui-test PRIVATE mux_modules ${mux_gtest})
   add_test(NAME ui COMMAND mux-ui-test)

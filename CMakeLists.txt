@@ -231,13 +231,13 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts and elapsed-time animation fixes from this revision.
-set(mux_skiff_pin b0211479a5508e422782b4ab2f4443c7c6900602)
+set(mux_skiff_pin 1bf38b93176255365f16ae96ec9790716d72374c)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin})
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 32ff2231453bf4879b624c8a86b24ef810b89867)
+  GIT_TAG 92d6daa47f49e275067952ae1487f6badc281052)
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
@@ -412,7 +412,7 @@ if(MUX_UI)
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_pattern})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
     FILES ${mux_platform_sources} ${mux_calls_sources} src/ui.cc
-          src/kept_root.cc src/ui/base.cc src/ui/requests.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations_show.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/call_bar.cc src/ui/window.cc
+          src/kept_root.cc src/ui/base.cc src/ui/requests.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations_show.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/about.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/call_bar.cc src/ui/window.cc
           src/proto/xmpp/ui.cc src/proto/matrix/ui_form.cc src/proto/matrix/ui_manage.cc src/proto/matrix/ui_sessions.cc src/proto/matrix/ui_tools.cc src/proto/matrix/ui.cc src/proto/ui.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries} ${mux_calls_libraries})
@@ -577,4 +577,8 @@ if(mux_ipo)
       endif()
     endforeach()
   endforeach()
+endif()
+
+if(MUX_UI)
+  include(cmake/about.cmake)
 endif()

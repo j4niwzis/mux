@@ -5,6 +5,7 @@ export module mux.platform.clipboard;
 
 import std;
 import sdl;
+import chevron.escape;
 
 export namespace mux::platform::clipboard {
 
@@ -22,6 +23,42 @@ inline void copy_picture(std::string png) {
         return bytes->data();
       },
       +[](void* data) { delete static_cast<std::string*>(data); }, held, types, 1);
+}
+
+// Offer both plain labels and Matrix-compatible HTML for inline custom
+// emoji. Other clients can consume the HTML without the in-process atoms.
+inline void copy_text(std::string text, std::string html) {
+  struct contents { std::string text, html; };
+  auto* held = new contents{std::move(text), std::move(html)};
+  const char* types[] = {"text/plain;charset=utf-8", "text/plain", "text/html"};
+  sdl::SDL_SetClipboardData(
+      +[](void* data, const char* mime, std::size_t* size) -> const void* {
+        const auto& value = *static_cast<const contents*>(data);
+        const auto& bytes = std::string_view(mime) == "text/html" ? value.html : value.text;
+        *size = bytes.size();
+        return bytes.data();
+      }, +[](void* data) { delete static_cast<contents*>(data); }, held, types, 3);
+}
+template <class Fragment> std::string emoji_html(const Fragment& fragment) {
+  std::string html;
+  const auto text = [&](std::string_view part) {
+    for (std::size_t at = 0; at < part.size();) {
+      const auto end = std::min(part.find('\n', at), part.size());
+      html += chevron::escaped(part.substr(at, end - at));
+      if (end < part.size()) html += "<br>";
+      at = end + 1;
+    }
+  };
+  std::size_t at = 0;
+  for (const auto& atom : fragment.atoms) {
+    text(std::string_view(fragment.display).substr(at, atom.first - at));
+    if (atom.picture)
+      html += std::format(R"(<img data-mx-emoticon src="{}" alt="{}">)", chevron::escaped(atom.target), chevron::escaped(atom.plain));
+    else text(atom.plain);
+    at = atom.last;
+  }
+  text(std::string_view(fragment.display).substr(at));
+  return html;
 }
 
 // A picture on the clipboard, for Ctrl+V: its bytes put in a file of its

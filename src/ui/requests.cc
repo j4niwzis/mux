@@ -664,6 +664,8 @@ struct switch_account {
 };
 struct close_settings {};
 struct settings_home {};
+struct settings_about {};
+struct settings_library { std::string name; };
 struct settings_animations {};
 // A chat's banner's button pressed: what it asks is its protocol's, asked
 // again where the program knows which protocol it is.

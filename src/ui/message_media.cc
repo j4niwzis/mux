@@ -354,97 +354,61 @@ struct file_view : skiff::compose::Stacked {
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
 
-// A message's reactions, as tdesktop's: a chip for each, its emoji and
-// how many, the user's own in the accent; a press on one puts or takes back
-// the user's.
-//
-// A reaction is whatever text a client put in it: an emoji mostly; an
-// mxc:// URL where it is a picture -- a custom emoji, shown as the picture,
-// fetched as an avatar is -- and words where it is words, cut to a chip's
-// length.
-struct reaction_chip : skiff::compose::Stacked {
-  std::string key;
-  std::size_t count = 0;
-  bool mine = false;
-  struct parts_t {
-    // Frosted, where the bubbles are: what is behind, blurred.
-    std::optional<frost_pane> frost;
-    std::optional<nodes::Image<from_emotes>> picture;
-    nodes::Text label;
-    // Who reacted, as Telegram shows them: their avatars in place of the
-    // count, where they are three or fewer.
-    std::vector<avatar_mark> who;
-  } parts;
-  [[nodiscard]] static bool pictured(std::string_view k) { return proto::is_media(k); }
-  static constexpr std::size_t kFacesShown = 3;
-  // What the chip says: the count beside a picture; else the reaction and
-  // the count -- cut where it is drawn, by its width (kLabelMost), not by
-  // its bytes: cut at 20 bytes, ten Cyrillic letters had an ellipsis with
-  // room to spare.
-  [[nodiscard]] static std::string label_of(std::string_view k, std::size_t n) {
-    if (pictured(k))
-      return std::to_string(n);
-    return std::format("{} {}", k, n);
+// Reactions are local compositions: inline pictures retain their own frame
+// deadlines, and a click sends the original (unmodified) reaction key.
+struct reaction_pictures {
+  static std::optional<scene::PillPicture> pill(std::string_view) { return std::nullopt; }
+  static const skia::Sp<skia::SkImage>* picture(std::string_view target) {
+    if (const auto* moving = emoji_animations().at(target, animation_clock())) return moving;
+    return emoji_images().find(target);
   }
-  static constexpr float kLabelMost = 240.0f;
-  // `people`: who reacted, by id and name.
-  reaction_chip(
-      const palette &colours, const looks_shown &looks, std::string k,
-      std::size_t n, bool own,
-      const std::vector<std::pair<std::string, std::string>> &people = {})
-      : Stacked(skiff::compose::justified(
-            skiff::compose::hbox(
-                4.0f,
-                {.height = 26.0f,
-                 .autoSize = scene::axes::kX,
-                 .minWidth = 26.0f,
-                 .padding = {0.0f, 9.0f, 0.0f, 9.0f},
-                 .cornerRadius = 13.0f,
-                 .background = at_opacity(
-                     own ? colours.accent : colours.tile,
-                     element_opacity_of(looks.bubbles,
-                                        &config::element_opacity::reactions))}),
-            nodes::justify::middle{})),
-        key(std::move(k)), count(n), mine(own),
-        parts{.label = elided(skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  nodes::Text(label_of(key, n), 13.0f,
-                              own ? colours.on_accent : colours.text)))} {
-    // Frosted, where the bubbles are, as its own blur says.
-    if (frosts(looks.bubbles)) {
-      parts.frost.emplace(frost_source{}, element_blur_of(looks.bubbles, &config::element_blur::reactions, looks.window));
-      parts.frost->apply({.place = scene::anchor::kTopLeft, .fill = true, .margin = {0.0f, -9.0f, 0.0f, -9.0f}, .cornerRadius = 13.0f});
-      // Its colour over the frost: the pane's tint, its own none.
-      parts.frost->setTint(fState.fBackground);
-      fState.apply({.background = skia::SkColor{0}});
-    }
-    if (pictured(key)) {
-      parts.picture.emplace(from_emotes{key});
-      parts.picture->apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
-    }
-    parts.label.setMaxWidth(kLabelMost);
-    if (!people.empty() && people.size() <= kFacesShown) {
-      // The count's place taken by the faces: the reaction alone before them.
-      parts.label.setText(pictured(key) ? std::string() : label_of(key, 0).substr(0, label_of(key, 0).size() - 2));
-      parts.label.setVisible(!pictured(key));
-      parts.who.reserve(people.size());
-      for (const auto& [id, name] : people) {
-        parts.who.emplace_back(id, name, 20.0f);
-        parts.who.back().apply({.margin = {0.0f, 0.0f, 0.0f, parts.who.size() == 1 ? 2.0f : -6.0f},
-                                .border = scene::Border{own ? colours.accent : colours.tile, 1.5f}});
-      }
-    }
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
+  static bool animated(std::string_view target) { return emoji_animations().has(target); }
+  static double wakeAt(std::string_view target) { return emoji_animations().next_frame_at(target, animation_clock()); }
 };
-struct reaction_row : nodes::Flow<std::vector<reaction_chip>> {
-  reaction_row() : nodes::Flow<std::vector<reaction_chip>>({.direction = nodes::direction::horizontal{}, .spacingX = 4.0f,
-                                                             .spacingY = 4.0f},
-                                                            {}) {
-    fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = 430.0f, .margin = {4.0f, 0.0f, 2.0f, 0.0f}});
+inline auto reaction_chip(const palette& colours, const looks_shown& looks,
+                          std::string message, std::string key, std::size_t count, bool own,
+                          const std::vector<emote>& emotes,
+                          const std::vector<std::pair<std::string, std::string>>& people = {},
+                          std::optional<std::string> shortcode = std::nullopt) {
+  namespace c = skiff::compose;
+  const auto colour = own ? colours.on_accent : colours.text;
+  auto words = emoji_text_of(key, emotes);
+  if (shortcode && words.spans.size() == 1 && words.spans.front().first == 0 && words.spans.front().last == words.text.size())
+    words.spans.front().plain = *shortcode;
+  const bool faces = !people.empty() && people.size() <= 3;
+  if (!faces) words.text += " " + std::to_string(count);
+  auto label = nodes::BasicText<reaction_pictures>(words.text, 13.0f, colour);
+  label.setLinks(std::move(words.spans), colour);
+  label.setSelectable(false);
+  label.setMaxWidth(240.0f);
+  auto avatars = people | std::views::take(faces ? people.size() : 0) | std::views::transform([&](const auto& person) {
+    return c::styled({.margin = {0.0f, 0.0f, 0.0f, -6.0f}, .border = scene::Border{own ? colours.accent : colours.tile, 1.5f}},
+                     avatar_mark(person.first, person.second, 20.0f));
+  }) | std::ranges::to<std::vector>();
+  const auto tint = at_opacity(own ? colours.accent : colours.tile,
+      element_opacity_of(looks.bubbles, &config::element_opacity::reactions));
+  std::optional<frost_pane> frost;
+  if (frosts(looks.bubbles)) {
+    frost.emplace(frost_source{}, element_blur_of(looks.bubbles, &config::element_blur::reactions, looks.window));
+    frost->apply({.place = scene::anchor::kTopLeft, .fill = true, .cornerRadius = 13.0f});
+    frost->setTint(tint);
   }
-  std::vector<reaction_chip>& chips() { return std::get<0>(fChildren); }
-  const std::vector<reaction_chip>& chips() const { return std::get<0>(fChildren); }
-};
+  return c::onClick(request::react{std::move(message), std::move(key)}, c::column(
+      c::vbox(0.0f, {.height = 26.0f, .autoSize = scene::axes::kX, .minWidth = 26.0f,
+                    .cornerRadius = 13.0f, .background = frost ? skia::SkColor{0} : tint}),
+      std::move(frost), c::row(c::hbox(4.0f, {.height = 26.0f, .autoSize = scene::axes::kX,
+                        .padding = {0.0f, 9.0f, 0.0f, 9.0f}}),
+        c::styled({.alignSelf = scene::align::kMiddle}, elided(std::move(label))), c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(avatars)))));
+}
+using reaction_chip_t = decltype(reaction_chip(std::declval<const palette&>(), std::declval<const looks_shown&>(),
+    std::string{}, std::string{}, std::size_t{}, bool{}, std::declval<const std::vector<emote>&>()));
+using reaction_row = nodes::Flow<std::vector<reaction_chip_t>>;
+inline auto reaction_row_of() {
+  auto row = reaction_row({.direction = nodes::direction::horizontal{}, .spacingX = 4.0f, .spacingY = 4.0f}, {});
+  row.apply({.autoSize = scene::axes::kBoth, .maxWidth = 430.0f, .margin = {4.0f, 0.0f, 2.0f, 0.0f}});
+  return row;
+}
+inline auto& reaction_chips(reaction_row& row) { return std::get<0>(row.fChildren); }
+inline const auto& reaction_chips(const reaction_row& row) { return std::get<0>(row.fChildren); }
 
-}  // namespace mux::ui
+} // namespace mux::ui

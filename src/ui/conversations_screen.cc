@@ -10,6 +10,7 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 import skiff.compose;
+import skiff.model;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.scroll;
@@ -127,48 +128,39 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   struct pick_mention {
     conversations_screen* screen;
     std::size_t index;
-    void operator()() const { screen->choose_mention(index); }
+    skiff::model::Nothing operator()() const { screen->choose_mention(index); return {}; }
   };
   // The emoji list: the emoji whose names or keywords (CLDR's, English and
   // Russian) have what follows a ':' at the end of what is written -- one at
   // its start or after a space, two letters at least -- as tdesktop's
   // suggestions; the one picked put in their place.
-  std::vector<const alef::emoji*> emoji_matches;
+  struct emoji_choice { std::string text, name, picture; };
+  std::vector<emoji_choice> emoji_matches;
   std::size_t emoji_lit = 0;
   std::string emoji_query;
+  std::optional<conversation_id> emoji_room;
   struct pick_emoji {
     conversations_screen* screen;
     std::size_t index;
-    void operator()() const { screen->choose_emoji(index); }
+    skiff::model::Nothing operator()() const { screen->choose_emoji(index); return {}; }
   };
   // A row of a list over the field -- the @ list's, the emoji list's: what
   // it shows at its start, its text beside it; lit while Up and Down are
   // on it, pressed to pick.
   template <class Pick, class Face>
-  struct suggestion_row : pressable<skiff::compose::Stacked> {
-    Pick act;
-    struct parts_t {
-      Face face;
-      two_lines_t texts;
-    } parts;
-    suggestion_row(const palette &colours, Pick what, Face face,
-                   std::string first, std::string second)
-        : pressable<skiff::compose::Stacked>(skiff::compose::hbox(
-              10.0f, {.fillX = true,
-                      .height = 44.0f,
-                      .padding = {0.0f, 14.0f, 0.0f, 14.0f},
-                      .hoverBackground = colours.chosen,
-                      .selectedBackground = colours.chosen})),
-          act(what), parts{.face = std::move(face),
-                           .texts = two_lines(colours, std::move(first),
-                                              std::move(second), 14.0f, 1.0f)} {
-    }
-    void set_lit(bool on) { fState.apply({.selected = on}); }
-  };
-  // One of the @ list: the avatar, the name over the ID.
-  using mention_row = suggestion_row<pick_mention, avatar_mark>;
-  // One of the emoji list: the emoji, its name.
-  using emoji_row = suggestion_row<pick_emoji, nodes::Text>;
+  static auto suggestion_row(const palette& colours, Pick pick, Face face, std::string first, std::string second) {
+    namespace c = skiff::compose;
+    auto label = first;
+    return c::onPress(std::move(pick), c::row(
+        c::hbox(10.0f, {.fillX = true, .height = 44.0f, .padding = {0.0f, 14.0f, 0.0f, 14.0f},
+                       .hoverBackground = colours.chosen, .selectedBackground = colours.chosen}),
+        std::move(face), two_lines(colours, std::move(first), std::move(second), 14.0f, 1.0f)), std::move(label));
+  }
+  using emoji_face = spl::variant<nodes::Text, nodes::Image<from_emotes>>;
+  using mention_row = decltype(suggestion_row(std::declval<const palette&>(), std::declval<pick_mention>(),
+      std::declval<avatar_mark>(), std::string{}, std::string{}));
+  using emoji_row = decltype(suggestion_row(std::declval<const palette&>(), std::declval<pick_emoji>(),
+      std::declval<emoji_face>(), std::string{}, std::string{}));
   template <class Row> struct suggestion_list : skiff::compose::Stacked {
     struct parts_t {
       std::vector<Row> rows;
@@ -460,13 +452,13 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     auto& rows = chat.parts.mentions.parts.rows;
     rows.clear();
     for (std::size_t i = 0; i < mention_matches.size(); ++i)
-      rows.emplace_back(*needs_.colours, pick_mention{this, i},
+      rows.push_back(suggestion_row(*needs_.colours, pick_mention{this, i},
                         avatar_mark(mention_matches[i].id,
                                     mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, 28.0f),
-                        mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, mention_matches[i].id);
+                        mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, mention_matches[i].id));
     mention_lit = 0;
     if (!rows.empty())
-      rows.front().set_lit(true);
+      rows.front().fState.apply({.selected = true});
     chat.parts.mentions.setVisible(!rows.empty());
     fState.relayoutQuietly();
   }
@@ -508,19 +500,38 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
       return;
     }
     // The same as before: as it was -- closed, where Esc closed it.
-    if (*query == emoji_query)
+    if (*query == emoji_query && emoji_room == chosen)
       return;
     emoji_query = *query;
-    emoji_matches = mux::logic::emoji_found(*query, 6);
+    emoji_room = chosen;
+    emoji_matches.clear();
+    const auto* room = chosen && last_model ? last_model->find(*chosen) : nullptr;
+    const auto wanted = mux::logic::folded(*query);
+    if (room)
+      for (const auto& emoji : room->emotes) {
+        if (!mux::logic::folded(emoji.shortcode).contains(wanted) && !mux::logic::folded(emoji.body).contains(wanted)) continue;
+        const auto label = ":" + emoji.shortcode + ":";
+        if (std::ranges::any_of(emoji_matches, [&](const auto& old) { return old.picture == emoji.url && old.text == label; })) continue;
+        emoji_matches.push_back({label, emoji.shortcode, emoji.url});
+        if (emoji_matches.size() == 6) break;
+      }
+    for (const auto* emoji : mux::logic::emoji_found(*query, 6 - emoji_matches.size()))
+      emoji_matches.push_back({std::string(emoji->text), std::string(emoji->name), {}});
     auto& rows = list.parts.rows;
     rows.clear();
-    for (std::size_t i = 0; i < emoji_matches.size(); ++i)
-      rows.emplace_back(*needs_.colours, pick_emoji{this, i},
-                        nodes::Text(std::string(emoji_matches[i]->text), 22.0f, needs_.colours->text),
-                        std::string(emoji_matches[i]->name), std::string());
+    for (std::size_t i = 0; i < emoji_matches.size(); ++i) {
+      const auto& emoji = emoji_matches[i];
+      emoji_face face(std::in_place_index<0>, nodes::Text(emoji.text, 22.0f, needs_.colours->text));
+      if (!emoji.picture.empty()) {
+        face.template emplace<1>(from_emotes{emoji.picture});
+        auto& picture = spl::get<1>(face);
+        picture.apply({.width = 28.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle});
+      }
+      rows.push_back(suggestion_row(*needs_.colours, pick_emoji{this, i}, std::move(face), emoji.name, emoji.picture.empty() ? "" : emoji.text));
+    }
     emoji_lit = 0;
     if (!rows.empty())
-      rows.front().set_lit(true);
+      rows.front().fState.apply({.selected = true});
     list.setVisible(!rows.empty());
     fState.relayoutQuietly();
   }
@@ -528,11 +539,15 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   void choose_emoji(std::size_t index) {
     if (index >= emoji_matches.size())
       return;
-    const std::string emoji(emoji_matches[index]->text);
+    const auto emoji = emoji_matches[index];
     const auto colon = chat.line.text().rfind(':');
     if (colon == std::string::npos)
       return;
-    chat.line.put_over_end(colon, emoji);
+    if (emoji.picture.empty()) chat.line.put_over_end(colon, emoji.text);
+    else {
+      chat.line.field.select(colon, chat.line.text().size());
+      chat.line.field.insertAtom("\u2003", emoji.picture, emoji.text, true);
+    }
     emoji_query.clear();
     emoji_matches.clear();
     chat.parts.emojis.parts.rows.clear();
@@ -552,10 +567,10 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
         press.modifiers.template has<scene::modifier::alt>())
       return false;
     if (press.key == keys::kUp || press.key == keys::kDown) {
-      rows[lit].set_lit(false);
+      rows[lit].fState.apply({.selected = false});
       const std::size_t n = rows.size();
       lit = press.key == keys::kUp ? (lit + n - 1) % n : (lit + 1) % n;
-      rows[lit].set_lit(true);
+      rows[lit].fState.apply({.selected = true});
       return true;
     }
     if (press.key == keys::kEnter || press.key == keys::kTab) {

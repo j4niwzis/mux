@@ -15,12 +15,15 @@ import :base;
 import :proxies;
 import :appearance;
 import :storage;
+import :about;
 
 export namespace mux::ui {
 
 // Settings' pages, each with what it shows.
 namespace settings_page {
 struct home {};
+struct about {};
+struct library { std::string name; };
 struct animations {};
 struct appearance {
   config::theme_t theme;
@@ -51,7 +54,7 @@ struct proxy {
 }  // namespace settings_page
 using settings_page_t = spl::variant<settings_page::home, settings_page::animations, settings_page::appearance, settings_page::rendering,
                                      settings_page::notifications, settings_page::files, settings_page::storage, settings_page::proxies,
-                                     settings_page::proxy>;
+                                     settings_page::proxy, settings_page::about, settings_page::library>;
 // Settings open, on a page.
 struct settings_facts {
   settings_page_t page = settings_page::home{};
@@ -72,7 +75,7 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
   ui_needs<Actions> needs_;
   using page_t = spl::variant<settings_home_t, animations_page_t, proxies_page_t, proxy_editor_t,
                               appearance_page_t<Actions>, rendering_page_t, storage_page_t, files_page_t,
-                              notifications_page_t>;
+                              notifications_page_t, about_page_t, library_page_t>;
   // The page up: home, or one of its pages.
   // The page up, in a scroll view of the dialog's size: sized to what it
   // holds, it scrolls where it is taller -- never past the dialog's edges,
@@ -160,6 +163,8 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
   void show_page(const settings_facts& facts) {
     spl::visit([&](const auto& page) { this->show_page_of(page); }, facts.page);
   }
+  void show_page_of(settings_page::about) { this->page().template emplace<9>(about_page(*needs_.colours)); this->begin_swap(1.0f); }
+  void show_page_of(const settings_page::library& page) { this->page().template emplace<10>(library_page(*needs_.colours, page.name)); this->begin_swap(1.0f); }
   void show_page_of(settings_page::home) { this->show_home(); }
   void show_page_of(settings_page::animations) { this->show_animations(); }
   void show_page_of(const settings_page::appearance& page) { this->show_appearance(page.theme, page.accent); }

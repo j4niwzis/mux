@@ -118,12 +118,6 @@ template <class Actions>
     else
       return ::mux::ui::request::open_file{one.parts.body.parts.file->source, one.said.attachment->name};
   }
-  // A reaction's chip: the user's own put or taken back.
-  if (one.parts.body.parts.reactions)
-    for (const reaction_chip& chip : one.parts.body.parts.reactions->chips())
-      if (chip.bounds().contains(press.x, press.y)) {
-        return ::mux::ui::request::react{one.message_id, chip.key};
-      }
   // A card of a link to a room or a message: followed.
   if (const auto url = message_link_at(one.parts.body.parts.blocks, press.x, press.y))
     return ::mux::ui::request::open_url{*url};

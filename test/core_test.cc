@@ -255,3 +255,19 @@ TEST(Mailbox, CrossesThreads) {
 }
 
 }  // namespace
+
+TEST(Model, DirectMessageReceiptsNeverMoveBackOrLoseTheirTimestamp) {
+  model kept;
+  kept.apply(change::conversation_updated{.id = with_juliet});
+  kept.apply(change::message_added{said("old", "older")});
+  kept.apply(change::message_added{said("new", "newer")});
+  const auto time = [](int ms) { return std::chrono::sys_time<std::chrono::milliseconds>{std::chrono::milliseconds{ms}}; };
+  kept.apply(change::receipts_changed{with_juliet, {{with_juliet.id, "new"}}, {{with_juliet.id, time(200)}}});
+  kept.apply(change::receipts_changed{with_juliet, {{with_juliet.id, "old"}}, {{with_juliet.id, time(100)}}});
+  EXPECT_EQ(kept.find(with_juliet)->read_by.at(with_juliet.id), "new");
+  EXPECT_EQ(kept.find(with_juliet)->receipt_times.at(with_juliet.id), time(200));
+  kept.apply(change::receipts_changed{with_juliet, {{with_juliet.id, "outside-window"}}, {{with_juliet.id, time(300)}}});
+  kept.apply(change::receipts_changed{with_juliet, {{with_juliet.id, "new"}}, {{with_juliet.id, time(200)}}});
+  EXPECT_EQ(kept.find(with_juliet)->read_by.at(with_juliet.id), "outside-window");
+  EXPECT_EQ(kept.find(with_juliet)->receipt_times.at(with_juliet.id), time(300));
+}

@@ -256,6 +256,7 @@ struct reaction_changed {
   std::chrono::sys_time<std::chrono::milliseconds> at{};
   // Come as it happened -- not read back from the history.
   bool live = false;
+  std::optional<std::string> shortcode;
 };
 
 // A message that mentions the user, come as it happened.
@@ -542,7 +543,15 @@ class model {
   // The user has read a chat up to a message: kept, sent or not.
   void read_up_to(const conversation_id& id, std::string message) {
     if (this->chat_in(id) != nullptr)
-      this->in_chat(id, [&](conversation& where) { where.read_up_to = std::move(message); });
+      this->in_chat(id, [&](conversation& where) {
+        if (where.read_up_to) {
+          const auto before = std::ranges::find(where.timeline, *where.read_up_to, &mux::message::id);
+          const auto after = std::ranges::find(where.timeline, message, &mux::message::id);
+          if (before != where.timeline.end() && after != where.timeline.end() && after < before)
+            return;
+        }
+        where.read_up_to = std::move(message);
+      });
   }
   // A chat read now: the last to lose its history.
   void touch(const conversation_id& id) {
@@ -988,7 +997,7 @@ class model {
       if (one.added) {
         who.insert(one.who);
         if (!one.event.empty())
-          kept->reaction_events.push_back({one.event, one.key, one.who, one.at});
+          kept->reaction_events.push_back({one.event, one.key, one.who, one.at, one.shortcode});
         // Another's reaction to the user's own, as it happened: for them.
         if (one.live && kept->outgoing && one.who != one.in.account.address && !one.event.empty())
           keep_mark(where, where.unread_reactions, {one.event, one.id, one.at});
@@ -1135,13 +1144,35 @@ class model {
   void on(const change::preview_loaded& one) { previews.insert_or_assign(one.url, one.preview); }
   void on(const change::receipts_changed& one) {
     this->in_chat(one.in, [&](conversation& kept) {
-    for (const auto& [user, event] : one.read_by)
+    const auto place = [&](const std::string& id) { return std::ranges::find(kept.timeline, id, &message::id); };
+    for (const auto& [user, event] : one.read_by) {
+      const auto previous = kept.read_by.find(user);
+      bool accept = previous == kept.read_by.end() || previous->second == event;
+      if (!accept) {
+        const auto before = place(previous->second), after = place(event);
+        if (before != kept.timeline.end() && after != kept.timeline.end())
+          accept = after > before;
+        else {
+          const auto old_time = kept.receipt_times.find(user);
+          const auto new_time = one.read_at.find(user);
+          if (old_time != kept.receipt_times.end() && new_time != one.read_at.end())
+            accept = new_time->second > old_time->second;
+        }
+        // Without either positions or timestamps, an unknown event cannot
+        // prove that an existing receipt moved forward.
+      }
+      if (!accept) continue;
       kept.read_by.insert_or_assign(user, event);
+      if (const auto time = one.read_at.find(user); time != one.read_at.end()) {
+        const auto old = kept.receipt_times.find(user);
+        if (old == kept.receipt_times.end() || time->second > old->second)
+          kept.receipt_times.insert_or_assign(user, time->second);
+      }
+    }
     // The user's own, from another device (or this one's, echoed): where it
     // is past the position kept here -- or there is none -- the position
     // moves on to it. Never back: a receipt older than what was read here.
     if (const auto mine = one.read_by.find(one.in.account.address); mine != one.read_by.end()) {
-      const auto place = [&](const std::string& id) { return std::ranges::find(kept.timeline, id, &message::id); };
       const auto theirs = place(mine->second);
       const bool past = !kept.read_up_to ||
                         (theirs != kept.timeline.end() &&
@@ -1149,8 +1180,6 @@ class model {
       if (past)
         kept.read_up_to = mine->second;
     }
-    for (const auto& [user, when] : one.read_at)
-      kept.receipt_times.insert_or_assign(user, when);
   });
   }
 

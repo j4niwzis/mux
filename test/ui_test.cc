@@ -1806,3 +1806,129 @@ TEST(Images, AvatarSourceChangeInvalidatesCachedImageAndRejectsStaleDownloads) {
   EXPECT_FALSE(cache.accepts_source("user", "mxc://new"));
   EXPECT_FALSE(cache.use_source("user", std::nullopt));
 }
+
+TEST(Html, DisclosuresKeepSummaryBodyNestingAndInitialOpenState) {
+  const auto read = mux::ui::read_html(
+      "<p>Before</p><details><summary><b>More</b></summary><p>Body</p>"
+      "<details open><summary>Inner</summary><pre><code>code</code></pre></details></details><p>After</p>");
+  ASSERT_EQ(read.disclosures.size(), 2u);
+  const auto& outer = read.disclosures[0];
+  const auto& inner = read.disclosures[1];
+  EXPECT_FALSE(outer.open);
+  EXPECT_TRUE(inner.open);
+  EXPECT_FALSE(outer.parent);
+  EXPECT_EQ(inner.parent, std::optional<std::size_t>{0});
+  EXPECT_EQ(read.text.substr(outer.summary_first, outer.summary_last - outer.summary_first), "More");
+  EXPECT_EQ(read.text.substr(inner.summary_first, inner.summary_last - inner.summary_first), "Inner");
+  EXPECT_LE(outer.first, inner.first);
+  EXPECT_GE(outer.last, inner.last);
+  EXPECT_TRUE(std::ranges::any_of(read.styles, [](const auto& style) { return style.block && style.code; }));
+  const auto fallback = mux::ui::read_html("<details><p>Body without a summary</p></details>");
+  ASSERT_EQ(fallback.disclosures.size(), 1u);
+  EXPECT_EQ(fallback.disclosures[0].summary_first, fallback.disclosures[0].summary_last);
+}
+
+TEST(Html, BlockListsAndCellsKeepTheirBoundaries) {
+  const auto read = mux::ui::read_html(
+      "before<h4>Heading</h4><ol start=3><li>First</li><li value=9>Second<ul><li>Nested</li></ul></li></ol>"
+      "<table><tr><th>A</th><th>B</th></tr><tr><td>C</td><td>D</td></tr></table><script>hidden</script>");
+  EXPECT_EQ(read.text, "before\nHeading\n3. First\n9. Second\n  • Nested\nA | B\nC | D");
+}
+
+TEST(Html, DisclosuresToggleThroughLocalModelAndKeepChildrenHidden) {
+  auto read = mux::ui::read_html("<details><summary>More</summary><p>Body</p>"
+      "<details open><summary>Inner</summary>Nested</details></details>");
+  mux::ui::mentioned shown;
+  shown.text = std::move(read.text);
+  shown.links = std::move(read.spans);
+  shown.styles = std::move(read.styles);
+  shown.disclosures = std::move(read.disclosures);
+  mux::ui::palette colours;
+  auto view = mux::ui::disclosure_piece(colours, shown, {}, nullptr, colours.accent);
+  ui_state ui;
+  skiff::bind::refresh(view, ui.showing);
+  auto& local = std::get<0>(view.fParts);
+  EXPECT_FALSE(local.fModel.root().open[0]);
+  EXPECT_TRUE(local.fModel.root().open[1]);
+  auto& rows = local.fParts;
+  ASSERT_GE(rows.size(), 4u);
+  EXPECT_TRUE(spl::visit([](const auto& row) { return row.visible(); }, rows[0]));
+  EXPECT_FALSE(spl::visit([](const auto& row) { return row.visible(); }, rows[1]));
+  const auto changed = mux::ui::disclosure_events{shown.disclosures}.on(mux::ui::toggle_disclosure{0}, local.fModel.root());
+  (void)local.fModel.apply(changed);
+  skiff::bind::refresh(view, ui.showing);
+  EXPECT_TRUE(local.fModel.root().open[0]);
+  EXPECT_TRUE(spl::visit([](const auto& row) { return row.visible(); }, rows[1]));
+}
+
+TEST(Html, CustomEmojiCopiesItsLabelAndSourceInsteadOfAnEmptyPlaceholder) {
+  const auto read = mux::ui::read_html("Hi <img data-mx-emoticon src=\"mxc://example/emoji\" alt=\":party:\">!");
+  ASSERT_EQ(read.spans.size(), 1u);
+  EXPECT_EQ(read.spans[0].plain, ":party:");
+  skiff::nodes::BasicText<mux::ui::message_pictures> text(read.text, 13.0f, skia::SkColor{0});
+  text.setLinks(read.spans, skia::SkColor{0});
+  const auto all = text.copiedRange(0, read.text.size());
+  EXPECT_EQ(all.text, "Hi :party:!");
+  ASSERT_EQ(all.atoms.size(), 1u);
+  EXPECT_EQ(all.atoms[0].target, "mxc://example/emoji");
+  const auto emoji = text.copiedRange(read.spans[0].first, read.spans[0].last);
+  EXPECT_EQ(emoji.text, ":party:");
+  ASSERT_EQ(emoji.atoms.size(), 1u);
+  EXPECT_EQ(emoji.atoms[0].first, 0u);
+}
+
+TEST(Html, MixedReactionTextKeepsWordsAndResolvesEveryCustomEmoji) {
+  const std::vector<mux::emote> emojis{{.shortcode = "party", .url = "mxc://example/party"}};
+  const auto shown = mux::ui::emoji_text_of("a reaction :party: and :unknown: mxc://example/other", emojis);
+  EXPECT_EQ(shown.text, "a reaction \u2003 and :unknown: \u2003");
+  ASSERT_EQ(shown.spans.size(), 2u);
+  EXPECT_EQ(shown.spans[0].target, "mxc://example/party");
+  EXPECT_EQ(shown.spans[0].plain, ":party:");
+  EXPECT_EQ(shown.spans[1].target, "mxc://example/other");
+}
+
+TEST(About, DependencyPagesUseUniqueResolvedIds) {
+  std::set<std::string_view> ids;
+  ASSERT_FALSE(mux::ui::about_data::libraries.empty());
+  for (const auto& library : mux::ui::about_data::libraries) {
+    EXPECT_TRUE(ids.insert(library.id).second);
+    EXPECT_FALSE(library.version.empty());
+    EXPECT_FALSE(library.license.empty());
+    for (const auto dep : library.dependencies)
+      EXPECT_NE(mux::ui::library_of(dep), nullptr) << library.id << " -> " << dep;
+  }
+}
+
+TEST(Composer, ShortcodeSuggestionInsertsCustomEmojiWithItsSource) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
+  stub program;
+  ui_state ui;
+  auto needs = ui.needs(program);
+  mux::ui::conversations_screen<stub> screen(needs);
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.org"};
+  const mux::conversation_id room{alice, "!room:example.org"};
+  mux::model model;
+  model.apply(mux::change::conversation_updated{.id = room,
+      .emotes = {{.shortcode = "party", .url = "mxc://example/party", .body = "Party"}}});
+  screen.chosen = room;
+  screen.show(model);
+  screen.line.field.setText("Hi :par");
+  screen.find_emoji();
+  ASSERT_FALSE(screen.emoji_matches.empty());
+  EXPECT_EQ(screen.emoji_matches[0].picture, "mxc://example/party");
+  screen.choose_emoji(0);
+  EXPECT_EQ(screen.line.field.plainText(), "Hi :party:");
+  ASSERT_EQ(screen.line.field.atoms().size(), 1u);
+  EXPECT_EQ(screen.line.field.atoms()[0].target, "mxc://example/party");
+}
+
+TEST(Reactions, MixedCustomEmojiKeepTheOriginalReactionKeyWhenClicked) {
+  mux::ui::palette colours;
+  mux::ui::looks_shown looks;
+  auto chip = mux::ui::reaction_chip(colours, looks, "$message", "a reaction :party:", 2, false,
+      {{.shortcode = "party", .url = "mxc://example/party"}});
+  EXPECT_EQ(chip.onPress().id, "$message");
+  EXPECT_EQ(chip.onPress().key, "a reaction :party:");
+}

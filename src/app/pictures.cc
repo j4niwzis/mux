@@ -276,8 +276,8 @@ class pictures_part {
           // message shown: fetched as avatars are, keyed by the URL.
           const auto emoji_of = [&](const message& said) {
             for (const auto& [reaction, who] : said.reactions)
-              if (mux::proto::is_media(reaction))
-                this->want_emote(id, reaction);
+              for (const auto& span : mux::ui::emoji_text_of(reaction, one.emotes).spans)
+                this->want_emote(id, span.target);
             if (const auto& html = said.body.html)
               for (const auto& span : mux::ui::read_html(*html).spans)
                 if (span.picture)
@@ -326,7 +326,7 @@ class pictures_part {
               // A video with no thumbnail: nothing to fetch as a picture --
               // its file is the video, its plate shown as it is.
               if (said.sticker)
-                this->want_emote(id, said.attachment->source, moves(said.attachment->kind), emote_kind::sticker);
+                this->want_emote(id, said.attachment->source, true, emote_kind::sticker);
               else if (said.attachment->video != said.attachment->source)
                 this->want_thumbnail(id, said.attachment->source);
               if (!said.sticker)
@@ -339,7 +339,7 @@ class pictures_part {
             for (const attachment& item : said.album)
               if (is_picture(item.kind)) {
                 if (said.sticker)
-                  this->want_emote(id, item.source, moves(item.kind), emote_kind::sticker);
+                  this->want_emote(id, item.source, true, emote_kind::sticker);
                 else {
                   this->want_thumbnail(id, item.source);
                   this->make_preview(item);

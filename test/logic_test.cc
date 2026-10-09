@@ -87,6 +87,13 @@ TEST(Reading, ReadUpToWhatWasSeenOnly) {
   EXPECT_EQ(logic::read_up_to_seen(chat, "4"), std::nullopt);
 }
 
+TEST(Reading, MarkAllReadDoesNotMoveBehindAnOutgoingReceipt) {
+  conversation chat;
+  chat.timeline = {said("1", "incoming"), said("2", "outgoing", true)};
+  chat.read_up_to = "2";
+  EXPECT_EQ(logic::to_mark_read(chat), std::nullopt);
+}
+
 TEST(Reading, TypingSaidAtMostEveryTwentySeconds) {
   using clock = std::chrono::steady_clock;
   const auto yes = [](const conversation_id&) { return true; };

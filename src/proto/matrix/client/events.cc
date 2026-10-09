@@ -31,6 +31,20 @@ import :account;
 // The members defined here are declared in :account, and exported there.
 namespace mux::proto::matrix::client {
 
+// MSC4027's textual label is event content, not part of the reaction key.
+struct reaction_label {
+  std::optional<std::string> stable, unstable;
+  friend consteval auto json_schema(knot::type<reaction_label>) {
+    return knot::schema<reaction_label>().member<"stable">(knot::key("shortcode"))
+        .member<"unstable">(knot::key("com.beeper.reaction.shortcode"));
+  }
+};
+inline std::optional<std::string> shortcode_of(const knot::raw& content) {
+  const auto read = knot::try_read<reaction_label>(content.text);
+  if (!read) return std::nullopt;
+  return read->stable ? read->stable : read->unstable;
+}
+
 // A picture's or a file's facts, as an attachment keeps them.
 // Of a message's own info or a gallery item's: loom reads both alike.
 inline void carry_info(mux::attachment& carried, const auto& info) {
@@ -263,7 +277,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
       const bool live = (!telling_history_ && placed_as_news(where));
       sink_(change::reaction_changed{in, *content.m_relates_to->event_id, *content.m_relates_to->key, one.sender,
-                                     true, one.event_id, at, live});
+                                     true, one.event_id, at, live, shortcode_of(content.rest)});
       // Fetched on its own, as what a reply quotes: a message of its own for
       // the quote, whether reactions are shown as events or not -- "Reacted
       // with" its key -- pointing at what it reacted to.

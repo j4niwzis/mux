@@ -9,15 +9,6 @@ import mux.core;
 
 export namespace mux::logic {
 
-// The message a chat is read up to once it is read to its end: its newest
-// from someone else -- none where there is none, or it is read already.
-[[nodiscard]] inline std::optional<std::string> to_mark_read(const conversation& one) {
-  for (auto it = one.timeline.rbegin(); it != one.timeline.rend(); ++it)
-    if (!it->outgoing && !it->id.empty())
-      return one.read_up_to == it->id ? std::nullopt : std::optional<std::string>(it->id);
-  return std::nullopt;
-}
-
 // The message a chat is read up to once the user has seen as far as `seen`,
 // as tdesktop counts it: the newest from someone else not after it -- none
 // where that is not past what is read already. A window of history away
@@ -39,6 +30,15 @@ export namespace mux::logic {
     if (!each.outgoing && !each.id.empty())
       return each.id;
   }
+  return std::nullopt;
+}
+
+// The message a chat is read up to once it is read to its end: its newest
+// from someone else -- none where there is none, or it is read already.
+[[nodiscard]] inline std::optional<std::string> to_mark_read(const conversation& one) {
+  for (auto it = one.timeline.rbegin(); it != one.timeline.rend(); ++it)
+    if (!it->outgoing && !it->id.empty())
+      return read_up_to_seen(one, it->id);
   return std::nullopt;
 }
 

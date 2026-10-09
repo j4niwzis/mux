@@ -319,14 +319,16 @@ class outbox_part {
     s_->root().main().line.show_context(std::nullopt);
   }
 
-  // A sticker, sent into the chat being read; the popup closed.
+  // A sticker sent into the chat. Keep the docked phone picker available
+  // for the next sticker, just as when inserting emoji.
   void apply(const request::send_sticker& one) {
     // Kept among the recent, as tdesktop's.
     s_->emoji.remember_sticker(one.sticker);
     const auto& chosen = s_->root().main().chosen;
     if (!chosen || s_->demo())
       return;
-    s_->close_emoji();
+    if (!s_->root().main().single)
+      s_->close_emoji();
     s_->go_live(*chosen);
     s_->root().main().jump_to_end();
     // Sent while answering: the answer, as a text would be.

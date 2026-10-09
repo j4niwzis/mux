@@ -273,6 +273,10 @@ int run(App& app, const options& how, const events::kinds& kinds) {
           give_motion();
         switch (event.type) {
           case sdl::SDL_EVENT_CLIPBOARD_UPDATE:
+            if (!event.clipboard.owner) {
+              skiff::scene::clipboardCandidate().reset();
+              skiff::scene::clipboardRichText().reset();
+            }
             clipboard_stale = true;
             break;
           case sdl::SDL_EVENT_WINDOW_FOCUS_GAINED:
@@ -509,7 +513,11 @@ int run(App& app, const options& how, const events::kinds& kinds) {
         typing_told.reset();
       }
       if (auto copied = std::exchange(work.copied, std::nullopt)) {
-        sdl::SDL_SetClipboardText(copied->c_str());
+        const auto& rich = skiff::scene::clipboardRichText();
+        if (rich && rich->text == *copied && !rich->atoms.empty())
+          mux::platform::clipboard::copy_text(*copied, mux::platform::clipboard::emoji_html(*rich));
+        else
+          sdl::SDL_SetClipboardText(copied->c_str());
         skiff::scene::clipboardContents() = std::move(*copied);
       }
       for (auto& url : std::exchange(work.links, {}))

@@ -81,6 +81,7 @@ struct message_line {
     std::string who;
     std::optional<std::string> event;
     std::optional<std::int64_t> at;
+    std::optional<std::string> shortcode;
     friend consteval auto json_schema(knot::type<reaction_line>) { return knot::schema<reaction_line>(); }
   };
   std::optional<std::vector<reaction_line>> reactions;
@@ -91,6 +92,7 @@ struct message_line {
 struct reads_file {
   std::map<std::string, std::string> users;
   std::optional<std::string> me;
+  std::optional<std::map<std::string, std::int64_t>> times;
   friend consteval auto json_schema(knot::type<reads_file>) { return knot::schema<reads_file>(); }
 };
 
@@ -120,7 +122,10 @@ class message_store {
   // beside its messages, written anew when it changes, read when the chat
   // is opened.
   void keep_reads(const mux::conversation_id& in, const mux::conversation& chat) {
-    const store_file::reads_file all{.users = chat.read_by, .me = chat.read_up_to};
+    std::map<std::string, std::int64_t> times;
+    for (const auto& [user, when] : chat.receipt_times)
+      times.emplace(user, when.time_since_epoch().count());
+    const store_file::reads_file all{.users = chat.read_by, .me = chat.read_up_to, .times = std::move(times)};
     pending_reads_.insert_or_assign(in, knot::to_json_string(all));
     flush_reads(true);
   }
@@ -142,6 +147,7 @@ class message_store {
   struct reads {
     std::map<std::string, std::string> read_by;
     std::optional<std::string> me;
+    std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> times;
   };
   [[nodiscard]] reads read_reads(const mux::conversation_id& in) const {
     reads out;
@@ -153,6 +159,9 @@ class message_store {
       return out;
     out.read_by = std::move(parsed->users);
     out.me = std::move(parsed->me);
+    if (parsed->times)
+      for (const auto& [user, when] : *parsed->times)
+        out.times.emplace(user, std::chrono::sys_time<std::chrono::milliseconds>{std::chrono::milliseconds{when}});
     return out;
   }
   // A message deleted that is held in memory: marked where it is kept, and
@@ -441,7 +450,7 @@ class message_store {
         if (reaction.event)
           one.reaction_events.push_back({*reaction.event, reaction.key, reaction.who,
                                          std::chrono::sys_time<std::chrono::milliseconds>(
-                                             std::chrono::milliseconds(reaction.at.value_or(0)))});
+                                             std::chrono::milliseconds(reaction.at.value_or(0))), reaction.shortcode});
       }
       if (o.forwarded)
         one.forwarded = mux::forward_info{.from = std::move(o.forwarded->from), .name = std::move(o.forwarded->name),
@@ -533,7 +542,8 @@ class message_store {
                         .event = known != one.reaction_events.end() ? std::optional(known->event) : std::nullopt,
                         .at = known != one.reaction_events.end()
                                   ? std::optional(static_cast<std::int64_t>(known->at.time_since_epoch().count()))
-                                  : std::nullopt});
+                                  : std::nullopt,
+                        .shortcode = known != one.reaction_events.end() ? known->shortcode : std::nullopt});
       }
     return knot::to_json_string(line);
   }

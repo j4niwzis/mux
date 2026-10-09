@@ -33,15 +33,11 @@ class history_part {
       return;
     reads_restored_.insert(in);
     auto saved = s_->store->read_reads(in);
-    std::map<std::string, std::string> missing;
-    for (auto& [user, event] : saved.read_by)
-      if (!chat->read_by.contains(user))
-        missing.emplace(user, std::move(event));
     const bool restore_me = !chat->read_up_to && saved.me.has_value();
     if (restore_me)
       s_->model->read_up_to(in, *saved.me);
-    if (!missing.empty())
-      s_->model->apply(mux::change_t{mux::change::receipts_changed{in, std::move(missing)}});
+    if (!saved.read_by.empty())
+      s_->model->apply(mux::change_t{mux::change::receipts_changed{in, std::move(saved.read_by), std::move(saved.times)}});
   }
 
   void before(const mux::change_t& one) {

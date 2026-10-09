@@ -9,6 +9,7 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 import skiff.compose;
+import skiff.model;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -72,11 +73,13 @@ struct mentioned {
   std::string text;
   std::vector<nodes::Text::Link> links;
   std::vector<mentioned_card> cards;
+  std::vector<html_disclosure> disclosures;
   std::vector<nodes::Text::Styled> styles;
 };
 [[nodiscard]] inline mentioned with_mentions(std::string text, std::vector<nodes::Text::Link> links,
                                              const conversation& in, const model* now,
-                                             std::vector<nodes::Text::Styled> styles = {}) {
+                                             std::vector<nodes::Text::Styled> styles = {},
+                                             std::vector<html_disclosure> disclosures = {}) {
   // What a mention is called here, and what it links to: a person by their
   // name in the chat, a room by its name where it is known.
   const auto name_of = [&](const logic::link_t& what) -> std::pair<std::string, std::string> {
@@ -112,6 +115,14 @@ struct mentioned {
   std::vector<nodes::Text::Link> kept;
   mentioned out;
   for (auto& link : links) {
+    // A disclosure's summary remains inline, including its linked words.
+    // Turning those words into a separate card would remove the heading.
+    if (std::ranges::any_of(disclosures, [&](const auto& detail) {
+          return link.first >= detail.summary_first && link.last <= detail.summary_last;
+        })) {
+      kept.push_back(std::move(link));
+      continue;
+    }
     // Code stays literal, including protocol links inside it.
     if (std::ranges::any_of(styles, [&](const auto& style) {
           return style.block && link.first < style.last && link.last > style.first;
@@ -231,6 +242,17 @@ struct mentioned {
       if (style.last >= span.last)
         style.last = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(style.last) + grew);
     }
+    const auto moved = [&](std::size_t offset) {
+      if (offset >= span.last)
+        return static_cast<std::size_t>(static_cast<std::ptrdiff_t>(offset) + grew);
+      return offset > span.first ? span.first + shown.size() : offset;
+    };
+    for (auto& detail : disclosures) {
+      detail.first = moved(detail.first);
+      detail.last = moved(detail.last);
+      detail.summary_first = moved(detail.summary_first);
+      detail.summary_last = moved(detail.summary_last);
+    }
     if (pill)
       out.links.push_back(std::move(*pill));
   }
@@ -247,6 +269,13 @@ struct mentioned {
     card.at = std::min(card.at, text.size());
   std::ranges::stable_sort(out.cards, {}, &mentioned_card::at);
   out.text = std::move(text);
+  for (auto& detail : disclosures) {
+    detail.first = std::min(detail.first, out.text.size());
+    detail.last = std::min(detail.last, out.text.size());
+    detail.summary_first = std::clamp(detail.summary_first, detail.first, detail.last);
+    detail.summary_last = std::clamp(detail.summary_last, detail.summary_first, detail.last);
+  }
+  out.disclosures = std::move(disclosures);
   return out;
 }
 
@@ -269,6 +298,8 @@ struct mentioned {
 // what is left; what it said, trimmed. Nothing where the text does not
 // open with a quote, or has another.
 [[nodiscard]] inline std::optional<std::string> take_opening_quote(mentioned& shown) {
+  if (!shown.disclosures.empty())
+    return std::nullopt;  // Disclosure contents must stay in their own sections.
   std::size_t end = 0;
   bool opens = false;
   for (const auto& one : shown.styles) {
@@ -454,12 +485,16 @@ struct text_piece {
   std::vector<nodes::Text::Link> links;
   std::vector<nodes::Text::Styled> styles;
   std::optional<mentioned_card> card;
+  bool disclosure = false;
 };
 [[nodiscard]] inline std::vector<text_piece> pieces_of(const std::string& text, const std::vector<nodes::Text::Link>& links,
                                                       const std::vector<nodes::Text::Styled>& styles,
-                                                      const std::vector<mentioned_card>& cards = {}) {
-  std::vector<nodes::Text::Styled> blocks =
-      std::ranges::to<std::vector>(std::views::filter(styles, [](const nodes::Text::Styled& one) { return one.block; }));
+                                                      const std::vector<mentioned_card>& cards = {},
+                                                      const std::vector<html_disclosure>& disclosures = {}) {
+  if (!disclosures.empty())
+    return {text_piece{}, text_piece{.disclosure = true}, text_piece{}};
+  std::vector<nodes::Text::Styled> blocks = std::ranges::to<std::vector>(
+      std::views::filter(styles, [](const auto& one) { return one.block; }));
   std::ranges::sort(blocks, {}, &nodes::Text::Styled::first);
   // Words from `a` to `b`: their links and styles cut to them, counted from
   // their start; the line breaks around a block gone.
@@ -539,10 +574,149 @@ inline auto link_piece(const palette& colours, const mentioned_card& card, const
 }
 using link_piece_t = decltype(link_piece(std::declval<const palette&>(), std::declval<const mentioned_card&>(),
     std::declval<const text_piece&>(), nullptr, skia::SkColor{}));
-using message_piece = spl::variant<code_piece_t, link_piece_t>;
+// Disclosure controls use local model state, with ordinary composed rows.
+// The flat rows retain their ancestor path, so nesting needs no erased UI tree.
+struct disclosure_state { std::vector<bool> open; };
+struct toggle_disclosure { std::size_t index; };
+struct disclosure_events {
+  std::vector<html_disclosure> sections;
+  auto on(toggle_disclosure event, const disclosure_state& state) const {
+    auto open = state.open;
+    open[event.index] = !open[event.index];
+    if (open[event.index] && !sections[event.index].group.empty())
+      for (std::size_t i = 0; i < sections.size(); ++i)
+        if (i != event.index && sections[i].group == sections[event.index].group)
+          open[i] = false;
+    return skiff::model::over<skiff::model::Field<&disclosure_state::open>>(skiff::model::setTo(std::move(open)));
+  }
+};
+struct disclosure_visible {
+  std::vector<std::size_t> ancestors;
+  bool operator()(const disclosure_state& state) const {
+    return std::ranges::all_of(ancestors, [&](std::size_t index) { return state.open[index]; });
+  }
+};
+inline auto piece_text(const palette& colours, const text_piece& words, skia::SkColor colour, skia::SkColor quote) {
+  auto node = nodes::BasicText<message_pictures>(words.text, 13.0f, colour);
+  node.setWrapped(true);
+  node.setSelectable(true);
+  node.setSelectionColour((colours.accent & 0x00FFFFFFu) | (110u << 24));
+  node.setLinks(words.links, colours.accent);
+  node.setStyles(words.styles, quote);
+  node.setShrinksToLines(true);
+  return node;
+}
+template <class Node> auto disclosure_row(Node node, const std::vector<std::size_t>& ancestors) {
+  return skiff::compose::shown_for<disclosure_state>(disclosure_visible{ancestors},
+      skiff::compose::styled({.margin = {2.0f, 0.0f, 2.0f, 12.0f * static_cast<float>(ancestors.size())}}, std::move(node)));
+}
+inline auto disclosure_header(const palette& colours, const text_piece& summary, std::size_t index,
+                              const std::vector<std::size_t>& ancestors, skia::SkColor quote) {
+  namespace c = skiff::compose;
+  auto label = piece_text(colours, summary, colours.text, quote);
+  label.setSelectable(false);
+  label.setBold(true);
+  return disclosure_row(c::onClick(toggle_disclosure{index},
+      c::row(c::hbox(6.0f, {.autoSize = scene::axes::kBoth, .padding = {4.0f, 4.0f, 4.0f, 4.0f},
+                           .hoverBackground = colours.chosen}),
+          c::projected<disclosure_state>([index](const disclosure_state& state) {
+            return state.open[index] ? std::string("▾") : std::string("▸");
+          }, c::TextOf(nodes::Text("▸", 13.0f, colours.dim))), std::move(label)), summary.text), ancestors);
+}
+using disclosure_header_t = decltype(disclosure_header(std::declval<const palette&>(), std::declval<const text_piece&>(),
+    std::size_t{}, std::declval<const std::vector<std::size_t>&>(), skia::SkColor{}));
+using disclosure_words_t = decltype(disclosure_row(std::declval<nodes::BasicText<message_pictures>>(),
+    std::declval<const std::vector<std::size_t>&>()));
+using disclosure_code_t = decltype(disclosure_row(std::declval<code_block>(), std::declval<const std::vector<std::size_t>&>()));
+using disclosure_link_t = decltype(disclosure_row(card_of(std::declval<const palette&>(), std::string{},
+    std::declval<const logic::link_t&>(), nullptr), std::declval<const std::vector<std::size_t>&>()));
+using disclosure_row_t = spl::variant<disclosure_header_t, disclosure_words_t, disclosure_code_t, disclosure_link_t>;
+inline auto disclosure_piece(const palette& colours, const mentioned& shown,
+                             const text_piece& after, const model* now, skia::SkColor quote) {
+  namespace c = skiff::compose;
+  // Slice already parsed content; links, pictures and code retain their offsets.
+  const auto slice = [&](std::size_t a, std::size_t b) {
+    mentioned part;
+    b = std::min(b, shown.text.size());
+    a = std::min(a, b);
+    part.text = shown.text.substr(a, b - a);
+    for (auto link : shown.links)
+      if (link.first >= a && link.last <= b) {
+        link.first -= a; link.last -= a; part.links.push_back(std::move(link));
+      }
+    for (auto style : shown.styles)
+      if (style.first < b && style.last > a) {
+        style.first = std::max(style.first, a) - a;
+        style.last = std::min(style.last, b) - a;
+        part.styles.push_back(std::move(style));
+      }
+    for (auto card : shown.cards)
+      if (card.at >= a && (card.at < b || (card.at == b && b == shown.text.size()))) { card.at -= a; part.cards.push_back(std::move(card)); }
+    return part;
+  };
+  std::vector<disclosure_row_t> rows;
+  const auto words = [&](std::size_t a, std::size_t b, const std::vector<std::size_t>& ancestors) {
+    const auto part = slice(a, b);
+    for (const auto& piece : pieces_of(part.text, part.links, part.styles, part.cards)) {
+      if (piece.card)
+        rows.emplace_back(std::in_place_type<disclosure_link_t>, disclosure_row(
+            card_of(colours, piece.card->url, piece.card->where, now), ancestors));
+      else if (piece.code)
+        rows.emplace_back(std::in_place_type<disclosure_code_t>, disclosure_row(
+            code_block(colours, piece.text, piece.language, quote, colours.text), ancestors));
+      else if (!piece.text.empty())
+        rows.emplace_back(std::in_place_type<disclosure_words_t>, disclosure_row(
+            piece_text(colours, piece, colours.text, quote), ancestors));
+    }
+  };
+  const auto append = [&](auto&& self, std::size_t index, std::vector<std::size_t> ancestors) -> void {
+    const auto& detail = shown.disclosures[index];
+    const auto summary = slice(detail.summary_first, detail.summary_last);
+    text_piece title{.text = summary.text.empty() ? std::string("Details") : summary.text,
+                     .links = summary.links, .styles = summary.styles};
+    rows.emplace_back(std::in_place_type<disclosure_header_t>, disclosure_header(colours, title, index, ancestors, quote));
+    ancestors.push_back(index);
+    const auto body = [&](std::size_t first, std::size_t last) {
+      auto at = first;
+      for (const auto& [child_index, child] : std::views::enumerate(shown.disclosures))
+        if (child.parent == index && child.first >= first && child.last <= last) {
+          words(at, child.first, ancestors);
+          self(self, static_cast<std::size_t>(child_index), ancestors);
+          at = child.last;
+        }
+      words(at, last, ancestors);
+    };
+    body(detail.first, detail.summary_first);
+    body(detail.summary_last, detail.last);
+  };
+  std::size_t at = 0;
+  for (const auto& [index, detail] : std::views::enumerate(shown.disclosures))
+    if (!detail.parent) {
+      words(at, detail.first, {});
+      append(append, static_cast<std::size_t>(index), {});
+      at = detail.last;
+    }
+  words(at, shown.text.size(), {});
+  disclosure_state initial{std::ranges::to<std::vector<bool>>(std::views::transform(shown.disclosures,
+      [](const auto& detail) { return detail.open; }))};
+  for (std::size_t i = 0; i < shown.disclosures.size(); ++i)
+    if (initial.open[i] && !shown.disclosures[i].group.empty())
+      for (std::size_t earlier = 0; earlier < i; ++earlier)
+        if (initial.open[earlier] && shown.disclosures[earlier].group == shown.disclosures[i].group)
+          initial.open[i] = false;
+  return c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+      c::local<disclosure_state>(disclosure_events{shown.disclosures},
+          c::many(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(rows)), std::move(initial)),
+      c::visible(!after.text.empty(), piece_text(colours, after, colours.text, quote)));
+}
+using disclosure_piece_t = decltype(disclosure_piece(std::declval<const palette&>(),
+    std::declval<const mentioned&>(), std::declval<const text_piece&>(), nullptr, skia::SkColor{}));
+using message_piece = spl::variant<code_piece_t, link_piece_t, disclosure_piece_t>;
+
 [[nodiscard]] inline std::optional<std::string> message_link_at(const std::vector<message_piece>& pieces, float x, float y) {
   for (const auto& piece : pieces) {
     const auto url = spl::visit(spl::overloaded{[](const code_piece_t&) -> std::optional<std::string> { return std::nullopt; },
+        [](const disclosure_piece_t&) -> std::optional<std::string> { return std::nullopt; },
         [&](const link_piece_t& link) -> std::optional<std::string> {
           const auto& card = std::get<0>(link.fParts);
           return card.bounds().contains(x, y) ? std::optional{card.fEvent.url} : std::nullopt;

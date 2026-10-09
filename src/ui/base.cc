@@ -682,11 +682,14 @@ struct mux_paint : scene::Painting {
       return std::nullopt;
     // Floating over others -- a popup, a sheet -- frosted, and asked so:
     // what is really under it blurred, as it is drawn, its fill over that.
-    if (state.fFloats && look.frosted && looks->window.live_blur) {
+    if (state.fFloats && look.frosted) {
       const bool panel = std::ranges::contains(look.panels, *fill);
       if (panel && inside_panel)
         return std::nullopt;
-      live_backdrop(blurs, state, canvas, look.blur, looks->window.frost, alpha);
+      if (looks->window.live_blur)
+        live_backdrop(blurs, state, canvas, look.blur, looks->window.frost, alpha);
+      else
+        widgets::drawBackdrops(canvas, frost_source{}(), look.blur, scene::detail::roundedBox(state, state.fBounds), alpha);
       if (panel) {
         inside_panel = true;
         panel_painted = state.fId;

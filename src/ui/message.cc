@@ -417,7 +417,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       time_placed = true;
       float last_width = text.lastLineWidth();
       if (reactions)
-        last_width = reactions->chips().empty() ? 0.0f : reactions->chips().back().bounds().fRight - last.fLeft;
+        last_width = reaction_chips(*reactions).empty() ? 0.0f : reaction_chips(*reactions).back().bounds().fRight - last.fLeft;
       // Measured again only where what it goes beside moved or changed: not
       // a font's measuring for every bubble in view, every frame.
       // The widest the text can be here: the bubble's widest, or what the
@@ -846,7 +846,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
     mentioned shown;
     if (said.body.html) {
       auto read = read_html(*said.body.html);
-      shown = with_mentions(std::move(read.text), std::move(read.spans), in, now, std::move(read.styles));
+      shown = with_mentions(std::move(read.text), std::move(read.spans), in, now, std::move(read.styles), std::move(read.disclosures));
     } else {
       shown = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
     }
@@ -871,13 +871,16 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       // as tdesktop's outgoing blockquote -- not the accent on its accent.
       const skia::SkColor quote_colour = outgoing ? colours_->text : colours_->accent;
       // Keep words, code blocks and link cards in their original order.
-      const std::vector<text_piece> pieces = pieces_of(shown.text, shown.links, shown.styles, shown.cards);
+      const std::vector<text_piece> pieces = pieces_of(shown.text, shown.links, shown.styles, shown.cards, shown.disclosures);
       body.parts.text.setText(pieces.front().text);
       body.parts.text.setLinks(pieces.front().links, colours_->accent);
       body.parts.text.setStyles(pieces.front().styles, quote_colour);
       body.parts.text.setVisible(!pieces.front().text.empty());
       for (std::size_t i = 1; i + 1 < pieces.size(); i += 2) {
-        if (pieces[i].card)
+        if (pieces[i].disclosure)
+          body.parts.blocks.emplace_back(std::in_place_type<disclosure_piece_t>,
+              disclosure_piece(*colours_, shown, pieces[i + 1], now, quote_colour));
+        else if (pieces[i].card)
           body.parts.blocks.emplace_back(std::in_place_type<link_piece_t>,
               link_piece(*colours_, *pieces[i].card, pieces[i + 1], now, quote_colour));
         else
@@ -985,15 +988,18 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
         },
         protocol_state_of(*shared_, in.id.account));
     if (!said.reactions.empty()) {
-      body.parts.reactions.emplace();
+      body.parts.reactions.emplace(reaction_row_of());
       for (const auto& [key, who] : said.reactions)
         if (!who.empty())
-          body.parts.reactions->chips().emplace_back(*colours_, *looks_, key, who.size(), who.contains(said.in.account.address), [&] {
+          reaction_chips(*body.parts.reactions).push_back(reaction_chip(*colours_, *looks_, message_id, key, who.size(), who.contains(said.in.account.address), in.emotes, [&] {
             std::vector<std::pair<std::string, std::string>> people;
             for (const std::string& one : who)
               people.emplace_back(one, sender_name(in, one));
             return people;
-          }());
+          }(), [&]() -> std::optional<std::string> {
+            const auto found = std::ranges::find_if(said.reaction_events, [&](const auto& event) { return event.key == key && event.shortcode.has_value(); });
+            return found == said.reaction_events.end() ? std::nullopt : found->shortcode;
+          }()));
     }
   }
 

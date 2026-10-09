@@ -350,6 +350,7 @@ struct message {
     std::string key;
     std::string who;
     std::chrono::sys_time<std::chrono::milliseconds> at{};
+    std::optional<std::string> shortcode;
     friend bool operator==(const reaction_event&, const reaction_event&) = default;
   };
   std::vector<reaction_event> reaction_events;

@@ -854,6 +854,7 @@ template <class Actions> struct window : skiff::compose::Specced {
   void text_formatting(bool open) { text_formatting_due = open; }
   void put_text_menu(const std::vector<text_menu_item>& items) {
     auto& menu = parts.now->parts.text_menu_up.emplace(make_text_menu(*needs_.colours, items));
+    menu.fState.setFloats(true);
     text_menu_close_due = false;
     auto& now = *parts.now;
     const skia::SkRect box = fState.fBounds;
@@ -921,6 +922,19 @@ template <class Actions> struct window : skiff::compose::Specced {
       const auto emoji = menu->parts.menu.parts.emoji->pictures_shown();
       shown.append_range(pictures(emoji, emote_kind::emoji));
     }
+    auto& screen = main();
+    if (screen.chat.parts.emojis.visible())
+      for (const auto& emoji : screen.emoji_matches)
+        if (!emoji.picture.empty())
+          shown.push_back({emoji.picture, emote_kind::emoji});
+    const auto inserted = [&](const auto& field) {
+      for (const auto& atom : field.atoms())
+        if (atom.picture)
+          shown.push_back({atom.target, emote_kind::emoji});
+    };
+    inserted(screen.line.field);
+    if (screen.thread_open())
+      inserted(screen.parts.threads.parts.line.parts.input.parts.field);
     return shown;
   }
   // The menu's card, where one is up: what takes the keys while it is.

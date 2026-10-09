@@ -19,8 +19,16 @@ export namespace mux::ui {
 // drawn: its text -- tags gone, line breaks and paragraphs as newlines,
 // list items bulleted, quotes marked, the common entities decoded -- and
 // its links, each a place to open.
+struct html_disclosure {
+  std::size_t first = 0, last = 0;
+  std::size_t summary_first = 0, summary_last = 0;
+  std::optional<std::size_t> parent;
+  bool open = false;
+  std::string group;
+};
 struct formatted {
   std::string text;
+  std::vector<html_disclosure> disclosures;
   std::vector<std::pair<std::string, std::string>> links;  // what it says, where it goes
   std::vector<nodes::Text::Link> spans;                    // where in the text each is
   std::vector<nodes::Text::Styled> styles;                 // what is strong, slanted, code, quoted
@@ -68,7 +76,19 @@ using text_style_t = spl::variant<text_style::strong, text_style::emphasis, text
 namespace html_tag {
 struct line_break {};  // <br>
 struct block_end {};   // </p>, </div>, </li>, </blockquote>, </h1>..</h3>, </pre>
-struct list_item {};   // <li>
+struct list_item { std::optional<int> value; };   // <li>
+struct list_open { bool ordered = false; int start = 1; };
+struct list_close {};
+struct paragraph {};
+struct heading_open {};
+struct heading_close {};
+struct cell {};
+struct table_row {};
+struct rule {};
+struct details_open { bool open = false; std::string group; };
+struct details_close {};
+struct summary_open {};
+struct summary_close {};
 struct quote {};       // <blockquote>
 struct reply {};       // <mx-reply>: the quoted message a reply carries
 struct link_open {     // <a href="...">
@@ -95,7 +115,10 @@ struct other {};  // anything else: dropped
 using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_tag::list_item, html_tag::quote,
                                 html_tag::reply, html_tag::link_open, html_tag::link_close, html_tag::image,
                                 html_tag::style_open, html_tag::style_close, html_tag::code_open, html_tag::block_open,
-                                html_tag::block_close, html_tag::other>;
+                                html_tag::block_close, html_tag::list_open, html_tag::list_close, html_tag::paragraph,
+                                html_tag::heading_open, html_tag::heading_close, html_tag::cell, html_tag::table_row, html_tag::rule,
+                                html_tag::details_open, html_tag::details_close, html_tag::summary_open,
+                                html_tag::summary_close, html_tag::other>;
 
 // An element's start, as chevron read it (dialect::html), read into what it
 // does: its name looked up once, here -- what follows works on the variant.
@@ -106,6 +129,20 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
   };
   static const std::unordered_map<std::string_view, html_tag_t> known = {
       {"br", html_tag::line_break{}},
+      {"p", html_tag::paragraph{}}, {"div", html_tag::paragraph{}},
+      {"section", html_tag::paragraph{}}, {"article", html_tag::paragraph{}},
+      {"header", html_tag::paragraph{}}, {"footer", html_tag::paragraph{}},
+      {"h1", html_tag::heading_open{}}, {"h2", html_tag::heading_open{}},
+      {"h3", html_tag::heading_open{}}, {"h4", html_tag::heading_open{}},
+      {"h5", html_tag::heading_open{}}, {"h6", html_tag::heading_open{}},
+      {"ol", html_tag::list_open{true}}, {"ul", html_tag::list_open{}},
+      {"dl", html_tag::paragraph{}}, {"dt", html_tag::heading_open{}}, {"dd", html_tag::paragraph{}},
+      {"table", html_tag::table_row{}}, {"caption", html_tag::heading_open{}},
+      {"tr", html_tag::table_row{}}, {"td", html_tag::cell{}}, {"th", html_tag::cell{}},
+      {"hr", html_tag::rule{}},
+      {"details", html_tag::details_open{}}, {"summary", html_tag::summary_open{}},
+      {"script", html_tag::reply{}}, {"style", html_tag::reply{}},
+      {"kbd", html_tag::code_open{}}, {"samp", html_tag::code_open{}},
       {"li", html_tag::list_item{}},
       {"mx-reply", html_tag::reply{}},
       {"b", html_tag::style_open{text_style::strong{}}},
@@ -127,7 +164,23 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
   const auto found = known.find(one.name.local);
   if (found == known.end())
     return html_tag::other{};
-  return spl::visit(spl::overloaded{[&](html_tag::link_open) -> html_tag_t {
+  const auto integer = [&](std::string_view name) -> std::optional<int> {
+    const std::string value = attribute(name);
+    int number = 0;
+    const auto parsed = std::from_chars(value.data(), value.data() + value.size(), number);
+    return parsed.ec == std::errc{} && parsed.ptr == value.data() + value.size() ? std::optional{number} : std::nullopt;
+  };
+  return spl::visit(spl::overloaded{
+                                          [&](html_tag::details_open) -> html_tag_t {
+                                            return html_tag::details_open{std::ranges::any_of(one.attributes,
+                                                [](const auto& a) { return a.name.local == "open"; }), attribute("name")};
+                                          },
+                                          [&](html_tag::list_open list) -> html_tag_t {
+                                            list.start = integer("start").value_or(1);
+                                            return list;
+                                          },
+                                          [&](html_tag::list_item) -> html_tag_t { return html_tag::list_item{integer("value")}; },
+                                          [&](html_tag::link_open) -> html_tag_t {
                                             const std::string href = attribute("href");
                                             return href.empty() ? html_tag_t{html_tag::other{}} : html_tag_t{html_tag::link_open{href}};
                                           },
@@ -163,12 +216,20 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
 // <img> -- do nothing: their start did it.
 [[nodiscard]] inline html_tag_t end_of(const chevron::end_element& one) {
   static const std::unordered_map<std::string_view, html_tag_t> known = {
+      {"section", html_tag::block_end{}}, {"article", html_tag::block_end{}},
+      {"header", html_tag::block_end{}}, {"footer", html_tag::block_end{}},
+      {"h4", html_tag::heading_close{}}, {"h5", html_tag::heading_close{}}, {"h6", html_tag::heading_close{}},
+      {"ol", html_tag::list_close{}}, {"ul", html_tag::list_close{}},
+      {"dl", html_tag::block_end{}}, {"dt", html_tag::heading_close{}}, {"dd", html_tag::block_end{}},
+      {"table", html_tag::block_end{}}, {"caption", html_tag::heading_close{}}, {"tr", html_tag::block_end{}},
+      {"kbd", html_tag::style_close{text_style::code{}}}, {"samp", html_tag::style_close{text_style::code{}}},
+      {"details", html_tag::details_close{}}, {"summary", html_tag::summary_close{}},
       {"p", html_tag::block_end{}},
       {"div", html_tag::block_end{}},
       {"li", html_tag::block_end{}},
-      {"h1", html_tag::block_end{}},
-      {"h2", html_tag::block_end{}},
-      {"h3", html_tag::block_end{}},
+      {"h1", html_tag::heading_close{}},
+      {"h2", html_tag::heading_close{}},
+      {"h3", html_tag::heading_close{}},
       {"b", html_tag::style_close{text_style::strong{}}},
       {"strong", html_tag::style_close{text_style::strong{}}},
       {"i", html_tag::style_close{text_style::emphasis{}}},
@@ -188,10 +249,47 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
   return found == known.end() ? html_tag_t{html_tag::other{}} : found->second;
 }
 
+// Resolve custom emoji wherever they occur in plain reaction text. Preserve
+// unknown shortcodes and words, and keep the protocol's original key intact.
+[[nodiscard]] inline formatted emoji_text_of(std::string_view text, const std::vector<emote>& emotes) {
+  formatted out;
+  for (std::size_t at = 0; at < text.size();) {
+    std::string source, label;
+    std::size_t end = at;
+    if (text.substr(at).starts_with("mxc://")) {
+      end = text.find_first_of(" \t\r\n", at);
+      if (end == std::string_view::npos) end = text.size();
+      source = text.substr(at, end - at);
+      const auto found = std::ranges::find(emotes, source, &emote::url);
+      label = found == emotes.end() ? ":emoji:" : ":" + found->shortcode + ":";
+    } else if (text[at] == ':') {
+      const auto close = text.find(':', at + 1);
+      if (close != std::string_view::npos) {
+        const auto code = text.substr(at + 1, close - at - 1);
+        const auto found = std::ranges::find(emotes, code, &emote::shortcode);
+        if (found != emotes.end()) {
+          source = found->url; label = text.substr(at, close - at + 1); end = close + 1;
+        }
+      }
+    }
+    if (source.empty()) { out.text += text[at++]; continue; }
+    const auto first = out.text.size();
+    out.text += "\u2003";
+    out.spans.push_back({first, out.text.size(), std::move(source), false, true, std::move(label)});
+    at = end;
+  }
+  return out;
+}
+
 [[nodiscard]] inline std::vector<nodes::Text::Link> link_spans_in(std::string_view text);
 
 [[nodiscard]] inline formatted read_html(std::string_view html) {
   formatted out;
+  struct disclosure_frame { std::size_t index; int depth; bool summary_seen = false; std::optional<int> summary_depth; };
+  std::vector<disclosure_frame> disclosures;
+  std::vector<html_tag::list_open> lists;
+  int depth = 0;
+  bool cell_started = false;
   // Where each open style began, by its kind: closed, a stretch.
   std::vector<std::pair<text_style_t, std::size_t>> opened;
   std::string open_href;
@@ -246,7 +344,62 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
                               opened.emplace_back(text_style::code{}, out.text.size());
                             },
                             [&](html_tag::block_end) { end_line(); },
-                            [&](html_tag::list_item) { out.text += "\u2022 "; },
+                            [&](html_tag::paragraph) { end_line(); },
+                            [&](html_tag::table_row) { end_line(); cell_started = false; },
+                            [&](html_tag::heading_open) { end_line(); opened.emplace_back(text_style::strong{}, out.text.size()); },
+                            [&](html_tag::heading_close) {
+                              for (auto it = opened.rbegin(); it != opened.rend(); ++it)
+                                if (spl::visit(spl::overloaded{[](text_style::strong) { return true; }, [](const auto&) { return false; }}, it->first)) {
+                                  if (out.text.size() > it->second)
+                                    out.styles.push_back(styled(text_style::strong{}, it->second, out.text.size()));
+                                  opened.erase(std::next(it).base());
+                                  break;
+                                }
+                              end_line();
+                            },
+                            [&](html_tag::list_open list) { end_line(); lists.push_back(list); },
+                            [&](html_tag::list_close) { end_line(); if (!lists.empty()) lists.pop_back(); },
+                            [&](html_tag::list_item item) {
+                              end_line();
+                              if (lists.size() > 1) out.text.append((lists.size() - 1) * 2, ' ');
+                              if (!lists.empty() && lists.back().ordered) {
+                                if (item.value) lists.back().start = *item.value;
+                                out.text += std::to_string(lists.back().start) + ". ";
+                                if (lists.back().start < std::numeric_limits<int>::max()) ++lists.back().start;
+                              } else out.text += "\u2022 ";
+                            },
+                            [&](html_tag::cell) { if (cell_started) out.text += " | "; cell_started = true; },
+                            [&](html_tag::rule) { end_line(); out.text += "────────\n"; },
+                            [&](html_tag::details_open detail) {
+                              end_line();
+                              const auto at = out.text.size();
+                              const auto parent = disclosures.empty() ? std::optional<std::size_t>{} : std::optional{disclosures.back().index};
+                              out.disclosures.push_back({at, at, at, at, parent, detail.open, std::move(detail.group)});
+                              disclosures.push_back({out.disclosures.size() - 1, depth});
+                            },
+                            [&](html_tag::details_close) {
+                              if (disclosures.empty()) return;
+                              out.disclosures[disclosures.back().index].last = out.text.size();
+                              disclosures.pop_back();
+                              end_line();
+                            },
+                            [&](html_tag::summary_open) {
+                              if (disclosures.empty() || disclosures.back().summary_seen || depth != disclosures.back().depth + 1) {
+                                end_line(); return;
+                              }
+                              end_line();
+                              auto& frame = disclosures.back();
+                              frame.summary_seen = true;
+                              frame.summary_depth = depth;
+                              out.disclosures[frame.index].summary_first = out.text.size();
+                            },
+                            [&](html_tag::summary_close) {
+                              if (!disclosures.empty() && disclosures.back().summary_depth == depth) {
+                                out.disclosures[disclosures.back().index].summary_last = out.text.size();
+                                disclosures.back().summary_depth.reset();
+                              }
+                              end_line();
+                            },
                             [&](html_tag::quote) {},
                             [&](html_tag::style_open& open) {
                               // A quote and a block of code start on a line of their own.
@@ -288,7 +441,7 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
                               if (proto::is_media(picture.src)) {
                                 const std::size_t first = out.text.size();
                                 out.text += "\u2003";
-                                out.spans.push_back({first, out.text.size(), std::move(picture.src), false, true});
+                                out.spans.push_back({first, out.text.size(), std::move(picture.src), false, true, std::move(picture.alt)});
                               } else {
                                 out.text += picture.alt;
                               }
@@ -322,14 +475,17 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
                                          ++skipping;
                                          return;
                                        }
+                                       ++depth;
                                        apply(start_of(one));
                                      },
                                      [&](const chevron::end_element& one) {
                                        if (skipping > 0) {
                                          --skipping;
+                                         if (skipping == 0) --depth;
                                          return;
                                        }
                                        apply(end_of(one));
+                                       --depth;
                                      },
                                      [&](const chevron::text& one) {
                                        if (skipping == 0)
@@ -341,6 +497,11 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
   // Every stretch within the text left: one closed after a line break that
   // is gone ran past its end (review 5).
   const std::size_t size = out.text.size();
+  for (auto& detail : out.disclosures) {
+    detail.last = std::min(detail.last, size);
+    detail.summary_first = std::min(detail.summary_first, detail.last);
+    detail.summary_last = std::clamp(detail.summary_last, detail.summary_first, detail.last);
+  }
   for (auto& span : out.spans)
     span.last = std::min(span.last, size);
   for (auto& style : out.styles)

@@ -119,7 +119,7 @@ export namespace mux::logic {
 [[nodiscard]] std::vector<const alef::emoji*> emoji_found(std::string_view query, std::size_t most = 200) {
   std::vector<const alef::emoji*> out;
   const std::string asked = folded(query);
-  if (asked.empty())
+  if (asked.empty() || most == 0)
     return out;
   for (const alef::emoji_group& group : alef::emoji_groups)
     for (const alef::emoji& one : group.all)

@@ -40,8 +40,25 @@ export namespace mux::ui {
 [[nodiscard]] inline skiff::compose::Look picker_look() {
   return skiff::compose::vbox(4.0f, {.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
 }
-[[nodiscard]] inline skiff::compose::Look picker_footer() {
-  return skiff::compose::hbox(4.0f, {.fillX = true, .height = 36.0f});
+template <class Tab>
+[[nodiscard]] inline auto picker_footer() {
+  namespace c = skiff::compose;
+  auto tabs = tab_strip<Tab>(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}));
+  tabs.fStack.wrap = true;
+  return c::styled({.fillX = true, .height = 36.0f}, nodes::ScrollContainer(std::move(tabs)));
+}
+template <class Footer>
+[[nodiscard]] auto& picker_tabs(Footer& footer) { return std::get<0>(footer.fChildren).fParts; }
+template <class Footer, class Tab>
+void light_picker_tab(Footer& footer, Tab& tab, bool on) {
+  if (on == tab.fState.selected())
+    return;
+  tab.fState.apply({.selected = on});
+  if (on && !tab.bounds().isEmpty()) {
+    const auto shown = footer.toView(tab.bounds());
+    if (shown.fTop < footer.bounds().fTop || shown.fBottom > footer.bounds().fBottom)
+      footer.scrollTo(tab.bounds().fTop - footer.bounds().fTop);
+  }
 }
 template <class Field> [[nodiscard]] Field picker_field(Field field) {
   field.setSearchIcon(true);
@@ -93,7 +110,7 @@ auto picker_tab(const palette& colours, Panel* panel, std::size_t at, std::optio
     image->keepBox();
   }
   return c::onPress(picker_jump<Panel>{panel, at},
-      c::row(c::justified(c::hbox(0.0f, {.width = 30.0f, .height = 30.0f, .shrink = scene::axes::kX,
+      c::row(c::justified(c::hbox(0.0f, {.width = 30.0f, .height = 30.0f,
           .minWidth = 24.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
           .hoverBackground = colours.chosen, .selectedBackground = colours.tile}), nodes::justify::middle{}),
           std::move(image), c::visible(!picture, c::styled({.alignSelf = scene::align::kMiddle},
@@ -151,7 +168,7 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
     sticker_grid* grid;
     void operator()(std::string_view text) const { grid->search(text); }
   };
-  using footer_row = tab_strip_t<tab>;
+  using footer_row = decltype(picker_footer<tab>());
   using field_t = widgets::TextBox<searched>;
   using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
   // The colours it is made in, for what it makes later.
@@ -163,7 +180,7 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
     nodes::Text empty;
     list_t list{picker_list(nodes::Flow<std::vector<section>>(
         {.spacingY = 0.0f, .wrap = false}, {}))};
-    footer_row footer{tab_strip<tab>(picker_footer())};
+    footer_row footer{picker_footer<tab>()};
     // Over the rest: the sticker the mouse rests on, large.
     std::optional<emote_preview_t> preview;
   } parts;
@@ -195,7 +212,7 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
   void show_all() {
     auto& all = this->sections();
     all.clear();
-    auto& tabs = parts.footer.fParts;
+    auto& tabs = picker_tabs(parts.footer);
     tabs.clear();
     tab_pictures.clear();
     // Recent: those sent lately that the chat still has.
@@ -224,7 +241,8 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
     parts.empty.setVisible(kept_->chat_stickers.empty() && kept_->favourite_stickers.empty());
     parts.footer.setVisible(tabs.size() > 1);
     parts.list.invalidateLayout();
-    parts.footer.invalidateLayout();
+    std::get<0>(parts.footer.fChildren).invalidateLayout();
+    parts.footer.scrollToStart();
     parts.list.scrollTo(0.0f);
   }
   // Those whose shortcode, words or pack have what is typed.
@@ -282,9 +300,8 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
     for (std::size_t s = 0; s < all.size(); ++s)
       if (!all[s].bounds().isEmpty() && parts.list.toView(all[s].bounds()).fTop <= top)
         lit = s;
-    for (auto&& [index, each] : std::views::enumerate(parts.footer.fParts))
-      if (const bool on = !searching && static_cast<std::size_t>(index) == lit; on != each.fState.selected())
-        each.fState.apply({.selected = on});
+    for (auto&& [index, each] : std::views::enumerate(picker_tabs(parts.footer)))
+      light_picker_tab(parts.footer, each, !searching && static_cast<std::size_t>(index) == lit);
   }
 };
 
@@ -452,7 +469,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     emoji_panel* panel;
     void operator()(std::string_view text) const { panel->search(text); }
   };
-  using footer_row = tab_strip_t<tab>;
+  using footer_row = decltype(picker_footer<tab>());
   using field_t = widgets::TextBox<searched>;
   using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
   // The colours it is made in, for what it makes later: its cells, its
@@ -465,7 +482,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     text_chip text_option;
     list_t list{picker_list(nodes::Flow<std::vector<section>>(
         {.spacingY = 0.0f, .wrap = false}, {}))};
-    footer_row footer{tab_strip<tab>(picker_footer())};
+    footer_row footer{picker_footer<tab>()};
     // Over the rest: an emoji's tones, while they are asked for.
     std::optional<tone_strip> tones;
     // And the emoji the mouse rests on, large.
@@ -494,7 +511,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     auto& all = this->sections();
     all.clear();
     all.reserve(logic::emoji_group_count() + 1);
-    auto& tabs = parts.footer.fParts;
+    auto& tabs = picker_tabs(parts.footer);
     tabs.clear();
     {
       // tdesktop's: what was picked lately first, then its default list
@@ -518,7 +535,8 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
       all.push_back(make_section(this, logic::emoji_group_name(g), logic::emoji_of_group(g)));
       tabs.push_back(picker_tab(*colours_, this, all.size() - 1, std::nullopt, logic::emoji_text(logic::emoji_group_face(g))));
     }
-    parts.footer.invalidateLayout();
+    std::get<0>(parts.footer.fChildren).invalidateLayout();
+    parts.footer.scrollToStart();
     searching = false;
     parts.text_option.show({});
     parts.list.invalidateLayout();
@@ -607,9 +625,8 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     for (std::size_t s = 0; s < all.size(); ++s)
       if (!all[s].bounds().isEmpty() && parts.list.toView(all[s].bounds()).fTop <= top)
         lit = s;
-    for (auto&& [index, each] : std::views::enumerate(parts.footer.fParts))
-      if (const bool on = !searching && static_cast<std::size_t>(index) == lit; on != each.fState.selected())
-        each.fState.apply({.selected = on});
+    for (auto&& [index, each] : std::views::enumerate(picker_tabs(parts.footer)))
+      light_picker_tab(parts.footer, each, !searching && static_cast<std::size_t>(index) == lit);
   }
 };
 

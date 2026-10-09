@@ -852,6 +852,42 @@ TEST(Frames, TypingAndScrollingKeepUnchangedPanesOutsideDamage) {
   EXPECT_FALSE(touches(frame(), screen.line.field.bounds()));
 }
 
+TEST(Emoji, PackTabsStayWithinTheFooterAndAllRemainReachable) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct restore_font { ~restore_font() { skiff::paint::defaultFont() = nullptr; } } reset;
+  struct panel { void bring(std::size_t) {} } owner;
+  mux::ui::palette colours;
+  using tab_t = decltype(mux::ui::picker_tab(colours, &owner, 0, std::nullopt));
+  using footer_t = decltype(mux::ui::picker_footer<tab_t>());
+  for (const float width : {180.0f, 320.0f}) {
+    scene::Scene<footer_t> window{std::in_place, mux::ui::picker_footer<tab_t>()};
+    auto& footer = window.root();
+    auto& tabs = mux::ui::picker_tabs(footer);
+    for (std::size_t i = 0; i < 32; ++i)
+      tabs.push_back(mux::ui::picker_tab(colours, &owner, i, std::nullopt, "x"));
+    footer.invalidateLayout();
+    const auto frame = [&](double clock) {
+      window.update(clock);
+      window.layoutIfNeeded(skia::SkRect::MakeWH(width, 36.0f));
+      (void)window.finishFrame();
+    };
+    for (int i = 0; i < 4; ++i)
+      frame(1000.0 + i * 16.0);
+    ASSERT_GT(footer.extent(), 0.0f);
+    for (const auto& tab : tabs) {
+      EXPECT_GE(tab.bounds().fLeft, footer.bounds().fLeft);
+      EXPECT_LE(tab.bounds().fRight, footer.bounds().fRight + 0.5f);
+    }
+    footer.scrollToEnd(false);
+    for (int i = 0; i < 4; ++i)
+      frame(1100.0 + i * 16.0);
+    const auto last = footer.toView(tabs.back().bounds());
+    EXPECT_GE(last.fTop, footer.bounds().fTop - 0.5f);
+    EXPECT_LE(last.fBottom, footer.bounds().fBottom + 0.5f);
+  }
+}
+
 TEST(Emoji, GifTabReceivesPointerPressesOnDesktopAndPhone) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;

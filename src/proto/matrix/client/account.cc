@@ -548,7 +548,7 @@ class account {
   // and said; the account shows as failed, to be connected again from what
   // it kept, so that nothing half done of it is relied on.
   template <class Body>
-  void spawn_guarded(Body body, std::size_t stack = 256 * 1024) {
+  void spawn_guarded(Body body) {
     loop_->spawn([this, body = std::move(body)] mutable {
       try {
         body();
@@ -556,7 +556,7 @@ class account {
         log(id_, "stopped by an error: {}", failed.what());
         this->say(connection::failed{std::format("Stopped by an error: {}", failed.what())});
       }
-    }, stack);
+    });
   }
   // A fiber that sends: a refusal of it caught here, for every sender alike.
   template <class Body>

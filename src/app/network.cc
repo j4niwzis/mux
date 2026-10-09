@@ -84,7 +84,6 @@ struct running_account {
 // The accounts, on their loop. Everything here runs on the loop's thread;
 // the window reaches it through post().
 struct network {
-  mux::net::loop loop;
   mux::net::tls tls = mux::net::client_tls();
   mailbox_type* box = nullptr;
   // What is kept on disk is read and written through: the program's.
@@ -94,6 +93,9 @@ struct network {
   // be finishing, and they must not be destroyed under them.
   std::vector<running_account> retired;
   std::thread thread;
+  // Destroyed before the accounts and TLS: suspended fibers unwind when
+  // the loop goes away, and their cleanup still accesses those objects.
+  mux::net::loop loop;
 
   // An account started, through the profile of `proxies` it names.
   void start(const mux::config::account_t& saved, const std::vector<mux::config::proxy_settings>& proxies) {

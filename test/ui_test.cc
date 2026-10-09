@@ -864,6 +864,7 @@ TEST(Emoji, FixedCategoriesStayVisibleWhileCustomPacksArePaged) {
       emoji.shortcode = "custom" + std::to_string(i);
       emoji.url = "mxc://example.com/" + emoji.shortcode;
       emoji.pack = "Pack " + std::to_string(i);
+      emoji.pack_avatar = "mxc://example.com/icon" + std::to_string(i);
       kept.chat_emotes.push_back(std::move(emoji));
     }
     using pick = mux::ui::insert_emoji_into<stub>;
@@ -891,7 +892,13 @@ TEST(Emoji, FixedCategoriesStayVisibleWhileCustomPacksArePaged) {
         EXPECT_NEAR(tab.bounds().centerY(), categories.front().bounds().centerY(), 0.5f);
       }
     };
+    const auto check_requested_icons = [&] {
+      const auto wanted = panel.pictures_shown();
+      for (std::size_t i = 0; i < packs.size(); ++i)
+        EXPECT_EQ(std::ranges::contains(wanted, panel.pack_icons[i]), packs[i].visible());
+    };
     check_categories();
+    check_requested_icons();
     EXPECT_TRUE(packs.front().visible());
     EXPECT_FALSE(packs.back().visible());
     for (std::size_t i = 0; i < packs.size(); ++i) {
@@ -901,6 +908,7 @@ TEST(Emoji, FixedCategoriesStayVisibleWhileCustomPacksArePaged) {
     EXPECT_TRUE(packs.back().visible());
     EXPECT_FALSE(packs.front().visible());
     check_categories();
+    check_requested_icons();
   }
 }
 

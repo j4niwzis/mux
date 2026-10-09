@@ -522,6 +522,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
   bool searching = false;
 
   std::size_t pack_page = 0, pack_capacity = 1;
+  std::vector<std::string> pack_icons;
   void page_packs(bool next) {
     const auto count = emoji_pack_tabs(parts.footer).size();
     if (next && pack_page + pack_capacity < count)
@@ -564,6 +565,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     auto& packs = emoji_pack_tabs(parts.footer);
     tabs.clear();
     packs.clear();
+    pack_icons.clear();
     pack_page = 0;
     {
       // tdesktop's: what was picked lately first, then its default list
@@ -581,7 +583,8 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     std::ranges::for_each(grouped_emotes(kept_->chat_emotes, "Custom emoji"), [&](const auto& pack) {
       const auto& [name, images] = pack;
       all.push_back(make_section(this, name, images));
-      packs.push_back(picker_tab(*colours_, this, all.size() - 1, images.front().pack_avatar.value_or(images.front().url)));
+      pack_icons.push_back(images.front().pack_avatar.value_or(images.front().url));
+      packs.push_back(picker_tab(*colours_, this, all.size() - 1, pack_icons.back()));
     });
     for (std::size_t g = 0; g < logic::emoji_group_count(); ++g) {
       all.push_back(make_section(this, logic::emoji_group_name(g), logic::emoji_of_group(g)));
@@ -636,10 +639,12 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     auto shown = std::ranges::to<std::vector>(std::views::transform(std::views::filter(cells, [&](const cell& one) {
       return !one.picture_url.empty() && !one.bounds().isEmpty() && parts.list.toView(one.bounds()).intersects(view);
     }), [](const cell& one) { return one.picture_url; }));
-    // Pack tabs stay visible even when their section is outside the view.
-    std::ranges::for_each(grouped_emotes(kept_->chat_emotes, ""), [&](const auto& pack) {
-      shown.push_back(pack.second.front().pack_avatar.value_or(pack.second.front().url));
-    });
+    // Request only this page's icons. Hidden tabs must not keep evicted
+    // animations decoding again, and grouping packs is only needed on rebuild.
+    const auto& packs = emoji_pack_tabs(parts.footer);
+    for (std::size_t i = 0; i < packs.size() && i < pack_icons.size(); ++i)
+      if (packs[i].visible())
+        shown.push_back(pack_icons[i]);
     return shown;
   }
   // An emoji's tones over its cell, kept inside the panel; nothing for one

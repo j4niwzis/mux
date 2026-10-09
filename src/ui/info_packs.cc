@@ -61,25 +61,26 @@ struct pack_open {
   scene::Taken operator()() const { box->open_pack(index); return {}; }
 };
 template <class Box>
-auto pack_row(Box* box, std::size_t index, const emote_pack& pack) {
+auto pack_row(const palette& colours, const std::optional<std::string>& room,
+              Box* box, std::size_t index, const emote_pack& pack) {
   namespace c = skiff::compose;
   auto picture = c::styled({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle,
-                            .cornerRadius = 8.0f, .background = box->colours_->tile},
+                            .cornerRadius = 8.0f, .background = colours.tile},
       nodes::Image<from_avatars>({pack.avatar.value_or(pack.pictures.empty() ? std::string() : pack.pictures.front().url)}));
   picture.keepBox();
   return c::onPress(pack_open<Box>{box, index},
       c::row(c::hbox(12.0f, {.fillX = true, .height = 56.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
-                             .cornerRadius = 8.0f, .hoverBackground = box->colours_->chosen}),
+                             .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
              std::move(picture),
-             two_lines(*box->colours_, pack.name.empty() ? "Unnamed pack" : pack.name,
+             two_lines(colours, pack.name.empty() ? "Unnamed pack" : pack.name,
                  std::format("{} images · {}{}", pack.pictures.size(),
                      pack.emoji && pack.sticker ? "Emoji and stickers" : pack.emoji ? "Emoji" : "Stickers",
-                     pack.chat != box->room ? " · From space" : ""), 14.0f, 2.0f),
+                     pack.chat != room ? " · From space" : ""), 14.0f, 2.0f),
              c::visible(pack.chat.has_value(),
                  c::onClick(request::adopt_pack{pack},
                      c::styled({.width = 120.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle,
-                                 .cornerRadius = 6.0f, .hoverBackground = box->colours_->tile},
-                         nodes::Text("Add to account", 13.0f, box->colours_->accent)), "Add pack to account"))),
+                                 .cornerRadius = 6.0f, .hoverBackground = colours.tile},
+                         nodes::Text("Add to account", 13.0f, colours.accent)), "Add pack to account"))),
       pack.name.empty() ? "Open pack" : pack.name);
 }
 
@@ -144,7 +145,8 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
   };
   // A pack in the list: its picture, its name, how many images and what
   // for; pressed, opened.
-  using pack_row_t = decltype(pack_row(std::declval<packs_box*>(), std::size_t{}, std::declval<const emote_pack&>()));
+  using pack_row_t = decltype(pack_row(std::declval<const palette&>(), std::declval<const std::optional<std::string>&>(),
+                                      std::declval<packs_box*>(), std::size_t{}, std::declval<const emote_pack&>()));
   // An image of the pack open: its picture, its shortcode to edit, its use,
   // and × to take it out.
   struct picture_row : skiff::compose::Stacked {
@@ -353,7 +355,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
     auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     rows.clear();
     for (std::size_t i = 0; i < packs.size(); ++i)
-      rows.push_back(pack_row(this, i, packs[i]));
+      rows.push_back(pack_row(*colours_, room, this, i, packs[i]));
     this->show_page();
   }
   // A pack opened -- a new one where none is named -- to edit.

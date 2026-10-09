@@ -325,7 +325,16 @@ void look_as_its_content(widgets::Dialog<Content, Dismiss>& dialog, const palett
   dialog.setDismissable(look.dismissable);
 }
 // Anything else a window holds: no dialog, nothing to put.
-inline void look_as_its_content(const auto&, const palette&) {}
+// Binding wrappers retain the content type. An exact wrapper overload
+// must win over the fallback, rather than silently keeping the default size.
+template <class Dialog>
+  requires requires { typename Dialog::dialog_content; }
+void look_as_its_content(Dialog& dialog, const palette& colours) {
+  look_as_its_content<typename Dialog::dialog_content, widgets::dismiss::pressed>(dialog, colours);
+}
+template <class Node>
+  requires (!requires { typename Node::dialog_content; })
+void look_as_its_content(const Node&, const palette&) {}
 
 // Each account's protocol state, as its client last said it
 // (ui_shared::protocol_states): what the extension points are asked with.

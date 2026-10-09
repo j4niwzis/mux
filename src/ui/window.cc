@@ -114,6 +114,7 @@ void show(shown_model& showing, std::optional<Facts> facts) {
 // they are gone. Pressed off, or Esc: that part emptied.
 template <class Content, class Facts, class Needs>
 struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
+  using dialog_content = Content;
   const Needs* needs = nullptr;
   explicit shown_dialog(const Needs* handed) : needs(handed) {}
   void read(const std::optional<Facts>& now) {

@@ -578,16 +578,9 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   shared.emoji.favourite_stickers = this->recent().favourite_stickers;
   if (saved.last_account)
     this->root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
-  shared.looks.bubbles_everywhere = this->appearance().bubbles.value_or(mux::config::bubble_look{});
-  shared.looks.panels_everywhere = this->appearance().panels.value_or(mux::config::bubble_look{});
-  this->choose_field<&mux::config::look_settings::wallpaper_behind>(shared.looks.window.behind);
-  shared.looks.window.live_blur = saved.live_blur.value_or(false);
-  this->choose_field<&mux::config::look_settings::live_blur>(shared.looks.window.live_blur);
-  this->choose_field<&mux::config::look_settings::frost_blur>(shared.looks.window.frost);
-  shared.looks.window.home_hides = this->appearance().home_hides_spaced;
-  shared.looks.window.home_direct = this->appearance().home_hides_direct;
-  shared.looks.window.spaces = this->appearance().spaces;
-  shared.looks.window.top_bar = this->appearance().top_bar;
+  // Read the loaded appearance just as a later settings change does.
+  // Writing the window's defaults here replaced the saved blur and backdrop.
+  this->show_looks();
   this->choose_field<&mux::config::look_settings::interface_scale>(std::clamp(this->appearance().interface_scale, mux::ui::kScaleLeast, mux::ui::kScaleMost));
   shared.looks.window.interface_scale = this->appearance().interface_scale;
   if (!demo)

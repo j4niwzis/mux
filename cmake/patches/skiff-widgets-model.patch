@@ -202,3 +202,103 @@ index ccfdd22..8e9eeaa 100644
 +  button.read(event{3});
 +  EXPECT_EQ(button.onPress().value, 3);
 +}
+diff --git a/src/wallpaper.cc b/src/wallpaper.cc
+index 5bdb23a..562ee1a 100644
+--- a/src/wallpaper.cc
++++ b/src/wallpaper.cc
+@@ -164,12 +164,24 @@ struct Backdrop {
+ [[nodiscard]] inline skia::Sp<skia::SkImage> backdropImage(const Backdrop &one, float blur) {
+   return one.blurs ? one.blurs->at(blur >= 0.0f ? blur : one.own) : nullptr;
+ }
++// A backdrop may follow a rounded box or a bubble's complete tail path.
++using BackdropShape = spl::variant<skia::SkRRect, skia::SkPath>;
++[[nodiscard]] inline skia::SkRect backdropBounds(const BackdropShape& shape) {
++  return spl::visit(spl::overloaded{
++      [](const skia::SkRRect& box) { return box.rect(); },
++      [](const skia::SkPath& path) { return path.getBounds(); }}, shape);
++}
++inline void drawBackdropShape(skia::SkCanvas* canvas, const BackdropShape& shape, const skia::SkPaint& paint) {
++  spl::visit(spl::overloaded{
++      [&](const skia::SkRRect& box) { canvas->drawRRect(box, paint); },
++      [&](const skia::SkPath& path) { canvas->drawPath(path, paint); }}, shape);
++}
+ // The piece of a backdrop under a shape, as blurred as `blur` says: the
+ // shape filled with the image, one antialiased draw -- not an antialiased
+ // clip, a mask made for each frosted thing at each repaint, and the image
+ // drawn into it. At the device's pixels, put down as it is; smoothed only
+ // where it is smaller than the device; nothing outside the backdrop.
+-inline void drawBackdrop(skia::SkCanvas *canvas, const Backdrop &one, float blur, const skia::SkRRect &shape, float alpha) {
++inline void drawBackdrop(skia::SkCanvas *canvas, const Backdrop &one, float blur, const BackdropShape &shape, float alpha) {
+   skia::SkMatrix inverse;
+   if (one.device.isEmpty() || !canvas->getTotalMatrix().invert(&inverse)) {
+     return;
+@@ -187,7 +199,7 @@ inline void drawBackdrop(skia::SkCanvas *canvas, const Backdrop &one, float blur
+   paint.setShader(image->makeShader(skia::SkTileMode::kDecal, skia::SkTileMode::kDecal,
+                                     skia::SkSamplingOptions(sharp ? skia::SkFilterMode::kNearest : skia::SkFilterMode::kLinear),
+                                     &local));
+-  canvas->drawRRect(shape, paint);
++  drawBackdropShape(canvas, shape, paint);
+ }
+ // What is under a shape, frosted, of the backdrops the wallpapers offered (in
+ // the order they lie, the lowest first): those drawn in this frame and under
+@@ -198,8 +210,8 @@ inline void drawBackdrop(skia::SkCanvas *canvas, const Backdrop &one, float blur
+ // not drawn.
+ template <std::ranges::forward_range Backdrops>
+   requires std::convertible_to<std::ranges::range_reference_t<Backdrops>, const Backdrop &>
+-void drawBackdrops(skia::SkCanvas *canvas, Backdrops &&all, float blur, const skia::SkRRect &shape, float alpha) {
+-  const skia::SkRect on = canvas->getTotalMatrix().mapRect(shape.rect());
++void drawBackdrops(skia::SkCanvas *canvas, Backdrops &&all, float blur, const BackdropShape &shape, float alpha) {
++  const skia::SkRect on = canvas->getTotalMatrix().mapRect(backdropBounds(shape));
+   const std::uint64_t now = skiff::scene::work::frameNumber();
+   auto under = std::views::filter(all, [&](const Backdrop &one) {
+                  return one.frame == now && skia::SkRect::Intersects(one.device, on);
+@@ -222,7 +234,7 @@ concept BackdropSource = std::copy_constructible<Source> && requires(const Sourc
+ // it. As blurred as setBlur says (0 to 1); below 0, the backdrop's own.
+ // The backdrops a source gives, drawn: those it is called for.
+ template <BackdropSource Source>
+-void drawFrom(const Source &source, skia::SkCanvas *canvas, float blur, const skia::SkRRect &shape, float alpha) {
++void drawFrom(const Source &source, skia::SkCanvas *canvas, float blur, const BackdropShape &shape, float alpha) {
+   drawBackdrops(canvas, source(), blur, shape, alpha);
+ }
+ // A source, whatever it is: its backdrops drawn as they would be, lazily, by
+@@ -234,17 +246,17 @@ public:
+   template <class Source>
+     requires(!std::same_as<std::remove_cvref_t<Source>, AnyBackdropSource> && BackdropSource<Source>)
+   explicit AnyBackdropSource(Source source)
+-      : fDraw([source = std::move(source)](skia::SkCanvas *canvas, float blur, const skia::SkRRect &shape, float alpha) {
++      : fDraw([source = std::move(source)](skia::SkCanvas *canvas, float blur, const BackdropShape &shape, float alpha) {
+           drawFrom(source, canvas, blur, shape, alpha);
+         }) {}
+-  void draw(skia::SkCanvas *canvas, float blur, const skia::SkRRect &shape, float alpha) const {
++  void draw(skia::SkCanvas *canvas, float blur, const BackdropShape &shape, float alpha) const {
+     fDraw(canvas, blur, shape, alpha);
+   }
+ 
+ private:
+-  std::function<void(skia::SkCanvas *, float, const skia::SkRRect &, float)> fDraw;
++  std::function<void(skia::SkCanvas *, float, const BackdropShape &, float)> fDraw;
+ };
+-inline void drawFrom(const AnyBackdropSource &source, skia::SkCanvas *canvas, float blur, const skia::SkRRect &shape,
++inline void drawFrom(const AnyBackdropSource &source, skia::SkCanvas *canvas, float blur, const BackdropShape &shape,
+                      float alpha) {
+   source.draw(canvas, blur, shape, alpha);
+ }
+@@ -271,14 +283,16 @@ public:
+   void drawSelf(skia::SkCanvas *canvas, float alpha) {
+     // Its shape as its State says: its corner radius, or each corner's own
+     // -- as what it is behind says them.
+-    const skia::SkRRect shape = skiff::scene::detail::roundedBox(fState, fState.fBounds);
++    const BackdropShape shape = fState.fTail
++        ? BackdropShape{skiff::scene::detail::boxWithTail(fState, fState.fBounds)}
++        : BackdropShape{skiff::scene::detail::roundedBox(fState, fState.fBounds)};
+     drawFrom(fSource, canvas, fBlur, shape, alpha);
+     if (fTint) {
+       skia::SkPaint paint;
+       paint.setAntiAlias(true);
+       paint.setColor(*fTint);
+       paint.setAlphaf(paint.getAlphaf() * alpha);
+-      canvas->drawRRect(shape, paint);
++      drawBackdropShape(canvas, shape, paint);
+     }
+   }
+ 

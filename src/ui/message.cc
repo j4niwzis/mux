@@ -289,9 +289,6 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       // The time inside the last line of the text, where that line leaves
       // room for it, as Telegram's: out of the column's flow, at its end.
       nodes::Text inline_time;
-      // The last of a run's tail, as Telegram's: out of the flow, at the
-      // corner on the sender's side, in the bubble's colour.
-      std::optional<nodes::Icon> tail;
     } parts;
     skia::SkColor plate = 0;
     // A protocol's sticker placed, where it made one.
@@ -410,7 +407,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
       // A sticker's time is over it, and nowhere else: placed beside its
       // reactions too, it was shown twice.
       if (picture && picture->sticker) {
@@ -507,34 +504,14 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
     skia::SkRect placed_beside = skia::SkRect::MakeEmpty();
     float placed_width = -1.0f;
     std::string placed_time;
-    // The tail: 10 by 12, its straight side on the bubble's edge, curving
-    // down and out to its tip at the bubble's bottom.
-    static IconShape tail_shape(bool mine) {
-      const float side = mine ? -5.0f : 5.0f, tip = -side;
-      return {{{marks::path{{steps::move{side + (mine ? -1.0f : 1.0f), -6.0f}, steps::line{side, -6.0f},
-                             steps::cubic{side, 1.0f, side * 0.2f, 5.0f, tip, 6.0f},
-                             steps::line{side + (mine ? -1.0f : 1.0f), 6.0f}, steps::close{}}},
-                0.0f, true}}};
-    }
     void grow_tail(bool mine) {
       const scene::Corners squared = mine ? scene::Corners{12.0f, 12.0f, 0.0f, 12.0f} : scene::Corners{12.0f, 12.0f, 12.0f, 0.0f};
       // The bubble's own fill and its tail one shape (skiff's Tail): a
       // see-through bubble is so once, with no seam -- a tail of its own
       // over the bubble's edge showed both through, darker where they met.
-      if (!parts.frost) {
-        fState.apply({.corners = squared,
-                      .tail = scene::Tail{.side = mine ? scene::TailSide{scene::tail_side::right{}} : scene::TailSide{scene::tail_side::left{}}}});
-        return;
-      }
-      // Frosted, the fill is the pane's, under the bubble's own: the tail a
-      // shape of its own, in the pane's tint.
-      parts.tail.emplace(tail_shape(mine), plate);
-      parts.tail->apply({.place = mine ? scene::anchor::kBottomRight : scene::anchor::kBottomLeft,
-                         .x = mine ? kPadX + 10.0f : -(kPadX + 10.0f),
-                         .y = kPadY,
-                         .width = 10.0f,
-                         .height = 12.0f});
-      fState.apply({.corners = squared});
+      fState.apply({.corners = squared,
+                    .tail = scene::Tail{.side = mine ? scene::TailSide{scene::tail_side::right{}} : scene::TailSide{scene::tail_side::left{}}}});
+      // The backdrop and its tint use the same shape, including its tail.
       this->sync_frost();
     }
     // Before its first layout, where the time goes is guessed from the text
@@ -545,7 +522,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -571,6 +548,10 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
     // Frosted as much as `blur` says: a pane behind all of it, filling it to
     // its edges, in its corners.
     void frosted(float blur) {
+      if (parts.frost) {
+        parts.frost->setBlur(blur);
+        return;
+      }
       parts.frost.emplace(frost_source{}, blur);
       parts.frost->apply({.place = scene::anchor::kTopLeft, .fill = true, .margin = {-kPadY, -kPadX, -kPadY, -kPadX},
                           .cornerRadius = 12.0f});
@@ -588,7 +569,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
         return;
       const scene::Margin& pad = fState.fPadding;
       parts.frost->apply({.margin = {-pad.fTop, -pad.fRight, -pad.fBottom, -pad.fLeft}, .cornerRadius = fState.fCornerRadius,
-                          .corners = fState.fCorners});
+                          .corners = fState.fCorners, .tail = fState.fTail});
     }
     body_column(const palette &colours, const looks_shown &looks, bool mine,
                 std::string said, std::string when)
@@ -608,7 +589,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
                         nodes::Text(when, 11.0f,
                                     mine ? colours.sent_time : colours.dim)))},
           plate(plate_of(colours, looks.bubbles, mine)) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
       // Frosted: what is behind blurred under the tint; glass: a light edge.

@@ -232,6 +232,14 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG 51b8103022a30385ddd8368a9ecbcca62c753f7c)
+# Until the shared Debug algorithms are in skiff's pin, carry its source
+# change here. A single-config Release build still fetches the original
+# tree. Multi-config builds use the patch, whose code and flags are guarded
+# by Debug alone; Release keeps its typed layout and drawing unchanged.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_CONFIGURATION_TYPES)
+  cme_declare_port(NAME skiff PATCHES
+    "${CMAKE_CURRENT_LIST_DIR}/cmake/patches/skiff-shared-debug-algorithms.patch")
+endif()
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
   GIT_TAG 4b2529e6582b784f349166f5d922dc60bb4fe7dc)

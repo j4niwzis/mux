@@ -660,6 +660,39 @@ TEST(Timeline, AShortReplyToALongMessageIsNarrow) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+TEST(Timeline, WrappedMessageTimeFollowsTheFinalLineAfterResizing) {
+  auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
+  auto face = manager ? manager->matchFamilyStyle("DejaVu Sans", skia::SkFontStyle()) : nullptr;
+  if (!face) GTEST_SKIP() << "Needs a font for wrapping";
+  skiff::paint::fonts().setPrimary(face);
+  skia::SkFont font(face);
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
+  mux::ui::palette colours;
+  mux::ui::looks_shown looks;
+  using bubble = mux::ui::message_bubble<stub>;
+  scene::Scene<bubble::body_column> view{std::in_place, colours, looks, false,
+      "there is maybe one or two people in this room who understand the reference", "04:37"};
+  auto& body = view.root();
+  body.base_min = 350.0f; // A reply header can make the bubble wider than its last line.
+  body.apply({.minWidth = body.base_min});
+  double now = 1000.0;
+  for (const float width : {440.0f, 260.0f, 440.0f}) {
+    for (int frame = 0; frame < 12; ++frame) {
+      view.update(now += 16.0);
+      view.layoutIfNeeded(skia::SkRect::MakeWH(width, 400.0f));
+      (void)view.finishFrame();
+    }
+    const auto& text = body.parts.text;
+    const auto& time = body.parts.inline_time;
+    ASSERT_TRUE(time.visible());
+    EXPECT_GT(text.bounds().height(), 24.0f);
+    EXPECT_NEAR(time.bounds().fBottom, text.bounds().fBottom + bubble::kTimeLower, 0.5f);
+    EXPECT_GE(time.bounds().fLeft, text.bounds().fLeft + text.lastLineWidth() + 8.0f);
+    EXPECT_FALSE(body.settling());
+  }
+}
+
 TEST(MessageLinks, RepeatedMessageCardsStayBetweenTheirSurroundingText) {
   const mux::conversation chat{};
   const std::string url = "https://matrix.to/#/!room:example.org/$message";

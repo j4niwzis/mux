@@ -308,6 +308,22 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       if (parts.quote)
         parts.quote->apply({.maxWidth = side ? beside_room : 0.0f});
       this->nodes::Stack::layoutChildren();
+      // The column can wrap again in its final box. Position its overlay
+      // here, after that layout, rather than keeping a pre-layout offset.
+      if (parts.inline_time.visible()) {
+        const auto last = parts.reactions ? parts.reactions->bounds() : parts.text.bounds();
+        if (!last.isEmpty()) {
+          parts.inline_time.apply({.y = last.fBottom - fState.contentBox().fBottom + kTimeLower});
+          scene::layout(parts.inline_time, fState.contentBox());
+        }
+      }
+      if (time_placed && parts.text.visible() && parts.blocks.empty() && !parts.preview && !beside) {
+        const auto last = parts.reactions ? parts.reactions->bounds() : parts.text.bounds();
+        if (last != placed_beside) {
+          time_placed = false;
+          this->markDamaged();
+        }
+      }
       if (!side)
         return;
       const skia::SkRect sticker = parts.picture->bounds();
@@ -441,21 +457,10 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
         inline_time.setVisible(inside);
         widened = widest;
         fState.apply({.minWidth = std::max(base_min, widest)});
+        time_placed = false;
         this->invalidateLayout();
       }
-      // On the last line: its bottom where the text's is, wherever the text
-      // ends in the bubble -- anchored to the bubble's bottom alone, it stood
-      // above the line it is beside.
-      if (inside) {
-        const float drop = last.fBottom - fState.contentBox().fBottom;
-        if (std::abs(drop - time_drop) > 0.25f) {
-          time_drop = drop;
-          inline_time.apply({.y = drop + kTimeLower});
-          this->invalidateLayout();
-        }
-      }
     }
-    float time_drop = 0.0f;
     skia::SkRect placed_beside = skia::SkRect::MakeEmpty();
     float placed_width = -1.0f;
     std::string placed_time;

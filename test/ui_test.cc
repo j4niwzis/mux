@@ -1923,6 +1923,14 @@ TEST(Html, MixedReactionTextKeepsWordsAndResolvesEveryCustomEmoji) {
 TEST(About, DependencyPagesUseUniqueResolvedIds) {
   std::set<std::string_view> ids;
   ASSERT_FALSE(mux::ui::about_data::libraries.empty());
+  ASSERT_FALSE(mux::ui::about_data::primary_libraries.empty());
+  std::set<std::string_view> primary;
+  for (const auto id : mux::ui::about_data::primary_libraries) {
+    EXPECT_TRUE(primary.insert(id).second);
+    EXPECT_NE(mux::ui::library_of(id), nullptr);
+    EXPECT_FALSE(id.starts_with("rust:")); // Crates belong on their library's dependency pages.
+  }
+  EXPECT_TRUE(primary.contains("splice"));
   for (const auto& library : mux::ui::about_data::libraries) {
     EXPECT_TRUE(ids.insert(library.id).second);
     EXPECT_FALSE(library.version.empty());

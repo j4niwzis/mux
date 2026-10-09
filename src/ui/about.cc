@@ -32,9 +32,10 @@ inline const library_info* library_of(std::string_view id) {
   return found == about_data::libraries.end() ? nullptr : &*found;
 }
 inline auto about_page(const palette& colours) {
-  auto libraries = about_data::libraries | std::views::transform([&](const library_info& library) {
-    return library_link(colours, library);
-  }) | std::ranges::to<std::vector>();
+  auto libraries = std::ranges::to<std::vector>(std::views::transform(
+      about_data::primary_libraries, [&](std::string_view id) {
+        return library_link(colours, *library_of(id));
+      }));
   return skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "About mux", {}, {}, true, true),

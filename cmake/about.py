@@ -104,7 +104,9 @@ def generate(args):
     for record in records:
         fields = [record[k] for k in ("name", "label", "version", "revision", "license", "repository", "license_text")]
         text += "  {" + ", ".join(map(literal, fields)) + ", {" + ", ".join(map(literal, record["dependencies"])) + "}},\n"
-    text += "};\n}\n"
+    text += "};\n"
+    primary = [r["name"] for r in records if r.get("primary", False)]
+    text += "inline constexpr std::array<std::string_view, " + str(len(primary)) + "> primary_libraries{" + ", ".join(map(literal, primary)) + "};\n}\n"
     path = Path(args.output)
     if not path.is_file() or path.read_text() != text:
         path.write_text(text)

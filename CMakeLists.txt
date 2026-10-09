@@ -23,6 +23,12 @@ endif()
 
 project(mux VERSION 0.1 LANGUAGES C CXX)
 
+# Keep direct requests distinct from requests made by the libraries themselves.
+macro(mux_find_package mux_requested_package)
+  set_property(GLOBAL APPEND PROPERTY MUX_ABOUT_PRIMARY_PACKAGES "${mux_requested_package}")
+  cme_find_package(${mux_requested_package} ${ARGN})
+endmacro()
+
 # A release build is optimised across its units (ThinLTO with clang), where
 # the toolchain can: mux's own targets, set at the end -- not the libraries
 # fetched for it, whose archives the system's ar cannot index as bitcode.
@@ -105,8 +111,8 @@ cme_options(loom "LOOM_TESTS OFF")
 
 # Boost: Asio for the sockets and the loop, Beast for Matrix's HTTP,
 # Context for the fibers, and PFR as a module for what reads with it.
-cme_find_package(Boost COMPONENTS asio beast pfr[modules] context REQUIRED)
-cme_find_package(OpenSSL REQUIRED)
+mux_find_package(Boost COMPONENTS asio beast pfr[modules] context REQUIRED)
+mux_find_package(OpenSSL REQUIRED)
 
 # Boost's definitions reach what links Boost, and nothing else, as in the
 # libraries under mux: defined for the whole build they were on the std
@@ -130,7 +136,7 @@ cme_declare_port(NAME splice PROVIDES splice
   LICENSE GPL-3.0-only
   TARGETS splice)
 cme_options(splice "SPLICE_TESTS OFF")
-cme_find_package(splice 0.4.1 REQUIRED)
+mux_find_package(splice 0.4.1 REQUIRED)
 
 # alef, which tern reads addresses with and skiff lays text out with, asked
 # for once with all that both of them need, before either asks: a later ask
@@ -143,7 +149,7 @@ cme_declare_port(NAME alef PROVIDES alef
   LICENSE AGPL-3.0-only
   TARGETS alef)
 cme_options(alef "ALEF_TESTS OFF")
-cme_find_package(alef 0.1.1 COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
+mux_find_package(alef 0.1.1 COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 
 
 # knot, with concrete writer frames and streaming raw JSON: what is not
@@ -156,14 +162,17 @@ cme_declare_port(NAME knot PROVIDES knot
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),
 # not only tern.
-cme_find_package(chevron 0.2 REQUIRED)
-cme_find_package(tern REQUIRED)
+# knot is linked directly by mux_vault and mux_config, but its package
+# is already resolved through chevron/tern.
+set_property(GLOBAL APPEND PROPERTY MUX_ABOUT_PRIMARY_PACKAGES knot)
+mux_find_package(chevron 0.2 REQUIRED)
+mux_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.
-cme_find_package(loom 0.1.1 COMPONENTS state crypto cs-joining cs-leaving cs-login cs-registration cs-oauth_server_metadata cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-device_management cs-room_upgrades cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher cs-voip REQUIRED)
+mux_find_package(loom 0.1.1 COMPONENTS state crypto cs-joining cs-leaving cs-login cs-registration cs-oauth_server_metadata cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-device_management cs-room_upgrades cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher cs-voip REQUIRED)
 # End-to-end encryption: Olm and Megolm, by vodozemac -- the kazv project's
 # C++ bindings, a Rust library built by cargo through cmake-everywhere.
-cme_find_package(vodozemac REQUIRED)
+mux_find_package(vodozemac REQUIRED)
 
 # One library of mux's modules, as the libraries it stands on have: modules
 # are what separates them. The window's two join it where the window is
@@ -263,7 +272,7 @@ else()
   set(mux_skiff_components)
   cme_options(skiff "SKIFF_UI OFF")
 endif()
-cme_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
+mux_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
 add_library(mux_config)
 # With the protocols' tags and what each keeps in the accounts file: the
 # settings read them, and everything above reads the settings.
@@ -279,17 +288,17 @@ foreach(name IN ITEMS core net xmpp http matrix media logic)
 endforeach()
 
 if(MUX_UI)
-  cme_find_package(SDL3 REQUIRED)
+  mux_find_package(SDL3 REQUIRED)
   # Sound: voice messages are Opus in Ogg; audio files are that or Vorbis.
-  cme_find_package(Opus REQUIRED)
-  cme_find_package(Vorbis REQUIRED)
+  mux_find_package(Opus REQUIRED)
+  mux_find_package(Vorbis REQUIRED)
   # Video, as tdesktop plays it: FFmpeg -- the system's where it has one,
   # else built with only what a chat's videos are in and made of. Off, the
   # client has no FFmpeg, and a video is played by the system's player.
   option(MUX_VIDEO "Videos played in the window, through FFmpeg" ${mux_desktop_default})
   set(mux_video_libraries)
   if(MUX_VIDEO)
-    cme_find_package(FFmpeg COMPONENTS mp4 matroska h264 hevc vp9 aac opus mp3 REQUIRED)
+    mux_find_package(FFmpeg COMPONENTS mp4 matroska h264 hevc vp9 aac opus mp3 REQUIRED)
     set(mux_video_libraries FFmpeg::avformat FFmpeg::avcodec FFmpeg::swscale FFmpeg::swresample FFmpeg::avutil)
   endif()
   # Calls -- voice, for now -- through WebRTC: libdatachannel, and libjuice,
@@ -299,7 +308,7 @@ if(MUX_UI)
   set(mux_calls_sources src/calls/media_none.cc)
   set(mux_calls_libraries)
   if(MUX_CALLS)
-    cme_find_package(LibDataChannel REQUIRED)
+    mux_find_package(LibDataChannel REQUIRED)
     set(mux_calls_sources src/calls/media.cc)
     set(mux_calls_libraries LibDataChannel::LibDataChannel)
   endif()
@@ -377,7 +386,7 @@ if(MUX_UI)
       list(REMOVE_ITEM mux_platform_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/${common_name}")
     endif()
   endforeach()
-  cme_find_package(skiff-widgets REQUIRED)
+  mux_find_package(skiff-widgets REQUIRED)
 
   # The emoji face the window draws emoji with, as tdesktop has its own:
   # Noto Color Emoji, fetched once at a pinned commit and checked, and put

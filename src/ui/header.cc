@@ -374,30 +374,50 @@ struct selection_shown {
   std::size_t count = 0;
   bool forwardable = false;
   bool deletable = false;
+  friend bool operator==(const selection_shown&, const selection_shown&) = default;
 };
-// Messages selected, as tdesktop's: in place of the head, how many, and
-// what can be done with them -- Forward, Copy, Delete -- and Cancel. Esc
-// cancels too. All of it read from what is shown: nothing set by hand.
+// As tdesktop's top bar: Forward and Delete carry the selection count,
+// Clear stays at the right. Copy remains in the context menu and Ctrl+C.
+// Buttons size from their text instead of relying on Button's zero width.
 template <class Actions>
 auto selection_bar(const ui_needs<Actions>& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
-  const scene::Spec button{.height = 32.0f, .alignSelf = scene::align::kMiddle};
+  const scene::Spec action{
+      .height = 32.0f, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle,
+      .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f,
+      .background = colours.accent, .hoverBackground = skiff::paint::lighten(colours.accent, 0.12f),
+      .focusBackground = skiff::paint::lighten(colours.accent, 0.12f)};
+  const auto selected_action = [&](auto event, std::string label) {
+    const std::string accessible = label + " selected messages";
+    return c::onClick(event,
+        c::row(c::hbox(0.0f, action),
+            c::text_of<selection_shown>(
+                [label = std::move(label)](const selection_shown& now) {
+                  return std::format("{} {}", label, now.count);
+                },
+                c::styled({.alignSelf = scene::align::kMiddle},
+                          nodes::Text("", 13.0f, colours.on_accent, true)))),
+        accessible);
+  };
   return c::shown_if<selection_shown>(
       [](const selection_shown& now) { return now.count > 0; },
       c::onKey(scene::keys::kEscape, ::mux::ui::request::selection_cancel{},
-               c::row(c::hbox(8.0f, {.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
-                                     .background = colours.sidebar}),
-                      c::text_of<selection_shown>([](const selection_shown& now) { return std::format("{} selected", now.count); },
-                                                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                                                            nodes::Text("", 15.0f, colours.text, true))),
-                      c::shown_if<selection_shown>([](const selection_shown& now) { return now.forwardable; },
-                                                   c::styled(button, button_for<sends<::mux::ui::request::selection_forward>>(colours.widgets, "Forward", {}))),
-                      c::styled(button, button_for<sends<::mux::ui::request::selection_copy>>(colours.widgets, "Copy", {})),
-                      c::shown_if<selection_shown>([](const selection_shown& now) { return now.deletable; },
-                                                   c::styled(button, button_for<sends<::mux::ui::request::selection_delete>>(colours.widgets, "Delete", {}))),
-                      c::styled(button, button_for<sends<::mux::ui::request::selection_cancel>>(colours.widgets, "Cancel", {})),
-                      c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)))));
+          c::row(c::hbox(8.0f, {.fillX = true, .height = chat_header<Actions>::kHeight,
+                               .padding = {0.0f, 12.0f, 1.0f, 12.0f}, .background = colours.sidebar}),
+              c::shown_if<selection_shown>([](const selection_shown& now) { return now.forwardable; },
+                  selected_action(::mux::ui::request::selection_forward{}, "Forward")),
+              c::shown_if<selection_shown>([](const selection_shown& now) { return now.deletable; },
+                  selected_action(::mux::ui::request::selection_delete{}, "Delete")),
+              c::styled({.grow = scene::axes::kX}, nodes::Box<>(skia::SkColor{0})),
+              c::onClick(::mux::ui::request::selection_cancel{},
+                  c::row(c::hbox(0.0f, {.height = 32.0f, .autoSize = scene::axes::kX,
+                                       .alignSelf = scene::align::kMiddle, .padding = {0.0f, 10.0f, 0.0f, 10.0f},
+                                       .cornerRadius = 6.0f, .hoverBackground = colours.chosen,
+                                       .focusBackground = colours.chosen}),
+                      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Clear", 13.0f, colours.accent, true))),
+                  "Clear message selection"),
+              c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)))));
 }
 template <class Actions>
 using selection_bar_t = decltype(selection_bar(std::declval<const ui_needs<Actions>&>()));

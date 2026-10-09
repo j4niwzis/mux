@@ -378,14 +378,14 @@ void keep_selection(menu_part& self) {
     return;
   }
   const conversation* chat = self.s_->model->find(*self.selected_chat_);
-  const auto removed = std::erase_if(self.selected_, [&](const std::string& id) {
+  (void)std::erase_if(self.selected_, [&](const std::string& id) {
     const message* one = chat ? mux::ui::held_message(*chat, id) : nullptr;
     return !one || one->redacted;
   });
-  if (removed)
-    show_selection(self);
-  else
-    self.s_->root().main().show_selection(self.selected_);
+  // The room's permissions and account capabilities can change while the
+  // selection stays the same. Refresh its actions too; equal facts do not
+  // change the shown model's revision.
+  show_selection(self);
 }
 
 void part_apply(menu_part& self, const request::menu_edit_history&) {
@@ -474,7 +474,9 @@ void show_selection(menu_part& self) {
   const auto now = chat ? mux::ui::protocol_state_of(self.s_->ui, chat->id.account) : mux::protocol_state_t{};
   const bool available = chat && proto::available(now);
   const bool deletable = available && !chosen.empty() && std::ranges::all_of(chosen, [&](const message* one) { return proto::may_delete(now, *chat, one->outgoing); });
-  mux::ui::show(*self.s_->showing, mux::ui::selection_shown{chosen.size(), available && ops.forward, deletable});
+  const mux::ui::selection_shown shown{chosen.size(), available && ops.forward, deletable};
+  if (*self.s_->showing->look<mux::ui::selection_shown>() != shown)
+    mux::ui::show(*self.s_->showing, shown);
   self.s_->root().main().show_selection(self.selected_);
 }
 

@@ -1683,3 +1683,57 @@ TEST(Selection, CapturesTapsAndSelectsAReversedRange) {
   EXPECT_TRUE(chosen->selected);
   EXPECT_TRUE(release.fReleasePointer);
 }
+
+
+TEST(Selection, TelegramActionsHaveWidthAndDispatchOnDesktopAndPhone) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  for (const float width : {390.0f, 1000.0f}) {
+    stub program;
+    ui_state ui;
+    auto bar = mux::ui::selection_bar(ui.needs(program));
+    scene::Scene<decltype(bar)> window{std::move(bar)};
+    ui.show(window.root(), mux::ui::selection_shown{2, true, true});
+    window.layoutIfNeeded(skia::SkRect::MakeWH(width, 60.0f));
+    auto& forward = std::get<0>(window.root().fParts);
+    auto& remove = std::get<1>(window.root().fParts);
+    auto& clear = std::get<3>(window.root().fParts);
+    EXPECT_EQ(std::get<0>(forward.fParts).text(), "Forward 2");
+    EXPECT_EQ(std::get<0>(remove.fParts).text(), "Delete 2");
+    for (const auto& bounds : {forward.bounds(), remove.bounds(), clear.bounds()}) {
+      EXPECT_GT(bounds.width(), 0.0f);
+      EXPECT_GT(bounds.height(), 0.0f);
+      EXPECT_GE(bounds.fLeft, window.root().bounds().fLeft);
+      EXPECT_LE(bounds.fRight, window.root().bounds().fRight);
+    }
+    scene::hostWork().pressed.clear();
+    scene::InputRouter router;
+    const std::array layers{scene::InputRouter::Layer{window.handle(), false}};
+    router.setLayers(layers);
+    struct sink {
+      int forwarded = 0, deleted = 0, cleared = 0;
+      void take(const mux::ui::request::selection_forward&) { ++forwarded; }
+      void take(const mux::ui::request::selection_delete&) { ++deleted; }
+      void take(const mux::ui::request::selection_cancel&) { ++cleared; }
+    } requests;
+    for (const auto& bounds : {forward.bounds(), remove.bounds(), clear.bounds()}) {
+      router.pointer(scene::PointerEvent{scene::pointer::down{bounds.centerX(), bounds.centerY()}});
+      router.pointer(scene::PointerEvent{scene::pointer::up{bounds.centerX(), bounds.centerY()}});
+      const auto presses = std::exchange(scene::hostWork().pressed, {});
+      ASSERT_FALSE(presses.empty());
+      for (const auto& path : presses)
+        ASSERT_TRUE(skiff::bind::press(window.root(), ui.showing, path, &requests));
+    }
+    EXPECT_EQ(requests.forwarded, 1);
+    EXPECT_EQ(requests.deleted, 1);
+    EXPECT_EQ(requests.cleared, 1);
+    ui.show(window.root(), mux::ui::selection_shown{3, true, false});
+    window.layoutIfNeeded(skia::SkRect::MakeWH(width, 60.0f));
+    EXPECT_TRUE(forward.visible());
+    EXPECT_FALSE(remove.visible());
+    EXPECT_EQ(std::get<0>(forward.fParts).text(), "Forward 3");
+    ui.show(window.root(), mux::ui::selection_shown{});
+    EXPECT_FALSE(window.root().visible());
+  }
+  skiff::paint::defaultFont() = nullptr;
+}

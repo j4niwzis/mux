@@ -39,6 +39,41 @@ export import :names;
 
 export namespace mux::proto::matrix::client {
 
+// Joined ancestors only, in breadth-first order. A removed relation has no
+// via servers; visited rooms make cycles and diamonds harmless. A space's
+// child relation also covers rooms that do not publish a reciprocal parent.
+inline std::vector<std::string> pack_rooms(const loom::client::state& all, const loom::client::joined_room& room) {
+  const auto first = std::ranges::find_if(all.joined, [&](const auto& one) { return &one.second == &room; });
+  if (first == all.joined.end())
+    return {};
+  std::vector<std::string> rooms{first->first};
+  std::set<std::string> visited{first->first};
+  for (std::size_t at = 0; at < rooms.size(); ++at) {
+    const std::string current = rooms[at];
+    const auto add = [&](const std::string& id) {
+      if (all.joined.contains(id) && visited.insert(id).second)
+        rooms.push_back(id); // the graph's work queue, not a conversion
+    };
+    std::ranges::for_each(all.joined.at(current).state.events, [&](const auto& event) {
+      spl::visit(spl::overloaded{
+          [&](const loom::ev::m_space_parent_content_t& parent) { if (!parent.via.empty()) add(event.first.second); },
+          [](const auto&) {}}, event.second.content.data());
+    });
+    std::ranges::for_each(all.joined, [&](const auto& candidate) {
+      if (!candidate.second.state.is_space())
+        return;
+      const bool parent = std::ranges::any_of(candidate.second.state.events, [&](const auto& event) {
+        return event.first.second == current && spl::visit(spl::overloaded{
+            [](const loom::ev::m_space_child_content_t& child) { return !child.via.empty(); },
+            [](const auto&) { return false; }}, event.second.content.data());
+      });
+      if (parent)
+        add(candidate.first);
+    });
+  }
+  return rooms;
+}
+
 // What mux reads of the secrets asked of it, by their names: read once,
 // where the name comes in, into a kind -- its own, or any other, passed over.
 namespace own_secret {
@@ -161,6 +196,7 @@ class account {
   // an image uploaded for one.
   void list_packs(std::optional<std::string> room);
   void save_pack(emote_pack pack);
+  void adopt_pack(emote_pack pack);
   void delete_pack(emote_pack pack);
   void upload_pack_picture(pack_picture picture, std::string bytes);
   // Threads (m.thread): a room's roots listed; a thread's answers loaded,

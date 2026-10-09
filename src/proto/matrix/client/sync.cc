@@ -558,7 +558,7 @@ void account<Sink>::run() {
         {"m.room.topic", ""},            {"m.room.encryption", ""},    {"m.room.canonical_alias", ""},
         {"m.room.join_rules", ""},       {"m.room.history_visibility", ""}, {"m.room.power_levels", ""},
         {"m.room.pinned_events", ""},    {"m.room.tombstone", ""},     {"m.space.child", "*"},
-        {"m.space.parent", "*"},         {"im.ponies.room_emotes", "*"}, {"m.room.member", "$LAZY"},
+        {"m.space.parent", "*"}, {"m.room.image_pack", "*"},         {"im.ponies.room_emotes", "*"}, {"m.room.member", "$LAZY"},
         {"m.room.member", "$ME"}};
     const bool sliding_first = sliding_ && !sliding_pos_;
     using sync_result = decltype(perform(syncing, loom::cs::sync{}, std::chrono::seconds(1)));
@@ -776,6 +776,25 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
                               },
                               [](const auto&) {}},
                    event.content.data());
+  const auto affects_packs = [](const auto& event) {
+    return spl::visit(spl::overloaded{
+        [](const loom::ev::im_ponies_user_emotes_content_t&) { return true; },
+        [](const loom::ev::im_ponies_emote_rooms_content_t&) { return true; },
+        [](const loom::ev::m_image_pack_rooms_content_t&) { return true; },
+        [](const loom::ev::im_ponies_room_emotes_content_t&) { return true; },
+        [](const loom::ev::m_room_image_pack_content_t&) { return true; },
+        [](const loom::ev::m_space_parent_content_t&) { return true; },
+        [](const loom::ev::m_space_child_content_t&) { return true; },
+        [](const auto&) { return false; }}, event.content.data());
+  };
+  const bool account_packs = got.account_data && got.account_data->events && std::ranges::any_of(*got.account_data->events, affects_packs);
+  const bool room_packs = got.rooms && got.rooms->join && std::ranges::any_of(*got.rooms->join, [&](const auto& room) {
+    return room.second.state && room.second.state->events && std::ranges::any_of(*room.second.state->events, affects_packs);
+  });
+  // A space pack or an account subscription changes other rooms too, even
+  // when those rooms have no events in this sync response.
+  if (account_packs || room_packs)
+    std::ranges::for_each(state_.joined, [&](const auto& room) { conversation(conversation_id{id_, room.first}, room.second); });
   if (!got.rooms)
     return;
   const auto& rooms = *got.rooms;
@@ -1026,17 +1045,48 @@ template <class Sink>
 auto account<Sink>::emotes_of(const loom::client::joined_room& kept, bool stickers) const -> std::vector<mux::emote> {
   const loom::client::image_use_t use = stickers ? loom::client::image_use_t{loom::client::image_use::sticker{}}
                                                  : loom::client::image_use_t{loom::client::image_use::emoticon{}};
+  const auto read = [&](const auto& content, std::optional<std::string> room, const std::string& key) {
+    std::vector<loom::client::pack_image> images;
+    loom::client::detail::add_packs_of(content, use, images);
+    return std::ranges::to<std::vector>(std::views::transform(images, [&](auto& one) {
+      return mux::emote{.shortcode = std::move(one.shortcode), .url = std::move(one.url),
+                        .body = std::move(one.body), .w = one.w, .h = one.h, .size = one.size,
+                        .mimetype = std::move(one.mimetype), .pack = std::move(one.pack),
+                        .pack_avatar = std::move(one.pack_avatar), .pack_room = room, .pack_key = key};
+    }));
+  };
   std::vector<mux::emote> out;
-  for (loom::client::pack_image& one : loom::client::images(state_, kept, use))
-    out.push_back({.shortcode = std::move(one.shortcode),
-                   .url = std::move(one.url),
-                   .body = std::move(one.body),
-                   .w = one.w,
-                   .h = one.h,
-                   .size = one.size,
-                   .mimetype = std::move(one.mimetype),
-                   .pack = std::move(one.pack),
-                   .pack_avatar = std::move(one.pack_avatar)});
+  const auto append = [&](auto images) {
+    // The same source may be inherited and subscribed; keep it once.
+    std::ranges::for_each(images, [&](auto& one) {
+      if (!std::ranges::any_of(out, [&](const auto& old) {
+        return std::tie(old.pack_room, old.pack_key, old.shortcode) == std::tie(one.pack_room, one.pack_key, one.shortcode);
+      }))
+        out.push_back(std::move(one));
+    });
+  };
+  if (const auto own = state_.account_data.find("im.ponies.user_emotes"); own != state_.account_data.end())
+    append(read(own->second.content.data(), std::nullopt, ""));
+  std::ranges::for_each(pack_rooms(state_, kept), [&](const std::string& room) {
+    std::ranges::for_each(state_.joined.at(room).state.events, [&](const auto& event) {
+      append(read(event.second.content.data(), room, event.first.second));
+    });
+  });
+  const auto subscribed = [&](const auto& rooms) {
+    std::ranges::for_each(rooms, [&](const auto& subscription) {
+      if (const auto joined = state_.joined.find(subscription.first); joined != state_.joined.end())
+        std::ranges::for_each(joined->second.state.events, [&](const auto& event) {
+          if (subscription.second.contains(event.first.second))
+            append(read(event.second.content.data(), subscription.first, event.first.second));
+        });
+    });
+  };
+  std::ranges::for_each(state_.account_data, [&](const auto& event) {
+    spl::visit(spl::overloaded{
+        [&](const loom::ev::im_ponies_emote_rooms_content_t& content) { subscribed(content.rooms); },
+        [&](const loom::ev::m_image_pack_rooms_content_t& content) { subscribed(content.rooms); },
+        [](const auto&) {}}, event.second.content.data());
+  });
   return out;
 }
 

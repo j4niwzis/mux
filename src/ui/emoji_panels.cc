@@ -56,6 +56,50 @@ template <class Rows> [[nodiscard]] auto picker_list(Rows rows) {
           {.fillX = true, .autoSize = scene::axes::kY}, std::move(rows))));
 }
 
+// Group by source and state key, not the displayed title. Old cached and
+// protocol-neutral packs without a source retain their named grouping.
+inline auto emote_pack_identity(const emote& one) {
+  return std::tuple{one.pack_room, one.pack_key, one.pack_room || !one.pack_key.empty() ? std::string() : one.pack};
+}
+inline auto grouped_emotes(const std::vector<emote>& all, std::string fallback) {
+  return std::ranges::to<std::vector>(std::views::transform(
+      std::views::filter(std::views::iota(std::size_t{0}, all.size()), [&](std::size_t i) {
+        return std::ranges::find(all, emote_pack_identity(all[i]), emote_pack_identity) == all.begin() + static_cast<std::ptrdiff_t>(i);
+      }), [&](std::size_t i) {
+        return std::pair{all[i].pack.empty() ? fallback : all[i].pack,
+            std::ranges::to<std::vector>(std::views::filter(all, [&](const auto& one) { return emote_pack_identity(one) == emote_pack_identity(all[i]); }))};
+      }));
+}
+inline std::optional<emote_pack> source_pack(const std::vector<emote>& images, std::string name) {
+  if (images.empty() || !images.front().pack_room || !std::ranges::all_of(images, [&](const auto& one) {
+        return emote_pack_identity(one) == emote_pack_identity(images.front());
+      }))
+    return std::nullopt;
+  return emote_pack{.chat = images.front().pack_room, .key = images.front().pack_key, .name = std::move(name)};
+}
+template <class Panel>
+struct picker_jump {
+  Panel* panel;
+  std::size_t at;
+  scene::Taken operator()() const { panel->bring(at); return {}; }
+};
+template <class Panel>
+auto picker_tab(const palette& colours, Panel* panel, std::size_t at, std::optional<std::string> picture, std::string mark = "⏲") {
+  namespace c = skiff::compose;
+  std::optional<nodes::Image<from_avatars>> image;
+  if (picture) {
+    image.emplace(from_avatars{*picture});
+    image->apply({.width = 24.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle});
+    image->keepBox();
+  }
+  return c::onPress(picker_jump<Panel>{panel, at},
+      c::row(c::justified(c::hbox(0.0f, {.width = 30.0f, .height = 30.0f, .shrink = scene::axes::kX,
+          .minWidth = 24.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
+          .hoverBackground = colours.chosen, .selectedBackground = colours.tile}), nodes::justify::middle{}),
+          std::move(image), c::visible(!picture, c::styled({.alignSelf = scene::align::kMiddle},
+              nodes::Text(std::move(mark), 16.0f, colours.text)))), "Show emoji group");
+}
+
 template <class Actions> struct sticker_grid : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   sticker_grid(const sticker_grid&) = delete;
@@ -96,59 +140,18 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
     }
   };
   // A pack: its name over its stickers.
-  struct section : cell_section<cell> {
-    section(const palette& colours, emoji_kept& kept, std::string name, const std::vector<emote>& stickers)
-        : cell_section<cell>(colours, std::move(name)) {
-      auto& cells = this->each();
-      cells.reserve(stickers.size());
-      for (const emote& one : stickers)
-        cells.emplace_back(colours, kept, one);
-    }
-  };
-  // A pack's tab in the footer: its picture -- the pack's own, else its
-  // first sticker's -- or, for Recent, a clock.
-  struct tab : skiff::compose::Stacked {
-    sticker_grid* grid;
-    std::size_t at;
-    struct parts_t {
-      std::optional<nodes::Image<from_avatars>> picture;
-      std::optional<nodes::Text> mark;
-    } parts;
-    tab(sticker_grid *g, std::size_t place, std::optional<std::string> picture,
-        std::string mark = "\u23F2")
-        : Stacked(skiff::compose::justified(
-              skiff::compose::hbox(0.0f,
-                                   {.width = 30.0f,
-                                    .height = 30.0f,
-                                    .shrink = scene::axes::kX,
-                                    .minWidth = 16.0f,
-                                    .alignSelf = scene::align::kMiddle,
-                                    .cornerRadius = 6.0f,
-                                    .hoverBackground = g->colours_->chosen,
-                                    .selectedBackground = g->colours_->tile}),
-              nodes::justify::middle{})),
-          grid(g), at(place) {
-
-      if (picture) {
-        parts.picture.emplace(from_avatars{*picture});
-        parts.picture->apply({.width = 24.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle});
-        parts.picture->keepBox();
-      } else {
-        parts.mark.emplace(std::move(mark), 16.0f, g->colours_->text);
-        parts.mark->apply({.alignSelf = scene::align::kMiddle});
-      }
-    }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      grid->bring(at);
-      return true;
-    }
-  };
+  using section = cell_section_t<cell>;
+  using tab = decltype(picker_tab(std::declval<const palette&>(), std::declval<sticker_grid*>(), std::size_t{}, std::optional<std::string>{}));
+  static section make_section(const palette& colours, emoji_kept& kept, std::string name, const std::vector<emote>& stickers) {
+    return cell_section(colours, name,
+        std::ranges::to<std::vector>(std::views::transform(stickers, [&](const emote& one) { return cell(colours, kept, one); })),
+        source_pack(stickers, name), kept.pack_account);
+  }
   struct searched {
     sticker_grid* grid;
     void operator()(std::string_view text) const { grid->search(text); }
   };
-  using footer_row = tab_strip<tab>;
+  using footer_row = tab_strip_t<tab>;
   using field_t = widgets::TextBox<searched>;
   using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
   // The colours it is made in, for what it makes later.
@@ -160,7 +163,7 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
     nodes::Text empty;
     list_t list{picker_list(nodes::Flow<std::vector<section>>(
         {.spacingY = 0.0f, .wrap = false}, {}))};
-    footer_row footer{picker_footer()};
+    footer_row footer{tab_strip<tab>(picker_footer())};
     // Over the rest: the sticker the mouse rests on, large.
     std::optional<emote_preview> preview;
   } parts;
@@ -187,18 +190,12 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
   [[nodiscard]] std::vector<section>& sections() { return std::get<0>(std::get<0>(parts.list.fChildren).fChildren); }
   // The packs as the chat has them, in the order they first come; the
   // unnamed together, as "Stickers".
-  [[nodiscard]] static std::string pack_of(const emote& one) { return one.pack.empty() ? std::string("Stickers") : one.pack; }
-  [[nodiscard]] std::vector<std::pair<std::string, std::vector<emote>>> packs() const {
-    const std::vector<std::string> names = std::ranges::to<std::vector>(std::views::transform(kept_->chat_stickers, pack_of));
-    return std::ranges::to<std::vector>(std::views::transform(std::views::filter(std::views::iota(std::size_t{0}, names.size()), [&](std::size_t i) { return std::ranges::find(names, names[i]) == names.begin() + static_cast<std::ptrdiff_t>(i); }), [&](std::size_t i) {
-             return std::pair{names[i], std::ranges::to<std::vector>(std::views::filter(kept_->chat_stickers, [&](const emote& one) { return pack_of(one) == names[i]; }))};
-           }));
-  }
+  [[nodiscard]] auto packs() const { return grouped_emotes(kept_->chat_stickers, "Stickers"); }
   // Recent, then every pack, one under another; a tab for each.
   void show_all() {
     auto& all = this->sections();
     all.clear();
-    auto& tabs = parts.footer.parts.each;
+    auto& tabs = parts.footer.fParts;
     tabs.clear();
     tab_pictures.clear();
     // Recent: those sent lately that the chat still has.
@@ -206,20 +203,20 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
                                   return std::ranges::contains(kept_->chat_stickers, one.url, &emote::url);
                                 }));
     if (!recent.empty()) {
-      all.emplace_back(*colours_, *kept_, "Recently used", recent);
-      tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u23F2");
+      all.push_back(make_section(*colours_, *kept_, "Recently used", recent));
+      tabs.push_back(picker_tab(*colours_, this, all.size() - 1, std::nullopt, "\u23F2"));
     }
     // The favourites: whichever chat they came from -- a sticker is its
     // picture's URL, sent anywhere.
     if (!kept_->favourite_stickers.empty()) {
-      all.emplace_back(*colours_, *kept_, "Favourites", kept_->favourite_stickers);
-      tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u2605");
+      all.push_back(make_section(*colours_, *kept_, "Favourites", kept_->favourite_stickers));
+      tabs.push_back(picker_tab(*colours_, this, all.size() - 1, std::nullopt, "\u2605"));
     }
     for (auto& [name, stickers] : packs()) {
       const std::optional<std::string> picture = stickers.front().pack_avatar ? stickers.front().pack_avatar
                                                                               : std::optional<std::string>(stickers.front().url);
-      all.emplace_back(*colours_, *kept_, name, stickers);
-      tabs.emplace_back(this, all.size() - 1, picture);
+      all.push_back(make_section(*colours_, *kept_, name, stickers));
+      tabs.push_back(picker_tab(*colours_, this, all.size() - 1, picture));
       if (picture)
         tab_pictures.push_back(*picture);
     }
@@ -244,7 +241,9 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
                                      }));
     auto& all = this->sections();
     all.clear();
-    all.emplace_back(*colours_, *kept_, found.empty() ? std::string("Nothing found") : std::string("Search results"), found);
+    std::ranges::for_each(grouped_emotes(found, "Search results"), [&](const auto& pack) {
+      all.push_back(make_section(*colours_, *kept_, pack.first, pack.second));
+    });
     searching = true;
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
@@ -258,7 +257,7 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
       return {};
     const skia::SkRect view = parts.list.bounds().makeOutset(0.0f, kCell);
     std::vector<std::string> out =
-        std::ranges::to<std::vector>(std::views::transform(std::views::filter(std::views::join(std::views::transform(this->sections(), [](section& one) -> std::vector<cell>& { return one.each(); })), [&](cell& one) { return !one.bounds().isEmpty() && parts.list.toView(one.bounds()).intersects(view); }), [](cell& one) { return one.sticker.url; }));
+        std::ranges::to<std::vector>(std::views::transform(std::views::filter(std::views::join(std::views::transform(this->sections(), [](section& one) -> std::vector<cell>& { return cell_section_cells(one); })), [&](cell& one) { return !one.bounds().isEmpty() && parts.list.toView(one.bounds()).intersects(view); }), [](cell& one) { return one.sticker.url; }));
     out.append_range(tab_pictures);
     return out;
   }
@@ -283,8 +282,8 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
     for (std::size_t s = 0; s < all.size(); ++s)
       if (!all[s].bounds().isEmpty() && parts.list.toView(all[s].bounds()).fTop <= top)
         lit = s;
-    for (tab& each : parts.footer.parts.each)
-      if (const bool on = !searching && each.at == lit; on != each.fState.selected())
+    for (auto&& [index, each] : std::views::enumerate(parts.footer.fParts))
+      if (const bool on = !searching && static_cast<std::size_t>(index) == lit; on != each.fState.selected())
         each.fState.apply({.selected = on});
   }
 };
@@ -414,61 +413,20 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     }
   };
   // A group: its name over its emoji (headerTop 10, headerLeft 14).
-  struct section : cell_section<cell> {
-    section(emoji_panel* p, std::string_view name, const std::vector<const alef::emoji*>& all)
-        : cell_section<cell>(*p->colours_, std::string(name)) {
-      auto& cells = this->each();
-      cells.reserve(all.size());
-      for (const alef::emoji* one : all)
-        cells.emplace_back(p, logic::emoji_text(*one), one);
-    }
-    // The chat's custom emoji, as pictures.
-    section(emoji_panel* p, std::string_view name, const std::vector<emote>& custom)
-        : cell_section<cell>(*p->colours_, std::string(name)) {
-      auto& cells = this->each();
-      cells.reserve(custom.size());
-      for (const emote& one : custom)
-        cells.emplace_back(p, one);
-    }
-    // The recently used: emoji as they were picked, text already.
-    section(emoji_panel* p, std::string_view name, const std::vector<std::string>& glyphs)
-        : cell_section<cell>(*p->colours_, std::string(name)) {
-      auto& cells = this->each();
-      cells.reserve(glyphs.size());
-      for (const std::string& one : glyphs)
-        cells.emplace_back(p, one);
-    }
-  };
-  // A group's tab in the footer: its first emoji (iconArea 28).
-  struct tab : skiff::compose::Stacked {
-    emoji_panel* panel;
-    std::size_t group;
-    struct parts_t {
-      nodes::Text face;
-    } parts;
-    tab(emoji_panel *p, std::size_t g)
-        : Stacked(skiff::compose::justified(
-              skiff::compose::hbox(0.0f,
-                                   {.width = 28.0f,
-                                    .height = 28.0f,
-                                    .shrink = scene::axes::kX,
-                                    .minWidth = 16.0f,
-                                    .alignSelf = scene::align::kMiddle,
-                                    .cornerRadius = 6.0f,
-                                    .hoverBackground = p->colours_->chosen,
-                                    .selectedBackground = p->colours_->tile}),
-              nodes::justify::middle{})),
-          panel(p), group(g),
-          parts{.face = skiff::compose::styled(
-                    {.alignSelf = scene::align::kMiddle},
-                    nodes::Text(logic::emoji_text(logic::emoji_group_face(g)),
-                                16.0f, p->colours_->text))} {}
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      panel->bring(group);
-      return true;
-    }
-  };
+  using section = cell_section_t<cell>;
+  using tab = decltype(picker_tab(std::declval<const palette&>(), std::declval<emoji_panel*>(), std::size_t{}, std::optional<std::string>{}));
+  static cell make_cell(emoji_panel* p, const alef::emoji* one) { return cell(p, logic::emoji_text(*one), one); }
+  static cell make_cell(emoji_panel* p, const emote& one) { return cell(p, one); }
+  static cell make_cell(emoji_panel* p, const std::string& one) { return cell(p, one); }
+  static section make_section(emoji_panel* p, std::string_view name, const auto& all) {
+    return cell_section(*p->colours_, std::string(name),
+        std::ranges::to<std::vector>(std::views::transform(all, [p](const auto& one) { return make_cell(p, one); })));
+  }
+  static section make_section(emoji_panel* p, std::string_view name, const std::vector<emote>& all) {
+    return cell_section(*p->colours_, std::string(name),
+        std::ranges::to<std::vector>(std::views::transform(all, [p](const auto& one) { return make_cell(p, one); })),
+        source_pack(all, std::string(name)), p->kept_->pack_account);
+  }
   // An emoji and its five tones in a row over it, as tdesktop's; a pick
   // closes it.
   struct tone_strip : skiff::compose::Stacked {
@@ -494,7 +452,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     emoji_panel* panel;
     void operator()(std::string_view text) const { panel->search(text); }
   };
-  using footer_row = tab_strip<tab>;
+  using footer_row = tab_strip_t<tab>;
   using field_t = widgets::TextBox<searched>;
   using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
   // The colours it is made in, for what it makes later: its cells, its
@@ -507,7 +465,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     text_chip text_option;
     list_t list{picker_list(nodes::Flow<std::vector<section>>(
         {.spacingY = 0.0f, .wrap = false}, {}))};
-    footer_row footer{picker_footer()};
+    footer_row footer{tab_strip<tab>(picker_footer())};
     // Over the rest: an emoji's tones, while they are asked for.
     std::optional<tone_strip> tones;
     // And the emoji the mouse rests on, large.
@@ -519,8 +477,6 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
   bool tones_done = false;
   // Whether a search is shown, not the groups: no tab is lit then.
   bool searching = false;
-  // Where the groups begin in the list: after the recently used, if any.
-  std::size_t first_group = 0;
 
   // Sized by where it is shown.
   emoji_panel(const palette &colours, emoji_kept &kept, Pick what,
@@ -530,8 +486,6 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
                                 colours.widgets, "Search emoji", {this})),
                             .text_option = text_chip(this)} {
     auto& [field, text_option, list, footer, tones, preview] = parts;
-    for (std::size_t g = 0; g < logic::emoji_group_count(); ++g)
-      footer.parts.each.emplace_back(this, g);
     this->show_all();
   }
   [[nodiscard]] std::vector<section>& sections() { return std::get<0>(std::get<0>(parts.list.fChildren).fChildren); }
@@ -540,7 +494,8 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     auto& all = this->sections();
     all.clear();
     all.reserve(logic::emoji_group_count() + 1);
-    first_group = 0;
+    auto& tabs = parts.footer.fParts;
+    tabs.clear();
     {
       // tdesktop's: what was picked lately first, then its default list
       // (lib_ui's GetDefaultRecent), up to the section's number -- so the
@@ -551,15 +506,19 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
                               "😅", "😚", "🙊", "😌", "😀", "😋", "😆", "👌", "😐", "😕"})
         if (shown.size() < 42 && std::ranges::find(shown, std::string(one)) == shown.end())
           shown.emplace_back(one);
-      all.emplace_back(this, "Recently used", shown);
-      ++first_group;
+      all.push_back(make_section(this, "Recently used", shown));
+      tabs.push_back(picker_tab(*colours_, this, all.size() - 1, std::nullopt));
     }
-    if (!kept_->chat_emotes.empty()) {
-      all.emplace_back(this, "Custom", kept_->chat_emotes);
-      ++first_group;
+    std::ranges::for_each(grouped_emotes(kept_->chat_emotes, "Custom emoji"), [&](const auto& pack) {
+      const auto& [name, images] = pack;
+      all.push_back(make_section(this, name, images));
+      tabs.push_back(picker_tab(*colours_, this, all.size() - 1, images.front().pack_avatar.value_or(images.front().url)));
+    });
+    for (std::size_t g = 0; g < logic::emoji_group_count(); ++g) {
+      all.push_back(make_section(this, logic::emoji_group_name(g), logic::emoji_of_group(g)));
+      tabs.push_back(picker_tab(*colours_, this, all.size() - 1, std::nullopt, logic::emoji_text(logic::emoji_group_face(g))));
     }
-    for (std::size_t g = 0; g < logic::emoji_group_count(); ++g)
-      all.emplace_back(this, logic::emoji_group_name(g), logic::emoji_of_group(g));
+    parts.footer.invalidateLayout();
     searching = false;
     parts.text_option.show({});
     parts.list.invalidateLayout();
@@ -572,7 +531,14 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     }
     auto& all = this->sections();
     all.clear();
-    all.emplace_back(this, "Search results", logic::emoji_found(query));
+    all.push_back(make_section(this, "Search results", logic::emoji_found(query)));
+    const std::string wanted = logic::folded(query);
+    const auto custom = std::ranges::to<std::vector>(std::views::filter(kept_->chat_emotes, [&](const emote& one) {
+      return logic::folded(one.shortcode).contains(wanted) || logic::folded(one.body).contains(wanted) || logic::folded(one.pack).contains(wanted);
+    }));
+    std::ranges::for_each(grouped_emotes(custom, "Custom emoji"), [&](const auto& pack) {
+      all.push_back(make_section(this, pack.first, pack.second));
+    });
     searching = true;
     // Where it reacts: what is typed, as a reaction of text.
     if (Pick::takes_text())
@@ -585,11 +551,25 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     if (searching)
       parts.field.setText({});
     auto& all = this->sections();
-    const std::size_t at = group + first_group;
+    const std::size_t at = group;
     if (at >= all.size() || all[at].bounds().isEmpty())
       return;
     auto& list = parts.list;
     list.scrollTo(std::max(0.0f, list.current() + (list.toView(all[at].bounds()).fTop - list.bounds().fTop)));
+  }
+  [[nodiscard]] std::vector<std::string> pictures_shown() {
+    if (!this->visible())
+      return {};
+    const auto view = parts.list.bounds().makeOutset(0.0f, kCell);
+    auto cells = std::views::join(std::views::transform(this->sections(), [](section& one) -> std::vector<cell>& { return cell_section_cells(one); }));
+    auto shown = std::ranges::to<std::vector>(std::views::transform(std::views::filter(cells, [&](const cell& one) {
+      return !one.picture_url.empty() && !one.bounds().isEmpty() && parts.list.toView(one.bounds()).intersects(view);
+    }), [](const cell& one) { return one.picture_url; }));
+    // Pack tabs stay visible even when their section is outside the view.
+    std::ranges::for_each(grouped_emotes(kept_->chat_emotes, ""), [&](const auto& pack) {
+      shown.push_back(pack.second.front().pack_avatar.value_or(pack.second.front().url));
+    });
+    return shown;
   }
   // An emoji's tones over its cell, kept inside the panel; nothing for one
   // that takes none.
@@ -624,11 +604,11 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     auto& all = this->sections();
     std::size_t lit = 0;
     const float top = parts.list.bounds().fTop + 1.0f;
-    for (std::size_t s = first_group; s < all.size(); ++s)
+    for (std::size_t s = 0; s < all.size(); ++s)
       if (!all[s].bounds().isEmpty() && parts.list.toView(all[s].bounds()).fTop <= top)
-        lit = s - first_group;
-    for (tab& each : parts.footer.parts.each)
-      if (const bool on = !searching && each.group == lit; on != each.fState.selected())
+        lit = s;
+    for (auto&& [index, each] : std::views::enumerate(parts.footer.fParts))
+      if (const bool on = !searching && static_cast<std::size_t>(index) == lit; on != each.fState.selected())
         each.fState.apply({.selected = on});
   }
 };

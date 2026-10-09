@@ -54,9 +54,11 @@ void app::apply(const request::copy_text& one) {
 // menu gone.
 void app::apply(const request::text_key& one) {
   skiff::scene::giveKey(
-      {one.key, skiff::scene::Modifiers{}.with<skiff::scene::modifier::control>(true).with<skiff::scene::modifier::shift>(one.shift)});
+      {one.key, skiff::scene::Modifiers{}.with<skiff::scene::modifier::control>(one.control).with<skiff::scene::modifier::shift>(one.shift)});
   root().close_text_menu();
 }
+
+void app::apply(const request::text_formatting& one) { root().text_formatting(one.open); }
 
 // The developer tools, for the chat being read.
 void app::apply(const request::close_dialog&) { root().close_dialog(); }

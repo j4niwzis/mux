@@ -100,21 +100,21 @@ struct app : kept_settings {
   drafts_part drafts{shared};
   reading_part reading{shared};
   outbox_part outbox{shared, drafts, this->sending()};
-  menu_part menu{shared, outbox, pictures};
+  menu_part menu{&shared, &outbox, &pictures};
   settings_part settings{shared, *this, pictures};
   notices_part notices{shared};
   marks_part marks{shared};
   history_part paging{shared};
   verification_part verification{shared};
   proxies_part proxying{shared, *this};
-  packs_part packs{shared};
+  packs_part packs{&shared};
   rooms_part rooms{shared};
   room_card_part room_card{shared};
   preferences_part preferences{shared, *this, proxying};
   manage_part manage{shared, *this};
   looks_part looks{shared, *this};
   threads_part threads{shared};
-  emoji_part emoji{shared};
+  emoji_part emoji{&shared};
   accounts_part accounts_screen{shared, *this};
   local_data_part local_data{shared, *this};
   calls_part calls{shared};
@@ -122,7 +122,7 @@ struct app : kept_settings {
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
   void files_given(std::vector<std::string> paths, bool dropped) {
-    if (packs.took_files(paths, dropped))
+    if (took_files(packs, paths, dropped))
       return;
     if (looks.took_files(paths, dropped))
       return;
@@ -152,6 +152,12 @@ struct app : kept_settings {
     }
   bool offer(Part& part, const Request& one) {
     part.apply(one);
+    return true;
+  }
+  template <class Part, class Request>
+    requires requires(Part& part, const Request& one) { part_apply(part, one); }
+  bool offer(Part& part, const Request& one) {
+    part_apply(part, one);
     return true;
   }
   // What a part asks for in turn, in its own type, given to the program
@@ -197,7 +203,8 @@ struct app : kept_settings {
   // A protocol's "nothing to ask": nothing.
   void take(const mux::proto::part::no_request&) {}
   template <class Part, class Request>
-  static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); } ||
+  static constexpr bool takes = requires(Part& part, const Request& one) { part_apply(part, one); } ||
+                                requires(Part& part, const Request& one) { part.apply(one); } ||
                                 requires(Part& part, const Request& one, const taker& asked) { part.apply(one, asked); };
   // A protocol's own request: done as its program glue says (mux.app.proto).
   template <class Request>
@@ -409,6 +416,7 @@ struct app : kept_settings {
   void apply(const request::close_dialog&);
   void apply(const request::copy_text& one);
   void apply(const request::text_key& one);
+  void apply(const request::text_formatting& one);
   void apply(const request::give_passphrase&);
   // The account whose room keys a passphrase was asked for.
   std::optional<mux::account_id> keys_of;

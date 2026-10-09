@@ -263,10 +263,72 @@ struct shown_how {
   std::optional<std::string> unread_from;
 };
 
+// Selection owns the gesture before any link, photo, or text child sees
+// it. A tap toggles one message; a drag commits the displayed message range.
+struct message_selection_drag {
+  std::string first;
+  float x, y;
+  bool selected;
+  bool moved = false;
+  float last_x = 0.0f, last_y = 0.0f;
+};
+inline auto selection_row_at(auto& area, float x, float y) {
+  return std::ranges::find_if(area.bubbles(), [&](const auto& row) {
+    return !row.message_id.empty() && !row.said.redacted && area.parts.timeline.toView(row.bounds()).contains(x, y);
+  });
+}
+inline bool selection_down(auto& area, const scene::pointer::down& press, scene::PointerReply& reply) {
+  if (area.selected_ids.empty() || press.button > 1)
+    return false;
+  auto& rows = area.bubbles();
+  const auto row = selection_row_at(area, press.x, press.y);
+  if (row == rows.end())
+    return false;
+  area.selecting = message_selection_drag{row->message_id, press.x, press.y, !area.selected_ids.contains(row->message_id)};
+  reply.capturePointer();
+  reply.handle();
+  return true;
+}
+inline bool selection_move(auto& area, const scene::pointer::move& at, scene::PointerReply& reply) {
+  if (!area.selecting)
+    return false;
+  auto& drag = *area.selecting;
+  drag.moved = drag.moved || std::hypot(at.x - drag.x, at.y - drag.y) > 6.0f;
+  drag.last_x = at.x;
+  drag.last_y = at.y;
+  if constexpr (requires { area.set_selected(area.selected_ids); })
+    area.set_selected(area.selected_ids);
+  reply.handle();
+  return true;
+}
+inline std::optional<request::selection_span> selection_up(auto& area, const scene::pointer::up& at, scene::PointerReply& reply) {
+  const auto drag = std::exchange(area.selecting, std::nullopt);
+  if (!drag)
+    return std::nullopt;
+  reply.releasePointer();
+  reply.handle();
+  auto& rows = area.bubbles();
+  const auto first = std::ranges::find(rows, drag->first, [](const auto& row) { return row.message_id; });
+  const auto last = selection_row_at(area, at.x, at.y);
+  if (first == rows.end() || last == rows.end())
+    return std::nullopt;
+  if (!drag->moved && first != last)
+    return std::nullopt;
+  const auto [begin, end] = std::minmax(first, last);
+  return request::selection_span{
+      std::ranges::to<std::vector>(std::views::transform(
+          std::views::filter(std::ranges::subrange(begin, end + 1), [](const auto& row) { return !row.said.redacted && !row.message_id.empty(); }),
+          [](const auto& row) { return row.message_id; })), drag->selected};
+}
+inline void selection_cancel(auto& area, scene::PointerReply& reply) {
+  if (std::exchange(area.selecting, std::nullopt))
+    reply.releasePointer();
+}
+
 template <class Actions> struct timeline_area : skiff::compose::Specced {
   // What a press on the messages asks for: a message selected or not, one
   // replied to by a swipe, the menu of one, or what a press in a bubble asks.
-  using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::toggle_selected, ::mux::ui::request::reply_to, menu_facts, bubble_press>;
+  using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::toggle_selected, ::mux::ui::request::selection_span, ::mux::ui::request::reply_to, menu_facts, bubble_press>;
   // The loader's cross: the message jumped to no longer looked for.
   struct stop_jump {
     using Answer = ::mux::ui::request::stop_jump;
@@ -508,20 +570,39 @@ template <class Actions> struct timeline_area : skiff::compose::Specced {
 
   // The swipe is followed on the way down (capture) and at the list itself
   // (target): the same for both, one overload each.
-  void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) { swipe_down(press); }
-  void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply&) { swipe_down(press); }
+  std::optional<message_selection_drag> selecting;
+  void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply) {
+    if (!selection_down(*this, press, reply)) swipe_down(press);
+  }
+  void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
+    if (!selection_down(*this, press, reply)) swipe_down(press);
+  }
   void onPointer(scene::phase::capture, const scene::pointer::move& at, scene::PointerReply& reply) {
-    swipe_move(at, reply);
+    if (!selection_move(*this, at, reply)) swipe_move(at, reply);
   }
   void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
-    swipe_move(at, reply);
+    if (!selection_move(*this, at, reply)) swipe_move(at, reply);
   }
-  std::optional<Answer> onPointer(scene::phase::capture, const scene::pointer::up&, scene::PointerReply& reply) { return swipe_up(reply); }
-  std::optional<Answer> onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) { return swipe_up(reply); }
+  std::optional<Answer> onPointer(scene::phase::capture, const scene::pointer::up& at, scene::PointerReply& reply) {
+    if (selecting) {
+      auto chosen = selection_up(*this, at, reply);
+      return chosen ? std::optional<Answer>{*chosen} : std::nullopt;
+    }
+    return swipe_up(reply);
+  }
+  std::optional<Answer> onPointer(scene::phase::target, const scene::pointer::up& at, scene::PointerReply& reply) {
+    if (selecting) {
+      auto chosen = selection_up(*this, at, reply);
+      return chosen ? std::optional<Answer>{*chosen} : std::nullopt;
+    }
+    return swipe_up(reply);
+  }
   void onPointer(scene::phase::capture, const scene::pointer::cancel&, scene::PointerReply& reply) {
+    selection_cancel(*this, reply);
     swipe_cancel(reply);
   }
   void onPointer(scene::phase::target, const scene::pointer::cancel&, scene::PointerReply& reply) {
+    selection_cancel(*this, reply);
     swipe_cancel(reply);
   }
 
@@ -571,8 +652,24 @@ template <class Actions> struct timeline_area : skiff::compose::Specced {
   std::set<std::string> selected_ids;
   void set_selected(const std::set<std::string>& ids) {
     selected_ids = ids;
-    for (message_bubble<Actions>& one : this->bubbles())
-      one.select(selected_ids.contains(one.message_id));
+    auto preview = selected_ids;
+    if (selecting && selecting->moved) {
+      auto& rows = this->bubbles();
+      const auto first = std::ranges::find(rows, selecting->first, &message_bubble<Actions>::message_id);
+      const auto last = selection_row_at(*this, selecting->last_x, selecting->last_y);
+      if (first != rows.end() && last != rows.end()) {
+        const auto [begin, end] = std::minmax(first, last);
+        std::ranges::for_each(std::ranges::subrange(begin, end + 1), [&](const auto& row) {
+          if (row.said.redacted || row.message_id.empty())
+            return;
+          if (!selecting->selected)
+            preview.erase(row.message_id);
+          else if (preview.size() < 100)
+            preview.insert(row.message_id);
+        });
+      }
+    }
+    std::ranges::for_each(this->bubbles(), [&](auto& one) { one.select(preview.contains(one.message_id)); });
   }
   std::optional<Answer> onClick(float x, float y) {
     // In the space the rows are laid out in: the list draws them scrolled.

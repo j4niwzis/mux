@@ -45,6 +45,7 @@ template void account<mux::app::post_change>::load_thread(std::string room, std:
 template void account<mux::app::post_change>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to);
 template void account<mux::app::post_change>::list_packs(std::optional<std::string> room);
 template void account<mux::app::post_change>::save_pack(emote_pack pack);
+template void account<mux::app::post_change>::adopt_pack(emote_pack pack);
 template void account<mux::app::post_change>::delete_pack(emote_pack pack);
 template void account<mux::app::post_change>::catch_up(std::string room, std::string from, std::string until);
 template void account<mux::app::post_change>::preview_room(std::string room, std::vector<std::string> via);

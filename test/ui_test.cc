@@ -678,12 +678,12 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
   auto& panel = popup.parts.card.parts.panel;
   auto& sections = panel.sections();
   ASSERT_FALSE(sections.empty());
-  const auto& cells = std::get<0>(sections.front().parts.cells.fChildren);
+  const auto& cells = mux::ui::cell_section_cells(sections.front());
   ASSERT_GE(cells.size(), 2u);
   EXPECT_GT(cells[1].bounds().fLeft, cells[0].bounds().fLeft)
       << "side by side: the card " << popup.parts.card.bounds().width() << " wide, the list "
       << panel.parts.list.bounds().width() << ", the first group " << sections.front().bounds().width()
-      << ", its cells " << sections.front().parts.cells.bounds().width();
+      << ", its cells " << std::get<1>(sections.front().fParts).bounds().width();
   EXPECT_FLOAT_EQ(cells[1].bounds().fTop, cells[0].bounds().fTop);
   EXPECT_GT(panel.parts.list.extent(), 0.0f) << "the list: " << panel.parts.list.bounds().height() << " high";
   skiff::paint::defaultFont() = nullptr;
@@ -1230,4 +1230,70 @@ TEST(Forms, LeaveSpaceChoicesAndRoomsAreModelEdits) {
   EXPECT_TRUE(requests.saved->rooms.empty());
   ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 0}, &requests));
   EXPECT_TRUE(requests.cancelled);
+}
+
+TEST(Emoji, EquallyNamedPacksKeepSeparateSources) {
+  const std::vector<mux::emote> images{
+      {.shortcode = "one", .url = "mxc://a/one", .pack = "Animals", .pack_room = "!one:a", .pack_key = "a"},
+      {.shortcode = "two", .url = "mxc://a/two", .pack = "Animals", .pack_room = "!two:a", .pack_key = "a"},
+      {.shortcode = "three", .url = "mxc://a/three", .pack = "Animals", .pack_room = "!one:a", .pack_key = "a"}};
+  const auto groups = mux::ui::grouped_emotes(images, "Custom");
+  ASSERT_EQ(groups.size(), 2u);
+  EXPECT_EQ(groups[0].second.size(), 2u);
+  EXPECT_EQ(groups[1].second.size(), 1u);
+  const auto pack = mux::ui::source_pack(groups[0].second, groups[0].first);
+  ASSERT_TRUE(pack);
+  EXPECT_EQ(pack->chat, "!one:a");
+  EXPECT_EQ(pack->key, "a");
+  EXPECT_FALSE(mux::ui::source_pack(images, "Recent"));
+}
+
+TEST(TextMenu, FormattingAndHistoryFollowTheFieldCapabilities) {
+  const auto empty = mux::ui::field_menu_items({.text = false}, false);
+  EXPECT_FALSE(empty[0].enabled);
+  EXPECT_FALSE(empty[1].enabled);
+  EXPECT_FALSE(empty[2].enabled);
+  EXPECT_FALSE(empty.back().enabled);
+  const auto selected = mux::ui::field_menu_items({.selection = true, .formats = true, .undo = true}, false);
+  EXPECT_TRUE(selected[0].enabled);
+  EXPECT_TRUE(selected[2].enabled);
+  EXPECT_EQ(selected.back().label, "Formatting ›");
+  const auto masked = mux::ui::field_menu_items({.selection = true, .masked = true, .formats = true}, false);
+  EXPECT_FALSE(masked[2].enabled);
+  EXPECT_FALSE(masked[3].enabled);
+  EXPECT_EQ(masked.back().label, "Select All");
+}
+
+TEST(Selection, CapturesTapsAndSelectsAReversedRange) {
+  struct row {
+    std::string message_id;
+    mux::message said;
+    skia::SkRect box;
+    skia::SkRect bounds() const { return box; }
+  };
+  struct scroll_view {
+    skia::SkRect toView(skia::SkRect box) const { return box; }
+  };
+  struct area {
+    std::vector<row> rows;
+    std::set<std::string> selected_ids{"first"};
+    std::optional<mux::ui::message_selection_drag> selecting;
+    struct { scroll_view timeline; } parts;
+    auto& bubbles() { return rows; }
+  } area;
+  area.rows = {{"first", {}, skia::SkRect::MakeXYWH(0, 0, 100, 40)},
+               {"deleted", {.redacted = true}, skia::SkRect::MakeXYWH(0, 40, 100, 40)},
+               {"last", {}, skia::SkRect::MakeXYWH(0, 80, 100, 40)}};
+  scene::PointerReply press;
+  ASSERT_TRUE(mux::ui::selection_down(area, {10, 100, 1}, press));
+  EXPECT_TRUE(press.fHandled);
+  EXPECT_TRUE(press.fCapturePointer);
+  scene::PointerReply move;
+  EXPECT_TRUE(mux::ui::selection_move(area, {10, 10}, move));
+  scene::PointerReply release;
+  const auto chosen = mux::ui::selection_up(area, {10, 10, 1}, release);
+  ASSERT_TRUE(chosen);
+  EXPECT_EQ(chosen->ids, (std::vector<std::string>{"first", "last"}));
+  EXPECT_TRUE(chosen->selected);
+  EXPECT_TRUE(release.fReleasePointer);
 }

@@ -18,341 +18,463 @@ import mux.logic.messages;
 
 export namespace mux::app {
 
-class menu_part {
- public:
-  menu_part(services& shared, outbox_part& outbox, pictures_part& pictures)
-      : s_(&shared), outbox_(&outbox), pictures_(&pictures) {}
-
-  void apply(const request::message_menu& one) {
-    target_ = one;
-    const auto& chosen = s_->root().main().chosen;
-    const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
-    s_->emoji.chat_emotes = chat ? chat->emotes : std::vector<emote>{};
-    mux::ui::show(*s_->showing, std::optional(one));
-    // The menu takes the keys, as tdesktop's: the arrows go through it,
-    // Enter does what is lit, Esc closes it. Nothing lit until an arrow.
-    // Focused once it is made, as what is shown is read.
-    s_->menu_focus_due = true;
-  }
-  void apply(const request::close_menu&) { mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt); }
-
-  // Swiped to the left: answered, as the menu's Reply does.
-  void apply(const request::reply_to& one) {
-    target_.id = one.id;
-    target_.text = one.text;
-    this->apply(request::menu_reply{});
-  }
-  // Quote & Reply, as Telegram's: the message answered, and what is
-  // selected of it quoted at the start of the field -- each of its lines
-  // after "> ", as Markdown quotes -- the rest of what was written after.
-  void apply(const request::menu_quote_reply&) {
-    const std::string selected = target_.selection ? target_.copied : std::string();
-    this->apply(request::menu_reply{});
-    if (selected.empty())
-      return;
-    std::string quote;
-    for (std::size_t at = 0; at <= selected.size();) {
-      const std::size_t end = std::min(selected.find('\n', at), selected.size());
-      quote += "> ";
-      quote += std::string_view(selected).substr(at, end - at);
-      quote += '\n';
-      at = end + 1;
-    }
-    quote += '\n';
-    // Into the field that answers it: the thread's, where it is answered there.
-    auto& screen = s_->root().main();
-    if (screen.parts.threads.answering == target_.id) {
-      auto& field = screen.parts.threads.parts.line.parts.input.parts.field;
-      field.setText(quote + std::string(field.text()));
-      return;
-    }
-    auto& line = screen.line;
-    line.set_text(quote + std::string(line.text()));
-  }
-  // As tdesktop's: "Reply to <name>" over a line of the message.
-  void apply(const request::menu_reply&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    std::string title = "Reply";
-    const message* said = nullptr;
-    std::string line;
-    if (const auto& chosen = s_->root().main().chosen)
-      if (const conversation* chat = s_->model->find(*chosen))
-        if (const message* it = mux::ui::held_message(*chat, target_.id)) {
-          said = &*it;
-          title = "Reply to " + mux::ui::sender_name(*chat, it->sender);
-          // Its mentions by name, as the quote in the bubble shows them.
-          if (!it->body.plain.empty())
-            line = mux::ui::quote_line_of(*it, *chat, s_->model);
-        }
-    // A thread's root or answer, its thread open: answered there.
-    if (said) {
-      const std::string root = said->thread ? *said->thread : said->id;
-      if (s_->root().main().answer_in_thread(
-              root, target_.id,
-              mux::ui::compose_context{mux::ui::icon::reply{}, title, line.empty() ? logic::reply_line(said, target_.text) : line}))
-        return;
-    }
-    outbox_->answer(target_.id, std::move(title), line.empty() ? logic::reply_line(said, target_.text) : line);
-  }
-  void apply(const request::menu_edit&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    // A picture with no caption says its file's name: nothing to edit then.
-    outbox_->edit(target_.id, target_.captioned && target_.text == target_.media_name ? std::string() : target_.text);
-  }
-  // What is selected in it, or all of it.
-  void apply(const request::menu_copy&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    skiff::scene::setClipboardText(target_.copied.empty() ? target_.text : target_.copied);
-  }
-  void apply(const request::menu_copy_link&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    skiff::scene::setClipboardText(target_.link);
-  }
-  // A sticker made a favourite, or no longer one.
-  void apply(const request::menu_fave_sticker&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    if (target_.sticker)
-      s_->emoji.flip_favourite(*target_.sticker);
-  }
-  // The link pressed on, in the text or the preview.
-  void apply(const request::menu_copy_url&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    skiff::scene::setClipboardText(target_.pressed_link);
-  }
-  void apply(const request::menu_copy_image&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    if (target_.picture)
-      pictures_->copy(*target_.picture);
-  }
-  // Reply in thread: the message's thread opened -- begun, where it has
-  // none -- in the panel beside the chat.
-  void apply(const request::menu_thread&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    auto& screen = s_->root().main();
-    if (!screen.chosen)
-      return;
-    s_->open_thread(target_.id);
-    if (!s_->demo())
-      s_->net->load_thread(*screen.chosen, target_.id);
-    s_->refresh_due = true;
-  }
-  void apply(const request::menu_save&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    if (target_.media)
-      pictures_->save(*target_.media, target_.media_name.empty() ? std::string("image") : target_.media_name);
-  }
-  // Pinned in its chat, or unpinned where it is: the room's list, set.
-  void apply(const request::menu_pin&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    const auto& chosen = s_->root().main().chosen;
-    if (!chosen || s_->demo())
-      return;
-    s_->net->pin(*chosen, target_.id, !target_.pinned);
-  }
-  // The message's reactions as the events they are, newest last.
-  void apply(const request::menu_reactions&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    const auto& chosen = s_->root().main().chosen;
-    const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
-    if (!chat)
-      return;
-    const message* said = mux::ui::held_message(*chat, target_.id);
-    if (!said)
-      return;
-    auto events = said->reaction_events;
-    std::ranges::stable_sort(events, {}, &message::reaction_event::at);
-    std::vector<mux::ui::reaction_entry> entries;
-    for (const auto& one : events)
-      entries.push_back(
-          {one.event, one.who, mux::ui::sender_name(*chat, one.who), one.key, one.at, one.who == chat->id.account.address,
-           target_.id});
-    // Those whose reaction came without its event -- read back from the
-    // history -- listed too, at the message's time.
-    for (const auto& [key, who] : said->reactions)
-      for (const std::string& user : who)
-        if (std::ranges::none_of(events, [&](const auto& one) { return one.key == key && one.who == user; }))
-          entries.push_back({std::string(), user, mux::ui::sender_name(*chat, user), key, said->at,
-                             user == chat->id.account.address, target_.id});
-    mux::ui::show(*s_->showing, std::optional(mux::ui::reactions_facts{chat->id, std::move(entries), &*s_->model}));
-  }
-  void apply(const request::close_reactions&) { mux::ui::show<mux::ui::reactions_facts>(*s_->showing, std::nullopt); }
-  void apply(const request::close_edit_history&) { mux::ui::show<mux::ui::history_facts>(*s_->showing, std::nullopt); }
-  // Forward: the chats of the account, to choose where; then sent there.
-  void apply(const request::menu_forward&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    const auto& chosen = s_->root().main().chosen;
-    if (!chosen)
-      return;
-    this->forward_from(*chosen, {target_.id});
-  }
-  // Messages of a chat, to be forwarded: the chats they may go to, asked.
-  void forward_from(const conversation_id& chosen, std::vector<std::string> events) {
-    forwarding_ = std::pair{chosen, std::move(events)};
-    std::vector<mux::ui::forward_target> chats;
-    for (const auto& [id, account] : s_->model->accounts())
-      if (id == chosen.account)
-        for (const auto& [key, one] : account.conversations)
-          chats.push_back({one.id, mux::ui::display_name(one)});
-    std::ranges::sort(chats, {}, &mux::ui::forward_target::name);
-    mux::ui::show(*s_->showing, std::optional(mux::ui::forward_facts{std::move(chats)}));
-  }
-  void apply(const request::close_forward&) { mux::ui::show<mux::ui::forward_facts>(*s_->showing, std::nullopt); }
-  // The message as the server has it.
-  void apply(const request::menu_view_source&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    if (const auto& chosen = s_->root().main().chosen; chosen && !s_->demo())
-      s_->net->view_source(*chosen, target_.id);
-  }
-  // -- messages selected, as tdesktop's: from a message's menu; a press on
-  // one while some are; and what the selection bar does with them, in the
-  // order they are in the chat.
-  void apply(const request::menu_select&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    selected_chat_ = s_->root().main().chosen;
-    selected_ = {target_.id};
-    this->show_selection();
-  }
-  void apply(const request::toggle_selected& one) {
-    if (!selected_.erase(one.id))
-      selected_.insert(one.id);
-    this->show_selection();
-  }
-  void apply(const request::selection_cancel&) {
-    selected_.clear();
-    this->show_selection();
-  }
-  void apply(const request::selection_copy&) {
-    const std::string text = std::ranges::to<std::string>(std::views::join_with(std::views::transform(this->selected_messages(), [](const message* one) { return one->body.plain; }), std::string("\n\n")));
-    skiff::scene::setClipboardText(text);
-    selected_.clear();
-    this->show_selection();
-  }
-  void apply(const request::selection_delete&) {
-    if (!selected_chat_)
-      return;
-    for (const message* one : this->selected_messages())
-      if (s_->demo())
-        s_->box->push(change_t{change::message_redacted{*selected_chat_, one->id}});
-      else
-        s_->net->remove_message(*selected_chat_, one->id);
-    selected_.clear();
-    this->show_selection();
-  }
-  void apply(const request::selection_forward&) {
-    if (!selected_chat_)
-      return;
-    this->forward_from(*selected_chat_, std::ranges::to<std::vector>(std::views::transform(this->selected_messages(), [](const message* one) { return one->id; })));
-    selected_.clear();
-    this->show_selection();
-  }
-  // Each frame: kept on the messages as the timeline is made again, and let
-  // go where another chat is shown.
-  void keep_selection() {
-    if (selected_.empty())
-      return;
-    if (s_->root().main().chosen != selected_chat_) {
-      selected_.clear();
-      this->show_selection();
-      return;
-    }
-    s_->root().main().chat.area.set_selected(selected_);
-  }
-  // A message's edit history, in a dialog of the chat's bubbles: what it
-  // said before each edit, oldest first, and what it says now.
-  void apply(const request::menu_edit_history&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    const auto& chosen = s_->root().main().chosen;
-    const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
-    if (!chat)
-      return;
-    const auto in_threads = std::views::join(std::views::values(chat->threads));
-    const auto is_it = [&](const mux::message& one) { return one.id == target_.id; };
-    const mux::message* found = nullptr;
-    if (const auto at = std::ranges::find_if(chat->timeline, is_it); at != chat->timeline.end())
-      found = &*at;
-    else if (const auto there = std::ranges::find_if(in_threads, is_it); there != std::ranges::end(in_threads))
-      found = &*there;
-    if (!found || found->versions.empty())
-      return;
-    mux::ui::show(*s_->showing, std::optional(mux::ui::history_facts{chat->id, *found, s_->model}));
-  }
-  void apply(const request::forward_to& one) {
-    mux::ui::show<mux::ui::forward_facts>(*s_->showing, std::nullopt);
-    if (!forwarding_ || s_->demo())
-      return;
-    const auto [from, events] = *std::exchange(forwarding_, std::nullopt);
-    for (const std::string& event : events)
-      s_->net->forward(from, event, one.to);
-    s_->notice("Forward", "Forwarded to " + [&] {
-      const conversation* to = s_->model->find(one.to);
-      return to ? mux::ui::display_name(*to) : one.to.id;
-    }());
-  }
-  // A GIF kept among the saved ones, for the input's GIF tab.
-  void apply(const request::menu_save_gif&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    if (target_.media)
-      pictures_->save_gif(*target_.media);
-  }
-  void apply(const request::menu_delete&) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    const auto& chosen = s_->root().main().chosen;
-    if (!chosen)
-      return;
-    if (s_->demo())
-      s_->box->push(change_t{change::message_redacted{*chosen, target_.id}});
-    else
-      s_->net->remove_message(*chosen, target_.id);
-  }
-
-  // A reaction: the user's own put where it is not, taken back where it is
-  // -- shown at once, and told to the server.
-  void apply(const request::menu_react& one) {
-    mux::ui::show<mux::ui::menu_facts>(*s_->showing, std::nullopt);
-    this->apply(request::react{target_.id, one.key});
-  }
-  void apply(const request::react& one) {
-    const auto& chosen = s_->root().main().chosen;
-    const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
-    if (!chat)
-      return;
-    const message* said = mux::ui::held_message(*chat, one.id);
-    if (!said)
-      return;
-    const std::string& me = chosen->account.address;
-    const bool on = logic::reaction_turns_on(*said, one.key, me);
-    s_->model->apply(change_t{change::reaction_changed{*chosen, one.id, one.key, me, on}});
-    if (!s_->demo())
-      s_->net->react(*chosen, one.id, one.key, on);
-    s_->refresh_due = true;
-  }
-
- private:
-  // The message being forwarded, and the chat it is in, until a chat is
-  // chosen to forward it to.
-  std::optional<std::pair<conversation_id, std::vector<std::string>>> forwarding_;
-  // The messages selected, and in which chat.
-  std::set<std::string> selected_;
-  std::optional<conversation_id> selected_chat_;
-  // The selected ones the chat has, in its order.
-  [[nodiscard]] std::vector<const message*> selected_messages() const {
-    const conversation* chat = selected_chat_ ? s_->model->find(*selected_chat_) : nullptr;
-    if (!chat)
-      return {};
-    return std::ranges::to<std::vector>(std::views::transform(std::views::filter(chat->timeline, [&](const message& one) { return selected_.contains(one.id); }), [](const message& one) { return &one; }));
-  }
-  void show_selection() {
-    const conversation* chat = selected_chat_ ? s_->model->find(*selected_chat_) : nullptr;
-    const auto ops = chat ? mux::ui::ops_of(s_->ui, chat->id.account) : mux::proto::account_ops{};
-    const auto chosen = this->selected_messages();
-    const bool deletable = !chosen.empty() && std::ranges::all_of(chosen, [](const message* one) { return one->outgoing; });
-    mux::ui::show(*s_->showing, mux::ui::selection_shown{selected_.size(), ops.forward, deletable});
-    s_->root().main().show_selection(selected_);
-  }
+struct menu_part {
   services* s_;
   outbox_part* outbox_;
   pictures_part* pictures_;
   request::message_menu target_;
+  std::set<std::string> selected_;
+  std::optional<conversation_id> selected_chat_;
+  std::optional<std::pair<conversation_id, std::vector<std::string>>> forwarding_;
+  std::optional<std::pair<conversation_id, std::vector<std::string>>> deleting_;
 };
+
+void part_apply(menu_part& self, const request::message_menu& one);
+void part_apply(menu_part& self, const request::close_menu&);
+void part_apply(menu_part& self, const request::reply_to& one);
+void part_apply(menu_part& self, const request::menu_quote_reply&);
+void part_apply(menu_part& self, const request::menu_reply&);
+void part_apply(menu_part& self, const request::menu_edit&);
+void part_apply(menu_part& self, const request::menu_copy&);
+void part_apply(menu_part& self, const request::menu_copy_link&);
+void part_apply(menu_part& self, const request::menu_fave_sticker&);
+void part_apply(menu_part& self, const request::menu_copy_url&);
+void part_apply(menu_part& self, const request::menu_copy_image&);
+void part_apply(menu_part& self, const request::menu_thread&);
+void part_apply(menu_part& self, const request::menu_save&);
+void part_apply(menu_part& self, const request::menu_pin&);
+void part_apply(menu_part& self, const request::menu_reactions&);
+void part_apply(menu_part& self, const request::close_reactions&);
+void part_apply(menu_part& self, const request::close_edit_history&);
+void part_apply(menu_part& self, const request::menu_forward&);
+void forward_from(menu_part& self, const conversation_id& chosen, std::vector<std::string> events);
+void part_apply(menu_part& self, const request::close_forward&);
+void part_apply(menu_part& self, const request::menu_view_source&);
+void part_apply(menu_part& self, const request::menu_select&);
+void part_apply(menu_part& self, const request::toggle_selected& one);
+void part_apply(menu_part& self, const request::selection_cancel&);
+void part_apply(menu_part& self, const request::selection_span&);
+void part_apply(menu_part& self, const request::selection_copy&);
+void part_apply(menu_part& self, const request::selection_delete&);
+void part_apply(menu_part& self, const request::selection_delete_confirm&);
+void part_apply(menu_part& self, const request::selection_forward&);
+void keep_selection(menu_part& self);
+void part_apply(menu_part& self, const request::menu_edit_history&);
+void part_apply(menu_part& self, const request::forward_to& one);
+void part_apply(menu_part& self, const request::menu_save_gif&);
+void part_apply(menu_part& self, const request::menu_delete&);
+void part_apply(menu_part& self, const request::menu_react& one);
+void part_apply(menu_part& self, const request::react& one);
+[[nodiscard]] std::vector<const message*> selected_messages(const menu_part& self);
+void show_selection(menu_part& self);
+
+void part_apply(menu_part& self, const request::message_menu& one) {
+  self.target_ = one;
+  if (self.selected_chat_ == self.s_->root().main().chosen && self.selected_.contains(one.id)) {
+    const auto chosen = selected_messages(self);
+    const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
+    if (chat && !chosen.empty()) {
+      const auto now = mux::ui::protocol_state_of(self.s_->ui, chat->id.account);
+      self.s_->root().show_selection_menu(chosen.size(), mux::ui::ops_of(self.s_->ui, chat->id.account).forward,
+          std::ranges::all_of(chosen, [&](const message* item) { return proto::may_delete(now, *chat, item->outgoing); }));
+      return;
+    }
+  }
+  const auto& chosen = self.s_->root().main().chosen;
+  const conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
+  self.s_->emoji.pack_account = chosen ? std::optional(chosen->account) : std::nullopt;
+  self.s_->emoji.chat_emotes = chat ? chat->emotes : std::vector<emote>{};
+  mux::ui::show(*self.s_->showing, std::optional(one));
+  // The menu takes the keys, as tdesktop's: the arrows go through it,
+  // Enter does what is lit, Esc closes it. Nothing lit until an arrow.
+  // Focused once it is made, as what is shown is read.
+  self.s_->menu_focus_due = true;
+}
+
+void part_apply(menu_part& self, const request::close_menu&) { mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt); }
+
+void part_apply(menu_part& self, const request::reply_to& one) {
+  self.target_.id = one.id;
+  self.target_.text = one.text;
+  part_apply(self, request::menu_reply{});
+}
+
+void part_apply(menu_part& self, const request::menu_quote_reply&) {
+  const std::string selected = self.target_.selection ? self.target_.copied : std::string();
+  part_apply(self, request::menu_reply{});
+  if (selected.empty())
+    return;
+  std::string quote;
+  for (std::size_t at = 0; at <= selected.size();) {
+    const std::size_t end = std::min(selected.find('\n', at), selected.size());
+    quote += "> ";
+    quote += std::string_view(selected).substr(at, end - at);
+    quote += '\n';
+    at = end + 1;
+  }
+  quote += '\n';
+  // Into the field that answers it: the thread's, where it is answered there.
+  auto& screen = self.s_->root().main();
+  if (screen.parts.threads.answering == self.target_.id) {
+    auto& field = screen.parts.threads.parts.line.parts.input.parts.field;
+    field.setText(quote + std::string(field.text()));
+    return;
+  }
+  auto& line = screen.line;
+  line.set_text(quote + std::string(line.text()));
+}
+
+void part_apply(menu_part& self, const request::menu_reply&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  std::string title = "Reply";
+  const message* said = nullptr;
+  std::string line;
+  if (const auto& chosen = self.s_->root().main().chosen)
+    if (const conversation* chat = self.s_->model->find(*chosen))
+      if (const message* it = mux::ui::held_message(*chat, self.target_.id)) {
+        said = &*it;
+        title = "Reply to " + mux::ui::sender_name(*chat, it->sender);
+        // Its mentions by name, as the quote in the bubble shows them.
+        if (!it->body.plain.empty())
+          line = mux::ui::quote_line_of(*it, *chat, self.s_->model);
+      }
+  // A thread's root or answer, its thread open: answered there.
+  if (said) {
+    const std::string root = said->thread ? *said->thread : said->id;
+    if (self.s_->root().main().answer_in_thread(
+            root, self.target_.id,
+            mux::ui::compose_context{mux::ui::icon::reply{}, title, line.empty() ? logic::reply_line(said, self.target_.text) : line}))
+      return;
+  }
+  self.outbox_->answer(self.target_.id, std::move(title), line.empty() ? logic::reply_line(said, self.target_.text) : line);
+}
+
+void part_apply(menu_part& self, const request::menu_edit&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  // A picture with no caption says its file's name: nothing to edit then.
+  self.outbox_->edit(self.target_.id, self.target_.captioned && self.target_.text == self.target_.media_name ? std::string() : self.target_.text);
+}
+
+void part_apply(menu_part& self, const request::menu_copy&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  skiff::scene::setClipboardText(self.target_.copied.empty() ? self.target_.text : self.target_.copied);
+}
+
+void part_apply(menu_part& self, const request::menu_copy_link&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  skiff::scene::setClipboardText(self.target_.link);
+}
+
+void part_apply(menu_part& self, const request::menu_fave_sticker&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  if (self.target_.sticker)
+    self.s_->emoji.flip_favourite(*self.target_.sticker);
+}
+
+void part_apply(menu_part& self, const request::menu_copy_url&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  skiff::scene::setClipboardText(self.target_.pressed_link);
+}
+
+void part_apply(menu_part& self, const request::menu_copy_image&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  if (self.target_.picture)
+    self.pictures_->copy(*self.target_.picture);
+}
+
+void part_apply(menu_part& self, const request::menu_thread&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  auto& screen = self.s_->root().main();
+  if (!screen.chosen)
+    return;
+  self.s_->open_thread(self.target_.id);
+  if (!self.s_->demo())
+    self.s_->net->load_thread(*screen.chosen, self.target_.id);
+  self.s_->refresh_due = true;
+}
+
+void part_apply(menu_part& self, const request::menu_save&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  if (self.target_.media)
+    self.pictures_->save(*self.target_.media, self.target_.media_name.empty() ? std::string("image") : self.target_.media_name);
+}
+
+void part_apply(menu_part& self, const request::menu_pin&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  const auto& chosen = self.s_->root().main().chosen;
+  if (!chosen || self.s_->demo())
+    return;
+  self.s_->net->pin(*chosen, self.target_.id, !self.target_.pinned);
+}
+
+void part_apply(menu_part& self, const request::menu_reactions&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  const auto& chosen = self.s_->root().main().chosen;
+  const conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
+  if (!chat)
+    return;
+  const message* said = mux::ui::held_message(*chat, self.target_.id);
+  if (!said)
+    return;
+  auto events = said->reaction_events;
+  std::ranges::stable_sort(events, {}, &message::reaction_event::at);
+  std::vector<mux::ui::reaction_entry> entries;
+  for (const auto& one : events)
+    entries.push_back(
+        {one.event, one.who, mux::ui::sender_name(*chat, one.who), one.key, one.at, one.who == chat->id.account.address,
+         self.target_.id});
+  // Those whose reaction came without its event -- read back from the
+  // history -- listed too, at the message's time.
+  for (const auto& [key, who] : said->reactions)
+    for (const std::string& user : who)
+      if (std::ranges::none_of(events, [&](const auto& one) { return one.key == key && one.who == user; }))
+        entries.push_back({std::string(), user, mux::ui::sender_name(*chat, user), key, said->at,
+                           user == chat->id.account.address, self.target_.id});
+  mux::ui::show(*self.s_->showing, std::optional(mux::ui::reactions_facts{chat->id, std::move(entries), &*self.s_->model}));
+}
+
+void part_apply(menu_part& self, const request::close_reactions&) { mux::ui::show<mux::ui::reactions_facts>(*self.s_->showing, std::nullopt); }
+
+void part_apply(menu_part& self, const request::close_edit_history&) { mux::ui::show<mux::ui::history_facts>(*self.s_->showing, std::nullopt); }
+
+void part_apply(menu_part& self, const request::menu_forward&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  const auto& chosen = self.s_->root().main().chosen;
+  if (!chosen)
+    return;
+  forward_from(self, *chosen, {self.target_.id});
+}
+
+void forward_from(menu_part& self, const conversation_id& chosen, std::vector<std::string> events) {
+  self.forwarding_ = std::pair{chosen, std::move(events)};
+  std::vector<mux::ui::forward_target> chats;
+  for (const auto& [id, account] : self.s_->model->accounts())
+    if (id == chosen.account)
+      for (const auto& [key, one] : account.conversations)
+        chats.push_back({one.id, mux::ui::display_name(one)});
+  std::ranges::sort(chats, {}, &mux::ui::forward_target::name);
+  mux::ui::show(*self.s_->showing, std::optional(mux::ui::forward_facts{std::move(chats)}));
+}
+
+void part_apply(menu_part& self, const request::close_forward&) { mux::ui::show<mux::ui::forward_facts>(*self.s_->showing, std::nullopt); }
+
+void part_apply(menu_part& self, const request::menu_view_source&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  if (const auto& chosen = self.s_->root().main().chosen; chosen && !self.s_->demo())
+    self.s_->net->view_source(*chosen, self.target_.id);
+}
+
+void part_apply(menu_part& self, const request::menu_select&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  const auto chat = self.s_->root().main().chosen;
+  if (self.selected_chat_ != chat)
+    self.selected_.clear();
+  self.selected_chat_ = chat;
+  part_apply(self, request::toggle_selected{self.target_.id});
+}
+
+void part_apply(menu_part& self, const request::toggle_selected& one) {
+  if (!self.selected_chat_ || self.selected_chat_ != self.s_->root().main().chosen)
+    return;
+  const conversation* chat = self.s_->model->find(*self.selected_chat_);
+  const message* item = chat ? mux::ui::held_message(*chat, one.id) : nullptr;
+  if (!item || item->redacted || one.id.empty())
+    return;
+  if (!self.selected_.erase(one.id) && self.selected_.size() < 100)
+    self.selected_.insert(one.id);
+  show_selection(self);
+}
+
+void part_apply(menu_part& self, const request::selection_span& span) {
+if (!self.selected_chat_ || self.selected_chat_ != self.s_->root().main().chosen)
+  return;
+const conversation* chat = self.s_->model->find(*self.selected_chat_);
+if (!chat)
+  return;
+std::ranges::for_each(span.ids, [&](const std::string& id) {
+  const message* one = mux::ui::held_message(*chat, id);
+  if (!one || one->redacted || id.empty())
+    return;
+  if (!span.selected)
+    self.selected_.erase(id);
+  else if (self.selected_.size() < 100)
+    self.selected_.insert(id);
+});
+show_selection(self);
+}
+
+void part_apply(menu_part& self, const request::selection_cancel&) {
+  self.s_->root().close_text_menu();
+  self.selected_.clear();
+  show_selection(self);
+}
+
+void part_apply(menu_part& self, const request::selection_copy&) {
+  self.s_->root().close_text_menu();
+  const std::string text = std::ranges::to<std::string>(std::views::join_with(std::views::transform(selected_messages(self), [](const message* one) {
+    return !one->body.plain.empty() ? one->body.plain : one->attachment ? one->attachment->name : std::string();
+  }), std::string("\n\n")));
+  skiff::scene::setClipboardText(text);
+  self.selected_.clear();
+  show_selection(self);
+}
+
+void part_apply(menu_part& self, const request::selection_delete&) {
+  self.s_->root().close_text_menu();
+  const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
+  const auto chosen = selected_messages(self);
+  if (!chat || chosen.empty())
+    return;
+  const auto now = mux::ui::protocol_state_of(self.s_->ui, chat->id.account);
+  if (!proto::available(now) || !std::ranges::all_of(chosen, [&](const message* one) { return proto::may_delete(now, *chat, one->outgoing); }))
+    return;
+  self.deleting_ = std::pair{chat->id, std::ranges::to<std::vector>(std::views::transform(chosen, [](const message* one) { return one->id; }))};
+  mux::ui::show(*self.s_->showing, std::optional(mux::ui::notice_facts{
+      "Delete messages?", std::format("Delete {} selected messages for everyone? This cannot be undone.", chosen.size()), true}));
+}
+
+void part_apply(menu_part& self, const request::selection_delete_confirm&) {
+  mux::ui::show<mux::ui::notice_facts>(*self.s_->showing, std::nullopt);
+  const auto pending = std::exchange(self.deleting_, std::nullopt);
+  if (!pending)
+    return;
+  const conversation* chat = self.s_->model->find(pending->first);
+  if (!chat)
+    return;
+  const auto now = mux::ui::protocol_state_of(self.s_->ui, chat->id.account);
+  if (!proto::available(now))
+    return;
+  std::ranges::for_each(pending->second, [&](const std::string& id) {
+    const message* one = mux::ui::held_message(*chat, id);
+    if (!one || one->redacted || !proto::may_delete(now, *chat, one->outgoing))
+      return;
+    if (self.s_->demo())
+      self.s_->box->push(change_t{change::message_redacted{chat->id, id}});
+    else
+      self.s_->net->remove_message(chat->id, id);
+  });
+  if (self.selected_chat_ == pending->first) {
+    self.selected_.clear();
+    show_selection(self);
+  }
+}
+
+void part_apply(menu_part& self, const request::selection_forward&) {
+  self.s_->root().close_text_menu();
+  if (!self.selected_chat_ || !mux::ui::ops_of(self.s_->ui, self.selected_chat_->account).forward || selected_messages(self).empty())
+    return;
+  forward_from(self, *self.selected_chat_, std::ranges::to<std::vector>(std::views::transform(selected_messages(self), [](const message* one) { return one->id; })));
+  self.selected_.clear();
+  show_selection(self);
+}
+
+void keep_selection(menu_part& self) {
+  if (self.selected_.empty())
+    return;
+  if (self.s_->root().main().chosen != self.selected_chat_) {
+    self.selected_.clear();
+    show_selection(self);
+    return;
+  }
+  const conversation* chat = self.s_->model->find(*self.selected_chat_);
+  const auto removed = std::erase_if(self.selected_, [&](const std::string& id) {
+    const message* one = chat ? mux::ui::held_message(*chat, id) : nullptr;
+    return !one || one->redacted;
+  });
+  if (removed)
+    show_selection(self);
+  else
+    self.s_->root().main().show_selection(self.selected_);
+}
+
+void part_apply(menu_part& self, const request::menu_edit_history&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  const auto& chosen = self.s_->root().main().chosen;
+  const mux::conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
+  if (!chat)
+    return;
+  const auto in_threads = std::views::join(std::views::values(chat->threads));
+  const auto is_it = [&](const mux::message& one) { return one.id == self.target_.id; };
+  const mux::message* found = nullptr;
+  if (const auto at = std::ranges::find_if(chat->timeline, is_it); at != chat->timeline.end())
+    found = &*at;
+  else if (const auto there = std::ranges::find_if(in_threads, is_it); there != std::ranges::end(in_threads))
+    found = &*there;
+  if (!found || found->versions.empty())
+    return;
+  mux::ui::show(*self.s_->showing, std::optional(mux::ui::history_facts{chat->id, *found, self.s_->model}));
+}
+
+void part_apply(menu_part& self, const request::forward_to& one) {
+  mux::ui::show<mux::ui::forward_facts>(*self.s_->showing, std::nullopt);
+  if (!self.forwarding_ || self.s_->demo())
+    return;
+  const auto [from, events] = *std::exchange(self.forwarding_, std::nullopt);
+  for (const std::string& event : events)
+    self.s_->net->forward(from, event, one.to);
+  self.s_->notice("Forward", "Forwarded to " + [&] {
+    const conversation* to = self.s_->model->find(one.to);
+    return to ? mux::ui::display_name(*to) : one.to.id;
+  }());
+}
+
+void part_apply(menu_part& self, const request::menu_save_gif&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  if (self.target_.media)
+    self.pictures_->save_gif(*self.target_.media);
+}
+
+void part_apply(menu_part& self, const request::menu_delete&) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  const auto& chosen = self.s_->root().main().chosen;
+  if (!chosen)
+    return;
+  if (self.s_->demo())
+    self.s_->box->push(change_t{change::message_redacted{*chosen, self.target_.id}});
+  else
+    self.s_->net->remove_message(*chosen, self.target_.id);
+}
+
+void part_apply(menu_part& self, const request::menu_react& one) {
+  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
+  part_apply(self, request::react{self.target_.id, one.key});
+}
+
+void part_apply(menu_part& self, const request::react& one) {
+  const auto& chosen = self.s_->root().main().chosen;
+  const conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
+  if (!chat)
+    return;
+  const message* said = mux::ui::held_message(*chat, one.id);
+  if (!said)
+    return;
+  const std::string& me = chosen->account.address;
+  const bool on = logic::reaction_turns_on(*said, one.key, me);
+  self.s_->model->apply(change_t{change::reaction_changed{*chosen, one.id, one.key, me, on}});
+  if (!self.s_->demo())
+    self.s_->net->react(*chosen, one.id, one.key, on);
+  self.s_->refresh_due = true;
+}
+
+[[nodiscard]] std::vector<const message*> selected_messages(const menu_part& self) {
+  const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
+  if (!chat)
+    return {};
+  auto all = std::views::transform(self.selected_, [&](const std::string& id) { return mux::ui::held_message(*chat, id); });
+  auto chosen = std::ranges::to<std::vector>(std::views::filter(all, [](const message* one) { return one && !one->redacted; }));
+  std::ranges::sort(chosen, [](const message* a, const message* b) { return std::tie(a->at, a->id) < std::tie(b->at, b->id); });
+  return chosen;
+}
+
+void show_selection(menu_part& self) {
+  const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
+  const auto ops = chat ? mux::ui::ops_of(self.s_->ui, chat->id.account) : mux::proto::account_ops{};
+  const auto chosen = selected_messages(self);
+  const auto now = chat ? mux::ui::protocol_state_of(self.s_->ui, chat->id.account) : mux::protocol_state_t{};
+  const bool available = chat && proto::available(now);
+  const bool deletable = available && !chosen.empty() && std::ranges::all_of(chosen, [&](const message* one) { return proto::may_delete(now, *chat, one->outgoing); });
+  mux::ui::show(*self.s_->showing, mux::ui::selection_shown{chosen.size(), available && ops.forward, deletable});
+  self.s_->root().main().show_selection(self.selected_);
+}
 
 }  // namespace mux::app

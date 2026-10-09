@@ -9,6 +9,7 @@ import skiff.paint;
 import skiff.scene;
 import skiff.compose;
 import skiff.nodes.box;
+import skiff.nodes.scroll;
 import skiff.widgets.motion;
 import skiff.widgets.wallpaper;
 import mux.core;
@@ -34,6 +35,68 @@ import :sending;
 import :viewer;
 
 export namespace mux::ui {
+
+// Text editing commands are data; the menu is composed from ordinary rows.
+// Keep the editor's focus so a command still reaches its original selection.
+using text_menu_action = spl::variant<request::copy_text, request::text_key, request::text_formatting,
+    request::selection_copy, request::selection_forward, request::selection_delete, request::selection_cancel>;
+struct text_menu_item {
+  std::string label;
+  std::string shortcut;
+  text_menu_action action;
+  bool enabled = true;
+  bool separate = false;
+};
+inline float text_menu_height(const std::vector<text_menu_item>& items) {
+  return 12.0f + std::ranges::fold_left(std::views::transform(items, [](const auto& item) {
+    return item.separate ? 39.0f : 33.0f;
+  }), 0.0f, std::plus{});
+}
+inline auto text_menu_row(const palette& colours, const text_menu_item& item) {
+  namespace c = skiff::compose;
+  return c::onClick(item.action,
+      c::row(c::hbox(12.0f, {.fillX = true, .height = item.separate ? 39.0f : 33.0f,
+                            .padding = {item.separate ? 6.0f : 0.0f, 17.0f, 0.0f, 17.0f},
+                            .hoverBackground = colours.chosen, .disabled = !item.enabled}),
+             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                       nodes::Text(item.label, 13.0f, item.enabled ? colours.text : colours.dim)),
+             c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(item.shortcut, 12.0f, colours.dim)),
+             c::visible(item.separate, c::styled({.place = scene::anchor::kTopLeft, .fillX = true, .height = 1.0f},
+                                                nodes::Box<>(colours.band)))), item.label);
+}
+inline auto make_text_menu(const palette& colours, const std::vector<text_menu_item>& items) {
+  auto rows = skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      std::ranges::to<std::vector>(std::views::transform(items, [&](const auto& item) { return text_menu_row(colours, item); })));
+  return skiff::compose::styled(
+      {.width = 260.0f, .height = text_menu_height(items), .padding = {6.0f, 0.0f, 6.0f, 0.0f},
+       .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
+       .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}, .masking = true},
+      nodes::ScrollContainer<decltype(rows)>(std::move(rows)));
+}
+inline std::vector<text_menu_item> field_menu_items(const scene::text_menu::of_field& field, bool formatting) {
+  const bool selected = field.selection && !field.masked;
+  if (formatting)
+    return {{"‹ Back", "", request::text_formatting{false}},
+            {"Bold", "Ctrl+B", request::text_key{scene::keys::kB}, selected, true},
+            {"Italic", "Ctrl+I", request::text_key{scene::keys::kI}, selected},
+            {"Underline", "Ctrl+U", request::text_key{scene::keys::kU}, selected},
+            {"Strikethrough", "Ctrl+Shift+X", request::text_key{scene::keys::kX, true}, selected},
+            {"Monospace", "Ctrl+Shift+M", request::text_key{scene::keys::kM, true}, selected},
+            {"Spoiler", "Ctrl+Shift+P", request::text_key{scene::keys::kP, true}, selected},
+            {"Link…", "Ctrl+K", request::text_key{scene::keys::kK}, selected},
+            {"Plain text", "Ctrl+Shift+N", request::text_key{scene::keys::kN, true}, selected, true}};
+  std::vector<text_menu_item> items{
+      {"Undo", "Ctrl+Z", request::text_key{scene::keys::kZ}, field.undo},
+      {"Redo", "Ctrl+Shift+Z", request::text_key{scene::keys::kZ, true}, field.redo},
+      {"Cut", "Ctrl+X", request::text_key{scene::keys::kX}, selected, true},
+      {"Copy", "Ctrl+C", request::text_key{scene::keys::kC}, selected},
+      {"Paste", "Ctrl+V", request::text_key{scene::keys::kV}},
+      {"Delete", "", request::text_key{scene::keys::kDelete, false, false}, field.selection},
+      {"Select All", "Ctrl+A", request::text_key{scene::keys::kA}, field.text, true}};
+  if (field.formats && !field.masked)
+    items.push_back({"Formatting ›", "", request::text_formatting{true}, selected, true});
+  return items;
+}
 
 // ---- the window -------------------------------------------------------------------
 
@@ -285,89 +348,7 @@ template <class Actions> struct window : skiff::compose::Specced {
   // is selected and it is no password's, Paste, Select All -- each the key
   // the field takes for it, given to it (it keeps the focus: a button takes
   // none).
-  struct text_menu : skiff::compose::Stacked {
-    struct copy_it {
-      using Answer = ::mux::ui::request::copy_text;
-      std::string text;
-      ::mux::ui::request::copy_text operator()() { return ::mux::ui::request::copy_text{text}; }
-    };
-    struct key_it {
-      using Answer = ::mux::ui::request::text_key;
-      scene::Key key;
-      bool shift = false;
-      ::mux::ui::request::text_key operator()() { return ::mux::ui::request::text_key{key, shift}; }
-    };
-    struct parts_t {
-      std::optional<widgets::Button<copy_it>> copy;
-      std::optional<widgets::Button<copy_it>> copy_link;
-      std::optional<widgets::Button<key_it>> cut;
-      std::optional<widgets::Button<key_it>> copy_selected;
-      std::optional<widgets::Button<key_it>> paste;
-      std::optional<widgets::Button<key_it>> select_all;
-      // A field that formats, with something selected: tdesktop's
-      // Formatting items, each its shortcut given to the field.
-      std::optional<widgets::Button<key_it>> bold;
-      std::optional<widgets::Button<key_it>> italic;
-      std::optional<widgets::Button<key_it>> underline;
-      std::optional<widgets::Button<key_it>> strike;
-      std::optional<widgets::Button<key_it>> monospace;
-      std::optional<widgets::Button<key_it>> spoiler;
-      std::optional<widgets::Button<key_it>> link;
-      std::optional<widgets::Button<key_it>> plain;
-    } parts;
-    // A selectable text's.
-    text_menu(const ui_needs<Actions>& n, std::string text, std::optional<std::string> link) : text_menu(*n.colours) {
-      parts.copy.emplace(n.colours->widgets, "Copy", copy_it{std::move(text)});
-      if (link)
-        parts.copy_link.emplace(n.colours->widgets, "Copy Link", copy_it{std::move(*link)});
-      this->rows();
-    }
-    // A field's.
-    text_menu(const ui_needs<Actions>& n, const scene::text_menu::of_field& field) : text_menu(*n.colours) {
-      const auto item = [&](std::optional<widgets::Button<key_it>>& button, std::string label, scene::Key key,
-                            bool shift = false) {
-        button.emplace(n.colours->widgets, std::move(label), key_it{key, shift});
-      };
-      if (field.selection && !field.masked) {
-        item(parts.cut, "Cut", scene::keys::kX);
-        item(parts.copy_selected, "Copy", scene::keys::kC);
-      }
-      item(parts.paste, "Paste", scene::keys::kV);
-      item(parts.select_all, "Select All", scene::keys::kA);
-      if (field.formats && field.selection && !field.masked) {
-        item(parts.bold, "Bold", scene::keys::kB);
-        item(parts.italic, "Italic", scene::keys::kI);
-        item(parts.underline, "Underline", scene::keys::kU);
-        item(parts.strike, "Strikethrough", scene::keys::kX, true);
-        item(parts.monospace, "Monospace", scene::keys::kM, true);
-        item(parts.spoiler, "Spoiler", scene::keys::kP, true);
-        item(parts.link, "Link", scene::keys::kK);
-        item(parts.plain, "Plain text", scene::keys::kN, true);
-      }
-      this->rows();
-    }
-    // How tall it is, for where it is put: its rows and its padding.
-    [[nodiscard]] float tall() const {
-      const auto& [... row] = parts;
-      return 12.0f + 34.0f * static_cast<float>((0 + ... + (row ? 1 : 0)));
-    }
-
-   private:
-     explicit text_menu(const palette &colours)
-         : Stacked(skiff::compose::vbox(
-               0.0f, {.width = 150.0f,
-                      .autoSize = scene::axes::kY,
-                      .padding = {6.0f, 6.0f, 6.0f, 6.0f},
-                      .cornerRadius = 10.0f,
-                      .background = colours.popup(),
-                      .border = scene::Border{colours.band, 1.0f},
-                      .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0),
-                                              3.0f}})) {}
-     void rows() {
-       auto &[... row] = parts;
-       ((row ? (row->apply({.fillX = true, .height = 30.0f}), 0) : 0), ...);
-     }
-  };
+  using text_menu = decltype(make_text_menu(std::declval<const palette&>(), std::vector<text_menu_item>{}));
   // The dialogs protocols have of their own (dialogs(state), made by their
   // dialog_type, found by ADL where the window is made): one of them up at
   // a time, in one dialog of the window's.
@@ -819,6 +800,8 @@ template <class Actions> struct window : skiff::compose::Specced {
   void drop_closed() {
     if (std::exchange(text_menu_close_due, false))
       this->close_text_menu_now();
+    if (auto formatting = std::exchange(text_formatting_due, std::nullopt); formatting && text_menu_field && layer().parts.text_menu_up)
+      this->put_text_menu(field_menu_items(*text_menu_field, *formatting));
     layer().frame.dropClosed();
     layer().settings.dropClosed();
     layer().notice.dropClosed();
@@ -845,19 +828,35 @@ template <class Actions> struct window : skiff::compose::Specced {
   // A selectable text's menu, where the pointer was pressed, kept in the
   // window; and gone.
   void show_text_menu(std::string text, std::optional<std::string> link = std::nullopt) {
-    this->place_text_menu(parts.now->parts.text_menu_up.emplace(needs_, std::move(text), std::move(link)));
+    text_menu_field.reset();
+    std::vector<text_menu_item> items{{"Copy", "", request::copy_text{std::move(text)}}};
+    if (link)
+      items.push_back({"Copy Link", "", request::copy_text{std::move(*link)}});
+    this->put_text_menu(items);
+  }
+  void show_selection_menu(std::size_t count, bool forwardable, bool deletable) {
+    text_menu_field.reset();
+    this->put_text_menu({
+        {std::format("Copy {} messages", count), "Ctrl+C", request::selection_copy{}},
+        {"Forward selected", "", request::selection_forward{}, forwardable},
+        {"Delete selected…", "Delete", request::selection_delete{}, deletable},
+        {"Clear selection", "Esc", request::selection_cancel{}, true, true}});
   }
   // A field's: Paste and the rest, for the field with the focus.
   void show_field_menu(const scene::text_menu::of_field& field) {
-    this->place_text_menu(parts.now->parts.text_menu_up.emplace(needs_, field));
+    text_menu_field = field;
+    this->put_text_menu(field_menu_items(field, false));
   }
-  void place_text_menu(text_menu& menu) {
+  void text_formatting(bool open) { text_formatting_due = open; }
+  void put_text_menu(const std::vector<text_menu_item>& items) {
+    auto& menu = parts.now->parts.text_menu_up.emplace(make_text_menu(*needs_.colours, items));
     text_menu_close_due = false;
     auto& now = *parts.now;
     const skia::SkRect box = fState.fBounds;
+    const float tall = std::min(text_menu_height(items), box.height());
     menu.apply({.place = scene::anchor::kTopLeft,
-                .x = std::clamp(now.last_press.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 150.0f)),
-                .y = std::clamp(now.last_press.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - menu.tall()))});
+                .x = std::clamp(now.last_press.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 260.0f)),
+                .y = std::clamp(now.last_press.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - tall)), .width = std::min(260.0f, box.width()), .height = tall});
     now.invalidateLayout();
     now.markDamaged();
   }
@@ -881,6 +880,8 @@ template <class Actions> struct window : skiff::compose::Specced {
     }
   }
   bool text_menu_close_due = false;
+  std::optional<scene::text_menu::of_field> text_menu_field;
+  std::optional<bool> text_formatting_due;
   [[nodiscard]] room_settings<Actions>* manage_up() { return layer().manage.shown(); }
 
   void close_drawer_now() { layer().frame.base().closeNow(); }
@@ -901,7 +902,14 @@ template <class Actions> struct window : skiff::compose::Specced {
   // The sticker pictures the panel shows, for the program to ask for.
   [[nodiscard]] std::vector<std::string> emoji_pictures_shown() {
     auto* up = layer().emoji.shown();
-    return up ? up->parts.card.parts.stickers.pictures_shown() : std::vector<std::string>{};
+    std::vector<std::string> shown;
+    if (up) {
+      shown.append_range(up->parts.card.parts.stickers.pictures_shown());
+      shown.append_range(up->parts.card.parts.panel.pictures_shown());
+    }
+    if (auto* menu = layer().menu.shown(); menu && menu->parts.menu.parts.emoji)
+      shown.append_range(menu->parts.menu.parts.emoji->pictures_shown());
+    return shown;
   }
   // The menu's card, where one is up: what takes the keys while it is.
   [[nodiscard]] scene::Node* menu_card() {

@@ -71,7 +71,7 @@ constexpr auto composer_views_for(const State& state, type_tag<Actions> tag) {
 
 template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   // What its keys and its swipes ask for.
-  using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of>;
+  using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::selection_copy, ::mux::ui::request::selection_delete, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of>;
   // What it was handed, for the rows it makes.
   ui_needs<Actions> needs_;
   std::optional<conversation_id> chosen;
@@ -795,11 +795,27 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   // messages; Esc lets an answer or an edit go.
   using Node::onKey;
   std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply);
+  std::optional<Answer> onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
+    if (!chat.parts.selection.visible())
+      return std::nullopt;
+    const bool control = press.modifiers.template has<scene::modifier::control>();
+    const bool other = press.modifiers.template has<scene::modifier::shift>() || press.modifiers.template has<scene::modifier::alt>();
+    if (press.key == scene::keys::kC && control && !other) {
+      reply.handle();
+      return request::selection_copy{};
+    }
+    if (press.key == scene::keys::kDelete && !control && !other) {
+      reply.handle();
+      return request::selection_delete{};
+    }
+    return std::nullopt;
+  }
   // Messages selected: the selection bar in place of the head, and the
   // messages marked; none, the head back.
   void show_selection(const std::set<std::string>& ids) {
     header.setVisible(ids.empty() && !search.visible());
     chat.area.set_selected(ids);
+    parts.threads.parts.answers.set_selected(ids);
     this->invalidateLayout();
   }
   // The search bar in place of the head, or the head back.

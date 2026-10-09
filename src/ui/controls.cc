@@ -944,29 +944,33 @@ struct label_button_row : skiff::compose::Stacked {
 // the name, dim, over its cells, wrapped as wide as it is. The cells are put
 // in by what it is a section of.
 template <class Cell>
-struct cell_section : skiff::compose::Stacked {
-  using cells_t = nodes::Flow<std::vector<Cell>>;
-  struct parts_t {
-    nodes::Text title;
-    cells_t cells;
-  } parts;
-  cell_section(const palette& colours, std::string name)
-      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        parts{.title = skiff::compose::styled({.margin = {10.0f, 0.0f, 6.0f, 7.0f}}, nodes::Text(std::move(name), 13.0f, colours.dim, true)),
-              .cells = skiff::compose::styled({.fillX = true, .autoSize = scene::axes::kY},
-                                              cells_t({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {}))} {}
-  [[nodiscard]] std::vector<Cell>& each() { return std::get<0>(parts.cells.fChildren); }
-};
+auto cell_section(const palette& colours, std::string name, std::vector<Cell> cells,
+                  std::optional<emote_pack> pack = std::nullopt, std::optional<account_id> by = std::nullopt) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::row(c::hbox(8.0f, {.fillX = true, .height = 32.0f, .padding = {0.0f, 7.0f, 0.0f, 7.0f}}),
+          c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                    nodes::Text(std::move(name), 13.0f, colours.dim, true)),
+          c::visible(pack && pack->chat,
+              c::onClick(request::adopt_pack{pack.value_or(emote_pack{}), by},
+                  c::styled({.width = 100.0f, .height = 26.0f, .alignSelf = scene::align::kMiddle,
+                              .cornerRadius = 6.0f, .hoverBackground = colours.chosen},
+                            nodes::Text("Add to account", 11.0f, colours.accent)), "Add pack to account"))),
+      c::styled({.fillX = true, .autoSize = scene::axes::kY},
+          nodes::Flow<std::vector<Cell>>({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, std::move(cells))));
+}
+template <class Cell>
+using cell_section_t = decltype(cell_section(std::declval<const palette&>(), "", std::vector<Cell>{}));
+
+inline auto& cell_section_cells(auto& section) {
+  return std::get<0>(std::get<1>(section.fParts).fChildren);
+}
 
 // A panel's footer of tabs, one for each of its sections.
-template <class Tab> struct tab_strip : skiff::compose::Stacked {
-  explicit tab_strip(skiff::compose::Look look = skiff::compose::vbox())
-      : Stacked(std::move(look)) {}
-
-  struct parts_t {
-    std::vector<Tab> each;
-  } parts;
-};
+template <class Tab>
+auto tab_strip(skiff::compose::Look look) { return skiff::compose::many(std::move(look), std::vector<Tab>{}); }
+template <class Tab>
+using tab_strip_t = decltype(tab_strip<Tab>(skiff::compose::vbox()));
 
 // A dialog's buttons, at its bottom right: Cancel, and what it does --
 // Send, Save, Create room -- the primary one.

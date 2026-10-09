@@ -431,6 +431,10 @@ struct close_packs {};
 struct save_pack {
   mux::emote_pack pack;
 };
+struct adopt_pack {
+  mux::emote_pack pack;
+  std::optional<mux::account_id> by;
+};
 struct delete_pack {
   mux::emote_pack pack;
 };
@@ -453,6 +457,10 @@ struct mute_call {};
 struct text_key {
   skiff::scene::Key key;
   bool shift = false;  // with Shift too: Ctrl+Shift+X struck through
+  bool control = true;
+};
+struct text_formatting {
+  bool open = true;
 };
 // Ctrl+K in the message field: the link box, for what is selected.
 struct ask_link {};
@@ -568,6 +576,11 @@ struct toggle_selected {
 struct selection_forward {};
 struct selection_copy {};
 struct selection_delete {};
+struct selection_delete_confirm {};
+struct selection_span {
+  std::vector<std::string> ids;
+  bool selected = true;
+};
 struct selection_cancel {};
 struct close_dialog {};
 struct menu_forward {};

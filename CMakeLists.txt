@@ -229,19 +229,15 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # there in every build; the rest of skiff, which draws, only with a window.
 # Without one, skiff is built as skiff.model alone, and no Skia is asked for.
 # skiff and skiff-widgets say the rest of what they are in their own trees.
-# Debug shares layout, default drawing and erased walk callbacks between
-# node types. Keep single-config Release on its existing source pin; the
-# newer pin used by multi-config builds guards the change with Debug alone.
-set(mux_skiff_pin 51b8103022a30385ddd8368a9ecbcca62c753f7c)
-if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_CONFIGURATION_TYPES)
-  set(mux_skiff_pin 4cee13b7042ac10e558c986ea9d99a6b83dd5418)
-endif()
+# Debug-only sharing remains guarded in skiff. Both configurations need the
+# editor menu facts and elapsed-time animation fixes from this revision.
+set(mux_skiff_pin 2073f57ff301ae2781e66bd6de7ae4fcc5ac86f0)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin})
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 4b2529e6582b784f349166f5d922dc60bb4fe7dc)
+  GIT_TAG 14ceecc5ffa8b853d2c7201951aa63aaddd61b16)
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures

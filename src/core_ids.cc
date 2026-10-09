@@ -431,6 +431,10 @@ struct emote {
   std::optional<std::string> mimetype;
   std::string pack;
   std::optional<std::string> pack_avatar;
+  // Identity stays separate from the display name: equally named packs
+  // from different spaces must have their own section and subscription.
+  std::optional<std::string> pack_room;
+  std::string pack_key;
   friend bool operator==(const emote&, const emote&) = default;
 };
 

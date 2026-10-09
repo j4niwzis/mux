@@ -543,6 +543,16 @@ struct network {
             one.account);
     });
   }
+  void adopt_pack(const mux::account_id& by, emote_pack pack) {
+    loop.post([this, by, pack = std::move(pack)] {
+      std::ranges::for_each(accounts, [&](auto& one) {
+        spl::visit([&](auto& account) {
+          if (account->id() == by)
+            ask_if_able([&](auto& a) -> decltype(void(a.adopt_pack(pack))) { a.adopt_pack(pack); }, *account);
+        }, one.account);
+      });
+    });
+  }
   void delete_pack(const mux::account_id& by, emote_pack pack) {
     loop.post([this, by, pack = std::move(pack)] {
       for (auto& one : accounts)

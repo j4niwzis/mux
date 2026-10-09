@@ -31,6 +31,7 @@ export namespace mux::ui {
 struct notice_facts {
   std::string heading;
   std::string text;
+  bool delete_selection = false;
 };
 // A notice's text: wrapped, selectable, as wide as the box.
 [[nodiscard]] inline auto notice_line(std::string text, float size, skia::SkColor colour, bool bold = false) {
@@ -40,8 +41,12 @@ inline auto notice_box(const palette& colours, const notice_facts& facts) {
   return skiff::compose::column(
       skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       notice_line(facts.heading, 17.0f, colours.text, true), notice_line(facts.text, 14.0f, colours.dim),
-      skiff::compose::styled({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},
-          primary(widgets::SendButton<request::close_notice>(colours.widgets, "OK", {}))));
+      skiff::compose::row(skiff::compose::hbox(8.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kEnd}),
+          skiff::compose::visible(facts.delete_selection,
+              skiff::compose::styled({.width = 90.0f, .height = 34.0f},
+                  widgets::SendButton<request::selection_delete_confirm>(colours.widgets, "Delete", {}))),
+          skiff::compose::styled({.width = 90.0f, .height = 34.0f},
+              primary(widgets::SendButton<request::close_notice>(colours.widgets, facts.delete_selection ? "Cancel" : "OK", {})))));
 }
 using notice_box_t = decltype(notice_box(std::declval<const palette&>(), std::declval<const notice_facts&>()));
 inline dialog_look content_look(std::type_identity<notice_box_t>) { return {.size = dialog_size::fitting{440.0f}}; }

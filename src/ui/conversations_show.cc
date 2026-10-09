@@ -75,6 +75,10 @@ auto conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     asked = ::mux::ui::request::reply_step{false};
   } else if (press.key == keys::kUp && !any && line.text().empty()) {
     asked = ::mux::ui::request::edit_last{};
+  } else if (press.key == keys::kC && control && chat.parts.selection.visible()) {
+    asked = ::mux::ui::request::selection_copy{};
+  } else if (press.key == keys::kDelete && !any && chat.parts.selection.visible()) {
+    asked = ::mux::ui::request::selection_delete{};
   } else if (press.key == keys::kC && control) {
     // Text nodes publish an owned copy of their selection as it changes.
     // Copy that snapshot without walking message widgets that may have

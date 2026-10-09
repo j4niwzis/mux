@@ -666,14 +666,18 @@ void account<Sink>::list_packs(std::optional<std::string> room) {
       if (found.empty())
         found.push_back(emote_pack{});
     } else if (const auto joined = state_.joined.find(*room); joined != state_.joined.end()) {
-      for (const auto& [key, one] : joined->second.state.events)
-        spl::visit(spl::overloaded{[&](const loom::ev::im_ponies_room_emotes_content_t& content) {
-                                           // An emptied one is a pack taken away.
-                                           if (!content.images.empty() || content.pack)
-                                             found.push_back(packs::pack_of(content, room, key.second));
-                                         },
-                                         [](const auto&) {}},
-                      one.content.data());
+      std::ranges::for_each(pack_rooms(state_, joined->second), [&](const std::string& source) {
+        std::ranges::for_each(state_.joined.at(source).state.events, [&](const auto& event) {
+          const auto add = [&](const auto& content) {
+            if (!content.images.empty() || content.pack)
+              found.push_back(packs::pack_of(content, source, event.first.second));
+          };
+          spl::visit(spl::overloaded{
+              [&](const loom::ev::im_ponies_room_emotes_content_t& content) { add(content); },
+              [&](const loom::ev::m_room_image_pack_content_t& content) { add(content); },
+              [](const auto&) {}}, event.second.content.data());
+        });
+      });
     }
     sink_(proto::matrix::packs_listed{id_, room, std::move(found)});
   });
@@ -707,6 +711,32 @@ void account<Sink>::save_pack(emote_pack pack) {
     if (!done)
       log(id_, "the pack {} was not saved", pack.name);
     sink_(proto::matrix::pack_saved{.by = id_, .pack = pack, .done = done});
+  });
+}
+
+// Subscribe to the existing room pack, keeping all previous subscriptions
+// and the personal pack. Images are neither reuploaded nor renamed.
+template <class Sink>
+void account<Sink>::adopt_pack(emote_pack pack) {
+  if (!pack.chat)
+    return;
+  this->spawn_guarded([this, pack = std::move(pack)] {
+    loom::ev::im_ponies_emote_rooms_content_t chosen;
+    if (const auto current = state_.account_data.find("im.ponies.emote_rooms"); current != state_.account_data.end())
+      spl::visit(spl::overloaded{
+          [&](const loom::ev::im_ponies_emote_rooms_content_t& content) { chosen = content; },
+          [](const auto&) {}}, current->second.content.data());
+    chosen.rooms[*pack.chat].insert_or_assign(pack.key, knot::raw{"{}"});
+    const bool done = api_ && static_cast<bool>(perform(*api_, loom::cs::set_account_data{
+        .user_id = id_.address, .type = "im.ponies.emote_rooms", .body = as_body(chosen)}));
+    if (!done) {
+      sink_(change::refused{id_, "The pack could not be added to your account."});
+      return;
+    }
+    state_.account_data.insert_or_assign("im.ponies.emote_rooms", loom::ev::account_data_event{
+        .content = loom::ev::other_content{std::move(chosen)}, .type = "im.ponies.emote_rooms"});
+    std::ranges::for_each(state_.joined, [&](const auto& room) { conversation(conversation_id{id_, room.first}, room.second); });
+    sink_(change::notice{id_, "Pack added", "This pack is now available in all your rooms."});
   });
 }
 

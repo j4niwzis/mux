@@ -54,6 +54,35 @@ struct packs_facts {
   std::optional<std::string> room;
   bool editable = false;
 };
+template <class Box>
+struct pack_open {
+  Box* box;
+  std::size_t index;
+  scene::Taken operator()() const { box->open_pack(index); return {}; }
+};
+template <class Box>
+auto pack_row(Box* box, std::size_t index, const emote_pack& pack) {
+  namespace c = skiff::compose;
+  auto picture = c::styled({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle,
+                            .cornerRadius = 8.0f, .background = box->colours_->tile},
+      nodes::Image<from_avatars>({pack.avatar.value_or(pack.pictures.empty() ? std::string() : pack.pictures.front().url)}));
+  picture.keepBox();
+  return c::onPress(pack_open<Box>{box, index},
+      c::row(c::hbox(12.0f, {.fillX = true, .height = 56.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
+                             .cornerRadius = 8.0f, .hoverBackground = box->colours_->chosen}),
+             std::move(picture),
+             two_lines(*box->colours_, pack.name.empty() ? "Unnamed pack" : pack.name,
+                 std::format("{} images · {}{}", pack.pictures.size(),
+                     pack.emoji && pack.sticker ? "Emoji and stickers" : pack.emoji ? "Emoji" : "Stickers",
+                     pack.chat != box->room ? " · From space" : ""), 14.0f, 2.0f),
+             c::visible(pack.chat.has_value(),
+                 c::onClick(request::adopt_pack{pack},
+                     c::styled({.width = 120.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle,
+                                 .cornerRadius = 6.0f, .hoverBackground = box->colours_->tile},
+                         nodes::Text("Add to account", 13.0f, box->colours_->accent)), "Add pack to account"))),
+      pack.name.empty() ? "Open pack" : pack.name);
+}
+
 template <class Actions> struct packs_box : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   packs_box(const packs_box&) = delete;
@@ -115,43 +144,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
   };
   // A pack in the list: its picture, its name, how many images and what
   // for; pressed, opened.
-  struct pack_row : skiff::compose::Stacked {
-    packs_box* box;
-    std::size_t index;
-    struct parts_t {
-      nodes::Image<from_avatars> face;
-      two_lines_t lines;
-    } parts;
-    pack_row(packs_box *b, std::size_t i, const emote_pack &one)
-        : Stacked(skiff::compose::hbox(
-              12.0f, {.fillX = true,
-                      .height = 56.0f,
-                      .padding = {8.0f, 14.0f, 8.0f, 14.0f},
-                      .cornerRadius = 8.0f,
-                      .hoverBackground = b->colours_->chosen})),
-          box(b), index(i),
-          parts{.face = skiff::compose::styled(
-                    {.width = 40.0f,
-                     .height = 40.0f,
-                     .alignSelf = scene::align::kMiddle,
-                     .cornerRadius = 8.0f,
-                     .background = b->colours_->tile},
-                    nodes::Image<from_avatars>({one.avatar.value_or(
-                        one.pictures.empty() ? std::string()
-                                             : one.pictures.front().url)})),
-                .lines = two_lines(*b->colours_, one.name.empty() ? "Unnamed pack" : one.name,
-                    std::format("{} image{} · {}", one.pictures.size(), one.pictures.size() == 1 ? "" : "s",
-                        one.emoji && one.sticker ? "Emoji and stickers" : one.emoji ? "Emoji" : "Stickers"), 14.0f, 2.0f)} {
-
-      parts.face.keepBox();
-    }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      box->open_pack(index);
-      return true;
-    }
-  };
+  using pack_row_t = decltype(pack_row(std::declval<packs_box*>(), std::size_t{}, std::declval<const emote_pack&>()));
   // An image of the pack open: its picture, its shortcode to edit, its use,
   // and × to take it out.
   struct picture_row : skiff::compose::Stacked {
@@ -294,7 +287,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
     }
   };
   using header_t = page_header_t<no_back, close_it>;
-  using packs_t = nodes::Flow<std::vector<pack_row>>;
+  using packs_t = nodes::Flow<std::vector<pack_row_t>>;
   using pictures_t = nodes::Flow<std::vector<picture_row>>;
   struct parts_t {
     header_t header;
@@ -355,13 +348,12 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
     open = false;
     std::get<1>(parts.header.fParts).setText("Emojis & Stickers");
     parts.note.setText(room ? (packs.empty() ? std::string("This room has no packs yet.")
-                                             : std::string("The packs of this room: their emoji and stickers are "
-                                                           "there for everyone in it."))
+                                             : std::string("Packs from this room and its spaces. Add a pack to your account to use it in every room."))
                             : std::string("Your own pack: its emoji and stickers are yours in every chat."));
     auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     rows.clear();
     for (std::size_t i = 0; i < packs.size(); ++i)
-      rows.emplace_back(this, i, packs[i]);
+      rows.push_back(pack_row(this, i, packs[i]));
     this->show_page();
   }
   // A pack opened -- a new one where none is named -- to edit.
@@ -372,7 +364,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
     std::get<1>(parts.header.fParts).setText(new_pack ? "New pack" : draft.name.empty() ? "Pack" : draft.name);
     parts.name.parts.box.setText(draft.name);
     parts.attribution.parts.box.setText(draft.attribution);
-    parts.note.setText(may_edit ? std::string("Shortcodes are what the emoji are typed as, :like_this:.")
+    parts.note.setText(may_edit && draft.chat == room ? std::string("Shortcodes are what the emoji are typed as, :like_this:.")
                                 : std::string("You may not change this room's packs."));
     this->show_use();
     this->show_pictures();
@@ -397,9 +389,14 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.name, &parts.attribution, &parts.use,
                                                                  &parts.images_heading, &parts.pictures, &parts.edit_actions})
       each->setVisible(open);
-    parts.edit_actions.parts.add.setVisible(may_edit);
-    parts.edit_actions.parts.save.setVisible(may_edit);
-    parts.edit_actions.parts.remove.setVisible(may_edit && room.has_value() && !new_pack);
+    const bool editable = may_edit && draft.chat == room;
+    parts.name.setDisabled(!editable);
+    parts.attribution.setDisabled(!editable);
+    parts.use.setDisabled(!editable);
+    parts.pictures.setDisabled(!editable);
+    parts.edit_actions.parts.add.setVisible(editable);
+    parts.edit_actions.parts.save.setVisible(editable);
+    parts.edit_actions.parts.remove.setVisible(editable && room.has_value() && !new_pack);
     parts.edit_actions.parts.back.setVisible(room.has_value());
     this->invalidateLayout();
   }

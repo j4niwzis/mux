@@ -468,7 +468,7 @@ void app::before_frame() {
     shared.ui.pictures_due = true;
   }
   calls.tick();
-  menu.keep_selection();
+  keep_selection(menu);
   // A selectable text or a field pressed with the right button -- a long
   // press, on a phone: its menu, the last asked for.
   if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !root().context_menu_up())

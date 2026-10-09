@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.image;
@@ -115,29 +116,39 @@ struct dwell {
 };
 // The preview, over a panel: a dark plate, the picture or glyph large, its
 // name under it.
-struct emote_preview : nodes::Stack {
+struct emote_preview : skiff::compose::Stacked {
   static constexpr float kSide = 200.0f;
   struct parts_t {
     std::optional<nodes::Image<from_avatars>> picture;
     nodes::Text glyph;
     nodes::Text label;
   } parts;
-  emote_preview(const palette& colours, const previewed& shown)
-      : parts{.glyph = nodes::Text(shown.picture ? std::string() : shown.key, 120.0f, colours.text),
-              .label = nodes::Text(shown.label, 14.0f, colours.text)} {
-    this->setGap(8.0f);
-    fStack.justify = nodes::justify::middle{};
-    fState.apply({.place = scene::anchor::kCentre, .autoSize = scene::axes::kBoth,
-                  .padding = {16.0f, 16.0f, 16.0f, 16.0f}, .cornerRadius = 14.0f,
-                  .background = (colours.sidebar & 0x00FFFFFFu) | (0xF0u << 24)});
+  emote_preview(const palette &colours, const previewed &shown)
+      : Stacked(skiff::compose::justified(
+            skiff::compose::vbox(
+                8.0f, {.place = scene::anchor::kCentre,
+                       .autoSize = scene::axes::kBoth,
+                       .padding = {16.0f, 16.0f, 16.0f, 16.0f},
+                       .cornerRadius = 14.0f,
+                       .background =
+                           (colours.sidebar & 0x00FFFFFFu) | (0xF0u << 24)}),
+            nodes::justify::middle{})),
+        parts{.glyph = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  skiff::compose::visible(
+                      !shown.picture,
+                      nodes::Text(shown.picture ? std::string() : shown.key,
+                                  120.0f, colours.text))),
+              .label = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  skiff::compose::visible(
+                      !shown.label.empty(),
+                      nodes::Text(shown.label, 14.0f, colours.text)))} {
+
     if (shown.picture) {
       parts.picture.emplace(from_avatars{shown.key});
       parts.picture->apply({.width = kSide, .height = kSide, .alignSelf = scene::align::kMiddle});
     }
-    parts.glyph.setVisible(!shown.picture);
-    parts.glyph.apply({.alignSelf = scene::align::kMiddle});
-    parts.label.setVisible(!shown.label.empty());
-    parts.label.apply({.alignSelf = scene::align::kMiddle});
   }
 };
 // A panel's preview kept to what the cells say: made anew as it changes.

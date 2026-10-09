@@ -40,7 +40,7 @@ struct chat_placement {
   std::string conversation;  // the chat's id in it
   std::string listed_in;     // the account whose list it is in, by its address
   bool moved = false;        // out of its own account's list
-  std::optional<std::string> strip_colour;
+  std::optional<accent_said_t> strip_colour;
   std::optional<bool> strip;
   friend bool operator==(const chat_placement&, const chat_placement&) = default;
 };
@@ -132,6 +132,63 @@ inline constexpr std::int64_t kDeletedOnDiskMb = 256;
   return spl::visit([](auto one) { return bounds_of(one); }, which);
 }
 
+// How frames are drawn, read by the host at each one: only the damage
+// repainted, and it outlined; in step with the display; the frames a
+// second counted.
+struct frame_settings {
+  bool partial_redraw = false;
+  bool flash_redraws = false;
+  bool vsync = true;
+  bool show_fps = false;
+  friend bool operator==(const frame_settings&, const frame_settings&) = default;
+};
+
+// What a chat -- or a space, for its rooms -- chose for itself: each setting
+// a field, found in the model by its member pointer (Field<&chat_choices::
+// muted>); unsaid, as the level above.
+struct chat_choices {
+  bool muted = false;
+  std::optional<bool> room_events;
+  std::optional<room_event_kinds> room_event_kinds;
+  std::optional<bool> receipts;
+  std::optional<bool> previews;
+  std::optional<bool> previews_direct;
+  std::optional<bool> typing;
+  std::optional<std::int64_t> jump_search;
+  std::optional<wallpaper_t> wallpaper;
+  std::optional<bubble_look> bubbles;
+  std::optional<bubble_look> panels;
+  bool forum = false;
+  bool hidden_from_home = false;
+  notify_choices notify;
+  friend bool operator==(const chat_choices&, const chat_choices&) = default;
+};
+
+// How the window looks, for every account and chat that does not say: the
+// theme and its accent, the renderer for the next start, the window's
+// opacity, scale and blur, the space bars and where each item is put, and
+// every chat's background, bubbles and panels.
+struct look_settings {
+  theme_t theme = theme::tinted{};
+  accent_t accent = accent::theme_own{};
+  renderer_t renderer = renderer::opengl{};
+  motion_t motion = motion::full{};
+  int window_opacity = 100;
+  bool wallpaper_behind = false;
+  bool live_blur = false;
+  double frost_blur = 10.0;
+  bool spaces = true;
+  bool top_bar = true;
+  bool home_hides_spaced = false;
+  bool home_hides_direct = false;  // and direct messages, where that is so
+  std::vector<space_placed> space_places;
+  int interface_scale = 100;  // in percent of the display's
+  std::optional<wallpaper_t> wallpaper;
+  std::optional<bubble_look> bubbles;
+  std::optional<bubble_look> panels;
+  friend bool operator==(const look_settings&, const look_settings&) = default;
+};
+
 // What is done to a picture dropped on the window before it is sent.
 struct sending_settings {
   bool strip_metadata = true;  // its EXIF, XMP, text and the like cut out
@@ -180,7 +237,7 @@ struct file {
   std::optional<std::vector<saved_account>> accounts;
   // How much the window moves: "none", "reduced" (sections unfold, panels
   // just appear) or "full". Nothing said is full.
-  std::optional<std::string> motion;
+  std::optional<motion_said_t> motion;
   // The account shown last, by its address: shown again at the next start.
   std::optional<std::string> last_account;
   // The emoji picked lately, newest first.
@@ -197,8 +254,8 @@ struct file {
   std::optional<std::vector<proxy_settings>> proxies;
   // The theme, "dark" or "light", and what draws the window, "opengl" or
   // "software". Nothing said is dark and OpenGL.
-  std::optional<std::string> theme;
-  std::optional<std::string> accent;
+  std::optional<theme_said_t> theme;
+  std::optional<accent_said_t> accent;
   // Every chat's background, as word_of(wallpaper_t) says it; none, the theme's.
   std::optional<std::string> wallpaper;
   // Every chat's bubbles, as word_of(bubble_look) says them; none, solid.
@@ -206,7 +263,7 @@ struct file {
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
   std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
-  std::optional<std::string> renderer;
+  std::optional<renderer_said_t> renderer;
   // Only what changed repainted, into a frame kept between them.
   std::optional<bool> partial_redraw;
   // What each frame repainted, outlined: to see that only that is.

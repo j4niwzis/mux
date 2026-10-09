@@ -11,6 +11,7 @@
 export module mux.ui;
 
 export import :base;
+export import :requests;
 export import :icons;
 export import :avatars;
 export import :controls;

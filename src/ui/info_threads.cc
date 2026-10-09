@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -44,9 +45,13 @@ export namespace mux::ui {
 // room's threads -- each root, who wrote it and what, how many answers and
 // when the latest came -- and one opened: its root, its answers, and a
 // field to answer in it.
-template <class Actions>
-struct threads_panel : nodes::Stack {
-  Actions* actions = nullptr;
+template <class Actions> struct threads_panel : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  threads_panel(const threads_panel&) = delete;
+  threads_panel& operator=(const threads_panel&) = delete;
+  threads_panel(threads_panel&&) = delete;
+  threads_panel& operator=(threads_panel&&) = delete;
+
   std::optional<std::string> open;  // the thread open, else the list
   std::vector<message> shown;       // what the open thread shows now
   std::optional<std::string> answering;  // an answer in it, answered
@@ -54,20 +59,22 @@ struct threads_panel : nodes::Stack {
   const model* seen_model = nullptr;
   std::optional<conversation_id> seen_chat;
   struct close_it {
-    Actions* actions;
-    void operator()() const { actions->toggle_threads(); }
+    using Answer = ::mux::ui::request::toggle_threads;
+    ::mux::ui::request::toggle_threads operator()() { return ::mux::ui::request::toggle_threads{}; }
   };
   struct back_it {
-    Actions* actions;
-    void operator()() const { actions->close_thread(); }
+    using Answer = ::mux::ui::request::close_thread;
+    ::mux::ui::request::close_thread operator()() { return ::mux::ui::request::close_thread{}; }
   };
   struct sent {
     threads_panel* panel;
-    void operator()(std::string_view) const { panel->send(); }
+    using Answer = std::optional<::mux::ui::request::send_in_thread>;
+    Answer operator()(std::string_view) const { return panel->send(); }
   };
   struct send_press {
     threads_panel* panel;
-    void operator()() const { panel->send(); }
+    using Answer = std::optional<::mux::ui::request::send_in_thread>;
+    Answer operator()() const { return panel->send(); }
   };
   struct stop_answer {
     threads_panel* panel;
@@ -77,21 +84,26 @@ struct threads_panel : nodes::Stack {
   // the latest's time; pressed, opened.
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
-  struct thread_row : nodes::Stack {
-    Actions* actions;
+  struct thread_row : skiff::compose::Stacked {
+    // What its handlers ask for, returned.
+    using Answer = ::mux::ui::request::open_thread;
     std::string root;
-    struct lines_t : nodes::Stack {
+    struct lines_t : skiff::compose::Stacked {
       struct parts_t {
         nodes::Text name;
         nodes::Text said;
         nodes::Text meta;
       } parts;
-      lines_t(const palette& colours, std::string who, std::string words, std::string meta)
-          : parts{.name = nodes::Text(std::move(who), 13.0f, colours.accent, true),
+      lines_t(const palette &colours, std::string who, std::string words,
+              std::string meta)
+          : Stacked(skiff::compose::vbox(2.0f,
+                                         {.autoSize = scene::axes::kY,
+                                          .grow = scene::axes::kX,
+                                          .alignSelf = scene::align::kMiddle})),
+            parts{.name =
+                      nodes::Text(std::move(who), 13.0f, colours.accent, true),
                   .said = nodes::Text(std::move(words), 13.0f, colours.text),
                   .meta = nodes::Text(std::move(meta), 12.0f, colours.dim)} {
-        this->setGap(2.0f);
-        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
         for (nodes::Text* each : {&parts.name, &parts.said, &parts.meta}) {
           each->setElided(true);
           each->apply({.fillX = true});
@@ -102,16 +114,21 @@ struct threads_panel : nodes::Stack {
       avatar_mark face;
       lines_t lines;
     } parts;
-    thread_row(Actions* a, const palette& colours, const conversation& chat, const message& said)
-        : actions(a), root(said.id),
-          parts{.face = avatar_mark(said.sender, sender_name(chat, said.sender), 36.0f),
-                .lines = lines_t(colours, sender_name(chat, said.sender), flat(said.body.plain), meta_of(chat, said))} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 8.0f,
-                    .hoverBackground = colours.chosen});
-      parts.face.apply({.alignSelf = scene::align::kStart});
-    }
+    thread_row(const palette &colours, const conversation &chat,
+               const message &said)
+        : Stacked(skiff::compose::hbox(10.0f,
+                                       {.fillX = true,
+                                        .autoSize = scene::axes::kY,
+                                        .padding = {8.0f, 12.0f, 8.0f, 12.0f},
+                                        .cornerRadius = 8.0f,
+                                        .hoverBackground = colours.chosen})),
+          root(said.id),
+          parts{.face = skiff::compose::styled(
+                    {.alignSelf = scene::align::kStart},
+                    avatar_mark(said.sender, sender_name(chat, said.sender),
+                                36.0f)),
+                .lines = lines_t(colours, sender_name(chat, said.sender),
+                                 flat(said.body.plain), meta_of(chat, said))} {}
     [[nodiscard]] static std::string flat(std::string text) {
       std::ranges::replace(text, '\n', ' ');
       return text;
@@ -127,19 +144,18 @@ struct threads_panel : nodes::Stack {
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      actions->open_thread(root);
-      return true;
+    std::optional<Answer> onClick(float, float) {
+      return ::mux::ui::request::open_thread{root};
     }
   };
-  using head_t = page_header<back_it, close_it>;
+  using head_t = page_header_t<back_it, close_it>;
   // The chat's own composer, writing into the thread: its ✕ lets go of the
   // answer, Enter and the arrow send there, its paperclip and emoji too.
   struct in_thread {
     using cancel = stop_answer;
     using submit = sent;
-    using attach = ask<Actions, &Actions::attach_in_thread>;
-    using emoji = ask<Actions, &Actions::toggle_thread_emoji>;
+    using attach = sends<::mux::ui::request::attach_in_thread>;
+    using emoji = sends<::mux::ui::request::toggle_thread_emoji>;
     using send = send_press;
     static constexpr std::string_view placeholder = "Reply in thread…";
   };
@@ -155,18 +171,20 @@ struct threads_panel : nodes::Stack {
     timeline_area<Actions> answers;
     composer_bar<Actions, in_thread> line;
   } parts;
-  explicit threads_panel(const ui_needs<Actions>& n) : threads_panel(n, n.actions) {}
-  threads_panel(const ui_needs<Actions>& n, Actions* a)
-      : actions(a),
+  threads_panel(const ui_needs<Actions> &n)
+      : Stacked(skiff::compose::vbox(
+            0.0f, {.fillY = true, .background = n.colours->sidebar})),
         colours_(n.colours),
-        parts{.head = head_t(*n.colours, "Threads", {a}, {a}, false, true),
-              .divider = nodes::Box<>(n.colours->band),
-              .empty = nodes::Text("No threads here yet.", 13.0f, n.colours->dim),
+        parts{.head = page_header<back_it, close_it>(*n.colours, "Threads", {}, {}, false, true),
+              .divider = skiff::compose::styled({.fillX = true, .height = 1.0f},
+                                                nodes::Box<>(n.colours->band)),
+              .empty = skiff::compose::styled(
+                  {.margin = {16.0f, 16.0f, 0.0f, 16.0f}},
+                  nodes::Text("No threads here yet.", 13.0f, n.colours->dim)),
               .answers = timeline_area<Actions>(n),
-              .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {a}, {a}, {this})} {
-    fState.apply({.fillY = true, .background = n.colours->sidebar});
-    parts.divider.apply({.fillX = true, .height = 1.0f});
-    parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
+              .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {},
+                                                       {}, {this})} {
+
     for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
       list->apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}});
@@ -179,11 +197,28 @@ struct threads_panel : nodes::Stack {
   }
   // Brought up to date with the chat: its threads listed, or the one open
   // shown -- made again only where what it shows changed.
+  // The chat whose threads it lists, and the model it reads them from:
+  // told as the chat is chosen, then read again by the chats binding as
+  // the chats move -- while it is open.
+  const model* now_ = nullptr;
+  std::optional<conversation_id> chosen_;
+  void choose(const model& now, std::optional<conversation_id> chosen) {
+    now_ = &now;
+    chosen_ = std::move(chosen);
+    this->show_chosen();
+  }
+  void refresh(const chats_model&) { this->show_chosen(); }
+  void show_chosen() {
+    if (!this->visible() || now_ == nullptr || !chosen_)
+      return;
+    if (const conversation* one = now_->find(*chosen_))
+      this->show(*one, now_);
+  }
   void show(const conversation& chat, const model* now) {
     seen_model = now;
     seen_chat = chat.id;
-    parts.head.parts.back.setVisible(open.has_value());
-    parts.head.parts.title.setText(open ? "Thread" : "Threads");
+    std::get<0>(parts.head.fParts).setVisible(open.has_value());
+    std::get<1>(parts.head.fParts).setText(open ? "Thread" : "Threads");
     parts.list.setVisible(!open);
     parts.answers.setVisible(open.has_value());
     parts.line.setVisible(open.has_value());
@@ -208,7 +243,7 @@ struct threads_panel : nodes::Stack {
       auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
       rows.clear();
       for (const message* one : roots)
-        rows.emplace_back(actions, *colours_, chat, *one);
+        rows.emplace_back(*colours_, chat, *one);
       parts.empty.setVisible(roots.empty());
       parts.list.invalidateLayout();
       shown.clear();
@@ -260,13 +295,15 @@ struct threads_panel : nodes::Stack {
   }
   // What is written, sent in the thread open -- an answer to what is
   // answered, where something is.
-  void send() {
+  std::optional<::mux::ui::request::send_in_thread> send() {
+    std::optional<::mux::ui::request::send_in_thread> asked;
     const std::string text = parts.line.plain();
     if (!open || text.empty())
-      return;
-    actions->send_in_thread(*open, text, answering);
+      return asked;
+    asked = ::mux::ui::request::send_in_thread{*open, text, answering};
     parts.line.clear();
     this->stop_answering();
+    return asked;
   }
 };
 

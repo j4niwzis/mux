@@ -8,6 +8,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -329,7 +330,6 @@ struct mentioned {
   return link_card(colours, url, id, name, "Message from " + name, said);
 }
 
-
 // What a message's text draws of the program's: a pill's avatar -- the one
 // of what it names, else its initials on its colours -- and a custom
 // emoji's picture, fetched as an avatar is. Given to its text as a type.
@@ -360,7 +360,7 @@ struct message_pictures {
 // quote's colour with a bar at its left; over the code, its language in the
 // colour and a Copy at the right; the code in the monospace face, wrapped,
 // selectable.
-struct code_block : nodes::Stack {
+struct code_block : skiff::compose::Stacked {
   // Copy: the block's code, as it is, onto the clipboard.
   struct copy_mark : nodes::Text {
     std::string code;
@@ -373,39 +373,50 @@ struct code_block : nodes::Stack {
       return true;
     }
   };
-  struct head_row : nodes::Stack {
+  struct head_row : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text language;
       copy_mark copy;
     } parts;
     head_row(std::string language, std::string code, skia::SkColor colour)
-        : parts{.language = nodes::Text(language.empty() ? std::string("Code") : std::move(language), 12.0f, colour, true),
-                .copy = copy_mark(std::move(code), colour)} {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.language.setElided(true);
-      parts.language.apply({.grow = scene::axes::kX});
-    }
+        : Stacked(skiff::compose::hbox(
+              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.language = skiff::compose::styled(
+                    {.grow = scene::axes::kX},
+                    elided(nodes::Text(language.empty() ? std::string("Code")
+                                                        : std::move(language),
+                                       12.0f, colour, true))),
+                .copy = copy_mark(std::move(code), colour)} {}
   };
   struct parts_t {
     nodes::Box<> bar;
     head_row head;
     nodes::BasicText<message_pictures> code;
   } parts;
-  code_block(const palette& colours, std::string code, std::string language, skia::SkColor colour, skia::SkColor text)
-      : parts{.bar = nodes::Box<>(colour),
+  code_block(const palette &colours, std::string code, std::string language,
+             skia::SkColor colour, skia::SkColor text)
+      : Stacked(skiff::compose::vbox(
+            4.0f, {.autoSize = scene::axes::kBoth,
+                   .minWidth = 120.0f,
+                   .margin = {4.0f, 0.0f, 4.0f, 0.0f},
+                   .padding = {6.0f, 8.0f, 6.0f, 12.0f},
+                   .cornerRadius = 5.0f,
+                   .background = (colour & 0x00FFFFFFu) | (0x1Fu << 24),
+                   .masking = true})),
+        parts{.bar = skiff::compose::styled({.place = scene::anchor::kTopLeft,
+                                             .x = -12.0f,
+                                             .y = -6.0f,
+                                             .fillY = true,
+                                             .width = 3.0f},
+                                            nodes::Box<>(colour)),
               .head = head_row(std::move(language), code, colour),
-              .code = nodes::BasicText<message_pictures>(code, 13.0f, text)} {
-    this->setGap(4.0f);
+              .code = wrapped(
+                  nodes::BasicText<message_pictures>(code, 13.0f, text))} {
     // As wide as its code (and its head), within the bubble: filling a
     // bubble that takes its width from what it holds, neither said a width,
     // and a short block was squeezed to a few letters a line.
-    fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 120.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f},
-                  .padding = {6.0f, 8.0f, 6.0f, 12.0f}, .cornerRadius = 5.0f,
-                  .background = (colour & 0x00FFFFFFu) | (0x1Fu << 24), .masking = true});
-    parts.bar.apply({.place = scene::anchor::kTopLeft, .x = -12.0f, .y = -6.0f, .fillY = true, .width = 3.0f});
+
     parts.code.setMonospace(true);
-    parts.code.setWrapped(true);
     parts.code.setSelectable(true);
     parts.code.setSelectionColour((colours.accent & 0x00FFFFFFu) | (110u << 24));
     parts.code.setShrinksToLines(true);
@@ -458,15 +469,17 @@ struct text_piece {
 }
 // After the first words: a block, then the words after it, as many times
 // as the text has blocks.
-struct code_piece : nodes::Stack {
+struct code_piece : skiff::compose::Stacked {
   struct parts_t {
     code_block block;
     std::optional<nodes::BasicText<message_pictures>> after;
   } parts;
-  code_piece(const palette& colours, const text_piece& code, const text_piece* words, skia::SkColor colour, skia::SkColor quote,
+  code_piece(const palette &colours, const text_piece &code,
+             const text_piece *words, skia::SkColor colour, skia::SkColor quote,
              skia::SkColor text)
-      : parts{.block = code_block(colours, code.text, code.language, colour, text)} {
-    fState.apply({.autoSize = scene::axes::kBoth});
+      : Stacked(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth})),
+        parts{.block =
+                  code_block(colours, code.text, code.language, colour, text)} {
     if (words && !words->text.empty()) {
       parts.after.emplace(words->text, 13.0f, text);
       parts.after->setWrapped(true);
@@ -483,7 +496,7 @@ struct code_piece : nodes::Stack {
 // the sender -- a person's pill, its avatar drawn by the message's pictures,
 // as a mention's -- each a node of its own: the pill pressed opens them,
 // the words the original.
-struct forward_line : nodes::Stack {
+struct forward_line : skiff::compose::Stacked {
   // Whose picture its pill waits for, where it has none yet: drawn again
   // when it comes.
   std::string from;
@@ -492,21 +505,24 @@ struct forward_line : nodes::Stack {
     nodes::Text label;
     nodes::BasicText<message_pictures> who;
   } parts;
-  forward_line(const palette& colours, std::string who, std::vector<nodes::Text::Link> links, skia::SkColor colour,
+  forward_line(const palette &colours, std::string who,
+               std::vector<nodes::Text::Link> links, skia::SkColor colour,
                std::string sender = {})
-      : from(std::move(sender)), parts{.label = nodes::Text("Forwarded from", 13.0f, colour, true),
-              .who = nodes::BasicText<message_pictures>(std::move(who), 13.0f, colour)} {
-    this->setHorizontal();
-    this->setGap(4.0f);
-    fState.apply({.autoSize = scene::axes::kBoth});
-    parts.label.apply({.alignSelf = scene::align::kMiddle});
+      : Stacked(skiff::compose::hbox(4.0f, {.autoSize = scene::axes::kBoth})),
+        from(std::move(sender)),
+        parts{.label = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  nodes::Text("Forwarded from", 13.0f, colour, true)),
+              .who = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  wrapped(nodes::BasicText<message_pictures>(std::move(who),
+                                                             13.0f, colour)))} {
+
     parts.who.setBold(true);
     // Wrapped, as a message text is: one on a single line draws its words
     // plain, its links and pills not at all -- no plate, no picture.
-    parts.who.setWrapped(true);
     parts.who.setShrinksToLines(true);
     parts.who.setLinks(std::move(links), colours.accent);
-    parts.who.apply({.alignSelf = scene::align::kMiddle});
     had = from.empty() || avatar_images().has(from);
     if (!had)
       avatar_images().waiting.wait(fState.fId);
@@ -526,24 +542,28 @@ struct forward_line : nodes::Stack {
 
 // Who has read up to a message, as Element shows it: their small faces at
 // the row's right under it, three at most and the rest counted.
-struct readers_row : nodes::Stack {
+struct readers_row : skiff::compose::Stacked {
   static constexpr float kFace = 14.0f;  // Element's read receipt avatar
   static constexpr std::size_t kMost = 3;
   struct parts_t {
     std::vector<avatar_mark> faces;
     nodes::Text more;
   } parts;
-  readers_row(const palette& colours, const conversation& in, const std::vector<std::string>& users)
-      : parts{.more = nodes::Text(users.size() > kMost ? std::format("+{}", users.size() - kMost) : std::string(),
-                                  10.0f, colours.dim)} {
-    this->setHorizontal();
-    this->setGap(2.0f);
-    fState.apply({.autoSize = scene::axes::kBoth});
+  readers_row(const palette &colours, const conversation &in,
+              const std::vector<std::string> &users)
+      : Stacked(skiff::compose::hbox(2.0f, {.autoSize = scene::axes::kBoth})),
+        parts{.more = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  skiff::compose::visible(
+                      users.size() > kMost,
+                      nodes::Text(users.size() > kMost
+                                      ? std::format("+{}", users.size() - kMost)
+                                      : std::string(),
+                                  10.0f, colours.dim)))} {
+
     parts.faces.reserve(std::min(users.size(), kMost));
     for (std::size_t i = 0; i < users.size() && i < kMost; ++i)
       parts.faces.emplace_back(users[i], sender_name(in, users[i]), kFace);
-    parts.more.setVisible(users.size() > kMost);
-    parts.more.apply({.alignSelf = scene::align::kMiddle});
   }
 };
 

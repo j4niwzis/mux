@@ -32,24 +32,22 @@ export namespace mux::proto::xmpp {
 template <class App>
 void program_told(App& app, const registration_asked& asked) {
   if (asked.fields.empty() && asked.page) {
-    app.ask.open_url(*asked.page);
-    app.root().show_message("Register in your browser",
+    app.take(mux::ui::request::open_url{*asked.page});
+    app.shared.notice("Register in your browser",
                             "The server makes accounts on a page of its own, now open in your browser. Once the account "
                             "is made there, turn Create a new account off in its settings, and mux signs in to it.");
     return;
   }
-  auto& panel = app.accounts_screen.show_account(asked.account.address);
-  if (auto* editor = panel.editor())
+  auto* panel = app.accounts_screen.show_account_now(asked.account.address);
+  if (auto* editor = panel ? panel->editor() : nullptr)
     spl::visit([&](auto& form) { app_detail::show_in(form, asked); }, editor->parts.form);
 }
 // The account made: kept as one to sign in to from now on.
 template <class App>
 void program_told(App& app, const registered& made) {
-  const auto found = app.find(made.account.address);
-  if (found == app.saved.end())
-    return;
-  spl::visit(spl::overloaded{[](kept& one) { forget_registration(one); }, [](auto&) {}}, found->own);
-  (void)app.write();
+  app.change_account(made.account.address, [](mux::config::account_t& account) {
+    spl::visit(spl::overloaded{[](kept& one) { forget_registration(one); }, [](auto&) {}}, account.own);
+  });
 }
 
 }  // namespace mux::proto::xmpp

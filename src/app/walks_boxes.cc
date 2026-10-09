@@ -42,6 +42,6 @@ template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::send_box<mux::app::actions>>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::send_box<mux::app::actions>>();
 }
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::notice_box<mux::app::actions>>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::notice_box<mux::app::actions>>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::notice_box_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::notice_box_t>();
 }

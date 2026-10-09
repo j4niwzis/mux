@@ -34,11 +34,11 @@ export namespace mux::ui {
 // protocol says (proto::unheard_presence).
 [[nodiscard]] inline std::string presence_of(const ui_shared& shared, const model& now, const account_id& account, const std::string& contact) {
   const auto unknown = [&] { return proto::unheard_presence(protocol_state_of(shared, account)); };
-  const auto found = now.accounts().find(account);
-  if (found == now.accounts().end())
+  const mux::account* found = now.accounts().find(account);
+  if (found == nullptr)
     return unknown();
-  const auto kept = found->second.presences.find(contact);
-  return kept == found->second.presences.end() ? unknown() : presence_text(kept->second.state);
+  const auto kept = found->presences.find(contact);
+  return kept == found->presences.end() ? unknown() : presence_text(kept->second.state);
 }
 // Whom a direct chat is with, as its protocol says (proto::direct_contact).
 [[nodiscard]] inline std::string contact_of(const ui_shared& shared, const conversation& one) {

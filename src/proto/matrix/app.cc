@@ -9,6 +9,7 @@ import std;
 import splice;
 import mux.core;
 import mux.config;
+import mux.protocols;
 import mux.proto.kept;
 import mux.proto.matrix.changes;
 import mux.proto.matrix.requests;
@@ -98,22 +99,19 @@ export namespace mux::proto::matrix {
 // type keeps one (take_session).
 template <class App>
 void program_told(App& app, const session_given& given) {
-  const auto found = app.find(given.account.address);
-  if (found == app.saved.end())
-    return;
-  spl::visit([&](auto& one) {
-                  using kept_defaults::take_session;
-                  take_session(one, given);
-                },
-                found->own);
-  (void)app.write();
+  app.change_account(given.account.address, [&](mux::config::account_t& account) {
+    spl::visit([&](auto& one) {
+      using kept_defaults::take_session;
+      take_session(one, given);
+    }, account.own);
+  });
 }
 // A registration stage done on the server's own page: opened in the browser,
 // and said -- the registration carries on by itself once it is done there.
 template <class App>
 void program_told(App& app, const registration_page& page) {
-  app.ask.open_url(page.url);
-  app.root().show_message("Finish registering in your browser",
+  app.take(mux::ui::request::open_url{page.url});
+  app.shared.notice("Finish registering in your browser",
                           "The server asks for a step it does on its own page, now open in your browser. Once it is done "
                           "there, mux carries on with the registration by itself.");
 }
@@ -121,8 +119,8 @@ void program_told(App& app, const registration_page& page) {
 // said -- the account carries on by itself once the browser comes back.
 template <class App>
 void program_told(App& app, const sign_in_page& page) {
-  app.ask.open_url(page.url);
-  app.root().show_message("Sign in in your browser",
+  app.take(mux::ui::request::open_url{page.url});
+  app.shared.notice("Sign in in your browser",
                           "The server's sign-in page is open in your browser. Once you have signed in there, the "
                           "browser comes back to mux, and the account carries on by itself.");
 }
@@ -130,7 +128,7 @@ void program_told(App& app, const sign_in_page& page) {
 // box to say when it is done.
 template <class App>
 void program_told(App& app, const uia_in_browser& asked) {
-  app.ask.open_url(asked.url);
+  app.take(mux::ui::request::open_url{asked.url});
   app.root().template open_dialog<uia_page<typename App::accounts::actions_type>>(asked.what, asked.url);
 }
 // What the developer tools asked, shown.
@@ -160,7 +158,7 @@ void program_told(App& app, const pack_picture_uploaded& uploaded) {
 template <class App>
 void program_told(App& app, const verification_changed& one) {
   app.verification.showing(one.by, one.txn);
-  app.root().show_verification(ui::verification_view{one.user, one.device, one.step});
+  mux::ui::show(app.showing, std::optional(ui::verification_view{one.user, one.device, one.step}));
 }
 
 // The account's Sessions page, where it is open for that account.
@@ -199,7 +197,7 @@ template <class App, class Purpose>
 void with_passphrase(App& app, Purpose purpose) {
   app.shared.with_chosen_account([&](auto&, config::account_t& account) {
     app.keys_of = App::id_of(account);
-    app.root().ask_passphrase(purpose);
+    mux::ui::show(app.showing, std::optional(mux::ui::passphrase_facts{purpose, std::nullopt}));
   });
 }
 template <class App>
@@ -275,13 +273,13 @@ void program_asked(App& app, const explore_state&) {
   const auto chosen = app.shared.managed();
   if (!chosen || app.shared.demo())
     return;
-  app.root().close_manage();
+  mux::ui::show<mux::ui::room_settings_facts>(app.showing, std::nullopt);
   ops::list_state(*app.net, *chosen);
 }
 template <class App>
 void program_asked(App& app, const open_send_custom&) {
   using page = devtools_page<typename App::accounts::actions_type>;
-  app.root().close_manage();
+  mux::ui::show<mux::ui::room_settings_facts>(app.showing, std::nullopt);
   app.root().template open_dialog<page>(typename page::send_form_t{});
 }
 template <class App>
@@ -321,49 +319,49 @@ export namespace mux::proto::matrix::passphrase {
 template <class App, class Given>
 void passphrase_given(App& app, const export_keys&, const Given& one) {
   if (auto refused = config::new_passphrase_refused(one.fresh, one.again))
-    return app.root().passphrase_refused(*refused);
+    return app.shared.passphrase_refused(*refused);
   if (!app.keys_of)
-    return app.root().close_passphrase();
+    return mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
   const char* home = std::getenv("HOME");
   const auto folder = home && *home ? std::filesystem::path(home) / "Downloads" : std::filesystem::current_path();
   // Joined, not formatted: clang 23 crashed on format strings first made in
   // these modules (see app/network.cc).
   const std::string file = "mux-room-keys-" + std::string(config::file_name_of(app.keys_of->address)) + ".txt";
   ops::export_room_keys(*app.net, *app.keys_of, (folder / file).string(), one.fresh);
-  app.root().close_passphrase();
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 template <class App, class Given>
 void passphrase_given(App& app, const import_keys&, const Given& one) {
   if (one.file.empty())
-    return app.root().passphrase_refused("Type the key file's path.");
+    return app.shared.passphrase_refused("Type the key file's path.");
   if (!app.keys_of)
-    return app.root().close_passphrase();
+    return mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
   ops::import_room_keys(*app.net, *app.keys_of, one.file, one.current);
-  app.root().close_passphrase();
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 template <class App, class Given>
 void passphrase_given(App& app, const cross_signing&, const Given& one) {
   if (app.keys_of)
     ops::setup_cross_signing(*app.net, *app.keys_of, one.current);
-  app.root().close_passphrase();
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 template <class App, class Given>
 void passphrase_given(App& app, const sign_out_unverified&, const Given& one) {
   if (app.keys_of)
     ops::sign_out_unverified(*app.net, *app.keys_of, one.current);
-  app.root().close_passphrase();
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 template <class App, class Given>
 void passphrase_given(App& app, const reset_identity&, const Given& one) {
   if (app.keys_of)
     ops::setup_cross_signing(*app.net, *app.keys_of, one.current, true);
-  app.root().close_passphrase();
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 template <class App, class Given>
 void passphrase_given(App& app, const recovery&, const Given& one) {
   if (app.keys_of)
     ops::restore_cross_signing(*app.net, *app.keys_of, one.current);
-  app.root().close_passphrase();
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 
 }  // namespace mux::proto::matrix::passphrase

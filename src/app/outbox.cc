@@ -80,13 +80,13 @@ class outbox_part {
   // Ctrl+K: the link box, with what is selected and the link on it.
   void apply(const request::ask_link&) {
     auto [text, url] = s_->root().main().line.link_asked();
-    s_->root().open_link(std::move(text), std::move(url));
+    mux::ui::show(*s_->showing, std::optional(mux::ui::link_facts{std::move(text), std::move(url)}));
   }
   void apply(const request::set_link& one) {
-    s_->root().close_link();
+    mux::ui::show<mux::ui::link_facts>(*s_->showing, std::nullopt);
     s_->root().main().line.put_link(one.text, one.url);
   }
-  void apply(const request::close_link&) { s_->root().close_link(); }
+  void apply(const request::close_link&) { mux::ui::show<mux::ui::link_facts>(*s_->showing, std::nullopt); }
   // Up in an empty input: the last message sent here edited.
   void apply(const request::edit_last&) {
     const auto& chosen = s_->root().main().chosen;
@@ -201,13 +201,17 @@ class outbox_part {
   }
   // Enter in the field: sent while the field still holds it. Two asked for
   // before the first was handled -- the field emptied by it -- send once.
-  void apply(const request::submit_message& one) {
+  template <class Asked>
+  void apply(const request::submit_message& one, const Asked& asked) {
     if (s_->root().main().line.plain().empty())
       return;
-    this->send(one.text);
+    this->send(one.text, asked);
   }
   void apply(const request::stop_jump&) { s_->root().main().stop_jump(); }
-  void apply(const request::send_typed&) { this->send(s_->root().main().line.plain()); }
+  template <class Asked>
+  void apply(const request::send_typed&, const Asked& asked) {
+    this->send(s_->root().main().line.plain(), asked);
+  }
 
   // Files: chosen with the paperclip, or dropped; the send box closed, or
   // what is in it sent -- the caption with the first.
@@ -229,7 +233,7 @@ class outbox_part {
   void apply(const request::close_send_box&) {
     to_send_.clear();
     files_thread_.reset();
-    s_->root().close_send_box();
+    mux::ui::show<mux::ui::send_facts>(*s_->showing, std::nullopt);
   }
   void apply(const request::send_files&) {
     const auto& chosen = s_->root().main().chosen;
@@ -269,7 +273,7 @@ class outbox_part {
     }
     to_send_.clear();
     files_thread_.reset();
-    s_->root().close_send_box();
+    mux::ui::show<mux::ui::send_facts>(*s_->showing, std::nullopt);
   }
   // A saved GIF sent into the chat, as a picture that moves -- as a file
   // dropped is, without the send box: its thumbnail shown under its local id
@@ -292,7 +296,7 @@ class outbox_part {
       sent.height = image->height();
       mux::ui::thumbnails().put("local:" + sent.local, std::move(image));
     }
-    s_->root().close_emoji();
+    s_->close_emoji();
     s_->go_live(*chosen);
     s_->root().main().jump_to_end();
     // Sent while answering: the answer, as a sticker or a text would be.
@@ -322,7 +326,7 @@ class outbox_part {
     const auto& chosen = s_->root().main().chosen;
     if (!chosen || s_->demo())
       return;
-    s_->root().close_emoji();
+    s_->close_emoji();
     s_->go_live(*chosen);
     s_->root().main().jump_to_end();
     // Sent while answering: the answer, as a text would be.
@@ -340,7 +344,7 @@ class outbox_part {
       return;
     // Dropped or pasted where files are not sent: said, not lost silently.
     if (!mux::ui::may_send_files(s_->ui, s_->root().main().chosen->account)) {
-      s_->root().show_message("Files", "Files cannot be sent in this chat.");
+      s_->notice("Files", "Files cannot be sent in this chat.");
       return;
     }
     // Dropped while the thread's field has the keys: into the thread, as
@@ -380,7 +384,7 @@ class outbox_part {
     for (const file& one : to_send_)
       shown.push_back({one.as.name, one.as.picture ? "local:" + one.local : std::string(),
                        static_cast<std::int64_t>(one.as.bytes.size()), one.as.picture.has_value()});
-    s_->root().open_send_box(shown);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::send_facts{shown}));
   }
 
  private:
@@ -388,7 +392,29 @@ class outbox_part {
   std::optional<std::string> files_thread_;
   // The field's text sent: as a message, an answer, or an edit -- as what is
   // written says -- and the field and its draft emptied.
-  void send(std::string text) {
+  // A line its chat's protocol reads as a command of its own -- an IRC
+  // /join -- what it asks given to `asked`, in the protocol's own type: the
+  // protocol is decided here, in the visit of the chat's state.
+  template <class Asked>
+  bool asked_as_command(const conversation_id& to, std::string_view text, const Asked& asked) {
+    return spl::visit(
+        [&](const auto& now) {
+          using mux::proto::command_defaults::command_of;
+          return asked_if(command_of(now, to, text), asked);
+        },
+        mux::ui::protocol_state_of(s_->ui, to.account));
+  }
+  static bool asked_if(std::nullopt_t, const auto&) { return false; }
+  template <class R>
+  static bool asked_if(const std::optional<R>& command, const auto& asked) {
+    if (!command)
+      return false;
+    asked(*command);
+    return true;
+  }
+  // Sent; or, a command of its protocol's own, what it asks done.
+  template <class Asked>
+  void send(std::string text, const Asked& asked) {
     // A text sent: the ways back from jumps let go, as tdesktop's
     // sendTextWithTags clears its reply returns.
     if (const auto& chosen = s_->root().main().chosen)
@@ -398,9 +424,7 @@ class outbox_part {
       return;
     const conversation_id to = *screen.chosen;
     // A command of its protocol's own: asked, not sent.
-    if (const auto asked = mux::proto::command_of(mux::ui::protocol_state_of(s_->ui, to.account), to, text)) {
-      spl::visit(spl::overloaded{[](mux::proto::part::no_request) {}, [&](const auto& one) { s_->ask->ask_for(one); }},
-                    *asked);
+    if (this->asked_as_command(to, text, asked)) {
       screen.line.set_text({});
       return;
     }

@@ -151,7 +151,7 @@ cme_find_package(alef 0.1.1 COMPONENTS precis idna grapheme line bidi emoji REQU
 # loom.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG f915e34f13265ee1302775cd4851dbfdf6201b24
+  GIT_TAG 6389154f394c740520b61b7981fd631c6845dab2
   LICENSE AGPL-3.0-only)
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),
@@ -225,28 +225,24 @@ target_sources(mux_vault PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/vau
 target_compile_features(mux_vault PUBLIC cxx_std_26)
 target_compile_options(mux_vault PUBLIC ${mux_std_flags})
 target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
-add_library(mux_config)
-# With the protocols' tags and what each keeps in the accounts file: the
-# settings read them, and everything above reads the settings.
-target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/proto/identity.cc src/proto/tags.cc src/proto/xmpp/kept.cc src/proto/matrix/kept.cc src/proto/kept.cc
-        src/proto/xmpp/state.cc src/proto/matrix/state.cc src/proto/state.cc src/config_choices.cc src/config_settings.cc src/config_looks.cc src/config_limits.cc src/config_accounts.cc src/config.cc)
-target_compile_features(mux_config PUBLIC cxx_std_26)
-target_compile_options(mux_config PUBLIC ${mux_std_flags})
-target_link_libraries(mux_config PUBLIC knot splice mux_vault)
-target_link_libraries(mux_modules PUBLIC mux_config splice)
-foreach(name IN ITEMS core net xmpp http matrix media logic)
-  add_library(mux_${name} ALIAS mux_modules)
-endforeach()
-
+# skiff: skiff.model holds the settings and the program's state, and is
+# there in every build; the rest of skiff, which draws, only with a window.
+# Without one, skiff is built as skiff.model alone, and no Skia is asked for.
+# skiff and skiff-widgets say the rest of what they are in their own trees.
+# Debug shares layout, default drawing and erased walk callbacks between
+# node types. Keep single-config Release on its existing source pin; the
+# newer pin used by multi-config builds guards the change with Debug alone.
+set(mux_skiff_pin 51b8103022a30385ddd8368a9ecbcca62c753f7c)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_CONFIGURATION_TYPES)
+  set(mux_skiff_pin 4cee13b7042ac10e558c986ea9d99a6b83dd5418)
+endif()
+cme_declare_port(NAME skiff PROVIDES skiff
+  GITHUB_REPOSITORY j4niwzis/skiff
+  GIT_TAG ${mux_skiff_pin})
+cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
+  GITHUB_REPOSITORY j4niwzis/skiff-widgets
+  GIT_TAG 4b2529e6582b784f349166f5d922dc60bb4fe7dc)
 if(MUX_UI)
-  # skiff and skiff-widgets say the rest of what they are in their own trees.
-  cme_declare_port(NAME skiff PROVIDES skiff
-    GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 3ccd977a1e4c86a3868d1df27599b8cb384d11c4)
-  cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
-    GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG dd4713eeaf699a51ba65e74f35fa0b5f27e71f95)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.
@@ -267,6 +263,26 @@ if(MUX_UI)
       list(APPEND mux_skiff_components ${feature})
     endif()
   endforeach()
+else()
+  set(mux_skiff_components)
+  cme_options(skiff "SKIFF_UI OFF")
+endif()
+cme_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
+add_library(mux_config)
+# With the protocols' tags and what each keeps in the accounts file: the
+# settings read them, and everything above reads the settings.
+target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
+  FILES src/proto/identity.cc src/proto/tags.cc src/proto/xmpp/kept.cc src/proto/matrix/kept.cc src/proto/kept.cc
+        src/proto/xmpp/state.cc src/proto/matrix/state.cc src/proto/state.cc src/config_choices.cc src/config_settings.cc src/config_looks.cc src/config_limits.cc src/config_accounts.cc src/config.cc)
+target_compile_features(mux_config PUBLIC cxx_std_26)
+target_compile_options(mux_config PUBLIC ${mux_std_flags})
+target_link_libraries(mux_config PUBLIC knot splice mux_vault skiff::model)
+target_link_libraries(mux_modules PUBLIC mux_config splice)
+foreach(name IN ITEMS core net xmpp http matrix media logic)
+  add_library(mux_${name} ALIAS mux_modules)
+endforeach()
+
+if(MUX_UI)
   cme_find_package(SDL3 REQUIRED)
   # Sound: voice messages are Opus in Ogg; audio files are that or Vorbis.
   cme_find_package(Opus REQUIRED)
@@ -365,7 +381,6 @@ if(MUX_UI)
       list(REMOVE_ITEM mux_platform_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/${common_name}")
     endif()
   endforeach()
-  cme_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
 
   # The emoji face the window draws emoji with, as tdesktop has its own:
@@ -401,7 +416,7 @@ if(MUX_UI)
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_pattern})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
     FILES ${mux_platform_sources} ${mux_calls_sources} src/ui.cc
-          src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations_show.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/call_bar.cc src/ui/window.cc
+          src/kept_root.cc src/ui/base.cc src/ui/requests.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations_show.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/call_bar.cc src/ui/window.cc
           src/proto/xmpp/ui.cc src/proto/matrix/ui_form.cc src/proto/matrix/ui_manage.cc src/proto/matrix/ui_sessions.cc src/proto/matrix/ui_tools.cc src/proto/matrix/ui.cc src/proto/ui.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries} ${mux_calls_libraries})
@@ -464,13 +479,14 @@ if(MUX_UI)
           src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc
           src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/emoji.cc src/app/accounts.cc
           src/app/local_data.cc src/app/calls.cc src/app/marks.cc src/app/history.cc src/proto/matrix/app.cc src/proto/xmpp/app.cc src/proto/app.cc)
+  target_sources(mux_app PRIVATE src/app/shown_binding.cc)
   target_compile_definitions(mux_app PUBLIC $<${mux_split}:MUX_SPLIT_ACCOUNTS>)
   target_link_libraries(mux_app PUBLIC mux_modules)
   # The program itself: its module, beside its implementation units.
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src FILES src/app/program.cc)
   # What the program does, a part each: the module's implementation units.
   target_sources(mux PRIVATE
-    src/app/program_core.cc src/app/program_media.cc
+    src/app/program_core.cc src/app/program_lifetime.cc src/app/program_media.cc
     src/app/program_chats.cc src/app/program_links.cc src/app/program_accounts.cc
     src/app/program_settings.cc src/app/program_sending.cc src/app/program_refresh.cc
     src/app/scene.cc)

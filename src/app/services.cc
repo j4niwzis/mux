@@ -11,6 +11,8 @@ import mux.platform.dialogs;
 import mux.platform.audio;
 import mux.vault;
 import skiff.scene;
+import skiff.model;
+import skiff.bind;
 import mux.core;
 import mux.config;
 import mux.ui;
@@ -27,6 +29,13 @@ export namespace mux::app {
 
 struct services {
   mux::model* model = nullptr;
+  // What the window shows that the program opens and closes.
+  mux::ui::shown_model* showing = nullptr;
+  // And the binding the window reads it through: read at once only where
+  // nothing of the window is being answered -- what the network told.
+  skiff::bind::Binding<mux::ui::shown_model>* showing_binding = nullptr;
+  // A message's menu asked for: focused once it is made.
+  bool menu_focus_due = false;
   // The emoji and stickers kept, as the window's panels show them.
   mux::ui::emoji_kept emoji;
   // The looks the window shows.
@@ -76,6 +85,58 @@ struct services {
   mux::platform::audio::speaker* speaker = nullptr;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
+  // The whole-window binding is instantiated in one implementation unit.
+  void read_shown_now() const;
+  // A notice shown, or the one up closed: what the window shows, edited.
+  void notice(std::string heading, std::string text) const {
+    mux::ui::show(*showing, std::optional(mux::ui::notice_facts{std::move(heading), std::move(text)}));
+  }
+  void not_implemented(std::string what) const {
+    this->notice("Not implemented yet", std::format("{} isn't implemented yet.", what));
+  }
+  // The emoji panel open where it is put, or closed -- the field back where
+  // it was; and whether it is open, as what is shown says.
+  void open_emoji(float right, float bottom) const { mux::ui::show(*showing, std::optional(mux::ui::emoji_facts{right, bottom, {}})); }
+  void close_emoji() const {
+    mux::ui::show<mux::ui::emoji_facts>(*showing, std::nullopt);
+    this->root().emoji_closed();
+  }
+  [[nodiscard]] bool emoji_open() const { return showing->root().emoji.fValue.has_value(); }
+  // The threads' panel, as what is shown says: opened on a thread, the
+  // thread closed in it, or the panel toggled -- whether it is open now.
+  void open_thread(std::string root) const {
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) {
+      now.threads_open = true;
+      now.thread = std::move(root);
+    });
+  }
+  void close_thread() const {
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) { now.thread.reset(); });
+  }
+  bool toggle_threads() const {
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) {
+      now.threads_open = !now.threads_open;
+      now.thread.reset();
+    });
+    return showing->look<mux::ui::chat_shown>()->threads_open;
+  }
+  // A page of settings shown, where settings are open.
+  void settings_page(mux::ui::settings_page_t page) const {
+    if (showing->look<std::optional<mux::ui::settings_facts>>()->has_value())
+      mux::ui::show(*showing, std::optional(mux::ui::settings_facts{std::move(page)}));
+  }
+  // The passphrase given refused: why, said in its box.
+  void passphrase_refused(std::string why) const {
+    mux::ui::change_shown<std::optional<mux::ui::passphrase_facts>>(*showing, [&](auto& now) {
+      if (now) {
+        now->refused = std::move(why);
+        now->current.clear();
+        now->fresh.clear();
+        now->again.clear();
+      }
+    });
+  }
+  void close_notice() const { mux::ui::show<mux::ui::notice_facts>(*showing, std::nullopt); }
   // A chat that is a window of its history away from its newest: back to
   // its newest, live -- before anything is put at its end. Its newest from
   // the disk, where all that came meanwhile is kept.
@@ -106,8 +167,8 @@ struct services {
         [&](mux::ui::accounts_panel<actions>& panel) {
           if (!panel.selected)
             return;
-          if (const auto found = kept->find(*panel.selected); found != kept->saved.end())
-            f(panel, *found);
+          // A copy changed, and put back in the model where it changed.
+          kept->change_account(*panel.selected, [&](mux::config::account_t& account) { f(panel, account); });
         },
         *up);
   }

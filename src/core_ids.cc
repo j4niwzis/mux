@@ -10,6 +10,7 @@ import std;
 import splice;
 export import mux.proto.tags;
 export import mux.proto.state;
+export import skiff.model;
 
 export namespace mux {
 
@@ -675,6 +676,9 @@ struct conversation {
   std::uint64_t members_revision = 0;
   // Invited to, not joined: who asked. Joined, or declined, it goes.
   std::optional<invite_info> invite;
+  // Changed whole by the model's edits, as one part: what is in it is not
+  // looked into by its search.
+  using ModelOpaque = void;
 };
 
 // Its newest message, as the chat list shows it and sorts by: the last of
@@ -705,7 +709,7 @@ struct account {
   account_id id;
   connection_t state = connection::offline{};
   std::string display_name;
-  std::map<std::string, conversation> conversations;  // by conversation id
+  skiff::model::Keyed<std::string, conversation> conversations;  // by conversation id
   std::map<std::string, presence> presences;          // by contact
 };
 

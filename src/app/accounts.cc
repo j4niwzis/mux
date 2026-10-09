@@ -33,57 +33,70 @@ class accounts_part {
 
   // The accounts page. From the drawer, it comes in over it, and the drawer
   // goes once the page is in: not two things moving at once.
-  accounts& show_accounts() {
+  // What is beside the list said too; shown as the panel is brought up to
+  // date, at the next frame.
+  void show_accounts(mux::ui::panel_detail_t detail = mux::ui::panel_detail::none{}) {
     if (s_->root().drawer_open())
       s_->drawer_waits = true;
-    s_->root().close_settings();
+    mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt);
     pending_login_.reset();
-    auto& panel = s_->root().open<accounts>();
-    if (k_->config_error)
-      panel.say(*k_->config_error);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::panel_facts{std::move(detail), k_->config_error}));
     s_->refresh_due = true;
-    return panel;
   }
   // The accounts, with this one's settings up beside them.
-  accounts& show_account(const std::string& address) {
-    auto& panel = this->show_accounts();
-    if (const auto found = k_->find(address); found != k_->saved.end()) {
-      panel.select(*found, *s_->model);
-      panel.show(k_->saved, *s_->model);
-    }
+  void show_account(const std::string& address) { this->show_accounts(mux::ui::panel_detail::account{address, std::nullopt, false}); }
+  // At once, outside any event -- what the network told: the panel made and
+  // brought up to date now, for its form to be filled in.
+  accounts* show_account_now(const std::string& address) {
+    this->show_account(address);
+    s_->read_shown_now();
+    auto* up = s_->root().open_panel();
+    if (!up)
+      return nullptr;
+    accounts* panel = up->visit(spl::overloaded{[](accounts& one) -> accounts* { return &one; }});
+    (void)this->bring_up_to_date(*panel);
     return panel;
   }
   // Adding an account: beside the list, on the accounts page.
-  void show_adding() {
-    auto& panel = this->show_accounts();
-    panel.proxies = k_->proxies;
-    panel.show_adding();
-    s_->refresh_due = true;
-  }
+  void show_adding() { this->show_accounts(mux::ui::panel_detail::adding{std::nullopt}); }
   // The page brought up to date with the model and the settings. Whether
   // the account being added is in now -- the chats to be shown.
   [[nodiscard]] bool bring_up_to_date(accounts& panel) {
-    panel.proxies = k_->proxies;
-    panel.show(k_->saved, *s_->model);
+    panel.proxies = k_->proxies();
+    // What is beside the list as what is shown last said, shown.
+    if (auto due = std::exchange(panel.detail_due, std::nullopt))
+      spl::visit(spl::overloaded{[](mux::ui::panel_detail::none) {},
+                                 [&](const mux::ui::panel_detail::account& one) {
+                                   if (const auto* found = k_->settings_of(one.address)) {
+                                     panel.select(*found, *s_->model);
+                                     if (auto* editor = panel.editor(); editor && one.said)
+                                       editor->say(*one.said, one.error);
+                                   }
+                                 },
+                                 [&](const mux::ui::panel_detail::adding& one) {
+                                   if (!panel.adding())
+                                     panel.show_adding();
+                                   if (auto* pane = panel.adding(); pane && one.speaks)
+                                     pane->show(*one.speaks);
+                                 }},
+                 *due);
+    panel.show(k_->accounts().values(), *s_->model);
     auto* pane = panel.adding();
     return pane && spl::visit([this](auto& form) { return this->watch_login(form); }, pane->parts.form);
   }
 
-  void apply(const request::open_accounts&) { (void)this->show_accounts(); }
+  void apply(const request::open_accounts&) { this->show_accounts(); }
   void apply(const request::open_new_account&) { this->show_adding(); }
-  void apply(const request::show_account& one) { (void)this->show_account(one.address); }
+  void apply(const request::show_account& one) { this->show_account(one.address); }
   // A protocol chosen for the account being added: its form.
   void apply(const request::add_account_of& one) {
-    auto* up = s_->root().open_panel();
-    if (!up)
+    auto facts = *s_->showing->look<std::optional<mux::ui::panel_facts>>();
+    if (!facts)
       return;
     pending_login_.reset();
-    spl::visit(
-        [&](accounts& panel) {
-          if (auto* pane = panel.adding())
-            pane->show(one.speaks);
-        },
-        *up);
+    facts->detail = mux::ui::panel_detail::adding{one.speaks};
+    mux::ui::show(*s_->showing, std::move(facts));
+    s_->refresh_due = true;
   }
   void apply(const request::select_account& one) {
     auto* up = s_->root().open_panel();
@@ -91,10 +104,10 @@ class accounts_part {
       return;
     spl::visit(
         [&](accounts& panel) {
-          if (const auto found = k_->find(one.address); found != k_->saved.end()) {
+          if (const auto* found = k_->settings_of(one.address)) {
             pending_login_.reset();
             panel.select(*found, *s_->model);
-            panel.show(k_->saved, *s_->model);
+            panel.show(k_->accounts().values(), *s_->model);
           }
         },
         *up);
@@ -131,20 +144,22 @@ class accounts_part {
   }
   // An account turned on -- started -- or off -- stopped.
   void apply(const request::flip_enabled& one) {
-    const auto found = k_->find(one.address);
-    if (found == k_->saved.end())
+    k_->change_account(one.address, [](mux::config::account_t& account) {
+      bool& enabled = mux::config::enabled_of(account);
+      enabled = !enabled;
+    });
+    const auto* found = k_->settings_of(one.address);
+    if (found == nullptr)
       return;
-    bool& enabled = mux::config::enabled_of(*found);
-    enabled = !enabled;
-    if (enabled)
-      s_->net->add(*found, k_->proxies);
+    if (mux::config::enabled_of(*found))
+      s_->net->add(*found, k_->proxies());
     else
       s_->net->remove(one.address);
     this->save();
     s_->refresh_due = true;
   }
   void apply(const request::remove_account& one) {
-    if (std::erase_if(k_->saved, [&](const auto& each) { return mux::config::address_of(each) == one.address; }) == 0)
+    if (!k_->remove_account(one.address))
       return;
     s_->net->remove(one.address);
     this->save();
@@ -166,9 +181,11 @@ class accounts_part {
   }
   // A page of the chosen account: one that wants something of the server
   // asks for it as it opens.
-  void apply(const request::account_page& one) {
+  // What the page asks for as it opens given to `asked`, in its own type.
+  template <class Asked>
+  void apply(const request::account_page& one, const Asked& asked) {
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-      panel.show_page(one.page, account, *s_->model, k_->proxies, k_->theme);
+      panel.show_page(one.page, account, *s_->model, k_->proxies(), k_->appearance().theme, asked);
     });
   }
 
@@ -185,8 +202,8 @@ class accounts_part {
   [[nodiscard]] bool watch_login(Form& form) {
     if (!pending_login_)
       return false;
-    const auto found = s_->model->accounts().find(mux::account_id{mux::ui::protocol_of(*pending_login_), *pending_login_});
-    if (found == s_->model->accounts().end())
+    const mux::account* found = s_->model->accounts().find(mux::account_id{mux::ui::protocol_of(*pending_login_), *pending_login_});
+    if (found == nullptr)
       return false;
     return spl::visit(spl::overloaded{[&](const mux::connection::online&) {
                                               pending_login_.reset();
@@ -201,7 +218,7 @@ class accounts_part {
                                               form.say("Connecting\u2026", false);
                                               return false;
                                             }},
-                         found->second.state);
+                         found->state);
   }
   // A new account: saved, and started; the page waits to hear how it went.
   template <class Form>
@@ -214,16 +231,15 @@ class accounts_part {
     mux::config::account_t account{.own = mux::config::kept_t{std::move(*typed)}};
     mux::config::proxy_in(account) = std::exchange(new_proxy_, std::nullopt);
     const std::string address = mux::config::address_of(account);
-    if (k_->find(address) != k_->saved.end()) {
+    if (!k_->add_account(account)) {
       form.say("That account is already here.", true);
       return;
     }
-    k_->saved.push_back(account);
     if (auto failed = k_->write()) {
       form.say(*failed, true);
       return;
     }
-    s_->net->add(account, k_->proxies);
+    s_->net->add(account, k_->proxies());
     pending_login_ = address;
     form.say("Connecting\u2026", false);
   }
@@ -239,10 +255,10 @@ class accounts_part {
     mux::config::account_t account{.own = mux::config::kept_t{std::move(*typed)}};
     const std::string address = mux::config::address_of(account);
     const std::string was = form.editing.value_or(address);
-    const auto old = k_->find(was);
-    if (old == k_->saved.end())
+    const auto* old = k_->settings_of(was);
+    if (old == nullptr)
       return;
-    if (address != was && k_->find(address) != k_->saved.end()) {
+    if (address != was && k_->settings_of(address) != nullptr) {
       form.say("That account is already here.", true);
       return;
     }
@@ -258,17 +274,15 @@ class accounts_part {
                   account.own, std::as_const(old->own));
     // Nothing changed: saved as it is, and the connection left alone.
     const bool same = account == *old;
-    *old = account;
+    k_->change_account(was, [&](mux::config::account_t& kept) { kept = account; });
     const auto failed = k_->write();
     if (!same) {
       s_->net->remove(was);
       if (mux::config::enabled_of(account))
-        s_->net->add(account, k_->proxies);
+        s_->net->add(account, k_->proxies());
     }
     // The form is made again from what was saved: `form` is gone after this.
-    auto& panel = this->show_account(address);
-    if (auto* editor = panel.editor())
-      editor->say(failed ? *failed : std::string("Saved."), failed.has_value());
+    this->show_accounts(mux::ui::panel_detail::account{address, failed ? *failed : std::string("Saved."), failed.has_value()});
   }
   // Written, and what went wrong said on the accounts page.
   void save() {

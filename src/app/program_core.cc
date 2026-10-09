@@ -18,6 +18,8 @@ import skiff.paint;
 import skiff.scene;
 import skiff.nodes.text;
 import mux.app.network;
+import mux.app.kept;
+import skiff.bind;
 import mux.app.demo;
 import mux.app.store;
 import mux.app.requests;
@@ -39,6 +41,9 @@ void app::woken() {
   // Deletions of what is not held in memory, by chat: looked for on disk on
   // a worker, each chat's file read once for all of its (mark_deleted_on_disk).
   std::map<mux::conversation_id, std::vector<std::string>> deleted_on_disk;
+  // One batch of edits for all that came: what binds to the chats told
+  // once, after.
+  model->chats().beginBatch();
   for (const auto& one : changes) {
     // What the program itself does with a change, besides the model: a
     // session kept, a picture shown.
@@ -53,15 +58,23 @@ void app::woken() {
                                [&](const mux::change::room_created& made) { made_room_ = made.id; },
                                // A directory searched: its rooms, in Explore.
                                [&](const mux::change::directory_listed& listed) {
-                                 root().show_directory(listed.rooms, listed.server, listed.space, listed.query, listed.next,
-                                                       listed.more);
+                                 // The rooms put in Explore's facts: a further page
+                                                                 // after those there, else in their place.
+                                 mux::ui::change_shown<std::optional<mux::ui::explore_facts>>(showing, [&](auto& now) {
+                                   if (!now)
+                                     return;
+                                   auto rooms = listed.more && now->listing ? std::move(now->listing->rooms) : std::vector<mux::directory_room>{};
+                                   rooms.insert(rooms.end(), listed.rooms.begin(), listed.rooms.end());
+                                   now->listing = mux::ui::explore_listing{std::move(rooms), listed.server, listed.space, listed.query, listed.next};
+                                   now->loading = false;
+                                 });
                                  // The own server's, for what the chat list searched.
                                  if (listed.server.empty() && !listed.space)
                                    root().main().found_rooms_elsewhere(listed.query, listed.rooms);
                                },
                                // Something the server refused: a notice saying why.
-                               [&](const mux::change::refused& said) { root().show_message("Not done", said.what); },
-                               [&](const mux::change::notice& said) { root().show_message(said.heading, said.what); },
+                               [&](const mux::change::refused& said) { shared.notice("Not done", said.what); },
+                               [&](const mux::change::notice& said) { shared.notice(said.heading, said.what); },
                                // People found: in Start chat, while it asks for them.
                                // A person's profile: their picture asked for, where they have one.
                                [&](const mux::change::profile_found& found) {
@@ -76,19 +89,24 @@ void app::woken() {
                                [&](const mux::change::devices_listed& listed) {
                                  if (person_open_ && person_open_->first.account == listed.by && person_open_->second == listed.user) {
                                    const auto [chat, user] = *person_open_;
-                                   root().open_person(chat.account, user,
-                                                      mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, user));
+                                   mux::ui::show(showing, std::optional(mux::ui::person_shown{chat.account, user,
+                                                      mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, user)}));
                                  }
                                },
                                [&](const mux::change::trust_changed& told) {
                                  if (person_open_ && person_open_->first.account == told.by && person_open_->second == told.user) {
                                    const auto [chat, user] = *person_open_;
-                                   root().open_person(chat.account, user,
-                                                      mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, user));
+                                   mux::ui::show(showing, std::optional(mux::ui::person_shown{chat.account, user,
+                                                      mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, user)}));
                                  }
                                },
                                [&](const mux::change::people_found& found) {
-                                 root().show_found_people(found.people, found.query);
+                                 mux::ui::change_shown<std::optional<mux::ui::new_chat_facts>>(showing, [&](auto& now) {
+                                   if (now) {
+                                     now->found = found.people;
+                                     now->query = found.query;
+                                   }
+                                 });
                                  root().main().found_people_elsewhere(found.query, found.people);
                                },
                                // A room looked up: its card filled, while it
@@ -140,6 +158,7 @@ void app::woken() {
     model->apply(one);
     paging.keep(one);
   }
+  model->chats().endBatch();
   for (auto& [in, ids] : deleted_on_disk)
     work.run([this, in, ids = std::move(ids)]() -> workers::done_t {
       store.mark_deleted_on_disk(in, ids);
@@ -170,7 +189,7 @@ void app::woken() {
                  one);
   }
   // Messages held to a number in all, least recently read out first.
-  model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
+  model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), root().main().chosen);
   this->refresh();
   // A room the user made: opened once the model has it.
   if (made_room_ && model->find(*made_room_))
@@ -202,7 +221,7 @@ void app::woken() {
                                            screen.jump_to(*gone.instead);
                                          } else {
                                            screen.stop_jump();
-                                           root().show_notice("That message isn't there any more, or can't be seen from this account.");
+                                           shared.not_implemented("That message isn't there any more, or can't be seen from this account.");
                                          }
                                        }
                                      },
@@ -236,6 +255,8 @@ void app::wire() {
   // state too (the looks, the paint, what the window's parts share), which
   // the window was made pointing at -- made anew, it was all lost.
   shared.model = model;
+  shared.showing = &showing;
+  shared.showing_binding = &showing_binding;
   shared.net = net;
   shared.store = &store;
   shared.box = box;
@@ -251,8 +272,167 @@ void app::wire() {
   store.vault = vault;
 }
 
+// The window, bound to the model whole: one binding, its change log read
+// once a frame. Where a page with the model's widgets has come up -- the
+// settings dialog's, the room settings', the accounts panel's -- the tree
+// was changed by hand, and is walked whole once; else only what changed.
+template <class Page>
+skiff::scene::NodeId bound_part_of(Page& page) {
+  // Combinator pages have no named settings member. Their node identity
+  // changes whenever a page is replaced, even at the same address.
+  return page.fState.fId;
+}
+void app::take_page_input() {
+  std::array<skiff::scene::NodeId, 3> now{};
+  if (auto* up = root().settings_up())
+    now[0] = spl::visit([](auto& page) { return bound_part_of(page); }, up->page());
+  if (auto* managing = root().manage_up())
+    now[1] = spl::visit([](auto& page) { return bound_part_of(page); }, managing->holder().parts.page);
+  if (auto* panel = root().open_panel())
+    now[2] = spl::visit([](auto& accounts) { return spl::visit([](auto& page) { return bound_part_of(page); }, accounts.detail); },
+                        *panel);
+  if (now != bound_pages) {
+    bound_pages = now;
+    window_binding.invalidate();
+    window_binding.refresh(root(), this->state);
+    showing_binding.invalidate();
+    this->refresh_shown();
+    chats_binding.invalidate();
+    chats_binding.refresh(root(), model->chats());
+  }
+  this->settle_model();
+}
+// How the window looks, as the model holds it, put where the window's
+// parts read it.
+void app::show_looks() {
+  const auto& now = this->appearance();
+  auto& window = shared.looks.window;
+  window.home_hides = now.home_hides_spaced;
+  window.home_direct = now.home_hides_direct;
+  window.spaces = now.spaces;
+  window.top_bar = now.top_bar;
+  window.interface_scale = now.interface_scale;
+  window.live_blur = now.live_blur;
+  window.behind = now.wallpaper_behind;
+  window.frost = now.frost_blur;
+  window.chosen = now.window_opacity;
+  shared.looks.bubbles_everywhere = now.bubbles.value_or(mux::config::bubble_look{});
+  shared.looks.panels_everywhere = now.panels.value_or(mux::config::bubble_look{});
+  shared.refresh_due = true;
+}
+// What the model's reactions asked for: the file written, UnifiedPush's
+// connector started or stopped; and the page up shown the model again.
+void app::settle_model() {
+  for (const auto& effect : this->take_effects())
+    std::visit(spl::overloaded{[&](const write_kept&) { (void)this->write(); },
+                               [&](const looks_changed&) { this->show_looks(); },
+                               [&](const motion_chosen&) { skiff::paint::motionLevel() = motion_of(this->appearance().motion); },
+                               [&](const deleted_shown&) {
+                                 model->show_deleted = this->history().show_deleted;
+                                 shared.refresh_due = true;
+                               },
+                               [&](const restyle_wanted&) {
+                                 skiff::scene::forgetStyles();
+                                 shared.rebuild_due = true;
+                               },
+                               [&](const opacity_chosen&) {
+                                 auto& look = shared.looks.window;
+                                 look.chosen = this->appearance().window_opacity;
+                                 if (look.see_through) {
+                                   look.opacity = look.chosen;
+                                   skiff::scene::forgetStyles();
+                                   shared.rebuild_due = true;
+                                 }
+                               },
+                               [&](const limits_changed&) {
+                                 settings.apply_limits();
+                                 model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), root().main().chosen);
+                               },
+                               [&](const push_wanted& wanted) {
+                                 if (wanted.on)
+                                   notices.start_push();
+                                 else
+                                   notices.stop_push();
+                               }},
+               effect);
+  window_binding.refresh(root(), this->state);
+  this->refresh_shown();
+  chats_binding.refresh(root(), model->chats());
+}
+
+// The chat screen read again by the chats binding: against everything the
+// model holds beside the chats, whether or not they moved.
+void app::show_chats_now() {
+  // The chat chosen, as what is shown has it, read first.
+  this->refresh_shown();
+  press_target_now() = {&this->state, this};
+  root().main().wants_ = &wants;
+  root().main().last_model = &*model;
+  // What is kept read first, where it moved since: the screen reads each
+  // chat's settings from it as it is shown.
+  window_binding.refresh(root(), this->state);
+  chats_binding.invalidate();
+  chats_binding.refresh(root(), model->chats());
+}
+
+// What the window came to want -- the reactions to its wants, as effects:
+// each done, and the want set back, so that the same comes again as a
+// change.
+void app::take_wants() {
+  for (const auto& wanted : wants.outbox().drain())
+    std::visit(
+        [this](const auto& each) {
+          this->route(each);
+          mux::ui::wanted_done<std::remove_cvref_t<decltype(each)>>(wants);
+        },
+        wanted);
+}
+
+void app::refresh_shown() {
+  shared.read_shown_now();
+  if (std::exchange(shared.menu_focus_due, false))
+    if (skiff::scene::Node* card = root().menu_card())
+      scene.focus(*card);
+}
+
+// Right after an event is handled, what it asked for -- taken from the
+// window and done at once, the handler that asked having returned: a press
+// acts before the next event, not a frame later.
+void app::after_event() {
+  this->take_wants();
+  // The nodes pressed that answer with what they ask for: each delivered
+  // along the path the scene routed it on, its event sent at once up the
+  // scopes it is in; what nothing in the window takes, to the program.
+  // Each in the window's state, else in the chats' model -- the one its
+  // node is bound in.
+  const auto ways = std::exchange(skiff::scene::hostWork().pressed, {});
+  const bool pressed = std::ranges::count_if(ways, [this](const auto& way) {
+                         return skiff::bind::press(root(), this->state, way, this) ||
+                                skiff::bind::press(root(), model->chats(), way, this) ||
+                                skiff::bind::press(root(), showing, way, this);
+                       }) > 0;
+  // What handlers returned that they ask for, where the routing carried
+  // nothing down to send it with (a debug build's erased walks): sent up the
+  // scopes their nodes are in, along their paths.
+  const auto kept = std::exchange(skiff::scene::hostWork().answers, {});
+  const bool answered = std::ranges::count_if(kept, [this](const auto& one) {
+                          return skiff::bind::answer(root(), this->state, one, this) ||
+                                 skiff::bind::answer(root(), model->chats(), one, this) ||
+                                 skiff::bind::answer(root(), showing, one, this);
+                        }) > 0;
+  if (!pressed && !answered)
+    return;
+  this->take_page_input();
+  // What the requests opened or closed, shown.
+  this->refresh_shown();
+}
+
 void app::before_frame() {
   ++mux::ui::image_cache::frame();
+  // What the model's widgets did: edits of the model, before the frame.
+  this->take_page_input();
+  // What the screen came to want as it was updated: done.
+  this->take_wants();
   root().drop_closed();
   // What has been on screen in the chat shown is read, as far as it goes,
   // as in tdesktop: the chat list's counts go down as it is read, not all
@@ -289,9 +469,6 @@ void app::before_frame() {
   }
   calls.tick();
   menu.keep_selection();
-  auto pending = std::exchange(ask.requests, {});
-  for (const request_t& one : pending)
-    spl::visit([this](const auto& each) { this->route(each); }, one);
   // A selectable text or a field pressed with the right button -- a long
   // press, on a phone: its menu, the last asked for.
   if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !root().context_menu_up())
@@ -313,15 +490,16 @@ void app::before_frame() {
   if (std::exchange(shared.ui.pictures_due, false))
     pictures.ask();
   if (std::exchange(shared.emoji.emoji_changed, false)) {
-    recent_emoji = shared.emoji.recent_emoji;
-    (void)this->write();
+    this->change_part<recently_used>([&](recently_used& now) { now.emoji = shared.emoji.recent_emoji; });
   }
   if (std::exchange(shared.emoji.stickers_changed, false)) {
-    recent_stickers = shared.emoji.recent_stickers;
-    favourite_stickers = shared.emoji.favourite_stickers;
-    (void)this->write();
+    this->change_part<recently_used>([&](recently_used& now) {
+      now.stickers = shared.emoji.recent_stickers;
+      now.favourite_stickers = shared.emoji.favourite_stickers;
+    });
   }
   if (shared.drawer_waits && !root().pages_moving()) {
+    mux::ui::show(showing, mux::ui::drawer_shown{false});
     root().close_drawer_now();
     shared.drawer_waits = false;
   }
@@ -336,9 +514,10 @@ void app::closing() {
 auto app::root() -> window_type& { return scene.root(); }
 
 void app::show_conversations() {
-  root().close_drawer();
+  mux::ui::show(showing, mux::ui::drawer_shown{false});
   accounts_screen.forget_login();
-  root().close();
+  mux::ui::show<mux::ui::panel_facts>(showing, std::nullopt);
+  this->refresh_shown();
   this->refresh();
 }
 
@@ -357,15 +536,9 @@ void app::refresh(std::source_location from) {
     return;
   }
   this->note_spaces();
-  this->show_placements();
-  this->show_event_filters();
-  this->show_looks_now();
-  this->show_space_bars();
-  this->show_levels();
-  this->show_backgrounds();
-  this->show_chat_choices();
-  root().show(saved, *model);
-  root().main().show(*model);
+  // The chat screen, as the chats binding reads it: against everything the
+  // model holds beside the chats, and shown again whether or not they moved.
+  this->show_chats_now();
   // The newly made range is now known, including a just-opened chat.
   pictures.ask();
   // The accounts page, where it is up: the account being added shown in,
@@ -396,36 +569,31 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   this->keeps_nothing = demo;
   // What each protocol's account does, for the window to offer.
   mux::app::tell_protocol_ops(shared.ui, mux::protocols{});
-  // The settings, as kept.
-  this->take(saved);
+  // Load the saved settings through the base; app::take dispatches requests.
+  this->kept_settings::take(saved);
+  // Loading replaces the model, including its revision. A previous read
+  // of the defaults must not suppress the saved settings' first read.
+  window_binding.invalidate();
   // And what of them the window holds, put in place there.
-  shared.emoji.recent_emoji = this->recent_emoji;
-  shared.emoji.recent_stickers = this->recent_stickers;
-  shared.emoji.favourite_stickers = this->favourite_stickers;
+  shared.emoji.recent_emoji = this->recent().emoji;
+  shared.emoji.recent_stickers = this->recent().stickers;
+  shared.emoji.favourite_stickers = this->recent().favourite_stickers;
   if (saved.last_account)
     this->root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
-  shared.looks.bubbles_everywhere = this->bubbles.value_or(mux::config::bubble_look{});
-  shared.looks.panels_everywhere = this->panels.value_or(mux::config::bubble_look{});
-  this->wallpaper_behind = shared.looks.window.behind;
-  shared.looks.window.live_blur = saved.live_blur.value_or(false);
-  this->live_blur = shared.looks.window.live_blur;
-  this->frost_blur = shared.looks.window.frost;
-  shared.looks.window.home_hides = this->home_hides_spaced;
-  shared.looks.window.home_direct = this->home_hides_direct;
-  shared.looks.window.spaces = this->spaces;
-  shared.looks.window.top_bar = this->top_bar;
-  this->interface_scale = std::clamp(this->interface_scale, mux::ui::kScaleLeast, mux::ui::kScaleMost);
-  shared.looks.window.interface_scale = this->interface_scale;
+  // Read the loaded appearance just as a later settings change does.
+  // Writing the window's defaults here replaced the saved blur and backdrop.
+  this->show_looks();
+  this->choose_field<&mux::config::look_settings::interface_scale>(std::clamp(this->appearance().interface_scale, mux::ui::kScaleLeast, mux::ui::kScaleMost));
+  shared.looks.window.interface_scale = this->appearance().interface_scale;
   if (!demo)
     this->drafts.load();
-  this->model->show_deleted = this->history.show_deleted;
+  this->model->show_deleted = this->history().show_deleted;
   this->settings.apply_limits();
   marks.load();
   // UnifiedPush only where chosen; off by default.
-  if (notifications.unified_push.value_or(false) && !demo)
+  if (this->notifications().unified_push.value_or(false) && !demo)
     notices.start_push();
-  skiff::paint::motionLevel() = motion_of(saved.motion);
-  this->root().show_motion(saved.motion.value_or("full"));
+  skiff::paint::motionLevel() = motion_of(this->appearance().motion);
   this->config_error = std::move(error);
   this->refresh();
 }

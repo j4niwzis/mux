@@ -9,9 +9,15 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 import skiff.nodes.box;
+import skiff.nodes.text;
+import skiff.compose;
 import skiff.widgets.theme;
+import skiff.widgets.sliderbar;
+import skiff.widgets.button;
 import skiff.widgets.wallpaper;
 import skiff.widgets.motion;
+import skiff.bind;
+export import :requests;
 import mux.core;
 import mux.protocols;
 import mux.config;
@@ -19,6 +25,11 @@ import mux.logic.text;
 import mux.platform.audio;
 
 export namespace mux::ui {
+
+using skiff::compose::primary;
+using skiff::compose::elided;
+using skiff::compose::on_now;
+using skiff::compose::wrapped;
 
 namespace scene = skiff::scene;
 namespace nodes = skiff::nodes;
@@ -189,9 +200,9 @@ struct panel_ease_t {
 // A chat background's dialog, for a level.
 template <class Actions>
 struct open_wallpaper_at {
-  Actions* actions = nullptr;
+  using Answer = ::mux::ui::request::open_wallpaper;
   choice_level_t level;
-  void operator()() const { actions->open_wallpaper(level); }
+  ::mux::ui::request::open_wallpaper operator()() { return ::mux::ui::request::open_wallpaper{level}; }
 };
 // A background's picture, read from where mux keeps it and decoded once.
 inline skia::Sp<skia::SkImage> wallpaper_picture(const std::string& path) {
@@ -220,34 +231,35 @@ inline std::vector<std::pair<std::string, std::string>>& listed_avatars() {
 // Whether files may be sent into an account's chats: where its account
 // sends them, and its protocol allows it now.
 [[nodiscard]] inline bool may_send_files(const ui_shared& shared, const account_id& of);
-// Lists of types, put together: the client's and every protocol's -- the
-// Manage tabs and pages, the account pages.
-template <class... Ts>
-struct type_list {};
-template <class... Lists>
-struct joined;
-template <class... Ts>
-struct joined<type_list<Ts...>> {
-  using type = type_list<Ts...>;
-};
-template <class... As, class... Bs, class... Rest>
-struct joined<type_list<As...>, type_list<Bs...>, Rest...> : joined<type_list<As..., Bs...>, Rest...> {};
-template <class List>
-struct variant_of_types;
-template <class... Ts>
-struct variant_of_types<type_list<Ts...>> {
-  using type = spl::variant<Ts...>;
-};
+// An act done where a node is pressed, with what was picked if anything: one
+// that answers, said pressed -- its answer asked as the press is delivered
+// (the node's onPress(), from what the node keeps of the press); else
+// called at once.
+template <class Act, class... Given>
+  requires skiff::scene::Answering<Act>
+void act_on(scene::State& pressed, Act&, Given&&...) {
+  skiff::scene::pressLater(pressed);
+}
+template <class Act, class... Given>
+void act_on(scene::State&, Act& act, Given&&... given) {
+  act(std::forward<Given>(given)...);
+}
 // A node a press acts on -- a row, a tile, a tab: it takes the pointer, is
-// lit under it, and a click calls its act.
+// lit under it, and a click calls its act -- or, where the act answers,
+// says it was pressed, the answer asked as the press is delivered.
 template <class Base>
 struct pressable : Base {
   using Base::Base;
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(this auto& self, float, float) {
-    self.act();
+    act_on(self.fState, self.act);
     return true;
+  }
+  auto onPress(this auto& self)
+    requires skiff::scene::Answering<std::remove_cvref_t<decltype(self.act)>>
+  {
+    return self.act();
   }
 };
 // The emoji and stickers kept (emoji_kept), and how fills are painted
@@ -259,7 +271,6 @@ struct mux_paint;
 // given by its parent, and takes what it needs of it with spl::remapped<>.
 template <class Actions>
 struct ui_needs {
-  Actions* actions = nullptr;
   // What plays voice messages: the program's.
   platform::audio::speaker* sound = nullptr;
   // The theme's colours: the program's.
@@ -298,10 +309,13 @@ struct dialog_look {
 };
 [[nodiscard]] inline skia::SkColor colour_of(sheet::side, const palette& colours) { return colours.sidebar; }
 [[nodiscard]] inline skia::SkColor colour_of(sheet::chat, const palette& colours) { return colours.chat; }
+template <class Content> dialog_look content_look(std::type_identity<Content>) {
+  return Content::look_of_dialog();
+}
 // A dialog put as its content says, in the palette's colours.
-template <class Content>
-void look_as_its_content(widgets::Dialog<Content>& dialog, const palette& colours) {
-  const dialog_look look = Content::look_of_dialog();
+template <class Content, class Dismiss>
+void look_as_its_content(widgets::Dialog<Content, Dismiss>& dialog, const palette& colours,
+                        const dialog_look& look = content_look(std::type_identity<Content>{})) {
   dialog.setSheetColour(spl::visit([&](auto one) { return colour_of(one, colours); }, look.sheet));
   spl::visit(spl::overloaded{[](dialog_size::as_opened) {},
                                    [&](dialog_size::fixed size) { dialog.setSize(size.width, size.height); },
@@ -311,7 +325,17 @@ void look_as_its_content(widgets::Dialog<Content>& dialog, const palette& colour
   dialog.setDismissable(look.dismissable);
 }
 // Anything else a window holds: no dialog, nothing to put.
-inline void look_as_its_content(const auto&, const palette&) {}
+// Binding wrappers retain the content type. An exact wrapper overload
+// must win over the fallback, rather than silently keeping the default size.
+template <class Dialog>
+  requires requires { typename Dialog::dialog_content; }
+void look_as_its_content(Dialog& dialog, const palette& colours) {
+  look_as_its_content<typename Dialog::dialog_content, widgets::dismiss::pressed>(
+      dialog, colours, dialog.look_of_content());
+}
+template <class Node>
+  requires (!requires { typename Node::dialog_content; })
+void look_as_its_content(const Node&, const palette&) {}
 
 // Each account's protocol state, as its client last said it
 // (ui_shared::protocol_states): what the extension points are asked with.
@@ -349,7 +373,6 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void remove_account(std::string address)
 //   void open_drawer()
 //   void show_account(std::string address)  -- its settings, from the drawer
-//   void set_motion(std::string level)       -- "full", "reduced" or "none"
 //   void quit()
 //   void toggle_mute()               -- the chosen chat muted, or not
 //   void leave_chat()                -- the chosen chat left
@@ -358,15 +381,14 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void accounts_back()              -- ← on the accounts page
 //   void account_page(account_page_t) -- a page of the chosen account
 //   void flip_account_receipts(), flip_account_mentions_shared(), flip_account_mentions_sealed(), flip_only_verified(), accept_identity(who), flip_account_typing(), choose_account_proxy(int), manage_proxies()
-//   template <class Request> void ask_for(Request) -- a protocol's own request (asks<Actions, Request>)
+//   a protocol's own request: sends<Request>
 //   void typing(bool)                -- the composer has text in it, or not
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
 //        save_proxy_profile(), delete_proxy_profile()
 //   void settings_appearance(), settings_rendering(), settings_storage()
-//   void change_limit(config::limit_t, bool more), clear_stored()  -- Storage
-//   void settings_files(), flip_strip_metadata(), flip_rename_pictures()  -- Files
-//   void flip_show_deleted()  -- Storage: deleted messages shown, marked
-//   void set_theme(config::theme_t), set_accent(config::accent_t), set_renderer(config::renderer_t)
+//   void clear_stored()  -- Storage (its limits are the model's)
+//   void settings_files()  -- Files (its switches are the model's)
+//   void set_renderer(config::renderer_t)  -- the theme and accent are the model's
 //   void proxy_kind(config::proxy_kind_t)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
 //   void close_notice()
@@ -391,9 +413,7 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void open_explore(), close_explore(), search_rooms(server, query), join_directory_room(room, server),
 //        search_elsewhere(query)  -- the chat list's search, where nothing joined matches,
 //        create_room(name, topic, open, alias, federate, encrypted)  -- rooms found and made
-//   void settings_notifications(), flip_notify(notify_flag_t), set_notify_backend(notify_backend_t),
-//        set_notify_choice(choice_level_t, notify_setting_t, optional<bool>)  -- notifications, at a level
-//   void set_room_event_kind(choice_level_t, optional<room_event_t>, optional<bool>)  -- which room events show
+//   void settings_notifications(),
 //   void toggle_emoji(), close_emoji(), insert_emoji(std::string text, std::string picture)  -- the input's emoji panel
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
@@ -403,32 +423,38 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void pop_panel()                 -- back from the top panel to what is under it
 //   void open_settings(), close_settings(), settings_home(), settings_animations()
 
-// A request with nothing to say but itself: `ask<Actions, &Actions::back>`.
-template <class Actions, auto Method>
-struct ask {
-  Actions* actions = nullptr;
-  void operator()() const { (actions->*Method)(); }
+// A request sent as an event: the answer to a press, sent up the scopes the
+// node pressed is in as the press is delivered -- the program taking those
+// that nothing in the window does. Nothing kept.
+template <class E>
+struct sends {
+  using Answer = E;
+  E event{};
+  E operator()() const { return event; }
 };
-// A protocol's own request with nothing to say but itself, as its UI asks
-// it: `asks<Actions, request::refresh_sessions>`, through the program's
-// ask_for.
-template <class Actions, class Request>
-struct asks {
-  Actions* actions = nullptr;
-  void operator()() const { actions->ask_for(Request{}); }
-};
+// Whether an act answers a press with what it asks for (scene::Answering).
+template <class Act>
+concept sending = skiff::scene::Answering<Act>;
+
+// A skiff-widgets button or toggle for an act: the plain one where the act
+// sends events, which the walk takes from its action; else the one the
+// build erases its action in.
+template <class Act>
+using button_for = std::conditional_t<sending<Act>, widgets::internal::Button<Act>, widgets::Button<Act>>;
+template <class Act>
+using toggle_for = std::conditional_t<sending<Act>, widgets::internal::Toggle<Act>, widgets::Toggle<Act>>;
 // The requests about one saved account.
 template <class Actions>
 struct flip_account {
-  Actions* actions = nullptr;
+  using Answer = ::mux::ui::request::flip_enabled;
   std::string address;
-  void operator()() const { actions->flip_enabled(address); }
+  ::mux::ui::request::flip_enabled operator()() { return ::mux::ui::request::flip_enabled{address}; }
 };
 template <class Actions>
 struct remove_account {
-  Actions* actions = nullptr;
+  using Answer = ::mux::ui::request::remove_account;
   std::string address;
-  void operator()() const { actions->remove_account(address); }
+  ::mux::ui::request::remove_account operator()() { return ::mux::ui::request::remove_account{address}; }
 };
 
 // ---- laying out ----------------------------------------------------------
@@ -453,7 +479,6 @@ struct column_stack {
   const float w = std::min(width, box.width() - 32.0f);
   return skia::SkRect::MakeXYWH(box.centerX() - w * 0.5f, box.fTop + top, w, std::max(0.0f, box.height() - top));
 }
-
 
 // A look's blur, 0 to 1: its own, else the window's Frosted blur.
 [[nodiscard]] inline float blur_of(const config::bubble_look& look, const window_look_t& window) {

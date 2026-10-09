@@ -32,7 +32,7 @@ class packs_part {
   // One's own packs, from Settings: by an account that has them.
   void apply(const request::open_packs&) {
     account_ = s_->account_offering(mux::proto::feature::sticker_packs{});
-    s_->root().open_packs(std::nullopt, true);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::packs_facts{std::nullopt, true}));
     if (account_ && !s_->demo())
       s_->net->list_packs(*account_, std::nullopt);
   }
@@ -44,12 +44,12 @@ class packs_part {
     if (!chat || !mux::proto::offers(mux::ui::protocol_state_of(s_->ui, chat->id.account), mux::proto::feature::sticker_packs{}))
       return;
     account_ = chat->id.account;
-    s_->root().open_packs(chat->id.id, mux::proto::chat_rights(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat).edit_packs);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::packs_facts{chat->id.id, mux::proto::chat_rights(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat).edit_packs}));
     if (!s_->demo())
       s_->net->list_packs(*account_, chat->id.id);
   }
   void apply(const request::close_packs&) {
-    s_->root().close_packs();
+    mux::ui::show<mux::ui::packs_facts>(*s_->showing, std::nullopt);
     s_->ui.pack_pictures_shown.clear();
   }
   void apply(const request::save_pack& one) {

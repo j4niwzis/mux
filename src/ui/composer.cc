@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -26,9 +27,29 @@ export namespace mux::ui {
 // An edge between two parts of the window, to drag: the pointer turns into
 // a resize arrow over it, and a drag asks `on_drag(x)` for the edge to be at
 // x. It draws a thin line where `with_line`.
-template <class OnDrag>
-struct drag_edge : scene::Node {
+// A round button over the bottom right corner of the messages, on the
+// panels' colour: the @ and the heart, "↓", the way back.
+[[nodiscard]] inline scene::Spec corner_button(const palette& colours) {
+  return {.place = scene::anchor::kBottomRight,
+                  .x = -18.0f,
+                  .y = -12.0f,
+                  .width = 42.0f,
+                  .height = 42.0f,
+                  .cornerRadius = 21.0f,
+                  .background = colours.sidebar,
+                  .hoverBackground = colours.chosen,
+                  .border = scene::Border{colours.band, 1.0f}};
+}
+
+template <class OnDrag> struct drag_edge : skiff::compose::Specced {
   OnDrag on_drag;
+  // Where it was last dragged to, and what its act answers there.
+  float dragged_to = 0.0f;
+  auto onPress()
+    requires skiff::scene::Answering<OnDrag>
+  {
+    return on_drag(dragged_to);
+  }
   bool with_line = true;
   bool dragging = false;
 
@@ -37,11 +58,15 @@ struct drag_edge : scene::Node {
     nodes::Box<> line;
   } parts;
 
-  drag_edge(const palette& colours, OnDrag what, bool line = true)
-      : on_drag(std::move(what)), with_line(line), parts{.line = nodes::Box<>(colours.band)} {
+  drag_edge(const palette &colours, OnDrag what, bool line = true)
+      : Specced({}), on_drag(std::move(what)), with_line(line),
+        parts{.line = skiff::compose::visible(
+                  line,
+                  skiff::compose::styled({.place = scene::anchor::kTopCentre,
+                                          .fillY = true,
+                                          .width = 1.0f},
+                                         nodes::Box<>(colours.band)))} {
     fState.setCursor(scene::cursor::resize_horizontal{});
-    parts.line.apply({.place = scene::anchor::kTopCentre, .fillY = true, .width = 1.0f});
-    parts.line.setVisible(line);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -56,7 +81,8 @@ struct drag_edge : scene::Node {
   void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
     if (!dragging)
       return;
-    on_drag(at.x);
+    dragged_to = at.x;
+    act_on(fState, on_drag, at.x);
     reply.handle();
   }
   void onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) {
@@ -73,13 +99,13 @@ struct drag_edge : scene::Node {
 // Where an edge was dragged to, asked of the program.
 template <class Actions>
 struct resize_sidebar_to {
-  Actions* actions = nullptr;
-  void operator()(float x) const { actions->resize_sidebar(x); }
+  using Answer = std::optional<::mux::ui::request::resize_sidebar>;
+  std::optional<::mux::ui::request::resize_sidebar> operator()(float x) { return ::mux::ui::request::resize_sidebar{x}; }
 };
 template <class Actions>
 struct resize_info_to {
-  Actions* actions = nullptr;
-  void operator()(float x) const { actions->resize_info(x); }
+  using Answer = std::optional<::mux::ui::request::resize_info>;
+  std::optional<::mux::ui::request::resize_info> operator()(float x) { return ::mux::ui::request::resize_info{x}; }
 };
 
 // ---- the message field --------------------------------------------------------------
@@ -100,10 +126,9 @@ struct resize_info_to {
 // What Enter in the message field does: asks for its text to be sent.
 template <class Actions>
 struct submit_message {
-  Actions* actions = nullptr;
-  void operator()(std::string_view text) const { actions->submit_message(with_blocks_closed(text)); }
+  using Answer = ::mux::ui::request::submit_message;
+  Answer operator()(std::string_view text) const { return ::mux::ui::request::submit_message{with_blocks_closed(text)}; }
 };
-
 
 // Where a message is written, across the bottom of a chat as in Telegram
 // Quotes in the field, as Telegram's: a paragraph starting "> " -- a "> "
@@ -581,7 +606,7 @@ struct field_quotes {
 // emoji, the arrow. The chat's composer and a thread's; what each
 // button does is said by where it is.
 template <class Submit, class Attach, class Emoji, class Send>
-struct message_input : nodes::Stack {
+struct message_input : skiff::compose::Stacked {
   using attach_button = icon_button<Attach>;
   using field_t = widgets::TextArea<Submit, message_pictures, field_quotes>;
   using emoji_button = icon_button<Emoji>;
@@ -593,22 +618,21 @@ struct message_input : nodes::Stack {
     send_button send;
   } parts;
   message_input(const palette& colours, std::string placeholder, Submit submit, Attach attach_it, Emoji emoji_it, Send send_it)
-      : parts{.attach = attach_button(colours, icon::clip{}, std::move(attach_it)),
-              .field = field_t(colours.widgets, std::move(placeholder), std::move(submit)),
-              .emoji = emoji_button(colours, icon::smile{}, std::move(emoji_it)),
-              .send = send_button(colours, icon::send{}, std::move(send_it))} {
-    auto& [attach, field, emoji, send] = parts;
-    emoji.apply({.alignSelf = scene::align::kEnd});
-    this->setHorizontal();
-    this->setGap(6.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}});
-    attach.apply({.alignSelf = scene::align::kEnd});
-    send.apply({.alignSelf = scene::align::kEnd});
-    field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    // What is typed looks as it will be sent: the messages' size, as in
-    // tdesktop, whose field takes the message font.
+      : Stacked(skiff::compose::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}})),
+        parts{.attach = skiff::compose::styled({.alignSelf = scene::align::kEnd}, attach_button(colours, icon::clip{}, std::move(attach_it))),
+              .field = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                              message_sized(field_t(colours.widgets, std::move(placeholder), std::move(submit)))),
+              .emoji = skiff::compose::styled({.alignSelf = scene::align::kEnd}, emoji_button(colours, icon::smile{}, std::move(emoji_it))),
+              .send = skiff::compose::styled({.alignSelf = scene::align::kEnd}, accented(colours, send_button(colours, icon::send{}, std::move(send_it))))} {}
+  // What is typed looks as it will be sent: the messages' size, as in
+  // tdesktop, whose field takes the message font.
+  [[nodiscard]] static field_t message_sized(field_t field) {
     field.setFontSize(13.0f);
+    return field;
+  }
+  [[nodiscard]] static send_button accented(const palette& colours, send_button send) {
     send.set_colour(colours.accent);
+    return send;
   }
 };
 
@@ -617,11 +641,11 @@ struct message_input : nodes::Stack {
 // says. The chat's own; a thread's is its panel's.
 template <class Actions>
 struct in_chat {
-  using cancel = ask<Actions, &Actions::cancel_compose>;
+  using cancel = sends<::mux::ui::request::cancel_compose>;
   using submit = submit_message<Actions>;
-  using attach = ask<Actions, &Actions::attach_files>;
-  using emoji = ask<Actions, &Actions::toggle_emoji>;
-  using send = ask<Actions, &Actions::send_typed>;
+  using attach = sends<::mux::ui::request::attach_files>;
+  using emoji = sends<::mux::ui::request::toggle_emoji>;
+  using send = sends<::mux::ui::request::send_typed>;
   static constexpr std::string_view placeholder = "Write a message…";
 };
 
@@ -644,7 +668,7 @@ inline void place_in_corner(auto& button, bool up, int slot) {
 }
 
 template <class First, class Second>
-struct two_choice_bar : nodes::Stack {
+struct two_choice_bar : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text said;
     widgets::Button<First> first;
@@ -652,75 +676,71 @@ struct two_choice_bar : nodes::Stack {
   } parts;
   two_choice_bar(const palette& colours, std::string said, skia::SkColor said_colour, std::string first_name, First first,
                  std::string second_name, Second second)
-      : parts{.said = nodes::Text(std::move(said), 13.0f, said_colour),
+      : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 12.0f, 6.0f, 12.0f}})),
+        parts{.said = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(said), 13.0f, said_colour))),
               .first = widgets::Button<First>(colours.widgets, std::move(first_name), std::move(first)),
-              .second = widgets::Button<Second>(colours.widgets, std::move(second_name), std::move(second))} {
-    this->setHorizontal();
-    this->setGap(8.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 12.0f, 6.0f, 12.0f}});
-    parts.said.setElided(true);
-    parts.said.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    parts.second.setPrimary(true);
-  }
+              .second = primary(widgets::Button<Second>(colours.widgets, std::move(second_name), std::move(second)))} {}
 };
 
 template <class Actions, class Where = in_chat<Actions>>
-struct composer_bar : nodes::Stack {
+struct composer_bar : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  composer_bar(const composer_bar&) = delete;
+  composer_bar& operator=(const composer_bar&) = delete;
+  composer_bar(composer_bar&&) = delete;
+  composer_bar& operator=(composer_bar&&) = delete;
+
   // What is written answers or edits: the reply bar, its ✕ going back to
   // a plain message.
   using context_row = context_bar<typename Where::cancel>;
   using input_row = message_input<typename Where::submit, typename Where::attach, typename Where::emoji, typename Where::send>;
   // Element's bar over the field while messages here were not sent
   // (RoomStatusBar's): a warning, and "Delete all" and "Retry all".
-  using unsent_row = two_choice_bar<ask<Actions, &Actions::discard_unsent>, ask<Actions, &Actions::retry_unsent>>;
+  using unsent_row = two_choice_bar<sends<::mux::ui::request::discard_unsent>, sends<::mux::ui::request::retry_unsent>>;
   // Where the reader may not post: a row as high as the input's, its line
   // in the middle -- padded inside it, not by a margin the bar's height
   // leaves out.
-  struct no_post_row : nodes::Stack {
+  struct no_post_row : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text line;
     } parts;
     explicit no_post_row(const palette& colours)
-        : parts{.line = nodes::Text("You don't have permission to post in this chat", 13.0f, colours.dim)} {
-      this->setHorizontal();
-      fStack.justify = nodes::justify::middle{};
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {18.0f, 12.0f, 18.0f, 12.0f}});
-      parts.line.apply({.alignSelf = scene::align::kMiddle});
-    }
+        : Stacked(skiff::compose::justified(
+              skiff::compose::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {18.0f, 12.0f, 18.0f, 12.0f}}),
+              nodes::justify::middle{})),
+          parts{.line = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                               nodes::Text("You don't have permission to post in this chat", 13.0f, colours.dim))} {}
   };
   // A tombstoned room's: "This room has been replaced and is no longer
   // active", and the room it goes on in, opened -- joined, where it is not
   // yet.
-  using go_on = ask<Actions, &Actions::open_replacement>;
-  struct replaced_row : nodes::Stack {
+  using go_on = sends<::mux::ui::request::open_replacement>;
+  struct replaced_row : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text line;
       widgets::Button<go_on> go;
     } parts;
-    replaced_row(const palette& colours, Actions* a)
-        : parts{.line = nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim),
-                .go = widgets::Button<go_on>(colours.widgets, "The conversation continues here", {a})} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fStack.justify = nodes::justify::middle{};
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {12.0f, 12.0f, 12.0f, 12.0f}});
-      parts.line.apply({.alignSelf = scene::align::kMiddle});
-      parts.go.setPrimary(true);
-      parts.go.apply({.height = 30.0f, .alignSelf = scene::align::kMiddle});
-    }
+    replaced_row(const palette& colours)
+        : Stacked(skiff::compose::justified(
+              skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {12.0f, 12.0f, 12.0f, 12.0f}}),
+              nodes::justify::middle{})),
+          parts{.line = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                               nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim)),
+                .go = skiff::compose::styled({.height = 30.0f, .alignSelf = scene::align::kMiddle},
+                                             primary(widgets::Button<go_on>(colours.widgets, "The conversation continues here", {})))} {}
   };
   // Those asking to join, for those who may let them in: the first
   // of them -- who, and why -- with Approve (an invite) and Deny (their
   // knock refused), and how many more.
   struct approve_it {
-    Actions* actions;
+    using Answer = ::mux::ui::request::room_act;
     std::string user;
-    void operator()() const { actions->room_act(room_action::invite{user}); }
+    ::mux::ui::request::room_act operator()() { return ::mux::ui::request::room_act{room_action::invite{user}}; }
   };
   struct deny_it {
-    Actions* actions;
+    using Answer = ::mux::ui::request::room_act;
     std::string user;
-    void operator()() const { actions->room_act(room_action::kick{user}); }
+    ::mux::ui::request::room_act operator()() { return ::mux::ui::request::room_act{room_action::kick{user}}; }
   };
   using knock_row = two_choice_bar<deny_it, approve_it>;
   [[nodiscard]] static std::string knock_said(const knock_request& one, std::size_t more) {
@@ -746,25 +766,19 @@ struct composer_bar : nodes::Stack {
 
   // Declared: the divider, the unsent bar, the answer's line where there is
   // one, the row -- or, where the reader may not post, the line saying so.
-  explicit composer_bar(const ui_needs<Actions>& n) : composer_bar(n, {n.actions}, {n.actions}, {n.actions}, {n.actions}, {n.actions}) {}
+  explicit composer_bar(const ui_needs<Actions>& n) : composer_bar(n, {}, {}, {}, {}, {}) {}
   composer_bar(const ui_needs<Actions>& n, typename Where::cancel cancel, typename Where::submit submit, typename Where::attach attach,
                typename Where::emoji emoji, typename Where::send send)
-      : colours_(n.colours),
-        parts{.divider = nodes::Box<>(n.colours->band),
-              .unsent = unsent_row(*n.colours, "Some of your messages have not been sent", n.colours->error, "Delete all", {n.actions},
-                                  "Retry all", {n.actions}),
-              .context_line = context_row(*n.colours, std::move(cancel)),
+      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .background = n.colours->sidebar})),
+        colours_(n.colours),
+        parts{.divider = skiff::compose::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(n.colours->band)),
+              .unsent = skiff::compose::visible(false, unsent_row(*n.colours, "Some of your messages have not been sent", n.colours->error,
+                                                                  "Delete all", {}, "Retry all", {})),
+              .context_line = skiff::compose::visible(false, context_row(*n.colours, std::move(cancel))),
               .input = input_row(*n.colours, std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji),
                                  std::move(send)),
-              .no_post = no_post_row(*n.colours),
-              .replaced = replaced_row(*n.colours, n.actions)} {
-    parts.unsent.setVisible(false);
-    parts.no_post.setVisible(false);
-    parts.replaced.setVisible(false);
-    parts.context_line.setVisible(false);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = n.colours->sidebar});
-    parts.divider.apply({.fillX = true, .height = 1.0f});
-  }
+              .no_post = skiff::compose::visible(false, no_post_row(*n.colours)),
+              .replaced = skiff::compose::visible(false, replaced_row(*n.colours))} {}
 
   // What is in the field, as it holds it: a mention picked, the room its
   // pill's picture takes and the name.
@@ -846,7 +860,7 @@ struct composer_bar : nodes::Stack {
   }
   // Those asking to join, where one may let them in: the first, and how many
   // more. Made again only as who is first changes.
-  void show_knocks(Actions* a, const std::vector<knock_request>& knocking, bool may) {
+  void show_knocks(const std::vector<knock_request>& knocking, bool may) {
     if (!may || knocking.empty()) {
       if (parts.knocks) {
         parts.knocks.reset();
@@ -860,7 +874,7 @@ struct composer_bar : nodes::Stack {
       return;
     knocks_shown = key;
     parts.knocks.emplace(*colours_, knock_said(knocking.front(), knocking.size() - 1), colours_->text, "Deny",
-                         deny_it{a, knocking.front().id}, "Approve", approve_it{a, knocking.front().id});
+                         deny_it{knocking.front().id}, "Approve", approve_it{knocking.front().id});
     this->invalidateLayout();
   }
   std::string knocks_shown;
@@ -909,26 +923,19 @@ struct composer_bar : nodes::Stack {
 // Telegram's @ and heart over "↓": how many mentions of the user, or
 // reactions to theirs, are not yet seen; pressed, the oldest is gone to.
 template <class Actions>
-struct mark_button : scene::Node {
-  Actions* actions = nullptr;
+struct mark_button : skiff::compose::Specced {
+  using Answer = std::variant<::mux::ui::request::jump_to_mark, ::mux::ui::request::list_marks>;
   mark_kind_t kind;
   using badge_t = count_badge;
   struct parts_t {
     nodes::Text glyph;
     badge_t badge;
   } parts;
-  mark_button(const palette& colours, Actions* a, mark_kind_t which, std::string glyph)
-      : actions(a), kind(which), parts{.glyph = nodes::Text(std::move(glyph), 18.0f, colours.text, true), .badge = badge_t(colours)} {
-    fState.apply({.place = scene::anchor::kBottomRight,
-                  .x = -18.0f,
-                  .y = -12.0f,
-                  .width = 42.0f,
-                  .height = 42.0f,
-                  .cornerRadius = 21.0f,
-                  .background = colours.sidebar,
-                  .hoverBackground = colours.chosen,
-                  .border = scene::Border{colours.band, 1.0f}});
-    parts.glyph.apply({.place = scene::anchor::kCentre});
+  mark_button(const palette& colours, mark_kind_t which, std::string glyph)
+      : Specced(corner_button(colours)),
+        kind(which),
+        parts{.glyph = skiff::compose::styled({.place = scene::anchor::kCentre}, nodes::Text(std::move(glyph), 18.0f, colours.text, true)),
+              .badge = badge_t(colours)} {
     this->setVisible(false);
   }
   // How many, and which place up the stack it takes: 0 at the bottom.
@@ -941,37 +948,34 @@ struct mark_button : scene::Node {
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    actions->jump_to_mark(kind);
-    return true;
-  }
+  std::optional<Answer> onClick(float, float) { return ::mux::ui::request::jump_to_mark{kind}; }
   // The other button: all of them, listed. On the way back up, not at the
   // target: a press there of its own hid the one that clicks, and a left
   // press did nothing.
   using Node::onPointer;
-  void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+  std::optional<Answer> onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button != 3)
-      return;
-    actions->list_marks(kind);
+      return std::nullopt;
     reply.handle();
+    return ::mux::ui::request::list_marks{kind};
   }
   // And where the press is on the button itself -- the target, which the
   // way back up does not reach: the right button lists them; any other
   // press as a node's is, a click.
-  void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
+  std::optional<Answer> onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button == 3) {
-      actions->list_marks(kind);
       reply.handle();
-      return;
+      return ::mux::ui::request::list_marks{kind};
     }
-    scene::defaultPointer(*this, scene::phase::target{}, press, reply);
+    return scene::defaultPointer(*this, scene::phase::target{}, press, reply);
   }
 };
 
 // "↓": back to the newest, with how many came while one read above them.
 template <class Actions>
-struct jump_button : scene::Node {
-  Actions* actions = nullptr;
+struct jump_button : skiff::compose::Specced {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::jump_to_end;
   int unseen = 0;
   // A round plate with a chevron down, and over its top the count of what
   // came while the reader was above, on a badge in the accent.
@@ -980,20 +984,10 @@ struct jump_button : scene::Node {
     nodes::Icon chevron;
     badge_t badge;
   } parts;
-  jump_button(const palette& colours, Actions* a)
-      : actions(a), parts{.chevron = nodes::Icon(shape_of(icon::down{}), colours.text), .badge = badge_t(colours)} {
-    parts.badge.setVisible(false);
-    fState.apply({.place = scene::anchor::kBottomRight,
-                  .x = -18.0f,
-                  .y = -12.0f,
-                  .width = 42.0f,
-                  .height = 42.0f,
-                  .cornerRadius = 21.0f,
-                  .background = colours.sidebar,
-                  .hoverBackground = colours.chosen,
-                  .border = scene::Border{colours.band, 1.0f}});
-    parts.chevron.apply({.fill = true});
-  }
+  jump_button(const palette& colours)
+      : Specced(corner_button(colours)),
+        parts{.chevron = skiff::compose::styled({.fill = true}, nodes::Icon(shape_of(icon::down{}), colours.text)),
+              .badge = skiff::compose::visible(false, badge_t(colours))} {}
   void set_unseen(int count) {
     unseen = count;
     parts.badge.parts.count.setText(std::to_string(count));
@@ -1002,40 +996,30 @@ struct jump_button : scene::Node {
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    actions->jump_to_end();
-    return true;
+  std::optional<Answer> onClick(float, float) {
+    return ::mux::ui::request::jump_to_end{};
   }
 };
 
 // Back to the chat a jump came from -- a link or a reply into another chat
 // -- over "↓", as Telegram's: the chat as it was left.
 template <class Actions>
-struct back_button : scene::Node {
-  Actions* actions = nullptr;
+struct back_button : skiff::compose::Specced {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::return_to_chat;
   struct parts_t {
     nodes::Icon mark;
   } parts;
-  back_button(const palette& colours, Actions* a) : actions(a), parts{.mark = nodes::Icon(shape_of(icon::back{}), colours.text)} {
-    fState.apply({.place = scene::anchor::kBottomRight,
-                  .x = -18.0f,
-                  .y = -12.0f,
-                  .width = 42.0f,
-                  .height = 42.0f,
-                  .cornerRadius = 21.0f,
-                  .background = colours.sidebar,
-                  .hoverBackground = colours.chosen,
-                  .border = scene::Border{colours.band, 1.0f}});
-    parts.mark.apply({.fill = true});
+  back_button(const palette& colours)
+      : Specced(corner_button(colours)), parts{.mark = skiff::compose::styled({.fill = true}, nodes::Icon(shape_of(icon::back{}), colours.text))} {
     this->setVisible(false);
   }
   // Up or not, at a place in the stack of buttons over the list's corner.
   void show(bool up, int slot) { place_in_corner(*this, up, slot); }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    actions->return_to_chat();
-    return true;
+  std::optional<Answer> onClick(float, float) {
+    return ::mux::ui::request::return_to_chat{};
   }
 };
 

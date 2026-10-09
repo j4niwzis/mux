@@ -29,12 +29,9 @@ void app::open_chat(const mux::conversation_id& which, const std::optional<std::
     return;
   }
   auto& screen = root().main();
-  screen.current = which.account;
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.current = which.account; });
   screen.wanted.reset();
-  if (this->last_account != which.account.address) {
-    this->last_account = which.account.address;
-    (void)this->write();
-  }
+  this->change_part<recently_used>([&](recently_used& now) { now.last_account = which.account.address; });
   this->apply(request::choose{which});
 }
 
@@ -77,7 +74,7 @@ void app::follow(const mux::logic::link_t& where) {
                              [&](const mux::logic::link_step::member_page& step) {
                                this->apply(request::open_member_info{step.user});
                              },
-                             [&](const mux::logic::link_step::say& step) { root().show_message(step.title, step.text); },
+                             [&](const mux::logic::link_step::say& step) { shared.notice(step.title, step.text); },
                              [&](const mux::logic::link_step::join& step) {
                                // Its card first, as a person's: filled when
                                // its server answers, in woken(), and joined
@@ -120,7 +117,7 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
   auto& screen = root().main();
   screen.stop_jump();
   if (screen.thread_open() != thread) {
-    screen.open_thread(*thread);
+    shared.open_thread(*thread);
     if (!shared.demo())
       net->load_thread(chat.id, *thread);
   }
@@ -158,7 +155,7 @@ void app::apply(const request::jump_to_message& one) {
                                                                                       : std::nullopt;
         if (thread) {
           if (screen.thread_open() != thread) {
-            screen.open_thread(*thread);
+            shared.open_thread(*thread);
             if (!shared.demo())
               net->load_thread(chat->id, *thread);
             this->refresh();

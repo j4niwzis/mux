@@ -3,6 +3,7 @@
 module mux.app.program;
 
 import std;
+import splice;
 import knot;
 import skia;
 import mux.core;
@@ -22,29 +23,38 @@ namespace mux::app {
 
 void app::rebuild_in_theme() {
   auto& before = root().main();
-  const auto chosen = before.chosen;
-  const auto current = before.current;
   const float side_width = before.side_width;
   const float info_width = before.info_width;
-  const bool info_open = before.info_open;
   const float settings_at = root().settings_up() ? root().settings_up()->offset() : 0.0f;
-  mux::ui::use_scroll_bars(theme);
-  colours = mux::ui::palette_of(theme, accent, shared.looks.window.opacity);
+  mux::ui::use_scroll_bars(this->appearance().theme);
+  colours = mux::ui::palette_of(this->appearance().theme, this->appearance().accent, shared.looks.window.opacity);
   accounts_screen.forget_login();
   shared.drawer_waits = false;
   root().rebuild();
+  // The new tree has not read the saved settings or chats, even when the
+  // models' revisions match what the old tree last read.
+  window_binding.invalidate();
+  chats_binding.invalidate();
+  // Rebuild the page that was already open; a look change from a space's
+  // menu must not open Settings or switch an unrelated settings page.
+  mux::ui::change_shown<std::optional<mux::ui::settings_facts>>(showing, [&](auto& now) {
+    if (now)
+      spl::visit(spl::overloaded{
+          [&](mux::ui::settings_page::appearance& page) {
+            page.theme = this->appearance().theme;
+            page.accent = this->appearance().accent;
+          },
+          [](auto&) {}}, now->page);
+  });
+  // The dialogs made again: each reads what is shown afresh.
+  showing_binding.invalidate();
+  this->refresh_shown();
   auto& after = root().main();
-  after.chosen = chosen;
-  after.current = current;
   after.side_width = side_width;
   after.info_width = info_width;
-  after.info_open = info_open;
   this->refresh();
-  root().open_settings(motion.value_or("full"));
-  if (auto* up = root().settings_up()) {
-    up->show_appearance(theme, accent);
+  if (auto* up = root().settings_up())
     up->keep_offset(settings_at);
-  }
 }
 
 }  // namespace mux::app

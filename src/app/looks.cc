@@ -30,8 +30,8 @@ class looks_part {
   looks_part(const looks_part&) = delete;
   looks_part& operator=(const looks_part&) = delete;
 
-  void apply(const request::open_wallpaper& one) { s_->root().open_wallpaper(one.level); }
-  void apply(const request::close_wallpaper&) { s_->root().close_wallpaper(); }
+  void apply(const request::open_wallpaper& one) { mux::ui::show(*s_->showing, std::optional(mux::ui::wallpaper_facts{one.level})); }
+  void apply(const request::close_wallpaper&) { mux::ui::show<mux::ui::wallpaper_facts>(*s_->showing, std::nullopt); }
   // A background chosen: the theme's, plain, or as the level over it says,
   // set at once; a picture, chosen first in the system's dialog (took_files).
   void apply(const request::set_wallpaper& one) {
@@ -57,20 +57,14 @@ class looks_part {
   // Bubbles, at a level: a look, or as the level over it says.
   void apply(const request::set_bubbles& one) {
     // Where each level keeps the look asked for: the bubbles', or the panels'.
-    using look_t = std::optional<mux::config::bubble_look>;
-    auto& everywhere = spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) -> look_t& { return k_->bubbles; },
-                                                        [&](mux::config::look_part::panels) -> look_t& { return k_->panels; }},
-                                     one.part);
     auto& known = spl::visit(
         spl::overloaded{[this](mux::config::look_part::bubbles) -> mux::config::bubble_look& { return s_->looks.bubbles_everywhere; },
                            [this](mux::config::look_part::panels) -> mux::config::bubble_look& { return s_->looks.panels_everywhere; }},
         one.part);
-    auto& per_chat = spl::visit(
-        spl::overloaded{[&](mux::config::look_part::bubbles) -> std::map<mux::conversation_id, mux::config::bubble_look>& { return k_->bubbles_in; },
-                           [&](mux::config::look_part::panels) -> std::map<mux::conversation_id, mux::config::bubble_look>& { return k_->panels_in; }},
-        one.part);
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
-                                       everywhere = one.look;
+                                       spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) { k_->choose_field<&mux::config::look_settings::bubbles>(one.look); },
+                                                                  [&](mux::config::look_part::panels) { k_->choose_field<&mux::config::look_settings::panels>(one.look); }},
+                                                  one.part);
                                        known = one.look.value_or(mux::config::bubble_look{});
                                      },
                                      [&](mux::choice_level::account) {
@@ -86,17 +80,16 @@ class looks_part {
                                        const auto chosen = s_->managed();
                                        if (!chosen)
                                          return;
-                                       if (one.look)
-                                         per_chat.insert_or_assign(*chosen, *one.look);
-                                       else
-                                         per_chat.erase(*chosen);
+                                       spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) { k_->choose<&mux::app::chat_choices::bubbles>(*chosen, one.look); },
+                                                                  [&](mux::config::look_part::panels) { k_->choose<&mux::app::chat_choices::panels>(*chosen, one.look); }},
+                                                  one.part);
                                      }},
                   one.level);
     (void)k_->write();
     s_->refresh_due = true;
     // Appearance up: its choice marked again.
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->theme, k_->accent);
+      s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
     if (auto* managing = s_->root().manage_up())
       managing->show_tab(managing->tab);
   }
@@ -111,7 +104,7 @@ class looks_part {
     std::string bytes = std::move(*bytes_read);
     const auto type = mux::media::picture_of(bytes);
     if (!type || !skia::decodeImage(bytes.data(), bytes.size())) {
-      s_->root().show_message("Chat background", "That file is not a picture mux can show.");
+      s_->notice("Chat background", "That file is not a picture mux can show.");
       return;
     }
     // Kept under its own name -- shown where it is chosen -- in a folder its
@@ -128,7 +121,7 @@ class looks_part {
   // and what shows the choice shown again: Appearance, Manage's tab, the
   // account's Chats page.
   void set_at(const mux::choice_level_t& level, std::optional<mux::config::wallpaper_t> chosen) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->wallpaper = chosen; },
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::look_settings::wallpaper>(chosen); },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                          mux::config::wallpaper_in(account) =
@@ -140,22 +133,19 @@ class looks_part {
                                        const auto chat = s_->managed();
                                        if (!chat)
                                          return;
-                                       if (chosen)
-                                         k_->wallpaper_in.insert_or_assign(*chat, *chosen);
-                                       else
-                                         k_->wallpaper_in.erase(*chat);
+                                       k_->choose<&mux::app::chat_choices::wallpaper>(*chat, chosen);
                                      }},
                   level);
     (void)k_->write();
-    s_->root().close_wallpaper();
+    mux::ui::show<mux::ui::wallpaper_facts>(*s_->showing, std::nullopt);
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
-      up->show_appearance(k_->theme, k_->accent);
+      s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
     if (auto* managing = s_->root().manage_up())
       managing->show_tab(managing->tab);
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
       if (panel.chats_page())
-        panel.show_page(mux::ui::account_page::chats{}, account, *s_->model, k_->proxies, k_->theme);
+        panel.show_page(mux::ui::account_page::chats{}, account, *s_->model, k_->proxies(), k_->appearance().theme);
     });
   }
 

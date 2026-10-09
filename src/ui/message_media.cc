@@ -8,6 +8,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -38,7 +39,7 @@ export namespace mux::ui {
 // 430 by 430 (maxMediaSize), no side under 100 (minPhotoSize); rounded, the
 // thumbnail drawn when it has come, a plate until then. With no caption,
 // the time is on a dark pill over its corner (msgDateImgBg).
-struct picture_view : scene::Node {
+struct picture_view : skiff::compose::Specced {
   std::string source;
   static constexpr float kMax = 430.0f, kMin = 100.0f;
   // Its own proportions: as its message says them, and as its picture has
@@ -46,28 +47,38 @@ struct picture_view : scene::Node {
   int width = 0, height = 0;
   // Over a video's thumbnail, as Telegram's: a dark disc with the play mark
   // in the middle, and its length on a dark pill at the top left.
-  struct video_marks : nodes::Stack {
-    struct disc : nodes::Stack {
+  struct video_marks : skiff::compose::Stacked {
+    struct disc : skiff::compose::Stacked {
       struct parts_t {
         nodes::Icon mark{shape_of(icon::play{}), skia::colorSetARGB(255, 255, 255, 255)};
       } parts;
-      disc() {
-        fStack.justify = nodes::justify::middle{};
-        fState.apply({.place = scene::anchor::kCentre, .width = 44.0f, .height = 44.0f, .cornerRadius = 22.0f,
-                      .background = skia::colorSetARGB(0x54, 0, 0, 0)});
+      disc()
+          : Stacked(skiff::compose::justified(
+                skiff::compose::vbox(
+                    0.0f, {.place = scene::anchor::kCentre,
+                           .width = 44.0f,
+                           .height = 44.0f,
+                           .cornerRadius = 22.0f,
+                           .background = skia::colorSetARGB(0x54, 0, 0, 0)}),
+                nodes::justify::middle{})) {
         parts.mark.apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
       }
     };
-    struct length : nodes::Stack {
+    struct length : skiff::compose::Stacked {
       struct parts_t {
         nodes::Text label;
       } parts;
       explicit length(std::int64_t ms)
-          : parts{.label = nodes::Text(std::format("{}:{:02}", ms / 60000, (ms / 1000) % 60), 11.0f,
-                                       skia::colorSetARGB(255, 255, 255, 255))} {
-        fState.apply({.place = scene::anchor::kTopLeft, .autoSize = scene::axes::kBoth,
-                      .margin = {6.0f, 0.0f, 0.0f, 6.0f}, .padding = {2.0f, 8.0f, 2.0f, 8.0f}, .cornerRadius = 9.0f,
-                      .background = skia::colorSetARGB(0x54, 0, 0, 0)});
+          : Stacked(skiff::compose::vbox(
+                0.0f, {.place = scene::anchor::kTopLeft,
+                       .autoSize = scene::axes::kBoth,
+                       .margin = {6.0f, 0.0f, 0.0f, 6.0f},
+                       .padding = {2.0f, 8.0f, 2.0f, 8.0f},
+                       .cornerRadius = 9.0f,
+                       .background = skia::colorSetARGB(0x54, 0, 0, 0)})),
+            parts{.label = nodes::Text(
+                      std::format("{}:{:02}", ms / 60000, (ms / 1000) % 60),
+                      11.0f, skia::colorSetARGB(255, 255, 255, 255))} {
         this->setVisible(ms > 0);
       }
     };
@@ -75,20 +86,23 @@ struct picture_view : scene::Node {
       disc play;
       length runs;
     } parts;
-    explicit video_marks(std::int64_t ms) : parts{.runs = length(ms)} { fState.apply({.fill = true}); }
+    explicit video_marks(std::int64_t ms)
+        : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
+          parts{.runs = length(ms)} {}
   };
   // The time on a dark pill over its corner, where there is no caption.
-  struct time_pill : nodes::Stack {
+  struct time_pill : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text label{"", 11.0f, skia::colorSetARGB(255, 255, 255, 255)};
     } parts;
-    time_pill() {
-      fState.apply({.place = scene::anchor::kBottomRight,
-                    .autoSize = scene::axes::kBoth,
-                    .margin = {0.0f, 6.0f, 6.0f, 0.0f},
-                    .padding = {2.0f, 8.0f, 2.0f, 8.0f},
-                    .cornerRadius = 9.0f,
-                    .background = skia::colorSetARGB(0x54, 0, 0, 0)});
+    time_pill()
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.place = scene::anchor::kBottomRight,
+                     .autoSize = scene::axes::kBoth,
+                     .margin = {0.0f, 6.0f, 6.0f, 0.0f},
+                     .padding = {2.0f, 8.0f, 2.0f, 8.0f},
+                     .cornerRadius = 9.0f,
+                     .background = skia::colorSetARGB(0x54, 0, 0, 0)})) {
       this->setVisible(false);
     }
   };
@@ -113,13 +127,18 @@ struct picture_view : scene::Node {
 
   // Rounded; a plate until the thumbnail comes, then the thumbnail covering
   // it, cut at the middle where the proportions differ by a rounding.
-  picture_view(const palette& colours, std::string where, int w, int h)
-      : source(where), width(w), height(h),
-        parts{.preview = nodes::Image<from_previews>({where}),
-              .picture = nodes::Image<from_moving_thumbnail>({where})} {
-    fState.apply({.cornerRadius = 10.0f, .background = colours.tile, .masking = true});
-    parts.preview.apply({.fill = true, .cornerRadius = 10.0f});
-    parts.picture.apply({.fill = true, .cornerRadius = 10.0f});
+  picture_view(const palette &colours, std::string where, int w, int h)
+      : Specced({.cornerRadius = 10.0f,
+                 .background = colours.tile,
+                 .masking = true}),
+        source(where), width(w), height(h),
+        parts{.preview =
+                  skiff::compose::styled({.fill = true, .cornerRadius = 10.0f},
+                                         nodes::Image<from_previews>({where})),
+              .picture = skiff::compose::styled(
+                  {.fill = true, .cornerRadius = 10.0f},
+                  nodes::Image<from_moving_thumbnail>({where}))} {
+
     parts.loader.apply({.place = scene::anchor::kCentre});
   }
   // The loader while the picture has not come; where it moves, drawn again
@@ -190,24 +209,21 @@ struct picture_view : scene::Node {
 // Several pictures in one message, as tdesktop shows an album: rows filling
 // its width with a thin gap between -- where they are odd, the first alone
 // and wide, then pairs -- each picture cut to fill its cell.
-struct album_view : nodes::Stack {
-  struct row : nodes::Stack {
+struct album_view : skiff::compose::Stacked {
+  struct row : skiff::compose::Stacked {
     struct parts_t {
       std::vector<picture_view> cells;
     } parts;
-    row() {
-      this->setHorizontal();
-      this->setGap(2.0f);
-      fState.apply({.autoSize = scene::axes::kBoth});
-    }
+    row()
+        : Stacked(
+              skiff::compose::hbox(2.0f, {.autoSize = scene::axes::kBoth})) {}
   };
   struct parts_t {
     std::vector<row> rows;
   } parts;
   static constexpr float kWidth = 360.0f, kGap = 2.0f;
-  album_view(const palette& colours, const std::vector<attachment>& items) {
-    this->setGap(kGap);
-    fState.apply({.autoSize = scene::axes::kBoth});
+  album_view(const palette &colours, const std::vector<attachment> &items)
+      : Stacked(skiff::compose::vbox(kGap, {.autoSize = scene::axes::kBoth})) {
     std::vector<std::size_t> per_row;
     std::size_t placed = items.size() % 2 == 1 ? 1 : 0;
     if (placed == 1)
@@ -251,10 +267,9 @@ struct album_view : nodes::Stack {
   }
 };
 
-
 // A file in a message, as tdesktop's row: a round icon in the accent, the
 // name over its size; pressed, it is saved and opened.
-struct file_view : nodes::Stack {
+struct file_view : skiff::compose::Stacked {
   std::string source;
   // tdesktop's msgFileSize: the icon, and so the row, is this high.
   static constexpr float kIcon = 44.0f;
@@ -267,16 +282,17 @@ struct file_view : nodes::Stack {
   // Its name over its size, each as wide as it reads, up to a limit: sized
   // by what they say, so that the bubble is (a block that only grew took
   // nothing in a bubble sized by its content, and showed neither).
-  struct texts_column : nodes::Stack {
+  struct texts_column : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text name;
       nodes::Text size;
     } parts;
-    texts_column(const palette& colours, std::string name, std::string size)
-        : parts{.name = nodes::Text(std::move(name), 14.0f, colours.text, true),
+    texts_column(const palette &colours, std::string name, std::string size)
+        : Stacked(
+              skiff::compose::vbox(4.0f, {.autoSize = scene::axes::kBoth,
+                                          .alignSelf = scene::align::kMiddle})),
+          parts{.name = nodes::Text(std::move(name), 14.0f, colours.text, true),
                 .size = nodes::Text(std::move(size), 12.0f, colours.dim)} {
-      this->setGap(4.0f);
-      fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
       for (nodes::Text* each : {&parts.name, &parts.size}) {
         each->setElided(true);
         each->setMaxWidth(360.0f);
@@ -326,15 +342,19 @@ struct file_view : nodes::Stack {
       return std::format("{:.1f} KB", static_cast<double>(bytes) / 1024.0);
     return std::format("{:.1f} MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
   }
-  file_view(const palette& colours, platform::audio::speaker* speaker, std::string where, std::string name, std::int64_t bytes,
+  file_view(const palette &colours, platform::audio::speaker *speaker,
+            std::string where, std::string name, std::int64_t bytes,
             bool is_sound = false)
-      : source(std::move(where)), parts{.icon = disc(colours), .texts = texts_column(colours, name, size_text(bytes))}, sound(is_sound),
-        size_line(size_text(bytes)), speaker_(speaker) {
+      : Stacked(
+            skiff::compose::hbox(11.0f, {.autoSize = scene::axes::kBoth,
+                                         .minWidth = 268.0f - 24.0f,
+                                         .padding = {2.0f, 0.0f, 2.0f, 0.0f}})),
+        source(std::move(where)),
+        parts{.icon = disc(colours),
+              .texts = texts_column(colours, name, size_text(bytes))},
+        sound(is_sound), size_line(size_text(bytes)), speaker_(speaker) {
     if (sound)
       parts.icon.setShape(shape_of(icon::play{}));
-    this->setHorizontal();
-    this->setGap(11.0f);
-    fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 268.0f - 24.0f, .padding = {2.0f, 0.0f, 2.0f, 0.0f}});
     fState.setCursor(scene::cursor::hand{});
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -348,7 +368,7 @@ struct file_view : nodes::Stack {
 // mxc:// URL where it is a picture -- a custom emoji, shown as the picture,
 // fetched as an avatar is -- and words where it is words, cut to a chip's
 // length.
-struct reaction_chip : nodes::Stack {
+struct reaction_chip : skiff::compose::Stacked {
   std::string key;
   std::size_t count = 0;
   bool mine = false;
@@ -374,17 +394,28 @@ struct reaction_chip : nodes::Stack {
   }
   static constexpr float kLabelMost = 240.0f;
   // `people`: who reacted, by id and name.
-  reaction_chip(const palette& colours, const looks_shown& looks, std::string k, std::size_t n, bool own,
-                const std::vector<std::pair<std::string, std::string>>& people = {})
-      : key(std::move(k)), count(n), mine(own),
-        parts{.label = nodes::Text(label_of(key, n), 13.0f, own ? colours.on_accent : colours.text)} {
-    this->setHorizontal();
-    this->setGap(4.0f);
-    fStack.justify = nodes::justify::middle{};
-    fState.apply({.height = 26.0f, .autoSize = scene::axes::kX, .minWidth = 26.0f, .padding = {0.0f, 9.0f, 0.0f, 9.0f},
-                  .cornerRadius = 13.0f,
-                  .background = at_opacity(own ? colours.accent : colours.tile,
-                                           element_opacity_of(looks.bubbles, &config::element_opacity::reactions))});
+  reaction_chip(
+      const palette &colours, const looks_shown &looks, std::string k,
+      std::size_t n, bool own,
+      const std::vector<std::pair<std::string, std::string>> &people = {})
+      : Stacked(skiff::compose::justified(
+            skiff::compose::hbox(
+                4.0f,
+                {.height = 26.0f,
+                 .autoSize = scene::axes::kX,
+                 .minWidth = 26.0f,
+                 .padding = {0.0f, 9.0f, 0.0f, 9.0f},
+                 .cornerRadius = 13.0f,
+                 .background = at_opacity(
+                     own ? colours.accent : colours.tile,
+                     element_opacity_of(looks.bubbles,
+                                        &config::element_opacity::reactions))}),
+            nodes::justify::middle{})),
+        key(std::move(k)), count(n), mine(own),
+        parts{.label = elided(skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  nodes::Text(label_of(key, n), 13.0f,
+                              own ? colours.on_accent : colours.text)))} {
     // Frosted, where the bubbles are, as its own blur says.
     if (frosts(looks.bubbles)) {
       parts.frost.emplace(frost_source{}, element_blur_of(looks.bubbles, &config::element_blur::reactions, looks.window));
@@ -397,8 +428,6 @@ struct reaction_chip : nodes::Stack {
       parts.picture.emplace(from_avatars{key});
       parts.picture->apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
     }
-    parts.label.apply({.alignSelf = scene::align::kMiddle});
-    parts.label.setElided(true);
     parts.label.setMaxWidth(kLabelMost);
     if (!people.empty() && people.size() <= kFacesShown) {
       // The count's place taken by the faces: the reaction alone before them.

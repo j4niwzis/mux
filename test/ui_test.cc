@@ -4,6 +4,8 @@ import std;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.bind;
+import skiff.model;
 import mux.core;
 import mux.config;
 import mux.ui;
@@ -36,7 +38,6 @@ struct stub {
   void flip_enabled(std::string) {}
   void remove_account(std::string) {}
   void open_drawer() {}
-  void set_motion(std::string) {}
   void quit() {}
   void open_settings() {}
   void close_settings() {}
@@ -90,9 +91,6 @@ struct stub {
   void attach_files() {}
   void typing(bool) {}
   void settings_files() {}
-  void flip_strip_metadata() {}
-  void flip_show_deleted() {}
-  void flip_rename_pictures() {}
   void close_send_box() {}
   void send_files() {}
   void open_member_info(std::string) {}
@@ -128,23 +126,18 @@ struct stub {
   void close_wallpaper() {}
   void set_bubbles(mux::choice_level_t, std::optional<mux::config::bubble_look>,
                    mux::config::look_part_t = mux::config::look_part::bubbles{}) {}
-  void set_window_opacity(int) {}
-  void flip_wallpaper_behind() {}
   void set_frost_blur(int) {}
   void place_spaces(std::string, mux::config::space_bar_t, std::vector<mux::config::space_item_t>,
                     std::optional<mux::config::space_bar_t>, std::optional<mux::config::space_item_t>) {}
   void set_space_bars(std::string, mux::config::space_item_t, bool, bool) {}
-  void flip_spaces() {}
   void set_home_hides(mux::choice_level_t, std::optional<bool>) {}
   void set_home_direct(mux::choice_level_t, std::optional<bool>) {}
-  void flip_top_bar() {}
   void set_wallpaper(mux::choice_level_t, mux::config::wallpaper_pick_t) {}
   void open_thread(std::string) {}
   void close_thread() {}
   void send_in_thread(std::string, std::string, std::optional<std::string>) {}
   void attach_in_thread() {}
   void toggle_thread_emoji() {}
-  void flip_live_blur() {}
   void set_account_colour(mux::config::accent_t) {}
   void flip_account_strip() {}
   void open_replacement() {}
@@ -182,17 +175,7 @@ struct stub {
   void hang_up() {}
   void mute_call() {}
   void settings_notifications() {}
-  void flip_notify(mux::config::notify_flag_t) {}
-  void flip_unified_push() {}
-  void set_notify_backend(mux::config::notify_backend_t) {}
-  void set_notify_choice(mux::choice_level_t, mux::config::notify_setting_t, std::optional<bool>) {}
   void set_chat_notify(mux::config::notify_mode_t) {}
-  void set_room_event_kind(mux::choice_level_t, std::optional<mux::room_event_t>, std::optional<bool>) {}
-  void set_room_events(mux::choice_level_t, std::optional<bool>, std::optional<mux::config::room_event_kinds>) {}
-  void set_receipts_shown(mux::choice_level_t, std::optional<bool>) {}
-  void set_link_previews(mux::choice_level_t, std::optional<bool>) {}
-  void set_typing_sent(mux::choice_level_t, std::optional<bool>) {}
-  void set_previews_direct(mux::choice_level_t, std::optional<bool>) {}
   void give_passphrase(mux::proto::passphrase_for_t, std::string, std::string, std::string, std::string) {}
   void verify_person(mux::conversation_id) {}
   void verify_accept_now() {}
@@ -202,7 +185,6 @@ struct stub {
   void close_verification() {}
   void flip_local_encryption() {}
   void change_passphrase() {}
-  void set_jump_search(mux::choice_level_t, std::optional<std::int64_t>) {}
   void press_loader(std::string) {}
   void stop_jump() {}
   void open_video(std::string, std::string, std::string, std::string, std::string) {}
@@ -260,21 +242,13 @@ struct stub {
   void settings_appearance() {}
   void settings_rendering() {}
   void settings_storage() {}
-  void change_limit(mux::config::limit_t, bool) {}
   void clear_stored() {}
-  void set_theme(mux::config::theme_t) {}
-  void flip_partial_redraw() {}
-  void flip_vsync() {}
-  void flip_show_fps() {}
   void menu_quote_reply() {}
   void show_account(std::string) {}
-  void flip_flash_redraws() {}
   void set_renderer(mux::config::renderer_t) {}
-  void set_accent(mux::config::accent_t) {}
   void leave_chat() {}
   void close_chat() {}
   void toggle_mute_of(mux::conversation_id) {}
-  void set_interface_scale(int) {}
 };
 
 // What each test's window reads and paints with: kept until it is gone.
@@ -284,14 +258,20 @@ struct ui_state {
   mux::ui::looks_shown looks;
   mux::ui::ui_shared shared;
   mux::ui::mux_paint paint;
+  mux::ui::shown_model showing{mux::ui::shown_root{}};
+
+  template <class Node, class Part> void show(Node &node, Part now) {
+    mux::ui::show(showing, std::move(now));
+    skiff::bind::refresh(node, showing);
+  }
 
   ui_state() {
     paint.looks = &looks;
     paint.colours = &colours;
   }
 
-  mux::ui::ui_needs<stub> needs(stub& program) {
-    return {.actions = &program, .colours = &colours, .emoji = &emoji,
+  mux::ui::ui_needs<stub> needs(stub&) {
+    return {.colours = &colours, .emoji = &emoji,
             .looks = &looks, .paint = &paint, .shared = &shared};
   }
 };
@@ -353,7 +333,7 @@ TEST(Drawer, SlidesOutAfterALongWhileOut) {
     (void)window.finishFrame();
   };
   frame(now);
-  window.root().open_drawer();
+  ui.show(window.root().layer().frame.base(), mux::ui::drawer_shown{true});
   for (int i = 0; i < 40; ++i)
     frame(now + 16.0);
   const auto& panel = window.root().layer().frame.base().content();
@@ -413,7 +393,8 @@ TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
 
   for (const bool invite : {false, true}) {
     preview.invite = invite;
-    window.root().open_room_card(preview.id, preview);
+    ui.show(window.root().layer().room,
+            std::optional{mux::ui::room_card_facts{preview.id, preview}});
     auto* card = window.root().layer().room.shown();
     ASSERT_NE(card, nullptr);
     auto& scroll = card->parts.scroll;
@@ -466,7 +447,7 @@ TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
       }
     }
     const int closed = program.room_cards_closed;
-    click(card->parts.top.parts.close);
+    click(std::get<2>(card->parts.top.fParts));
     EXPECT_EQ(program.room_cards_closed, closed + 1);
   }
 
@@ -474,7 +455,8 @@ TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
   viewport = skia::SkRect::MakeWH(1000.0f, 720.0f);
   preview.topic = "A brief description.";
   preview.invite = false;
-  window.root().open_room_card(preview.id, preview);
+  ui.show(window.root().layer().room,
+          std::optional{mux::ui::room_card_facts{preview.id, preview}});
   frame();
   auto* card = window.root().layer().room.shown();
   ASSERT_NE(card, nullptr);
@@ -684,14 +666,15 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
   stub program;
   ui_state ui;
   scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
-  window.root().open_emoji(700.0f, 650.0f);
+  ui.show(window.root().layer().emoji,
+          std::optional{mux::ui::emoji_facts{700.0f, 650.0f, {}}});
   const skia::SkRect viewport = skia::SkRect::MakeWH(1100.0f, 720.0f);
   for (int i = 0; i < 4; ++i) {
     window.update(1000.0 + 16.0 * i);
     window.layoutIfNeeded(viewport);
     (void)window.finishFrame();
   }
-  auto& popup = *window.root().layer().emoji;
+  auto &popup = *window.root().layer().emoji.shown();
   auto& panel = popup.parts.card.parts.panel;
   auto& sections = panel.sections();
   ASSERT_FALSE(sections.empty());
@@ -845,7 +828,8 @@ TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
   skiff::paint::defaultFont() = &font;
   stub program;
   ui_state ui;
-  scene::Scene<mux::ui::settings_dialog<stub>> dialog{std::in_place, ui.needs(program), "none"};
+  scene::Scene<mux::ui::settings_dialog<stub>> dialog{std::in_place,
+                                                      ui.needs(program)};
   auto& settings = dialog.root();
   const mux::config::theme_t theme{};
   const mux::config::accent_t accent{};
@@ -868,7 +852,7 @@ TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
   ui.looks.bubbles_everywhere = *ui.looks.everywhere.bubbles;
   frame(1332.0);
   ASSERT_NE(settings.appearance(), nullptr);
-  auto& bubbles = settings.appearance()->parts.looks.parts.bubbles;
+  auto& bubbles = std::get<1>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles;
   EXPECT_EQ(bubbles.parts.kinds.parts.head.parts.value.text(), "Translucent");
   EXPECT_EQ(bubbles.parts.opacity_label.text(), "Opacity: 65%");
   EXPECT_NEAR(bubbles.parts.opacity.fraction(), 55.0f / 90.0f, 0.001f);
@@ -878,7 +862,7 @@ TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
   ui.looks.everywhere.bubbles = mux::config::bubble_look{mux::config::bubbles::frosted{}, 80};
   ui.looks.bubbles_everywhere = *ui.looks.everywhere.bubbles;
   frame(1348.0);
-  EXPECT_EQ(settings.appearance()->parts.looks.parts.bubbles.parts.kinds.parts.head.parts.value.text(), "Frosted");
+  EXPECT_EQ(std::get<1>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles.parts.kinds.parts.head.parts.value.text(), "Frosted");
 
   // A queued refresh must not reopen a page the user just left.
   settings.show_appearance(theme, accent);
@@ -895,7 +879,8 @@ TEST(Settings, OpeningAndChangingPagesStartsAtTheTop) {
     stub program;
     ui_state ui;
     scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
-    window.root().open_settings("none");
+    ui.show(window.root().layer().settings,
+            std::optional{mux::ui::settings_facts{}});
     auto* settings = window.root().settings_up();
     ASSERT_NE(settings, nullptr);
     double now = 1000.0;
@@ -922,3 +907,327 @@ TEST(Settings, OpeningAndChangingPagesStartsAtTheTop) {
 }
 
 }  // namespace
+
+TEST(Calls, PlacementFollowsTheModel) {
+  mux::ui::call_shown shown{mux::ui::call_view{}};
+  shown.now->phase = mux::ui::call_phase::ringing_in{};
+  shown.now->in_view = true;
+  EXPECT_TRUE(mux::ui::call_card_of{}(shown).has_value());
+  EXPECT_FALSE(mux::ui::call_panel_of{}(shown).has_value());
+  shown.now->phase = mux::ui::call_phase::connected{61};
+  EXPECT_FALSE(mux::ui::call_card_of{}(shown).has_value());
+  EXPECT_TRUE(mux::ui::call_panel_of{}(shown).has_value());
+  shown.now->whole = true;
+  EXPECT_FALSE(mux::ui::call_card_of{}(shown).has_value());
+  EXPECT_FALSE(mux::ui::call_panel_of{}(shown).has_value());
+  EXPECT_TRUE(mux::ui::call_screen_of{}(shown).has_value());
+  shown.now.reset();
+  EXPECT_FALSE(mux::ui::call_screen_of{}(shown).has_value());
+}
+
+TEST(Calls, TimerUpdatesTextWithoutRebuildingControls) {
+  stub program;
+  ui_state ui;
+  mux::ui::shown_root root;
+  root.call.fValue.now = mux::ui::call_view{};
+  root.call.fValue.now->phase = mux::ui::call_phase::connected{61};
+  root.call.fValue.now->encrypted = true;
+  auto shown = mux::ui::call_layer(
+      ui.needs(program), mux::ui::call_card_of{}, mux::ui::call_ui::card{}, {.fill = true});
+  mux::ui::shown_model model(std::move(root));
+  skiff::bind::Binding<mux::ui::shown_model> binding;
+  binding.refresh(shown, model);
+  ASSERT_NE(shown.shown(), nullptr);
+  const auto id = shown.shown()->fState.id();
+  EXPECT_EQ(std::get<1>(std::get<1>(shown.shown()->fParts).fParts).text(), "1:01");
+  auto next = *model.look<mux::ui::call_shown>();
+  next.now->phase = mux::ui::call_phase::connected{62};
+  mux::ui::show(model, std::move(next));
+  binding.refresh(shown, model);
+  ASSERT_NE(shown.shown(), nullptr);
+  EXPECT_EQ(shown.shown()->fState.id(), id);
+  EXPECT_EQ(std::get<1>(std::get<1>(shown.shown()->fParts).fParts).text(), "1:02");
+}
+
+TEST(Appearance, ThemeCardPressEditsTheFieldAndRefreshesItsRing) {
+  struct root { skiff::model::Tracked<mux::config::look_settings> looks; };
+  using model_t = skiff::model::Model<root, skiff::bind::NoReactions>;
+  using field = skiff::model::Field<&mux::config::look_settings::theme>;
+  model_t kept(root{});
+  const mux::ui::palette colours;
+  const mux::config::theme_t chosen = mux::config::theme::night{};
+  auto card = mux::ui::theme_card(colours, chosen, "Night", colours.background, colours.bubble, colours.bubble);
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(card, kept);
+  auto& preview = std::get<1>(card.fParts);
+  ASSERT_TRUE(preview.fState.fBorder.has_value());
+  EXPECT_FLOAT_EQ(preview.fState.fBorder->width, 0.0f);
+  ASSERT_TRUE(skiff::bind::press(card, kept, scene::Path{}));
+  binding.refresh(card, kept);
+  EXPECT_EQ(*kept.look<field>(), chosen);
+  EXPECT_FLOAT_EQ(preview.fState.fBorder->width, 2.0f);
+  EXPECT_EQ(preview.fState.fBorder->colour, colours.accent);
+}
+
+TEST(Proxies, DraftValidationPreservesCredentialsAndPortBounds) {
+  mux::ui::proxy_draft draft;
+  EXPECT_FALSE(mux::ui::proxy_profile(draft));
+  draft.name = "Home";
+  draft.host = "localhost";
+  for (const auto& port : {"", "0", "65536", "1080junk", "-1"}) {
+    draft.port = port;
+    EXPECT_FALSE(mux::ui::proxy_profile(draft));
+  }
+  draft.port = "65535";
+  draft.password = "secret";
+  const auto profile = mux::ui::proxy_profile(draft);
+  ASSERT_TRUE(profile);
+  EXPECT_EQ(profile->port, 65535);
+  EXPECT_EQ(profile->password, "secret");
+  EXPECT_FALSE(profile->username.has_value());
+}
+
+TEST(Proxies, RequestsCarryTheDraftAndProfileIndex) {
+  const mux::ui::proxy_draft draft{.index = 2, .name = "Work", .host = "localhost", .port = "1080"};
+  const mux::ui::proxy_draft_events events;
+  const auto saved = events.on(mux::ui::save_proxy_draft{}, draft).fEvent;
+  ASSERT_TRUE(saved.profile);
+  EXPECT_EQ(saved.index, 2);
+  EXPECT_EQ(saved.profile->name, "Work");
+  EXPECT_EQ(events.on(mux::ui::delete_proxy_draft{}, draft).fEvent.index, 2);
+}
+
+TEST(Storage, SealModelRefreshesControlsWithoutReplacingThem) {
+  mux::ui::shown_model model(mux::ui::shown_root{});
+  mux::ui::palette colours;
+  auto view = mux::ui::seal_settings_view(colours);
+  skiff::bind::Binding<mux::ui::shown_model> binding;
+  binding.refresh(view, model);
+  auto& toggle = std::get<1>(std::get<0>(view.fParts).fParts);
+  auto& change = std::get<1>(view.fParts);
+  const auto id = toggle.fState.id();
+  EXPECT_FALSE(toggle.on());
+  EXPECT_FALSE(change.visible());
+  mux::ui::show(model, mux::ui::local_seal{true});
+  binding.refresh(view, model);
+  EXPECT_TRUE(toggle.on());
+  EXPECT_TRUE(change.visible());
+  EXPECT_EQ(toggle.fState.id(), id);
+}
+
+TEST(Controls, NameStatusRowsDeclareSelectionAndVisibility) {
+  mux::ui::palette colours;
+  auto text = mux::ui::two_lines(colours, "Alice", "", 14.0f, 2.0f,
+      mux::ui::two_line_style{.first_ink = colours.accent, .selectable = true});
+  EXPECT_EQ(std::get<0>(text.fParts).text(), "Alice");
+  EXPECT_TRUE(std::get<0>(text.fParts).selectable());
+  EXPECT_TRUE(std::get<1>(text.fParts).selectable());
+  EXPECT_FALSE(std::get<1>(text.fParts).visible());
+  auto forced = mux::ui::two_lines(colours, "Account", "", 14.0f, 2.0f,
+      mux::ui::two_line_style{.show_second = true});
+  EXPECT_TRUE(std::get<1>(forced.fParts).visible());
+}
+
+TEST(Controls, PersonSearchRowSendsItsIdAndNamesItsAction) {
+  mux::ui::palette colours;
+  const mux::found_person person{.id = "@alice:example.com", .name = "Alice"};
+  const auto row = mux::ui::found_person_row(colours, person);
+  EXPECT_EQ(row.onPress().user, person.id);
+  EXPECT_EQ(row.semantics().fLabel, "Alice");
+  EXPECT_EQ(std::get<0>(std::get<1>(row.fParts).fParts).text(), "Alice");
+}
+
+TEST(Controls, CopyIdRequestUpdatesOnlyItsLocalFeedback) {
+  struct sink {
+    std::vector<std::string> copied;
+    void take(const mux::ui::request::copy_text& request) { copied.push_back(request.text); }
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  auto row = mux::ui::id_line(colours, "#room:example.com", "https://matrix.to/#/#room:example.com");
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(row, model);
+  auto& label = std::get<1>(row.fParts);
+  const auto id = label.fState.id();
+  EXPECT_EQ(label.text(), "ID");
+  ASSERT_TRUE(skiff::bind::press(row, model, scene::Path{}, &requests));
+  binding.refresh(row, model);
+  ASSERT_EQ(requests.copied.size(), 1u);
+  EXPECT_EQ(requests.copied.front(), "https://matrix.to/#/#room:example.com");
+  EXPECT_EQ(label.text(), "ID · link copied, with its servers");
+  EXPECT_EQ(label.fState.id(), id);
+  EXPECT_EQ(model.root(), 0);
+}
+
+TEST(Proxies, LocalEditorPressesSendTypedSaveAndDeleteRequests) {
+  struct sink {
+    std::optional<mux::ui::request::save_proxy_profile> saved;
+    int removed = -1;
+    void take(const mux::ui::request::save_proxy_profile& request) { saved = request; }
+    void take(const mux::ui::request::delete_proxy_profile& request) { removed = request.index; }
+    void take(const mux::ui::request::settings_proxies&) {}
+    void take(const mux::ui::request::close_settings&) {}
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  const mux::config::proxy_settings profile{.name = "Home", .host = "localhost", .port = 1080};
+  auto editor = mux::ui::proxy_editor(colours, profile, 2);
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(editor, model);
+  ASSERT_TRUE(skiff::bind::press(editor, model, scene::Path{9, 0}, &requests));
+  ASSERT_TRUE(requests.saved.has_value());
+  ASSERT_TRUE(requests.saved->profile);
+  EXPECT_EQ(requests.saved->index, 2);
+  EXPECT_EQ(requests.saved->profile->name, "Home");
+  ASSERT_TRUE(skiff::bind::press(editor, model, scene::Path{9, 1}, &requests));
+  EXPECT_EQ(requests.removed, 2);
+}
+
+TEST(Controls, MemberRowPressSendsItsIdAndKeepsDrawingCached) {
+  struct sink {
+    std::string opened;
+    void take(const mux::ui::request::open_member_info& request) { opened = request.id; }
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  const mux::member person{.id = "@alice:example.com", .name = "Alice"};
+  auto row = mux::ui::member_row(colours, person, "Online");
+  EXPECT_TRUE(row.fState.fRecorded);
+  EXPECT_EQ(row.semantics().fLabel, "Alice");
+  ASSERT_TRUE(skiff::bind::press(row, model, scene::Path{}, &requests));
+  EXPECT_EQ(requests.opened, person.id);
+}
+
+TEST(Controls, ActionTileComputesOptionalRequestAtPressTime) {
+  struct action {
+    using Answer = std::optional<mux::ui::request::not_implemented>;
+    const std::string* current;
+    Answer operator()() const {
+      if (current->empty()) return std::nullopt;
+      return mux::ui::request::not_implemented{*current};
+    }
+  };
+  struct sink {
+    std::vector<std::string> asked;
+    void take(const mux::ui::request::not_implemented& request) { asked.push_back(request.what); }
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  std::string current;
+  auto tile = mux::ui::action_tile(colours, "Action", mux::ui::icon::info{}, action{&current});
+  const auto id = tile.fState.id();
+  ASSERT_TRUE(skiff::bind::press(tile, model, scene::Path{}, &requests));
+  EXPECT_TRUE(requests.asked.empty());
+  current = "Updated action";
+  ASSERT_TRUE(skiff::bind::press(tile, model, scene::Path{}, &requests));
+  ASSERT_EQ(requests.asked.size(), 1u);
+  EXPECT_EQ(requests.asked.front(), current);
+  EXPECT_EQ(tile.fState.id(), id);
+}
+
+TEST(Forms, LinkEditorSubmitsItsModelFields) {
+  struct sink {
+    std::optional<mux::ui::request::set_link> saved;
+    void take(const mux::ui::request::set_link& request) { saved = request; }
+    void take(const mux::ui::request::close_link&) {}
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  auto box = mux::ui::link_box(colours, mux::ui::link_facts{"Original", "https://example.com"});
+  box.fModel.apply(skiff::model::over<skiff::model::Field<&mux::ui::link_draft::text>>(
+      skiff::model::setTo(std::string("Changed"))));
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(box, model);
+  ASSERT_TRUE(skiff::bind::press(box, model, scene::Path{3}, &requests));
+  ASSERT_TRUE(requests.saved.has_value());
+  EXPECT_EQ(requests.saved->text, "Changed");
+  EXPECT_EQ(requests.saved->url, "https://example.com");
+}
+
+TEST(Forms, ExpressionDialogUsesItsFactoryAndDeclaredLook) {
+  stub program;
+  ui_state ui;
+  const auto needs = ui.needs(program);
+  mux::ui::shown_dialog<mux::ui::link_box_t, mux::ui::link_facts, mux::ui::ui_needs<stub>> dialog(&needs);
+  mux::ui::look_as_its_content(dialog, *needs.colours);
+  dialog.read(std::optional(mux::ui::link_facts{"Text", "https://example.com"}));
+  ASSERT_NE(dialog.shown(), nullptr);
+  EXPECT_EQ(dialog.shown()->fModel.root().text, "Text");
+}
+
+TEST(Forms, PassphraseSubmissionReadsBoundModel) {
+  struct sink {
+    std::optional<mux::ui::request::give_passphrase> saved;
+    void take(const mux::ui::request::give_passphrase& request) { saved = request; }
+  } requests;
+  mux::ui::shown_model model;
+  mux::ui::passphrase_facts facts{mux::config::passphrase_for::change{}, std::nullopt};
+  facts.current = "old";
+  facts.fresh = facts.again = "new";
+  facts.file = "/tmp/keys";
+  mux::ui::show(model, std::optional(facts));
+  mux::ui::palette colours;
+  auto box = mux::ui::passphrase_box(colours);
+  skiff::bind::Binding<mux::ui::shown_model> binding;
+  binding.refresh(box, model);
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{7}, &requests));
+  ASSERT_TRUE(requests.saved.has_value());
+  EXPECT_EQ(requests.saved->current, "old");
+  EXPECT_EQ(requests.saved->fresh, "new");
+  EXPECT_EQ(requests.saved->again, "new");
+  EXPECT_EQ(requests.saved->file, "/tmp/keys");
+}
+TEST(Forms, PassphraseDialogRetainsContentOnModelRefresh) {
+  mux::ui::palette colours;
+  struct Needs { const mux::ui::palette* colours; } needs{&colours};
+  mux::ui::shown_dialog<mux::ui::passphrase_box_t, mux::ui::passphrase_facts, Needs> dialog(&needs);
+  mux::ui::look_as_its_content(dialog, colours);
+  mux::ui::passphrase_facts facts{mux::config::passphrase_for::unlock{}, std::nullopt};
+  dialog.read(std::optional(facts));
+  auto* original = dialog.shown();
+  ASSERT_NE(original, nullptr);
+  facts.refused = "Incorrect passphrase";
+  dialog.read(std::optional(facts));
+  EXPECT_EQ(dialog.shown(), original);
+  EXPECT_FALSE(content_dismissable(std::type_identity<mux::ui::passphrase_box_t>{}, facts));
+  facts.why = mux::config::passphrase_for::encrypt{};
+  EXPECT_TRUE(content_dismissable(std::type_identity<mux::ui::passphrase_box_t>{}, facts));
+}
+
+TEST(Forms, LeaveSpaceChoicesAndRoomsAreModelEdits) {
+  struct sink {
+    std::optional<mux::ui::request::leave_space> saved;
+    bool cancelled = false;
+    void take(const mux::ui::request::leave_space& request) { saved = request; }
+    void take(const mux::ui::request::close_leave_space&) { cancelled = true; }
+  } requests;
+  skiff::model::Model<int, skiff::bind::NoReactions> model(0);
+  mux::ui::palette colours;
+  mux::ui::leave_space_facts facts;
+  facts.name = "Space";
+  facts.rooms = {{"one", "One"}, {"two", "Two"}};
+  auto box = mux::ui::leave_space_box(colours, facts);
+  skiff::bind::Binding<decltype(model)> binding;
+  binding.refresh(box, model);
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 1}, &requests));
+  ASSERT_TRUE(requests.saved.has_value());
+  EXPECT_TRUE(requests.saved->rooms.empty());
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{3}, &requests));
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 1}, &requests));
+  EXPECT_EQ(requests.saved->rooms, (std::vector<std::string>{"one", "two"}));
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{4}, &requests));
+  binding.refresh(box, model);
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{5, 1, 1}, &requests));
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 1}, &requests));
+  EXPECT_EQ(requests.saved->rooms, (std::vector<std::string>{"two"}));
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{5, 1, 1}, &requests));
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 1}, &requests));
+  EXPECT_TRUE(requests.saved->rooms.empty());
+  ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 0}, &requests));
+  EXPECT_TRUE(requests.cancelled);
+}

@@ -115,10 +115,10 @@ struct mentions_choice {
   }
 }
 [[nodiscard]] inline accent_t colour_of(const account_t& one) {
-  const std::optional<std::string>& word = one.shared.colour;
+  const std::optional<accent_said_t>& word = one.shared.colour;
   return word ? accent_of(word) : default_colour_of(address_of(one));
 }
-[[nodiscard]] inline std::optional<std::string>& colour_in(account_t& one) {
+[[nodiscard]] inline std::optional<accent_said_t>& colour_in(account_t& one) {
   return one.shared.colour;
 }
 [[nodiscard]] inline bool strip_of(const account_t& one) {

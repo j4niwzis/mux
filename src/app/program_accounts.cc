@@ -32,7 +32,7 @@ void app::apply(const request::open_member_info& one) {
   if (!chosen)
     return;
   const mux::conversation* in = model->find(*chosen);
-  root().open_person(chosen->account, one.id, mux::ui::person_of(shared.ui, in, *model, chosen->account, one.id));
+  mux::ui::show(showing, std::optional(mux::ui::person_shown{chosen->account, one.id, mux::ui::person_of(shared.ui, in, *model, chosen->account, one.id)}));
   person_open_ = std::pair{*chosen, one.id};
   if (!shared.demo()) {
     net->ask_trust(chosen->account, one.id);
@@ -42,7 +42,7 @@ void app::apply(const request::open_member_info& one) {
 
 void app::apply(const request::close_person_info&) {
   person_open_.reset();
-  root().close_person();
+  mux::ui::show<mux::ui::person_shown>(showing, std::nullopt);
 }
 
 void app::apply(const request::copy_text& one) {
@@ -61,9 +61,9 @@ void app::apply(const request::text_key& one) {
 // The developer tools, for the chat being read.
 void app::apply(const request::close_dialog&) { root().close_dialog(); }
 
-void app::apply(const request::not_implemented& one) { root().show_notice(one.what); }
+void app::apply(const request::not_implemented& one) { shared.not_implemented(one.what); }
 
-void app::apply(const request::close_notice&) { root().close_notice(); }
+void app::apply(const request::close_notice&) { shared.close_notice(); }
 
 void app::apply(const request::resize_info& one) { root().main().resize_info(one.x); }
 

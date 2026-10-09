@@ -65,6 +65,9 @@ inline double now_ms() {
 //   take_toasts()   the notifications to show in windows of their own
 //                   (toast_due: chat, key, title, text; toast_card, the node)
 //   open_notified(chat)  one of them pressed
+//   after_event()   right after each event is handled: what it asked for,
+//                   taken from the window and done at once -- the handler
+//                   that asked returned, nothing of it running
 //   before_frame()  between events: what the screens asked for, applied
 //                   where no handler is running
 //   closing()       the window is going away
@@ -250,7 +253,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
         // window's by it, and what the pointer says is taken in the scene's.
         const float to_scene = sdl::SDL_GetWindowPixelDensity(window) /
                                sdl::SDL_GetWindowDisplayScale(window) *
-                               100.0f / static_cast<float>(std::max(1, app.interface_scale));
+                               100.0f / static_cast<float>(std::max(1, app.appearance().interface_scale));
         // An event of a notification's window: a press opens its chat, in
         // the window brought up; nothing else of it reaches the scene.
         if (sdl::SDL_Window* over = sdl::SDL_GetWindowFromEvent(&event); over && over != window && shown_toasts.owns(over)) {
@@ -437,9 +440,11 @@ int run(App& app, const options& how, const events::kinds& kinds) {
                                     [&](std::string& path) { app.save_path_chosen(std::move(path)); });
             break;
         }
+        app.after_event();
         got = sdl::SDL_PollEvent(&event);
       }
       give_motion();
+      app.after_event();
       if (!running)
         break;
       // Held long enough where it went down: what is under it lets go of the
@@ -451,7 +456,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       }
 
       // The display's scale, times the interface's (Settings, Appearance).
-      const float scale = sdl::SDL_GetWindowDisplayScale(window) * static_cast<float>(app.interface_scale) / 100.0f;
+      const float scale = sdl::SDL_GetWindowDisplayScale(window) * static_cast<float>(app.appearance().interface_scale) / 100.0f;
       // Another: all of it laid out and painted again at it.
       if (scale != std::exchange(scale_before, scale)) {
         scene.state().invalidateLayout();
@@ -549,7 +554,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
                      one.x, one.y);
       shapes.show(scene.cursor());
       // Scroll views copied rather than repainted, where the frame is kept.
-      skiff::scene::blitScrolling() = app.partial_redraw;
+      skiff::scene::blitScrolling() = app.frames().partial_redraw;
       const skiff::scene::FrameResult frame = scene.finishFrame();
       const double damage_found = detail::now_ms();
       // Frames said, where MUX_TRACE_FRAMES is set: what each repaints, and
@@ -634,7 +639,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
           canvas->drawImage(pixels, static_cast<float>(at.fLeft), static_cast<float>(at.fTop));
           changed.push_back(at);
         }
-      if (app.partial_redraw) {
+      if (app.frames().partial_redraw) {
         // Else into a frame of its own kept between frames (the window's
         // buffers are not): only the damage repainted there, then the frame
         // shown whole.
@@ -903,7 +908,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
         }
       };
       // What this frame repainted, outlined, where that is asked for.
-      if (app.flash_redraws)
+      if (app.frames().flash_redraws)
         for (const skia::SkRect& piece : pieces) {
         if (piece.isEmpty())
           continue;
@@ -924,7 +929,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       // the top right corner: counted as shown, so an idle window stays at
       // what it last was.
       const double shown_at = detail::now_ms();
-      if (app.show_fps) {
+      if (app.frames().show_fps) {
         while (!shown_times.empty() && shown_at - shown_times.front() > 1000.0)
           shown_times.pop_front();
         const double since = shown_times.empty() ? 0.0 : shown_at - shown_times.back();
@@ -954,8 +959,8 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       shown_times.push_back(shown_at);
       if (shown_times.size() > 2000)
         shown_times.pop_front();
-      if (app.vsync != vsync_on) {
-        vsync_on = app.vsync;
+      if (app.frames().vsync != vsync_on) {
+        vsync_on = app.frames().vsync;
         target.set_vsync(vsync_on);
       }
       if (keeps && !show_all)

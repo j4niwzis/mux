@@ -11,15 +11,19 @@ import std;
 import splice;
 import skia;
 import skiff.scene;
+import skiff.compose;
+import skiff.bind;
+import skiff.model;
 import skiff.nodes.box;
+import skiff.nodes.icon;
 import skiff.nodes.flow;
 import skiff.nodes.text;
-import skiff.widgets.button;
+import skiff.widgets.avatar;
 import mux.core;
 import :base;
 import :icons;
 import :themes;
-import :controls;
+import :avatars;
 
 export namespace mux::ui {
 
@@ -35,14 +39,14 @@ struct connecting {
   friend bool operator==(connecting, connecting) = default;
 };
 struct connected {
-  std::int64_t seconds = 0;  // how long it has gone on
+  std::int64_t seconds = 0; // how long it has gone on
   friend bool operator==(const connected&, const connected&) = default;
 };
 struct ended {
   std::string why;
   friend bool operator==(const ended&, const ended&) = default;
 };
-}  // namespace call_phase
+} // namespace call_phase
 using call_phase_t =
     spl::variant<call_phase::ringing_in, call_phase::ringing_out, call_phase::connecting, call_phase::connected, call_phase::ended>;
 struct call_view {
@@ -50,30 +54,36 @@ struct call_view {
   std::string who;
   call_phase_t phase;
   bool muted = false;
-  bool encrypted = false;  // its signalling end-to-end encrypted: the room is
-  bool available = true;   // calls in this build
-  bool in_view = false;    // its chat is the one shown
-  bool whole = false;      // a phone's window: the call over all of it
+  bool encrypted = false; // its signalling end-to-end encrypted: the room is
+  bool available = true;  // calls in this build
+  bool in_view = false;   // its chat is the one shown
+  bool whole = false;     // a phone's window: the call over all of it
   friend bool operator==(const call_view&, const call_view&) = default;
 };
 
 [[nodiscard]] inline bool rings_here(const call_view& view) {
-  return spl::visit(spl::overloaded{[](call_phase::ringing_in) { return true; }, [](const auto&) { return false; }},
-                       view.phase);
+  return spl::visit(spl::overloaded{[](call_phase::ringing_in) { return true; },
+                                    [](const auto &) { return false; }},
+                    view.phase);
 }
 [[nodiscard]] inline bool has_ended(const call_view& view) {
-  return spl::visit(spl::overloaded{[](const call_phase::ended&) { return true; }, [](const auto&) { return false; }},
-                       view.phase);
+  return spl::visit(
+      spl::overloaded{[](const call_phase::ended &) { return true; },
+                      [](const auto &) { return false; }},
+      view.phase);
 }
 [[nodiscard]] inline std::string said_of(const call_view& view) {
   const std::string where = spl::visit(
-      spl::overloaded{[](call_phase::ringing_in) { return std::string("Incoming voice call"); },
-                         [](call_phase::ringing_out) { return std::string("Calling…"); },
-                         [](call_phase::connecting) { return std::string("Connecting…"); },
-                         [](const call_phase::connected& now) {
-                           return std::format("{}:{:02}", now.seconds / 60, now.seconds % 60);
-                         },
-                         [](const call_phase::ended& done) { return done.why; }},
+      spl::overloaded{
+          [](call_phase::ringing_in) {
+            return std::string("Incoming voice call");
+          },
+          [](call_phase::ringing_out) { return std::string("Calling…"); },
+          [](call_phase::connecting) { return std::string("Connecting…"); },
+          [](const call_phase::connected &now) {
+            return std::format("{}:{:02}", now.seconds / 60, now.seconds % 60);
+          },
+          [](const call_phase::ended &done) { return done.why; }},
       view.phase);
   if (has_ended(view))
     return where;
@@ -82,224 +92,143 @@ struct call_view {
   return view.encrypted ? where : where + " · not end-to-end encrypted";
 }
 
+struct call_shown {
+  std::optional<call_view> now;
+};
+// Only the timer moves every second. Its text is bound separately, keeping
+// the buttons and their keyboard focus while the call's structure is same.
+[[nodiscard]] inline std::optional<call_view>
+call_structure(std::optional<call_view> view) {
+  if (view)
+    spl::visit(spl::overloaded{[](call_phase::connected &connected) {
+                                 connected.seconds = 0;
+                               },
+                               [](auto &) {}},
+               view->phase);
+  return view;
+}
+struct call_words {
+  std::string operator()(const call_shown &shown) const {
+    return shown.now ? said_of(*shown.now) : std::string();
+  }
+};
+using call_status_t = decltype(skiff::compose::text_of<call_shown>(
+    call_words{}, nodes::Text("", 13.0f, 0u)));
+struct call_card_of {
+  std::optional<call_view> operator()(const call_shown &shown) const {
+    return shown.now && !shown.now->whole &&
+                   (!shown.now->in_view || rings_here(*shown.now))
+               ? call_structure(shown.now)
+               : std::nullopt;
+  }
+};
+struct call_screen_of {
+  std::optional<call_view> operator()(const call_shown &shown) const {
+    return shown.now && shown.now->whole ? call_structure(shown.now)
+                                         : std::nullopt;
+  }
+};
+struct call_panel_of {
+  std::optional<call_view> operator()(const call_shown &shown) const {
+    return shown.now && !shown.now->whole && shown.now->in_view &&
+                   !rings_here(*shown.now)
+               ? call_structure(shown.now)
+               : std::nullopt;
+  }
+};
 // Element's call colours: hanging up and declining red, answering green.
 inline constexpr skia::SkColor kHangUpRed = skia::colorSetARGB(255, 0xFF, 0x5B, 0x55);
 inline constexpr skia::SkColor kAnswerGreen = skia::colorSetARGB(255, 0x0D, 0xBD, 0x8B);
 
-// The round buttons, the same in the view and in the card: the microphone
-// and hanging up during the call; Decline and Accept while it rings here;
-// none once it has ended.
+inline scene::Spec call_button_look(float size, skia::SkColor plate, skia::SkColor hover) {
+  return {.width = size, .height = size, .cornerRadius = size / 2.0f, .background = plate,
+          .hoverBackground = hover, .focusBackground = hover};
+}
+template <class Event>
+auto call_button(const palette& colours, float size, skia::SkColor plate, skia::SkColor hover,
+                 skia::SkColor ink, icon_t mark, Event event, bool shown, std::string label) {
+  return skiff::compose::visible(shown, skiff::compose::onClick(std::move(event),
+      skiff::compose::styled(call_button_look(size, plate, hover), nodes::Icon(shape_of(mark), ink)), std::move(label)));
+}
+inline auto call_buttons(const palette& colours, float size, const call_view& view) {
+  const auto white = skia::colorSetARGB(255, 255, 255, 255);
+  const bool ringing = rings_here(view), ended = has_ended(view);
+  return skiff::compose::keep_ticking(ended, skiff::compose::row(
+      skiff::compose::hbox(size / 2.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+      call_button(colours, size, colours.tile, colours.chosen, colours.text,
+                  view.muted ? icon_t{icon::microphone_off{}} : icon_t{icon::microphone{}},
+                  request::mute_call{}, !ringing && !ended, view.muted ? "Unmute" : "Mute"),
+      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, request::decline_call{}, ringing, "Decline"),
+      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, request::hang_up{}, !ringing && !ended, "Hang up"),
+      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, request::accept_call{}, ringing && view.available, "Accept"),
+      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, request::start_call{view.in}, ended && view.available, "Call back"),
+      call_button(colours, size, colours.tile, colours.chosen, colours.text, icon::close{}, request::dismiss_call{}, ended, "Dismiss")));
+}
+inline auto call_avatar(const call_view& view, float size) {
+  return skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+      widgets::Avatar<from_avatars>(initials_of(view.who), size, picture_of(view.in.id), gradient_of(view.in.id)));
+}
+inline auto call_status(const palette& colours, const call_view& view, float size) {
+  return skiff::compose::text_of<call_shown>(call_words{}, nodes::Text(said_of(view), size, colours.dim));
+}
+// The call in its chat, beneath the header.
+inline auto call_panel(const palette& colours, const call_view& view) {
+  return skiff::compose::column(
+      skiff::compose::justified(skiff::compose::vbox(10.0f,
+          {.fillX = true, .height = 280.0f, .padding = {20.0f, 16.0f, 20.0f, 16.0f},
+           .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f}}), nodes::justify::middle{}),
+      call_avatar(view, 88.0f),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(view.who, 18.0f, colours.text, true)),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle, .margin = {0.0f, 0.0f, 8.0f, 0.0f}}, call_status(colours, view, 13.0f)),
+      call_buttons(colours, 52.0f, view));
+}
+// On a phone the call fills the window and takes presses off its controls.
+inline auto call_screen(const palette& colours, const call_view& view) {
+  return skiff::compose::onClick(scene::Taken{}, skiff::compose::column(
+      skiff::compose::vbox(12.0f, {.place = scene::anchor::kTopLeft, .fill = true,
+                                 .padding = {24.0f, 24.0f, 48.0f, 24.0f}, .background = colours.sidebar}),
+      skiff::compose::styled({.fillX = true, .height = 1.0f, .grow = scene::axes::kY}, nodes::Box<>(skia::SkColor{0})),
+      call_avatar(view, 128.0f),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(view.who, 24.0f, colours.text, true))),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, wrapped(call_status(colours, view, 15.0f))),
+      skiff::compose::styled({.fillX = true, .height = 1.0f, .grow = scene::axes::kY}, nodes::Box<>(skia::SkColor{0})),
+      call_buttons(colours, 64.0f, view)));
+}
+// A compact card above the conversation while the call rings elsewhere.
+inline auto call_bar(const palette& colours, const call_view& view) {
+  return skiff::compose::row(
+      skiff::compose::hbox(12.0f, {.place = scene::anchor::kTopRight, .x = 12.0f, .y = 12.0f,
+                                  .width = 360.0f, .autoSize = scene::axes::kY,
+                                  .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .cornerRadius = 12.0f,
+                                  .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
+                                  .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
+      call_avatar(view, 40.0f),
+      skiff::compose::column(
+          skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+          skiff::compose::styled({.fillX = true}, elided(nodes::Text(view.who, 15.0f, colours.text, true))),
+          skiff::compose::styled({.fillX = true}, elided(call_status(colours, view, 13.0f)))),
+      call_buttons(colours, 40.0f, view));
+}
+namespace call_ui {
+struct panel {};
+struct card {};
+struct screen {};
+}
+inline auto call_content(call_ui::panel, const palette& colours, const call_view& view) { return call_panel(colours, view); }
+inline auto call_content(call_ui::card, const palette& colours, const call_view& view) { return call_bar(colours, view); }
+inline auto call_content(call_ui::screen, const palette& colours, const call_view& view) { return call_screen(colours, view); }
+
+template <class Actions, class Which, class View>
+[[nodiscard]] auto call_layer(const ui_needs<Actions>& needs, Which which, View view,
+                              scene::Spec spec, bool floats = false) {
+  using Content = decltype(call_content(view, *needs.colours, call_view{}));
+  return skiff::compose::derived<call_shown>(which, skiff::compose::mount<Content, call_view>(
+      [colours = needs.colours, view](const call_view& facts) {
+        return std::tuple{call_content(view, *colours, facts)};
+      }, spec, floats));
+}
 template <class Actions>
-struct call_buttons : nodes::Stack {
-  struct accept_it {
-    Actions* actions;
-    void operator()() const { actions->accept_call(); }
-  };
-  struct decline_it {
-    Actions* actions;
-    void operator()() const { actions->decline_call(); }
-  };
-  struct mute_it {
-    Actions* actions;
-    void operator()() const { actions->mute_call(); }
-  };
-  struct hang_up_it {
-    Actions* actions;
-    void operator()() const { actions->hang_up(); }
-  };
-  // Over: called again, as Element's Call back; or put away.
-  struct call_back_it {
-    call_buttons* buttons;
-    void operator()() const {
-      if (buttons->in_)
-        buttons->actions_->start_call(*buttons->in_);
-    }
-  };
-  struct dismiss_it {
-    Actions* actions;
-    void operator()() const { actions->dismiss_call(); }
-  };
-  struct parts_t {
-    icon_button<mute_it> mute;
-    icon_button<decline_it> decline;
-    icon_button<hang_up_it> hang_up;
-    icon_button<accept_it> accept;
-    icon_button<call_back_it> call_back;
-    icon_button<dismiss_it> dismiss;
-  } parts;
-  const palette* colours_;
-  Actions* actions_;
-  std::optional<conversation_id> in_;
-  // Ended, it goes by itself in a moment: frames asked for until then, so
-  // the program sees the moment come.
-  bool ending_ = false;
-  [[nodiscard]] bool wantsTick() const { return ending_; }
-  void update(double) {}
-  call_buttons(const palette& colours, Actions* a, float size)
-      : parts{.mute = icon_button<mute_it>(colours, icon::microphone{}, {a}),
-              .decline = icon_button<decline_it>(colours, icon::hang_up{}, {a}),
-              .hang_up = icon_button<hang_up_it>(colours, icon::hang_up{}, {a}),
-              .accept = icon_button<accept_it>(colours, icon::phone{}, {a}),
-              .call_back = icon_button<call_back_it>(colours, icon::phone{}, {this}),
-              .dismiss = icon_button<dismiss_it>(colours, icon::close{}, {a})},
-        colours_(&colours),
-        actions_(a) {
-    this->setHorizontal();
-    this->setGap(size / 2.0f);
-    fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
-    auto& [mute, decline, hang_up, accept, call_back, dismiss] = parts;
-    const auto round = [&](auto& button, skia::SkColor plate, skia::SkColor hover) {
-      button.apply({.width = size, .height = size, .cornerRadius = size / 2.0f, .background = plate, .hoverBackground = hover,
-                    .focusBackground = hover});
-    };
-    round(mute, colours.tile, colours.chosen);
-    round(decline, kHangUpRed, kHangUpRed);
-    round(hang_up, kHangUpRed, kHangUpRed);
-    round(accept, kAnswerGreen, kAnswerGreen);
-    round(call_back, kAnswerGreen, kAnswerGreen);
-    round(dismiss, colours.tile, colours.chosen);
-    for (auto* white : {&decline.parts.mark, &hang_up.parts.mark, &accept.parts.mark, &call_back.parts.mark})
-      white->setColour(skia::colorSetARGB(255, 255, 255, 255));
-  }
-  void show(const call_view& view) {
-    auto& [mute, decline, hang_up, accept, call_back, dismiss] = parts;
-    const bool ringing = rings_here(view);
-    const bool ended = has_ended(view);
-    in_ = view.in;
-    ending_ = ended;
-    call_back.setVisible(ended && view.available);
-    dismiss.setVisible(ended);
-    mute.setVisible(!ringing && !ended);
-    mute.parts.mark.setShape(view.muted ? shape_of(icon::microphone_off{}) : shape_of(icon::microphone{}));
-    hang_up.setVisible(!ringing && !ended);
-    decline.setVisible(ringing);
-    accept.setVisible(ringing && view.available);
-  }
-};
+using call_panel_t = decltype(call_layer(std::declval<const ui_needs<Actions>&>(),
+    call_panel_of{}, call_ui::panel{}, scene::Spec{}));
 
-// The call, in its chat: under the head, as Element's call view.
-template <class Actions>
-struct call_panel : nodes::Stack {
-  struct parts_t {
-    avatar_mark face;
-    nodes::Text who;
-    nodes::Text said;
-    call_buttons<Actions> buttons;
-  } parts;
-  call_panel(const ui_needs<Actions>& n, const call_view& view)
-      : parts{.face = avatar_mark(view.in.id, view.who, 88.0f),
-              .who = nodes::Text(view.who, 18.0f, n.colours->text, true),
-              .said = nodes::Text(said_of(view), 13.0f, n.colours->dim),
-              .buttons = call_buttons<Actions>(*n.colours, n.actions, 52.0f)} {
-    this->setGap(10.0f);
-    fStack.justify = nodes::justify::middle{};
-    fState.apply({.fillX = true, .height = 280.0f, .padding = {20.0f, 16.0f, 20.0f, 16.0f}, .background = n.colours->sidebar,
-                  .border = scene::Border{n.colours->band, 1.0f}});
-    parts.who.apply({.alignSelf = scene::align::kMiddle});
-    parts.said.apply({.alignSelf = scene::align::kMiddle, .margin = {0.0f, 0.0f, 8.0f, 0.0f}});
-    this->show(view);
-  }
-  void show(const call_view& view) {
-    parts.face.show(view.in.id, view.who);
-    parts.who.setText(view.who);
-    parts.said.setText(said_of(view));
-    parts.buttons.show(view);
-    this->invalidateLayout();
-    this->markDamaged();
-  }
-};
-
-// The call on a phone -- a window narrow and taller than wide, mux's
-// single column -- as Element's phone apps show it: the whole window,
-// the other's picture large in its upper middle with their name and where
-// the call is under it, and the buttons along the bottom, larger.
-template <class Actions>
-struct call_screen : nodes::Stack {
-  struct parts_t {
-    nodes::Box<> above;
-    avatar_mark face;
-    nodes::Text who;
-    nodes::Text said;
-    nodes::Box<> below;
-    call_buttons<Actions> buttons;
-  } parts;
-  call_screen(const ui_needs<Actions>& n, const call_view& view)
-      : parts{.above = nodes::Box<>(skia::SkColor{0}),
-              .face = avatar_mark(view.in.id, view.who, 128.0f),
-              .who = nodes::Text(view.who, 24.0f, n.colours->text, true),
-              .said = nodes::Text(said_of(view), 15.0f, n.colours->dim),
-              .below = nodes::Box<>(skia::SkColor{0}),
-              .buttons = call_buttons<Actions>(*n.colours, n.actions, 64.0f)} {
-    this->setGap(12.0f);
-    fState.apply({.place = scene::anchor::kTopLeft, .fill = true, .padding = {24.0f, 24.0f, 48.0f, 24.0f},
-                  .background = n.colours->sidebar});
-    auto& [above, face, who, said, below, buttons] = parts;
-    above.apply({.fillX = true, .height = 1.0f, .grow = scene::axes::kY});
-    below.apply({.fillX = true, .height = 1.0f, .grow = scene::axes::kY});
-    for (nodes::Text* each : {&who, &said}) {
-      each->setWrapped(true);
-      each->apply({.alignSelf = scene::align::kMiddle});
-    }
-    this->show(view);
-  }
-  void show(const call_view& view) {
-    parts.face.show(view.in.id, view.who);
-    parts.who.setText(view.who);
-    parts.said.setText(said_of(view));
-    parts.buttons.show(view);
-    this->invalidateLayout();
-    this->markDamaged();
-  }
-  // Over the whole window: nothing under it is pressed.
-  [[nodiscard]] bool acceptsInput() const { return true; }
-};
-
-// The call anywhere else, and ringing here: a card at the top of the
-// window, as Element's toast.
-template <class Actions>
-struct call_bar : nodes::Stack {
-  struct texts : nodes::Stack {
-    struct parts_t {
-      nodes::Text who;
-      nodes::Text said;
-    } parts;
-    texts(const palette& colours, const call_view& view)
-        : parts{.who = nodes::Text(view.who, 15.0f, colours.text, true), .said = nodes::Text(said_of(view), 13.0f, colours.dim)} {
-      this->setGap(2.0f);
-      fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      for (nodes::Text* each : {&parts.who, &parts.said}) {
-        each->setElided(true);
-        each->apply({.fillX = true});
-      }
-    }
-  };
-  struct parts_t {
-    avatar_mark face;
-    texts lines;
-    call_buttons<Actions> buttons;
-  } parts;
-
-  call_bar(const ui_needs<Actions>& n, const call_view& view)
-      : parts{.face = avatar_mark(view.in.id, view.who, 40.0f),
-              .lines = texts(*n.colours, view),
-              .buttons = call_buttons<Actions>(*n.colours, n.actions, 40.0f)} {
-    this->setHorizontal();
-    this->setGap(12.0f);
-    fState.apply({.place = scene::anchor::kTopRight, .x = 12.0f, .y = 12.0f, .width = 360.0f, .autoSize = scene::axes::kY,
-                  .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .cornerRadius = 12.0f, .background = n.colours->popup(),
-                  .border = scene::Border{n.colours->band, 1.0f},
-                  .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
-    this->show(view);
-  }
-  // As the call is now.
-  void show(const call_view& view) {
-    parts.face.show(view.in.id, view.who);
-    parts.lines.parts.who.setText(view.who);
-    parts.lines.parts.said.setText(said_of(view));
-    parts.buttons.show(view);
-    this->invalidateLayout();
-    this->markDamaged();
-  }
-};
-
-}  // namespace mux::ui
+} // namespace mux::ui

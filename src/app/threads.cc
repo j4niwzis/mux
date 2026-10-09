@@ -28,7 +28,7 @@ class threads_part {
   // falling back, for clients without threads, to its latest event.
   void apply(const request::toggle_threads&) {
     auto& screen = s_->root().main();
-    if (screen.toggle_threads() && screen.chosen && !s_->demo())
+    if (s_->toggle_threads() && screen.chosen && !s_->demo())
       s_->net->list_threads(*screen.chosen);
     s_->refresh_due = true;
   }
@@ -36,7 +36,7 @@ class threads_part {
     auto& screen = s_->root().main();
     if (!screen.chosen)
       return;
-    screen.open_thread(one.root);
+    s_->open_thread(one.root);
     if (!s_->demo()) {
       s_->net->load_thread(*screen.chosen, one.root);
       if (const mux::conversation* chat = s_->model->find(*screen.chosen);
@@ -47,7 +47,7 @@ class threads_part {
     s_->refresh_due = true;
   }
   void apply(const request::close_thread&) {
-    s_->root().main().close_thread();
+    s_->close_thread();
     s_->refresh_due = true;
   }
   void apply(const request::send_in_thread& one) {

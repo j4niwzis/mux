@@ -12,6 +12,7 @@ import knot;
 import mux.core;
 import mux.config;
 import mux.ui;
+import skiff.model;
 import mux.app.network;
 import mux.app.store;
 import mux.app.services;
@@ -138,7 +139,7 @@ class marks_part {
       s_->store->keep_marked(in, *said);
       return true;
     });
-    if (!listed_ || !s_->root().marks_up()) {
+    if (!listed_ || !s_->showing->root().marks.fValue) {
       listed_.reset();
       return;
     }
@@ -201,7 +202,7 @@ class marks_part {
       return entry;
     };
     const auto entries = std::ranges::to<std::vector>(std::views::transform(marks_of(*chat, one.kind), entry_of));
-    s_->root().open_marks(one.kind, *chat, entries, s_->model);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::marks_facts{one.kind, in, entries, s_->model}));
     listed_ = one.kind;
   }
   // One of the list, gone to, and let go.
@@ -218,7 +219,7 @@ class marks_part {
   }
   void apply(const request::close_marks&) {
     listed_.reset();
-    s_->root().close_marks();
+    mux::ui::show<mux::ui::marks_facts>(*s_->showing, std::nullopt);
   }
 
  private:
@@ -242,7 +243,7 @@ class marks_part {
   // was looked for there for ever.
   void go_to(const mux::conversation& chat, mux::mark_kind_t kind, const std::string& event, const std::string& target) {
     if (const mux::message* said = mux::ui::held_message(chat, target); said && said->thread) {
-      s_->root().main().open_thread(*said->thread);
+      s_->open_thread(*said->thread);
       if (!s_->demo())
         s_->net->load_thread(chat.id, *said->thread);
       s_->model->apply(mux::change_t{mux::change::mark_taken{chat.id, kind, event}});

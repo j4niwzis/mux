@@ -25,6 +25,7 @@ import mux.ui.proto;
 import mux.app.proto;
 import skiff.paint;
 import skiff.scene;
+import skiff.bind;
 import mux.app.network;
 import mux.app.workers;
 import mux.app.demo;
@@ -60,6 +61,26 @@ import mux.logic.links;
 
 export namespace mux::app {
 
+// What a press is answered with where it is made -- in a release build, as
+// the window routes it, every node with its type: the settings model the
+// window's scopes edit, and the program's sink for what nothing in the
+// window takes. The program says them once it has them; till then nothing
+// is answered there, and a press is delivered along its path instead.
+struct app;
+struct press_target {
+  kept_model* model = nullptr;
+  app* sink = nullptr;
+};
+inline press_target& press_target_now() {
+  static press_target kept;
+  return kept;
+}
+// What the window's routing starts with (found by its root's type).
+inline auto startCarry(window_type&) {
+  const press_target& now = press_target_now();
+  return skiff::bind::carryFrom(now.model, now.sink);
+}
+
 // What the program does to the window between events.
 // What the program does to the window between events -- on what the
 // accounts file keeps, its base.
@@ -67,11 +88,10 @@ struct app : kept_settings {
   // Made in the theme's colours, which are in place before the window is.
   // Made in the theme's colours and the window's look as the program
   // starts: the window, made here, is shown in them.
-  app(const mux::ui::palette& theme_colours, const mux::ui::window_look_t& window)
-      : shared{.looks = {.window = window}}, colours(theme_colours) {
-    shared.paint.looks = &shared.looks;
-    shared.paint.colours = &colours;
-  }
+  app(const mux::ui::palette& theme_colours, const mux::ui::window_look_t& window);
+  // Keep construction, exception cleanup and UI teardown in the owning
+  // module unit; importers must not instantiate the window's destructors.
+  ~app();
   // -- the parts: each owns its state, and reaches the rest through what
   // they share
   services shared;
@@ -79,7 +99,7 @@ struct app : kept_settings {
   pictures_part pictures{shared};
   drafts_part drafts{shared};
   reading_part reading{shared};
-  outbox_part outbox{shared, drafts, sending};
+  outbox_part outbox{shared, drafts, this->sending()};
   menu_part menu{shared, outbox, pictures};
   settings_part settings{shared, *this, pictures};
   notices_part notices{shared};
@@ -113,7 +133,7 @@ struct app : kept_settings {
   // The file dialog not shown -- on Linux, SDL asks xdg-desktop-portal for
   // it, else zenity: with neither, the paperclip did nothing at all.
   void dialog_failed(std::string why) {
-    root().show_message("The file dialog could not be opened",
+    shared.notice("The file dialog could not be opened",
                         "The system gave no file dialog (" + why +
                             "). On Linux it comes from xdg-desktop-portal with a backend (-gtk, -gnome, -kde or -wlr), or "
                             "from zenity: install one of them. Meanwhile files can be dropped on the window, and pictures pasted.");
@@ -124,36 +144,82 @@ struct app : kept_settings {
   // A request, to the part that takes it -- the first with an apply for
   // it, as overload resolution finds -- and to the program's own where
   // none does.
+  // Offered to a part: done by it -- and what it asks for in turn, where
+  // its apply() returns that, done too.
   template <class Part, class Request>
-    requires requires(Part& part, const Request& one) { part.apply(one); }
-  static bool offer(Part& part, const Request& one) {
+    requires requires(Part& part, const Request& one) {
+      { part.apply(one) } -> std::same_as<void>;
+    }
+  bool offer(Part& part, const Request& one) {
     part.apply(one);
     return true;
   }
+  // What a part asks for in turn, in its own type, given to the program
+  // to do at once: where the part decides it in a visit -- a chat's
+  // protocol -- its type is static there.
+  struct taker {
+    app* program = nullptr;
+    template <class R>
+    void operator()(const R& asked) const {
+      program->take(asked);
+    }
+  };
   template <class Part, class Request>
-  static bool offer(Part&, const Request&) {
-    return false;
+    requires requires(Part& part, const Request& one, const taker& asked) { part.apply(one, asked); }
+  bool offer(Part& part, const Request& one) {
+    part.apply(one, taker{this});
+    return true;
   }
   template <class Part, class Request>
-  static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); };
+  bool offer(Part&, const Request&) {
+    return false;
+  }
+
+ public:
+  // What the window answers, and what the program's parts ask in turn:
+  // done at once, as it is taken -- the program is the window's sink. A
+  // press is answered after the handler that made it has returned, and
+  // what is done to the window is a model's edit, read by the bindings
+  // after the event: nothing pressed is gone under its own answer.
+  template <class E>
+  void take(const E& one) {
+    this->route(one);
+  }
+  template <class... E>
+  void take(const spl::variant<E...>& one) {
+    spl::visit([this](const auto& each) { this->take(each); }, one);
+  }
+  template <class E>
+  void take(const std::optional<E>& one) {
+    if (one)
+      this->take(*one);
+  }
+  // A protocol's "nothing to ask": nothing.
+  void take(const mux::proto::part::no_request&) {}
+  template <class Part, class Request>
+  static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); } ||
+                                requires(Part& part, const Request& one, const taker& asked) { part.apply(one, asked); };
   // A protocol's own request: done as its program glue says (mux.app.proto).
   template <class Request>
     requires requires(app& self, const Request& one) { program_asked(self, one); }
   void route(const Request& one) {
     program_asked(*this, one);
   }
+  // The program's parts, in the order a request is offered to them; what
+  // none of them takes, the program's own.
+  auto parts() {
+    return std::tie(search, pictures, reading, outbox, settings, menu, notices, marks, paging, verification, proxying,
+                    packs, rooms, room_card, preferences, manage, looks, threads, emoji, accounts_screen, local_data, calls);
+  }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> || takes<room_card_part, Request> || takes<preferences_part, Request> || takes<manage_part, Request> || takes<looks_part, Request> || takes<threads_part, Request> || takes<emoji_part, Request> || takes<accounts_part, Request> || takes<local_data_part, Request> || takes<calls_part, Request> ||
-                      takes<app, Request>, "a request no part of the program takes");
-    if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
-        !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one) &&
-        !offer(verification, one) && !offer(proxying, one) && !offer(packs, one) &&
-        !offer(rooms, one) && !offer(room_card, one) &&
-        !offer(preferences, one) && !offer(manage, one) &&
-        !offer(looks, one) && !offer(threads, one) && !offer(emoji, one) &&
-        !offer(accounts_screen, one) && !offer(local_data, one) && !offer(calls, one))
-      offer(*this, one);
+    std::apply(
+        [&](auto&... part) {
+          static_assert((takes<std::remove_reference_t<decltype(part)>, Request> || ...) || takes<app, Request>,
+                        "a request no part of the program takes");
+          (void)((offer(part, one) || ...) || offer(*this, one));
+        },
+        parts());
   }
 
   using adding = mux::ui::add_account_pane<actions>;
@@ -174,8 +240,9 @@ struct app : kept_settings {
   // made again in new ones when the theme changes (rebuild_in_theme).
   mux::ui::palette colours;
   actions ask;
-  skiff::scene::Scene<window_type> scene{std::in_place,
-                                         mux::ui::ui_needs<actions>{.actions = &ask, .sound = &speaker, .colours = &colours, .emoji = &shared.emoji, .looks = &shared.looks, .paint = &shared.paint, .shared = &shared.ui}};
+  window_scene scene_storage{mux::ui::ui_needs<actions>{.sound = &speaker, .colours = &colours, .emoji = &shared.emoji,
+      .looks = &shared.looks, .paint = &shared.paint, .shared = &shared.ui}};
+  skiff::scene::Scene<window_type>& scene = scene_storage.get();
 
   // -- what the host asks
   skiff::scene::Scene<window_type>& window();
@@ -198,8 +265,29 @@ struct app : kept_settings {
   // A Matrix session given: kept with its account, for the next start.
 
   // A link pressed in a message's text: routed as a link is.
-  void open_link(std::string url) { ask.open_url(std::move(url)); }
+  void open_link(std::string url) { this->take(mux::ui::request::open_url{std::move(url)}); }
   void before_frame();
+  void after_event();
+  // The window bound to the model, and the pages with the model's widgets
+  // it was last walked whole with.
+  skiff::bind::Binding<kept_model> window_binding;
+  // What the window shows that the program opens and closes -- the dialogs'
+  // facts -- and the binding the dialogs read it through.
+  mux::ui::shown_model showing{mux::ui::shown_root{}};
+  skiff::bind::Binding<mux::ui::shown_model> showing_binding;
+  // What is shown read by the dialogs and layers bound to it; a menu just
+  // made, given the keys.
+  void refresh_shown();
+  std::array<skiff::scene::NodeId, 3> bound_pages{};
+  // And to the chats, the window's other model.
+  skiff::bind::Binding<mux::chats_model> chats_binding;
+  // What the window wants of the program as its state comes to want it.
+  mux::ui::wants_model wants;
+  void take_wants();
+  void show_chats_now();
+  void take_page_input();
+  void settle_model();
+  void show_looks();
 
   void closing();
   // Drafts: in the screen, and on disk in one small file, written anew
@@ -219,13 +307,6 @@ struct app : kept_settings {
   void refresh(std::source_location from = std::source_location::current());
   // Each thing the window shows of the settings, brought up to date.
   void note_spaces();
-  void show_placements();
-  void show_event_filters();
-  void show_looks_now();
-  void show_space_bars();
-  void show_levels();
-  void show_backgrounds();
-  void show_chat_choices();
   // Every chat of every account.
   [[nodiscard]] auto all_chats() const {
     return std::views::values(std::views::join(std::views::transform(std::views::values(model->accounts()), [](const auto& account) -> const auto& { return account.conversations; })));
@@ -254,6 +335,9 @@ struct app : kept_settings {
   void apply(const request::close_chat&);
   void apply(const request::back&);
   void apply(const request::open_drawer&);
+  void apply(const request::close_drawer&);
+  void apply(const request::banner_pressed&);
+  void apply(const request::card_action&);
   void apply(const request::quit&);
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);
@@ -301,7 +385,10 @@ struct app : kept_settings {
   // The notifications mux shows itself, for the host to put up; one pressed;
   // the window's focus -- the notices part's.
   using toast_due = notices_part::toast_due;
-  using toast_card = mux::ui::toast_card;
+  using toast_card = mux::ui::toast_card_t;
+  static auto make_toast(const mux::ui::palette& colours, std::string key, std::string title, std::string text) {
+    return mux::ui::toast_card(colours, std::move(key), std::move(title), std::move(text));
+  }
   [[nodiscard]] std::vector<toast_due> take_toasts() { return notices.take_toasts(); }
   void open_notified(const mux::conversation_id& chat) { this->open_chat(chat, std::nullopt); }
   void focus_changed(bool on) { notices.focus_changed(on); }

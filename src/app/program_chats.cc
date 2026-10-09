@@ -41,7 +41,7 @@ void app::apply(const request::choose& one) {
   // A space shown as a forum: its rooms listed in it, as tdesktop opens a
   // forum's topics -- no chat opened.
   if (root().main().is_forum(one.which)) {
-    root().main().open_forum(one.which.id);
+    mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.forum = one.which.id; });
     return;
   }
   // What was being written where the reader was: kept as its draft; and
@@ -75,8 +75,8 @@ void app::apply(const request::choose& one) {
       chat && !ask.demo && chat->member_count > static_cast<std::int64_t>(chat->members.size()) &&
       members_fetched.insert(one.which).second)
     net->fetch_members(one.which);
-  root().main().chosen = one.which;
-  root().main().show(*model);
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.chosen = one.which; });
+  this->show_chats_now();
 }
 
 void app::apply(const request::close_chat&) {
@@ -85,9 +85,11 @@ void app::apply(const request::close_chat&) {
     return;
   drafts.keep(*screen.chosen, screen.line.plain());
   screen.line.set_text({});
-  screen.info_open = false;
-  screen.chosen.reset();
-  screen.show(*model);
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) {
+    now.chosen.reset();
+    now.info_open = false;
+  });
+  this->show_chats_now();
 }
 
 void app::apply(const request::leave_chat&) {
@@ -97,7 +99,7 @@ void app::apply(const request::leave_chat&) {
   const mux::conversation* one = model->find(*chosen);
   // As its protocol says: where it may not be left, there is no Leave.
   if (!one || !mux::proto::can_leave(mux::ui::protocol_state_of(shared.ui, chosen->account), *one)) {
-    root().show_notice("This chat cannot be left");
+    shared.not_implemented("This chat cannot be left");
     return;
   }
   // A space: Element's box first, for which of its rooms to leave with it.
@@ -107,7 +109,7 @@ void app::apply(const request::leave_chat&) {
   }
   if (!ask.demo)
     net->leave(*chosen);
-  root().main().info_open = false;
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) { now.info_open = false; });
 }
 
 void app::apply(const request::open_leave_space& one) {
@@ -118,27 +120,39 @@ void app::apply(const request::open_leave_space& one) {
   for (const std::string& child : space->children)
     if (const mux::conversation* room = model->find(mux::conversation_id{one.space.account, child}))
       facts.rooms.push_back({child, room->name.empty() ? child : room->name});
-  root().open_leave_space(std::move(facts));
+  mux::ui::show(showing, std::optional(std::move(facts)));
 }
 void app::apply(const request::leave_space& one) {
-  root().close_leave_space();
+  mux::ui::show<mux::ui::leave_space_facts>(showing, std::nullopt);
   if (ask.demo)
     return;
   for (const std::string& room : one.rooms)
     net->leave(mux::conversation_id{one.space.account, room});
   net->leave(one.space);
-  root().main().info_open = false;
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) { now.info_open = false; });
 }
-void app::apply(const request::close_leave_space&) { root().close_leave_space(); }
+void app::apply(const request::close_leave_space&) { mux::ui::show<mux::ui::leave_space_facts>(showing, std::nullopt); }
 
 void app::apply(const request::back&) { this->show_conversations(); }
 
-void app::apply(const request::open_drawer&) { root().open_drawer(); }
+void app::apply(const request::open_drawer&) { mux::ui::show(showing, mux::ui::drawer_shown{true}); }
+void app::apply(const request::close_drawer&) { mux::ui::show(showing, mux::ui::drawer_shown{false}); }
+
+// A banner's button, or a card's button of its protocol's own: what it asks
+// got again in the visit of its protocol's state, and done in that type.
+void app::apply(const request::banner_pressed& one) {
+  if (const mux::conversation* chat = model->find(one.in))
+    mux::proto::banner_asked(mux::ui::protocol_state_of(shared.ui, one.in.account), *chat, *model, taker{this});
+}
+void app::apply(const request::card_action& one) {
+  mux::proto::person_action_asked(mux::ui::protocol_state_of(shared.ui, one.by), one.by, one.who, one.index, taker{this});
+}
 
 void app::apply(const request::quit&) { mux::platform::events::request_quit(); }
 
 void app::apply(const request::toggle_info&) {
-  root().main().toggle_info();
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) { now.info_open = !now.info_open; });
+  this->refresh_shown();
   // An encrypted room's members, what is known of each one's identity asked
   // for, for their rows -- up to two hundred: the account answers from what
   // it holds, and no more than a page of rows is looked at.

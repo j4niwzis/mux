@@ -6,6 +6,7 @@ import std;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.image;
 import skiff.nodes.scroll;
@@ -31,11 +32,14 @@ struct pending_file {
   std::int64_t size = 0;
   bool image = false;
 };
-template <class Actions>
-struct send_box : nodes::Stack {
+// The files about to be sent, shown before they go.
+struct send_facts {
+  std::vector<pending_file> files;
+};
+template <class Actions> struct send_box : skiff::compose::Stacked {
   // Sized as it is opened, by the files it is opened with.
   [[nodiscard]] static dialog_look look_of_dialog() { return {}; }
-  struct previews_column : nodes::Stack {
+  struct previews_column : skiff::compose::Stacked {
     // A picture to be sent, as it will look: rounded, its thumbnail by its
     // local id.
     struct picture_preview : nodes::Image<from_thumbnails> {
@@ -67,9 +71,10 @@ struct send_box : nodes::Stack {
         total += one.image ? size_of(one, all.size()).second : file_view::kIcon;
       return total;
     }
-    previews_column(const palette& colours, const std::vector<pending_file>& all) {
-      this->setGap(kGap);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    previews_column(const palette &colours,
+                    const std::vector<pending_file> &all)
+        : Stacked(skiff::compose::vbox(
+              kGap, {.fillX = true, .autoSize = scene::axes::kY})) {
       for (const pending_file& one : all) {
         if (one.image) {
           const auto [w, h] = size_of(one, all.size());
@@ -80,7 +85,7 @@ struct send_box : nodes::Stack {
       }
     }
   };
-  using buttons_row = dialog_buttons<ask<Actions, &Actions::close_send_box>, ask<Actions, &Actions::send_files>>;
+  using buttons_row = dialog_buttons<sends<::mux::ui::request::close_send_box>, sends<::mux::ui::request::send_files>>;
   // What a box of these says it sends.
   [[nodiscard]] static std::string title_of(const std::vector<pending_file>& all) {
     return all.size() == 1 ? std::string(all.front().image ? "Send a photo" : "Send a file")
@@ -98,18 +103,26 @@ struct send_box : nodes::Stack {
     buttons_row buttons;
   } parts;
 
-  send_box(const ui_needs<Actions>& n, const std::vector<pending_file>& all) : send_box(*n.colours, n.actions, all) {}
-  send_box(const palette& colours, Actions* a, const std::vector<pending_file>& all)
-      : parts{.title = nodes::Text(title_of(all), 17.0f, colours.text, true),
-              .previews = nodes::ScrollContainer<previews_column>(previews_column(colours, all)),
-              .caption = widgets::TextArea<>(colours.widgets, "Add a caption…"),
-              .buttons = buttons_row(colours, "Send", {a}, {a})} {
-    this->setGap(12.0f);
+  send_box(const ui_needs<Actions>& n, const send_facts& facts) : send_box(*n.colours, facts.files) {}
+  send_box(const ui_needs<Actions>& n, const std::vector<pending_file>& all) : send_box(*n.colours, all) {}
+  send_box(const palette &colours, const std::vector<pending_file> &all)
+      : Stacked(skiff::compose::vbox(
+            12.0f, {.fillX = true,
+                    .autoSize = scene::axes::kY,
+                    .padding = {18.0f, 20.0f, 16.0f, 20.0f}})),
+        parts{.title = nodes::Text(title_of(all), 17.0f, colours.text, true),
+              .previews = skiff::compose::styled(
+                  {.fillX = true,
+                   .height = std::min(previews_column::height_of(all),
+                                      kMostPreviews)},
+                  nodes::ScrollContainer<previews_column>(
+                      previews_column(colours, all))),
+              .caption = skiff::compose::styled(
+                  {.fillX = true},
+                  widgets::TextArea<>(colours.widgets, "Add a caption…")),
+              .buttons = buttons_row(colours, "Send", {}, {})} {
     // Sized by what it holds, not by the window: the dialog fits it (up to
     // most of the window, the previews scrolling past what fits of them).
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {18.0f, 20.0f, 16.0f, 20.0f}});
-    parts.previews.apply({.fillX = true, .height = std::min(previews_column::height_of(all), kMostPreviews)});
-    parts.caption.apply({.fillX = true});
   }
 };
 

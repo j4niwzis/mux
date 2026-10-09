@@ -8,6 +8,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.image;
 import skiff.nodes.text;
@@ -26,25 +27,24 @@ using namespace ::mux::ui;
 
 // What "Advanced" folds out on an XMPP form: the resource, where to connect,
 // and PLAIN without TLS. Its height is what its last layout took.
-template <class Actions>
-struct xmpp_advanced : nodes::Stack {
-  using plain_toggle = widgets::Toggle<ask<Actions, &Actions::toggle_plain>>;
+template <class Actions> struct xmpp_advanced : skiff::compose::Stacked {
+  using plain_toggle = toggle_for<sends<::mux::ui::request::toggle_plain>>;
   // The switch and what it says, side by side.
-  struct plain_row : nodes::Stack {
+  struct plain_row : skiff::compose::Stacked {
     struct parts_t {
       plain_toggle plain;
       nodes::Text label;
     } parts;
-    plain_row(Actions* a, const palette& colours)
-        : parts{.plain = plain_toggle(colours.widgets, {a}),
-                .label = nodes::Text("Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
-                                     13.0f, colours.error)} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.label.setWrapped(true);
-      parts.label.apply({.grow = scene::axes::kX});
-    }
+    plain_row(const palette &colours)
+        : Stacked(skiff::compose::hbox(
+              10.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.plain = plain_toggle(colours.widgets, {}),
+                .label = skiff::compose::styled(
+                    {.grow = scene::axes::kX},
+                    wrapped(nodes::Text(
+                        "Allow PLAIN without TLS. Only for a test server on "
+                        "this machine: never over a network.",
+                        13.0f, colours.error)))} {}
   };
   struct parts_t {
     field resource;
@@ -53,13 +53,16 @@ struct xmpp_advanced : nodes::Stack {
     plain_row row;
   } parts;
 
-  xmpp_advanced(Actions* a, const palette& colours) : parts{.resource = field(colours, "Device name (resource)", "mux", "mux"),
+  xmpp_advanced(const palette &colours)
+      : Stacked(
+            skiff::compose::vbox(8.0f, {.fillX = true,
+                                        .autoSize = scene::axes::kY,
+                                        .padding = {0.0f, 0.0f, 12.0f, 0.0f}})),
+        parts{.resource =
+                  field(colours, "Device name (resource)", "mux", "mux"),
               .host = field(colours, "Host", "from the domain's SRV records"),
               .port = field(colours, "Port", "5222"),
-              .row = plain_row(a, colours)} {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
-    this->setGap(8.0f);
-  }
+              .row = plain_row(colours)} {}
   [[nodiscard]] plain_toggle& plain() { return parts.row.parts.plain; }
   [[nodiscard]] const plain_toggle& plain() const { return parts.row.parts.plain; }
 };
@@ -96,7 +99,7 @@ struct sent_picture {
 // A field of what the server asks to register: its picture where it has
 // one, what is said of it, and its box -- masked for a secret; none for
 // one only read; nothing at all shown of a hidden one, sent back as it came.
-struct asked_row : nodes::Stack {
+struct asked_row : skiff::compose::Stacked {
   struct parts_t {
     nodes::Image<sent_picture> picture;
     nodes::Text note;
@@ -106,21 +109,28 @@ struct asked_row : nodes::Stack {
   field_shown_t shown;
   std::vector<std::string> held;
 
-  asked_row(const palette& colours, const registration_field& one)
-      : parts{.picture = nodes::Image<sent_picture>(picture_of(one), nodes::fit::contain{}),
-              .note = nodes::Text(note_of(one), 13.0f, colours.dim),
-              .box = field(colours, one.label + (one.required ? " (required)" : ""), one.desc,
-                           one.value.empty() ? std::string() : one.value.front())},
-        var(one.var),
-        shown(one.shown),
-        held(one.value) {
-    this->setGap(6.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.picture.setVisible(!one.picture.empty());
-    parts.picture.apply({.width = 240.0f, .height = 90.0f, .cornerRadius = 6.0f, .background = colours.tile});
-    parts.note.setWrapped(true);
+  asked_row(const palette &colours, const registration_field &one)
+      : Stacked(skiff::compose::vbox(
+            6.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.picture = skiff::compose::styled(
+                  {.width = 240.0f,
+                   .height = 90.0f,
+                   .cornerRadius = 6.0f,
+                   .background = colours.tile},
+                  skiff::compose::visible(
+                      !one.picture.empty(),
+                      nodes::Image<sent_picture>(picture_of(one),
+                                                 nodes::fit::contain{}))),
+              .note = skiff::compose::styled(
+                  {.fillX = true},
+                  wrapped(nodes::Text(note_of(one), 13.0f, colours.dim))),
+              .box = field(
+                  colours, one.label + (one.required ? " (required)" : ""),
+                  one.desc,
+                  one.value.empty() ? std::string() : one.value.front())},
+        var(one.var), shown(one.shown), held(one.value) {
+
     parts.note.setSelectable(true);
-    parts.note.apply({.fillX = true});
     parts.note.setVisible(!parts.note.text().empty());
     spl::visit(spl::overloaded{[&](field_shown::typed) {},
                                      [&](field_shown::masked) { parts.box.parts.box.setMasked(true); },
@@ -142,17 +152,19 @@ struct asked_row : nodes::Stack {
 };
 
 // What the server asked, under the form: what it says, and its fields.
-struct asked_part : nodes::Stack {
+struct asked_part : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text instructions;
     std::vector<asked_row> rows;
   } parts;
-  explicit asked_part(const palette& colours) : parts{.instructions = nodes::Text("", 13.0f, colours.text)} {
-    this->setGap(10.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.instructions.setWrapped(true);
+  explicit asked_part(const palette &colours)
+      : Stacked(skiff::compose::vbox(
+            10.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.instructions = skiff::compose::styled(
+                  {.fillX = true},
+                  wrapped(nodes::Text("", 13.0f, colours.text)))} {
+
     parts.instructions.setSelectable(true);
-    parts.instructions.apply({.fillX = true});
     this->setVisible(false);
   }
   void show(const palette& colours, const registration_asked& asked) {
@@ -169,11 +181,11 @@ struct asked_part : nodes::Stack {
 
 // An XMPP account's settings: its JID and password, and "Advanced" folds out
 // the rest. It fills the column it is given.
-template <class Actions>
-struct xmpp_form : nodes::Stack {
+template <class Actions> struct xmpp_form : skiff::compose::Stacked {
+  // What its handlers ask for, returned.
+  using Answer = ::mux::ui::request::submit_login;
   // What the add-account pane says of the protocol.
   static constexpr std::string_view note = "An address like user@example.com, on a server such as Prosody or ejabberd.";
-  Actions* actions = nullptr;
   // The address the account was saved under, when this is an edit of one.
   std::optional<std::string> editing;
   bool advanced = false;
@@ -187,7 +199,7 @@ struct xmpp_form : nodes::Stack {
     void operator()(std::size_t index) const { form->set_creating(index == 1); }
   };
 
-  using advanced_button_t = widgets::Button<ask<Actions, &Actions::toggle_advanced>>;
+  using advanced_button_t = button_for<sends<::mux::ui::request::toggle_advanced>>;
   struct parts_t {
     field address;
     field password;
@@ -198,27 +210,33 @@ struct xmpp_form : nodes::Stack {
     form_end<Actions> end;
   } parts;
 
-  xmpp_form(Actions* a, const palette& colours, const std::optional<::mux::proto::xmpp::kept>& from)
-      : actions(a),
+  xmpp_form(const palette &colours,
+            const std::optional<::mux::proto::xmpp::kept> &from)
+      : Stacked(skiff::compose::vbox(
+            12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
         creating(from && from->create.value_or(false)),
-        answered(from ? from->answers.value_or(std::vector<registration_answer>{}) : std::vector<registration_answer>{}),
+        answered(
+            from ? from->answers.value_or(std::vector<registration_answer>{})
+                 : std::vector<registration_answer>{}),
         colours_(&colours),
         parts{.address = field(colours, "Address (JID)", "user@example.com"),
               .password = field(colours, "Password", "Password"),
-              .mode = choice_menu<pick_mode>(colours, "Account", {"Sign in to an account", "Create a new account"},
-                                             creating ? 1 : 0, pick_mode{this}),
+              .mode = skiff::compose::visible(
+                  !from || creating,
+                  choice_menu<pick_mode>(
+                      colours, "Account",
+                      {"Sign in to an account", "Create a new account"},
+                      creating ? 1 : 0, pick_mode{this})),
               .asked = asked_part(colours),
-              .advanced_button = advanced_button_t(colours.widgets, "Advanced", {a}),
-              .more = widgets::Collapsible<xmpp_advanced<Actions>>(a, colours),
-              .end = form_end<Actions>(colours, a, from.has_value())} {
+              .advanced_button = skiff::compose::styled(
+                  {.width = 120.0f, .height = 36.0f},
+                  advanced_button_t(colours.widgets, "Advanced", {})),
+              .more = widgets::Collapsible<xmpp_advanced<Actions>>(colours),
+              .end = form_end<Actions>(colours, from.has_value())} {
     auto& [address, password, mode, asked, advanced_button, more, end] = parts;
     // An account kept and signed in to: one already, nothing to choose.
-    mode.setVisible(!from || creating);
     auto& folded = more.child().parts;
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    this->setGap(12.0f);
     password.parts.box.setMasked(true);
-    advanced_button.apply({.width = 120.0f, .height = 36.0f});
     if (from) {
       editing = from->address;
       address.parts.box.setText(from->address);
@@ -287,15 +305,15 @@ struct xmpp_form : nodes::Stack {
   void say(std::string text, bool error) { parts.end.say(std::move(text), error); }
 
   using Node::onKey;
-  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    std::optional<Answer> answer;
     if (press.key == scene::keys::kEnter) {
-      actions->submit_login();
+      answer = ::mux::ui::request::submit_login{};
       reply.handle();
     }
+    return answer;
   }
-
 };
-
 
 }  // namespace mux::proto::xmpp::form_detail
 

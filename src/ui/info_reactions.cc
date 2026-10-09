@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -54,36 +55,57 @@ struct reaction_entry {
 // message can reply to it.
 // A list dialog's rows, under its top bar: the box as high as it is, the
 // list scrolling in what is left of it, its rows one under another.
-template <class List>
-[[nodiscard]] auto& listed_rows(nodes::Stack& box, List& list, float height) {
-  box.fState.apply({.fillX = true, .height = height, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
-  list.apply({.fillX = true, .grow = scene::axes::kY});
-  auto& flow = std::get<0>(list.fChildren);
-  flow.apply({.fillX = true, .autoSize = scene::axes::kY});
-  return std::get<0>(flow.fChildren);
+[[nodiscard]] inline skiff::compose::Look list_dialog(float height) {
+  return skiff::compose::vbox(
+      0.0f,
+      {.fillX = true, .height = height, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
+}
+template <class Rows> [[nodiscard]] auto dialog_list(Rows rows) {
+  return skiff::compose::styled(
+      {.fillX = true, .grow = scene::axes::kY},
+      nodes::ScrollContainer<Rows>(skiff::compose::styled(
+          {.fillX = true, .autoSize = scene::axes::kY}, std::move(rows))));
 }
 
-template <class Actions>
-struct reactions_box : nodes::Stack {
+// A chat as the chats hold it now: none, where it is gone.
+[[nodiscard]] inline const conversation& chat_or_none(const model* now, const conversation_id& in) {
+  static const conversation none{};
+  const conversation* found = now == nullptr ? nullptr : now->find(in);
+  return found == nullptr ? none : *found;
+}
+// A message's reactions open: in which chat, the reactions, the chats.
+struct reactions_facts {
+  conversation_id in;
+  std::vector<reaction_entry> entries;
+  const model* now = nullptr;
+};
+template <class Actions> struct reactions_box : skiff::compose::Stacked {
   // On the chat's colour: its bubbles, as in the chat.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{392.0f, 420.0f}}; }
-  using close_act = ask<Actions, &Actions::close_reactions>;
+  using close_act = sends<::mux::ui::request::close_reactions>;
   using close_button = icon_button<close_act>;
-  using top_bar = page_header<no_back, close_act>;
+  using top_bar = page_header_t<no_back, close_act>;
   // A reaction as the chat would show it: a bubble from who reacted,
   // saying what they reacted with, in runs as the chat's bubbles are.
   // Pressed, it is answered.
-  struct row : nodes::Stack {
-    Actions* actions;
+  struct row : skiff::compose::Stacked {
+    // Its menu; a link in it followed; else it answered, and the list closed.
+    using Answer = std::variant<menu_facts, ::mux::ui::request::open_url, std::tuple<std::optional<::mux::ui::request::reply_to>, ::mux::ui::request::close_reactions>>;
     reaction_entry entry;
     struct parts_t {
       message_bubble<Actions> bubble;
     } parts;
-    row(const ui_needs<Actions>& n, const conversation& in, reaction_entry one, bool first, bool last, const model* now)
-        : actions(n.actions), entry(one),
-          parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, message_of(in, one), first, last, now)} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
-                    .hoverBackground = n.colours->chosen});
+    row(const ui_needs<Actions> &n, const conversation &in, reaction_entry one,
+        bool first, bool last, const model *now)
+        : Stacked(skiff::compose::vbox(0.0f,
+                                       {.fillX = true,
+                                        .autoSize = scene::axes::kY,
+                                        .padding = {0.0f, 12.0f, 0.0f, 12.0f},
+                                        .hoverBackground = n.colours->chosen})),
+          entry(one),
+          parts{.bubble = message_bubble<Actions>(
+                    spl::remapped<typename message_bubble<Actions>::needs>(n),
+                    in, message_of(in, one), first, last, now)} {
       fState.setCursor(scene::cursor::hand{});
     }
     // What it said, as a message: its key; a picture's, as a custom emoji
@@ -101,9 +123,9 @@ struct reactions_box : nodes::Stack {
     // link under the pointer, the preview's -- and, one's own, the reaction
     // changed to another from the menu's reactions, or taken back.
     using scene::Node::onPointer;
-    void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+    std::optional<Answer> onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
       if (press.button != 3)
-        return;
+        return std::nullopt;
       const message_bubble<Actions>& one = parts.bubble;
       menu_facts facts;
       facts.id = entry.event;
@@ -120,37 +142,39 @@ struct reactions_box : nodes::Stack {
         facts.reaction = menu_facts::reaction_facts{entry.to, entry.key};
       facts.x = press.x;
       facts.y = press.y;
-      actions->message_menu(std::move(facts));
       reply.handle();
+      return Answer{std::move(facts)};
     }
-    [[nodiscard]] bool onClick(float x, float y) {
+    std::optional<Answer> onClick(float x, float y) {
       // A link's preview or card in it: followed, as in the chat.
       const message_bubble<Actions>& one = parts.bubble;
-      if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y)) {
-        actions->open_url(preview->url);
-        return true;
-      }
-      for (const link_card& card : one.parts.body.parts.cards)
-        if (card.bounds().contains(x, y)) {
-          actions->open_url(card.url);
-          return true;
-        }
-      // Answered, where it is an event of its own to answer.
+      if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y))
+        return ::mux::ui::request::open_url{preview->url};
+      const auto& cards = one.parts.body.parts.cards;
+      if (const auto card = std::ranges::find_if(cards, [&](const link_card& each) { return each.bounds().contains(x, y); });
+          card != cards.end())
+        return ::mux::ui::request::open_url{card->url};
+      // Answered, where it is an event of its own to answer; the list closed.
+      std::optional<::mux::ui::request::reply_to> answered;
       if (!entry.event.empty())
-        actions->reply_to(entry.event, std::format("{} reacted {}", entry.name, entry.key));
-      actions->close_reactions();
-      return true;
+        answered = ::mux::ui::request::reply_to{entry.event, std::format("{} reacted {}", entry.name, entry.key)};
+      return std::tuple{answered, ::mux::ui::request::close_reactions{}};
     }
   };
   using rows_t = nodes::Flow<std::vector<row>>;
   struct parts_t {
     top_bar top;
-    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+    nodes::ScrollContainer<rows_t> list{
+        dialog_list(rows_t({.spacingY = 0.0f, .wrap = false}, {}))};
   } parts;
 
-  reactions_box(const ui_needs<Actions>& n, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
-      : parts{.top = top_bar(*n.colours, "Reactions", {}, {n.actions}, false, true)} {
-    auto& rows = listed_rows(*this, parts.list, 420.0f);
+  reactions_box(const ui_needs<Actions>& n, const reactions_facts& facts)
+      : reactions_box(n, chat_or_none(facts.now, facts.in), facts.entries, facts.now) {}
+  reactions_box(const ui_needs<Actions> &n, const conversation &in,
+                const std::vector<reaction_entry> &entries, const model *now)
+      : Stacked(list_dialog(420.0f)),
+        parts{.top = page_header<no_back, close_act>(*n.colours, "Reactions", {}, {}, false, true)} {
+    auto &rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     rows.reserve(entries.size());
     for (std::size_t i = 0; i < entries.size(); ++i)
       rows.emplace_back(n, in, entries[i], i == 0 || entries[i - 1].who != entries[i].who,
@@ -161,19 +185,29 @@ struct reactions_box : nodes::Stack {
 // A message's edit history, as AyuGram Desktop's: each version of it the
 // chat's own bubble, on the chat's colour, oldest first, each at the time
 // it was written -- the message as it is now last, the list scrolled to it.
-template <class Actions>
-struct edit_history_box : nodes::Stack {
+// A message's earlier versions open: in which chat, the message, the chats.
+struct history_facts {
+  conversation_id in;
+  message said;
+  const model* known = nullptr;
+};
+template <class Actions> struct edit_history_box : skiff::compose::Stacked {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 560.0f}}; }
-  using close_act = ask<Actions, &Actions::close_edit_history>;
-  using top_bar = page_header<no_back, close_act>;
-  struct row : nodes::Stack {
+  using close_act = sends<::mux::ui::request::close_edit_history>;
+  using top_bar = page_header_t<no_back, close_act>;
+  struct row : skiff::compose::Stacked {
     struct parts_t {
       message_bubble<Actions> bubble;
     } parts;
-    row(const ui_needs<Actions>& n, const conversation& in, const message& said, const model* now)
-        : parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, said, true, true, now)} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}});
-    }
+    row(const ui_needs<Actions> &n, const conversation &in, const message &said,
+        const model *now)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.fillX = true,
+                     .autoSize = scene::axes::kY,
+                     .padding = {4.0f, 12.0f, 4.0f, 12.0f}})),
+          parts{.bubble = message_bubble<Actions>(
+                    spl::remapped<typename message_bubble<Actions>::needs>(n),
+                    in, said, true, true, now)} {}
   };
   // Each version as a message of its own: what it said then, at the time it
   // was written -- the first when the message was sent, each after it when
@@ -197,12 +231,17 @@ struct edit_history_box : nodes::Stack {
   using rows_t = nodes::Flow<std::vector<row>>;
   struct parts_t {
     top_bar top;
-    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+    nodes::ScrollContainer<rows_t> list{
+        dialog_list(rows_t({.spacingY = 0.0f, .wrap = false}, {}))};
   } parts;
 
-  edit_history_box(const ui_needs<Actions>& n, const conversation& in, const message& now, const model* known)
-      : parts{.top = top_bar(*n.colours, "Edit History", {}, {n.actions}, false, true)} {
-    auto& rows = listed_rows(*this, parts.list, 560.0f);
+  edit_history_box(const ui_needs<Actions>& n, const history_facts& facts)
+      : edit_history_box(n, chat_or_none(facts.known, facts.in), facts.said, facts.known) {}
+  edit_history_box(const ui_needs<Actions> &n, const conversation &in,
+                   const message &now, const model *known)
+      : Stacked(list_dialog(560.0f)),
+        parts{.top = page_header<no_back, close_act>(*n.colours, "Edit History", {}, {}, false, true)} {
+    auto &rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     const auto versions = versions_of(now);
     // Made where they stay: a bubble knows its parts by their addresses.
     rows.reserve(versions.size());
@@ -220,70 +259,100 @@ struct mark_entry {
   std::string key;
 };
 
+// A list of marks open: of which kind, in which chat, what it lists, and
+// the chats it shows them from.
+struct marks_facts {
+  mark_kind_t kind;
+  conversation_id in;
+  std::vector<mark_entry> entries;
+  const model* now = nullptr;
+};
+
 // The mentions of the user or the reactions to theirs not yet seen, as a
 // list of the chat's bubbles: each its message -- a reaction's with who
 // reacted and with what on a badge at its bottom right. Pressed, gone to.
-template <class Actions>
-struct marks_box : nodes::Stack {
+template <class Actions> struct marks_box : skiff::compose::Stacked {
   // On the chat's colour: its bubbles, as in the chat.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 520.0f}}; }
-  using close_act = ask<Actions, &Actions::close_marks>;
+  using close_act = sends<::mux::ui::request::close_marks>;
   using close_button = icon_button<close_act>;
-  using top_bar = page_header<no_back, close_act>;
-  struct badge : nodes::Stack {
+  using top_bar = page_header_t<no_back, close_act>;
+  struct badge : skiff::compose::Stacked {
     struct parts_t {
       avatar_mark face;
       nodes::Text key;
     } parts;
-    badge(const palette& colours, const std::string& who, const std::string& name, const std::string& key)
-        : parts{.face = avatar_mark(who, name, 20.0f),
-                .key = nodes::Text(proto::is_media(key) ? std::string(":emoji:") : key, 15.0f, colours.text)} {
-      this->setHorizontal();
-      this->setGap(4.0f);
-      fState.apply({.place = scene::anchor::kBottomRight, .x = -14.0f, .y = -2.0f, .autoSize = scene::axes::kBoth,
-                    .padding = {2.0f, 6.0f, 2.0f, 3.0f}, .cornerRadius = 12.0f, .background = colours.sidebar});
-      parts.key.apply({.alignSelf = scene::align::kMiddle});
-    }
+    badge(const palette &colours, const std::string &who,
+          const std::string &name, const std::string &key)
+        : Stacked(
+              skiff::compose::hbox(4.0f, {.place = scene::anchor::kBottomRight,
+                                          .x = -14.0f,
+                                          .y = -2.0f,
+                                          .autoSize = scene::axes::kBoth,
+                                          .padding = {2.0f, 6.0f, 2.0f, 3.0f},
+                                          .cornerRadius = 12.0f,
+                                          .background = colours.sidebar})),
+          parts{.face = avatar_mark(who, name, 20.0f),
+                .key = skiff::compose::styled(
+                    {.alignSelf = scene::align::kMiddle},
+                    nodes::Text(proto::is_media(key) ? std::string(":emoji:")
+                                                     : key,
+                                15.0f, colours.text))} {}
   };
-  struct row : nodes::Stack {
-    Actions* actions = nullptr;
+  struct row : skiff::compose::Stacked {
+    // A press: to the mark, the list closed.
+    using Answer = std::tuple<::mux::ui::request::go_to_mark, ::mux::ui::request::close_marks>;
     mark_kind_t kind;
     std::string event;
     struct parts_t {
       message_bubble<Actions> bubble;
       std::optional<badge> reacted;
     } parts;
-    row(const ui_needs<Actions>& n, mark_kind_t which, const conversation& in, const mark_entry& one, const model* now)
-        : actions(n.actions), kind(which), event(one.event),
-          parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, one.said, true, true, now)} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 8.0f, 12.0f},
-                    .hoverBackground = n.colours->chosen});
+    row(const ui_needs<Actions> &n, mark_kind_t which, const conversation &in,
+        const mark_entry &one, const model *now)
+        : Stacked(skiff::compose::vbox(0.0f,
+                                       {.fillX = true,
+                                        .autoSize = scene::axes::kY,
+                                        .padding = {4.0f, 12.0f, 8.0f, 12.0f},
+                                        .hoverBackground = n.colours->chosen})),
+          kind(which), event(one.event),
+          parts{.bubble = message_bubble<Actions>(
+                    spl::remapped<typename message_bubble<Actions>::needs>(n),
+                    in, one.said, true, true, now)} {
       fState.setCursor(scene::cursor::hand{});
       if (one.who)
         parts.reacted.emplace(*n.colours, *one.who, sender_name(in, *one.who), one.key);
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      actions->go_to_mark(kind, event);
-      actions->close_marks();
-      return true;
-    }
+    std::optional<Answer> onClick(float, float) { return Answer{::mux::ui::request::go_to_mark{kind, event}, ::mux::ui::request::close_marks{}}; }
   };
   using rows_t = nodes::Flow<std::vector<row>>;
   struct parts_t {
     top_bar top;
-    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+    nodes::ScrollContainer<rows_t> list{
+        dialog_list(rows_t({.spacingY = 0.0f, .wrap = false}, {}))};
   } parts;
-  marks_box(const ui_needs<Actions>& n, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
-      : parts{.top = top_bar(*n.colours, spl::visit(spl::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
-                                                   [](mark_kind::reaction) { return std::string("Reactions"); }},
-                                kind),
-                             {}, {n.actions}, false, true)} {
-    auto& rows = listed_rows(*this, parts.list, 520.0f);
-    rows.reserve(entries.size());
-    for (const mark_entry& one : entries)
-      rows.emplace_back(n, kind, in, one, now);
+  // Made from what the list is of; its rows from the chat as the chats
+  // hold it now -- none where it is gone.
+  marks_box(const ui_needs<Actions> &n, const marks_facts &facts)
+      : Stacked(list_dialog(520.0f)),
+        parts{.top = page_header<no_back, close_act>(
+                  *n.colours,
+                  spl::visit(spl::overloaded{[](mark_kind::mention) {
+                                               return std::string("Mentions");
+                                             },
+                                             [](mark_kind::reaction) {
+                                               return std::string("Reactions");
+                                             }},
+                             facts.kind),
+                  {}, {}, false, true)} {
+    auto &rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+    const conversation* in = facts.now == nullptr ? nullptr : facts.now->find(facts.in);
+    if (in == nullptr)
+      return;
+    rows.reserve(facts.entries.size());
+    std::ranges::for_each(facts.entries, [&](const mark_entry& one) { rows.emplace_back(n, facts.kind, *in, one, facts.now); });
   }
 };
 

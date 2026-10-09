@@ -28,14 +28,14 @@ class manage_part {
 
   // The room's management: made from what the model knows of it now.
   void apply(const request::open_manage&) {
-    (void)s_->root().main().close_space_menu();  // the chat menu its Settings came from
+    s_->root().main().close_space_menu_soon();  // the chat menu its Settings came from
     s_->manage_target.reset();
     if (const auto chosen = s_->root().main().chosen)
       this->manage_chat(*chosen);
   }
   // A space's settings: Manage, for it.
   void apply(const request::manage_space& one) {
-    (void)s_->root().main().close_space_menu();
+    s_->root().main().close_space_menu_soon();
     const auto by = s_->root().main().current;
     if (!by)
       return;
@@ -56,10 +56,8 @@ class manage_part {
       const mux::conversation* in = s_->model->find(mux::conversation_id{*by, child});
       return in && in->space;
     });
-    if (k_->forums.contains(id))
-      k_->forums.erase(id);
-    else if (!holds_spaces)
-      k_->forums.insert(id);
+    if (k_->own_of<&mux::app::chat_choices::forum>(id) || !holds_spaces)
+      k_->flip<&mux::app::chat_choices::forum>(id);
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* managing = s_->root().manage_up())
@@ -74,21 +72,22 @@ class manage_part {
     const mux::conversation* space = s_->model->find(id);
     if (!space || !space->space)
       return;
-    if (!k_->hidden_from_home.erase(id))
-      k_->hidden_from_home.insert(id);
+    k_->flip<&mux::app::chat_choices::hidden_from_home>(id);
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* managing = s_->root().manage_up())
       managing->show_tab(managing->tab);
   }
-  void apply(const request::close_forum&) { s_->root().main().close_forum(); }
+  void apply(const request::close_forum&) {
+    mux::ui::change_shown<mux::ui::chat_shown>(*s_->showing, [](mux::ui::chat_shown& now) { now.forum.reset(); });
+  }
   void apply(const request::manage_forum&) {
     if (const auto& open = s_->root().main().forum_open)
       this->apply(request::manage_space{*open});
   }
   void apply(const request::close_manage&) {
     s_->manage_target.reset();
-    s_->root().close_manage();
+    mux::ui::show<mux::ui::room_settings_facts>(*s_->showing, std::nullopt);
   }
   // Done to the room being read, by its account.
   void apply(const request::room_act& one) {
@@ -113,42 +112,32 @@ class manage_part {
                                        .encrypted = chat->encrypted,
                                        .theirs = chat->theirs,
                                        .notify = k_->notify_choices_of(chat->id),
-                                       .events_all = k_->room_events.contains(chat->id)
-                                                         ? std::optional<bool>(k_->room_events.at(chat->id))
-                                                         : std::nullopt,
-                                       .typing = k_->typing_sent_in.contains(chat->id) ? std::optional<bool>(k_->typing_sent_in.at(chat->id))
-                                                                                   : std::nullopt,
-                                       .previews = k_->previews_shown_in.contains(chat->id)
-                                                       ? std::optional<bool>(k_->previews_shown_in.at(chat->id))
-                                                       : std::nullopt,
-                                       .previews_direct = k_->previews_direct_in.contains(chat->id)
-                                                              ? std::optional<bool>(k_->previews_direct_in.at(chat->id))
-                                                              : std::nullopt,
-                                       .receipts = k_->receipts_shown_in.contains(chat->id)
-                                                       ? std::optional<bool>(k_->receipts_shown_in.at(chat->id))
-                                                       : std::nullopt,
-                                       .jump_search = k_->jump_search_in.contains(chat->id)
-                                                          ? std::optional<std::int64_t>(k_->jump_search_in.at(chat->id))
-                                                          : std::nullopt,
-                                       .event_kinds = k_->room_event_kinds.contains(chat->id)
-                                                          ? std::optional<mux::config::room_event_kinds>(k_->room_event_kinds.at(chat->id))
-                                                          : std::nullopt,
+                                       .events_all = k_->own_of<&mux::app::chat_choices::room_events>(chat->id),
+                                       .typing = k_->own_of<&mux::app::chat_choices::typing>(chat->id),
+                                       .previews = k_->own_of<&mux::app::chat_choices::previews>(chat->id),
+                                       .previews_direct = k_->own_of<&mux::app::chat_choices::previews_direct>(chat->id),
+                                       .receipts = k_->own_of<&mux::app::chat_choices::receipts>(chat->id),
+                                       .jump_search = k_->own_of<&mux::app::chat_choices::jump_search>(chat->id),
+                                       .event_kinds = k_->own_of<&mux::app::chat_choices::room_event_kinds>(chat->id),
                                        .space = chat->space,
                                        .holds_spaces = std::ranges::any_of(chat->children, [&](const std::string& child) {
                                          const mux::conversation* in = s_->model->find(mux::conversation_id{chat->id.account, child});
                                          return in && in->space;
                                        }),
-                                       .forum = k_->forums.contains(chat->id),
-                                       .hidden_from_home = k_->hidden_from_home.contains(chat->id),
+                                       .forum = k_->own_of<&mux::app::chat_choices::forum>(chat->id),
+                                       .hidden_from_home = k_->own_of<&mux::app::chat_choices::hidden_from_home>(chat->id),
                                        .speaks = chat->id.account.speaks};
+    facts.chat = chat->id;
+    // Its own choices there to be bound to, chosen or not.
+    k_->ensure_chat(chat->id);
     // The spaces it is in: those of its account whose rooms list it. A
     // space's rooms, by their names; and the account's other rooms, by
     // name, to be added to it.
-    if (const auto account = s_->model->accounts().find(chat->id.account); account != s_->model->accounts().end()) {
+    if (const mux::account* account = s_->model->accounts().find(chat->id.account)) {
       const auto named = [](const std::string& id, const mux::conversation& one) {
         return mux::ui::room_settings_facts::named_room{id, one.name.empty() ? id : one.name};
       };
-      for (const auto& [id, one] : account->second.conversations) {
+      for (const auto& [id, one] : account->conversations) {
         if (one.space && std::ranges::contains(one.children, chat->id.id))
           facts.parents.push_back(named(id, one));
         if (!chat->space || id == chat->id.id)
@@ -160,13 +149,13 @@ class manage_part {
       }
       // The children the account is not in: by their IDs.
       for (const std::string& child : chat->children)
-        if (!account->second.conversations.contains(child))
+        if (!account->conversations.contains(child))
           facts.children.push_back({child, child});
       std::ranges::sort(facts.addable, {}, &mux::ui::room_settings_facts::named_room::name);
     }
     // What its protocol fills of them: Matrix's own level and privileged users.
     mux::proto::manage_facts(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat, facts);
-    s_->root().open_manage(facts);
+    mux::ui::show(*s_->showing, std::optional(facts));
   }
 
   services* s_;

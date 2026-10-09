@@ -17,8 +17,11 @@ import skiff.nodes.icon;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
 import skiff.widgets.button;
+import skiff.widgets.model;
 import skiff.widgets.sliderbar;
 import skiff.widgets.textarea;
+import skiff.model;
+import skiff.compose;
 import mux.core;
 import mux.config;
 import :base;
@@ -83,6 +86,8 @@ struct room_settings_facts {
     std::int64_t level = 0;
   };
   std::vector<person> privileged;
+  // The chat itself, its own choices kept by it in the model.
+  conversation_id chat{};
 };
 
 // Element's names for levels: 100 Admin, 50 Moderator, the default Default.
@@ -167,23 +172,26 @@ inline nodes::Text explained(const palette& colours, std::string text) {
 
 // One of a choice, as Element's radio buttons: a ring, and a title over
 // what it means.
-template <class Act>
-struct radio_choice : pressable<nodes::Stack> {
+template <class Act> struct radio_choice : pressable<skiff::compose::Stacked> {
   Act act;
-  struct texts : nodes::Stack {
+  struct texts : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text title;
       nodes::Text about;
     } parts;
-    texts(const palette& colours, std::string title, std::string about)
-        : parts{.title = nodes::Text(std::move(title), 14.0f, colours.text),
-                .about = nodes::Text(std::move(about), 12.0f, colours.dim)} {
-      this->setGap(2.0f);
-      fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.title.setWrapped(true);
-      parts.title.apply({.fillX = true});
-      parts.about.setWrapped(true);
-      parts.about.apply({.fillX = true});
+    texts(const palette &colours, std::string title, std::string about)
+        : Stacked(
+              skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY,
+                                          .grow = scene::axes::kX,
+                                          .alignSelf = scene::align::kMiddle})),
+          parts{
+              .title = skiff::compose::styled(
+                  {.fillX = true},
+                  wrapped(nodes::Text(std::move(title), 14.0f, colours.text))),
+              .about = skiff::compose::styled(
+                  {.fillX = true},
+                  wrapped(nodes::Text(std::move(about), 12.0f, colours.dim)))} {
+
       parts.about.setVisible(!parts.about.text().empty());
     }
   };
@@ -191,12 +199,19 @@ struct radio_choice : pressable<nodes::Stack> {
     radio_mark ring;
     texts words;
   } parts;
-  radio_choice(const palette& colours, std::string title, std::string about, Act what, bool on, bool allowed)
-      : act(std::move(what)), parts{.ring = radio_mark(colours), .words = texts(colours, std::move(title), std::move(about))} {
-    this->setHorizontal();
-    this->setGap(10.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 6.0f, 6.0f, 6.0f},
-                  .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .disabled = !allowed});
+  radio_choice(const palette &colours, std::string title, std::string about,
+               Act what, bool on, bool allowed)
+      : pressable<skiff::compose::Stacked>(
+            skiff::compose::hbox(10.0f, {.fillX = true,
+                                         .autoSize = scene::axes::kY,
+                                         .padding = {6.0f, 6.0f, 6.0f, 6.0f},
+                                         .cornerRadius = 6.0f,
+                                         .hoverBackground = colours.chosen,
+                                         .disabled = !allowed})),
+        act(std::move(what)),
+        parts{.ring = radio_mark(colours),
+              .words = texts(colours, std::move(title), std::move(about))} {
+
     if (allowed)
       fState.setCursor(scene::cursor::hand{});
     parts.ring.set_on(on);
@@ -206,20 +221,25 @@ struct radio_choice : pressable<nodes::Stack> {
 };
 
 // A switch with what it does beside it, as Element's labelled toggles.
-template <class Act>
-struct toggle_line : nodes::Stack {
+template <class Act> struct toggle_line : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text label;
-    widgets::Toggle<Act> toggle;
+    toggle_for<Act> toggle;
   } parts;
-  toggle_line(const palette& colours, std::string text, Act what, bool on, bool allowed)
-      : parts{.label = nodes::Text(std::move(text), 14.0f, colours.text), .toggle = widgets::Toggle<Act>(colours.widgets, std::move(what))} {
-    this->setHorizontal();
-    this->setGap(12.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = !allowed});
-    parts.label.setWrapped(true);
-    parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    parts.toggle.apply({.alignSelf = scene::align::kMiddle});
+  toggle_line(const palette &colours, std::string text, Act what, bool on,
+              bool allowed)
+      : Stacked(
+            skiff::compose::hbox(12.0f, {.fillX = true,
+                                         .autoSize = scene::axes::kY,
+                                         .padding = {6.0f, 0.0f, 6.0f, 0.0f},
+                                         .disabled = !allowed})),
+        parts{.label = skiff::compose::styled(
+                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  wrapped(nodes::Text(std::move(text), 14.0f, colours.text))),
+              .toggle = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  toggle_for<Act>(colours.widgets, std::move(what)))} {
+
     parts.toggle.setOnNow(on);
     if (!allowed)
       fState.setAlpha(0.55f);
@@ -234,96 +254,71 @@ struct leave_space_facts {
   std::vector<room_settings_facts::named_room> rooms;  // its rooms one is in
 };
 namespace leave_choice {
-struct none {};
-struct all {};
-struct some {};
-}  // namespace leave_choice
+struct none { friend bool operator==(none, none) = default; };
+struct all { friend bool operator==(all, all) = default; };
+struct some { friend bool operator==(some, some) = default; };
+}
 using leave_choice_t = spl::variant<leave_choice::none, leave_choice::all, leave_choice::some>;
-template <class Actions>
-struct leave_space_box : nodes::Stack {
-  // The dialog it is shown in.
-  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}}; }
-  Actions* actions = nullptr;
-  leave_space_facts facts;
+struct leave_draft {
   leave_choice_t choice = leave_choice::none{};
-  std::set<std::string> chosen;  // the rooms to leave, where some are
-  struct pick {
-    leave_space_box* box;
-    leave_choice_t to;
-    void operator()() const {
-      box->choice = to;
-      box->show();
-    }
-  };
-  struct flip_room {
-    leave_space_box* box;
-    std::string room;
-    void operator()() const {
-      if (!box->chosen.erase(room))
-        box->chosen.insert(room);
-    }
-  };
-  struct go {
-    leave_space_box* box;
-    void operator()() const { box->actions->leave_space(box->facts.space, box->leaving()); }
-  };
-  struct cancel {
-    Actions* actions;
-    void operator()() const { actions->close_leave_space(); }
-  };
-  struct parts_t {
-    nodes::Text title;
-    nodes::Text about;
-    radio_choice<pick> none, all, some;
-    std::vector<toggle_line<flip_room>> rooms;
-    dialog_buttons<cancel, go> buttons;
-  } parts;
-  leave_space_box(const ui_needs<Actions>& n, leave_space_facts what)
-      : actions(n.actions), facts(std::move(what)),
-        parts{.title = nodes::Text("Leave " + facts.name, 17.0f, n.colours->text, true),
-              .about = explained(*n.colours, facts.rooms.empty()
-                                                 ? "You are in none of its rooms."
-                                                 : "Would you like to leave the rooms in this space too?"),
-              .none = radio_choice<pick>(*n.colours, "Don't leave any rooms", "", {this, leave_choice::none{}}, true, true),
-              .all = radio_choice<pick>(*n.colours, "Leave all rooms", "", {this, leave_choice::all{}}, false, true),
-              .some = radio_choice<pick>(*n.colours, "Leave some rooms", "", {this, leave_choice::some{}}, false, true),
-              .buttons = dialog_buttons<cancel, go>(*n.colours, "Leave space", {n.actions}, {this}, 130.0f)} {
-    for (const auto& one : facts.rooms)
-      parts.rooms.emplace_back(*n.colours, one.name, flip_room{this, one.id}, false, true);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
-    this->setGap(8.0f);
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.none, &parts.all, &parts.some})
-      each->setVisible(!facts.rooms.empty());
-    this->show();
+  std::set<std::string> chosen;
+};
+struct flip_leave_room { std::string room; };
+struct submit_leave_space {};
+struct leave_events {
+  leave_space_facts facts;
+  auto on(const flip_leave_room& event, const leave_draft& draft) const {
+    auto chosen = draft.chosen;
+    if (!chosen.erase(event.room))
+      chosen.insert(event.room);
+    return skiff::model::over<skiff::model::Field<&leave_draft::chosen>>(skiff::model::setTo(std::move(chosen)));
   }
-  // The choice made shown: its ring lit, the rooms' switches where some.
-  void show() {
-    const auto is = [&](auto which) {
-      return spl::visit(spl::overloaded{[](decltype(which)) { return true; }, [](const auto&) { return false; }}, choice);
-    };
-    parts.none.parts.ring.set_on(is(leave_choice::none{}));
-    parts.all.parts.ring.set_on(is(leave_choice::all{}));
-    parts.some.parts.ring.set_on(is(leave_choice::some{}));
-    for (auto& one : parts.rooms)
-      one.setVisible(is(leave_choice::some{}));
-    this->invalidateLayout();
-    this->markDamaged();
-  }
-  // The rooms to leave with it, as chosen.
-  [[nodiscard]] std::vector<std::string> leaving() const {
-    return spl::visit(
-        spl::overloaded{[](const leave_choice::none&) { return std::vector<std::string>{}; },
-                        [&](const leave_choice::all&) {
-                          return std::ranges::to<std::vector<std::string>>(
-                              std::views::transform(facts.rooms, [](const room_settings_facts::named_room& one) { return one.id; }));
-                        },
-                        [&](const leave_choice::some&) { return std::vector<std::string>(chosen.begin(), chosen.end()); }},
-        choice);
+  auto on(submit_leave_space, const leave_draft& draft) const {
+    auto leaving = spl::visit(spl::overloaded{
+        [](leave_choice::none) { return std::vector<std::string>{}; },
+        [&](leave_choice::all) {
+          return facts.rooms | std::views::transform([](const auto& room) { return room.id; }) | std::ranges::to<std::vector>();
+        },
+        [&](leave_choice::some) { return std::vector<std::string>(draft.chosen.begin(), draft.chosen.end()); }}, draft.choice);
+    return skiff::model::Up{request::leave_space{facts.space, std::move(leaving)}};
   }
 };
+inline auto leave_room_row(const palette& colours, const room_settings_facts::named_room& room) {
+  return skiff::compose::row(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
+      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(room.name, 14.0f, colours.text))),
+      skiff::compose::onClick(flip_leave_room{room.id}, skiff::compose::projected<skiff::model::Field<&leave_draft::chosen>>(
+          [id = room.id](const auto& chosen) { return chosen.contains(id); },
+          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::ToggleField<bool>(colours.widgets))), room.name));
+}
+inline auto leave_space_box(const palette& colours, const leave_space_facts& facts) {
+  using choice = skiff::model::Field<&leave_draft::choice>;
+  return skiff::compose::local<leave_draft>(leave_events{facts}, skiff::compose::column(
+      skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+      nodes::Text("Leave " + facts.name, 17.0f, colours.text, true),
+      explained(colours, facts.rooms.empty() ? "You are in none of its rooms." : "Would you like to leave the rooms in this space too?"),
+      skiff::compose::visible(!facts.rooms.empty(), skiff::compose::bound<choice>(
+          widgets::ChoiceRowField<leave_choice_t>(colours.widgets, "Don't leave any rooms", leave_choice::none{}))),
+      skiff::compose::visible(!facts.rooms.empty(), skiff::compose::bound<choice>(
+          widgets::ChoiceRowField<leave_choice_t>(colours.widgets, "Leave all rooms", leave_choice::all{}))),
+      skiff::compose::visible(!facts.rooms.empty(), skiff::compose::bound<choice>(
+          widgets::ChoiceRowField<leave_choice_t>(colours.widgets, "Leave some rooms", leave_choice::some{}))),
+      skiff::compose::shown_for<choice>([](const auto& picked) { return picked == leave_choice_t(leave_choice::some{}); },
+          skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              facts.rooms | std::views::transform([&](const auto& room) { return leave_room_row(colours, room); }) | std::ranges::to<std::vector>())),
+      skiff::compose::row(skiff::compose::justified(
+          skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}), nodes::justify::end{}),
+          skiff::compose::styled({.width = 130.0f, .height = 36.0f}, widgets::SendButton<request::close_leave_space>(colours.widgets, "Cancel", {})),
+          skiff::compose::styled({.width = 130.0f, .height = 36.0f}, primary(widgets::SendButton<submit_leave_space>(colours.widgets, "Leave space", {}))))));
+}
+using leave_space_box_t = decltype(leave_space_box(std::declval<const palette&>(), std::declval<const leave_space_facts&>()));
+inline dialog_look content_look(std::type_identity<leave_space_box_t>) { return {.size = dialog_size::fitting{440.0f}}; }
+template <class Needs>
+auto make_content(std::type_identity<leave_space_box_t>, const Needs& needs, const leave_space_facts& facts) {
+  return leave_space_box(*needs.colours, facts);
+}
 
 // A text to copy, as Element's "Internal room ID": the text, and a button.
-struct copy_line : nodes::Stack {
+struct copy_line : skiff::compose::Stacked {
   struct copy_it {
     std::string text;
     void operator()() const { skiff::scene::setClipboardText(text); }
@@ -333,26 +328,88 @@ struct copy_line : nodes::Stack {
     nodes::Text value;
     widgets::Button<copy_it> copy;
   } parts;
-  copy_line(const palette& colours, std::string label, std::string value)
-      : parts{.label = nodes::Text(std::move(label), 14.0f, colours.dim),
-              .value = nodes::Text(value, 14.0f, colours.text),
-              .copy = widgets::Button<copy_it>(colours.widgets, "Copy", {value})} {
-    this->setHorizontal();
-    this->setGap(10.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 4.0f, 0.0f}});
-    parts.label.apply({.alignSelf = scene::align::kMiddle});
-    parts.value.setElided(true);
-    parts.value.apply({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    parts.copy.apply({.width = 70.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle});
-  }
+  copy_line(const palette &colours, std::string label, std::string value)
+      : Stacked(
+            skiff::compose::hbox(10.0f, {.fillX = true,
+                                         .autoSize = scene::axes::kY,
+                                         .padding = {4.0f, 0.0f, 4.0f, 0.0f}})),
+        parts{
+            .label = skiff::compose::styled(
+                {.alignSelf = scene::align::kMiddle},
+                nodes::Text(std::move(label), 14.0f, colours.dim)),
+            .value = skiff::compose::styled(
+                {.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                elided(nodes::Text(value, 14.0f, colours.text))),
+            .copy = skiff::compose::styled(
+                {.width = 70.0f,
+                 .height = 28.0f,
+                 .alignSelf = scene::align::kMiddle},
+                widgets::Button<copy_it>(colours.widgets, "Copy", {value}))} {}
 };
 
-template <class Actions>
-struct room_settings : nodes::Stack {
+// A chat's own choices, bound to them in the model: receipts, previews,
+// where previews come from, typing sent -- Default as the level above.
+inline auto chat_settings_view(const palette& colours, const conversation_id& chat) {
+  using choices = config::chat_choices;
+  const choice_level_t level = choice_level::chat{};
+  return skiff::compose::scoped<choices>(
+      skiff::compose::handlers(),
+      skiff::compose::column(
+          skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          skiff::compose::bound<choices>(event_kinds_field<choices>(colours, level)),
+          skiff::compose::bound<skiff::model::Field<&choices::receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
+          skiff::compose::bound<skiff::model::Field<&choices::previews>>(
+              show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
+          skiff::compose::bound<skiff::model::Field<&choices::previews_direct>>(
+              show_hide_field<previews_direct_setting, std::optional<bool>>(colours, level)),
+          skiff::compose::bound<skiff::model::Field<&choices::typing>>(show_hide_field<typing_setting, std::optional<bool>>(colours, level)),
+          skiff::compose::bound<skiff::model::Field<&choices::jump_search>>(jump_search_field<std::optional<std::int64_t>>(colours, level))),
+      chat);
+}
+
+// A chat's notifications on or off: off is muted -- the chat list's mute,
+// the same -- and on, said apart from it; Default, neither. So it reads
+// and sets the chat's choices whole.
+struct chat_on_field : show_hide_field<notify_on_setting, std::optional<bool>, config::chat_choices> {
+  explicit chat_on_field(const palette& colours) : show_hide_field(colours, choice_level::chat{}) {}
+  void read(const config::chat_choices& now) {
+    show_hide_field::show_value(now.muted ? std::optional<bool>(false) : now.notify.on);
+    const auto with = [&](std::optional<bool> on) {
+      auto next = now;
+      next.muted = on == false;
+      next.notify.on = on == true ? on : std::nullopt;
+      return next;
+    };
+    show_hide_field::set_nexts(with(std::nullopt), with(true), with(false));
+  }
+};
+// A chat's notification rows, bound to its own choices in the model.
+inline auto chat_notify_view(const palette& colours, const conversation_id& chat) {
+  using notify = config::notify_choices;
+  using skiff::compose::bound;
+  const choice_level_t level = choice_level::chat{};
+  return skiff::compose::scoped<config::chat_choices>(
+      skiff::compose::handlers(),
+      skiff::compose::column(
+          skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          bound<config::chat_choices>(chat_on_field(colours)),
+          bound<skiff::model::Field<&notify::mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&notify::name>>(show_hide_field<notify_name_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&notify::text>>(show_hide_field<notify_text_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&notify::sound>>(show_hide_field<notify_sound_setting, std::optional<bool>>(colours, level))),
+      chat);
+}
+
+template <class Actions> struct room_settings : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  room_settings(const room_settings&) = delete;
+  room_settings& operator=(const room_settings&) = delete;
+  room_settings(room_settings&&) = delete;
+  room_settings& operator=(room_settings&&) = delete;
+
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{860.0f, 620.0f}}; }
   using actions_type = Actions;
-  Actions* actions = nullptr;
   // The colours it and its pages are made in: what it was handed.
   const palette* colours_ = nullptr;
   // The looks shown: the program's.
@@ -393,26 +450,33 @@ struct room_settings : nodes::Stack {
   };
 
   // ---- the tabs down the left ------------------------------------------------
-  struct tab_row : pressable<nodes::Stack> {
+  struct tab_row : pressable<skiff::compose::Stacked> {
     pick_tab act;
     struct parts_t {
-      icon_mark mark;
+      icon_mark_t mark;
       nodes::Text label;
     } parts;
-    tab_row(const palette& colours, std::string text, icon_t icon, pick_tab what)
-        : act(std::move(what)),
-          parts{.mark = icon_mark(colours, icon), .label = nodes::Text(std::move(text), 14.0f, colours.text)} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f,
-                    .hoverBackground = colours.chosen, .selectedBackground = colours.chosen});
-      parts.mark.apply({.alignSelf = scene::align::kMiddle});
-      parts.label.setElided(true);
-      parts.label.apply({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    }
+    tab_row(const palette &colours, std::string text, icon_t icon,
+            pick_tab what)
+        : pressable<skiff::compose::Stacked>(skiff::compose::hbox(
+              10.0f, {.fillX = true,
+                      .height = 36.0f,
+                      .padding = {0.0f, 12.0f, 0.0f, 12.0f},
+                      .cornerRadius = 8.0f,
+                      .hoverBackground = colours.chosen,
+                      .selectedBackground = colours.chosen})),
+          act(std::move(what)),
+          parts{
+              .mark =
+                  skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                         icon_mark(colours, icon)),
+              .label = skiff::compose::styled(
+                  {.shrink = scene::axes::kX,
+                   .alignSelf = scene::align::kMiddle},
+                  elided(nodes::Text(std::move(text), 14.0f, colours.text)))} {}
     void set_chosen(bool on) { fState.apply({.selected = on}); }
   };
-  struct tab_list : nodes::Stack {
+  struct tab_list : skiff::compose::Stacked {
     struct parts_t {
       tab_row general;
       std::vector<tab_row> protocol;  // the room's protocol's tabs, as it lists them
@@ -422,13 +486,19 @@ struct room_settings : nodes::Stack {
     void add(room_settings* box, manage_tab_list<Tabs...>) {
       (parts.protocol.emplace_back(*box->colours_, std::string(tab_title(Tabs{})), tab_icon(Tabs{}), pick_tab{box, settings_tab_t{Tabs{}}}), ...);
     }
-    explicit tab_list(room_settings* box)
-        : parts{.general = tab_row(*box->colours_, "General", icon::gear{}, {box, settings_tab::general{}}),
-                .notifications = tab_row(*box->colours_, "Notifications", icon::bell{}, {box, settings_tab::notifications{}}),
-                .looks = tab_row(*box->colours_, "Appearance", icon::eye{}, {box, settings_tab::looks{}})} {
+    explicit tab_list(room_settings *box)
+        : Stacked(skiff::compose::vbox(
+              2.0f, {.fillY = true,
+                     .width = 220.0f,
+                     .padding = {4.0f, 12.0f, 12.0f, 12.0f}})),
+          parts{.general = tab_row(*box->colours_, "General", icon::gear{},
+                                   {box, settings_tab::general{}}),
+                .notifications =
+                    tab_row(*box->colours_, "Notifications", icon::bell{},
+                            {box, settings_tab::notifications{}}),
+                .looks = tab_row(*box->colours_, "Appearance", icon::eye{},
+                                 {box, settings_tab::looks{}})} {
       spl::visit([&](auto of) { this->add(box, tabs_of_t<decltype(of)>{}); }, box->facts.speaks);
-      this->setGap(2.0f);
-      fState.apply({.fillY = true, .width = 220.0f, .padding = {4.0f, 12.0f, 12.0f, 12.0f}});
     }
     [[nodiscard]] std::vector<tab_row*> rows() {
       std::vector<tab_row*> out{&parts.general};
@@ -448,128 +518,146 @@ struct room_settings : nodes::Stack {
   // A space as one chat, its rooms as topics: a switch, off for a space
   // that holds spaces.
   struct flip_forum_act {
-    Actions* actions;
+    using Answer = std::optional<::mux::ui::request::flip_forum>;
     std::string room;
     bool allowed = true;
-    void operator()() const {
+    std::optional<::mux::ui::request::flip_forum> operator()() {
       if (allowed)
-        actions->flip_forum(room);
+        return ::mux::ui::request::flip_forum{room};
+      return std::nullopt;
     }
   };
   // A space's rooms out of Home, or in it: a switch, for a space that is
   // not shown as one chat.
   struct flip_home_hide_act {
-    Actions* actions;
+    using Answer = ::mux::ui::request::flip_home_hide;
     std::string room;
-    void operator()() const { actions->flip_home_hide(room); }
+    ::mux::ui::request::flip_home_hide operator()() { return ::mux::ui::request::flip_home_hide{room}; }
   };
-  struct general_page : nodes::Stack {
+  using settings_t = decltype(chat_settings_view(std::declval<const palette&>(), std::declval<const conversation_id&>()));
+  struct general_page : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text heading;
       nodes::Text events_about;
-      chat_choices<Actions> chats;
-      typing_choice<Actions> typing;
+      settings_t settings;
       nodes::Text forum_heading;
       toggle_line<flip_forum_act> forum;
       nodes::Text forum_about;
       toggle_line<flip_home_hide_act> home_hide;
       nodes::Text leave_heading;
-      widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
+      button_for<sends<::mux::ui::request::leave_chat>> leave;
     } parts;
-    general_page(Actions* a, room_settings* box, const room_settings_facts& facts)
-        : parts{.heading = tab_heading(*box->colours_, "General"),
-                .events_about = explained(*box->colours_, "Room events shown in this room, for you: Default is as your account's."),
-                .chats = chat_choices<Actions>(a, *box->colours_, choice_level::chat{},
-                                               {.events_all = facts.events_all,
-                                                .event_kinds = facts.event_kinds,
-                                                .receipts = facts.receipts,
-                                                .previews = facts.previews,
-                                                .previews_direct = facts.previews_direct,
-                                                .jump_search = facts.jump_search},
-                                               6.0f),
-                .typing = typing_choice<Actions>(a, *box->colours_, choice_level::chat{}, facts.typing),
+    general_page(room_settings *box, const room_settings_facts &facts)
+        : Stacked(skiff::compose::vbox(
+              6.0f, {.fillX = true,
+                     .autoSize = scene::axes::kY,
+                     .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
+          parts{.heading = tab_heading(*box->colours_, "General"),
+                .events_about = explained(*box->colours_,
+                                          "Room events shown in this room, for "
+                                          "you: Default is as your account's."),
+                .settings = chat_settings_view(*box->colours_, facts.chat),
                 .forum_heading = part_heading(*box->colours_, "Shown as"),
-                .forum = toggle_line<flip_forum_act>(*box->colours_, "One chat, its rooms as topics", {a, facts.id, !facts.holds_spaces},
-                                                     facts.forum, !facts.holds_spaces),
-                .forum_about = explained(*box->colours_, facts.holds_spaces
-                                             ? "A space that holds spaces is shown as a space."
-                                             : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
-                .home_hide = toggle_line<flip_home_hide_act>(*box->colours_, "Its rooms not in Home", {a, facts.id}, facts.hidden_from_home, true),
+                .forum = toggle_line<flip_forum_act>(
+                    *box->colours_, "One chat, its rooms as topics",
+                    {facts.id, !facts.holds_spaces}, facts.forum,
+                    !facts.holds_spaces),
+                .forum_about = explained(
+                    *box->colours_,
+                    facts.holds_spaces
+                        ? "A space that holds spaces is shown as a space."
+                        : "On: in the chat list as one chat; its rooms open "
+                          "inside it, as Telegram's topics."),
+                .home_hide = skiff::compose::visible(
+                    facts.space && !facts.forum,
+                    toggle_line<flip_home_hide_act>(
+                        *box->colours_, "Its rooms not in Home", {facts.id},
+                        facts.hidden_from_home, true)),
                 .leave_heading = part_heading(*box->colours_, "Leave room"),
-                .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>(box->colours_->widgets, "Leave room", {a})} {
+                .leave = skiff::compose::styled(
+                    {.width = 130.0f, .height = 32.0f},
+                    button_for<sends<::mux::ui::request::leave_chat>>(
+                        box->colours_->widgets, "Leave room", {}))} {
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.forum_heading, &parts.forum, &parts.forum_about})
         each->setVisible(facts.space);
       // A space's own: its rooms out of Home -- not one shown as one chat,
       // whose rooms are in it, not in the list.
-      parts.home_hide.setVisible(facts.space && !facts.forum);
-      this->setGap(6.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
-      parts.leave.apply({.width = 130.0f, .height = 32.0f});
     }
   };
 
   // ---- Notifications ----------------------------------------------------------------
-  struct notifications_page : nodes::Stack {
+  struct notifications_page : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text heading;
-      notify_choice_rows<Actions> choices;
+      decltype(chat_notify_view(std::declval<const palette&>(), std::declval<const conversation_id&>())) settings;
       nodes::Text note;
     } parts;
-    notifications_page(Actions* a, room_settings* box, const room_settings_facts& facts)
-        : parts{.heading = tab_heading(*box->colours_, "Notifications"),
-                .choices = notify_choice_rows<Actions>(a, *box->colours_, choice_level::chat{}, facts.notify),
-                .note = nodes::Text(facts.space ? "For every chat in this space, unless the chat chooses again; Default is "
-                                                  "as the space above it, or the account, says."
-                                                : "Default is as the space it is in, or the account, says.",
-                                    12.0f, box->colours_->dim)} {
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
-      parts.note.setWrapped(true);
-      parts.note.apply({.fillX = true});
-    }
+    notifications_page(room_settings *box, const room_settings_facts &facts)
+        : Stacked(skiff::compose::vbox(
+              10.0f, {.fillX = true,
+                      .autoSize = scene::axes::kY,
+                      .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
+          parts{.heading = tab_heading(*box->colours_, "Notifications"),
+                .settings = chat_notify_view(*box->colours_, facts.chat),
+                .note = skiff::compose::styled(
+                    {.fillX = true},
+                    wrapped(nodes::Text(
+                        facts.space
+                            ? "For every chat in this space, unless the chat "
+                              "chooses again; Default is "
+                              "as the space above it, or the account, says."
+                            : "Default is as the space it is in, or the "
+                              "account, says.",
+                        12.0f, box->colours_->dim)))} {}
   };
 
   // ---- Appearance: the room's background, bubbles and panels --------------------
-  struct looks_page : nodes::Stack {
+  struct looks_page : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text heading;
       look_choices<Actions> choices;
     } parts;
-    looks_page(Actions* a, room_settings* box, const room_settings_facts&)
-        : parts{.heading = tab_heading(*box->colours_, "Appearance"), .choices = look_choices<Actions>(a, *box->colours_, *box->looks_, choice_level::chat{})} {
-      this->setGap(6.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
-    }
+    looks_page(room_settings *box, const room_settings_facts &)
+        : Stacked(skiff::compose::vbox(
+              6.0f, {.fillX = true,
+                     .autoSize = scene::axes::kY,
+                     .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
+          parts{.heading = tab_heading(*box->colours_, "Appearance"),
+                .choices = look_choices<Actions>(*box->colours_, *box->looks_,
+                                                 choice_level::chat{})} {}
   };
 
   using page_t = typename variant_of_types<
       typename joined<type_list<general_page, notifications_page, looks_page>, protocol_pages>::type>::type;
-  struct page_holder : nodes::Stack {
+  struct page_holder : skiff::compose::Stacked {
     struct parts_t {
       page_t page;
     } parts;
-    explicit page_holder(page_t first) : parts{.page = std::move(first)} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    }
+    explicit page_holder(page_t first)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.page = std::move(first)} {}
   };
 
   // ---- the dialog ---------------------------------------------------------------------
   struct close_it {
-    Actions* actions;
-    void operator()() const { actions->close_manage(); }
+    using Answer = ::mux::ui::request::close_manage;
+    ::mux::ui::request::close_manage operator()() { return ::mux::ui::request::close_manage{}; }
   };
-  using header_t = page_header<no_back, close_it>;
-  struct body_row : nodes::Stack {
+  using header_t = page_header_t<no_back, close_it>;
+  struct body_row : skiff::compose::Stacked {
     struct parts_t {
       tab_list tabs;
       nodes::ScrollContainer<page_holder> content;
     } parts;
-    body_row(room_settings* box, page_t first)
-        : parts{.tabs = tab_list(box), .content = nodes::ScrollContainer<page_holder>(page_holder(std::move(first)))} {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .grow = scene::axes::kY});
-      parts.content.apply({.fillY = true, .grow = scene::axes::kX});
-    }
+    body_row(room_settings *box, page_t first)
+        : Stacked(skiff::compose::hbox(
+              0.0f, {.fillX = true, .grow = scene::axes::kY})),
+          parts{.tabs = tab_list(box),
+                .content = skiff::compose::styled(
+                    {.fillY = true, .grow = scene::axes::kX},
+                    nodes::ScrollContainer<page_holder>(
+                        page_holder(std::move(first))))} {}
     // Narrow -- a phone's -- the tabs a thin column of their icons beside the
     // page, the page the rest of the width: beside a column of 220 it had a
     // hundred. Their sizing as it is, only narrower -- flipped from a column
@@ -607,12 +695,15 @@ struct room_settings : nodes::Stack {
   bool rebuild_due = false;
   bool to_top = false;  // another tab: shown from its top
 
-  room_settings(const ui_needs<Actions>& n, const room_settings_facts& shown) : room_settings(n.colours, n.looks, n.actions, shown) {}
-  room_settings(const palette* colours, const looks_shown* looks, Actions* a, const room_settings_facts& shown)
-      : actions(a), colours_(colours), looks_(looks), facts(shown),
-        parts{.header = header_t(*colours, "Room Settings - " + shown.name, {}, {a}, false, true),
-              .body = body_row(this, page_t(std::in_place_index<0>, a, this, shown))} {
-    fState.apply({.fill = true});
+  room_settings(const ui_needs<Actions>& n, const room_settings_facts& shown) : room_settings(n.colours, n.looks, shown) {}
+  room_settings(const palette *colours, const looks_shown *looks,
+                const room_settings_facts &shown)
+      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})), colours_(colours),
+        looks_(looks), facts(shown),
+        parts{.header = page_header<no_back, close_it>(*colours, "Room Settings - " + shown.name, {},
+                                 {}, false, true),
+              .body =
+                  body_row(this, page_t(std::in_place_index<0>, this, shown))} {
     parts.body.parts.tabs.show(tab);
   }
 
@@ -644,11 +735,11 @@ struct room_settings : nodes::Stack {
     const settings_tab_t to = tab;
     auto& page = holder().parts.page;
     spl::visit(spl::overloaded{
-                      [&](settings_tab::general) { page.template emplace<general_page>(actions, this, facts); },
-                      [&](settings_tab::notifications) { page.template emplace<notifications_page>(actions, this, facts); },
-                      [&](settings_tab::looks) { page.template emplace<looks_page>(actions, this, facts); },
+                      [&](settings_tab::general) { page.template emplace<general_page>(this, facts); },
+                      [&](settings_tab::notifications) { page.template emplace<notifications_page>(this, facts); },
+                      [&](settings_tab::looks) { page.template emplace<looks_page>(this, facts); },
                       // A protocol's tab: the page its page_type() gives.
-                      [&](auto theirs) { page.template emplace<page_of_t<decltype(theirs)>>(actions, this, facts); }},
+                      [&](auto theirs) { page.template emplace<page_of_t<decltype(theirs)>>(this, facts); }},
                   to);
     parts.body.parts.tabs.show(tab);
     if (std::exchange(to_top, false))

@@ -148,7 +148,7 @@ class pictures_part {
                             std::error_code failed;
                             std::filesystem::create_directories(where.parent_path(), failed);
                             std::ofstream(where, std::ios::binary) << picture.bytes;
-                            s_->root().play_video(picture.source, where);
+                            this->play_video_file(picture.source, where);
                           },
                           // Saved where the dialog said, where it said; else into Downloads.
                           [&](const media_use::to_save& one) {
@@ -377,27 +377,35 @@ class pictures_part {
   // The viewer: over the window, with the thumbnail at once and the whole
   // picture when it comes -- from the disk, or from the account.
   void apply(const request::open_picture& one) {
-    s_->root().open_picture(one.source, one.sender, one.name, one.when);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::viewer_facts{one.source, one.sender, one.name, one.when, {}, std::nullopt}));
     const auto& chosen = s_->root().main().chosen;
     if (chosen)
       this->want_whole(chosen->account, one.source);
   }
-  void apply(const request::close_picture&) { s_->root().close_picture(); }
+  void apply(const request::close_picture&) { mux::ui::show<mux::ui::viewer_facts>(*s_->showing, std::nullopt); }
   // A video: the viewer on its thumbnail at once; the video from its file
   // where it was fetched before, else fetched, the loader showing how far.
   void apply(const request::open_video& one) {
-    s_->root().open_video(one.source, one.video, one.sender, one.name, one.when);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::viewer_facts{one.source, one.sender, one.name, one.when, one.video, std::nullopt}));
     videos_.insert(one.video);
     mux::ui::stopped_downloads().erase(one.video);
     this->watch(one.video);
   }
   void watch(const std::string& video) {
     if (const auto where = video_file(video); std::filesystem::exists(where)) {
-      s_->root().play_video(video, where);
+      this->play_video_file(video, where);
       return;
     }
     if (const auto& chosen = s_->root().main().chosen; chosen && videos_fetching_.insert(video).second)
       s_->net->fetch_media(chosen->account, video, media_use::to_watch{}, 0);
+  }
+  // A video's file come: played, where the viewer is still up for it.
+  void play_video_file(const std::string& video, const std::filesystem::path& file) {
+    auto now = s_->showing->root().viewer.fValue;
+    if (!now || now->video != video)
+      return;
+    now->file = file;
+    mux::ui::show(*s_->showing, std::move(now));
   }
   // Where a video is kept once fetched: a file of its own, named by it.
   [[nodiscard]] static std::filesystem::path video_file(std::string_view source) {
@@ -492,14 +500,14 @@ class pictures_part {
     const auto kept = kept_file(media_use::whole{}, source);
     auto bytes_read = kept ? spl::bytes::file_text(*kept) : std::nullopt;
     if (!bytes_read) {
-      s_->root().show_message("GIFs", "The GIF has not loaded yet. Save it once it plays.");
+      s_->notice("GIFs", "The GIF has not loaded yet. Save it once it plays.");
       return;
     }
     std::string bytes = std::move(*bytes_read);
     std::error_code failed;
     std::filesystem::create_directories(gifs(), failed);
     std::ofstream(gifs() / mux::config::file_name_of(source), std::ios::binary) << bytes;
-    s_->root().show_message("GIFs", "Saved to your GIFs.");
+    s_->notice("GIFs", "Saved to your GIFs.");
   }
   // The saved GIFs, newest first, to the input's GIF tab; each decoded on a
   // worker into the frames it plays, where it is not already.
@@ -529,7 +537,10 @@ class pictures_part {
         };
       });
     }
-    s_->root().show_gifs(paths);
+    mux::ui::change_shown<std::optional<mux::ui::emoji_facts>>(*s_->showing, [&](auto& now) {
+      if (now)
+        now->gifs = paths;
+    });
   }
   // Where the saved GIFs are kept: with the program's state, not its cache,
   // which is pruned.
@@ -598,7 +609,7 @@ class pictures_part {
   // Bytes written where the dialog said, and said.
   void write_chosen(const std::string& bytes, const std::string& path) {
     const bool saved = mux::platform::files::write(path, bytes);
-    s_->root().show_message("Saved", saved ? std::format("Saved to {}", path) : std::format("Could not write {}", path));
+    s_->notice("Saved", saved ? std::format("Saved to {}", path) : std::format("Could not write {}", path));
   }
   // What Save As… was asked for, until the dialog answers; and where the
   // bytes go when they have to be fetched first.
@@ -781,12 +792,12 @@ class pictures_part {
       where = downloads() / std::vformat("{} ({}){}", std::make_format_args(stem, n, extension));
     std::ofstream(where, std::ios::binary) << bytes;
     if (open && runs_when_opened(where))
-      s_->root().show_message("Saved, not opened",
+      s_->notice("Saved, not opened",
                               std::format("Saved to {}. It was not opened: a file like it runs as a program.", where.string()));
     else if (open)
       mux::platform::system::open_url("file://" + where.string());
     else
-      s_->root().show_message("Saved", std::format("Saved to {}", where.string()));
+      s_->notice("Saved", std::format("Saved to {}", where.string()));
   }
   static std::filesystem::path downloads() {
     if (const char* home = std::getenv("HOME"); home && *home)

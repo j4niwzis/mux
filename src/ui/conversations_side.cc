@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.scroll;
@@ -60,8 +61,7 @@ using folder_t = spl::variant<folder::all, folder::space, folder::group, folder:
 // An item of a space bar: Home, Direct messages, or a space -- round, its
 // picture or its mark, ringed in the accent while its chats are the ones
 // listed. Pressed, they are.
-template <class Pick>
-struct space_icon : nodes::Stack {
+template <class Pick> struct space_icon : skiff::compose::Stacked {
   Pick pick;
   folder_t which;
   config::space_item_t item;
@@ -75,15 +75,22 @@ struct space_icon : nodes::Stack {
     std::optional<avatar_mark> face;
     std::optional<nodes::Text> mark;
   } parts;
-  space_icon(const palette& colours, config::space_item_t what, folder_t shows, config::space_bar_t in, std::string id,
-             std::string shown, bool chosen, float size, Pick act)
-      : pick(std::move(act)), which(std::move(shows)), item(std::move(what)), bar(in), name(shown), key(id), diameter(size),
-        colours_(&colours) {
-    this->setHorizontal();
-    fStack.justify = nodes::justify::middle{};
-    fState.apply({.width = size, .height = size, .cornerRadius = size * 0.5f, .background = colours.tile,
-                  .hoverBackground = colours.chosen,
-                  .border = scene::Border{chosen ? colours.accent : skia::SkColor{0}, chosen ? 2.0f : 0.0f}});
+  space_icon(const palette &colours, config::space_item_t what, folder_t shows,
+             config::space_bar_t in, std::string id, std::string shown,
+             bool chosen, float size, Pick act)
+      : Stacked(skiff::compose::justified(
+            skiff::compose::hbox(
+                0.0f, {.width = size,
+                       .height = size,
+                       .cornerRadius = size * 0.5f,
+                       .background = colours.tile,
+                       .hoverBackground = colours.chosen,
+                       .border = scene::Border{chosen ? colours.accent
+                                                      : skia::SkColor{0},
+                                               chosen ? 2.0f : 0.0f}}),
+            nodes::justify::middle{})),
+        pick(std::move(act)), which(std::move(shows)), item(std::move(what)),
+        bar(in), name(shown), key(id), diameter(size), colours_(&colours) {
     spl::visit(spl::overloaded{[&](config::space_item::home) { parts.mark.emplace("\u2302", size * 0.5f, colours.text); },
                                      [&](config::space_item::direct) { parts.mark.emplace("@", size * 0.45f, colours.text, true); },
                                      [&](const config::space_item::space&) { parts.face.emplace(id, shown, size - 6.0f); }},
@@ -108,8 +115,7 @@ struct space_icon : nodes::Stack {
 
 // A folder's tab over the chat list, as Telegram's: its name, and under
 // the one chosen a line in the accent.
-template <class Pick>
-struct folder_tab : scene::Node {
+template <class Pick> struct folder_tab : skiff::compose::Specced {
   Pick pick;
   folder_t which;
   bool chosen = false;
@@ -120,22 +126,32 @@ struct folder_tab : scene::Node {
     // The line under the one chosen, in the accent.
     nodes::Box<> underline;
   } parts;
-  folder_tab(const palette& colours, std::string name, folder_t what, bool is_chosen, Pick act)
-      : pick(std::move(act)), which(std::move(what)), chosen(is_chosen), colours_(&colours),
-        parts{.label = nodes::Text(std::move(name), 13.0f, is_chosen ? colours.accent : colours.dim, true),
-              .underline = nodes::Box<>(colours.accent)} {
+  folder_tab(const palette &colours, std::string name, folder_t what,
+             bool is_chosen, Pick act)
+      : Specced({.height = 32.0f,
+                 .autoSize = scene::axes::kX,
+                 .padding = {0.0f, 10.0f, 0.0f, 10.0f},
+                 .cornerRadius = 6.0f,
+                 .hoverBackground = colours.chosen,
+                 .focusBackground = colours.chosen}),
+        pick(std::move(act)), which(std::move(what)), chosen(is_chosen),
+        colours_(&colours),
+        parts{.label = skiff::compose::styled(
+                  {.anchor = scene::anchor::kCentreLeft,
+                   .origin = scene::anchor::kCentreLeft},
+                  elided(nodes::Text(std::move(name), 13.0f,
+                                     is_chosen ? colours.accent : colours.dim,
+                                     true))),
+              .underline = skiff::compose::visible(
+                  is_chosen,
+                  skiff::compose::styled({.place = scene::anchor::kBottomLeft,
+                                          .fillX = true,
+                                          .height = 3.0f,
+                                          .cornerRadius = 1.5f},
+                                         nodes::Box<>(colours.accent)))} {
     auto& [label, underline] = parts;
-    fState.apply({.height = 32.0f,
-                  .autoSize = scene::axes::kX,
-                  .padding = {0.0f, 10.0f, 0.0f, 10.0f},
-                  .cornerRadius = 6.0f,
-                  .hoverBackground = colours.chosen,
-                  .focusBackground = colours.chosen});
-    underline.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 3.0f, .cornerRadius = 1.5f});
-    underline.setVisible(is_chosen);
+
     label.setMaxWidth(160.0f);
-    label.setElided(true);
-    label.apply({.anchor = scene::anchor::kCentreLeft, .origin = scene::anchor::kCentreLeft});
   }
   // Chosen or not: its colour and its line, where it is.
   void set_chosen(bool on) {
@@ -163,14 +179,12 @@ template <class Pick>
 using space_icons = nodes::Flow<std::vector<space_icon<Pick>>>;
 // The top bar's view: its line of items, moved along by the wheel where
 // it is longer than the view -- cut to it.
-template <class Pick>
-struct top_view : nodes::Stack {
+template <class Pick> struct top_view : skiff::compose::Stacked {
   float offset = 0.0f;
   struct parts_t {
     space_icons<Pick> line{{.direction = nodes::direction::horizontal{}, .spacingX = 4.0f, .wrap = false}, {}};
   } parts;
-  top_view() {
-    this->setHorizontal();
+  top_view() : Stacked(skiff::compose::hbox(0.0f, {})) {
     parts.line.apply({.fillY = true, .autoSize = scene::axes::kX});
   }
   [[nodiscard]] float most() const {
@@ -200,15 +214,23 @@ struct top_view : nodes::Stack {
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
 template <class Actions, class Pick>
-struct side_column : nodes::Stack {
+struct side_column : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  side_column(const side_column&) = delete;
+  side_column& operator=(const side_column&) = delete;
+  side_column(side_column&&) = delete;
+  side_column& operator=(side_column&&) = delete;
+
+  // A space dragged to another place in the bars.
+  using Answer = ::mux::ui::request::place_spaces;
   // The colours it is made in, for what it makes later: its menus, the
   // icon dragged.
   const palette* colours_ = nullptr;
   float wanted = 300.0f;
   // All of the window across: one thing at a time (single, below).
   bool whole = false;
-  struct head_row : nodes::Stack {
-    using explore_button = icon_button<ask<Actions, &Actions::open_explore>>;
+  struct head_row : skiff::compose::Stacked {
+    using explore_button = icon_button<sends<::mux::ui::request::open_explore>>;
     struct parts_t {
       menu_button<Actions> menu;
       nodes::Text name;
@@ -220,28 +242,38 @@ struct side_column : nodes::Stack {
       // Element's compass is.
       explore_button explore;
     } parts;
-    head_row(const palette& colours, Actions* a)
-        : parts{.menu = menu_button<Actions>(colours, a),
-                .name = nodes::Text("mux", 17.0f, colours.text, true),
-                .explore = explore_button(colours, icon::compass{}, {a})} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 8.0f, 8.0f, 8.0f}});
-      parts.name.apply({.alignSelf = scene::align::kMiddle});
+    head_row(const palette &colours)
+        : Stacked(skiff::compose::hbox(10.0f,
+                                       {.fillX = true,
+                                        .height = 52.0f,
+                                        .padding = {8.0f, 8.0f, 8.0f, 8.0f}})),
+          parts{.menu = menu_button<Actions>(colours),
+                .name = skiff::compose::styled(
+                    {.alignSelf = scene::align::kMiddle},
+                    nodes::Text("mux", 17.0f, colours.text, true)),
+                .explore = skiff::compose::styled(
+                    {.alignSelf = scene::align::kMiddle},
+                    explore_button(colours, icon::compass{}, {}))} {
+
       parts.top.apply({.height = 34.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f,
                        .masking = true});
-      parts.explore.apply({.alignSelf = scene::align::kMiddle});
     }
   };
   // Search: the chats listed are those whose name or address has what is
   // typed here.
-  struct search_box : scene::Node {
+  struct search_box : skiff::compose::Specced {
     struct parts_t {
       widgets::TextArea<> field;
     } parts;
     widgets::TextArea<>& field = parts.field;
-    explicit search_box(const palette& colours) : parts{.field = widgets::TextArea<>(colours.widgets, "Search")} {
-      fState.apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}, .cornerRadius = 18.0f, .background = colours.tile, .selectedBackground = colours.chosen});
+    explicit search_box(const palette &colours)
+        : Specced({.fillX = true,
+                   .height = 36.0f,
+                   .margin = {0.0f, 10.0f, 8.0f, 10.0f},
+                   .cornerRadius = 18.0f,
+                   .background = colours.tile,
+                   .selectedBackground = colours.chosen}),
+          parts{.field = widgets::TextArea<>(colours.widgets, "Search")} {
       field.setSingleLine(true);
       field.setFontSize(14.0f);
       field.apply({.fillX = true, .margin = {2.0f, 14.0f, 0.0f, 14.0f}});
@@ -254,38 +286,43 @@ struct side_column : nodes::Stack {
         fState.apply({.selected = field.focused()});
     }
   };
-  using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>;
+  using list_t = nodes::ScrollContainer<chat_rows<Actions>>;
   // What is right of the side bar: the search, the tabs, the chats.
   // A forum open: its name, and the way back to the chats.
-  struct forum_head_t : nodes::Stack {
+  struct forum_head_t : skiff::compose::Stacked {
     struct parts_t {
-      icon_button<ask<Actions, &Actions::close_forum>> back;
+      icon_button<sends<::mux::ui::request::close_forum>> back;
       nodes::Text name;
       // Its settings: it is in no bar, to be right-pressed.
-      icon_button<ask<Actions, &Actions::manage_forum>> settings;
+      icon_button<sends<::mux::ui::request::manage_forum>> settings;
     } parts;
-    forum_head_t(const palette& colours, Actions* a)
-        : parts{.back = icon_button<ask<Actions, &Actions::close_forum>>(colours, icon::back{}, {a}),
-                .name = nodes::Text("", 15.0f, colours.text, true),
-                .settings = icon_button<ask<Actions, &Actions::manage_forum>>(colours, icon::gear{}, {a})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .height = 40.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f}});
-      parts.back.apply({.alignSelf = scene::align::kMiddle});
-      parts.name.setElided(true);
-      parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.settings.apply({.alignSelf = scene::align::kMiddle});
-    }
+    forum_head_t(const palette &colours)
+        : Stacked(skiff::compose::hbox(8.0f,
+                                       {.fillX = true,
+                                        .height = 40.0f,
+                                        .padding = {0.0f, 8.0f, 0.0f, 8.0f}})),
+          parts{
+              .back = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  icon_button<sends<::mux::ui::request::close_forum>>(
+                      colours, icon::back{}, {})),
+              .name = skiff::compose::styled(
+                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  elided(nodes::Text("", 15.0f, colours.text, true))),
+              .settings = skiff::compose::styled(
+                  {.alignSelf = scene::align::kMiddle},
+                  icon_button<sends<::mux::ui::request::manage_forum>>(
+                      colours, icon::gear{}, {}))} {}
   };
   // A message found, in the list of them: who, when, and its words.
   struct pick_found {
-    Actions* actions;
+    using Answer = ::mux::ui::request::search_pick;
     std::size_t index;
-    void operator()() const { actions->search_pick(index); }
+    ::mux::ui::request::search_pick operator()() { return ::mux::ui::request::search_pick{index}; }
   };
-  struct found_row : nodes::Stack {
+  struct found_row : skiff::compose::Stacked {
     pick_found pick;
-    struct lines_t : nodes::Stack {
+    struct lines_t : skiff::compose::Stacked {
       struct top_t : name_time_line {
         top_t(const palette& colours, std::string name, std::string when)
             : name_time_line(std::move(name), std::move(when), colours.text, colours.dim, 12.0f) {}
@@ -294,31 +331,44 @@ struct side_column : nodes::Stack {
         top_t top;
         nodes::Text text;
       } parts;
-      lines_t(const palette& colours, const search_result& one)
-          : parts{.top = top_t(colours, one.name, std::format("{:%d.%m.%y}", std::chrono::floor<std::chrono::days>(one.at))),
-                  .text = nodes::Text(one.snippet, 13.0f, colours.dim)} {
-        this->setGap(4.0f);
-        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-        parts.text.setElided(true);
-        parts.text.apply({.fillX = true});
-      }
+      lines_t(const palette &colours, const search_result &one)
+          : Stacked(skiff::compose::vbox(4.0f,
+                                         {.autoSize = scene::axes::kY,
+                                          .grow = scene::axes::kX,
+                                          .alignSelf = scene::align::kMiddle})),
+            parts{
+                .top = top_t(
+                    colours, one.name,
+                    std::format("{:%d.%m.%y}",
+                                std::chrono::floor<std::chrono::days>(one.at))),
+                .text = skiff::compose::styled(
+                    {.fillX = true},
+                    elided(nodes::Text(one.snippet, 13.0f, colours.dim)))} {}
     };
     struct parts_t {
       avatar_mark face;
       lines_t lines;
     } parts;
-    found_row(const palette& colours, Actions* a, const search_result& one)
-        : pick{a, one.index}, parts{.face = avatar_mark(one.sender, one.name, 40.0f), .lines = lines_t(colours, one)} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen});
-      parts.face.apply({.alignSelf = scene::align::kMiddle});
-    }
+    found_row(const palette &colours, const search_result &one)
+        : Stacked(skiff::compose::hbox(10.0f,
+                                       {.fillX = true,
+                                        .height = 56.0f,
+                                        .padding = {0.0f, 12.0f, 0.0f, 10.0f},
+                                        .hoverBackground = colours.chosen})),
+          pick{one.index}, parts{.face = skiff::compose::styled(
+                                     {.alignSelf = scene::align::kMiddle},
+                                     avatar_mark(one.sender, one.name, 40.0f)),
+                                 .lines = lines_t(colours, one)} {}
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      pick();
+      act_on(fState, pick);
       return true;
+    }
+    auto onPress()
+      requires skiff::scene::Answering<pick_found>
+    {
+      return pick();
     }
   };
   using found_list_t = nodes::ScrollContainer<nodes::Flow<std::vector<found_row>>>;
@@ -326,8 +376,8 @@ struct side_column : nodes::Stack {
   // directory and the people of its user directory that do -- as Explore
   // and Start chat list them, to join or to write to.
   using room_rows_t = nodes::Flow<std::vector<directory_row<Actions>>>;
-  using people_rows_t = nodes::Flow<std::vector<found_person_row<Actions>>>;
-  struct elsewhere_list : nodes::Stack {
+  using people_rows_t = nodes::Flow<std::vector<found_person_row_t>>;
+  struct elsewhere_list : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text rooms_title;
       room_rows_t rooms{room_rows_t({.spacingY = 0.0f, .wrap = false}, {})};
@@ -335,21 +385,22 @@ struct side_column : nodes::Stack {
       people_rows_t people{people_rows_t({.spacingY = 0.0f, .wrap = false}, {})};
       nodes::Text status;
     } parts;
-    explicit elsewhere_list(const palette& colours)
-        : parts{.rooms_title = nodes::Text("Rooms", 13.0f, colours.dim, true),
+    explicit elsewhere_list(const palette &colours)
+        : Stacked(skiff::compose::vbox(4.0f,
+                                       {.fillX = true,
+                                        .autoSize = scene::axes::kY,
+                                        .padding = {4.0f, 0.0f, 8.0f, 0.0f}})),
+          parts{.rooms_title = nodes::Text("Rooms", 13.0f, colours.dim, true),
                 .people_title = nodes::Text("People", 13.0f, colours.dim, true),
-                .status = nodes::Text("", 13.0f, colours.dim)} {
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 8.0f, 0.0f}});
+                .status = wrapped(nodes::Text("", 13.0f, colours.dim))} {
       for (nodes::Text* each : {&parts.rooms_title, &parts.people_title, &parts.status})
         each->apply({.margin = {6.0f, 16.0f, 2.0f, 16.0f}});
-      parts.status.setWrapped(true);
       parts.rooms.apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.people.apply({.fillX = true, .autoSize = scene::axes::kY});
     }
   };
   using elsewhere_t = nodes::ScrollContainer<elsewhere_list>;
-  struct rest_t : nodes::Stack {
+  struct rest_t : skiff::compose::Stacked {
     struct parts_t {
       forum_head_t forum_head;
       search_box search;
@@ -358,28 +409,33 @@ struct side_column : nodes::Stack {
       nodes::Flow<std::vector<folder_tab<Pick>>> folders{
           {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
       nodes::Text no_chats;
-      list_t list{nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+      list_t list{chat_rows<Actions>()};
       // While a chat is searched: what was found, in the chats' place.
       nodes::Text found_title;
       found_list_t found{nodes::Flow<std::vector<found_row>>({.spacingY = 0.0f, .wrap = false}, {})};
       elsewhere_t elsewhere;
     } parts;
-    rest_t(const palette& colours, Actions* a)
-        : parts{.forum_head = forum_head_t(colours, a),
+    rest_t(const palette &colours)
+        : Stacked(skiff::compose::vbox(
+              0.0f, {.fillY = true, .grow = scene::axes::kX})),
+          parts{.forum_head =
+                    skiff::compose::visible(false, forum_head_t(colours)),
                 .search = search_box(colours),
-                .no_chats = nodes::Text("No chats yet.", 13.0f, colours.dim),
-                .found_title = nodes::Text("", 13.0f, colours.dim, true),
-                .elsewhere = elsewhere_t(elsewhere_list(colours))} {
-      parts.found_title.apply({.margin = {4.0f, 16.0f, 6.0f, 16.0f}});
-      parts.found_title.setVisible(false);
+                .no_chats = skiff::compose::styled(
+                    {.margin = {12.0f, 16.0f, 0.0f, 16.0f}},
+                    nodes::Text("No chats yet.", 13.0f, colours.dim)),
+                .found_title = skiff::compose::visible(
+                    false, skiff::compose::styled(
+                               {.margin = {4.0f, 16.0f, 6.0f, 16.0f}},
+                               nodes::Text("", 13.0f, colours.dim, true))),
+                .elsewhere = skiff::compose::visible(
+                    false, skiff::compose::styled(
+                               {.fillX = true, .grow = scene::axes::kY},
+                               elsewhere_t(elsewhere_list(colours))))} {
       parts.found.apply({.fillX = true, .grow = scene::axes::kY});
       std::get<0>(parts.found.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.found.setVisible(false);
-      parts.elsewhere.apply({.fillX = true, .grow = scene::axes::kY});
-      parts.elsewhere.setVisible(false);
-      fState.apply({.fillY = true, .grow = scene::axes::kX});
-      parts.forum_head.setVisible(false);
-      parts.no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
+
       parts.folders.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
       parts.list.apply({.fillX = true, .grow = scene::axes::kY});
       // Chats change places by their newest: the view stays at its offset,
@@ -390,99 +446,102 @@ struct side_column : nodes::Stack {
   };
   // Under the head: the side bar of spaces, under the menu's button and
   // down to the window's bottom -- drawn where it holds any -- and the rest.
-  struct body_t : nodes::Stack {
+  struct body_t : skiff::compose::Stacked {
     struct parts_t {
       // Longer than the window, it scrolls.
       nodes::ScrollContainer<space_icons<Pick>> side{space_icons<Pick>({.spacingY = 8.0f, .wrap = false, .crossAlign = scene::align::kMiddle}, {})};
       rest_t rest;
     } parts;
-    body_t(const palette& colours, Actions* a) : parts{.rest = rest_t(colours, a)} {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .grow = scene::axes::kY});
+    body_t(const palette &colours)
+        : Stacked(skiff::compose::hbox(
+              0.0f, {.fillX = true, .grow = scene::axes::kY})),
+          parts{.rest = rest_t(colours)} {
       parts.side.apply({.fillY = true, .width = 56.0f});
       std::get<0>(parts.side.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 6.0f, 8.0f, 6.0f}});
     }
   };
   // What a right press on an item offers: the bars it is in, or hidden.
   struct set_bars_act {
-    Actions* actions;
+    using Answer = ::mux::ui::request::set_space_bars;
     std::string account;
     config::space_item_t item;
     bool side = true, top = false;
-    void operator()() const { actions->set_space_bars(account, item, side, top); }
+    ::mux::ui::request::set_space_bars operator()() { return ::mux::ui::request::set_space_bars{account, item, side, top}; }
   };
   struct explore_act {
-    Actions* actions;
+    using Answer = ::mux::ui::request::explore_space;
     std::string room;
-    void operator()() const { actions->explore_space(room); }
+    ::mux::ui::request::explore_space operator()() { return ::mux::ui::request::explore_space{room}; }
   };
   struct manage_act {
-    Actions* actions;
+    using Answer = ::mux::ui::request::manage_space;
     std::string room;
-    void operator()() const { actions->manage_space(room); }
+    ::mux::ui::request::manage_space operator()() { return ::mux::ui::request::manage_space{room}; }
   };
   struct leave_act {
-    Actions* actions;
+    using Answer = ::mux::ui::request::open_leave_space;
     std::string account;
     std::string room;
-    void operator()() const { actions->open_leave_space(conversation_id{account_id{protocol_of(account), account}, room}); }
+    ::mux::ui::request::open_leave_space operator()() { return ::mux::ui::request::open_leave_space{conversation_id{account_id{protocol_of(account), account}, room}}; }
   };
   // A room, or a space, made in it -- Element's Add room and Add space.
   struct create_in_act {
-    Actions* actions;
+    using Answer = std::optional<::mux::ui::request::open_new_room_in>;
     std::string account;
     std::string room;
     std::string name;
     bool make_space = false;
-    void operator()() const {
-      actions->open_new_room_in(conversation_id{account_id{protocol_of(account), account}, room}, name, make_space);
+    std::optional<::mux::ui::request::open_new_room_in> operator()() {
+      return ::mux::ui::request::open_new_room_in{conversation_id{account_id{protocol_of(account), account}, room}, name, make_space};
     }
   };
   // The column's menus' look: a card over the rest, 190 wide.
-  static void as_popup(nodes::Stack& menu, const palette& colours) {
-    menu.setGap(4.0f);
-    menu.fState.apply({.width = 190.0f, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 10.0f,
-                       .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
-                       .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
+  [[nodiscard]] static skiff::compose::Look popup_look(const palette &colours,
+                                                       float width = 190.0f) {
+    return skiff::compose::vbox(
+        4.0f, {.width = width,
+               .autoSize = scene::axes::kY,
+               .padding = {8.0f, 8.0f, 8.0f, 8.0f},
+               .cornerRadius = 10.0f,
+               .background = colours.popup(),
+               .border = scene::Border{colours.band, 1.0f},
+               .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
   }
   // A chat's: its settings.
   struct chat_settings_act {
-    Actions* actions;
+    using Answer = std::tuple<::mux::ui::request::choose, ::mux::ui::request::open_manage>;
     conversation_id id;
-    void operator()() const {
-      actions->choose(id);
-      actions->open_manage();
-    }
+    Answer operator()() const { return {::mux::ui::request::choose{id}, ::mux::ui::request::open_manage{}}; }
   };
   // Listed in another account's list too, or moved there.
   struct place_act {
-    Actions* actions;
+    using Answer = ::mux::ui::request::place_chat;
     conversation_id chat;
     account_id to;
     bool moved;
-    void operator()() const { actions->place_chat(chat, to, moved); }
+    ::mux::ui::request::place_chat operator()() { return ::mux::ui::request::place_chat{chat, to, moved}; }
   };
   // Out of this list, where it is another account's: back to its own
   // where it was moved.
   struct unplace_act {
-    Actions* actions;
+    using Answer = ::mux::ui::request::unplace_chat;
     conversation_id chat;
     account_id from;
-    void operator()() const { actions->unplace_chat(chat, from); }
+    ::mux::ui::request::unplace_chat operator()() { return ::mux::ui::request::unplace_chat{chat, from}; }
   };
   struct strip_act {
-    Actions* actions;
+    using Answer = ::mux::ui::request::flip_chat_strip;
     conversation_id chat;
     account_id in;
-    void operator()() const { actions->flip_chat_strip(chat, in); }
+    ::mux::ui::request::flip_chat_strip operator()() { return ::mux::ui::request::flip_chat_strip{chat, in}; }
   };
   struct strip_colour_act {
-    Actions* actions;
+    using Answer = std::optional<::mux::ui::request::set_chat_strip_colour>;
     conversation_id chat;
     account_id in;
-    void operator()(const config::accent_t& colour) const { actions->set_chat_strip_colour(chat, in, colour); }
+    std::optional<::mux::ui::request::set_chat_strip_colour> operator()(const config::accent_t& colour) { return ::mux::ui::request::set_chat_strip_colour{chat, in, colour}; }
   };
-  struct chat_menu : nodes::Stack {
+  struct chat_menu : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text title;
       widgets::Button<chat_settings_act> settings;
@@ -493,24 +552,28 @@ struct side_column : nodes::Stack {
     } parts;
     // Its places: Copy to and Move to each other account. Listed here from
     // another, its way out of this list, and its strip.
-    chat_menu(const palette& colours, Actions* a, conversation_id id, std::string name, const account_id& listing,
-              const std::vector<account_id>& accounts, const config::theme_t& theme)
-        : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true),
-                .settings = widgets::Button<chat_settings_act>(colours.widgets, "Chat settings\u2026", {a, id})} {
-      as_popup(*this, colours);
-      fState.apply({.width = 320.0f});
-      parts.title.setElided(true);
-      parts.title.apply({.fillX = true});
-      parts.settings.apply({.fillX = true, .height = 30.0f});
+    chat_menu(const palette &colours, conversation_id id, std::string name,
+              const account_id &listing,
+              const std::vector<account_id> &accounts,
+              const config::theme_t &theme)
+        : Stacked(popup_look(colours, 320.0f)),
+          parts{.title = skiff::compose::styled(
+                    {.fillX = true}, elided(nodes::Text(std::move(name), 13.0f,
+                                                        colours.dim, true))),
+                .settings = skiff::compose::styled(
+                    {.fillX = true, .height = 30.0f},
+                    widgets::Button<chat_settings_act>(
+                        colours.widgets, "Chat settings\u2026", {id}))} {
+
       for (const account_id& to : accounts)
         if (to != id.account && to != listing) {
-          parts.places.emplace_back(colours.widgets, std::format("Copy to {}", to.address), place_act{a, id, to, false});
-          parts.places.emplace_back(colours.widgets, std::format("Move to {}", to.address), place_act{a, id, to, true});
+          parts.places.emplace_back(colours.widgets, std::format("Copy to {}", to.address), place_act{id, to, false});
+          parts.places.emplace_back(colours.widgets, std::format("Move to {}", to.address), place_act{id, to, true});
         }
       if (id.account != listing) {
-        parts.unplace.emplace(colours.widgets, "Remove from this list", unplace_act{a, id, listing});
-        parts.strip.emplace(colours.widgets, "Strip on or off", strip_act{a, id, listing});
-        parts.strip_colours.emplace(strip_colour_act{a, id, listing}, theme, false);
+        parts.unplace.emplace(colours.widgets, "Remove from this list", unplace_act{id, listing});
+        parts.strip.emplace(colours.widgets, "Strip on or off", strip_act{id, listing});
+        parts.strip_colours.emplace(strip_colour_act{id, listing}, theme, false);
       }
       for (auto& each : parts.places)
         each.apply({.fillX = true, .height = 30.0f});
@@ -522,7 +585,7 @@ struct side_column : nodes::Stack {
         parts.strip_colours->apply({.margin = {4.0f, 0.0f, 0.0f, 0.0f}});
     }
   };
-  struct space_menu : nodes::Stack {
+  struct space_menu : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text title;
       widgets::Button<explore_act> explore;
@@ -536,20 +599,36 @@ struct side_column : nodes::Stack {
                                               [](const auto&) { return std::string(); }},
                            item);
     }
-    space_menu(const palette& colours, Actions* a, const std::string& account, const config::space_item_t& item, std::string name)
-        : parts{.title = nodes::Text(name, 13.0f, colours.dim, true),
-                .explore = widgets::Button<explore_act>(colours.widgets, "Explore its rooms\u2026", {a, room_of(item)}),
-                .manage = widgets::Button<manage_act>(colours.widgets, "Space settings\u2026", {a, room_of(item)}),
-                .add_room = widgets::Button<create_in_act>(colours.widgets, "Create a room in it\u2026", {a, account, room_of(item), name, false}),
-                .add_space = widgets::Button<create_in_act>(colours.widgets, "Create a space in it\u2026", {a, account, room_of(item), name, true}),
-                .leave = widgets::Button<leave_act>(colours.widgets, "Leave space\u2026", {a, account, room_of(item)}),
-                .side = widgets::Button<set_bars_act>(colours.widgets, "Side bar only", {a, account, item, true, false}),
-                .top = widgets::Button<set_bars_act>(colours.widgets, "Top bar only", {a, account, item, false, true}),
-                .both = widgets::Button<set_bars_act>(colours.widgets, "Both bars", {a, account, item, true, true}),
-                .hide = widgets::Button<set_bars_act>(colours.widgets, "Hide", {a, account, item, false, false})} {
-      as_popup(*this, colours);
-      parts.title.setElided(true);
-      parts.title.apply({.fillX = true});
+    space_menu(const palette &colours, const std::string &account,
+               const config::space_item_t &item, std::string name)
+        : Stacked(popup_look(colours)),
+          parts{
+              .title = skiff::compose::styled(
+                  {.fillX = true},
+                  elided(nodes::Text(name, 13.0f, colours.dim, true))),
+              .explore = widgets::Button<explore_act>(
+                  colours.widgets, "Explore its rooms\u2026", {room_of(item)}),
+              .manage = widgets::Button<manage_act>(
+                  colours.widgets, "Space settings\u2026", {room_of(item)}),
+              .add_room = widgets::Button<create_in_act>(
+                  colours.widgets, "Create a room in it\u2026",
+                  {account, room_of(item), name, false}),
+              .add_space = widgets::Button<create_in_act>(
+                  colours.widgets, "Create a space in it\u2026",
+                  {account, room_of(item), name, true}),
+              .leave = widgets::Button<leave_act>(colours.widgets,
+                                                  "Leave space\u2026",
+                                                  {account, room_of(item)}),
+              .side = widgets::Button<set_bars_act>(
+                  colours.widgets, "Side bar only",
+                  {account, item, true, false}),
+              .top =
+                  widgets::Button<set_bars_act>(colours.widgets, "Top bar only",
+                                                {account, item, false, true}),
+              .both = widgets::Button<set_bars_act>(
+                  colours.widgets, "Both bars", {account, item, true, true}),
+              .hide = widgets::Button<set_bars_act>(
+                  colours.widgets, "Hide", {account, item, false, false})} {
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.manage, &parts.add_room, &parts.add_space,
                                                                    &parts.leave, &parts.side, &parts.top, &parts.both, &parts.hide})
         each->apply({.fillX = true, .height = 30.0f});
@@ -584,13 +663,13 @@ struct side_column : nodes::Stack {
   nodes::ScrollContainer<space_icons<Pick>>& side_bar = parts.body.parts.side;
   space_icons<Pick>& top_line = parts.head.parts.top.parts.line;
   space_icons<Pick>& side_line = std::get<0>(parts.body.parts.side.fChildren);
-  Actions* actions = nullptr;
   // Whose spaces the bars hold, as the screen says as it shows them.
   std::string account;
-  side_column(const palette& colours, Actions* a)
-      : colours_(&colours), parts{.head = head_row(colours, a), .body = body_t(colours, a)}, actions(a) {
-    fState.apply({.fillY = true, .background = colours.sidebar});
-  }
+  side_column(const palette &colours)
+      : Stacked(skiff::compose::vbox(
+            0.0f, {.fillY = true, .background = colours.sidebar})),
+        colours_(&colours),
+        parts{.head = head_row(colours), .body = body_t(colours)} {}
 
   // ---- an item dragged from a bar to the other, or along one ------------
   struct drag_t {
@@ -724,6 +803,12 @@ struct side_column : nodes::Stack {
     this->invalidateLayout();
     this->markDamaged();
   }
+  // Closed at the next frame, not now: the program asks it as it does what
+  // was chosen in it, while the press that chose is still being answered.
+  void close_menu_soon() {
+    menu_close_due = this->menu_up();
+    this->markDamaged();
+  }
   [[nodiscard]] bool menu_up() const { return parts.menu || parts.row_menu; }
   [[nodiscard]] bool menu_has(float x, float y) const {
     return (parts.menu && parts.menu->bounds().contains(x, y)) || (parts.row_menu && parts.row_menu->bounds().contains(x, y));
@@ -747,9 +832,9 @@ struct side_column : nodes::Stack {
     const space_icon<Pick>* one = this->icon_at(press.x, press.y);
     // A right press on a chat in the list: its menu, where it was pressed.
     if (!one && press.button == 3 && list.visible())
-      for (const auto& row : std::get<0>(std::get<0>(list.fChildren).fChildren))
-        if (list.toView(row.bounds()).contains(press.x, press.y)) {
-          parts.row_menu.emplace(*colours_, actions, row.id, row.parts.lines.parts.top.parts.name.text(),
+      for (const auto& kept : std::get<0>(list.fChildren).fRows)
+        if (const auto& row = kept.fRow; list.toView(row.bounds()).contains(press.x, press.y)) {
+          parts.row_menu.emplace(*colours_, row.id, row.parts.lines.parts.top.parts.name.text(),
                                  current_account ? *current_account : row.id.account, accounts_known, theme_now);
           this->place_menu(*parts.row_menu, press.x, press.y, 320.0f, 260.0f);
           reply.handle();
@@ -759,7 +844,7 @@ struct side_column : nodes::Stack {
       return;
     // A right press: its menu, where it was pressed, kept in the column.
     if (press.button == 3) {
-      parts.menu.emplace(*colours_, actions, account, one->item, one->name);
+      parts.menu.emplace(*colours_, account, one->item, one->name);
       this->place_menu(*parts.menu, press.x, press.y, 190.0f, 180.0f);
       reply.handle();
       return;
@@ -809,17 +894,18 @@ struct side_column : nodes::Stack {
     this->light(this->bar_at(at.x, at.y));
     reply.handle();
   }
-  void drag_up(const scene::pointer::up& at, scene::PointerReply& reply) {
+  std::optional<::mux::ui::request::place_spaces> drag_up(const scene::pointer::up& at, scene::PointerReply& reply) {
+    std::optional<::mux::ui::request::place_spaces> asked;
     if (!drag)
-      return;
+      return asked;
     const drag_t was = *std::exchange(drag, std::nullopt);
     if (was.scrolling) {
       reply.releasePointer();
       reply.handle();
-      return;
+      return asked;
     }
     if (!was.moving)
-      return;
+      return asked;
     reply.releasePointer();
     reply.handle();
     this->light(std::nullopt);
@@ -846,16 +932,17 @@ struct side_column : nodes::Stack {
       target = along_x ? skia::SkPoint{top_bar.bounds().fLeft + step * 0.5f, top_bar.bounds().centerY()}
                        : skia::SkPoint{side_bar.bounds().centerX(), side_bar.bounds().fTop + step * 0.5f};
     if (bar)
-      actions->place_spaces(account, *bar, order, was.from, was.item);
+      asked = ::mux::ui::request::place_spaces{account, *bar, order, was.from, was.item};
     this->let_go(was.item, {at.x, at.y}, target);
     this->show_drop_targets(false);
+    return asked;
   }
   using Node::onPointer;
   void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply) { drag_down(press, reply); }
   void onPointer(scene::phase::capture, const scene::pointer::move& at, scene::PointerReply& reply) { drag_move(at, reply); }
   void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) { drag_move(at, reply); }
-  void onPointer(scene::phase::capture, const scene::pointer::up& at, scene::PointerReply& reply) { drag_up(at, reply); }
-  void onPointer(scene::phase::target, const scene::pointer::up& at, scene::PointerReply& reply) { drag_up(at, reply); }
+  std::optional<::mux::ui::request::place_spaces> onPointer(scene::phase::capture, const scene::pointer::up& at, scene::PointerReply& reply) { return drag_up(at, reply); }
+  std::optional<::mux::ui::request::place_spaces> onPointer(scene::phase::target, const scene::pointer::up& at, scene::PointerReply& reply) { return drag_up(at, reply); }
   // The menu closed after the press that chose from it, or one off it:
   // not from inside that press's handling.
   [[nodiscard]] bool wantsTick() const { return menu_close_due || fly.moving() || (parts.ghost && !drag); }
@@ -870,11 +957,8 @@ struct side_column : nodes::Stack {
       if (!fly.moving())
         this->land();
     }
-    if (std::exchange(menu_close_due, false) && parts.menu) {
-      parts.menu.reset();
-      this->invalidateLayout();
-      this->markDamaged();
-    }
+    if (std::exchange(menu_close_due, false))
+      this->close_menu();
   }
   // Its own width, as far as the window has room for it.
   void measure(const skia::SkRect& parent) {

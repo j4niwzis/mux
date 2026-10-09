@@ -34,11 +34,12 @@ import :conversations_screen;
 export namespace mux::ui {
 
 template <class Actions>
-void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+auto conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) -> std::optional<Answer> {
+  std::optional<Answer> asked;
   namespace keys = scene::keys;
   if (press.key == keys::kEscape && this->close_space_menu()) {
     reply.handle();
-    return;
+    return asked;
   }
   const bool control = press.modifiers.template has<scene::modifier::control>();
   const bool any = control || press.modifiers.template has<scene::modifier::shift>() ||
@@ -51,48 +52,46 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     if (const auto place = static_cast<std::size_t>(digit - kFolderKeys.begin()); place < tabs.size())
       this->choose_folder(tabs[place].which);
     reply.handle();
-    return;
+    return asked;
   }
   // A forum gone into, no chat of it open: Esc back out to the chats.
   if (press.key == keys::kEscape && !any && !chosen && forum_open) {
     this->close_forum();
     reply.handle();
-    return;
+    return asked;
   }
   if (!chosen && !pointed)
-    return;
+    return asked;
   // Only a forum gone to: Alt+Up and Alt+Down go on from it, nothing else.
   if (!chosen && !((press.key == keys::kUp || press.key == keys::kDown) && press.modifiers.template has<scene::modifier::alt>()))
-    return;
+    return asked;
   if (press.key == keys::kF && control) {
-    actions->open_search();
+    asked = ::mux::ui::request::open_search{};
   } else if (press.key == keys::kK && control) {
-    actions->ask_link();
+    asked = ::mux::ui::request::ask_link{};
   } else if (press.key == keys::kUp && control) {
-    actions->reply_step(true);
+    asked = ::mux::ui::request::reply_step{true};
   } else if (press.key == keys::kDown && control) {
-    actions->reply_step(false);
+    asked = ::mux::ui::request::reply_step{false};
   } else if (press.key == keys::kUp && !any && line.text().empty()) {
-    actions->edit_last();
+    asked = ::mux::ui::request::edit_last{};
   } else if (press.key == keys::kC && control) {
-    auto& bubbles = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    const auto selected = std::ranges::find_if(bubbles, [](message_bubble<Actions>& one) { return one.parts.body.parts.text.hasSelection(); });
-    // Not in a message: what any text shows selected -- View source's.
-    if (selected == bubbles.end()) {
-      if (!scene::selectedText().empty())
-        skiff::scene::setClipboardText(scene::selectedText());
-      return;
-    }
-    skiff::scene::setClipboardText(selected->parts.body.parts.text.selected());
+    // Text nodes publish an owned copy of their selection as it changes.
+    // Copy that snapshot without walking message widgets that may have
+    // been replaced by a model refresh since the selection was made.
+    const std::string selected = scene::selectedText();
+    if (selected.empty())
+      return asked;
+    skiff::scene::setClipboardText(selected);
   } else if (press.key == keys::kEscape && !any && chat.parts.selection.visible()) {
     // Messages selected, the focus elsewhere than their bar: let go first.
-    actions->selection_cancel();
+    asked = ::mux::ui::request::selection_cancel{};
   } else if (press.key == keys::kEscape && !any && search.visible()) {
-    actions->close_search();
+    asked = ::mux::ui::request::close_search{};
   } else if (press.key == keys::kEscape && !any && parts.threads.answering) {
     parts.threads.stop_answering();
   } else if (press.key == keys::kEscape && !any && line.answering()) {
-    actions->cancel_compose();
+    asked = ::mux::ui::request::cancel_compose{};
   } else if ((press.key == keys::kTab && control) ||
              ((press.key == keys::kUp || press.key == keys::kDown) && press.modifiers.template has<scene::modifier::alt>())) {
     // To the next chat in the list, or the one before: Ctrl+Tab and
@@ -103,7 +102,7 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     // From the forum gone to, where one is; else from the chat open.
     const auto at = std::ranges::find(rows, pointed ? *pointed : *chosen);
     if (at == rows.end() || rows.empty())
-      return;
+      return asked;
     const auto index = static_cast<std::size_t>(at - rows.begin());
     const std::size_t to = back ? (index == 0 ? rows.size() - 1 : index - 1) : (index + 1) % rows.size();
     // A forum: gone to, lit, not opened -- Alt+Right opens it. A chat: opened.
@@ -113,22 +112,23 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
         this->show(*last_model, false);
     } else {
       pointed.reset();
-      actions->choose(rows[to]);
+      asked = ::mux::ui::request::choose{rows[to]};
     }
   } else if (press.key == keys::kPageUp || press.key == keys::kPageDown) {
     // A page of the messages, most of what is in view.
     const float page = timeline.bounds().height() * 0.9f;
     timeline.scrollTo(std::max(0.0f, timeline.current() + (press.key == keys::kPageUp ? -page : page)));
   } else if (press.key == keys::kEnd && control) {
-    actions->jump_to_end();
+    asked = ::mux::ui::request::jump_to_end{};
   } else if (press.key == keys::kEscape && !any) {
     // Nothing else to cancel: a step back -- the threads or the info shut,
     // else the chat closed, as tdesktop's Esc closes it.
-    this->step_back();
+    asked = this->step_back();
   } else {
-    return;
+    return asked;
   }
   reply.handle();
+  return asked;
 }
 
 template <class Actions>
@@ -153,10 +153,10 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
       if (one.space)
         for (const std::string& child : one.children)
           if (const auto found = chats->find(child);
-              found != chats->end() && found->second.space && !this->shown_as_forum(found->second) && child != one.id.id &&
+              found != nullptr && found->space && !this->shown_as_forum(*found) && child != one.id.id &&
               !parent_of.contains(child)) {
             parent_of.emplace(child, one.id.id);
-            spaces_in[one.id.id].push_back(&found->second);
+            spaces_in[one.id.id].push_back(found);
           }
   std::set<std::string> open;
   if (const std::optional<std::string> chosen_room = space_of(folder))
@@ -308,9 +308,9 @@ void conversations_screen<Actions>::onPointer(scene::phase::capture, const scene
   swipe_row.reset();
   if (single && !chosen && press.button <= 1 && side.visible() && side.bounds().contains(press.x, press.y)) {
     swipe_from = skia::SkPoint{press.x, press.y};
-    for (const conversation_row<Actions>& row : std::get<0>(std::get<0>(list.fChildren).fChildren))
-      if (list.toView(row.bounds()).contains(press.x, press.y))
-        swipe_row = row.id;
+    for (const auto& kept : std::get<0>(list.fChildren).fRows)
+      if (list.toView(kept.fRow.bounds()).contains(press.x, press.y))
+        swipe_row = kept.fKey;
   }
   if (single && chosen && press.button <= 1 &&
       ((chat.visible() && chat.bounds().contains(press.x, press.y)) ||
@@ -332,22 +332,24 @@ void conversations_screen<Actions>::onPointer(scene::phase::capture, const scene
 }
 
 template <class Actions>
-void conversations_screen<Actions>::onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) {
+auto conversations_screen<Actions>::onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) -> std::optional<Answer> {
+  std::optional<Answer> asked;
   const std::optional<skia::SkPoint> from = std::exchange(swipe_from, std::nullopt);
   if (!from || !single)
-    return;
+    return asked;
   const float dx = lift.x - from->fX;
   const float dy = lift.y - from->fY;
   if (dx > 90.0f && std::abs(dy) < dx * 0.5f) {
     if (chosen)
-      this->step_back();
+      asked = this->step_back();
     else
-      actions->open_drawer();
+      asked = ::mux::ui::request::open_drawer{};
     reply.handle();
   } else if (const auto row = std::exchange(swipe_row, std::nullopt); row && !chosen && -dx > 90.0f && std::abs(dy) < -dx * 0.5f) {
-    actions->toggle_mute_of(*row);
+    asked = ::mux::ui::request::toggle_mute_of{*row};
     reply.handle();
   }
+  return asked;
 }
 
 template <class Actions>
@@ -376,7 +378,7 @@ void conversations_screen<Actions>::update(double now_ms) {
   // The list scrolled past the rows made: those for where it is now made,
   // those far from it let go.
   if (last_model && list.visible() && this->chats_window() != std::pair{chats_from, chats_made})
-    this->show(*last_model, false);
+    this->show_rows(*last_model);
   // The panels' opacity on its way to the chat's.
   if (auto& ease = needs_.paint->ease; ease.t.step(now_ms)) {
     needs_.paint->panel.opacity = ease.from + (ease.to - ease.from) * ease.t.value();
@@ -464,7 +466,7 @@ void conversations_screen<Actions>::update(double now_ms) {
       // Come with the context, but as an answer in a thread: kept with its
       // thread, never in the timeline -- paged back for, the whole chat was
       // fetched to the beginning and it was not found. Its thread opened.
-      actions->open_thread(*held->thread);
+      if (wants_) want(*wants_, ::mux::ui::request::open_thread{*held->thread});
       this->stop_jump();
     } else if (proto::offers(protocol_state_of(*needs_.shared, chosen->account), proto::feature::history_context{}) && !jump_paging) {
       // Not here: a window of the history around it, from the server --
@@ -473,7 +475,7 @@ void conversations_screen<Actions>::update(double now_ms) {
       if (context_asked != jumping_to) {
         context_asked = jumping_to;
         jump_since_ms = now_ms;
-        actions->load_context(*chosen, *jumping_to);
+        if (wants_) want(*wants_, ::mux::ui::request::load_context{*chosen, *jumping_to});
       } else if (now_ms - jump_since_ms > kContextPatienceMs) {
         jump_paging = true;
         jump_tries = 0;
@@ -490,7 +492,7 @@ void conversations_screen<Actions>::update(double now_ms) {
         history_asked = history_from;
         history_asked_ms = now_ms;
         jump_since_ms = now_ms;
-        actions->load_older(*chosen, *history_from);
+        if (wants_) want(*wants_, ::mux::ui::request::load_older{*chosen, *history_from});
       }
     } else if (!history_from && now_ms - jump_since_ms > 2000.0) {
       jumping_to.reset();  // the beginning, and it was not there
@@ -563,7 +565,7 @@ void conversations_screen<Actions>::update(double now_ms) {
   if (const bool has_text = !line.text().empty(); has_text != was_typing || (has_text && line.text() != typed_last)) {
     was_typing = has_text;
     typed_last = line.text();
-    actions->typing(has_text);
+    if (wants_) want(*wants_, ::mux::ui::request::typing{has_text});
   }
   if (side.search.field.text() != searched && last_model) {
     searched = side.search.field.text();
@@ -634,12 +636,12 @@ void conversations_screen<Actions>::update(double now_ms) {
       } else if (timeline.current() <= 4.0f && from == 0 && history_from && history_asked != history_from) {
         history_asked = history_from;
         history_asked_ms = now_ms;
-        actions->load_older(*chosen, *history_from);
+        if (wants_) want(*wants_, ::mux::ui::request::load_older{*chosen, *history_from});
       } else if (made.to_end && one->detached && one->future_from && newer_asked != one->future_from &&
                  timeline.current() >= timeline.extent() - 300.0f) {
         // At the end of a window: paged forward, toward the newest.
         newer_asked = one->future_from;
-        actions->load_newer(*chosen, *one->future_from);
+        if (wants_) want(*wants_, ::mux::ui::request::load_newer{*chosen, *one->future_from});
       } else if (!made.to_end && timeline.current() >= timeline.extent() - ahead) {
         to = std::min(one->timeline.size(), to + kMadeStep);
         from = to > kMostMade && to - from > kMostMade ? to - kMostMade : from;
@@ -649,9 +651,183 @@ void conversations_screen<Actions>::update(double now_ms) {
     }
 }
 
+// What the list shows, from the model and what is chosen: the chats of
+// the account shown in the folder chosen -- or the forum open -- with the
+// other accounts' placed here, those searched for, invites first, then by
+// their newest.
+template <class Actions>
+chat_listing<Actions> conversations_screen<Actions>::listing_of(const model& now) const {
+  chat_listing<Actions> out;
+  constexpr auto lower = mux::logic::folded;
+  const std::string wanted = lower(side.search.field.text());
+  const account* in = current ? &now.accounts().at(*current) : nullptr;
+  if (in == nullptr)
+    return out;
+  // The rooms of the space chosen: its own, and those of the spaces in it,
+  // down every level -- each space once, however they hold each other.
+  std::set<std::string> in_space;
+  if (const std::optional<std::string> chosen_room = space_of(folder)) {
+    std::set<std::string> seen;
+    std::vector<std::string> todo{*chosen_room};
+    while (!todo.empty()) {
+      const std::string at = std::move(todo.back());
+      todo.pop_back();
+      if (!seen.insert(at).second)
+        continue;
+      if (const auto* found = in->conversations.find(at); found != nullptr) {
+        in_space.insert_range(found->children);
+        todo.append_range(found->children);
+      }
+    }
+  }
+  // Forums: each listed as one chat; their rooms in them, not beside them.
+  const auto rooms_of = [](const conversation& one) -> const std::vector<std::string>& { return one.children; };
+  const std::set<std::string> in_forums = in->conversations.values() |
+                                          std::views::filter([&](const conversation& one) { return this->shown_as_forum(one); }) |
+                                          std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::set>();
+  const conversation* forum = forum_open ? in->conversations.find(*forum_open) : nullptr;
+  // What the account's spaces hold: out of Home, where it is chosen so --
+  // but direct messages. Every space's, where Home hides all that spaces
+  // hold; else those of the spaces that hide theirs.
+  const bool home = folder == folder_t{folder::all{}};
+  const std::set<std::string> in_spaces = in->conversations.values() | std::views::filter([&](const conversation& each) {
+                                            return home && each.space && (home_hides_spaced || hidden_from_home.contains(each.id));
+                                          }) |
+                                          std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::set>();
+  const auto direct = [](const conversation& one) {
+    return spl::visit(spl::overloaded{[](conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
+  };
+  const auto in_folder = [&](const conversation& one) {
+    if (!one.space && in_spaces.contains(one.id.id) && !direct(one))
+      return false;
+    if (home_hides_spaced && home_hides_direct && folder == folder_t{folder::all{}} && direct(one))
+      return false;
+    if (forum)
+      return !one.space && std::ranges::contains(forum->children, one.id.id);
+    // A space is a folder, not a chat -- but a forum is one chat.
+    if (one.space && !this->shown_as_forum(one))
+      return false;
+    if (!one.space && in_forums.contains(one.id.id))
+      return false;
+    return spl::visit(spl::overloaded{[](const folder::all&) { return true; },
+                                      [&](const folder::space&) { return in_space.contains(one.id.id); },
+                                      [&](const folder::group& g) { return std::ranges::contains(one.groups, g.name); },
+                                      [&](const folder::direct&) { return direct(one); }},
+                      folder);
+  };
+  // Upgraded away, its new room here: only the new one listed, as Element
+  // -- where the two agree: its tombstone names the new room, and the new
+  // room's creation names it as what it continues. One side alone is not
+  // believed (as matrix-js-sdk's CVE-2025-59160, the other way round): a
+  // room could otherwise hide another from the list.
+  const auto found_by = [&](const conversation& one) {
+    if (const auto successor = proto::successor_of(protocol_state_of(*needs_.shared, one.id.account), one))
+      if (const auto* next = in->conversations.find(*successor);
+          next != nullptr && proto::predecessor_of(protocol_state_of(*needs_.shared, one.id.account), *next) == one.id.id)
+        return false;
+    return in_folder(one) && (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted));
+  };
+  // Its own chats -- not those moved to another account's list -- and the
+  // other accounts' listed in it.
+  std::vector<const conversation*> chats = in->conversations.values() |
+                                           std::views::filter([&](const conversation& one) { return !moved_out.contains(one.id) && found_by(one); }) |
+                                           std::views::transform([](const conversation& one) { return &one; }) | std::ranges::to<std::vector>();
+  if (const auto extra = listed_in.find(*current); extra != listed_in.end())
+    std::ranges::copy(extra->second | std::views::transform([&](const conversation_id& id) { return now.find(id); }) |
+                          std::views::filter([&](const conversation* one) { return one != nullptr && found_by(*one); }),
+                      std::back_inserter(chats));
+  // The strip of a chat listed here from another account.
+  const auto strip_for = [&](const conversation* one) -> std::optional<skia::SkColor> {
+    if (one->id.account == *current)
+      return std::nullopt;
+    const auto found = strips.find(one->id);
+    return found == strips.end() ? std::nullopt : std::optional<skia::SkColor>(found->second);
+  };
+  // Each chat's room events as it shows them: what it hides is not its
+  // newest, nor counted.
+  const auto events_of = [&](const conversation* one) {
+    const auto found = event_filters.find(one->id);
+    return found == event_filters.end() ? room_event_filter{} : found->second;
+  };
+  // A forum's row, as tdesktop's: the newest of its topics, and their
+  // unread summed -- not the space's own, which says what was done to it.
+  std::ranges::for_each(chats, [&](const conversation*& one) {
+    if (!this->shown_as_forum(*one))
+      return;
+    conversation made = *one;
+    made.timeline.clear();
+    made.read_up_to.reset();
+    made.detached = false;
+    made.unread = 0;
+    made.highlights = 0;
+    auto topics = one->children | std::views::transform([&](const std::string& child) { return in->conversations.find(child); }) |
+                        std::views::filter([](const conversation* topic) { return topic != nullptr && !topic->space; });
+    made.unread = std::ranges::fold_left(topics | std::views::transform([&](const conversation* topic) { return topic->unread_here(events_of(topic)); }),
+                                         std::int64_t{0}, std::plus{});
+    made.highlights = std::ranges::fold_left(topics | std::views::transform(&conversation::highlights), decltype(made.highlights){0}, std::plus{});
+    // The newest of its topics, and which.
+    const auto newest_in = [&](const conversation* topic) { return newest(*topic, events_of(topic)); };
+    auto with_one = topics | std::views::filter([&](const conversation* topic) { return newest_in(topic) != nullptr; });
+    if (const auto best = std::ranges::max_element(with_one, {}, [&](const conversation* topic) { return newest_in(topic)->at; });
+        best != std::ranges::end(with_one)) {
+      made.timeline.push_back(*newest_in(*best));
+      // Said as tdesktop says a forum's newest: in which topic, by whom.
+      made.forum_topic = display_name(**best);
+      made.members = (*best)->members;
+    }
+    one = &out.forums.insert_or_assign(one->id, std::move(made)).first->second;
+  });
+  // Invites first, as Element lists them; then by their newest.
+  std::ranges::sort(chats, std::ranges::greater{}, [&](const conversation* one) {
+    const message* last = newest(*one, events_of(one));
+    return std::pair{one->invite.has_value(), last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{}};
+  });
+  // The chat open -- or, where Alt+Up or Alt+Down went to a forum, that.
+  const auto is_chosen = [&](const conversation* one) { return pointed ? *pointed == one->id : chosen && *chosen == one->id; };
+  out.chats = chats | std::views::transform([&](const conversation* one) {
+                return listed_chat<Actions>{.id = one->id,
+                                            .view = conversation_row<Actions>::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id),
+                                                                                       draft_of(one->id), events_of(one), strip_for(one)),
+                                            .events = events_of(one),
+                                            .strip = strip_for(one),
+                                            .height = conversation_row<Actions>::height_of(*one)};
+              }) |
+              std::ranges::to<std::vector>();
+  return out;
+}
+
+// The rows for where the list is now: those a screen above the view to two
+// below it made from the listing, the rest stand-ins of their height (the
+// rows' padding above and below).
+template <class Actions>
+void conversations_screen<Actions>::show_rows(const model& now) {
+  auto& rows = std::get<0>(list.fChildren);
+  const auto key_of = [](const auto& kept) { return kept.fKey; };
+  const std::vector<conversation_id> listed_before = rows.fRows | std::views::transform(key_of) | std::ranges::to<std::vector>();
+  chats_listed = listing.chats.size();
+  order = listing.chats | std::views::transform(&listed_chat<Actions>::id) | std::ranges::to<std::vector>();
+  const std::vector<float> heights = listing.chats | std::views::transform(&listed_chat<Actions>::height) | std::ranges::to<std::vector>();
+  tops.assign(1, 0.0f);
+  std::inclusive_scan(heights.begin(), heights.end(), std::back_inserter(tops));
+  std::tie(chats_from, chats_made) = this->chats_window();
+  rows.apply({.padding = scene::Margin{tops[chats_from], 0.0f, tops.back() - tops[chats_made], 0.0f}});
+  const auto items = listing.chats | std::views::drop(chats_from) | std::views::take(chats_made - chats_from) |
+                     std::views::transform([&](const listed_chat<Actions>& one) {
+                       return chat_item<Actions>{one.id, one.view, listing.find(now, one.id), &one, &needs_};
+                     });
+  if (rows.read(items)) {
+    list.invalidateLayout();
+    // A chat come or gone -- or moved to another place: the whole list
+    // painted again, not only what says it moved.
+    if (!std::ranges::equal(listed_before, rows.fRows | std::views::transform(key_of)))
+      list.markDamaged();
+  }
+}
+
 template <class Actions>
 void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   last_model = &now;
+  this->read_chat_settings(now);
   // Files attached where the chat's account sends them, and its protocol
   // allows it now: no paperclip otherwise, in the chat or its thread.
   if (chosen) {
@@ -662,10 +838,12 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   if (wanted && now.accounts().contains(*wanted)) {
     current = std::exchange(wanted, std::nullopt);
   } else if (!current || !now.accounts().contains(*current)) {
-    current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().begin()->first);
+    current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().keyAt(0));
   }
-  auto& rows = std::get<0>(std::get<0>(list.fChildren).fChildren);
-  std::vector<const conversation*> chats;
+  // What the chat list's menus offer: the account shown, and the accounts
+  // there are to move a chat to.
+  side.current_account = current;
+  side.accounts_known = now.accounts().keys() | std::ranges::to<std::vector>();
   // What is searched for, in any case: in a name or an address.
   constexpr auto lower = mux::logic::folded;
   const std::string wanted = lower(side.search.field.text());
@@ -691,7 +869,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
                              return false;
                            const auto& chats = now.accounts().at(*current).conversations;
                            const auto found = chats.find(s.room);
-                           return found != chats.end() && found->second.space;
+                           return found != nullptr && found->space;
                          },
                          [](const auto&) { return false; }},
       folder);
@@ -711,206 +889,17 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   shown_folder = folder;
   side.folders.setVisible(folders.size() > 1);
   this->show_space_bars(now);
-  // Whether a chat is in the folder chosen. A space is a folder, not a
-  // chat: it is never listed.
-  const account* in = current ? &now.accounts().at(*current) : nullptr;
-  // The rooms of the space chosen: its own, and those of the spaces in it,
-  // down every level -- each space once, however they hold each other.
-  std::set<std::string> in_space;
-  if (in)
-    if (const std::optional<std::string> chosen_room = space_of(folder)) {
-      std::set<std::string> seen;
-      std::vector<std::string> todo{*chosen_room};
-      while (!todo.empty()) {
-        const std::string at = std::move(todo.back());
-        todo.pop_back();
-        if (!seen.insert(at).second)
-          continue;
-        if (const auto found = in->conversations.find(at); found != in->conversations.end())
-          for (const std::string& child : found->second.children) {
-            in_space.insert(child);
-            todo.push_back(child);
-          }
-      }
-    }
-  // Forums: each listed as one chat; their rooms in them, not beside them.
-  std::set<std::string> in_forums;
-  if (in)
-    std::ranges::for_each(std::views::filter(std::views::values(in->conversations), [&](const conversation& one) { return this->shown_as_forum(one); }),
-                          [&](const conversation& one) { in_forums.insert(one.children.begin(), one.children.end()); });
   // The forum open: still one; its rooms, the list.
   if (forum_open && (!current || !this->is_forum(conversation_id{*current, *forum_open})))
     forum_open.reset();
-  const conversation* forum = forum_open && in && in->conversations.contains(*forum_open) ? &in->conversations.at(*forum_open) : nullptr;
+  const account* in = current ? &now.accounts().at(*current) : nullptr;
+  const conversation* forum = forum_open && in ? in->conversations.find(*forum_open) : nullptr;
   side.forum_head.setVisible(forum != nullptr);
   if (forum)
     side.forum_head.parts.name.setText(display_name(*forum));
-  // What the account's spaces hold: out of Home, where it is chosen so --
-  // but direct messages.
-  std::set<std::string> in_spaces;
-  // Every space's, where Home hides all that spaces hold; else those of
-  // the spaces that hide theirs.
-  if (in && folder == folder_t{folder::all{}})
-    for (const auto& [key, each] : in->conversations)
-      if (each.space && (home_hides_spaced || hidden_from_home.contains(each.id)))
-        in_spaces.insert(each.children.begin(), each.children.end());
-  const auto direct = [](const conversation& one) {
-    return spl::visit(spl::overloaded{[](conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
-  };
-  const auto in_folder = [&](const conversation& one) {
-    if (!one.space && in_spaces.contains(one.id.id) && !direct(one))
-      return false;
-    if (home_hides_spaced && home_hides_direct && folder == folder_t{folder::all{}} && direct(one))
-      return false;
-    if (forum)
-      return !one.space && std::ranges::contains(forum->children, one.id.id);
-    // A space is a folder, not a chat -- but a forum is one chat.
-    if (one.space && !this->shown_as_forum(one))
-      return false;
-    if (!one.space && in_forums.contains(one.id.id))
-      return false;
-    return spl::visit(spl::overloaded{[](const folder::all&) { return true; },
-                                 [&](const folder::space&) { return in_space.contains(one.id.id); },
-                                 [&](const folder::group& g) { return std::ranges::contains(one.groups, g.name); },
-                                 [&](const folder::direct&) {
-                                   return spl::visit(spl::overloaded{[](conversation_kind::direct) { return true; },
-                                                                           [](const auto&) { return false; }},
-                                                        one.kind);
-                                 }},
-                      folder);
-  };
-  // Its own chats -- not those moved to another account's list -- and the
-  // other accounts' listed in it.
-  const auto found_by = [&](const conversation& one) {
-    // Upgraded away, its new room here: only the new one listed, as Element
-    // -- where the two agree: its tombstone names the new room, and the new
-    // room's creation names it as what it continues. One side alone is not
-    // believed (as matrix-js-sdk's CVE-2025-59160, the other way round):
-    // a room could otherwise hide another from the list.
-    if (const auto successor = proto::successor_of(protocol_state_of(*needs_.shared, one.id.account), one); successor && in)
-      if (const auto next = in->conversations.find(*successor);
-          next != in->conversations.end() &&
-          proto::predecessor_of(protocol_state_of(*needs_.shared, one.id.account), next->second) == one.id.id)
-        return false;
-    return in_folder(one) && (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted));
-  };
-  if (in)
-    for (const auto& [key, one] : in->conversations)
-      if (!moved_out.contains(one.id) && found_by(one))
-        chats.push_back(&one);
-  if (in && current)
-    if (const auto extra = listed_in.find(*current); extra != listed_in.end())
-      for (const conversation_id& id : extra->second)
-        if (const conversation* one = now.find(id); one && found_by(*one))
-          chats.push_back(one);
-  // The strip of a chat listed here from another account.
-  const auto strip_for = [&](const conversation* one) -> std::optional<skia::SkColor> {
-    if (!current || one->id.account == *current)
-      return std::nullopt;
-    const auto found = strips.find(one->id);
-    return found == strips.end() ? std::nullopt : std::optional<skia::SkColor>(found->second);
-  };
-  // Each chat's room events as it shows them: what it hides is not its
-  // newest, nor counted.
-  const auto events_of = [&](const conversation* one) {
-    const auto found = event_filters.find(one->id);
-    return found == event_filters.end() ? room_event_filter{} : found->second;
-  };
-  // A forum's row, as tdesktop's: the newest of its topics, and their
-  // unread summed -- not the space's own, which says what was done to it.
-  std::map<conversation_id, conversation> forum_shown;
-  if (in)
-    for (const conversation*& one : chats)
-      if (this->shown_as_forum(*one)) {
-        conversation made = *one;
-        made.timeline.clear();
-        made.read_up_to.reset();
-        made.detached = false;
-        made.unread = 0;
-        made.highlights = 0;
-        const message* best = nullptr;
-        std::string best_in;
-        for (const std::string& child : one->children)
-          if (const auto found = in->conversations.find(child); found != in->conversations.end() && !found->second.space) {
-            const conversation& topic = found->second;
-            made.unread += topic.unread_here(events_of(&topic));
-            made.highlights += topic.highlights;
-            if (const message* last = newest(topic, events_of(&topic)); last && (!best || last->at > best->at)) {
-              best = last;
-              best_in = topic.id.id;
-            }
-          }
-        if (best) {
-          made.timeline.push_back(*best);
-          // Said as tdesktop says a forum's newest: in which topic, by whom.
-          if (const auto found = in->conversations.find(best_in); found != in->conversations.end()) {
-            made.forum_topic = display_name(found->second);
-            made.members = found->second.members;
-          }
-        }
-        one = &forum_shown.insert_or_assign(one->id, std::move(made)).first->second;
-      }
-  // Invites first, as Element lists them; then by their newest.
-  std::ranges::sort(chats, std::ranges::greater{}, [&](const conversation* one) {
-    const message* last = newest(*one, events_of(one));
-    return std::pair{one->invite.has_value(), last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{}};
-  });
-  // The rows, as a function of the chats: those whose chat shows the same
-  // are kept as they are.
-  // The chat open -- or, where Alt+Up or Alt+Down went to a forum, that.
-  const auto is_chosen = [&](const conversation* one) {
-    return pointed ? *pointed == one->id : chosen && *chosen == one->id;
-  };
-  const std::vector<conversation_id> listed_before =
-      std::ranges::to<std::vector>(std::views::transform(rows, [](const conversation_row<Actions>& row) { return row.id; }));
-  chats_listed = chats.size();
-  order = std::ranges::to<std::vector>(std::views::transform(chats, [](const conversation* one) { return one->id; }));
-  tops.assign(1, 0.0f);
-  tops.reserve(chats.size() + 1);
-  for (const conversation* one : chats)
-    tops.push_back(tops.back() + conversation_row<Actions>::height_of(*one));
-  std::tie(chats_from, chats_made) = this->chats_window();
-  const auto made = std::views::take(std::views::drop(chats, chats_from), chats_made - chats_from);
-  // The rows not made, above and below: as much room as they would take.
-  std::get<0>(list.fChildren).apply({.padding = scene::Margin{tops[chats_from], 0.0f, tops.back() - tops[chats_made], 0.0f}});
-  {
-    const std::set<conversation_id> listed = std::ranges::to<std::set>(std::views::transform(made, [](const conversation* one) { return one->id; }));
-    for (conversation_row<Actions>& row : rows)
-      if (!listed.contains(row.id)) {
-        const conversation_id id = row.id;
-        rows_kept.insert_or_assign(id, std::move(row));
-      }
-    while (rows_kept.size() > kRowsKept)
-      rows_kept.erase(rows_kept.begin());
-  }
-  if (nodes::reconcile(
-          rows, made, [](const conversation* one) { return one->id; },
-          [](const conversation_row<Actions>& row) { return row.id; },
-          [&](const conversation* one) {
-            if (const auto kept = rows_kept.find(one->id); kept != rows_kept.end()) {
-              const bool same = kept->second.shown == conversation_row<Actions>::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id),
-                                                                                         draft_of(one->id), events_of(one), strip_for(one));
-              if (same) {
-                conversation_row<Actions> back = std::move(kept->second);
-                rows_kept.erase(kept);
-                return back;
-              }
-              rows_kept.erase(kept);
-            }
-            return conversation_row<Actions>(needs_, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
-                                             events_of(one), strip_for(one));
-          },
-          [&](const conversation_row<Actions>& row, const conversation* one) {
-            return row.shown ==
-                   conversation_row<Actions>::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
-                                                      events_of(one), strip_for(one));
-          })) {
-    list.invalidateLayout();
-    // A chat come or gone -- or moved to another place: the whole list
-    // painted again, not only what says it moved.
-    if (!std::ranges::equal(listed_before, rows, {}, {}, [](const conversation_row<Actions>& row) { return row.id; }))
-      list.markDamaged();
-  }
+  // The chats listed, as the model has them now, made into rows.
+  listing = this->listing_of(now);
+  this->show_rows(now);
   const bool none = now.accounts().empty();
   // The messages' area, not only its list: hidden, it no longer takes the
   // column's height and pushes what is said instead to the bottom.
@@ -923,13 +912,13 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   // the server is asked for rooms and people that do, once for each
   // thing typed.
   const std::string& typed = side.search.field.text();
-  const bool elsewhere = !none && !wanted.empty() && chats.empty() && typed.size() >= 2;
+  const bool elsewhere = !none && !wanted.empty() && listing.chats.empty() && typed.size() >= 2;
   if (elsewhere && typed != asked_elsewhere) {
     asked_elsewhere = typed;
     rooms_elsewhere.clear();
     people_elsewhere.clear();
     rooms_came = people_came = false;
-    actions->search_elsewhere(typed);
+    if (wants_) want(*wants_, ::mux::ui::request::search_elsewhere{typed});
     this->show_elsewhere();
   } else if (!elsewhere && !asked_elsewhere.empty()) {
     asked_elsewhere.clear();
@@ -938,7 +927,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     this->show_elsewhere();
   }
   side.elsewhere.setVisible(elsewhere);
-  no_chats.setVisible(!none && chats.empty() && !elsewhere);
+  no_chats.setVisible(!none && listing.chats.empty() && !elsewhere);
   chat.empty.setVisible(none);
   this->show_info();
   // Laid out again, repainting only what moves: what changed repaints
@@ -952,17 +941,16 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
 template <class Actions>
 void conversations_screen<Actions>::show_banners(const conversation* one, const model& now) {
   const auto banners = one ? proto::composer_banners(protocol_state_of(*needs_.shared, one->id.account), *one, now)
-                           : std::vector<proto::any_banner>{};
-  const std::string said = std::ranges::to<std::string>(std::views::join_with(std::views::transform(banners, &proto::any_banner::text), '\n'));
+                           : std::vector<proto::part::banner>{};
+  const std::string said = std::ranges::to<std::string>(std::views::join_with(std::views::transform(banners, &proto::part::banner::text), '\n'));
   // The first's button, where it has one.
   const std::string label = banners.empty() ? std::string() : banners.front().button;
-  chat.banner_asks = banners.empty() ? std::nullopt : banners.front().asks;
   auto& button = chat.parts.banner_button;
   if (label.empty() == button.has_value()) {
     if (label.empty())
       button.reset();
     else {
-      button.emplace(needs_.colours->widgets, label, banner_press{actions, &chat.banner_asks});
+      button.emplace(needs_.colours->widgets, label, banner_press{this});
       button->apply({.width = 120.0f, .height = 30.0f, .alignSelf = scene::align::kEnd,
                      .margin = {4.0f, 14.0f, 6.0f, 14.0f}});
     }
@@ -1006,9 +994,7 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
   const float left_at = timeline.current();
   auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
   const conversation* one = chosen ? now.find(*chosen) : nullptr;
-  head_shown = chat_header<Actions>::view_of(*needs_.shared, one, now);
-  head_shown.back = single;
-  header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(needs_, shown); });
+  header.choose(now, chosen, single);
   this->show_banners(one, now);
   if (pinned_of != chosen) {
     pinned_of = chosen;
@@ -1027,11 +1013,9 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
   }
   // Only while it is open: its members were made at every switch of chat,
   // the panel shut or not. Opened, it is shown then (toggle_info).
-  if (info.visible())
-    info.show(*one, now, muted.contains(one->id));
+  info.choose(now, chosen, muted.contains(one->id));
   chat.area.show_wallpaper(wallpaper);
-  if (parts.threads.visible())
-    parts.threads.show(*one, &now);
+  parts.threads.choose(now, chosen);
   // Whether the reader may post here, as the chat's protocol says (Matrix:
   // its power levels); and whether any message of theirs here was not sent.
   {
@@ -1039,7 +1023,7 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
     chat.line.set_can_post(may.post);
     chat.line.set_replaced(proto::successor_of(protocol_state_of(*needs_.shared, one->id.account), *one).has_value());
     // Those knocking, for whoever may invite.
-    chat.line.show_knocks(actions, one->knocking, may.invite);
+    chat.line.show_knocks(one->knocking, may.invite);
     chat.line.show_unsent(std::ranges::any_of(one->timeline, [](const message& said) {
       return said.outgoing &&
              spl::visit(spl::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }},

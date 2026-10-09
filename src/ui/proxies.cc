@@ -9,8 +9,13 @@ import skiff.paint;
 import skiff.scene;
 import skiff.nodes.box;
 import skiff.nodes.flow;
+import skiff.nodes.icon;
 import skiff.nodes.text;
 import skiff.widgets.button;
+import skiff.model;
+import skiff.compose;
+import skiff.widgets.model;
+import skiff.bind;
 import mux.core;
 import mux.config;
 import :base;
@@ -26,269 +31,137 @@ export namespace mux::ui {
 
 // Settings, as Telegram Desktop shows them: a box over the window, a list of
 // sections, and each section a page of the same box.
-template <class Actions>
-struct settings_home : nodes::Stack {
-  // Its children, in the order they are shown: the header, then the lines,
-  // one under another -- walked as they are declared.
-  struct parts_t {
-    page_header<ask<Actions, &Actions::close_settings>, ask<Actions, &Actions::close_settings>> header;
-    row_item<ask<Actions, &Actions::open_accounts>> accounts;
-    row_item<ask<Actions, &Actions::settings_animations>> animations;
-    row_item<ask<Actions, &Actions::settings_appearance>> appearance;
-    row_item<ask<Actions, &Actions::open_packs>> packs;
-    row_item<ask<Actions, &Actions::settings_rendering>> rendering;
-    row_item<ask<Actions, &Actions::settings_notifications>> notifications;
-    row_item<ask<Actions, &Actions::settings_storage>> storage;
-    row_item<ask<Actions, &Actions::settings_files>> files;
-    row_item<ask<Actions, &Actions::settings_proxies>> proxies;
-  } parts;
+template <class Event>
+auto settings_link(const palette& colours, std::string label, icon_t icon, Event event) {
+  return skiff::compose::onClick(std::move(event), skiff::compose::row(
+      skiff::compose::hbox(16.0f, {.fillX = true, .height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
+                                  .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
+      skiff::compose::styled({.width = 28.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon), colours.dim)),
+      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(label, 15.0f, colours.text)))), label);
+}
+inline auto settings_home(const palette& colours) {
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
+          page_header<sends<request::close_settings>, sends<request::close_settings>>(colours, "Settings", {}, {}, false, true)),
+      settings_link(colours, "Accounts", icon::person{}, request::open_accounts{}),
+      settings_link(colours, "Animations", icon::motion{}, request::settings_animations{}),
+      settings_link(colours, "Appearance", icon::eye{}, request::settings_appearance{}),
+      settings_link(colours, "Emojis & Stickers", icon::smile{}, request::open_packs{}),
+      settings_link(colours, "Rendering", icon::sliders{}, request::settings_rendering{}),
+      settings_link(colours, "Notifications", icon::bell{}, request::settings_notifications{}),
+      settings_link(colours, "Storage", icon::clip{}, request::settings_storage{}),
+      settings_link(colours, "Files", icon::send{}, request::settings_files{}),
+      settings_link(colours, "Proxies", icon::gear{}, request::settings_proxies{}));
+}
+using settings_home_t = decltype(settings_home(std::declval<const palette&>()));
 
-  explicit settings_home(const ui_needs<Actions>& n) : settings_home(*n.colours, n.actions) {}
-  settings_home(const palette& colours, Actions* a)
-      : parts{.header = {colours, "Settings", {a}, {a}, false, true},
-              .accounts = {colours, "Accounts", {a}, icon::person{}},
-              .animations = {colours, "Animations", {a}, icon::motion{}},
-              .appearance = {colours, "Appearance", {a}, icon::eye{}},
-              .packs = {colours, "Emojis & Stickers", {a}, icon::smile{}},
-              .rendering = {colours, "Rendering", {a}, icon::sliders{}},
-              .notifications = {colours, "Notifications", {a}, icon::bell{}},
-              .storage = {colours, "Storage", {a}, icon::clip{}},
-              .files = {colours, "Files", {a}, icon::send{}},
-              .proxies = {colours, "Proxies", {a}, icon::gear{}}} {
-    fState.apply({.fill = true});
-  }
-
-  void show_motion(std::string_view) {}
-  void show_receipts(bool) {}
-};
-
-
-
-template <class Actions>
-struct animations_page : nodes::Stack {
-  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
-  using choice = row_item<choose_motion<Actions>>;
-  struct parts_t {
-    header_t header;
-    nodes::Text note;
-    choice full;
-    choice reduced;
-    choice none;
-  } parts;
-
-  explicit animations_page(const ui_needs<Actions>& n) : animations_page(*n.colours, n.actions) {}
-  animations_page(const palette& colours, Actions* a)
-      : parts{.header = header_t(colours, "Animations", {a}, {a}, true, true),
-              .note = note_text(colours, "How much the window moves. Reduced keeps the small movements, such as a section "
-                                         "unfolding, and shows panels at once."),
-              .full = choice(colours, "Full", {a, kMotions[0]}, icon::none{}, false),
-              .reduced = choice(colours, "Reduced", {a, kMotions[1]}, icon::none{}, false),
-              .none = choice(colours, "None", {a, kMotions[2]}, icon::none{}, false)} {
-    parts.note.apply({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}});
-    fState.apply({.fill = true});
-    parts.note.setWrapped(true);
-  }
-
-  void show_receipts(bool) {}
-  void show_motion(std::string_view level) {
-    auto& [header, note, full, reduced, none] = parts;
-    full.set_chosen(level == kMotions[0]);
-    reduced.set_chosen(level == kMotions[1]);
-    none.set_chosen(level == kMotions[2]);
-  }
-};
-
-// A proxy profile opened from the list in Settings.
-template <class Actions>
-struct edit_proxy {
-  Actions* actions = nullptr;
-  int index = 0;
-  void operator()() const { actions->edit_proxy(index); }
-};
-// A kind of proxy chosen on a profile's page.
-template <class Actions>
-struct choose_proxy_kind {
-  Actions* actions = nullptr;
-  config::proxy_kind_t kind;
-  void operator()() const { actions->proxy_kind(kind); }
-};
+inline auto motion_settings_view(const palette& colours) {
+  using field = skiff::model::Field<&config::look_settings::motion>;
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      wrapped(skiff::compose::styled({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}},
+          note_text(colours, "How much the window moves. Reduced keeps the small movements, such as a section unfolding, and shows panels at once."))),
+      skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "Full", config::motion::full{})),
+      skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "Reduced", config::motion::reduced{})),
+      skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "None", config::motion::none{})));
+}
+inline auto animations_page(const palette& colours) {
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
+          page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Animations", {}, {}, true, true)),
+      motion_settings_view(colours));
+}
+using animations_page_t = decltype(animations_page(std::declval<const palette&>()));
 
 // Settings' Proxies page, as Gajim's Manage Proxies: the profiles, and a way
 // to add one.
-template <class Actions>
-struct proxies_page : nodes::Stack {
-  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
-  using add_row = row_item<ask<Actions, &Actions::add_proxy>>;
-  struct parts_t {
-    header_t header;
-    std::vector<row_item<edit_proxy<Actions>>> profiles;
-    add_row add;
-    nodes::Text empty;
-  } parts;
+inline auto proxies_page(const palette& colours, const std::vector<config::proxy_settings>& profiles, bool with_back) {
+  auto rows = std::views::iota(std::size_t{0}, profiles.size()) |
+      std::views::transform([&](std::size_t index) {
+        const auto& profile = profiles[index];
+        return settings_link(colours, std::format("{} ({} {}:{})", profile.name, config::label_of(profile.kind), profile.host, profile.port),
+                             icon::dot{proxy_colour(profile.name)}, request::edit_proxy{static_cast<int>(index)});
+      }) | std::ranges::to<std::vector>();
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
+          page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Proxies", {}, {}, with_back, true)),
+      skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)),
+      settings_link(colours, "Add proxy", icon::plus{}, request::add_proxy{}),
+      skiff::compose::visible(profiles.empty(), wrapped(skiff::compose::styled({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}},
+          note_text(colours, "No proxies yet. Accounts connect directly.")))));
+}
+using proxies_page_t = decltype(proxies_page(std::declval<const palette&>(), std::declval<const std::vector<config::proxy_settings>&>(), true));
 
-  // With a way back to the settings' list where it was opened from there.
-  proxies_page(const ui_needs<Actions>& n, const std::vector<config::proxy_settings>& all, bool with_back)
-      : proxies_page(*n.colours, n.actions, all, with_back) {}
-  proxies_page(const palette& colours, Actions* a, const std::vector<config::proxy_settings>& all, bool with_back)
-      : parts{.header = header_t(colours, "Proxies", {a}, {a}, with_back, true),
-              .add = add_row(colours, "Add proxy", {a}, icon::plus{}),
-              .empty = note_text(colours, "No proxies yet. Accounts connect directly.")} {
-    auto& [header, profiles, add, empty] = parts;
-    empty.setWrapped(true);
-    empty.apply({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}});
-    fState.apply({.fill = true});
-    for (std::size_t i = 0; i < all.size(); ++i)
-      profiles.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
-                                        all[i].host, all[i].port),
-                            edit_proxy<Actions>{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
-    empty.setVisible(all.empty());
-  }
-  void show_motion(std::string_view) {}
-  void show_receipts(bool) {}
-};
-
-// SOCKS5 | HTTP: two segments in a frame, the chosen one lit by a plate
-// that slides from one to the other.
-template <class Actions>
-struct kind_switch : nodes::Stack {
-  // The highlight that slides from one to the other: under them, out of
-  // their flow, shifted as far as the slide has come.
-  using kind_segment = segment<choose_proxy_kind<Actions>>;
-  struct parts_t {
-    nodes::Box<> highlight;
-    kind_segment socks;
-    kind_segment http;
-  } parts;
-  skiff::paint::Tween slide{0.0f, 180.0f, skiff::paint::movement::subtle{}};
-
-  kind_switch(const palette& colours, Actions* a)
-      : parts{.highlight = nodes::Box<>(colours.accent),
-              .socks = kind_segment(colours, "SOCKS5", {a, config::proxy_kind::socks5{}}),
-              .http = kind_segment(colours, "HTTP", {a, config::proxy_kind::http{}})} {
-    this->setHorizontal();
-    this->setGap(1.0f);
-    fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen});
-    parts.highlight.apply({.place = scene::anchor::kTopLeft, .width = 92.0f, .height = 28.0f});
-  }
-  void show(const config::proxy_kind_t& kind, bool at_once) {
-    const float to = spl::visit(spl::overloaded{[](config::proxy_kind::socks5) { return 0.0f; },
-                                           [](config::proxy_kind::http) { return 1.0f; }},
-                                kind);
-    if (at_once)
-      slide.jump(to);
-    else
-      slide.setTarget(to);
-    this->markDamaged();
-  }
-  [[nodiscard]] bool settling() const { return slide.moving(); }
-  void update(double now_ms) {
-    auto& [highlight, socks, http] = parts;
-    if (slide.step(now_ms))
-      highlight.apply({.shiftX = (http.bounds().fLeft - socks.bounds().fLeft) * slide.value()});
-  }
-};
-
-
-// One proxy profile's page: its name, SOCKS5 or HTTP, where, and who to be
-// there; saved or deleted with its buttons. Declared: a column of these,
-// nothing placed by hand.
-template <class Actions>
-struct proxy_editor : nodes::Stack {
-  int index = -1;  // in the list; -1 for a new one
-  // The colours what it says is said in.
-  const palette* colours_ = nullptr;
+// The editor owns a local draft. Controls write fields of this model;
+// requests carry the parsed profile instead of asking the app to read widgets.
+struct proxy_draft {
+  int index = -1;
+  std::string name;
   config::proxy_kind_t kind = config::proxy_kind::socks5{};
-  using header_t = page_header<ask<Actions, &Actions::settings_proxies>, ask<Actions, &Actions::close_settings>>;
-  using save_button = widgets::Button<ask<Actions, &Actions::save_proxy_profile>>;
-  using delete_button = widgets::Button<ask<Actions, &Actions::delete_proxy_profile>>;
-  struct parts_t {
-    header_t header;
-    field name;
-    kind_switch<Actions> kinds;
-    field host;
-    field port;
-    field username;
-    field password;
-    // XMPP's SRV records, through it: asked of whom.
-    field resolver;
-    nodes::Text message;
-    button_row<save_button, delete_button> buttons;
-  } parts;
-
-  proxy_editor(const ui_needs<Actions>& n, const std::optional<config::proxy_settings>& from, int at)
-      : proxy_editor(*n.colours, n.actions, from, at) {}
-  proxy_editor(const palette& colours, Actions* a, const std::optional<config::proxy_settings>& from, int at)
-      : index(at),
-        colours_(&colours),
-        parts{.header = header_t(colours, from ? from->name : std::string("New proxy"), {a}, {a}, true, true),
-              .name = field(colours, "Name", "Home, Tor, Work…"),
-              .kinds = kind_switch<Actions>(colours, a),
-              .host = field(colours, "Host", "proxy.example.com"),
-              .port = field(colours, "Port", "1080"),
-              .username = field(colours, "User name", "none"),
-              .password = field(colours, "Password", "none"),
-              .resolver = field(colours, "XMPP SRV lookups: nameserver", "the system's; an IP address, or off"),
-              .message = nodes::Text("", 13.0f, colours.dim),
-              .buttons = button_row<save_button, delete_button>(save_button(colours.widgets, "Save", {a}), delete_button(colours.widgets, "Delete", {a}))} {
-    auto& [header, name, kinds, host, port, username, password, resolver, message, buttons] = parts;
-    fState.apply({.fill = true});
-    this->setGap(8.0f);
-    const auto inset = scene::Margin::horizontal(16.0f);
-    for (field* one : {&name, &host, &port, &username, &password, &resolver})
-      one->apply({.margin = inset});
-    kinds.apply({.margin = {4.0f, 0.0f, 4.0f, 16.0f}});
-    message.setWrapped(true);
-    message.apply({.fillX = true, .margin = inset});
-    buttons.apply({.margin = inset});
-    auto& [save, remove] = buttons.parts.buttons;
-    save.setPrimary(true);
-    save.apply({.width = 110.0f, .height = 34.0f});
-    remove.apply({.width = 110.0f, .height = 34.0f});
-    remove.setVisible(from.has_value());
-    password.parts.box.setMasked(true);
-    if (from) {
-      name.parts.box.setText(from->name);
-      host.parts.box.setText(from->host);
-      port.parts.box.setText(std::to_string(from->port));
-      username.parts.box.setText(from->username.value_or(""));
-      password.parts.box.setText(from->password.value_or(""));
-      resolver.parts.box.setText(from->srv_resolver.value_or(""));
-    }
-    kind = from ? config::proxy_kind_of(from->kind) : config::proxy_kind_t{config::proxy_kind::socks5{}};
-    kinds.show(kind, true);
-  }
-
-  void set_kind(const config::proxy_kind_t& to) {
-    kind = to;
-    parts.kinds.show(kind, false);
-  }
-
-  // The profile as typed, or what is wrong with it.
-  [[nodiscard]] std::expected<config::proxy_settings, std::string> proxy() const {
-    const auto& [header, name, kinds, host, port, username, password, resolver, message, buttons] = parts;
-    config::proxy_settings out{.name = name.parts.box.text(), .kind = config::word_of(kind), .host = host.parts.box.text()};
-    if (out.name.empty())
-      return std::unexpected("Name the proxy");
-    if (out.host.empty())
-      return std::unexpected("Type the proxy's host");
-    const std::string& text = port.parts.box.text();
-    std::int64_t number = 0;
-    const auto [last, failed] = std::from_chars(text.data(), text.data() + text.size(), number);
-    if (text.empty() || failed != std::errc{} || last != text.data() + text.size() || number < 1 || number > 65535)
-      return std::unexpected("A port is a number from 1 to 65535");
-    out.port = number;
-    out.username = typed_or_nothing(username.parts.box.text());
-    out.password = typed_or_nothing(password.parts.box.text());
-    out.srv_resolver = typed_or_nothing(resolver.parts.box.text());
-    return out;
-  }
-
-  void say(std::string text, bool error) {
-    parts.message.setText(std::move(text));
-    parts.message.setColour(error ? colours_->error : colours_->dim);
-  }
-  void show_motion(std::string_view) {}
-  void show_receipts(bool) {}
+  std::string host;
+  std::string port;
+  std::string username;
+  std::string password;
+  std::string resolver;
 };
+struct proxy_notice { std::string text; };
+struct save_proxy_draft {};
+struct delete_proxy_draft {};
+
+inline std::expected<config::proxy_settings, std::string> proxy_profile(const proxy_draft& draft) {
+  if (draft.name.empty()) return std::unexpected("Name the proxy");
+  if (draft.host.empty()) return std::unexpected("Type the proxy's host");
+  std::int64_t number = 0;
+  const auto [last, failed] = std::from_chars(draft.port.data(), draft.port.data() + draft.port.size(), number);
+  if (draft.port.empty() || failed != std::errc{} || last != draft.port.data() + draft.port.size() || number < 1 || number > 65535)
+    return std::unexpected("A port is a number from 1 to 65535");
+  return config::proxy_settings{.name = draft.name, .kind = draft.kind, .host = draft.host, .port = number,
+      .username = typed_or_nothing(draft.username), .password = typed_or_nothing(draft.password),
+      .srv_resolver = typed_or_nothing(draft.resolver)};
+}
+struct proxy_draft_events {
+  auto on(save_proxy_draft, const proxy_draft& draft) const {
+    return skiff::model::Up{request::save_proxy_profile{proxy_profile(draft), draft.index}};
+  }
+  auto on(delete_proxy_draft, const proxy_draft& draft) const {
+    return skiff::model::Up{request::delete_proxy_profile{draft.index}};
+  }
+};
+inline auto proxy_editor(const palette& colours, const std::optional<config::proxy_settings>& from, int index) {
+  proxy_draft draft{.index = index};
+  if (from) draft = {.index = index, .name = from->name, .kind = from->kind, .host = from->host,
+      .port = std::to_string(from->port), .username = from->username.value_or(""),
+      .password = from->password.value_or(""), .resolver = from->srv_resolver.value_or("")};
+  return skiff::compose::local<proxy_draft>(proxy_draft_events{}, skiff::compose::column(
+      skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      page_header<sends<request::settings_proxies>, sends<request::close_settings>>(colours,
+          from ? from->name : "New proxy", {}, {}, true, true),
+      model_field<&proxy_draft::name>(colours, "Name", "Home, Tor, Work…", false, scene::Margin::horizontal(16.0f)),
+      skiff::compose::bound<skiff::model::Field<&proxy_draft::kind>>(skiff::compose::styled(
+          {.fillX = true, .height = 30.0f, .margin = scene::Margin::horizontal(16.0f)},
+          widgets::ChoiceTabs<config::proxy_kind_t>({{"SOCKS5", config::proxy_kind::socks5{}}, {"HTTP", config::proxy_kind::http{}}}))),
+      model_field<&proxy_draft::host>(colours, "Host", "proxy.example.com", false, scene::Margin::horizontal(16.0f)),
+      model_field<&proxy_draft::port>(colours, "Port", "1080", false, scene::Margin::horizontal(16.0f)),
+      model_field<&proxy_draft::username>(colours, "User name", "none", false, scene::Margin::horizontal(16.0f)),
+      model_field<&proxy_draft::password>(colours, "Password", "none", true, scene::Margin::horizontal(16.0f)),
+      model_field<&proxy_draft::resolver>(colours, "XMPP SRV lookups: nameserver", "the system's; an IP address, or off", false, scene::Margin::horizontal(16.0f)),
+      skiff::compose::text_for<proxy_notice>([](const proxy_notice& notice) { return notice.text; },
+          wrapped(skiff::compose::styled({.fillX = true, .margin = scene::Margin::horizontal(16.0f)},
+                                        nodes::Text("", 13.0f, colours.error)))),
+      skiff::compose::row(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
+          .margin = scene::Margin::horizontal(16.0f)}),
+          skiff::compose::onClick(save_proxy_draft{}, skiff::compose::column(
+              skiff::compose::vbox(0.0f, {.width = 110.0f, .height = 34.0f, .cornerRadius = 6.0f,
+                  .background = colours.accent, .hoverBackground = colours.chosen}),
+              nodes::Text("Save", 14.0f, colours.text)), "Save proxy"),
+          skiff::compose::visible(from.has_value(), skiff::compose::onClick(delete_proxy_draft{}, skiff::compose::column(
+              skiff::compose::vbox(0.0f, {.width = 110.0f, .height = 34.0f, .cornerRadius = 6.0f,
+                  .background = colours.tile, .hoverBackground = colours.chosen}),
+              nodes::Text("Delete", 14.0f, colours.text)), "Delete proxy")))), std::move(draft));
+}
+using proxy_editor_t = decltype(proxy_editor(std::declval<const palette&>(), std::nullopt, -1));
 
 }  // namespace mux::ui

@@ -43,7 +43,7 @@ TEST(Config, WhatIsSavedIsWhatIsLoaded) {
   const std::vector<mux::config::account_t> accounts{
       {.own = mux::config::kept_t{xmpp_account{.address = "alice@example.com", .password = "p\"ss\\word", .resource = "laptop",
                                                .host = "xmpp.example.com", .port = 5222, .plain_without_tls = true}},
-       .shared = {.colour = "pink"}},
+       .shared = {.colour = mux::config::accent_said_t{mux::config::accent::pink{}}}},
       {.own = mux::config::kept_t{matrix_account{.user_id = "@bob:example.org", .password = "секрет",
                                                  .homeserver = "https://matrix.example.org", .device_name = "desk"}},
        .shared = {.enabled = false}}};
@@ -86,6 +86,22 @@ TEST(Config, ABrokenFileSaysSo) {
   EXPECT_NE(got.error().find("is not an accounts file"), std::string::npos);
 }
 
+// The choices' words, read once into the choices: each its own, the old
+// ones as what they meant, an unknown one as the default.
+TEST(Config, TheChoicesWordsAreReadAsChoices) {
+  mux::vault::vault vault;
+  scratch here;
+  fs::create_directories(here.dir);
+  const fs::path where = here.dir / "accounts.json";
+  std::ofstream(where) << R"({"theme": "dark", "accent": "cyan", "renderer": "software", "motion": "spinning"})";
+  const auto got = mux::config::load(where, vault);
+  ASSERT_TRUE(got.has_value());
+  EXPECT_EQ(mux::config::theme_of(got->theme), mux::config::theme_t{mux::config::theme::night{}});
+  EXPECT_EQ(mux::config::accent_of(got->accent), mux::config::accent_t{mux::config::accent::blue{}});
+  EXPECT_EQ(mux::config::renderer_of(got->renderer), mux::config::renderer_t{mux::config::renderer::software{}});
+  EXPECT_EQ(mux::config::motion_of(got->motion), mux::config::motion_t{mux::config::motion::full{}});
+}
+
 TEST(Config, AnOldFileIsNotReadAsEmpty) {
   mux::vault::vault vault;
   scratch here;
@@ -110,7 +126,7 @@ TEST(Config, AnOldFilesAccountsAreReadAsTheyAreNow) {
   ASSERT_EQ(all.size(), 2u);
   EXPECT_EQ(mux::config::address_of(all[0]), "a@b.c");
   EXPECT_EQ(mux::config::protocol_name(all[0]), "XMPP");
-  EXPECT_EQ(all[0].shared.colour, std::optional<std::string>("red"));
+  EXPECT_EQ(mux::config::colour_of(all[0]), mux::config::accent_t{mux::config::accent::red{}});
   EXPECT_EQ(mux::config::address_of(all[1]), "@d:e.f");
   EXPECT_EQ(mux::config::protocol_name(all[1]), "Matrix");
   EXPECT_FALSE(mux::config::enabled_of(all[1]));
@@ -190,7 +206,7 @@ TEST(Config, ProxiesAndTheirAccountsAreKept) {
   account.shared.proxy = "tor";
   mux::config::file kept = mux::config::file_of(std::vector{account});
   kept.proxies = std::vector<mux::config::proxy_settings>{
-      {.name = "tor", .kind = "socks5", .host = "127.0.0.1", .port = 9050}};
+      {.name = "tor", .kind = mux::config::proxy_kind::socks5{}, .host = "127.0.0.1", .port = 9050}};
   ASSERT_TRUE(mux::config::save(where, kept, vault).has_value());
   const auto got = mux::config::load(where, vault);
   ASSERT_TRUE(got.has_value()) << got.error();

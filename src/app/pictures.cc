@@ -286,9 +286,8 @@ class pictures_part {
                 std::ranges::find(one.timeline, pinned, &message::id) == one.timeline.end() &&
                 this->quote_due(pinned))
               s_->net->fetch_quoted(one.id, pinned);
-          // The chat's own custom emoji and stickers, for its panels.
-          for (const emote& custom : one.emotes)
-            this->want_emote(id, custom.url);
+          // Pack media is requested only for visible picker cells above or
+          // visible message content. Opening a room must not decode its packs.
           // Its stickers: those the panel shows, asked for above as it shows
           // them. Every one of them at every refresh, at 256 px each, pushed
           // each other -- and the chats' avatars -- out of the pictures kept.
@@ -715,7 +714,7 @@ class pictures_part {
     const auto where = kept_file(use, source);
     if (!where)
       return false;
-    auto bytes_read = spl::bytes::file_text(*where);
+    auto bytes_read = mux::platform::files::read(where->string());
     if (!bytes_read)
       return false;
     std::string bytes = std::move(*bytes_read);

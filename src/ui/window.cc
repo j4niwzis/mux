@@ -115,6 +115,11 @@ void show(shown_model& showing, std::optional<Facts> facts) {
 template <class Content, class Facts, class Needs>
 struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
   using dialog_content = Content;
+  // The expression-specific overloads are imported here. Looking them up
+  // in base.cc only sees the generic class-member fallback.
+  [[nodiscard]] dialog_look look_of_content() const {
+    return content_look(std::type_identity<Content>{});
+  }
   const Needs* needs = nullptr;
   explicit shown_dialog(const Needs* handed) : needs(handed) {}
   void read(const std::optional<Facts>& now) {

@@ -314,8 +314,8 @@ template <class Content> dialog_look content_look(std::type_identity<Content>) {
 }
 // A dialog put as its content says, in the palette's colours.
 template <class Content, class Dismiss>
-void look_as_its_content(widgets::Dialog<Content, Dismiss>& dialog, const palette& colours) {
-  const dialog_look look = content_look(std::type_identity<Content>{});
+void look_as_its_content(widgets::Dialog<Content, Dismiss>& dialog, const palette& colours,
+                        const dialog_look& look = content_look(std::type_identity<Content>{})) {
   dialog.setSheetColour(spl::visit([&](auto one) { return colour_of(one, colours); }, look.sheet));
   spl::visit(spl::overloaded{[](dialog_size::as_opened) {},
                                    [&](dialog_size::fixed size) { dialog.setSize(size.width, size.height); },
@@ -330,7 +330,8 @@ void look_as_its_content(widgets::Dialog<Content, Dismiss>& dialog, const palett
 template <class Dialog>
   requires requires { typename Dialog::dialog_content; }
 void look_as_its_content(Dialog& dialog, const palette& colours) {
-  look_as_its_content<typename Dialog::dialog_content, widgets::dismiss::pressed>(dialog, colours);
+  look_as_its_content<typename Dialog::dialog_content, widgets::dismiss::pressed>(
+      dialog, colours, dialog.look_of_content());
 }
 template <class Node>
   requires (!requires { typename Node::dialog_content; })

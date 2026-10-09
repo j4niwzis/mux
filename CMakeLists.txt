@@ -234,7 +234,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # newer pin used by multi-config builds guards the change with Debug alone.
 set(mux_skiff_pin 51b8103022a30385ddd8368a9ecbcca62c753f7c)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_CONFIGURATION_TYPES)
-  set(mux_skiff_pin de1b332b92ed4113f7d34a6c1d72091aebe0a3cf)
+  set(mux_skiff_pin 4cee13b7042ac10e558c986ea9d99a6b83dd5418)
 endif()
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff

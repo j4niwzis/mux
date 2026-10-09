@@ -5,27 +5,14 @@ export module mux.ui:emoji_kept;
 import std;
 import splice;
 import skia;
-import skiff.paint;
 import skiff.scene;
 import skiff.compose;
-import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.image;
-import skiff.nodes.scroll;
 import skiff.nodes.text;
-import skiff.widgets.textbox;
 import mux.core;
-import mux.config;
-import mux.logic.emoji;
 import :base;
-import :icons;
-import :controls;
-import :themes;
 import :avatars;
-import :timeline;
-import :conversations;
-import :forms;
-import :names;
 
 export namespace mux::ui {
 

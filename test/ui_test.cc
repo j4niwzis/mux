@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui, driven as the window's user drives it: pressed and typed into.
 import std;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.nodes.image;

@@ -165,6 +165,10 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
 template <class Screen>
 struct shown_screen : Screen {
   using Screen::Screen;
+  using Screen::onKey;
+  using Screen::onPointer;
+  using Screen::onText;
+  using Screen::onSemantic;
   void read(const chat_shown& now) {
     this->chosen = now.chosen;
     // The account the program asked for; where it asked for none, the one

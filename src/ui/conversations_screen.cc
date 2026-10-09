@@ -522,7 +522,11 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   bool list_keys(List& list, std::size_t& lit, Choose choose, const scene::key::down& press) {
     namespace keys = scene::keys;
     auto& rows = list.parts.rows;
-    if (!list.visible() || rows.empty())
+    // Modified arrows belong to the screen's reply/chat shortcuts, even
+    // while mention or emoji suggestions are visible.
+    if (!list.visible() || rows.empty() ||
+        press.modifiers.template has<scene::modifier::control>() ||
+        press.modifiers.template has<scene::modifier::alt>())
       return false;
     if (press.key == keys::kUp || press.key == keys::kDown) {
       rows[lit].set_lit(false);

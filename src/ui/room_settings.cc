@@ -220,32 +220,6 @@ template <class Act> struct radio_choice : pressable<skiff::compose::Stacked> {
   }
 };
 
-// A switch with what it does beside it, as Element's labelled toggles.
-template <class Act> struct toggle_line : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text label;
-    toggle_for<Act> toggle;
-  } parts;
-  toggle_line(const palette &colours, std::string text, Act what, bool on,
-              bool allowed)
-      : Stacked(
-            skiff::compose::hbox(12.0f, {.fillX = true,
-                                         .autoSize = scene::axes::kY,
-                                         .padding = {6.0f, 0.0f, 6.0f, 0.0f},
-                                         .disabled = !allowed})),
-        parts{.label = skiff::compose::styled(
-                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                  wrapped(nodes::Text(std::move(text), 14.0f, colours.text))),
-              .toggle = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  toggle_for<Act>(colours.widgets, std::move(what)))} {
-
-    parts.toggle.setOnNow(on);
-    if (!allowed)
-      fState.setAlpha(0.55f);
-  }
-};
-
 // Leaving a space, as Element's LeaveSpaceDialog: the rooms of it one is in
 // left with it -- none of them, all, or those chosen, each by a switch.
 struct leave_space_facts {
@@ -400,6 +374,39 @@ inline auto chat_notify_view(const palette& colours, const conversation_id& chat
       chat);
 }
 
+// Stable model-bound switches: keep the widget while its saved value changes.
+template <auto Member>
+inline auto space_choice_row(const palette& colours, std::string label, bool allowed = true) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
+                              .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = !allowed}),
+      c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                wrapped(nodes::Text(std::move(label), 14.0f, colours.text))),
+      c::bound<skiff::model::Field<Member>>(c::styled({.alignSelf = scene::align::kMiddle},
+                                                    widgets::ToggleField<bool>(colours.widgets))));
+}
+inline auto room_general_page(const palette& colours, const room_settings_facts& facts) {
+  namespace c = skiff::compose;
+  using choices = config::chat_choices;
+  return c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
+                                .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
+      tab_heading(colours, "General"),
+      explained(colours, "Room events shown in this room, for you: Default is as your account's."),
+      chat_settings_view(colours, facts.chat),
+      c::visible(facts.space, c::scoped<choices>(c::handlers(),
+          c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              part_heading(colours, "Shown as"),
+              space_choice_row<&choices::forum>(colours, "One chat, its rooms as topics", !facts.holds_spaces),
+              explained(colours, facts.holds_spaces ? "A space that holds spaces is shown as a space."
+                  : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
+              c::shown_for<skiff::model::Field<&choices::forum>>([](bool forum) { return !forum; },
+                  space_choice_row<&choices::hidden_from_home>(colours, "Its rooms not in Home"))), facts.chat)),
+      part_heading(colours, "Leave room"),
+      c::styled({.width = 130.0f, .height = 32.0f},
+          button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {})));
+}
+using room_general_page_t = decltype(room_general_page(std::declval<const palette&>(), std::declval<const room_settings_facts&>()));
+
 template <class Actions> struct room_settings : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   room_settings(const room_settings&) = delete;
@@ -514,77 +521,6 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
     }
   };
 
-  // ---- General: the room as the client shows it -------------------------------------
-  // A space as one chat, its rooms as topics: a switch, off for a space
-  // that holds spaces.
-  struct flip_forum_act {
-    using Answer = std::optional<::mux::ui::request::flip_forum>;
-    std::string room;
-    bool allowed = true;
-    std::optional<::mux::ui::request::flip_forum> operator()() {
-      if (allowed)
-        return ::mux::ui::request::flip_forum{room};
-      return std::nullopt;
-    }
-  };
-  // A space's rooms out of Home, or in it: a switch, for a space that is
-  // not shown as one chat.
-  struct flip_home_hide_act {
-    using Answer = ::mux::ui::request::flip_home_hide;
-    std::string room;
-    ::mux::ui::request::flip_home_hide operator()() { return ::mux::ui::request::flip_home_hide{room}; }
-  };
-  using settings_t = decltype(chat_settings_view(std::declval<const palette&>(), std::declval<const conversation_id&>()));
-  struct general_page : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text heading;
-      nodes::Text events_about;
-      settings_t settings;
-      nodes::Text forum_heading;
-      toggle_line<flip_forum_act> forum;
-      nodes::Text forum_about;
-      toggle_line<flip_home_hide_act> home_hide;
-      nodes::Text leave_heading;
-      button_for<sends<::mux::ui::request::leave_chat>> leave;
-    } parts;
-    general_page(room_settings *box, const room_settings_facts &facts)
-        : Stacked(skiff::compose::vbox(
-              6.0f, {.fillX = true,
-                     .autoSize = scene::axes::kY,
-                     .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
-          parts{.heading = tab_heading(*box->colours_, "General"),
-                .events_about = explained(*box->colours_,
-                                          "Room events shown in this room, for "
-                                          "you: Default is as your account's."),
-                .settings = chat_settings_view(*box->colours_, facts.chat),
-                .forum_heading = part_heading(*box->colours_, "Shown as"),
-                .forum = toggle_line<flip_forum_act>(
-                    *box->colours_, "One chat, its rooms as topics",
-                    {facts.id, !facts.holds_spaces}, facts.forum,
-                    !facts.holds_spaces),
-                .forum_about = explained(
-                    *box->colours_,
-                    facts.holds_spaces
-                        ? "A space that holds spaces is shown as a space."
-                        : "On: in the chat list as one chat; its rooms open "
-                          "inside it, as Telegram's topics."),
-                .home_hide = skiff::compose::visible(
-                    facts.space && !facts.forum,
-                    toggle_line<flip_home_hide_act>(
-                        *box->colours_, "Its rooms not in Home", {facts.id},
-                        facts.hidden_from_home, true)),
-                .leave_heading = part_heading(*box->colours_, "Leave room"),
-                .leave = skiff::compose::styled(
-                    {.width = 130.0f, .height = 32.0f},
-                    button_for<sends<::mux::ui::request::leave_chat>>(
-                        box->colours_->widgets, "Leave room", {}))} {
-      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.forum_heading, &parts.forum, &parts.forum_about})
-        each->setVisible(facts.space);
-      // A space's own: its rooms out of Home -- not one shown as one chat,
-      // whose rooms are in it, not in the list.
-    }
-  };
-
   // ---- Notifications ----------------------------------------------------------------
   struct notifications_page : skiff::compose::Stacked {
     struct parts_t {
@@ -628,7 +564,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   };
 
   using page_t = typename variant_of_types<
-      typename joined<type_list<general_page, notifications_page, looks_page>, protocol_pages>::type>::type;
+      typename joined<type_list<room_general_page_t, notifications_page, looks_page>, protocol_pages>::type>::type;
   struct page_holder : skiff::compose::Stacked {
     struct parts_t {
       page_t page;
@@ -735,7 +671,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
     const settings_tab_t to = tab;
     auto& page = holder().parts.page;
     spl::visit(spl::overloaded{
-                      [&](settings_tab::general) { page.template emplace<general_page>(this, facts); },
+                      [&](settings_tab::general) { page.template emplace<room_general_page_t>(room_general_page(*colours_, facts)); },
                       [&](settings_tab::notifications) { page.template emplace<notifications_page>(this, facts); },
                       [&](settings_tab::looks) { page.template emplace<looks_page>(this, facts); },
                       // A protocol's tab: the page its page_type() gives.

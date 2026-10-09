@@ -121,10 +121,23 @@ class message_store {
   // is opened.
   void keep_reads(const mux::conversation_id& in, const mux::conversation& chat) {
     const store_file::reads_file all{.users = chat.read_by, .me = chat.read_up_to};
-    const auto where = reads_file_of(in);
-    std::error_code failed;
-    std::filesystem::create_directories(where.parent_path(), failed);
-    (void)vault->write_file(where, knot::to_json_string(all));
+    pending_reads_.insert_or_assign(in, knot::to_json_string(all));
+    flush_reads(true);
+  }
+  // A failed write keeps the latest value for a later attempt.
+  void flush_reads(bool force = false) {
+    if (pending_reads_.empty())
+      return;
+    const auto now = std::chrono::steady_clock::now();
+    if (!force && now < reads_retry_at_)
+      return;
+    reads_retry_at_ = now + std::chrono::seconds(1);
+    std::erase_if(pending_reads_, [&](const auto& entry) {
+      const auto where = reads_file_of(entry.first);
+      std::error_code failed;
+      std::filesystem::create_directories(where.parent_path(), failed);
+      return !failed && vault->write_file(where, entry.second);
+    });
   }
   struct reads {
     std::map<std::string, std::string> read_by;
@@ -132,7 +145,9 @@ class message_store {
   };
   [[nodiscard]] reads read_reads(const mux::conversation_id& in) const {
     reads out;
-    const std::string text = vault->read_file(reads_file_of(in)).value_or(std::string());
+    const auto pending = pending_reads_.find(in);
+    const std::string text = pending != pending_reads_.end() ? pending->second
+        : vault->read_file(reads_file_of(in)).value_or(std::string());
     auto parsed = knot::try_read<store_file::reads_file>(std::string_view(text));
     if (!parsed)
       return out;
@@ -299,15 +314,15 @@ class message_store {
   std::uintmax_t deleted_budget = 256u << 20;
 
  private:
-  // What is under `dir` held to `cap`: the chats used longest ago -- read
-  // or written -- go first, whole; `keep`, just written, never does.
+  // History held to `cap`: the chats used longest ago go first, whole.
+  // Read markers and gaps survive eviction; `keep`, just written, stays.
   void prune(const std::filesystem::path& dir, std::uintmax_t cap, const std::filesystem::path& keep) {
     const std::uintmax_t kDiskBudget = cap;
     std::error_code failed;
     std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> files;
     std::uintmax_t total = 0;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(dir, failed)) {
-      if (!entry.is_regular_file(failed))
+      if (!entry.is_regular_file(failed) || entry.path().extension() != ".jsonl")
         continue;
       total += entry.file_size(failed);
       files.emplace_back(entry.last_write_time(failed), entry.path());
@@ -325,6 +340,8 @@ class message_store {
         total -= size;
     }
   }
+  std::map<mux::conversation_id, std::string> pending_reads_;
+  std::chrono::steady_clock::time_point reads_retry_at_{};
   std::atomic<std::size_t> appended_ = 0;
   // The chat's messages as its file says, each as its last line says; the
   // file written again with one line each where most of its lines were old.

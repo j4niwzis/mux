@@ -216,6 +216,7 @@ template <class Actions> struct conversation_row : skiff::compose::Stacked {
     std::optional<invite_info> invite;
     std::optional<skia::SkColor> strip;
     std::vector<proto::part::badge> badges;
+    std::optional<std::string> forum_topic;
     friend bool operator==(const view&, const view&) = default;
   };
   // What it says of the chat -- its newest and its count -- as the chat
@@ -224,7 +225,7 @@ template <class Actions> struct conversation_row : skiff::compose::Stacked {
                                     const room_event_filter& events = {}, std::optional<skia::SkColor> strip = std::nullopt) {
     const message* last = newest(one, events);
     return {display_name(one), last ? std::optional<message>(*last) : std::nullopt, one.unread_here(events), is_chosen,
-            is_muted, std::move(draft), one.invite, strip, proto::row_badges(protocol_state_of(shared, one.id.account), one)};
+            is_muted, std::move(draft), one.invite, strip, proto::row_badges(protocol_state_of(shared, one.id.account), one), one.forum_topic};
   }
   view shown;
 

@@ -634,6 +634,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       // What is repainted, rect by rect: all of it, unless only the damage.
       std::vector<skia::SkRect> pieces{all};
       bool show_all = true;
+      bool fresh_pixels = false;
       for (auto& [pixels, at] : std::exchange(overlays, {}))
         if (keeps) {
           canvas->drawImage(pixels, static_cast<float>(at.fLeft), static_cast<float>(at.fTop));
@@ -657,6 +658,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
           fresh = std::exchange(kept_frame_for, kept_frame.get()) != kept_frame.get();
           kept = kept_frame.get();
         }
+        fresh_pixels = fresh;
         // Each rect of the damage on its own, in the window's pixels -- a pixel
         // out for antialiasing: their union could be the whole view.
         // Whether what is repainted has something blurring what is under it,
@@ -892,6 +894,14 @@ int run(App& app, const options& how, const events::kinds& kinds) {
         // The full-redraw fallback painted every pixel. Its damage overlay
         // must report that work rather than the smaller scene damage.
         pieces = {repainted};
+      }
+      if (traced) {
+        float painted_area = 0.0f;
+        for (const auto& piece : pieces)
+          painted_area += piece.width() * piece.height();
+        std::println(std::cerr, "[frame] repaint: partial {}, forced {}, fresh {}, {} rects, {:.1f}% of window",
+                     app.frames().partial_redraw, whole, fresh_pixels, pieces.size(),
+                     100.0f * painted_area / std::max(1.0f, all.width() * all.height()));
       }
       // What is drawn over the frame, where the window keeps its pixels:
       // what was under it kept, to be put back at the next frame.

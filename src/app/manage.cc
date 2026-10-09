@@ -60,8 +60,6 @@ class manage_part {
       k_->flip<&mux::app::chat_choices::forum>(id);
     (void)k_->write();
     s_->refresh_due = true;
-    if (auto* managing = s_->root().manage_up())
-      managing->show_tab(managing->tab);
   }
   // A space's rooms in Home, or not: its own choice.
   void apply(const request::flip_home_hide& one) {
@@ -75,8 +73,6 @@ class manage_part {
     k_->flip<&mux::app::chat_choices::hidden_from_home>(id);
     (void)k_->write();
     s_->refresh_due = true;
-    if (auto* managing = s_->root().manage_up())
-      managing->show_tab(managing->tab);
   }
   void apply(const request::close_forum&) {
     mux::ui::change_shown<mux::ui::chat_shown>(*s_->showing, [](mux::ui::chat_shown& now) { now.forum.reset(); });

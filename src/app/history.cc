@@ -24,10 +24,40 @@ class history_part {
  public:
   explicit history_part(services& shared) : s_(&shared) {}
 
+  // Restore once before server receipts can replace the local marker.
+  void restore_reads(const mux::conversation_id& in) {
+    if (s_->demo() || reads_restored_.contains(in))
+      return;
+    const auto* chat = s_->model->find(in);
+    if (!chat)
+      return;
+    reads_restored_.insert(in);
+    auto saved = s_->store->read_reads(in);
+    std::map<std::string, std::string> missing;
+    for (auto& [user, event] : saved.read_by)
+      if (!chat->read_by.contains(user))
+        missing.emplace(user, std::move(event));
+    const bool restore_me = !chat->read_up_to && saved.me.has_value();
+    if (restore_me)
+      s_->model->read_up_to(in, *saved.me);
+    if (!missing.empty())
+      s_->model->apply(mux::change_t{mux::change::receipts_changed{in, std::move(missing)}});
+  }
+
+  void before(const mux::change_t& one) {
+    spl::visit(spl::overloaded{
+        [&](const mux::change::receipts_changed& c) { restore_reads(c.in); },
+        [](const auto&) {}}, one);
+  }
+
   // A change the model was given, kept on disk as it says.
   void keep(const mux::change_t& one) {
     if (s_->demo())
       return;
+    spl::visit(spl::overloaded{
+        [&](const mux::change::conversation_updated& c) { restore_reads(c.id); },
+        [&](const mux::change::conversation_removed& c) { reads_restored_.erase(c.id); },
+        [](const auto&) {}}, one);
     // Where the history on disk has gaps, noted as it comes (see
     // message_store::gap_mark). A page from the server: the message it was
     // paged from now follows it, and before its oldest is the token it ended
@@ -224,6 +254,7 @@ class history_part {
   }
 
   services* s_;
+  std::set<mux::conversation_id> reads_restored_;
   // The gaps of each chat's history on disk, as read and as changed; the
   // message each chat was paged back from, on the server, while it is; and
   // the token of a first sync, for the first message it brings.

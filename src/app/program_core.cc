@@ -155,6 +155,7 @@ void app::woken() {
                                  },
                                  [](const auto&) {}},
                  one);
+    paging.before(one);
     model->apply(one);
     paging.keep(one);
   }
@@ -389,6 +390,10 @@ void app::take_wants() {
 }
 
 void app::refresh_shown() {
+  const auto shown = showing.look<mux::ui::chat_shown>();
+  const auto& screen = root().main();
+  if (shown->forum && screen.current && !screen.is_forum({*screen.current, *shown->forum}))
+    mux::ui::change_shown<mux::ui::chat_shown>(showing, [](auto& now) { now.forum.reset(); });
   shared.read_shown_now();
   if (std::exchange(shared.menu_focus_due, false))
     if (skiff::scene::Node* card = root().menu_card())
@@ -428,6 +433,7 @@ void app::after_event() {
 }
 
 void app::before_frame() {
+  store.flush_reads();
   ++mux::ui::image_cache::frame();
   // What the model's widgets did: edits of the model, before the frame.
   this->take_page_input();
@@ -508,6 +514,7 @@ void app::before_frame() {
 void app::closing() {
   if (const auto& chosen = root().main().chosen)
     drafts.keep(*chosen, root().main().line.plain());
+  store.flush_reads(true);
   net->shutdown();
 }
 

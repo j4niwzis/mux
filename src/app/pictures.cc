@@ -210,9 +210,9 @@ class pictures_part {
     // The images of the pack being edited, by the account of the chat in view.
     if (screen.current) {
       for (const auto& picture : s_->ui.pack_pictures_shown)
-        this->want_emote(*screen.current, picture.source, false, picture.kind);
+        this->want_emote(*screen.current, picture.source, true, picture.kind);
       for (const auto& picture : s_->ui.panel_pictures_shown)
-        this->want_emote(*screen.current, picture.source, false, picture.kind);
+        this->want_emote(*screen.current, picture.source, true, picture.kind);
       // Those a dialog lists -- Explore's rooms, people found -- by their keys.
       for (const auto& [key, url] : mux::ui::listed_avatars())
         want(*screen.current, url, key);
@@ -752,7 +752,7 @@ class pictures_part {
 
   // The whole of a picture that moves, for its frames: from the disk where
   // it was fetched before, from the account where not.
-  void want_emote(const account_id& of, const std::string& source, bool animated = false, emote_kind kind = emote_kind::emoji) {
+  void want_emote(const account_id& of, const std::string& source, bool animated = true, emote_kind kind = emote_kind::emoji) {
     if (source.empty() || source.starts_with("local:") || decoding_.contains(source) ||
         mux::ui::emote_animations(kind).has(source) ||
         ((!animated || animated_emotes_.contains({source, kind})) && mux::ui::emote_images(kind).has(source)))

@@ -282,10 +282,11 @@ struct from_emotes {
   std::string key;
   emote_kind kind = emote_kind::emoji;
   picture_ptr operator()() const {
-    if (picture_ptr still = emote_images(kind).find(key))
-      return still;
-    return emote_animations(kind).at(key, animation_clock());
+    if (picture_ptr moving = emote_animations(kind).at(key, animation_clock()))
+      return moving;
+    return emote_images(kind).find(key);
   }
+  [[nodiscard]] bool animated() const { return emote_animations(kind).has(key); }
   skiff::scene::Waiters& waiters() const { return emote_images(kind).waiting; }
 };
 struct from_previews {  // blurred, from a blurhash, until the picture comes

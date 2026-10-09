@@ -21,6 +21,22 @@ message said(std::string id, std::string text, bool outgoing = false) {
                  .outgoing = outgoing};
 }
 
+TEST(Model, SavedReadMarkerSurvivesOlderAndUnknownReceipts) {
+  model kept;
+  kept.apply(change::conversation_updated{.id = with_juliet});
+  kept.apply(change::message_added{said("old", "older")});
+  kept.apply(change::message_added{said("new", "newer")});
+  kept.read_up_to(with_juliet, "new");
+  kept.apply(change::receipts_changed{with_juliet, {{romeo.address, "old"}}});
+  EXPECT_EQ(kept.find(with_juliet)->read_up_to, std::optional<std::string>("new"));
+  kept.read_up_to(with_juliet, "outside-window");
+  kept.apply(change::receipts_changed{with_juliet, {{romeo.address, "old"}}});
+  EXPECT_EQ(kept.find(with_juliet)->read_up_to, std::optional<std::string>("outside-window"));
+  kept.read_up_to(with_juliet, "old");
+  kept.apply(change::receipts_changed{with_juliet, {{romeo.address, "new"}}});
+  EXPECT_EQ(kept.find(with_juliet)->read_up_to, std::optional<std::string>("new"));
+}
+
 TEST(Model, Conversation) {
   model kept;
   kept.apply(change::connection_changed{romeo, connection::online{}});

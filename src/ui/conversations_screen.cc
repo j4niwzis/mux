@@ -415,7 +415,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
       if (chat.parts.mentions.visible()) {
         chat.parts.mentions.setVisible(false);
         mention_matches.clear();
-        this->invalidateLayout();
+        fState.relayoutQuietly();
       }
       mention_query.clear();
       return;
@@ -445,7 +445,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     if (!rows.empty())
       rows.front().set_lit(true);
     chat.parts.mentions.setVisible(!rows.empty());
-    this->invalidateLayout();
+    fState.relayoutQuietly();
   }
   // One picked: the @ and what follows it made their name, and they kept
   // to be mentioned when it is sent.
@@ -462,7 +462,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     mention_matches.clear();
     chat.parts.mentions.parts.rows.clear();
     chat.parts.mentions.setVisible(false);
-    this->invalidateLayout();
+    fState.relayoutQuietly();
   }
   // The emoji list, as what is written now asks.
   void find_emoji() {
@@ -479,7 +479,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
       if (list.visible()) {
         list.setVisible(false);
         emoji_matches.clear();
-        this->invalidateLayout();
+        fState.relayoutQuietly();
       }
       emoji_query.clear();
       return;
@@ -499,7 +499,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     if (!rows.empty())
       rows.front().set_lit(true);
     list.setVisible(!rows.empty());
-    this->invalidateLayout();
+    fState.relayoutQuietly();
   }
   // One picked: the ':' and what follows it made that emoji.
   void choose_emoji(std::size_t index) {
@@ -514,7 +514,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     emoji_matches.clear();
     chat.parts.emojis.parts.rows.clear();
     chat.parts.emojis.setVisible(false);
-    this->invalidateLayout();
+    fState.relayoutQuietly();
   }
   // Up and Down through a list over the field, Enter or Tab picks, Esc
   // closes it: true where the key was the list's.
@@ -541,7 +541,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     }
     if (press.key == keys::kEscape) {
       list.setVisible(false);
-      this->invalidateLayout();
+      fState.relayoutQuietly();
       return true;
     }
     return false;
@@ -814,7 +814,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     header.setVisible(ids.empty() && !search.visible());
     chat.area.set_selected(ids);
     parts.threads.parts.answers.set_selected(ids);
-    this->invalidateLayout();
+    this->fState.relayoutQuietly();
   }
   // The search bar in place of the head, or the head back.
   void show_search(bool shown) {

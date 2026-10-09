@@ -3,6 +3,8 @@
 import std;
 import skia;
 import skiff.paint;
+import skiff.nodes.image;
+import skiff.nodes.text;
 import skiff.scene;
 import skiff.bind;
 import skiff.model;
@@ -742,6 +744,57 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+TEST(Frames, TypingAndScrollingKeepUnchangedPanesOutsideDamage) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  const bool previous_blit = std::exchange(scene::blitScrolling(), true);
+  struct restore {
+    bool blit;
+    ~restore() { scene::blitScrolling() = blit; skiff::paint::defaultFont() = nullptr; }
+  } reset{previous_blit};
+  stub program;
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
+  mux::model model;
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.com"};
+  const mux::conversation_id room{alice, "!room:example.com"};
+  model.apply(mux::change_t{mux::change::connection_changed{alice, mux::connection::online{}}});
+  for (int i = 0; i < 80; ++i)
+    model.apply(mux::change_t{mux::change::conversation_updated{
+        .id = {alice, "!other" + std::to_string(i) + ":example.com"}, .name = "Other room " + std::to_string(i)}});
+  model.apply(mux::change_t{mux::change::conversation_updated{.id = room, .name = "Room"}});
+  for (int i = 0; i < 80; ++i) {
+    mux::message message;
+    message.in = room;
+    message.id = "$message" + std::to_string(i);
+    message.sender = "@bob:example.com";
+    message.body.plain = "Message " + std::to_string(i);
+    model.apply(mux::change_t{mux::change::message_added{.message = std::move(message)}});
+  }
+  auto& screen = window.root().main();
+  screen.chosen = room;
+  screen.show(model);
+  double clock = 1000.0;
+  const auto frame = [&] {
+    window.update(clock += 16.0);
+    window.layoutIfNeeded(skia::SkRect::MakeWH(1100.0f, 720.0f));
+    return window.finishFrame();
+  };
+  for (int i = 0; i < 40; ++i)
+    (void)frame();
+  const auto touches = [](const auto& damage, const skia::SkRect& area) {
+    return std::ranges::any_of(damage.fDamageRects, [&](const auto& piece) { return skia::SkRect::Intersects(piece, area); });
+  };
+  screen.line.set_text("hello");
+  EXPECT_FALSE(touches(frame(), screen.list.bounds()));
+  screen.line.set_text(":sm");
+  EXPECT_FALSE(touches(frame(), screen.list.bounds()));
+  screen.timeline.setCurrent(std::max(0.0f, screen.timeline.current() - 100.0f));
+  EXPECT_FALSE(touches(frame(), screen.list.bounds()));
+  screen.list.setCurrent(100.0f);
+  EXPECT_FALSE(touches(frame(), screen.line.field.bounds()));
+}
+
 TEST(Emoji, GifTabReceivesPointerPressesOnDesktopAndPhone) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;
@@ -799,6 +852,55 @@ TEST(Timeline, SelectedQuoteKeepsAllLinesAndWraps) {
   EXPECT_EQ(text.text(), *quote);
   EXPECT_GT(text.bounds().height(), 26.0f);
   skiff::paint::defaultFont() = nullptr;
+}
+
+TEST(Images, AnimatedEmotesTakePriorityOverTheirStillThumbnail) {
+  auto still = skia::Raster(skia::SkImageInfo::MakeN32Premul(8, 8));
+  auto moving = skia::Raster(skia::SkImageInfo::MakeN32Premul(16, 16));
+  ASSERT_TRUE(still);
+  ASSERT_TRUE(moving);
+  for (const auto kind : {mux::emote_kind::emoji, mux::emote_kind::sticker}) {
+    auto& images = mux::ui::emote_images(kind);
+    auto& frames = mux::ui::emote_animations(kind);
+    images.put("animation-test", still->makeImageSnapshot());
+    frames.put("animation-test", {{moving->makeImageSnapshot(), 100}, {moving->makeImageSnapshot(), 100}});
+    const mux::ui::from_emotes source{"animation-test", kind};
+    EXPECT_TRUE(source.animated());
+    ASSERT_NE(source(), nullptr);
+    EXPECT_EQ((*source())->width(), 16);
+    skiff::nodes::Image<mux::ui::from_emotes> image(source);
+    image.keepBox();
+    image.update(0.0);
+    EXPECT_TRUE(image.wantsTick());
+    if (kind == mux::emote_kind::emoji) {
+      skiff::nodes::BasicText<mux::ui::message_pictures> text(" ", 14.0f, skia::SkColor{0});
+      text.setLinks({{.first = 0, .last = 1, .target = "animation-test", .picture = true}}, skia::SkColor{0});
+      text.update(0.0);
+      EXPECT_TRUE(text.wantsTick());
+      frames.clear();
+      EXPECT_FALSE(text.wantsTick());
+    }
+    frames.clear();
+    images.clear();
+  }
+}
+
+TEST(Controls, SpaceSwitchReadsEachClickWithoutReplacingTheWidget) {
+  using choices = mux::config::chat_choices;
+  using model_t = skiff::model::Model<choices, skiff::bind::NoReactions>;
+  model_t model(choices{});
+  mux::ui::palette colours;
+  auto row = mux::ui::space_choice_row<&choices::forum>(colours, "Topics");
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(row, model);
+  const auto id = std::get<1>(row.fParts).fState.id();
+  stub requests;
+  for (const bool expected : {true, false, true}) {
+    ASSERT_TRUE(skiff::bind::press(row, model, scene::Path{1}, &requests));
+    EXPECT_EQ(model.root().forum, expected);
+    binding.refresh(row, model);
+    EXPECT_EQ(std::get<1>(row.fParts).fState.id(), id);
+  }
 }
 
 TEST(Images, EmojiAndStickerStoresAreIndependent) {

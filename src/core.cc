@@ -1124,7 +1124,7 @@ class model {
       const auto theirs = place(mine->second);
       const bool past = !kept.read_up_to ||
                         (theirs != kept.timeline.end() &&
-                         (place(*kept.read_up_to) == kept.timeline.end() || theirs > place(*kept.read_up_to)));
+                         (place(*kept.read_up_to) != kept.timeline.end() && theirs > place(*kept.read_up_to)));
       if (past)
         kept.read_up_to = mine->second;
     }

@@ -675,6 +675,19 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
     (void)window.finishFrame();
   }
   auto &popup = *window.root().layer().emoji.shown();
+  // The transparent outer layer establishes a floating scope. The card
+  // must still paint a backdrop, even with a fully transparent tint.
+  ui.looks.window.live_blur = true;
+  ui.paint.panel = {.active = true, .opacity = 0.0f, .frosted = true,
+                    .panels = {ui.colours.sidebar}};
+  ui.paint.inside_float = true;
+  skia::SkBitmap pixels;
+  ASSERT_TRUE(pixels.tryAllocN32Pixels(1100, 720));
+  pixels.eraseColor(0xff405060u);
+  skia::SkCanvas canvas(pixels);
+  const auto fill = ui.paint.under(popup.parts.card.fState, ui.colours.sidebar, &canvas, 1.0f);
+  EXPECT_TRUE(fill.has_value());
+  EXPECT_TRUE(scene::detail::liveBackdrops().contains(popup.parts.card.id()));
   auto& panel = popup.parts.card.parts.panel;
   auto& sections = panel.sections();
   ASSERT_FALSE(sections.empty());

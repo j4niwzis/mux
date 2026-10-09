@@ -220,6 +220,10 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
                     {.fillX = true, .grow = scene::axes::kY},
                     gif_grid<Actions>(colours))} {
 
+      // The card paints its own floating backdrop. Its full-window layer
+      // has no fill; treating this as an inner panel drops the plate when
+      // live blur is enabled.
+      fState.setFloats(true);
       (void)this->show(popup_page::emoji{});
     }
     // Docked as Telegram's apps have it, on a phone: across all of the window

@@ -376,6 +376,26 @@ template <class Box> struct room_page : skiff::compose::Stacked {
     names += (i == 0 ? "" : i + 1 == facts.parents.size() ? " or " : ", ") + facts.parents[i].name;
   return std::string(before) + names + std::string(after);
 }
+// A room's one-way encryption switch, composed from its current facts.
+template <class Box>
+inline auto encryption_row(const palette& colours, const room_settings_facts& facts, Box* box) {
+  namespace c = skiff::compose;
+  const bool allowed = !facts.encrypted && may(facts, power_need::encrypt{});
+  auto toggle = toggle_for<turn_encryption_on<Box>>(colours.widgets, {box});
+  toggle.setOnNow(facts.encrypted);
+  auto row = c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
+                                   .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = !allowed}),
+      c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                wrapped(nodes::Text("Encrypted", 14.0f, colours.text))),
+      c::styled({.alignSelf = scene::align::kMiddle}, std::move(toggle)));
+  if (!allowed)
+    row.fState.setAlpha(0.55f);
+  return row;
+}
+template <class Box>
+using encryption_row_t = decltype(encryption_row(std::declval<const palette&>(),
+    std::declval<const room_settings_facts&>(), std::declval<Box*>()));
+
 template <class Box> struct security_page : skiff::compose::Stacked {
   using Actions = typename Box::actions_type;
   using join_choice = radio_choice<choose_join<Box>>;
@@ -384,7 +404,7 @@ template <class Box> struct security_page : skiff::compose::Stacked {
     nodes::Text heading;
     nodes::Text encryption;
     nodes::Text encryption_about;
-    toggle_line<turn_encryption_on<Box>> encrypted;
+    encryption_row_t<Box> encrypted;
     nodes::Text encryption_warning;
     nodes::Text access;
     nodes::Text access_about;
@@ -404,9 +424,7 @@ template <class Box> struct security_page : skiff::compose::Stacked {
             .encryption_about =
                 explained((*box->colours_),
                           "Once enabled, encryption cannot be disabled."),
-            .encrypted = toggle_line<turn_encryption_on<Box>>(
-                (*box->colours_), "Encrypted", {box}, facts.encrypted,
-                !facts.encrypted && may(facts, power_need::encrypt{})),
+            .encrypted = encryption_row(*box->colours_, facts, box),
             .encryption_warning = skiff::compose::visible(
                 box->template part<state>().confirming_encryption,
                 skiff::compose::styled(

@@ -639,7 +639,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
         parts{.header = page_header<no_back, close_it>(*colours, "Room Settings - " + shown.name, {},
                                  {}, false, true),
               .body =
-                  body_row(this, page_t(std::in_place_index<0>, this, shown))} {
+                  body_row(this, page_t(std::in_place_index<0>, room_general_page(*colours, shown)))} {
     parts.body.parts.tabs.show(tab);
   }
 

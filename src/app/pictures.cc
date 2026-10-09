@@ -82,6 +82,10 @@ class pictures_part {
     mux::ui::thumbnails().budget = pictures;
     mux::ui::whole_pictures().budget = pictures / 2;
     mux::ui::avatar_images().budget = std::max<std::size_t>(pictures / 4, 16u << 20);
+    mux::ui::emoji_images().budget = std::max<std::size_t>(pictures / 8, 8u << 20);
+    mux::ui::sticker_images().budget = std::max<std::size_t>(pictures / 8, 8u << 20);
+    mux::ui::emoji_animations().budget = std::max<std::size_t>(pictures / 4, 16u << 20);
+    mux::ui::sticker_animations().budget = std::max<std::size_t>(pictures / 4, 16u << 20);
     on_disk_ = static_cast<std::uintmax_t>(limits.pictures_on_disk_mb) << 20;
   }
 
@@ -110,24 +114,37 @@ class pictures_part {
       });
     };
     // A whole picture: its frames, where it moves; else it, still.
-    const auto shown_whole = [&](const std::string& key) {
+    const auto shown_whole = [&](const std::string& key, std::optional<emote_kind> emote = std::nullopt) {
       auto bytes = std::make_shared<const std::string>(picture.bytes);
       decoding_.insert(picture.source);
-      s_->work->run([this, bytes, key, use = picture.use, source = picture.source, fresh]() -> workers::done_t {
+      s_->work->run([this, bytes, key, use = picture.use, source = picture.source, fresh, emote]() -> workers::done_t {
         auto frames = skia::decodeFrames(bytes->data(), bytes->size());
-        return [this, frames = std::move(frames), bytes, key, use, source, fresh]() mutable {
+        return [this, frames = std::move(frames), bytes, key, use, source, fresh, emote]() mutable {
           const bool made = !frames.empty();
+          const bool moving = frames.size() > 1;
+          const auto still = made ? frames.front().image : skia::Sp<skia::SkImage>{};
           if (frames.size() > 1)
-            mux::ui::animations().put(key, std::move(frames));
-          else if (made)
+            (emote ? mux::ui::emote_animations(*emote) : mux::ui::animations()).put(key, std::move(frames));
+          else if (made && !emote)
             mux::ui::whole_pictures().put(key, std::move(frames.front().image));
+          if (emote && made) {
+            if (!moving)
+              animated_emotes_.insert({key, *emote});
+            mux::ui::emote_images(*emote).put(key, still);
+          }
           this->decoded(use, source, *bytes, made, fresh);
         };
       });
     };
     spl::visit(spl::overloaded{[&](const media_use::avatar& one) {
-                            // An avatar is shown at 120 px at most -- twice that on a dense screen.
-                            shown(mux::ui::avatar_images(), one.of, 256);
+                            // Keep enough detail for high-density phone screens.
+                            shown(mux::ui::avatar_images(), one.of, 512);
+                          },
+                          [&](const media_use::emote& one) {
+                            if (one.animated)
+                              shown_whole(picture.source, one.kind);
+                            else
+                              shown(mux::ui::emote_images(one.kind), picture.source, 256);
                           },
                           [&](const media_use::thumbnail&) { shown(mux::ui::thumbnails(), picture.source, 860); },
                           [&](const media_use::whole&) { shown_whole(picture.source); },
@@ -160,7 +177,7 @@ class pictures_part {
                picture.use);
     if (!fresh)
       return;
-    spl::visit(spl::overloaded{[](const media_use::avatar&) {}, [](const media_use::thumbnail&) {},
+    spl::visit(spl::overloaded{[](const media_use::avatar&) {}, [](const media_use::emote&) {}, [](const media_use::thumbnail&) {},
                                      [](const media_use::whole&) {}, [](const media_use::to_copy&) {},
                                      [&](const auto&) { this->keep(picture.use, picture.source, picture.bytes); }},
                   picture.use);
@@ -192,10 +209,10 @@ class pictures_part {
     auto& screen = s_->root().main();
     // The images of the pack being edited, by the account of the chat in view.
     if (screen.current) {
-      for (const std::string& url : s_->ui.pack_pictures_shown)
-        want(*screen.current, url, url);
-      for (const std::string& url : s_->ui.panel_pictures_shown)
-        want(*screen.current, url, url);
+      for (const auto& picture : s_->ui.pack_pictures_shown)
+        this->want_emote(*screen.current, picture.source, false, picture.kind);
+      for (const auto& picture : s_->ui.panel_pictures_shown)
+        this->want_emote(*screen.current, picture.source, false, picture.kind);
       // Those a dialog lists -- Explore's rooms, people found -- by their keys.
       for (const auto& [key, url] : mux::ui::listed_avatars())
         want(*screen.current, url, key);
@@ -252,11 +269,11 @@ class pictures_part {
           const auto emoji_of = [&](const message& said) {
             for (const auto& [reaction, who] : said.reactions)
               if (mux::proto::is_media(reaction))
-                want(id, reaction, reaction);
+                this->want_emote(id, reaction);
             if (const auto& html = said.body.html)
               for (const auto& span : mux::ui::read_html(*html).spans)
                 if (span.picture)
-                  want(id, span.target, span.target);
+                  this->want_emote(id, span.target);
           };
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             emoji_of(one.timeline[i]);
@@ -271,7 +288,7 @@ class pictures_part {
               s_->net->fetch_quoted(one.id, pinned);
           // The chat's own custom emoji and stickers, for its panels.
           for (const emote& custom : one.emotes)
-            want(id, custom.url, custom.url);
+            this->want_emote(id, custom.url);
           // Its stickers: those the panel shows, asked for above as it shows
           // them. Every one of them at every refresh, at 256 px each, pushed
           // each other -- and the chats' avatars -- out of the pictures kept.
@@ -301,18 +318,25 @@ class pictures_part {
             if (said.attachment && is_picture(said.attachment->kind)) {
               // A video with no thumbnail: nothing to fetch as a picture --
               // its file is the video, its plate shown as it is.
-              if (said.attachment->video != said.attachment->source)
+              if (said.attachment->sticker)
+                this->want_emote(id, said.attachment->source, moves(said.attachment->kind), emote_kind::sticker);
+              else if (said.attachment->video != said.attachment->source)
                 this->want_thumbnail(id, said.attachment->source);
-              this->make_preview(*said.attachment);
+              if (!said.attachment->sticker)
+                this->make_preview(*said.attachment);
               // One that moves: the whole of it, for its frames.
-              if (moves(said.attachment->kind))
+              if (!said.attachment->sticker && moves(said.attachment->kind))
                 this->want_whole(id, said.attachment->source);
             }
             // An album's pictures, each as one alone.
             for (const attachment& item : said.album)
               if (is_picture(item.kind)) {
-                this->want_thumbnail(id, item.source);
-                this->make_preview(item);
+                if (item.sticker)
+                  this->want_emote(id, item.source, moves(item.kind), emote_kind::sticker);
+                else {
+                  this->want_thumbnail(id, item.source);
+                  this->make_preview(item);
+                }
               }
             // Its first link's preview, once, where the chat shows them;
             // and the preview's picture.
@@ -368,7 +392,14 @@ class pictures_part {
   void clear() {
     std::error_code failed;
     std::filesystem::remove_all(mux::config::cache_path("avatars"), failed);
+    std::filesystem::remove_all(mux::config::cache_path("emoji"), failed);
+    std::filesystem::remove_all(mux::config::cache_path("stickers"), failed);
     mux::ui::avatar_images().clear();
+    mux::ui::emoji_images().clear();
+    mux::ui::sticker_images().clear();
+    mux::ui::emoji_animations().clear();
+    mux::ui::sticker_animations().clear();
+    animated_emotes_.clear();
     mux::ui::thumbnails().clear();
     mux::ui::whole_pictures().clear();
     fetches_.clear();
@@ -618,8 +649,8 @@ class pictures_part {
 
   // Where a kind of picture is kept on disk, by its source; nothing for a
   // file fetched to be saved, which goes to Downloads instead. Named as
-  // before -- an avatar by its source, a thumbnail and a whole picture with
-  // thumb_ and full_ before it -- so what was kept is found.
+  // before for ordinary media. Avatars have a resolution version; emoji
+  // and stickers have independent directories and thumbnail/full files.
   std::optional<std::filesystem::path> kept_file(const media_use_t& use, std::string_view source) const {
     // Local data encrypted: pictures are kept in memory only -- none is
     // written in the clear beside what is sealed, nor read back from there.
@@ -628,7 +659,11 @@ class pictures_part {
     const auto named = [&](std::string_view kind) {
       return std::optional(mux::config::cache_path("avatars") / (std::string(kind) + mux::config::file_name_of(source)));
     };
-    return spl::visit(spl::overloaded{[&](const media_use::avatar&) { return named(""); },
+    return spl::visit(spl::overloaded{[&](const media_use::avatar&) { return named("avatar512_"); },
+                                 [&](const media_use::emote& one) {
+                                   return std::optional(mux::config::cache_path(one.kind == emote_kind::emoji ? "emoji" : "stickers") /
+                                       ((one.animated ? "full_" : "thumb_") + mux::config::file_name_of(source)));
+                                 },
                                  [&](const media_use::thumbnail&) { return named("thumb_"); },
                                  [&](const media_use::whole&) { return named("full_"); },
                                  [](const media_use::to_open&) { return std::optional<std::filesystem::path>(); },
@@ -649,6 +684,7 @@ class pictures_part {
       fetches_.forget(source);
       if (fresh)
         this->keep(use, source, bytes);
+      s_->ui.pictures_due = true;  // another use of the same source may be waiting
       return;
     }
     if (!fresh)
@@ -716,6 +752,19 @@ class pictures_part {
 
   // The whole of a picture that moves, for its frames: from the disk where
   // it was fetched before, from the account where not.
+  void want_emote(const account_id& of, const std::string& source, bool animated = false, emote_kind kind = emote_kind::emoji) {
+    if (source.empty() || source.starts_with("local:") || decoding_.contains(source) ||
+        mux::ui::emote_animations(kind).has(source) ||
+        ((!animated || animated_emotes_.contains({source, kind})) && mux::ui::emote_images(kind).has(source)))
+      return;
+    if (this->read_back(media_use::emote{animated, kind}, source) || !fetches_.due(source))
+      return;
+    fetches_.asked(source);
+    s_->net->fetch_media(of, source, media_use::emote{animated, kind}, animated ? 0 : 256);
+  }
+
+  std::set<std::pair<std::string, emote_kind>> animated_emotes_;
+
   void want_whole(const account_id& of, const std::string& source) {
     if (source.empty() || source.starts_with("local:") || mux::ui::animations().has(source) || mux::ui::whole_pictures().has(source) ||
         decoding_.contains(source))
@@ -741,25 +790,30 @@ class pictures_part {
   // The pictures on disk held to their budget: the least recently used go
   // first, a file's time being when it was last read or written.
   void prune() const {
-    std::error_code failed;
-    std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> files;
-    std::uintmax_t total = 0;
-    for (const auto& entry : std::filesystem::directory_iterator(mux::config::cache_path("avatars"), failed)) {
-      if (!entry.is_regular_file(failed))
-        continue;
-      total += entry.file_size(failed);
-      files.emplace_back(entry.last_write_time(failed), entry.path());
-    }
-    if (total <= on_disk_)
-      return;
-    std::ranges::sort(files);
-    for (const auto& [when, path] : files) {
-      if (total <= on_disk_)
-        break;
-      const auto size = std::filesystem::file_size(path, failed);
-      if (std::filesystem::remove(path, failed))
-        total -= size;
-    }
+    const auto prune_at = [](std::string_view folder, std::uintmax_t budget) {
+      std::error_code failed;
+      std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> files;
+      std::uintmax_t total = 0;
+      for (const auto& entry : std::filesystem::directory_iterator(mux::config::cache_path(folder), failed)) {
+        if (!entry.is_regular_file(failed))
+          continue;
+        total += entry.file_size(failed);
+        files.emplace_back(entry.last_write_time(failed), entry.path());
+      }
+      if (total <= budget)
+        return;
+      std::ranges::sort(files);
+      for (const auto& [when, path] : files) {
+        if (total <= budget)
+          break;
+        const auto size = std::filesystem::file_size(path, failed);
+        if (std::filesystem::remove(path, failed))
+          total -= size;
+      }
+    };
+    prune_at("avatars", on_disk_ / 2);
+    prune_at("emoji", on_disk_ / 4);
+    prune_at("stickers", on_disk_ / 4);
   }
 
   // Bytes into Downloads, named as given -- a picture's type added where the

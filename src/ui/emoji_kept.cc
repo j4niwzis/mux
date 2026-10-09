@@ -37,6 +37,7 @@ struct previewed {
   std::string key;    // a picture's source, or a glyph
   std::string label;  // its :shortcode:, or nothing
   bool picture = false;
+  emote_kind kind = emote_kind::emoji;
   friend bool operator==(const previewed&, const previewed&) = default;
 };
 // The emoji and stickers kept, as the program holds them: handed to the
@@ -117,49 +118,31 @@ struct dwell {
 };
 // The preview, over a panel: a dark plate, the picture or glyph large, its
 // name under it.
-struct emote_preview : skiff::compose::Stacked {
-  static constexpr float kSide = 200.0f;
-  struct parts_t {
-    std::optional<nodes::Image<from_avatars>> picture;
-    nodes::Text glyph;
-    nodes::Text label;
-  } parts;
-  emote_preview(const palette &colours, const previewed &shown)
-      : Stacked(skiff::compose::justified(
-            skiff::compose::vbox(
-                8.0f, {.place = scene::anchor::kCentre,
-                       .autoSize = scene::axes::kBoth,
-                       .padding = {16.0f, 16.0f, 16.0f, 16.0f},
-                       .cornerRadius = 14.0f,
-                       .background =
-                           (colours.sidebar & 0x00FFFFFFu) | (0xF0u << 24)}),
-            nodes::justify::middle{})),
-        parts{.glyph = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  skiff::compose::visible(
-                      !shown.picture,
-                      nodes::Text(shown.picture ? std::string() : shown.key,
-                                  120.0f, colours.text))),
-              .label = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  skiff::compose::visible(
-                      !shown.label.empty(),
-                      nodes::Text(shown.label, 14.0f, colours.text)))} {
-
-    if (shown.picture) {
-      parts.picture.emplace(from_avatars{shown.key});
-      parts.picture->apply({.width = kSide, .height = kSide, .alignSelf = scene::align::kMiddle});
-    }
-  }
-};
+[[nodiscard]] inline auto emote_preview(const palette& colours, const previewed& shown) {
+  namespace c = skiff::compose;
+  std::optional<nodes::Image<from_emotes>> picture;
+  if (shown.picture)
+    picture.emplace(c::styled({.width = 200.0f, .height = 200.0f, .alignSelf = scene::align::kMiddle},
+                               nodes::Image<from_emotes>({shown.key, shown.kind})));
+  return c::column(c::justified(c::vbox(8.0f, {.place = scene::anchor::kCentre,
+      .autoSize = scene::axes::kBoth, .padding = {16.0f, 16.0f, 16.0f, 16.0f},
+      .cornerRadius = 14.0f, .background = (colours.sidebar & 0x00FFFFFFu) | (0xF0u << 24)}),
+      nodes::justify::middle{}),
+    std::move(picture),
+    c::styled({.alignSelf = scene::align::kMiddle}, c::visible(!shown.picture,
+        nodes::Text(shown.picture ? std::string{} : shown.key, 120.0f, colours.text))),
+    c::styled({.alignSelf = scene::align::kMiddle}, c::visible(!shown.label.empty(),
+        nodes::Text(shown.label, 14.0f, colours.text))));
+}
+using emote_preview_t = decltype(emote_preview(std::declval<const palette&>(), std::declval<const previewed&>()));
 // A panel's preview kept to what the cells say: made anew as it changes.
-inline bool follow_preview(std::optional<emote_preview>& shown, std::optional<previewed>& of, const palette& colours, const emoji_kept& kept) {
+inline bool follow_preview(std::optional<emote_preview_t>& shown, std::optional<previewed>& of, const palette& colours, const emoji_kept& kept) {
   if (of == kept.previewed_now)
     return false;
   of = kept.previewed_now;
   shown.reset();
   if (of)
-    shown.emplace(colours, *of);
+    shown.emplace(emote_preview(colours, *of));
   return true;
 }
 

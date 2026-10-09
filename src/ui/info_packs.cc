@@ -66,7 +66,7 @@ auto pack_row(const palette& colours, const std::optional<std::string>& room,
   namespace c = skiff::compose;
   auto picture = c::styled({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle,
                             .cornerRadius = 8.0f, .background = colours.tile},
-      nodes::Image<from_avatars>({pack.avatar.value_or(pack.pictures.empty() ? std::string() : pack.pictures.front().url)}));
+      nodes::Image<from_emotes>({pack.avatar.value_or(pack.pictures.empty() ? std::string() : pack.pictures.front().url), pack.emoji ? emote_kind::emoji : emote_kind::sticker}));
   picture.keepBox();
   return c::onPress(pack_open<Box>{box, index},
       c::row(c::hbox(12.0f, {.fillX = true, .height = 56.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
@@ -174,7 +174,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
       void operator()() const { box->remove_picture(index); }
     };
     struct parts_t {
-      nodes::Image<from_avatars> face;
+      nodes::Image<from_emotes> face;
       widgets::TextBox<renamed> shortcode;
       nodes::Text emoji_label;
       widgets::Toggle<flip_its_emoji> emoji;
@@ -193,7 +193,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
                      .alignSelf = scene::align::kMiddle,
                      .cornerRadius = 6.0f,
                      .background = box->colours_->tile},
-                    nodes::Image<from_avatars>({one.url})),
+                    nodes::Image<from_emotes>({one.url, one.emoji ? emote_kind::emoji : emote_kind::sticker})),
                 .shortcode = skiff::compose::styled(
                     {.height = 32.0f,
                      .relativeSize = scene::axes::kNone,
@@ -356,6 +356,12 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
     rows.clear();
     for (std::size_t i = 0; i < packs.size(); ++i)
       rows.push_back(pack_row(*colours_, room, this, i, packs[i]));
+    shared_->pack_pictures_shown.clear();
+    for (const auto& pack : packs) {
+      const auto image = pack.avatar.value_or(pack.pictures.empty() ? std::string{} : pack.pictures.front().url);
+      if (!image.empty())
+        shared_->pack_pictures_shown.push_back({image, pack.emoji ? emote_kind::emoji : emote_kind::sticker});
+    }
     this->show_page();
   }
   // A pack opened -- a new one where none is named -- to edit.
@@ -382,7 +388,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
     for (std::size_t i = 0; i < draft.pictures.size(); ++i)
       rows.emplace_back(this, i, draft.pictures[i]);
     parts.pictures.invalidateLayout();
-    shared_->pack_pictures_shown = std::ranges::to<std::vector>(std::views::transform(draft.pictures, &pack_picture::url));
+    shared_->pack_pictures_shown = std::ranges::to<std::vector>(std::views::transform(draft.pictures, [](const auto& one) { return emote_picture{one.url, one.emoji ? emote_kind::emoji : emote_kind::sticker}; }));
   }
   // What shows: the list, or the pack open.
   void show_page() {

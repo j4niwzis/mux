@@ -739,9 +739,19 @@ void log(const account_id& who, std::format_string<Args...> what, Args&&... args
 
 // What a picture or a file is fetched for: told by its type, never by a
 // word in a key.
+enum class emote_kind { emoji, sticker };
+struct emote_picture {
+  std::string source;
+  emote_kind kind = emote_kind::emoji;
+  friend bool operator==(const emote_picture&, const emote_picture&) = default;
+};
 namespace media_use {
 struct avatar {  // a chat's avatar or a person's, shown by their id
   std::string of;
+};
+struct emote {  // custom emoji and stickers, isolated from other pictures
+  bool animated = false;
+  emote_kind kind = emote_kind::emoji;
 };
 struct thumbnail {};  // a message's picture, small, as the chat shows it
 struct whole {};      // a message's picture, whole, as the viewer shows it
@@ -759,7 +769,7 @@ struct to_watch {};
 // the clipboard.
 struct to_copy {};
 }  // namespace media_use
-using media_use_t = spl::variant<media_use::avatar, media_use::thumbnail, media_use::whole, media_use::to_open,
+using media_use_t = spl::variant<media_use::avatar, media_use::emote, media_use::thumbnail, media_use::whole, media_use::to_open,
                                  media_use::to_save, media_use::to_play, media_use::to_watch, media_use::to_copy>;
 
 // Where a message goes among those of its chat.

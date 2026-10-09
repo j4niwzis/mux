@@ -143,15 +143,15 @@ struct picture_view : skiff::compose::Specced {
   }
   // The loader while the picture has not come; where it moves, drawn again
   // each frame for the next of its frames.
-  [[nodiscard]] bool settling() const { return animations().has(source); }
+  [[nodiscard]] bool settling() const { return (sticker ? sticker_animations() : animations()).has(source); }
   // Ticked while the picture is coming or moves. Its thumbnail coming is
   // seen by the picture itself, which marks this; every picture message
   // was ticked at every frame for as long as its whole picture was not
   // fetched -- that is, nearly always.
-  [[nodiscard]] bool wantsTick() const { return parts.loader.visible() || animations().has(source); }
+  [[nodiscard]] bool wantsTick() const { return parts.loader.visible() || (sticker ? sticker_animations() : animations()).has(source); }
   void update(double) {
-    const bool moving = animations().has(source);
-    const bool coming = has_thumbnail && !moving && !thumbnails().has(source) && !whole_pictures().has(source);
+    const bool moving = (sticker ? sticker_animations() : animations()).has(source);
+    const bool coming = has_thumbnail && !moving && !(sticker ? sticker_images().has(source) : thumbnails().has(source) || whole_pictures().has(source));
     if (coming != parts.loader.visible())
       parts.loader.setVisible(coming);
     if (moving)
@@ -201,6 +201,7 @@ struct picture_view : skiff::compose::Specced {
   static constexpr float kStickerMax = 256.0f;
   void as_sticker() {
     sticker = true;
+    parts.picture.setSource(from_moving_thumbnail{source, true});
     fState.apply({.background = skia::SkColor{0}});
     this->invalidateLayout();
   }
@@ -375,7 +376,7 @@ struct reaction_chip : skiff::compose::Stacked {
   struct parts_t {
     // Frosted, where the bubbles are: what is behind, blurred.
     std::optional<frost_pane> frost;
-    std::optional<nodes::Image<from_avatars>> picture;
+    std::optional<nodes::Image<from_emotes>> picture;
     nodes::Text label;
     // Who reacted, as Telegram shows them: their avatars in place of the
     // count, where they are three or fewer.
@@ -425,7 +426,7 @@ struct reaction_chip : skiff::compose::Stacked {
       fState.apply({.background = skia::SkColor{0}});
     }
     if (pictured(key)) {
-      parts.picture.emplace(from_avatars{key});
+      parts.picture.emplace(from_emotes{key});
       parts.picture->apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
     }
     parts.label.setMaxWidth(kLabelMost);

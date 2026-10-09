@@ -71,9 +71,8 @@ export namespace mux::ui {
 // A round avatar: the colour of `id`, and the initials of `name` in it.
 // Pictures fetched, decoded, by what they are of. Least recently drawn
 // first out, past a number of bytes; what is out is read from the disk
-// again when it is wanted. Three of them, so that one kind never pushes
-// another out: avatars (by a chat's id, a person's), the thumbnails of the
-// pictures in messages, and whole pictures (both by their source).
+// again when it is wanted. Each kind has its own store and budget:
+// avatars, emoji, stickers, message thumbnails, and whole pictures.
 class avatar_cache {
  public:
   // Held to this many bytes; set from Storage. What was drawn in this frame
@@ -145,6 +144,17 @@ using image_cache = avatar_cache;
 inline image_cache& avatar_images() {
   static image_cache images;
   return images;
+}
+inline image_cache& emoji_images() {
+  static image_cache images;
+  return images;
+}
+inline image_cache& sticker_images() {
+  static image_cache images;
+  return images;
+}
+inline image_cache& emote_images(emote_kind kind = emote_kind::emoji) {
+  return kind == emote_kind::emoji ? emoji_images() : sticker_images();
 }
 inline image_cache& thumbnails() {
   static image_cache images;
@@ -243,6 +253,17 @@ inline animation_cache& animations() {
   static animation_cache all;
   return all;
 }
+inline animation_cache& emoji_animations() {
+  static animation_cache all;
+  return all;
+}
+inline animation_cache& sticker_animations() {
+  static animation_cache all;
+  return all;
+}
+inline animation_cache& emote_animations(emote_kind kind = emote_kind::emoji) {
+  return kind == emote_kind::emoji ? emoji_animations() : sticker_animations();
+}
 // The clock animations are shown by.
 [[nodiscard]] inline double animation_clock() {
   return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -252,10 +273,20 @@ inline animation_cache& animations() {
 // looked up -- asked for each frame, so one that comes later is shown.
 // Values of types of their own, not functions kept.
 using picture_ptr = const skia::Sp<skia::SkImage>*;
-struct from_avatars {  // a chat's or a person's, a custom emoji's, a sticker's
+struct from_avatars {  // a chat's or a person's
   std::string key;
   picture_ptr operator()() const { return avatar_images().find(key); }
   skiff::scene::Waiters& waiters() const { return avatar_images().waiting; }
+};
+struct from_emotes {
+  std::string key;
+  emote_kind kind = emote_kind::emoji;
+  picture_ptr operator()() const {
+    if (picture_ptr still = emote_images(kind).find(key))
+      return still;
+    return emote_animations(kind).at(key, animation_clock());
+  }
+  skiff::scene::Waiters& waiters() const { return emote_images(kind).waiting; }
 };
 struct from_previews {  // blurred, from a blurhash, until the picture comes
   std::string key;
@@ -263,13 +294,20 @@ struct from_previews {  // blurred, from a blurhash, until the picture comes
 };
 struct from_thumbnails {
   std::string key;
-  picture_ptr operator()() const { return thumbnails().find(key); }
-  skiff::scene::Waiters& waiters() const { return thumbnails().waiting; }
+  bool sticker = false;
+  picture_ptr operator()() const { return (sticker ? sticker_images() : thumbnails()).find(key); }
+  skiff::scene::Waiters& waiters() const { return (sticker ? sticker_images() : thumbnails()).waiting; }
 };
 // Where it moves, the frame for now; else its thumbnail.
 struct from_moving_thumbnail {
   std::string key;
+  bool emote = false;
   picture_ptr operator()() const {
+    if (emote) {
+      if (picture_ptr moving = sticker_animations().at(key, animation_clock()))
+        return moving;
+      return sticker_images().find(key);
+    }
     if (picture_ptr moving = animations().at(key, animation_clock()))
       return moving;
     // Its thumbnail; else the whole of it, where that came first -- opened

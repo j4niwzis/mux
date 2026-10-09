@@ -904,15 +904,22 @@ template <class Actions> struct window : skiff::compose::Specced {
   }
   [[nodiscard]] bool emoji_open() { return layer().emoji.shown() != nullptr; }
   // The sticker pictures the panel shows, for the program to ask for.
-  [[nodiscard]] std::vector<std::string> emoji_pictures_shown() {
+  [[nodiscard]] std::vector<emote_picture> emoji_pictures_shown() {
     auto* up = layer().emoji.shown();
-    std::vector<std::string> shown;
+    std::vector<emote_picture> shown;
+    const auto pictures = [](const auto& urls, emote_kind kind) {
+      return std::views::transform(urls, [kind](const std::string& url) { return emote_picture{url, kind}; });
+    };
     if (up) {
-      shown.append_range(up->parts.card.parts.stickers.pictures_shown());
-      shown.append_range(up->parts.card.parts.panel.pictures_shown());
+      const auto stickers = up->parts.card.parts.stickers.pictures_shown();
+      const auto emoji = up->parts.card.parts.panel.pictures_shown();
+      shown.append_range(pictures(stickers, emote_kind::sticker));
+      shown.append_range(pictures(emoji, emote_kind::emoji));
     }
-    if (auto* menu = layer().menu.shown(); menu && menu->parts.menu.parts.emoji)
-      shown.append_range(menu->parts.menu.parts.emoji->pictures_shown());
+    if (auto* menu = layer().menu.shown(); menu && menu->parts.menu.parts.emoji) {
+      const auto emoji = menu->parts.menu.parts.emoji->pictures_shown();
+      shown.append_range(pictures(emoji, emote_kind::emoji));
+    }
     return shown;
   }
   // The menu's card, where one is up: what takes the keys while it is.

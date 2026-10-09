@@ -144,10 +144,10 @@ struct ui_shared {
   std::vector<space_item_shown> space_items;
   std::string space_account;
   // The images of the pack being edited, and the stickers the emoji panel
-  // shows -- in view, and its packs' tabs: fetched as avatars are, keyed by
-  // their mxc://, while they show.
-  std::vector<std::string> pack_pictures_shown;
-  std::vector<std::string> panel_pictures_shown;
+  // shows -- in view, and its packs' tabs: keyed by source and kind,
+  // fetched into their separate stores while they show.
+  std::vector<emote_picture> pack_pictures_shown;
+  std::vector<emote_picture> panel_pictures_shown;
   // A viewport moved onto messages whose media has not been requested yet.
   bool pictures_due = false;
   // What each protocol's account does beyond what every one does, as the

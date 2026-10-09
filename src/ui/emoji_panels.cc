@@ -84,11 +84,11 @@ struct picker_jump {
   scene::Taken operator()() const { panel->bring(at); return {}; }
 };
 template <class Panel>
-auto picker_tab(const palette& colours, Panel* panel, std::size_t at, std::optional<std::string> picture, std::string mark = "⏲") {
+auto picker_tab(const palette& colours, Panel* panel, std::size_t at, std::optional<std::string> picture, std::string mark = "⏲", emote_kind kind = emote_kind::emoji) {
   namespace c = skiff::compose;
-  std::optional<nodes::Image<from_avatars>> image;
+  std::optional<nodes::Image<from_emotes>> image;
   if (picture) {
-    image.emplace(from_avatars{*picture});
+    image.emplace(from_emotes{*picture, kind});
     image->apply({.width = 24.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle});
     image->keepBox();
   }
@@ -114,7 +114,7 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
     emoji_kept* kept_ = nullptr;
     emote sticker;
     struct parts_t {
-      nodes::Image<from_avatars> picture;
+      nodes::Image<from_emotes> picture;
     } parts;
     cell(const palette &colours, emoji_kept &kept, emote one)
         : Stacked(
@@ -126,13 +126,13 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
                                           .hoverBackground = colours.chosen})),
           kept_(&kept), sticker(one),
           parts{.picture = skiff::compose::styled(
-                    {.fill = true}, nodes::Image<from_avatars>({one.url}))} {
+                    {.fill = true}, nodes::Image<from_emotes>({one.url, emote_kind::sticker}))} {
 
       parts.picture.keepBox();  // the cell's size, whatever the sticker
     }
     dwell resting;
     [[nodiscard]] bool settling() const { return resting.counting(this->hovered()); }
-    void update(double now) { resting.step(this->hovered(), now, {sticker.url, ":" + sticker.shortcode + ":", true}, *kept_); }
+    void update(double now) { resting.step(this->hovered(), now, {sticker.url, ":" + sticker.shortcode + ":", true, emote_kind::sticker}, *kept_); }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     std::optional<Answer> onClick(float, float) {
@@ -165,7 +165,7 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
         {.spacingY = 0.0f, .wrap = false}, {}))};
     footer_row footer{tab_strip<tab>(picker_footer())};
     // Over the rest: the sticker the mouse rests on, large.
-    std::optional<emote_preview> preview;
+    std::optional<emote_preview_t> preview;
   } parts;
   std::optional<previewed> preview_of;
   bool searching = false;
@@ -216,7 +216,7 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
       const std::optional<std::string> picture = stickers.front().pack_avatar ? stickers.front().pack_avatar
                                                                               : std::optional<std::string>(stickers.front().url);
       all.push_back(make_section(*colours_, *kept_, name, stickers));
-      tabs.push_back(picker_tab(*colours_, this, all.size() - 1, picture));
+      tabs.push_back(picker_tab(*colours_, this, all.size() - 1, picture, "⏲", emote_kind::sticker));
       if (picture)
         tab_pictures.push_back(*picture);
     }
@@ -363,7 +363,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     // while what goes into the text is its :shortcode:.
     std::string picture_url;
     struct parts_t {
-      std::optional<nodes::Image<from_avatars>> picture;
+      std::optional<nodes::Image<from_emotes>> picture;
       nodes::Text face;
     } parts;
     dwell resting;
@@ -391,7 +391,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     cell(emoji_panel* p, const emote& custom) : cell(p, ":" + custom.shortcode + ":") {
       picture_url = custom.url;
       parts.face.setVisible(false);
-      parts.picture.emplace(from_avatars{custom.url});
+      parts.picture.emplace(from_emotes{custom.url});
       parts.picture->apply({.width = 26.0f, .height = 26.0f, .alignSelf = scene::align::kMiddle});
       parts.picture->keepBox();  // fixed: its coming repaints, lays nothing out
     }
@@ -469,7 +469,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     // Over the rest: an emoji's tones, while they are asked for.
     std::optional<tone_strip> tones;
     // And the emoji the mouse rests on, large.
-    std::optional<emote_preview> preview;
+    std::optional<emote_preview_t> preview;
   } parts;
   std::optional<previewed> preview_of;
   // A pick made: the tones, if open, closed at the next frame -- not now,

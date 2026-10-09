@@ -303,7 +303,6 @@ struct mentioned {
     card.at -= cut;
   while (!quoted.empty() && std::isspace(static_cast<unsigned char>(quoted.back())))
     quoted.pop_back();
-  std::ranges::replace(quoted, '\n', ' ');
   return quoted;
 }
 
@@ -373,7 +372,7 @@ struct message_pictures {
     return skiff::scene::PillPicture{avatar_images().find(id), top, bottom, initials_of(id)};
   }
   static const skia::Sp<skia::SkImage>* picture(std::string_view target) {
-    return avatar_images().find(std::string(target));
+    return emoji_images().find(target);
   }
 };
 

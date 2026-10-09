@@ -742,6 +742,84 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+TEST(Emoji, GifTabReceivesPointerPressesOnDesktopAndPhone) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  for (const float width : {1100.0f, 390.0f}) {
+    stub program;
+    ui_state ui;
+    scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
+    ui.show(window.root().layer().emoji,
+            std::optional{mux::ui::emoji_facts{width - 30.0f, 650.0f, {}}});
+    for (int i = 0; i < 4; ++i) {
+      window.update(1000.0 + 16.0 * i);
+      window.layoutIfNeeded(skia::SkRect::MakeWH(width, 720.0f));
+      (void)window.finishFrame();
+    }
+    auto& card = window.root().layer().emoji.shown()->parts.card;
+    const auto tab = std::get<2>(card.parts.tabs.fParts).bounds();
+    ASSERT_FALSE(tab.isEmpty());
+    scene::hostWork().pressed.clear();
+    scene::InputRouter router;
+    const std::array layers{scene::InputRouter::Layer{window.handle(), false}};
+    router.setLayers(layers);
+    router.pointer(scene::PointerEvent{scene::pointer::down{tab.centerX(), tab.centerY()}});
+    router.pointer(scene::PointerEvent{scene::pointer::up{tab.centerX(), tab.centerY()}});
+    struct sink {
+      bool asked = false;
+      void take(const mux::ui::request::show_gifs&) { asked = true; }
+    } requests;
+    const auto presses = std::exchange(scene::hostWork().pressed, {});
+    ASSERT_FALSE(presses.empty());
+    for (const auto& path : presses)
+      ASSERT_TRUE(skiff::bind::press(window.root(), ui.showing, path, &requests));
+    EXPECT_TRUE(requests.asked);
+    EXPECT_EQ(card.page_at, 2);
+    EXPECT_TRUE(card.parts.gifs.visible());
+    EXPECT_FALSE(card.parts.panel.visible());
+  }
+  skiff::paint::defaultFont() = nullptr;
+}
+
+TEST(Timeline, SelectedQuoteKeepsAllLinesAndWraps) {
+  mux::ui::mentioned shown;
+  shown.text = "First quoted line\nSecond quoted line\n\nAnswer";
+  shown.styles.push_back({.first = 0, .last = 36, .quote = true});
+  const auto quote = mux::ui::take_opening_quote(shown);
+  ASSERT_TRUE(quote);
+  EXPECT_EQ(*quote, "First quoted line\nSecond quoted line");
+  EXPECT_EQ(shown.text, "Answer");
+  mux::ui::palette colours;
+  auto row = mux::ui::quote_row(colours, colours.accent, "Alice", *quote, std::nullopt, true);
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  scene::Scene<mux::ui::quote_row_t> view{std::move(row)};
+  view.layoutIfNeeded(skia::SkRect::MakeWH(200.0f, 400.0f));
+  const auto& text = std::get<1>(std::get<2>(view.root().fParts).fParts);
+  EXPECT_EQ(text.text(), *quote);
+  EXPECT_GT(text.bounds().height(), 26.0f);
+  skiff::paint::defaultFont() = nullptr;
+}
+
+TEST(Images, EmojiAndStickerStoresAreIndependent) {
+  auto& emoji = mux::ui::emoji_images();
+  auto& stickers = mux::ui::sticker_images();
+  emoji.clear();
+  stickers.clear();
+  auto first = skia::Raster(skia::SkImageInfo::MakeN32Premul(8, 8));
+  auto second = skia::Raster(skia::SkImageInfo::MakeN32Premul(16, 16));
+  ASSERT_TRUE(first);
+  ASSERT_TRUE(second);
+  emoji.put("same-source", first->makeImageSnapshot());
+  stickers.put("same-source", second->makeImageSnapshot());
+  EXPECT_EQ((*mux::ui::from_emotes{"same-source", mux::emote_kind::emoji}())->width(), 8);
+  EXPECT_EQ((*mux::ui::from_emotes{"same-source", mux::emote_kind::sticker}())->width(), 16);
+  emoji.clear();
+  EXPECT_FALSE(emoji.has("same-source"));
+  EXPECT_TRUE(stickers.has("same-source"));
+  stickers.clear();
+}
+
 // A one-letter message in a group, as in a screenshot: its bubble
 // as wide as its name and its letter ask, not its widest; each part's width
 // said where it is not.

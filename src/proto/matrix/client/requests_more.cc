@@ -848,7 +848,7 @@ void account<Sink>::load_newer(std::string room, std::string from) {
 
 template <class Sink>
 void account<Sink>::fetch_avatar(std::string source, std::string of) {
-  this->fetch_media(std::move(source), media_use::avatar{std::move(of)}, 96, true);
+  this->fetch_media(std::move(source), media_use::avatar{std::move(of)}, 512, true);
 }
 
 }  // namespace mux::proto::matrix::client

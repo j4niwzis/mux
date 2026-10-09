@@ -132,6 +132,24 @@ struct emoji_facts {
   // The GIFs saved, for its GIF tab, as the program has them.
   std::vector<std::string> gifs;
 };
+template <class Card> struct popup_tab_action {
+  Card* card;
+  popup_page_t page;
+  std::variant<scene::Taken, request::show_gifs> operator()() const {
+    if (auto asked = card->show(page))
+      return *asked;
+    return scene::Taken{};
+  }
+};
+template <class Card>
+auto popup_tab(const palette& colours, Card* card, popup_page_t page, std::string name) {
+  namespace c = skiff::compose;
+  return c::onPress(popup_tab_action<Card>{card, std::move(page)},
+      c::row(c::justified(c::hbox(0.0f, {.width = 80.0f, .height = 28.0f, .cornerRadius = 6.0f,
+          .hoverBackground = colours.chosen, .selectedBackground = colours.tile}), nodes::justify::middle{}),
+          c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(name, 13.0f, colours.text, true))), name);
+}
+
 template <class Actions> struct emoji_popup : skiff::compose::Specced {
   // Child references and handlers require a fixed address.
   emoji_popup(const emoji_popup&) = delete;
@@ -149,54 +167,14 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
     // A swipe to the GIFs: what has been saved since, asked for.
     using Answer = ::mux::ui::request::show_gifs;
     using panel_t = emoji_panel<insert_emoji_into<Actions>>;
-    // Emoji, stickers or GIFs, as tdesktop's tabs at the panel's top.
-    struct tab : skiff::compose::Stacked {
-      using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::show_gifs>;
-      card_t* card;
-      popup_page_t page;
-      struct parts_t {
-        nodes::Text label;
-      } parts;
-      tab(card_t *c, popup_page_t p, std::string name)
-          : Stacked(skiff::compose::justified(
-                skiff::compose::hbox(0.0f,
-                                     {.width = 80.0f,
-                                      .height = 28.0f,
-                                      .cornerRadius = 6.0f,
-                                      .hoverBackground = c->colours_->chosen,
-                                      .selectedBackground = c->colours_->tile}),
-                nodes::justify::middle{})),
-            card(c), page(p), parts{.label = skiff::compose::styled(
-                                        {.alignSelf = scene::align::kMiddle},
-                                        nodes::Text(std::move(name), 13.0f,
-                                                    c->colours_->text, true))} {
-      }
-      [[nodiscard]] bool acceptsInput() const { return true; }
-      std::optional<std::variant<::skiff::scene::Taken, ::mux::ui::request::show_gifs>> onClick(float, float) {
-        if (auto asked = card->show(page))
-          return *asked;
-        return ::skiff::scene::Taken{};
-      }
-    };
-    struct tabs_row : skiff::compose::Stacked {
-      struct parts_t {
-        tab emoji;
-        tab stickers;
-        tab gifs;
-      } parts;
-      explicit tabs_row(card_t *c)
-          : Stacked(skiff::compose::hbox(
-                4.0f, {.fillX = true,
-                       .height = 36.0f,
-                       .padding = {4.0f, 8.0f, 4.0f, 8.0f}})),
-            parts{.emoji = tab(c, popup_page::emoji{}, "Emoji"),
-                  .stickers = tab(c, popup_page::stickers{}, "Stickers"),
-                  .gifs = tab(c, popup_page::gifs{}, "GIFs")} {}
-    };
+    using tab_t = decltype(popup_tab(std::declval<const palette&>(), std::declval<card_t*>(),
+        popup_page_t{popup_page::emoji{}}, std::string{}));
+    using tabs_t = decltype(skiff::compose::row(skiff::compose::hbox(),
+        std::declval<tab_t>(), std::declval<tab_t>(), std::declval<tab_t>()));
     // The colours it is made in: its tabs read them from it.
     const palette* colours_ = nullptr;
     struct parts_t {
-      tabs_row tabs;
+      tabs_t tabs;
       panel_t panel;
       sticker_grid<Actions> stickers;
       gif_grid<Actions> gifs;
@@ -211,13 +189,17 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
                      .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0),
                                              3.0f}})),
           colours_(&colours),
-          parts{.tabs = tabs_row(this),
+          parts{.tabs = skiff::compose::row(skiff::compose::hbox(4.0f, {.fillX = true, .height = 36.0f, .depth = 1.0f,
+                    .padding = {4.0f, 8.0f, 4.0f, 8.0f}}),
+                    popup_tab(colours, this, popup_page::emoji{}, "Emoji"),
+                    popup_tab(colours, this, popup_page::stickers{}, "Stickers"),
+                    popup_tab(colours, this, popup_page::gifs{}, "GIFs")),
                 .panel = panel_t(colours, kept, insert_emoji_into<Actions>{},
-                                 {.fillX = true, .grow = scene::axes::kY}),
+                                 {.fillX = true, .grow = scene::axes::kY, .masking = true}),
                 .stickers = sticker_grid<Actions>(
-                    colours, kept, {.fillX = true, .grow = scene::axes::kY}),
+                    colours, kept, {.fillX = true, .grow = scene::axes::kY, .masking = true}),
                 .gifs = skiff::compose::styled(
-                    {.fillX = true, .grow = scene::axes::kY},
+                    {.fillX = true, .grow = scene::axes::kY, .masking = true},
                     gif_grid<Actions>(colours))} {
 
       // The card paints its own floating backdrop. Its full-window layer
@@ -284,9 +266,9 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
       parts.stickers.setVisible(stickers);
       parts.gifs.setVisible(gifs);
       page_at = emoji ? 0 : stickers ? 1 : 2;
-      parts.tabs.parts.emoji.fState.apply({.selected = emoji});
-      parts.tabs.parts.stickers.fState.apply({.selected = stickers});
-      parts.tabs.parts.gifs.fState.apply({.selected = gifs});
+      std::get<0>(parts.tabs.fParts).fState.apply({.selected = emoji});
+      std::get<1>(parts.tabs.fParts).fState.apply({.selected = stickers});
+      std::get<2>(parts.tabs.fParts).fState.apply({.selected = gifs});
       this->invalidateLayout();
       if (gifs)
         return ::mux::ui::request::show_gifs{};

@@ -35,6 +35,46 @@ export import :message_text;
 
 export namespace mux::ui {
 
+[[nodiscard]] inline skia::SkColor quote_tint(skia::SkColor colour, float alpha) {
+  return (colour & 0x00FFFFFFu) | (static_cast<skia::SkColor>(std::lround(alpha * 255.0f)) << 24);
+}
+[[nodiscard]] inline auto quote_row(const palette& colours, skia::SkColor colour,
+                                    std::string who, std::string said,
+                                    std::optional<std::string> picture = std::nullopt,
+                                    bool quoted = false, bool sticker = false) {
+  namespace c = skiff::compose;
+  std::optional<nodes::Text> tag;
+  if (quoted)
+    tag.emplace(c::styled({.alignSelf = scene::align::kStart,
+                           .margin = {1.0f, 0.0f, 0.0f, 0.0f}},
+                          nodes::Text("quoted", 11.0f, colours.dim)));
+  std::optional<nodes::Image<from_thumbnails>> thumb;
+  if (picture)
+    thumb.emplace(c::styled({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle,
+                              .margin = {2.0f, 0.0f, 2.0f, 0.0f}, .cornerRadius = 3.0f,
+                              .background = colours.tile},
+                             nodes::Image<from_thumbnails>({*picture, sticker})));
+  auto text = nodes::Text(std::move(said), 13.0f, colours.text);
+  if (quoted)
+    text = wrapped(std::move(text));
+  else
+    text = elided(std::move(text));
+  return c::row(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY,
+      .margin = {2.0f, 0.0f, 4.0f, 0.0f},
+      .padding = {2.0f, 6.0f, 2.0f, picture ? 7.0f : 11.0f}, .cornerRadius = 5.0f,
+      .background = quote_tint(colour, 0.12f), .masking = true}),
+    c::styled({.place = scene::anchor::kTopLeft, .x = picture ? -7.0f : -11.0f,
+                .y = -2.0f, .fillY = true, .width = 3.0f}, nodes::Box<>(quote_tint(colour, 0.9f))),
+    std::move(thumb),
+    c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
+                             .alignSelf = scene::align::kMiddle}),
+      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+        c::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(who), 13.0f, colour, true))),
+        std::move(tag)),
+      c::styled({.fillX = true}, std::move(text))));
+}
+using quote_row_t = decltype(quote_row(std::declval<const palette&>(), skia::SkColor{}, std::string{}, std::string{}));
+
 // A protocol's own sticker nodes, and its making of one for a message:
 // none by default -- the picture.
 namespace sticker_defaults {
@@ -150,90 +190,6 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
   [[nodiscard]] static skia::SkColor with_alpha(skia::SkColor colour, float alpha) {
     return (colour & 0x00FFFFFFu) | (static_cast<skia::SkColor>(std::lround(alpha * 255.0f)) << 24);
   }
-  struct quote_row : skiff::compose::Stacked {
-    // Who said it, and "quoted" after the name -- thin and grey, at the
-    // right: what it shows is the part the reply quoted, not the message's
-    // text. In the line's flow, so the name is cut before it rather than
-    // drawn under it, and the quote is at least as wide as both.
-    struct who_row : skiff::compose::Stacked {
-      struct parts_t {
-        nodes::Text who;
-        std::optional<nodes::Text> tag;
-      } parts;
-      who_row(const palette &colours, skia::SkColor colour, std::string name,
-              bool quoted)
-          : Stacked(skiff::compose::hbox(
-                8.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-            parts{.who = skiff::compose::styled(
-                      {.grow = scene::axes::kX},
-                      elided(
-                          nodes::Text(std::move(name), 13.0f, colour, true)))} {
-        auto& [who, tag] = parts;
-
-        if (quoted) {
-          tag.emplace("quoted", 11.0f, colours.dim);
-          tag->apply({.alignSelf = scene::align::kStart, .margin = {1.0f, 0.0f, 0.0f, 0.0f}});
-        }
-      }
-    };
-    // Who said it over a line of it, each cut at the bubble's width.
-    struct said_column : skiff::compose::Stacked {
-      struct parts_t {
-        who_row who;
-        nodes::Text said;
-      } parts;
-      said_column(const palette &colours, skia::SkColor colour,
-                  std::string name, std::string line, bool quoted)
-          : Stacked(skiff::compose::vbox(0.0f,
-                                         {.autoSize = scene::axes::kY,
-                                          .grow = scene::axes::kX,
-                                          .alignSelf = scene::align::kMiddle})),
-            parts{
-                .who = who_row(colours, colour, std::move(name), quoted),
-                .said = skiff::compose::styled(
-                    {.fillX = true}, elided(nodes::Text(std::move(line), 13.0f,
-                                                        colours.text)))} {
-        auto& [who, said] = parts;
-        // As wide as the quote, cut where it ends: the quote is as wide as
-        // its bubble.
-      }
-    };
-    struct parts_t {
-      nodes::Box<> bar;
-      // A picture quoted: its thumbnail.
-      std::optional<nodes::Image<from_thumbnails>> thumb;
-      said_column texts;
-    } parts;
-    quote_row(const palette &colours, skia::SkColor colour, std::string who,
-              std::string said,
-              std::optional<std::string> picture = std::nullopt,
-              bool quoted = false)
-        : Stacked(skiff::compose::hbox(
-              4.0f, {.fillX = true,
-                     .autoSize = scene::axes::kY,
-                     .margin = {2.0f, 0.0f, 4.0f, 0.0f},
-                     .padding = {2.0f, 6.0f, 2.0f, picture ? 7.0f : 11.0f},
-                     .cornerRadius = 5.0f,
-                     .background = with_alpha(colour, 0.12f),
-                     .masking = true})),
-          parts{.bar = skiff::compose::styled(
-                    {.place = scene::anchor::kTopLeft,
-                     .x = picture ? -7.0f : -11.0f,
-                     .y = -2.0f,
-                     .fillY = true,
-                     .width = 3.0f},
-                    nodes::Box<>(with_alpha(colour, 0.9f))),
-                .texts = said_column(colours, colour, std::move(who),
-                                     std::move(said), quoted)} {
-      auto& [bar, thumb, texts] = parts;
-
-      if (picture) {
-        thumb.emplace(from_thumbnails{*picture});
-        thumb->apply({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle,
-                      .margin = {2.0f, 0.0f, 2.0f, 0.0f}, .cornerRadius = 3.0f, .background = colours.tile});
-      }
-    }
-  };
   // The bubble: as wide as what it says, up to its largest.
   struct body_column : skiff::compose::Stacked {
     bool outgoing = false;
@@ -266,7 +222,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       std::optional<name_row> name;
       // Forwarded: from whom, in the accent, as Telegram's.
       std::optional<forward_line> forwarded;
-      std::optional<quote_row> quote;
+      std::optional<quote_row_t> quote;
       std::optional<picture_view> picture;
       // A sticker its protocol draws itself, in the picture's place.
       std::optional<sticker_holder> their_sticker;
@@ -957,12 +913,13 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
         if (line.empty())
           line = is_picture(found->attachment->kind) ? std::string("Photo") : found->attachment->name;
       }
-      std::ranges::replace(line, '\n', ' ');
+      if (!header_quote)
+        std::ranges::replace(line, '\n', ' ');
       const bool with_picture = picture.has_value();
-      body.parts.quote.emplace(*colours_, known ? avatar_colour(found->sender) : colours_->accent,
+      body.parts.quote.emplace(quote_row(*colours_, known ? avatar_colour(found->sender) : colours_->accent,
                          known ? (found->outgoing ? std::string("You") : sender_name(in, found->sender))
                                : std::string("A message"),
-                         std::move(line), header_quote ? std::nullopt : std::move(picture), header_quote.has_value());
+                         std::move(line), header_quote ? std::nullopt : std::move(picture), header_quote.has_value(), known && found->attachment && found->attachment->sticker));
       // The quote spans its bubble, as tdesktop's; the bubble is at least as
       // wide as the quote asks -- its name and its line, the line counted up
       // to maxSignatureSize (240), so that a short answer to a long message
@@ -970,13 +927,14 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       float asks = 160.0f;
       if (skia::SkFont* font = skiff::paint::defaultFont()) {
         skiff::paint::Painter measure(nullptr, *font);
-        const auto& texts = body.parts.quote->parts.texts.parts;
+        const auto& texts = std::get<2>(body.parts.quote->fParts).fParts;
+        const auto& name = std::get<0>(texts).fParts;
         // The name line with "quoted" after it, whole: the bubble widened for
         // the tag, rather than the tag drawn over the name.
-        const auto& tag = texts.who.parts.tag;
-        const float who = measure.measure(texts.who.parts.who.text(), 13.0f) +
+        const auto& tag = std::get<1>(name);
+        const float who = measure.measure(std::get<0>(name).text(), 13.0f) +
                           (tag ? 8.0f + std::ceil(measure.measure(tag->text(), 11.0f)) : 0.0f);
-        const float words = std::max(who, std::min(measure.measure(texts.said.text(), 13.0f), kReplyLineMax));
+        const float words = std::max(who, std::min(measure.measure(std::get<1>(texts).text(), 13.0f), kReplyLineMax));
         const float around = (with_picture ? 7.0f + 32.0f + 4.0f : 11.0f) + 6.0f + 2.0f * kPadX;
         asks = std::min(std::ceil(words) + around, kMaxWidth + 2.0f * kPadX);
       }
@@ -1009,7 +967,8 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       std::string line = std::format("\U0001F4AC {} {}", summary.count, summary.count == 1 ? "reply" : "replies");
       if (!summary.last_text.empty())
         line += std::format(" \u00b7 {}: {}", sender_name(in, summary.last_sender), summary.last_text);
-      std::ranges::replace(line, '\n', ' ');
+      if (!header_quote)
+        std::ranges::replace(line, '\n', ' ');
       body.parts.thread.emplace(std::move(line), 13.0f, colours_->accent, true);
       body.parts.thread->setElided(true);
       body.parts.thread->apply({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}});

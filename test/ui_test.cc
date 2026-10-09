@@ -852,7 +852,59 @@ TEST(Frames, TypingAndScrollingKeepUnchangedPanesOutsideDamage) {
   EXPECT_FALSE(touches(frame(), screen.line.field.bounds()));
 }
 
-TEST(Emoji, PackTabsStayWithinTheFooterAndAllRemainReachable) {
+TEST(Emoji, FixedCategoriesStayVisibleWhileCustomPacksArePaged) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct restore_font { ~restore_font() { skiff::paint::defaultFont() = nullptr; } } reset;
+  mux::ui::palette colours;
+  for (const float width : {180.0f, 320.0f}) {
+    mux::ui::emoji_kept kept;
+    for (int i = 0; i < 32; ++i) {
+      mux::emote emoji;
+      emoji.shortcode = "custom" + std::to_string(i);
+      emoji.url = "mxc://example.com/" + emoji.shortcode;
+      emoji.pack = "Pack " + std::to_string(i);
+      kept.chat_emotes.push_back(std::move(emoji));
+    }
+    using pick = mux::ui::insert_emoji_into<stub>;
+    scene::Scene<mux::ui::emoji_panel<pick>> window{std::in_place, colours, kept, pick{}, scene::Spec{.fill = true}};
+    auto& panel = window.root();
+    double clock = 1000.0;
+    const auto frame = [&] {
+      for (int i = 0; i < 4; ++i) {
+        window.update(clock += 16.0);
+        window.layoutIfNeeded(skia::SkRect::MakeWH(width, 400.0f));
+        (void)window.finishFrame();
+      }
+    };
+    frame();
+    auto& categories = mux::ui::emoji_category_tabs(panel.parts.footer);
+    auto& packs = mux::ui::emoji_pack_tabs(panel.parts.footer);
+    ASSERT_GT(categories.size(), 1u);
+    ASSERT_EQ(packs.size(), 32u);
+    const auto category_row = std::get<0>(panel.parts.footer.fParts).bounds();
+    const auto check_categories = [&] {
+      for (const auto& tab : categories) {
+        EXPECT_TRUE(tab.visible());
+        EXPECT_GE(tab.bounds().fLeft, category_row.fLeft - 0.5f);
+        EXPECT_LE(tab.bounds().fRight, category_row.fRight + 0.5f);
+        EXPECT_NEAR(tab.bounds().centerY(), categories.front().bounds().centerY(), 0.5f);
+      }
+    };
+    check_categories();
+    EXPECT_TRUE(packs.front().visible());
+    EXPECT_FALSE(packs.back().visible());
+    for (std::size_t i = 0; i < packs.size(); ++i) {
+      panel.page_packs(true);
+      frame();
+    }
+    EXPECT_TRUE(packs.back().visible());
+    EXPECT_FALSE(packs.front().visible());
+    check_categories();
+  }
+}
+
+TEST(Stickers, PackTabsStayWithinTheFooterAndAllRemainReachable) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;
   struct restore_font { ~restore_font() { skiff::paint::defaultFont() = nullptr; } } reset;

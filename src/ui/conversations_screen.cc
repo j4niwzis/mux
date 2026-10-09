@@ -550,6 +550,19 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   // Esc closes it -- before the input reads Enter as sending.
   std::optional<Answer> onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
     namespace keys = scene::keys;
+    // Selection shortcuts precede the composer and its suggestion lists.
+    if (chat.parts.selection.visible()) {
+      const bool control = press.modifiers.template has<scene::modifier::control>();
+      const bool other = press.modifiers.template has<scene::modifier::shift>() || press.modifiers.template has<scene::modifier::alt>();
+      if (press.key == keys::kC && control && !other) {
+        reply.handle();
+        return request::selection_copy{};
+      }
+      if (press.key == keys::kDelete && !control && !other) {
+        reply.handle();
+        return request::selection_delete{};
+      }
+    }
     // Alt+Right: into the forum gone to; Alt+Left: out of the one open, to
     // its row. Taken before the field: it moves its caret on Left and Right
     // whatever the modifiers, and took Alt+Left from under this.
@@ -795,21 +808,6 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   // messages; Esc lets an answer or an edit go.
   using Node::onKey;
   std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply);
-  std::optional<Answer> onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
-    if (!chat.parts.selection.visible())
-      return std::nullopt;
-    const bool control = press.modifiers.template has<scene::modifier::control>();
-    const bool other = press.modifiers.template has<scene::modifier::shift>() || press.modifiers.template has<scene::modifier::alt>();
-    if (press.key == scene::keys::kC && control && !other) {
-      reply.handle();
-      return request::selection_copy{};
-    }
-    if (press.key == scene::keys::kDelete && !control && !other) {
-      reply.handle();
-      return request::selection_delete{};
-    }
-    return std::nullopt;
-  }
   // Messages selected: the selection bar in place of the head, and the
   // messages marked; none, the head back.
   void show_selection(const std::set<std::string>& ids) {

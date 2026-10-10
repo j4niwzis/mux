@@ -458,6 +458,15 @@ class stream {
   // What ended the stream, where the network did.
   std::optional<error_code> failed() const { return failed_; }
 
+  // Cancel a dead connection without waiting for a TLS shutdown reply.
+  // Outstanding reads and writes complete with an error and wake their fibers.
+  void abort() {
+    error_code ignored;
+    failed_ = asio::error::operation_aborted;
+    stream_.next_layer().cancel(ignored);
+    stream_.next_layer().close(ignored);
+  }
+
   void close() {
     error_code ignored;
     if (tls_)

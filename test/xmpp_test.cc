@@ -77,6 +77,10 @@ TEST(Xmpp, AScriptedSession) {
                               .plain_without_tls = true},
                              sink);
   account.start();
+  running.spawn([&] {
+    running.sleep(std::chrono::milliseconds(100));
+    account.stop();
+  });
   running.run();
 
   const mux::account_id me{mux::protocol::xmpp{}, "user@example.com"};
@@ -127,6 +131,81 @@ TEST(Xmpp, AScriptedSession) {
   EXPECT_NE(heard.find("jabber:iq:roster"), std::string::npos) << heard;
   EXPECT_NE(heard.find("id=\"push1\""), std::string::npos) << heard;
   EXPECT_NE(heard.find("<presence"), std::string::npos) << heard;
+}
+
+
+TEST(Xmpp, ReconnectsAndDeliversMessagesWithoutAccountSelection) {
+  mux::net::loop running;
+  auto tls = mux::net::client_tls();
+  mux::net::listener server(running);
+  std::vector<std::string> connections;
+  running.spawn([&] {
+    for (int attempt = 0; attempt != 2; ++attempt) {
+      mux::net::stream wire(running, tls, server.accept());
+      auto replay = script;
+      if (attempt == 1) replay.replace(replay.find("id='m1'"), 7, "id='m2'");
+      wire.write(replay);
+      wire.flush();
+      connections.emplace_back();
+      for (auto it = wire.input().begin(); it != std::default_sentinel; ++it)
+        connections.back() += *it;
+    }
+  });
+  mux::model model;
+  const mux::account_id other{mux::protocol::matrix{}, "@other:example.org"};
+  model.apply(mux::change::connection_changed{other, mux::connection::online{}});
+  auto sink = [&](mux::change_t one) { model.apply(one); };
+  mux::proto::xmpp::client::account account(running, tls,
+      {.address = "user@example.com", .password = "pencil", .host = "127.0.0.1",
+       .port = server.port(), .plain_without_tls = true}, sink);
+  account.start();
+  account.start(); // An enabled account has only one recovery fiber.
+  running.spawn([&] {
+    const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(4);
+    const mux::account_id me{mux::protocol::xmpp{}, "user@example.com"};
+    const auto delivered = [&] {
+      const auto* chat = model.find({me, "romeo@example.net"});
+      return chat && std::ranges::any_of(chat->timeline, [](const auto& message) { return message.id == "m2"; });
+    };
+    while (!delivered() && std::chrono::steady_clock::now() < until)
+      running.sleep(std::chrono::milliseconds(10));
+    account.stop();
+    server.close();
+  });
+  running.run();
+  ASSERT_EQ(connections.size(), 2u);
+  for (const auto& heard : connections)
+    EXPECT_NE(heard.find("balcony@rooms.example.com/user"), std::string::npos);
+  const mux::account_id me{mux::protocol::xmpp{}, "user@example.com"};
+  const auto* chat = model.find({me, "romeo@example.net"});
+  ASSERT_NE(chat, nullptr);
+  EXPECT_TRUE(std::ranges::any_of(chat->timeline, [](const auto& message) { return message.id == "m2"; }));
+  EXPECT_TRUE(model.accounts().contains(other));
+}
+
+TEST(Xmpp, DisablingDuringBackoffStopsConnectionAttempts) {
+  mux::net::loop running;
+  auto tls = mux::net::client_tls();
+  mux::net::listener unused(running);
+  const auto port = unused.port();
+  unused.close();
+  int attempts = 0;
+  auto sink = [&](mux::change_t one) {
+    spl::visit(spl::overloaded{
+        [&](const mux::change::connection_changed& changed) {
+          spl::visit(spl::overloaded{[&](mux::connection::connecting) { ++attempts; }, [](const auto&) {}}, changed.state);
+        }, [](const auto&) {}}, one);
+  };
+  mux::proto::xmpp::client::account account(running, tls,
+      {.address = "user@example.com", .password = "pencil", .host = "127.0.0.1",
+       .port = port, .plain_without_tls = true}, sink);
+  account.start();
+  running.spawn([&] {
+    running.sleep(std::chrono::milliseconds(100));
+    account.stop();
+  });
+  running.run();
+  EXPECT_EQ(attempts, 1);
 }
 
 }  // namespace

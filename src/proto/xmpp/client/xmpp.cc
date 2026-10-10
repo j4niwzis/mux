@@ -254,7 +254,9 @@ class account {
 
   // Connected, and kept connected, by a fiber of its own.
   void start() {
-    this->spawn_guarded([this] { run(); });
+    if (started_ || stopping_) return;
+    started_ = true;
+    loop_->spawn([this] { run(); });
   }
 
   // What an account of another protocol does and this does not -- avatars
@@ -651,13 +653,10 @@ class account {
     }
   }
 
-  // Unavailable, and the stream closed.
+  // Called on the network loop: stop recovery before canceling its I/O.
   void stop() {
-    this->spawn_guarded([this] {
-      stopping_ = true;
-      if (session_)
-        session_->close();
-    });
+    stopping_ = true;
+    if (wire_) wire_->abort();
   }
 
  private:
@@ -669,7 +668,12 @@ class account {
   // it kept, so that nothing half done of it is relied on.
   template <class Body>
   void spawn_guarded(Body body) {
+    ++commands_;
     loop_->spawn([this, body = std::move(body)] mutable {
+      struct finished {
+        std::size_t& commands;
+        ~finished() { --commands; }
+      } done{commands_};
       try {
         body();
       } catch (const std::exception& failed) {
@@ -681,6 +685,29 @@ class account {
 
 
   void run() {
+    std::chrono::seconds delay{1};
+    while (!stopping_) {
+      retry_ = true;
+      connected_ = false;
+      try {
+        this->connect_once();
+      } catch (const std::exception& failed) {
+        log(id_, "connection stopped by an error: {}", failed.what());
+        say(connection::failed{failed.what()});
+      }
+      sink_(change::protocol_state_changed{id_, protocol_state_t{mux::proto::xmpp::state{}}});
+      if (stopping_ || !retry_) break;
+      if (connected_) delay = std::chrono::seconds(1);
+      log(id_, "reconnecting in {} seconds", delay.count());
+      // Short sleeps let disabling an account finish promptly during backoff.
+      for (std::chrono::seconds waited{0}; waited < delay && !stopping_; waited += std::chrono::seconds(1))
+        loop_->sleep(std::chrono::seconds(1));
+      delay = std::min(delay * 2, std::chrono::seconds(60));
+    }
+    started_ = false;
+  }
+
+  void connect_once() {
     say(connection::connecting{});
     if (how_.proxy)
       log(id_, "through the proxy {}:{}", how_.proxy->host, how_.proxy->port);
@@ -714,6 +741,11 @@ class account {
     log(id_, "opening the stream: TLS, then logging in");
     net::stream wire(*loop_, *tls_, std::move(*socket));
     wire_ = &wire;
+    struct forget_connection {
+      account& own;
+      ~forget_connection() { own.session_ = nullptr; own.wire_ = nullptr; }
+    } forget{*this};
+    if (stopping_) { wire.abort(); return; }
     tern::options options;
     options.username = user_;
     options.domain = domain_;
@@ -730,11 +762,13 @@ class account {
       // Registering: what the server asks more, to the account's form; what
       // it refused, said as what it means.
       if (made.error().registration) {
+        retry_ = false;
         sink_(registration_asked_of(id_, *made.error().registration));
         say(connection::failed{"the server asks more to register: see the account's settings"});
         return;
       }
       if (made.error().code == tern::connect_code::registration_refused) {
+        retry_ = false;
         const auto& refused = made.error().stanza;
         std::string meaning = made.error().detail;
         const auto closed = [&](const auto&) { meaning = "the server does not let accounts be made here"; };
@@ -755,6 +789,12 @@ class account {
         say(connection::failed{"registration refused: " + meaning + (text.empty() ? std::string() : " -- " + text)});
         return;
       }
+      // Credentials and unsupported authentication require an account edit.
+      // Network and stream failures are retried with the same settings.
+      if (made.error().code == tern::connect_code::not_authorized ||
+          made.error().code == tern::connect_code::authentication ||
+          made.error().code == tern::connect_code::no_mechanism)
+        retry_ = false;
       say(connection::failed{made.error().detail.empty() ? "the connection failed" : made.error().detail});
       return;
     }
@@ -766,6 +806,7 @@ class account {
     }
     session_type& session = *made;
     session_ = &session;
+    connected_ = true;
     log(id_, "logged in, as {}", how_.resource.empty() ? std::string("a resource the server chose") : how_.resource);
     say(connection::online{});
 
@@ -798,6 +839,16 @@ class account {
     } else {
       log(id_, "no bookmarks");
     }
+    // Restore every room joined here, including rooms whose bookmark could
+    // not be saved. Drop occupants from the previous connection.
+    std::ranges::for_each(rooms_, [](auto& entry) { entry.second.occupants.clear(); });
+    // Sending may yield to a leave request: do not retain map iterators or
+    // references across it, or join a room removed while another was sent.
+    const auto rejoining = std::ranges::to<std::vector>(std::views::transform(rooms_, [](const auto& entry) {
+      return std::pair{entry.first, entry.second.nick};
+    }));
+    for (const auto& [jid, nick] : rejoining)
+      if (rooms_.contains(jid)) this->join(jid, nick);
 
     for (;;) {
       auto one = inbox.try_next();
@@ -813,6 +864,9 @@ class account {
       on(**one);
     }
     session_ = nullptr;
+    // Tern woke requests waiting on this session when its reader ended.
+    // Keep the session and transport alive until those fibers have returned.
+    while (commands_ != 0) loop_->sleep(std::chrono::milliseconds(1));
     if (!creating_.empty() || !joining_.empty())
       sink_(change::refused{id_, "Disconnected before the requested room could be opened."});
     creating_.clear();
@@ -832,7 +886,7 @@ class account {
                                        .name = mark.name.value_or(jid)});
     sink_(change::history_position{{id_, jid}, std::string()});
     if (tern::bookmarks::autojoins(mark))
-      this->join(jid, mark.nick.value_or(user_));
+      rooms_[jid].nick = mark.nick.value_or(user_);
   }
   void join(const std::string& jid, const std::string& nick) {
     rooms_[jid].nick = nick;
@@ -1129,6 +1183,8 @@ class account {
   net::stream* wire_ = nullptr;
   std::uint64_t sent_ = 0;
   bool stopping_ = false;
+  bool started_ = false, retry_ = true, connected_ = false;
+  std::size_t commands_ = 0;
 };
 
 }  // namespace mux::proto::xmpp::client

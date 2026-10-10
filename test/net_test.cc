@@ -66,6 +66,28 @@ TEST(Loop, AFailureComesOutOfRun) {
 
 // Two fibers talking over a TCP connection on the loopback, each through a
 // stream as tern would use it: chunks in as they come, bytes out on flush.
+TEST(Stream, AbortWakesAnOutstandingRead) {
+  loop running;
+  auto tls = mux::net::client_tls();
+  mux::net::listener server(running);
+  running.spawn([&] {
+    mux::net::stream wire(running, tls, server.accept());
+    for (auto it = wire.input().begin(); it != std::default_sentinel; ++it) {}
+  });
+  bool ended = false;
+  running.spawn([&] {
+    mux::net::stream wire(running, tls, mux::net::connect(running, "127.0.0.1", server.port()));
+    running.spawn([&] {
+      running.sleep(std::chrono::milliseconds(20));
+      wire.abort();
+    });
+    ended = wire.input().begin() == std::default_sentinel;
+    EXPECT_TRUE(wire.failed().has_value());
+  });
+  running.run();
+  EXPECT_TRUE(ended);
+}
+
 TEST(Stream, OverTheLoopback) {
   loop running;
   auto tls = mux::net::client_tls();

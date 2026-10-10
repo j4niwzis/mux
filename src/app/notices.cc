@@ -16,6 +16,7 @@ import mux.platform.audio;
 import mux.platform.notifications;
 import mux.platform.push;
 import mux.app.network;
+import mux.app.kept;
 import mux.app.services;
 import mux.app.requests;
 import splice.bytes;

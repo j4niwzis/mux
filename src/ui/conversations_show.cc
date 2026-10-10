@@ -834,6 +834,7 @@ void conversations_screen<Actions>::show_rows(const model& now) {
 
 template <class Actions>
 void conversations_screen<Actions>::show(const model& now, bool with_chat) {
+  const auto previous_account = current;
   last_model = &now;
   this->read_chat_settings(now);
   // Files attached where the chat's account sends them, and its protocol
@@ -847,6 +848,11 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     current = std::exchange(wanted, std::nullopt);
   } else if (!current || !now.accounts().contains(*current)) {
     current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().keyAt(0));
+  }
+  if (current != previous_account) {
+    asked_elsewhere.clear();
+    rooms_elsewhere.clear();
+    people_elsewhere.clear();
   }
   // What the chat list's menus offer: the account shown, and the accounts
   // there are to move a chat to.
@@ -921,12 +927,15 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   // the server is asked for rooms and people that do, once for each
   // thing typed.
   const std::string& typed = side.search.field.text();
-  const bool elsewhere = !none && !wanted.empty() && listing.chats.empty() && typed.size() >= 2;
+  const bool find_rooms = current && proto::offers(protocol_state_of(*needs_.shared, *current), proto::feature::room_directory{});
+  const bool find_people = current && proto::offers(protocol_state_of(*needs_.shared, *current), proto::feature::people_directory{});
+  const bool elsewhere = (find_rooms || find_people) && !wanted.empty() && listing.chats.empty() && typed.size() >= 2;
   if (elsewhere && typed != asked_elsewhere) {
     asked_elsewhere = typed;
     rooms_elsewhere.clear();
     people_elsewhere.clear();
-    rooms_came = people_came = false;
+    rooms_came = !find_rooms;
+    people_came = !find_people;
     if (wants_) want(*wants_, ::mux::ui::request::search_elsewhere{typed});
     this->show_elsewhere();
   } else if (!elsewhere && !asked_elsewhere.empty()) {

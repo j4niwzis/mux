@@ -57,11 +57,14 @@ class rooms_part {
     s_->net->search_people(*by, one.query);
   }
   void apply(const request::search_elsewhere& one) {
-    const auto by = s_->account_offering(mux::proto::feature::people_directory{});
+    const auto by = s_->root().main().current;
     if (!by || s_->demo())
       return;
-    s_->net->search_directory(*by, std::string(), one.query);
-    s_->net->search_people(*by, one.query);
+    const auto state = mux::ui::protocol_state_of(s_->ui, *by);
+    if (mux::proto::offers(state, mux::proto::feature::room_directory{}))
+      s_->net->search_directory(*by, std::string(), one.query);
+    if (mux::proto::offers(state, mux::proto::feature::people_directory{}))
+      s_->net->search_people(*by, one.query);
   }
   void apply(const request::open_new_room&) {
     const auto by = s_->account_offering(mux::proto::feature::room_creation{});

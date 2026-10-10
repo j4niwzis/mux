@@ -153,88 +153,37 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
 
   // The upper part, made from its view: ← where a member is shown, ✕; the
   // big avatar, the name, how it is; the chat's tiles or the member's; its ID.
-  struct head : skiff::compose::Stacked {
-    struct top_row : skiff::compose::Stacked {
-      using close_button = icon_button<sends<::mux::ui::request::toggle_info>>;
-      struct parts_t {
-        icon_button<back_to_group> back;
-        nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
-        close_button close;
-      } parts;
-      top_row(info_panel *panel, bool with_back)
-          : Stacked(skiff::compose::hbox(
-                0.0f, {.fillX = true,
-                       .autoSize = scene::axes::kY,
-                       .padding = {8.0f, 8.0f, 0.0f, 8.0f}})),
-            parts{.back = skiff::compose::visible(
-                      with_back, icon_button<back_to_group>(
-                                     *panel->colours_, icon::back{}, {panel})),
-                  .close = close_button(*panel->colours_, icon::close{}, {})} {
-        parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
-      }
+  static auto head_of(info_panel* panel, const view& shown) {
+    namespace c = skiff::compose;
+    const auto& colours = *panel->colours_;
+    const auto centred = [&](std::string text, float size, skia::SkColor colour, bool bold) {
+      auto node = nodes::Text(std::move(text), size, colour, bold);
+      node.setSelectable(true);
+      return c::styled({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}}, elided(std::move(node)));
     };
-    // What the chat is about, as Telegram's group description: its text,
-    // links in it pressed as any, and what it is under it, dim.
-    struct about_block : skiff::compose::Stacked {
-      struct parts_t {
-        nodes::Text text;
-        nodes::Text label;
-      } parts;
-      about_block(const palette &colours, const std::string &said)
-          : Stacked(skiff::compose::vbox(
-                2.0f, {.fillX = true,
-                       .autoSize = scene::axes::kY,
-                       .padding = {8.0f, 20.0f, 8.0f, 20.0f}})),
-            parts{.text = skiff::compose::styled(
-                      {.fillX = true},
-                      wrapped(nodes::Text(said, 14.0f, colours.text))),
-                  .label = nodes::Text("Description", 12.0f, colours.dim)} {
-
-        parts.text.setSelectable(true);
-        parts.text.setLinks(link_spans_in(said), colours.accent);
-      }
-    };
-    struct parts_t {
-      top_row top;
-      avatar_button<Actions> avatar;
-      nodes::Text name;
-      nodes::Text status;
-      std::optional<info_tiles_t> tiles;
-      std::optional<person_actions_t<message_them>> person_tiles;
-      nodes::Box<> band_1;
-      about_block about;
-      std::vector<id_line_t> addresses;
-      id_line_t id_text;
-    } parts;
-
-    head(info_panel *panel, const view &shown)
-        : Stacked(skiff::compose::vbox(
-              2.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.top = top_row(panel, shown.of_person),
-                .avatar = avatar_button<Actions>(shown.key, shown.name, 96.0f),
-                .name =
-                    nodes::Text(shown.name, 17.0f, panel->colours_->text, true),
-                .status =
-                    nodes::Text(shown.status, 13.0f, panel->colours_->dim),
-                .band_1 = section_band(*panel->colours_),
-                .about = skiff::compose::visible(
-                    !shown.topic.empty(),
-                    about_block(*panel->colours_, shown.topic)),
-                .id_text = id_line(*panel->colours_, shown.key, shown.copied)} {
-      auto& [top, avatar, name, status, tiles, person_tiles, band_1, about, addresses, id_text] = parts;
-      for (const std::string& address : shown.addresses)
-        addresses.push_back(id_line(*panel->colours_, address, "", "Address"));
-      if (shown.of_person)
-        person_tiles.emplace(person_actions(*panel->colours_, message_them{panel}));
-      else
-        tiles.emplace(info_tiles(*panel->colours_, shown.muted, shown.leavable));
-      for (nodes::Text* centred : {&name, &status}) {
-        centred->setElided(true);
-        centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});
-        centred->setSelectable(true);
-      }
-    }
-  };
+    auto description = wrapped(c::styled({.fillX = true}, nodes::Text(shown.topic, 14.0f, colours.text)));
+    description.setSelectable(true);
+    description.setLinks(link_spans_in(shown.topic), colours.accent);
+    std::vector<id_line_t> addresses;
+    for (const auto& address : shown.addresses)
+      addresses.push_back(id_line(colours, address, "", "Address"));
+    return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+        c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}),
+            c::visible(shown.of_person, icon_button<back_to_group>(colours, icon::back{}, {panel})),
+            c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::colorSetARGB(0, 0, 0, 0))),
+            icon_button<sends<request::toggle_info>>(colours, icon::close{}, {})),
+        avatar_button<Actions>(shown.key, shown.name, 96.0f),
+        centred(shown.name, 17.0f, colours.text, true),
+        centred(shown.status, 13.0f, colours.dim, false),
+        c::visible(!shown.of_person, info_tiles(colours, shown.muted, shown.leavable)),
+        c::visible(shown.of_person, person_actions(colours, message_them{panel})),
+        section_band(colours),
+        c::visible(!shown.topic.empty(), c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
+            .padding = {8.0f, 20.0f, 8.0f, 20.0f}}), std::move(description), nodes::Text("Description", 12.0f, colours.dim))),
+        c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(addresses)),
+        id_line(colours, shown.key, shown.copied));
+  }
+  using head = decltype(head_of(std::declval<info_panel*>(), std::declval<const view&>()));
   struct members_heading {
     std::size_t count = 0;
     conversation_id room;
@@ -299,6 +248,7 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
     upper.apply({.fillX = true, .autoSize = scene::axes::kY});
     members_header.apply({.fillX = true, .height = 48.0f});
     members.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.scroll.scrollToStart();
   }
 
   // A member as the list shows them: their role, as the chat's protocol
@@ -325,6 +275,7 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
   bool muted_ = false;
   void choose(const model& now, std::optional<conversation_id> chosen, bool muted) {
     now_ = &now;
+    if (chosen_ != chosen) parts.scroll.scrollToStart();
     chosen_ = std::move(chosen);
     muted_ = muted;
     this->show_chosen();
@@ -435,7 +386,7 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
         shown.status = group_view.status;
       }
     }
-    upper.show(shown, [this](const view& v) { return head(this, v); });
+    upper.show(shown, [this](const view& v) { return head_of(this, v); });
     const bool list = shown.group && !shown.of_person;
     band_2.setVisible(list);
     members_header.setVisible(list);

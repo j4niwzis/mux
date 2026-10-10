@@ -2481,3 +2481,87 @@ TEST(Composer, QuotedEmojiKeepTheirOriginalSourcesAndDraftFormatting) {
   EXPECT_EQ(spl::get<mux::run_style::custom_emoji>(sent->styles[0].style).url, "mxc://original/first");
   EXPECT_EQ(spl::get<mux::run_style::custom_emoji>(sent->styles[1].style).url, "mxc://original/second");
 }
+
+TEST(Controls, MemoizedRoomIdKeepsCopyFeedbackWithoutAnOuterModelChange) {
+  struct sink {
+    std::vector<std::string> copied;
+    void take(const mux::ui::request::copy_text& request) { copied.push_back(request.text); }
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  skiff::nodes::Memo<int, mux::ui::id_line_t> header;
+  header.show(1, [&](int) { return mux::ui::id_line(colours, "!room:example.com", "https://matrix.to/#/!room:example.com"); });
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(header, model);
+  auto& label = std::get<1>(header.content()->fParts);
+  const auto id = label.fState.id();
+  ASSERT_TRUE(skiff::bind::press(header, model, scene::Path{0}, &requests));
+  binding.refresh(header, model);
+  ASSERT_EQ(requests.copied.size(), 1u);
+  EXPECT_EQ(label.text(), "ID · link copied, with its servers");
+  EXPECT_EQ(label.fState.id(), id);
+  EXPECT_EQ(model.root(), 0);
+}
+
+TEST(Composer, ReplacementActionRemainsVisibleInNarrowPanes) {
+  auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
+  auto face = manager ? manager->matchFamilyStyle("DejaVu Sans", skia::SkFontStyle()) : nullptr;
+  if (!face) GTEST_SKIP() << "Needs a font for wrapping";
+  skiff::paint::fonts().setPrimary(face);
+  skia::SkFont font(face);
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
+  mux::ui::palette colours;
+  using bar_t = decltype(mux::ui::replaced_room_bar(colours));
+  scene::Scene<bar_t> view{std::in_place, mux::ui::replaced_room_bar(colours)};
+  for (float width : {240.0f, 340.0f, 720.0f}) {
+    view.layoutIfNeeded(skia::SkRect::MakeWH(width, 400.0f));
+    const auto& bar = view.root();
+    const auto& button = std::get<1>(bar.fParts);
+    EXPECT_EQ(button.semantics().fLabel, "Join New Room");
+    EXPECT_TRUE(button.visible());
+    EXPECT_GE(button.bounds().fLeft, bar.bounds().fLeft);
+    EXPECT_LE(button.bounds().fRight, bar.bounds().fRight);
+    EXPECT_GT(button.bounds().height(), 0.0f);
+    EXPECT_GE(button.bounds().fTop, std::get<0>(bar.fParts).bounds().fBottom);
+  }
+}
+
+TEST(Info, RoomSwitchStartsAtTheTopAndSameRoomUpdatesKeepTheScroll) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
+  ui_state ui;
+  scene::Scene<mux::ui::info_panel<stub>> view{std::in_place, ui.colours, ui.shared};
+  auto& panel = view.root();
+  panel.apply({.fill = true});
+  const mux::account_id account{mux::protocol::matrix{}, "@alice:example.com"};
+  const mux::conversation_id first{account, "!first:example.com"};
+  const mux::conversation_id second{account, "!second:example.com"};
+  mux::model model;
+  for (const auto& room : {first, second}) {
+    model.apply(mux::change::conversation_updated{.id = room, .kind = mux::conversation_kind::group{}, .name = "Room"});
+    std::vector<mux::member> members;
+    for (int i = 0; i < 100; ++i) members.push_back({.id = std::format("@member{}:example.com", i)});
+    model.apply(mux::change::members_changed{room, std::move(members)});
+  }
+  const auto viewport = skia::SkRect::MakeWH(340.0f, 500.0f);
+  panel.choose(model, first, false);
+  view.layoutIfNeeded(viewport);
+  EXPECT_EQ(panel.parts.scroll.current(), 0.0f);
+  EXPECT_EQ(panel.members_built, 60u);
+  panel.parts.scroll.scrollToEnd(false);
+  view.layoutIfNeeded(viewport);
+  EXPECT_GT(panel.parts.scroll.current(), 0.0f);
+  EXPECT_TRUE(panel.wants_more());
+  const float at = panel.parts.scroll.current();
+  panel.choose(model, first, true);
+  view.layoutIfNeeded(viewport);
+  EXPECT_NEAR(panel.parts.scroll.current(), at, 1.0f);
+  panel.choose(model, second, false);
+  view.layoutIfNeeded(viewport);
+  EXPECT_EQ(panel.parts.scroll.current(), 0.0f);
+  EXPECT_EQ(panel.members_built, 60u);
+  EXPECT_FALSE(panel.wants_more());
+}

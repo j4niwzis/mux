@@ -711,6 +711,18 @@ struct two_choice_bar : skiff::compose::Stacked {
               .second = primary(widgets::Button<Second>(colours.widgets, std::move(second_name), std::move(second)))} {}
 };
 
+// Keep the successor action inside the available width, including a narrow
+// pane: the explanation wraps above a separate button.
+inline auto replaced_room_bar(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
+      .minHeight = 54.0f, .padding = {12.0f, 12.0f, 12.0f, 12.0f}}),
+      wrapped(c::styled({.fillX = true},
+          nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim))),
+      c::styled({.height = 30.0f}, primary(widgets::Button<sends<request::open_replacement>>(
+          colours.widgets, "Join New Room", {}))));
+}
+
 template <class Actions, class Where = in_chat<Actions>>
 struct composer_bar : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
@@ -743,21 +755,7 @@ struct composer_bar : skiff::compose::Stacked {
   // A tombstoned room's: "This room has been replaced and is no longer
   // active", and the room it goes on in, opened -- joined, where it is not
   // yet.
-  using go_on = sends<::mux::ui::request::open_replacement>;
-  struct replaced_row : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text line;
-      widgets::Button<go_on> go;
-    } parts;
-    replaced_row(const palette& colours)
-        : Stacked(skiff::compose::justified(
-              skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {12.0f, 12.0f, 12.0f, 12.0f}}),
-              nodes::justify::middle{})),
-          parts{.line = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                               nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim)),
-                .go = skiff::compose::styled({.height = 30.0f, .alignSelf = scene::align::kMiddle},
-                                             primary(widgets::Button<go_on>(colours.widgets, "The conversation continues here", {})))} {}
-  };
+  using replaced_row = decltype(replaced_room_bar(std::declval<const palette&>()));
   // Those asking to join, for those who may let them in: the first
   // of them -- who, and why -- with Approve (an invite) and Deny (their
   // knock refused), and how many more.
@@ -807,7 +805,7 @@ struct composer_bar : skiff::compose::Stacked {
               .input = input_row(*n.colours, std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji),
                                  std::move(send)),
               .no_post = skiff::compose::visible(false, no_post_row(*n.colours)),
-              .replaced = skiff::compose::visible(false, replaced_row(*n.colours))} {}
+              .replaced = skiff::compose::visible(false, replaced_room_bar(*n.colours))} {}
 
   // What is in the field, as it holds it: a mention picked, the room its
   // pill's picture takes and the name.

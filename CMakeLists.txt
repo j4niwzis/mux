@@ -239,11 +239,11 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts and elapsed-time animation fixes from this revision.
-set(mux_skiff_pin 3930a88d7fb225d0a83006596441ff0f6909be5f)
+set(mux_skiff_pin 54c7a4691437d1582db0efea9291d84d5ef47995)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
-  VERSION 0.1.1)
+  VERSION 0.1.2)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
   GIT_TAG 601ca4ac7430022413493ee75755560eca4be91d
@@ -273,7 +273,7 @@ else()
   set(mux_skiff_components)
   cme_options(skiff "SKIFF_UI OFF")
 endif()
-mux_find_package(skiff 0.1.1 COMPONENTS ${mux_skiff_components} REQUIRED)
+mux_find_package(skiff 0.1.2 COMPONENTS ${mux_skiff_components} REQUIRED)
 add_library(mux_config)
 # With the protocols' tags and what each keeps in the accounts file: the
 # settings read them, and everything above reads the settings.

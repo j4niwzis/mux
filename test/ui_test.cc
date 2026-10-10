@@ -1293,7 +1293,7 @@ TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
   ui.looks.bubbles_everywhere = *ui.looks.everywhere.bubbles;
   frame(1332.0);
   ASSERT_NE(settings.appearance(), nullptr);
-  auto& bubbles = std::get<1>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles;
+  auto& bubbles = std::get<2>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles;
   EXPECT_EQ(std::get<1>(bubbles.parts.kinds.parts.head.fParts).text(), "Translucent");
   EXPECT_EQ(bubbles.parts.opacity_label.text(), "Opacity: 65%");
   EXPECT_NEAR(bubbles.parts.opacity.fraction(), 55.0f / 90.0f, 0.001f);
@@ -1303,7 +1303,7 @@ TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
   ui.looks.everywhere.bubbles = mux::config::bubble_look{mux::config::bubbles::frosted{}, 80};
   ui.looks.bubbles_everywhere = *ui.looks.everywhere.bubbles;
   frame(1348.0);
-  EXPECT_EQ(std::get<1>(std::get<1>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles.parts.kinds.parts.head.fParts).text(), "Frosted");
+  EXPECT_EQ(std::get<1>(std::get<2>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles.parts.kinds.parts.head.fParts).text(), "Frosted");
 
   // A queued refresh must not reopen a page the user just left.
   settings.show_appearance(theme, accent);

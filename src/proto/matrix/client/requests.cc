@@ -431,7 +431,7 @@ bool account<Sink>::save_notifications(std::optional<std::string> room, mux::not
                 return action && *action == "notify";
               });
               if (!notifies || (!content && !rule.default_)) continue;
-              auto conditions = rule.conditions.value_or(std::vector<loom::def::push_condition_t>{});
+              auto conditions = rule.conditions.value_or(std::vector<loom::cs::def::push_condition_t>{});
               if (content && rule.pattern) conditions.push_back({.kind = "event_match", .key = "content.body", .pattern = rule.pattern});
               conditions.push_back({.kind = "event_match", .key = "room_id", .pattern = *room});
               success = bool(perform(*api_, put{.kind = put::kind_values::override_{}, .rule_id = prefix + rule.rule_id,
@@ -448,7 +448,7 @@ bool account<Sink>::save_notifications(std::optional<std::string> room, mux::not
       else if (!effective.on.value_or(true)) {
         erase(remove::kind_values::room{});
         success = bool(perform(*api_, put{.kind = put::kind_values::override_{}, .rule_id = *room,
-            .body = {.actions = {}, .conditions = std::vector<loom::def::push_condition_t>{
+            .body = {.actions = {}, .conditions = std::vector<loom::cs::def::push_condition_t>{
                 {.kind = "event_match", .key = "room_id", .pattern = *room}}}})) && success;
       } else success = bool(perform(*api_, put{.kind = put::kind_values::room{}, .rule_id = *room,
           .body = {.actions = effective.mentions.value_or(false) ? std::vector<knot::raw>{} : actions}})) && success;

@@ -12,6 +12,7 @@ import mux.logic.links;
 import mux.logic.messages;
 import mux.logic.blurhash;
 import mux.logic.markdown;
+import mux.logic.reactions;
 
 #include "gtest/gtest-macros.h"
 
@@ -189,4 +190,32 @@ TEST(Markdown, PreservedEmojiSourcesReplaceRepeatedLabelsInsideFormattedText) {
       {2, 7, {}, {}, image}, {8, 13, {}, {}, image}};
   EXPECT_EQ(mux::logic::markdown_html("a :cat: :cat: z", runs),
       "<strong>a " + image + " " + image + "</strong> z");
+}
+
+TEST(Reactions, TypedCustomNamesBecomeMediaKeysAndKeepReadableLabels) {
+  const std::vector<mux::emote> emotes{{.shortcode = "neocat", .url = "mxc://room/cat"}};
+  for (const std::string text : {":neocat", ":neocat:"}) {
+    const auto one = mux::logic::reaction_text_of(text, emotes);
+    EXPECT_EQ(one.key, "mxc://room/cat");
+    EXPECT_EQ(one.label, ":neocat:");
+    EXPECT_TRUE(one.custom);
+  }
+  const auto mixed = mux::logic::reaction_text_of("hi :neocat: :neocat:!", emotes);
+  EXPECT_EQ(mixed.key, "hi mxc://room/cat mxc://room/cat !");
+  EXPECT_EQ(mixed.label, "hi :neocat: :neocat:!");
+  const auto unknown = mux::logic::reaction_text_of("hi :unknown: 👍", emotes);
+  EXPECT_EQ(unknown.key, "hi :unknown: 👍");
+  EXPECT_EQ(unknown.label, unknown.key);
+  EXPECT_FALSE(unknown.custom);
+}
+
+TEST(Reactions, CopiedImageOverridesRoomNamesAndWorksWithoutItsPack) {
+  const std::vector<mux::emote> emotes{{.shortcode = "neocat", .url = "mxc://room/different"}};
+  const std::vector<mux::logic::reaction_image> copied{{3, 11, "mxc://remote/original", ":neocat:"}};
+  for (const auto& available : {emotes, std::vector<mux::emote>{}}) {
+    const auto one = mux::logic::reaction_text_of("hi :neocat:!", available, copied);
+    EXPECT_EQ(one.key, "hi mxc://remote/original !");
+    EXPECT_EQ(one.label, "hi :neocat:!");
+    EXPECT_TRUE(one.custom);
+  }
 }

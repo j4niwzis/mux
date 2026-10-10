@@ -183,9 +183,11 @@ struct favourite_emoji { emote emoji; };
 struct react {
   std::string id;
   std::string key;
+  std::optional<std::string> shortcode;
 };
 struct menu_react {
   std::string key;
+  std::optional<std::string> shortcode;
 };
 struct menu_save {};
 struct close_menu {};

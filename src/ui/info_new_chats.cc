@@ -203,24 +203,22 @@ struct find_people_typed {
   using Answer = request::find_people;
   Answer operator()(std::string_view text) const { return {std::string(text)}; }
 };
-struct start_chat_go {};
 struct start_chat_events {
   std::optional<account_id> by;
   std::optional<conversation_id> inviting;
-  auto on(const request::find_people& event, const new_chat_facts& now) const {
-    auto next = now;
-    next.query = event.query;
-    next.found.clear();
-    next.rows = people_rows(next);
-    return std::tuple{skiff::model::over<new_chat_facts>(skiff::model::setTo(std::move(next))), skiff::model::Up{event}};
-  }
-  auto on(start_chat_go, const new_chat_facts& now) const {
-    std::optional<choose_person_request> asked;
-    if (direct_address(now, now.query)) asked = choose_person(now.inviting, now.query);
-    else if (!now.rows.empty()) asked = choose_person(now.inviting, (*now.rows.begin()).first);
-    return skiff::model::Up{asked};
-  }
 };
+inline std::optional<choose_person_request> start_chat_request(const new_chat_facts& now) {
+  if (direct_address(now, now.query)) return choose_person(now.inviting, now.query);
+  if (!now.rows.empty()) return choose_person(now.inviting, (*now.rows.begin()).first);
+  return std::nullopt;
+}
+inline auto person_rows(const palette& colours, const new_chat_facts& facts) {
+  return std::ranges::to<std::vector>(std::views::transform(facts.rows, [&](const auto& row) {
+    return person_pick_row(colours, row.second, choose_person(facts.inviting, row.second.id));
+  }));
+}
+using person_rows_t = decltype(skiff::compose::many(skiff::compose::vbox(),
+    person_rows(std::declval<const palette&>(), std::declval<const new_chat_facts&>())));
 inline auto start_chat_view(const palette& colours, const new_chat_facts& facts) {
   namespace c = skiff::compose;
   const auto words = proto::direct_chat_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol::matrix{}));
@@ -232,14 +230,17 @@ inline auto start_chat_view(const palette& colours, const new_chat_facts& facts)
           c::styled({.height = 36.0f, .grow = scene::axes::kX},
               widgets::TextBox<find_people_typed>(colours.widgets, words.hint, {})),
           c::styled({.width = 64.0f, .height = 34.0f},
-              primary(widgets::SendButton<start_chat_go>(colours.widgets, facts.inviting ? "Invite" : "Go", {})))),
+              c::projected<new_chat_facts>(start_chat_request,
+                  primary(widgets::SendButton<std::optional<choose_person_request>>(
+                      colours.widgets, facts.inviting ? "Invite" : "Go", start_chat_request(facts)))))),
       c::text_for<new_chat_facts>([](const auto& now) {
         return now.query.empty() ? std::string("Suggestions") : now.rows.empty() ? std::string("No results") : std::string("Results");
       }, nodes::Text("", 12.0f, colours.dim, true)),
       c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(
-          c::each<std::string, found_person>([colours = &colours, room = facts.inviting](const auto& person) {
-            return person_pick_row(*colours, person, choose_person(room, person.id));
-          }, c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY})))),
+          c::projected<new_chat_facts>([](const auto& now) { return std::optional(now); },
+              c::mount<person_rows_t, new_chat_facts>([colours = &colours](const auto& now) {
+                return std::tuple{c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), person_rows(*colours, now)};
+              }, {.fillX = true, .autoSize = scene::axes::kY})))),
       c::visible(!facts.inviting, c::styled({.fillX = true}, wrapped(nodes::Text("You can share your address with someone you haven't chatted with yet.", 13.0f, colours.dim)))),
       c::visible(!facts.inviting, nodes::Text(facts.own_link, 13.0f, colours.accent)),
       c::visible(!facts.inviting, widgets::SendButton<request::copy_text>(colours.widgets, "Copy link", {facts.own_link}))));

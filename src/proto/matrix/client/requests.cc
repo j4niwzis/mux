@@ -186,11 +186,12 @@ void account<Sink>::load_older(std::string room, std::string from) {
   });
 }
 
-// Beeper's name of a custom emoji reacted with, beside the relation.
+// MSC4027 labels, beside the relation: stable and interoperable unstable names.
 struct reaction_shortcode {
-  std::string shortcode;
+  std::string shortcode, unstable;
   friend consteval auto json_schema(knot::type<reaction_shortcode>) {
-    return knot::schema<reaction_shortcode>().member<"shortcode">(knot::key("com.beeper.reaction.shortcode"));
+    return knot::schema<reaction_shortcode>().member<"shortcode">(knot::key("shortcode"))
+        .member<"unstable">(knot::key("com.beeper.reaction.shortcode"));
   }
 };
 

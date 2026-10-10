@@ -36,7 +36,9 @@ struct react_with {
   using Answer = ::mux::ui::request::menu_react;
   // What is typed in its search, a reaction too: Matrix takes any text.
   [[nodiscard]] static constexpr bool takes_text() { return true; }
-  Answer operator()(const std::string&, const std::string& key) const { return ::mux::ui::request::menu_react{key}; }
+  Answer operator()(const std::string& text, const std::string& key) const {
+    return ::mux::ui::request::menu_react{key, key == text ? std::nullopt : std::optional(text)};
+  }
 };
 // What the input's emoji do: go into what is written.
 template <class Actions>

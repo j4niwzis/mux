@@ -246,13 +246,19 @@ struct network {
     });
   }
   // A reaction to a message put or taken back, by the account it is of.
-  void react(const mux::conversation_id& in, std::string target, std::string key, bool on) {
-    loop.post([this, in, target = std::move(target), key = std::move(key), on] {
+  void react(const mux::conversation_id& in, std::string target, std::string key, bool on,
+             std::optional<std::string> shortcode = std::nullopt) {
+    loop.post([this, in, target = std::move(target), key = std::move(key), on, shortcode = std::move(shortcode)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.react(in.id, target, key, on))) { a.react(in.id, target, key, on); }, *account);
+                ask_if_able([&](auto& a) -> decltype(void(a.react(in.id, target, key, on))) {
+                  if constexpr (requires { a.react(in.id, target, key, on, shortcode); })
+                    a.react(in.id, target, key, on, shortcode);
+                  else
+                    a.react(in.id, target, key, on);
+                }, *account);
             },
             one.account);
     });

@@ -18,6 +18,7 @@ import skiff.widgets.textbox;
 import mux.core;
 import mux.config;
 import mux.logic.emoji;
+import mux.logic.reactions;
 import :base;
 import :icons;
 import :controls;
@@ -337,6 +338,17 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
 // the groups' tabs, 36 high, that brings each into view and is lit for the
 // one in view. A press on an emoji gives it to Pick: a reaction, from a
 // message's menu; text in the input, from the input's own button.
+template <class Make>
+auto reaction_search_chip(const palette& colours, std::string label, Make make) {
+  namespace c = skiff::compose;
+  return c::onPress(std::move(make), c::row(c::hbox(0.0f,
+      {.fillX = true, .height = 34.0f, .margin = {4.0f, 7.0f, 2.0f, 0.0f},
+       .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 17.0f,
+       .background = colours.tile, .hoverBackground = colours.chosen}),
+      c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+          elided(nodes::Text(std::format("React with \u201C{}\u201D", label), 13.0f, colours.text)))), "React with search text");
+}
+
 template <class Pick> struct emoji_panel : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   emoji_panel(const emoji_panel&) = delete;
@@ -346,54 +358,15 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
 
   Pick pick;
   static constexpr float kCell = 37.0f;
-  // A reaction that is text -- Matrix takes any -- as SchildiChat offers one:
-  // what is searched, itself, at the top of the results, where the panel
-  // reacts rather than writes.
-  struct text_chip : skiff::compose::Stacked {
-    using Answer = typename Pick::Answer;
+  struct text_pick {
     emoji_panel* panel;
-    std::string text;
-    struct parts_t {
-      nodes::Text label;
-    } parts;
-    explicit text_chip(emoji_panel *p)
-        : Stacked(skiff::compose::hbox(
-              0.0f, {.fillX = true,
-                     .height = 34.0f,
-                     .margin = {4.0f, 7.0f, 2.0f, 0.0f},
-                     .padding = {0.0f, 12.0f, 0.0f, 12.0f},
-                     .cornerRadius = 17.0f,
-                     .background = p->colours_->tile,
-                     .hoverBackground = p->colours_->chosen})),
-          panel(p),
-          parts{
-              .label = skiff::compose::styled(
-                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                  elided(nodes::Text("", 13.0f, p->colours_->text)))} {
-
-      this->setVisible(false);
-    }
-    // What is typed, its spaces at either end cut: offered where there is
-    // any.
-    void show(std::string_view typed) {
-      const auto space = [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
-      while (!typed.empty() && space(typed.front()))
-        typed.remove_prefix(1);
-      while (!typed.empty() && space(typed.back()))
-        typed.remove_suffix(1);
-      text = std::string(typed);
-      parts.label.setText(std::format("React with \u201C{}\u201D", text));
-      if (this->visible() != !text.empty())
-        this->setVisible(!text.empty());
-      this->invalidateLayout();
-    }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    auto onClick(float, float) -> std::optional<typename Pick::Answer> {
+    logic::reaction_text text;
+    auto operator()() const -> typename Pick::Answer {
       panel->tones_done = true;
-      return panel->pick(text, text);
+      return panel->pick(text.label, text.key);
     }
   };
+  using text_chip = decltype(reaction_search_chip(std::declval<const palette&>(), std::string{}, std::declval<text_pick>()));
   // One emoji of the list.
   struct cell : skiff::compose::Stacked {
     using Answer = typename Pick::Answer;
@@ -505,7 +478,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
   emoji_kept* kept_ = nullptr;
   struct parts_t {
     field_t field;
-    text_chip text_option;
+    std::optional<text_chip> text_option;
     list_t list{picker_list(nodes::Flow<std::vector<section>>(
         {.spacingY = 0.0f, .wrap = false}, {}))};
     footer_row footer;
@@ -550,7 +523,6 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
       : Stacked(picker_look(), spec), pick(std::move(what)), colours_(&colours),
         kept_(&kept), parts{.field = picker_field(field_t(
                                 colours.widgets, "Search emoji", {this})),
-                            .text_option = text_chip(this),
                             .footer = emoji_footer(colours, this)} {
     auto& [field, text_option, list, footer, tones, preview] = parts;
     this->show_all();
@@ -599,7 +571,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
       tab.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .minWidth = 0.0f});
     parts.footer.invalidateLayout();
     searching = false;
-    parts.text_option.show({});
+    parts.text_option.reset();
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
   }
@@ -611,10 +583,28 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     auto& all = this->sections();
     all.clear();
     all.push_back(make_section(this, "Search results", logic::emoji_found(query)));
-    const std::string wanted = logic::folded(query);
     auto available = kept_->custom_emoji ? kept_->chat_emotes : std::vector<emote>{};
     for (const auto& one : kept_->custom_emoji ? kept_->favourite_emoji : std::vector<emote>{})
       if (std::ranges::none_of(available, [&](const emote& other) { return other.url == one.url; })) available.push_back(one);
+    // Rich clipboard atoms retain the original source even if a different
+    // emoji in this room has the same name.
+    std::vector<logic::reaction_image> images;
+    if (kept_->custom_emoji) {
+      for (const auto& atom : parts.field.atoms())
+        if (atom.picture) {
+          images.push_back({atom.first, atom.last, atom.target, atom.plain});
+          auto code = atom.plain;
+          if (code.starts_with(':') && code.ends_with(':') && code.size() > 2)
+            code = code.substr(1, code.size() - 2);
+          if (std::ranges::none_of(available, [&](const emote& one) { return one.url == atom.target; }))
+            available.push_back(emote{.shortcode = std::move(code), .url = atom.target, .body = atom.plain});
+        }
+    }
+    auto resolved = logic::reaction_text_of(query, available, images);
+    auto search_text = std::string_view(resolved.label);
+    if (search_text.starts_with(':')) search_text.remove_prefix(1);
+    if (search_text.ends_with(':')) search_text.remove_suffix(1);
+    const std::string wanted = logic::folded(search_text);
     const auto custom = std::ranges::to<std::vector>(std::views::filter(available, [&](const emote& one) {
       return logic::folded(one.shortcode).contains(wanted) || logic::folded(one.body).contains(wanted) || logic::folded(one.pack).contains(wanted);
     }));
@@ -623,8 +613,20 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     });
     searching = true;
     // Where it reacts: what is typed, as a reaction of text.
-    if (Pick::takes_text())
-      parts.text_option.show(query);
+    parts.text_option.reset();
+    if (Pick::takes_text()) {
+      const auto trim = [](std::string& text) {
+        const auto first = text.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos) { text.clear(); return; }
+        text = text.substr(first, text.find_last_not_of(" \t\r\n") - first + 1);
+      };
+      trim(resolved.key);
+      trim(resolved.label);
+      if (!resolved.key.empty()) {
+        const auto label = resolved.label;
+        parts.text_option.emplace(reaction_search_chip(*colours_, label, text_pick{this, std::move(resolved)}));
+      }
+    }
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
   }

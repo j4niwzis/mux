@@ -2371,3 +2371,67 @@ TEST(Timeline, QuoteNearTheEndOfATallMessageStaysInViewAfterTheJumpSettles) {
   EXPECT_NEAR(line, view.fTop + view.height() * 0.4f, 6.0f);
   EXPECT_LT(screen.timeline.toView(target->bounds()).fTop, view.fTop);
 }
+
+TEST(Emoji, SearchSendsTypedAndCopiedCustomEmojiAsMediaKeys) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct cleanup {
+    ~cleanup() {
+      skiff::paint::defaultFont() = nullptr;
+      scene::clipboardCandidate().reset();
+      scene::clipboardRichText().reset();
+      scene::hostWork().copied.reset();
+    }
+  } clear;
+  mux::ui::palette colours;
+  mux::ui::emoji_kept kept;
+  kept.chat_emotes = {{.shortcode = "neocat", .url = "mxc://room/neocat"}};
+  using pick = mux::ui::react_with<stub>;
+  scene::Scene<mux::ui::emoji_panel<pick>> window{std::in_place, colours, kept, pick{}, scene::Spec{.fill = true}};
+  auto& panel = window.root();
+  panel.search(":neocat");
+  ASSERT_TRUE(panel.parts.text_option.has_value());
+  auto typed = panel.parts.text_option->onPress();
+  EXPECT_EQ(typed.key, "mxc://room/neocat");
+  EXPECT_EQ(typed.shortcode, std::optional<std::string>(":neocat:"));
+  scene::clipboardCandidate() = scene::clipboardFragment("\u2003", {{0, 3, "mxc://remote/original", ":neocat:", true}});
+  scene::setClipboardText(":neocat:");
+  scene::Reply reply;
+  panel.parts.field.onKey(scene::phase::target{}, scene::key::down{scene::keys::kV,
+      scene::Modifiers{}.with<scene::modifier::control>()}, reply);
+  ASSERT_TRUE(panel.parts.text_option.has_value());
+  auto copied = panel.parts.text_option->onPress();
+  EXPECT_EQ(copied.key, "mxc://remote/original");
+  EXPECT_EQ(copied.shortcode, std::optional<std::string>(":neocat:"));
+  panel.parts.field.onText(scene::phase::target{}, scene::text::commit{" hello"}, reply);
+  auto mixed = panel.parts.text_option->onPress();
+  EXPECT_EQ(mixed.key, "mxc://remote/original hello");
+  EXPECT_EQ(mixed.shortcode, std::optional<std::string>(":neocat: hello"));
+}
+
+TEST(StartChat, BoundGoEmitsRealRequestsAndRowsIgnoreOtherModels) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct cleanup { ~cleanup() { skiff::paint::defaultFont() = nullptr; } } clear;
+  mux::ui::palette colours;
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.org"};
+  mux::ui::new_chat_facts facts{.query = "@bob:example.org", .by = alice};
+  facts.rows = mux::ui::people_rows(facts);
+  auto view = mux::ui::start_chat_view(colours, facts);
+  skiff::model::Model<mux::ui::new_chat_facts, skiff::bind::NoReactions> owner(facts);
+  mux::model other;
+  skiff::bind::refresh(view, other.chats());
+  skiff::bind::refresh(view, owner);
+  skiff::bind::refresh(view, other.chats());
+  auto& go = std::get<1>(std::get<2>(view.fParts).fParts);
+  auto asked = go.onPress();
+  ASSERT_TRUE(asked.has_value());
+  EXPECT_TRUE(spl::holds_alternative<mux::ui::request::start_direct>(*asked));
+  EXPECT_EQ(spl::get<mux::ui::request::start_direct>(*asked).user, "@bob:example.org");
+  facts.inviting = mux::conversation_id{alice, "!room:example.org"};
+  go.read(facts);
+  asked = go.onPress();
+  ASSERT_TRUE(asked.has_value());
+  EXPECT_TRUE(spl::holds_alternative<mux::ui::request::invite_to_room>(*asked));
+  EXPECT_EQ(spl::get<mux::ui::request::invite_to_room>(*asked).room, *facts.inviting);
+}

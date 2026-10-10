@@ -49,6 +49,7 @@ import mux.http;
 import mux.net;
 import loom.cs.pusher;
 import mux.logic.markdown;
+import mux.logic.reactions;
 import :account;
 import :requests;
 import :requests_more;
@@ -112,17 +113,21 @@ void account<Sink>::remove(std::string room, std::string event) {
 }
 
 template <class Sink>
-void account<Sink>::react(std::string room, std::string target, std::string key, bool on) {
-  this->spawn_sending([this, room = std::move(room), target = std::move(target), key = std::move(key), on] {
+void account<Sink>::react(std::string room, std::string target, std::string key, bool on, std::optional<std::string> shortcode) {
+  this->spawn_sending([this, room = std::move(room), target = std::move(target), key = std::move(key), on,
+                       shortcode = std::move(shortcode)] {
     if (!api_)
       return;
     if (on) {
-      auto content = loom::client::reaction(target, key);
-      if (loom::media::mxc_of(key)) {
-        const auto emotes = emotes_in(room);
-        if (const auto found = std::ranges::find(emotes, key, &mux::emote::url); found != emotes.end())
-          content.rest = as_body(reaction_shortcode{std::format(":{}:", found->shortcode)});
-      }
+      const auto resolved = logic::reaction_text_of(key, emotes_in(room));
+      auto content = loom::client::reaction(target, resolved.key);
+      auto label = shortcode;
+      if (!label && resolved.custom && resolved.label != resolved.key)
+        label = resolved.label;
+      // MSC4027 bounds the label in bytes. Omit oversized optional metadata
+      // rather than cutting a UTF-8 character or rejecting the reaction.
+      if (label && label->size() <= 100)
+        content.rest = as_body(reaction_shortcode{*label, *label});
       (void)this->send_room_event(loom::cs::send_message{.room_id = room,
                                                   .event_type = "m.reaction",
                                                   .txn_id = this->transaction(),

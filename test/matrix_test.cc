@@ -111,6 +111,10 @@ void sink::operator()(mux::change_t one) const {
   if (room_there && !to->sent) {
     to->sent = true;
     to->account->send("!r:x.org", "from mux");
+    to->account->react("!r:x.org", "$m1", "mxc://remote/neocat", true, ":neocat:");
+    to->account->react("!r:x.org", "$m1", "hi mxc://remote/neocat", true, "hi :neocat:");
+    to->account->react("!r:x.org", "$m1", "👍", true);
+    to->account->react("!r:x.org", "$m1", "mxc://remote/long", true, std::string(101, 'a'));
   }
   to->model.apply(one);
 }
@@ -125,7 +129,7 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
 
   std::vector<request> heard;
   recorder seen{.running = &running};
-  int syncs = 0;
+  int syncs = 0, reactions_sent = 0;
   std::array<int, 3> initial_updates{};
   running.spawn([&] {
     for (;;) {
@@ -154,9 +158,12 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
                     "ephemeral":{"events":[{"type":"m.receipt","content":{
                       "$m1":{"m.read":{"@b:x.org":{"ts":15}}}}}]}}}}})";
                 }
-                if (syncs >= 3)
+                if (syncs >= 3 && reactions_sent == 4)
                   seen.account->stop();
               }
+            } else if (one->target.find("/send/m.reaction/") != std::string::npos) {
+              ++reactions_sent;
+              body = R"({"event_id":"$reaction)" + std::to_string(reactions_sent) + R"("})";
             } else if (one->target.find("/send/m.room.message/") != std::string::npos) {
               body = R"({"event_id":"$sent"})";
             }
@@ -216,6 +223,21 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   ASSERT_NE(sent_one, room->timeline.end());
   EXPECT_EQ(sent_one->id, "$sent");
   EXPECT_EQ(sent_one->delivery, mux::delivery_t{mux::delivery::sent{}});
+
+  // The wire keeps media identities separate from both MSC4027 label names.
+  const auto reactions = std::ranges::to<std::vector>(std::views::filter(heard, [](const auto& one) {
+    return one.target.find("/send/m.reaction/") != std::string::npos;
+  }));
+  ASSERT_EQ(reactions.size(), 4u);
+  for (const auto& one : reactions) {
+    if (one.body.find("mxc://remote/neocat") != std::string::npos) {
+      EXPECT_NE(one.body.find("\"shortcode\":"), std::string::npos);
+      EXPECT_NE(one.body.find("\"com.beeper.reaction.shortcode\":"), std::string::npos);
+      EXPECT_NE(one.body.find(":neocat:"), std::string::npos);
+    } else {
+      EXPECT_EQ(one.body.find("shortcode"), std::string::npos);
+    }
+  }
 
   // What the client asked: login without a token, sync with one, the
   // message PUT with a transaction id -- one of this run's own, "mux-<when

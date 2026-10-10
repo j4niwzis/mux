@@ -74,6 +74,15 @@ class rooms_part {
     mux::ui::show(*s_->showing, std::optional(std::move(facts)));
   }
   void apply(const request::find_people& one) {
+    // Query changes belong to the shown dialog. Update suggestions even
+    // when this protocol has no server-side people directory.
+    mux::ui::change_shown<std::optional<mux::ui::new_chat_facts>>(*s_->showing, [&](auto& now) {
+      if (!now) return;
+      now->query = one.query;
+      now->found.clear();
+      now->rows = mux::ui::people_rows(*now);
+    });
+    s_->refresh_due = true;
     const auto& facts = s_->showing->root().new_chat.fValue;
     const auto by = facts ? facts->by : std::nullopt;
     if (!by || s_->demo() || !mux::proto::offers(mux::ui::protocol_state_of(s_->ui, *by), mux::proto::feature::people_directory{}))

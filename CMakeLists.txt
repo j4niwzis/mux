@@ -129,14 +129,13 @@ mux_find_package(OpenSSL REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "spl::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG 8a7755a335917daf3bbfc54ef8a3a160f8445d15
-  # splice.bytes with the libstdc++ module lookup fix. An older installed
-  # copy has the same failing range-pipe operators as the old source pin.
-  VERSION 0.4.1
+  GIT_TAG 0adc70b0f349e7e2543f17d8309e072f414d54dd
+  # Failed variant/callable replacement must not retain a destroyed object.
+  VERSION 0.4.2
   LICENSE GPL-3.0-only
   TARGETS splice)
 cme_options(splice "SPLICE_TESTS OFF")
-mux_find_package(splice 0.4.1 REQUIRED)
+mux_find_package(splice 0.4.2 REQUIRED)
 
 # alef, which tern reads addresses with and skiff lays text out with, asked
 # for once with all that both of them need, before either asks: a later ask
@@ -187,7 +186,7 @@ target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc src/logic/notifications.cc
         src/logic/link_base.cc src/proto/xmpp/links.cc src/proto/matrix/links.cc src/proto/links.cc
         src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
-        src/logic/blurhash.cc src/logic/emoji.cc src/logic/markdown.cc src/logic/room_events.cc)
+        src/logic/blurhash.cc src/logic/emoji.cc src/logic/reactions.cc src/logic/markdown.cc src/logic/room_events.cc)
 target_compile_features(mux_modules PUBLIC cxx_std_26)
 # The emoji's keywords, as Unicode's CLDR annotates them in English and in
 # Russian -- what the emoji search matches besides the names, as Telegram's
@@ -246,7 +245,8 @@ cme_declare_port(NAME skiff PROVIDES skiff
   GIT_TAG ${mux_skiff_pin})
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 0077e42225ae7510e6e48af6236307251e9677b4)
+  GIT_TAG ca20a761677459a3b587dac82609d03c89e01d22
+  VERSION 0.1.1)
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
@@ -386,7 +386,7 @@ if(MUX_UI)
       list(REMOVE_ITEM mux_platform_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/${common_name}")
     endif()
   endforeach()
-  mux_find_package(skiff-widgets REQUIRED)
+  mux_find_package(skiff-widgets 0.1.1 REQUIRED)
 
   # The emoji face the window draws emoji with, as tdesktop has its own:
   # Noto Color Emoji, fetched once at a pinned commit and checked, and put

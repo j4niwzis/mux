@@ -468,7 +468,7 @@ void part_apply(menu_part& self, const request::menu_delete&) {
 
 void part_apply(menu_part& self, const request::menu_react& one) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  part_apply(self, request::react{self.target_.id, one.key});
+  part_apply(self, request::react{self.target_.id, one.key, one.shortcode});
 }
 
 void part_apply(menu_part& self, const request::react& one) {
@@ -482,9 +482,11 @@ void part_apply(menu_part& self, const request::react& one) {
     return;
   const std::string& me = chosen->account.address;
   const bool on = logic::reaction_turns_on(*said, one.key, me);
-  self.s_->model->apply(change_t{change::reaction_changed{*chosen, one.id, one.key, me, on}});
+  change::reaction_changed changed{*chosen, one.id, one.key, me, on};
+  changed.shortcode = one.shortcode;
+  self.s_->model->apply(change_t{std::move(changed)});
   if (!self.s_->demo())
-    self.s_->net->react(*chosen, one.id, one.key, on);
+    self.s_->net->react(*chosen, one.id, one.key, on, one.shortcode);
   self.s_->refresh_due = true;
 }
 

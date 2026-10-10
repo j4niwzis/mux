@@ -438,7 +438,10 @@ void app::after_event() {
                                  skiff::bind::answer(root(), model->chats(), one, this) ||
                                  skiff::bind::answer(root(), showing, one, this);
                         }) > 0;
-  if (!pressed && !answered)
+  // Static routing may already have delivered the request to take(),
+  // leaving both queues empty. Its edits still need to reach the window.
+  const bool routed = std::exchange(event_requests_taken, false);
+  if (!pressed && !answered && !routed)
     return;
   this->take_page_input();
   // What the requests opened or closed, shown.

@@ -187,8 +187,10 @@ struct app : kept_settings {
   // press is answered after the handler that made it has returned, and
   // what is done to the window is a model's edit, read by the bindings
   // after the event: nothing pressed is gone under its own answer.
+  bool event_requests_taken = false;
   template <class E>
   void take(const E& one) {
+    event_requests_taken = true;
     this->route(one);
   }
   template <class... E>

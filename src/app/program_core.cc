@@ -111,6 +111,10 @@ void app::woken() {
                                    if (now && now->by == std::optional(found.by) && now->query == found.query) {
                                      now->found = found.people;
                                      now->rows = mux::ui::people_rows(*now);
+                                     std::ranges::for_each(found.people, [](const auto& person) {
+                                       if (person.avatar && !person.avatar->empty())
+                                         mux::ui::listed_avatars().emplace_back(person.id, *person.avatar);
+                                     });
                                    }
                                  });
                                  if (root().main().current == std::optional(found.by))

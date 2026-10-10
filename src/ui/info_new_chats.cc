@@ -184,8 +184,8 @@ inline auto people_rows(const new_chat_facts& facts) {
   if (direct_address(facts, facts.query)) rows.put(facts.query, found_person{.id = facts.query});
   std::ranges::for_each(std::views::filter(facts.people, [&](const auto& person) {
     return wanted.empty() || mux::logic::folded(person.name).contains(wanted) || mux::logic::folded(person.id).contains(wanted);
-  }), [&](const auto& person) { rows.put(person.id, person); });
-  std::ranges::for_each(facts.found, [&](const auto& person) { rows.put(person.id, person); });
+  }), [&](const auto& person) { if (rows.size() < 60) rows.put(person.id, person); });
+  std::ranges::for_each(facts.found, [&](const auto& person) { if (rows.size() < 60) rows.put(person.id, person); });
   return rows;
 }
 struct find_people_typed {
@@ -220,6 +220,9 @@ inline auto start_chat_view(const palette& colours, const new_chat_facts& facts)
               widgets::TextBox<find_people_typed>(colours.widgets, words.hint, {})),
           c::styled({.width = 64.0f, .height = 34.0f},
               primary(widgets::SendButton<start_chat_go>(colours.widgets, "Go", {})))),
+      c::text_for<new_chat_facts>([](const auto& now) {
+        return now.query.empty() ? std::string("Suggestions") : now.rows.empty() ? std::string("No results") : std::string("Results");
+      }, nodes::Text("", 12.0f, colours.dim, true)),
       c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(
           c::each<std::string, found_person>([colours = &colours](const auto& person) {
             return found_person_row(*colours, person);

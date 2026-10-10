@@ -716,14 +716,17 @@ struct window_wants {
   skiff::model::Tracked<std::optional<request::typing>> typing;
   skiff::model::Tracked<std::optional<request::search_elsewhere>> elsewhere;
 };
+using window_want_t = std::variant<request::load_older, request::load_newer, request::load_context, request::open_thread, request::typing,
+                                   request::search_elsewhere>;
 struct window_wanting {
+  // Request payloads can contain optionals too; only a window request is
+  // an effect, never one of its fields (such as the search account).
   template <class R>
+    requires std::constructible_from<window_want_t, R>
   std::optional<R> on(skiff::model::Changed<std::optional<R>>, const std::optional<R>& now) const {
     return now;
   }
 };
-using window_want_t = std::variant<request::load_older, request::load_newer, request::load_context, request::open_thread, request::typing,
-                                   request::search_elsewhere>;
 using wants_model = skiff::model::Model<window_wants, window_wanting, window_want_t>;
 // What the window comes to want, set: the program told by the reaction.
 template <class R>

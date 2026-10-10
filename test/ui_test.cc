@@ -2639,3 +2639,24 @@ TEST(Search, RoomAddressSuggestionsRespectSelectedProtocol) {
   EXPECT_FALSE(mux::ui::room_address_for(xmpp, "#lounge:example.org").has_value());
   EXPECT_FALSE(mux::ui::room_address_for(matrix, "@alice:example.org").has_value());
 }
+
+TEST(Search, WindowWantsEmitAccountScopedRequests) {
+  mux::ui::wants_model wants;
+  const mux::account_id account{mux::protocol::xmpp{}, "alice@example.org"};
+  mux::ui::want(wants, mux::ui::request::search_elsewhere{"lounge", account});
+  auto effects = wants.outbox().drain();
+  ASSERT_EQ(effects.size(), 1u);
+  const auto* request = std::get_if<mux::ui::request::search_elsewhere>(&effects.front());
+  ASSERT_NE(request, nullptr);
+  EXPECT_EQ(request->query, "lounge");
+  EXPECT_EQ(request->by, account);
+
+  mux::ui::wanted_done<mux::ui::request::search_elsewhere>(wants);
+  EXPECT_TRUE(wants.outbox().drain().empty());
+  mux::ui::want(wants, mux::ui::request::search_elsewhere{"lounge", std::nullopt});
+  effects = wants.outbox().drain();
+  ASSERT_EQ(effects.size(), 1u);
+  request = std::get_if<mux::ui::request::search_elsewhere>(&effects.front());
+  ASSERT_NE(request, nullptr);
+  EXPECT_FALSE(request->by.has_value());
+}

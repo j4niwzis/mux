@@ -129,13 +129,13 @@ mux_find_package(OpenSSL REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "spl::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG 0adc70b0f349e7e2543f17d8309e072f414d54dd
+  GIT_TAG db4be11c76c36ac32377cc5e918009b8898223c2
   # Failed variant/callable replacement must not retain a destroyed object.
-  VERSION 0.4.2
+  VERSION 0.4.3
   LICENSE GPL-3.0-only
   TARGETS splice)
 cme_options(splice "SPLICE_TESTS OFF")
-mux_find_package(splice 0.4.2 REQUIRED)
+mux_find_package(splice 0.4.3 REQUIRED)
 
 # alef, which tern reads addresses with and skiff lays text out with, asked
 # for once with all that both of them need, before either asks: a later ask

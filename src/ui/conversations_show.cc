@@ -516,6 +516,7 @@ void conversations_screen<Actions>::update(double now_ms) {
     const auto it = std::ranges::find(entries, *aiming, &message_bubble<Actions>::message_id);
     if (it == entries.end() || it->bounds().isEmpty() || ++aim_frames > 180) {
       aiming.reset();
+      jump_fragment.reset();
     } else {
       const skia::SkRect view = timeline.bounds();
       const skia::SkRect box = timeline.toView(it->bounds());
@@ -526,13 +527,16 @@ void conversations_screen<Actions>::update(double now_ms) {
       // Where a reply quoted a part of it: that part marked, and its line
       // brought to the view's upper middle -- the right place of a message
       // taller than the view.
-      if (aimed_at < 0.0f && jump_fragment) {
-        if (const auto at = it->mark(*jump_fragment)) {
-          const auto& text = it->parts.body.parts.text;
-          const float line = timeline.toView(text.bounds()).fTop + text.lineTopOf(*at);
+      if (jump_fragment && !jump_fragment->empty()) {
+        if (aimed_at < 0.0f) it->mark(*jump_fragment);
+        const auto& text = it->parts.body.parts.text;
+        if (const auto at = std::string_view(text.text()).find(*jump_fragment); at != std::string_view::npos) {
+          const float line = timeline.toView(text.bounds()).fTop + text.lineTopOf(at);
           to = std::max(0.0f, timeline.current() + (line - view.fTop) - view.height() * 0.4f);
         }
-        jump_fragment.reset();
+        // Keep aiming at the quote while layout and scrolling settle.
+        // Dropping it after the first frame aimed subsequent frames at
+        // the message's top, hiding quotes near the end of long messages.
       }
       // The first aim: flashed at once, where it is -- not once all above
       // it has settled, which can be never, and the flash was lost. Far
@@ -554,6 +558,7 @@ void conversations_screen<Actions>::update(double now_ms) {
         aimed_at = to;
       } else if (!timeline.moving()) {
         aiming.reset();
+        jump_fragment.reset();
       }
     }
   }

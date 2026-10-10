@@ -2313,3 +2313,61 @@ TEST(Controls, ScalarSettingsIgnoreOtherModelsAndChangeOnlyTheirNamedField) {
   EXPECT_EQ(model.root().jump_search, 500);
   EXPECT_EQ(model.root().receipts, true);
 }
+
+TEST(Timeline, QuoteNearTheEndOfATallMessageStaysInViewAfterTheJumpSettles) {
+  auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
+  skia::Sp<skia::SkTypeface> face;
+  for (const char* family : {"DejaVu Sans", "Noto Sans", "Liberation Sans"})
+    if (manager && !face) face = manager->matchFamilyStyle(family, skia::SkFontStyle());
+  ASSERT_TRUE(face);
+  skiff::paint::fonts().setPrimary(face);
+  skia::SkFont font(face);
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
+  stub program;
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
+  const mux::account_id account{mux::protocol::matrix{}, "@alice:example.org"};
+  const mux::conversation_id room{account, "!room:example.org"};
+  mux::model model;
+  model.apply(mux::change::connection_changed{account, mux::connection::online{}});
+  model.apply(mux::change::conversation_updated{.id = room, .kind = mux::conversation_kind::group{}});
+  const std::string quote = "The quoted passage near the end";
+  std::string long_text;
+  for (int line = 0; line < 120; ++line) long_text += "An earlier line in the long message.\n";
+  long_text += quote + "\nThe final line.";
+  for (int i = 0; i < 21; ++i) {
+    mux::message one;
+    one.in = room;
+    one.id = std::format("$quote-jump-{}", i);
+    one.sender = "@bob:example.org";
+    one.at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(1'700'000'000'000)) + std::chrono::minutes(i);
+    one.body.plain = i == 0 ? long_text : "A later message.";
+    model.apply(mux::change::message_added{.message = std::move(one)});
+  }
+  auto& screen = window.root().main();
+  screen.chosen = room;
+  screen.show(model);
+  const auto viewport = skia::SkRect::MakeWH(1000.0f, 700.0f);
+  double now = 1000.0;
+  const auto frame = [&] {
+    window.update(now += 16.0);
+    window.layoutIfNeeded(viewport);
+    (void)window.finishFrame();
+  };
+  for (int i = 0; i < 30; ++i) frame();
+  screen.jump_to("$quote-jump-0", quote);
+  for (int i = 0; i < 220; ++i) frame();
+  EXPECT_FALSE(screen.jump_target());
+  auto& bubbles = std::get<0>(std::get<0>(screen.timeline.fChildren).fChildren);
+  const auto target = std::ranges::find(bubbles, "$quote-jump-0", &mux::ui::message_bubble<stub>::message_id);
+  ASSERT_NE(target, bubbles.end());
+  const auto& text = target->parts.body.parts.text;
+  const auto at = std::string_view(text.text()).find(quote);
+  ASSERT_NE(at, std::string_view::npos);
+  const auto view = screen.timeline.bounds();
+  ASSERT_GT(target->bounds().height(), view.height());
+  const float line = screen.timeline.toView(text.bounds()).fTop + text.lineTopOf(at);
+  EXPECT_NEAR(line, view.fTop + view.height() * 0.4f, 6.0f);
+  EXPECT_LT(screen.timeline.toView(target->bounds()).fTop, view.fTop);
+}

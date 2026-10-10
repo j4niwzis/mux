@@ -279,7 +279,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     auto& rooms = std::get<0>(shown.parts.rooms.fChildren);
     rooms.clear();
     for (const directory_room& one : std::views::take(rooms_elsewhere, 30))
-      rooms.emplace_back(*needs_.colours, one, std::string());
+      rooms.push_back(directory_room_row<Actions>(*needs_.colours, one, std::string()));
     auto& people = std::get<0>(shown.parts.people.fChildren);
     people.clear();
     for (const found_person& one : std::views::take(people_elsewhere, 30))
@@ -507,7 +507,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     emoji_matches.clear();
     const auto* room = chosen && last_model ? last_model->find(*chosen) : nullptr;
     const auto wanted = mux::logic::folded(*query);
-    if (room)
+    if (room && proto::offers(protocol_state_of(*needs_.shared, room->id.account), proto::feature::sticker_packs{}))
       for (const auto& emoji : room->emotes) {
         if (!mux::logic::folded(emoji.shortcode).contains(wanted) && !mux::logic::folded(emoji.body).contains(wanted)) continue;
         const auto label = ":" + emoji.shortcode + ":";

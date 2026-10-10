@@ -11,6 +11,7 @@ import splice;
 import mux.core;
 import mux.ui;
 import mux.ui.proto;
+import mux.protocols;
 import mux.app.services;
 import mux.app.requests;
 
@@ -19,6 +20,17 @@ export namespace mux::app {
 struct emoji_part {
   services* s_;
   request::writing_t into_ = request::writing::chat{};
+  template <class Asked>
+  void apply(const request::select_emoji_page& one, const Asked& asked) {
+    bool gifs = false;
+    mux::ui::change_shown<std::optional<mux::ui::emoji_facts>>(*s_->showing, [&](auto& now) {
+      if (!now || !mux::ui::page_available(*now, one.page)) return;
+      now->page = one.page;
+      gifs = one.page == mux::ui::popup_page_t(mux::ui::popup_page::gifs{});
+    });
+    if (gifs) asked(request::show_gifs{});
+  }
+
 };
 
 void part_apply(emoji_part& self, const request::toggle_emoji&);
@@ -78,6 +90,8 @@ void part_apply(emoji_part& self, const request::insert_emoji& one) {
 void open_at(emoji_part& self, float right, float top) {
   const auto chosen = self.s_->managed();
   const mux::conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
+  self.s_->emoji.custom_emoji = chosen && mux::proto::offers(mux::ui::protocol_state_of(self.s_->ui, chosen->account),
+                                                          mux::proto::feature::sticker_packs{});
   self.s_->emoji.pack_account = chosen ? std::optional(chosen->account) : std::nullopt;
   self.s_->emoji.chat_emotes = chat ? chat->emotes : std::vector<mux::emote>{};
   self.s_->emoji.chat_stickers = chat ? chat->stickers : std::vector<mux::emote>{};

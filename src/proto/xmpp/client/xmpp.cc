@@ -14,6 +14,7 @@ import splice;
 import tern;
 import mux.core;
 import mux.net;
+import mux.logic.text;
 import mux.proto.xmpp.changes;
 
 export namespace mux::proto::xmpp::client {
@@ -258,10 +259,110 @@ class account {
 
   // What an account of another protocol does and this does not -- avatars
   // (XEP-0084), reactions (XEP-0444), chat states (XEP-0085), files (HTTP
-  // upload, XEP-0363), stickers, threads, pins, link previews, directories,
-  // new rooms, forwarding, push -- is not here at all: what is asked of an
+  // upload, XEP-0363), stickers, threads, pins, link previews,
+  // forwarding, push -- is not here at all: what is asked of an
   // account is done where its type has it (mux.app.network's ask_if_able),
   // and nothing is written for what it has not.
+
+  // Starting a direct chat needs no Matrix-style create-room request:
+  // messages are addressed to the contact's prepared bare JID.
+  void create_direct(std::string user) {
+    this->spawn_guarded([this, user = std::move(user)] {
+      const auto jid = tern::jid::parse(user);
+      if (!jid || jid->local().empty()) {
+        sink_(change::refused{id_, "Enter a contact's JID, such as user@example.com."});
+        return;
+      }
+      const conversation_id chat{id_, jid->bare().str()};
+      sink_(change::conversation_updated{.id = chat, .kind = conversation_kind::direct{}, .name = chat.id});
+      sink_(change::history_position{chat, std::string()});
+      sink_(change::room_created{chat});
+    });
+  }
+  // XEP-0045 creates a room by joining a new JID. Only status 201 on our
+  // own presence permits configuration; an existing room is never changed.
+  void create_room(std::string name, std::string topic, bool open, std::string address,
+                   bool federate, bool encrypted, room_place place) {
+    this->spawn_guarded([this, name = std::move(name), topic = std::move(topic), open,
+                        address = std::move(address), encrypted, place] {
+      if (!session_) {
+        sink_(change::refused{id_, "Connect the XMPP account before creating a room."});
+        return;
+      }
+      const auto jid = tern::jid::parse(address);
+      if (!jid || jid->local().empty() || !jid->resource().empty()) {
+        sink_(change::refused{id_, "Enter a room's bare JID, such as room@conference.example.com."});
+        return;
+      }
+      if (encrypted || place.space || place.make_space) {
+        sink_(change::refused{id_, "XMPP room encryption and Matrix spaces are not implemented."});
+        return;
+      }
+      const auto room = jid->bare().str();
+      if (rooms_.contains(room) || creating_.contains(room)) {
+        sink_(change::refused{id_, "That room is already joined or being created."});
+        return;
+      }
+      creating_.emplace(room, room_creation{std::move(name), std::move(topic), open});
+      this->join(room, user_);
+    });
+  }
+
+  // XEP-0030: a MUC service lists its rooms; an account domain lists its
+  // services first. Searches are local because disco has no search query.
+  void search_directory(std::string server, std::string query, std::optional<std::string> since = std::nullopt) {
+    this->spawn_guarded([this, server = std::move(server), query = std::move(query)] {
+      const std::string target = server.empty() ? domain_ : server;
+      const auto is_muc = [&](const std::string& jid) {
+        if (!session_) return false;
+        auto info = session_->template try_request<tern::query::disco_info>({.to = jid});
+        return info && std::ranges::contains(info->features, std::string_view("http://jabber.org/protocol/muc"),
+                                             &tern::disco::feature::var);
+      };
+      const auto rooms_at = [&](const std::string& jid) {
+        if (!session_) return std::vector<directory_room>{};
+        auto items = session_->template try_request<tern::query::disco_items>({.to = jid});
+        if (!items) return std::vector<directory_room>{};
+        return std::ranges::to<std::vector>(std::views::transform(items->list, [](const auto& item) {
+          return directory_room{.id = item.jid, .name = item.name.value_or(item.jid), .alias = item.jid};
+        }));
+      };
+      std::vector<directory_room> rooms;
+      if (session_) {
+        if (is_muc(target)) {
+          rooms = rooms_at(target);
+        } else if (session_) {
+          auto services = session_->template try_request<tern::query::disco_items>({.to = target});
+          if (services) {
+            // Each reply owns its room data across the yielding requests.
+            const auto pages = std::ranges::to<std::vector>(std::views::transform(
+                services->list, [&](const auto& item) {
+                  return !item.node && is_muc(item.jid) ? rooms_at(item.jid) : std::vector<directory_room>{};
+                }));
+            rooms = std::ranges::to<std::vector>(std::views::join(pages));
+          }
+        }
+      }
+      const auto wanted = mux::logic::folded(query);
+      rooms = std::ranges::to<std::vector>(std::views::filter(rooms, [&](const auto& room) {
+        return wanted.empty() || mux::logic::folded(room.name).contains(wanted) || mux::logic::folded(room.id).contains(wanted);
+      }));
+      sink_(change::directory_listed{.by = id_, .server = server, .query = query, .rooms = std::move(rooms)});
+    });
+  }
+  // A directory room joined with the account's normal nickname.
+  void join(std::string room, const std::vector<std::string>&) {
+    this->spawn_guarded([this, room = bare(room)] {
+      if (!session_) return;
+      const auto address = tern::jid::parse(room);
+      if (!address || address->local().empty()) {
+        sink_(change::refused{id_, "Enter a room JID such as room@conference.example.com."});
+        return;
+      }
+      joining_.insert(room);
+      this->join(room, user_);
+    });
+  }
 
   // A chat message sent: from any fiber, or posted to the loop from another
   // thread. What was sent is said as a change at once, and marked sent once
@@ -353,6 +454,9 @@ class account {
         session_->send(proto::presence::unavailable{.to = room + "/" + found->second.nick});
       rooms_.erase(found);
       sink_(change::conversation_removed{{id_, room}});
+      if (session_ && !session_->template try_request<tern::query::bookmark_remove>(
+                          {.query = {.retract = {.item = {.id = room}}}}))
+        sink_(change::notice{id_, "Room bookmark", "The room was left, but the server could not remove its bookmark."});
     });
   }
 
@@ -626,6 +730,10 @@ class account {
       on(**one);
     }
     session_ = nullptr;
+    if (!creating_.empty() || !joining_.empty())
+      sink_(change::refused{id_, "Disconnected before the requested room could be opened."});
+    creating_.clear();
+    joining_.clear();
     wire_ = nullptr;
     if (stopping_ || !wire.failed()) {
       log(id_, "disconnected");
@@ -739,6 +847,77 @@ class account {
     sink_(change::message_added{std::move(in)});
   }
 
+  struct room_creation { std::string name, topic; bool open = false; };
+  void save_room(std::string room, std::string name) {
+    this->spawn_guarded([this, room = std::move(room), name = std::move(name)] {
+      if (!session_) return;
+      const auto info = session_->template try_request<tern::query::disco_info>({.to = id_.address});
+      if (!info || !std::ranges::contains(info->features, std::string_view("http://jabber.org/protocol/pubsub#publish-options"),
+                                         &tern::disco::feature::var) || !session_ ||
+          !session_->template try_request<tern::query::bookmark_save>({.query = {
+              .publish = {.item = {.id = room, .conference = tern::bookmarks::conference{
+                  .name = name, .autojoin = "true", .nick = user_}}}}}))
+        sink_(change::notice{id_, "Room bookmark", "The room is open, but the server could not save its private bookmark for reconnecting."});
+    });
+  }
+  void configure_created(std::string room, room_creation wanted) {
+    this->spawn_guarded([this, room = std::move(room), wanted = std::move(wanted)] {
+      const auto failed = [&](std::string why) {
+        if (session_) {
+          (void)session_->template try_request<tern::query::muc_configure>(
+              {.to = room, .query = {{.type = "cancel"}}});
+          if (session_) session_->send(proto::presence::unavailable{.to = room + "/" + user_});
+        }
+        rooms_.erase(room);
+        sink_(change::refused{id_, std::move(why)});
+      };
+      if (!session_) { failed("Disconnected before the room could be configured."); return; }
+      auto configuration = session_->template try_request<tern::query::muc_configuration>({.to = room});
+      if (!configuration || !configuration->form) {
+        failed("The service did not provide a room configuration form."); return;
+      }
+      // Preserve every unknown field's server default and the hidden FORM_TYPE.
+      // Require the access controls before accepting an invite-only room.
+      bool members = false, listed = false, persistent = false;
+      auto form = *configuration->form;
+      form.type = "submit";
+      form.fields = std::ranges::to<std::vector>(std::views::transform(form.fields, [&](auto field) {
+        spl::visit(spl::overloaded{
+            [&](tern::muc::config_field::name) { field.value = {wanted.name}; },
+            [&](tern::muc::config_field::description) { field.value = {wanted.topic}; },
+            [&](tern::muc::config_field::persistent) { persistent = true; field.value = {"1"}; },
+            [&](tern::muc::config_field::public_room) { listed = true; field.value = {wanted.open ? "1" : "0"}; },
+            [&](tern::muc::config_field::members_only) { members = true; field.value = {wanted.open ? "0" : "1"}; },
+            [](tern::muc::config_field::form_type) {},
+            [](tern::muc::config_field::other) {}}, tern::muc::kind_of(field));
+        return field;
+      }));
+      if (!members || !listed || !persistent) { failed("The service cannot configure the requested persistent room and access."); return; }
+      if (!session_ || !session_->template try_request<tern::query::muc_configure>({.to = room, .query = {std::move(form)}})) {
+        failed("The service refused the room configuration."); return;
+      }
+      if (!session_) { failed("Disconnected before the room could be opened."); return; }
+      if (!wanted.topic.empty()) session_->send(proto::message::groupchat{.to = room, .subject = wanted.topic});
+      const conversation_id chat{id_, room};
+      sink_(change::conversation_updated{.id = chat, .kind = conversation_kind::group{}, .name = wanted.name, .topic = wanted.topic});
+      sink_(change::history_position{chat, std::string()});
+      sink_(change::room_created{chat});
+      this->save_room(room, wanted.name);
+    });
+  }
+  void on_presence(const proto::presence::error& got) {
+    if (!got.from) return;
+    const auto room = bare(*got.from);
+    if (joining_.erase(room)) {
+      rooms_.erase(room);
+      sink_(change::refused{id_, "The service refused to join " + room + "."});
+    }
+    if (creating_.erase(room)) {
+      rooms_.erase(room);
+      sink_(change::refused{id_, "The service refused to create " + room + "."});
+    }
+  }
+
   void on_presence(const proto::presence::available& got) {
     if (!got.from)
       return;
@@ -783,6 +962,31 @@ class account {
       who.push_back(one);
     sink_(change::members_changed{{id_, room}, std::move(who)});
     sink_(change::presence_changed{id_, *got.from, {std::move(state), got.status}});
+    if (here && joining_.contains(room))
+      for (const auto& carried : got.payload)
+        if (const auto* user = carried.template get_if<tern::muc::user>(); user && tern::muc::flags_of(*user).self) {
+          joining_.erase(room);
+          const conversation_id chat{id_, room};
+          sink_(change::conversation_updated{.id = chat, .kind = conversation_kind::group{}, .name = room});
+          sink_(change::history_position{chat, std::string()});
+          sink_(change::room_created{chat});
+          break;
+        }
+    if (here && creating_.contains(room))
+      for (const auto& carried : got.payload)
+        if (const auto* user = carried.template get_if<tern::muc::user>()) {
+          const auto flags = tern::muc::flags_of(*user);
+          if (!flags.self) continue;
+          auto wanted = std::move(creating_.at(room));
+          creating_.erase(room);
+          if (flags.created) this->configure_created(room, std::move(wanted));
+          else {
+            session_->send(proto::presence::unavailable{.to = room + "/" + user_});
+            rooms_.erase(room);
+            sink_(change::refused{id_, "That room already exists; its configuration was left unchanged."});
+          }
+          break;
+        }
     return true;
   }
   template <class Other>
@@ -801,6 +1005,8 @@ class account {
     std::map<std::string, member> occupants;
   };
   std::map<std::string, room> rooms_;
+  std::map<std::string, room_creation> creating_;
+  std::set<std::string> joining_;
   session_type* session_ = nullptr;
   net::stream* wire_ = nullptr;
   std::uint64_t sent_ = 0;

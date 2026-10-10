@@ -24,6 +24,7 @@ import skiff.model;
 import skiff.compose;
 import mux.core;
 import mux.config;
+import mux.protocols;
 import :base;
 import :icons;
 import :controls;
@@ -330,7 +331,7 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          event_kinds_field<choices>(colours, level),
+          event_kinds_field<choices>(colours, level, proto::room_event_kinds_of(state_before(chat.account.speaks))),
           skiff::compose::bound<skiff::model::Field<&choices::receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::previews>>(
               show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
@@ -344,19 +345,33 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
 // A chat's notifications on or off: off is muted -- the chat list's mute,
 // the same -- and on, said apart from it; Default, neither. So it reads
 // and sets the chat's choices whole.
-struct chat_on_field : show_hide_field<notify_on_setting, std::optional<bool>, config::chat_choices> {
-  explicit chat_on_field(const palette& colours) : show_hide_field(colours, choice_level::chat{}) {}
-  void read(const config::chat_choices& now) {
-    show_hide_field::show_value(now.muted ? std::optional<bool>(false) : now.notify.on);
-    const auto with = [&](std::optional<bool> on) {
-      auto next = now;
-      next.muted = on == false;
-      next.notify.on = on == true ? on : std::nullopt;
-      return next;
-    };
-    show_hide_field::set_nexts(with(std::nullopt), with(true), with(false));
+struct chat_notify_change {
+  std::optional<bool> on;
+  auto operator()(const config::chat_choices& now) const {
+    auto next = now;
+    next.muted = on == false;
+    next.notify.on = on == true ? on : std::nullopt;
+    return skiff::model::setTo(std::move(next));
   }
 };
+struct set_chat_notify {
+  std::optional<bool> on;
+  using Answer = skiff::bind::Own<chat_notify_change>;
+  Answer operator()() const { return skiff::bind::own(chat_notify_change{on}); }
+};
+inline auto chat_on_field(const palette& colours) {
+  namespace c = skiff::compose;
+  using choices = config::chat_choices;
+  const auto shown = [](const choices& now) { return now.muted ? std::optional<bool>(false) : now.notify.on; };
+  return c::scoped<choices>(c::handlers(), c::row(setting_row(),
+      setting_label(nodes::Text(std::string(notify_on_setting::label), 14.0f, colours.text)),
+      setting_button<choices>(colours, "Default", 70.0f,
+          [shown](const choices& now) { return !shown(now); }, set_chat_notify{std::nullopt}),
+      setting_button<choices>(colours, std::string(notify_on_setting::yes), 70.0f,
+          [shown](const choices& now) { return shown(now) == true; }, set_chat_notify{true}),
+      setting_button<choices>(colours, std::string(notify_on_setting::no), 70.0f,
+          [shown](const choices& now) { return shown(now) == false; }, set_chat_notify{false})));
+}
 // A chat's notification rows, bound to its own choices in the model.
 inline auto chat_notify_view(const palette& colours, const conversation_id& chat) {
   using notify = config::notify_choices;
@@ -391,7 +406,8 @@ inline auto room_general_page(const palette& colours, const room_settings_facts&
   return c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
                                 .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "General"),
-      explained(colours, "Room events shown in this room, for you: As above follows the inherited settings."),
+      c::visible(!proto::room_event_kinds_of(state_before(facts.speaks)).empty(),
+          explained(colours, "Room events shown in this room, for you: As above follows the inherited settings.")),
       chat_settings_view(colours, facts.chat),
       c::visible(facts.space, c::scoped<choices>(c::handlers(),
           c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),

@@ -280,7 +280,7 @@ class outbox_part {
   // while it goes.
   void apply(const request::send_gif& one) {
     const auto& chosen = s_->root().main().chosen;
-    if (!chosen || s_->demo())
+    if (!chosen || s_->demo() || !mux::ui::may_send_files(s_->ui, chosen->account))
       return;
     auto bytes_read = spl::bytes::file_text(one.path);
     if (!bytes_read)
@@ -322,11 +322,10 @@ class outbox_part {
   // A sticker sent into the chat. Keep the docked phone picker available
   // for the next sticker, just as when inserting emoji.
   void apply(const request::send_sticker& one) {
-    // Kept among the recent, as tdesktop's.
-    s_->emoji.remember_sticker(one.sticker);
     const auto& chosen = s_->root().main().chosen;
-    if (!chosen || s_->demo())
+    if (!chosen || s_->demo() || !mux::ui::ops_of(s_->ui, chosen->account).send_sticker)
       return;
+    s_->emoji.remember_sticker(one.sticker);
     if (!s_->root().main().single)
       s_->close_emoji();
     s_->go_live(*chosen);

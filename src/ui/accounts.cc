@@ -248,7 +248,7 @@ inline auto account_chats_view(const palette& colours, std::string address) {
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          event_kinds_field<shared>(colours, level),
+          event_kinds_field<shared>(colours, level, proto::room_event_kinds_of(state_before(protocol_of(address)))),
           bound<skiff::model::Field<&shared::show_receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
           bound<skiff::model::Field<&shared::link_previews>>(show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
           bound<skiff::model::Field<&shared::previews_direct>>(

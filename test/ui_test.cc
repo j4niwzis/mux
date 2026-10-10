@@ -986,7 +986,9 @@ TEST(Stickers, PackTabsStayWithinTheFooterAndAllRemainReachable) {
 namespace {
 struct gif_tab_requests {
   bool asked = false;
-  void take(const mux::ui::request::show_gifs&) { asked = true; }
+  void take(const mux::ui::request::select_emoji_page& event) {
+    asked = event.page == mux::ui::popup_page_t(mux::ui::popup_page::gifs{});
+  }
   template <class Event> void take(const Event&) { ADD_FAILURE() << "Unexpected request from the GIF tab"; }
 };
 }
@@ -999,7 +1001,7 @@ TEST(Emoji, GifTabReceivesPointerPressesOnDesktopAndPhone) {
     ui_state ui;
     scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
     ui.show(window.root().layer().emoji,
-            std::optional{mux::ui::emoji_facts{width - 30.0f, 650.0f, {}}});
+            std::optional{mux::ui::emoji_facts{width - 30.0f, 650.0f, {}, mux::ui::popup_page::emoji{}, true, true}});
     for (int i = 0; i < 4; ++i) {
       window.update(1000.0 + 16.0 * i);
       window.layoutIfNeeded(skia::SkRect::MakeWH(width, 720.0f));
@@ -1020,9 +1022,16 @@ TEST(Emoji, GifTabReceivesPointerPressesOnDesktopAndPhone) {
     for (const auto& path : presses)
       ASSERT_TRUE(skiff::bind::press(window.root(), ui.showing, path, &requests));
     EXPECT_TRUE(requests.asked);
-    EXPECT_EQ(card.page_at, 2);
-    EXPECT_TRUE(card.parts.gifs.visible());
-    EXPECT_FALSE(card.parts.panel.visible());
+    // The application keeps selection in the facts. Loading GIFs rebuilds
+    // the mounted popup; its selected page must survive that second read.
+    mux::ui::emoji_facts facts{width - 30.0f, 650.0f, {}, mux::ui::popup_page::gifs{}, true, true};
+    ui.show(window.root().layer().emoji, std::optional(facts));
+    facts.gifs = {"saved.gif"};
+    ui.show(window.root().layer().emoji, std::optional(facts));
+    auto& refreshed = window.root().layer().emoji.shown()->parts.card;
+    EXPECT_EQ(refreshed.page_at, 2);
+    EXPECT_TRUE(refreshed.parts.gifs.visible());
+    EXPECT_FALSE(refreshed.parts.panel.visible());
   }
   skiff::paint::defaultFont() = nullptr;
 }
@@ -2027,6 +2036,9 @@ TEST(Controls, RoomEventsDropdownKeepsDisabledShowHideRows) {
   ASSERT_TRUE(model.root().room_event_kinds.has_value());
   EXPECT_EQ(mode.current, 3u);
   auto& kind = rows.fParts.front();
+  EXPECT_EQ(std::tuple_size_v<std::remove_reference_t<decltype(std::get<1>(kind.fParts).fParts)>>, 1u);
+  EXPECT_EQ(std::get<0>(std::get<1>(kind.fParts).fParts).text(), "Show");
+  EXPECT_EQ(std::get<0>(std::get<2>(kind.fParts).fParts).text(), "Hide");
   EXPECT_FALSE(kind.disabled());
   ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{1, 0, 1}));
   binding.refresh(field, model);
@@ -2164,4 +2176,76 @@ TEST(History, ReactionsTargetEachEditAndNeverGuessMissingEditIds) {
   EXPECT_EQ(legacy[0].id, "$original");
   EXPECT_TRUE(legacy[1].id.empty());
   EXPECT_TRUE(legacy[2].id.empty());
+}
+
+TEST(Explore, RepliesBelongToTheOpeningAccountAndSearch) {
+  const mux::account_id xmpp{mux::protocol::xmpp{}, "alice@example.org"};
+  const mux::account_id matrix{mux::protocol::matrix{}, "@alice:example.org"};
+  mux::ui::explore_facts facts{.by = xmpp, .server = "rooms.example.org", .query = "lounge"};
+  mux::change::directory_listed reply{.by = matrix, .server = facts.server, .query = facts.query};
+  EXPECT_FALSE(mux::ui::accepts_listing(facts, reply));
+  reply.by = xmpp;
+  EXPECT_TRUE(mux::ui::accepts_listing(facts, reply));
+  reply.query = "old query";
+  EXPECT_FALSE(mux::ui::accepts_listing(facts, reply));
+  reply.query = facts.query;
+  reply.server = "other.example.org";
+  EXPECT_FALSE(mux::ui::accepts_listing(facts, reply));
+  reply.server = facts.server;
+  reply.space = "!space:example.org";
+  EXPECT_FALSE(mux::ui::accepts_listing(facts, reply));
+}
+
+TEST(Protocols, XmppFormsAndEventControlsUseItsCapabilities) {
+  const auto xmpp = mux::state_before(mux::protocol::xmpp{});
+  const auto matrix = mux::state_before(mux::protocol::matrix{});
+  EXPECT_EQ(mux::proto::directory_server_of(xmpp, "alice@example.org/client"), "example.org");
+  EXPECT_TRUE(mux::proto::offers(xmpp, mux::proto::feature::room_directory{}));
+  EXPECT_TRUE(mux::proto::offers(xmpp, mux::proto::feature::room_creation{}));
+  EXPECT_FALSE(mux::proto::offers(xmpp, mux::proto::feature::sticker_packs{}));
+  EXPECT_TRUE(mux::proto::room_event_kinds_of(xmpp).empty());
+  EXPECT_EQ(mux::proto::room_event_kinds_of(matrix).size(), mux::all_room_events.size());
+  const auto form = mux::proto::room_creation_form_of(xmpp, "example.org");
+  EXPECT_TRUE(form.address_required);
+  EXPECT_FALSE(form.encryption);
+  EXPECT_FALSE(form.federation);
+  mux::ui::new_room_facts facts{.own_server = "example.org", .by = mux::account_id{mux::protocol::xmpp{}, "alice@example.org"}};
+  mux::ui::room_creation_events submit{facts, form};
+  mux::ui::room_draft draft{.name = "Lounge", .topic = "Welcome", .address = "lounge@rooms.example.org"};
+  const auto event = submit.on(mux::ui::submit_room{}, draft).fEvent;
+  ASSERT_TRUE(event.has_value());
+  EXPECT_EQ(event->alias, draft.address);
+  EXPECT_EQ(event->name, draft.name);
+  EXPECT_FALSE(event->encrypted);
+  draft.address.clear();
+  EXPECT_FALSE(submit.on(mux::ui::submit_room{}, draft).fEvent.has_value());
+}
+
+TEST(StartChat, XmppAddressesAndKnownContactsStayInItsForm) {
+  mux::ui::new_chat_facts facts{.people = {{"bob@example.org", "Bob"}},
+      .by = mux::account_id{mux::protocol::xmpp{}, "alice@example.org"}};
+  EXPECT_FALSE(mux::ui::direct_address(facts, "@bob:example.org"));
+  EXPECT_TRUE(mux::ui::direct_address(facts, "new@example.org"));
+  facts.query = "new@example.org";
+  const auto rows = mux::ui::people_rows(facts);
+  ASSERT_EQ(rows.size(), 1u);
+  EXPECT_EQ((*rows.begin()).first, facts.query);
+  facts.query = "bob";
+  const auto known = mux::ui::people_rows(facts);
+  ASSERT_EQ(known.size(), 1u);
+  EXPECT_EQ((*known.begin()).first, "bob@example.org");
+}
+
+TEST(Emoji, UnsupportedTabsAreUnavailableAndHidden) {
+  stub program;
+  ui_state ui;
+  const mux::ui::emoji_facts facts{};
+  EXPECT_TRUE(mux::ui::page_available(facts, mux::ui::popup_page::emoji{}));
+  EXPECT_FALSE(mux::ui::page_available(facts, mux::ui::popup_page::stickers{}));
+  EXPECT_FALSE(mux::ui::page_available(facts, mux::ui::popup_page::gifs{}));
+  mux::ui::emoji_popup<stub> popup(ui.needs(program), facts);
+  const auto& tabs = popup.parts.card.parts.tabs.fParts;
+  EXPECT_TRUE(std::get<0>(tabs).visible());
+  EXPECT_FALSE(std::get<1>(tabs).visible());
+  EXPECT_FALSE(std::get<2>(tabs).visible());
 }

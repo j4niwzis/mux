@@ -11,6 +11,22 @@ import mux.proto;
 
 export namespace mux::proto::xmpp {
 
+inline creation_form room_creation_form(const state&, std::string_view) {
+  return {"room@conference.example.com", true, false, false};
+}
+inline chat_form direct_chat_form(const state&) {
+  return {"user@example.com", "Start a conversation with a contact by entering their XMPP JID."};
+}
+constexpr bool offers(const state&, feature::room_creation) { return true; }
+constexpr bool offers(const state&, feature::room_directory) { return true; }
+inline std::string directory_server(const state&, std::string_view address) {
+  const auto domain = address.substr(address.find('@') + 1);
+  return std::string(domain.substr(0, domain.find('/')));
+}
+// The current XMPP client does not emit service events into the timeline.
+// Keep their controls absent until those events are implemented.
+inline std::vector<room_event_t> room_event_kinds(const state&) { return {}; }
+
 // Edits as XMPP has them: one's own last message corrected, and no other
 // (Last Message Correction, XEP-0308).
 struct last_correction {};

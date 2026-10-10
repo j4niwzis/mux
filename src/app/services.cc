@@ -96,7 +96,12 @@ struct services {
   }
   // The emoji panel open where it is put, or closed -- the field back where
   // it was; and whether it is open, as what is shown says.
-  void open_emoji(float right, float bottom) const { mux::ui::show(*showing, std::optional(mux::ui::emoji_facts{right, bottom, {}})); }
+  void open_emoji(float right, float bottom) const {
+    const auto chosen = root().main().chosen;
+    const auto ops = chosen ? mux::ui::ops_of(ui, chosen->account) : mux::proto::account_ops{};
+    mux::ui::show(*showing, std::optional(mux::ui::emoji_facts{right, bottom, {}, mux::ui::popup_page::emoji{},
+        ops.send_sticker, chosen && mux::ui::may_send_files(ui, chosen->account)}));
+  }
   void close_emoji() const {
     mux::ui::show<mux::ui::emoji_facts>(*showing, std::nullopt);
     this->root().emoji_closed();
@@ -178,16 +183,13 @@ struct services {
   [[nodiscard]] std::optional<mux::conversation_id> managed() const {
     return manage_target && root().manage_up() ? manage_target : root().main().chosen;
   }
-  // An account whose protocol offers what is asked: the one in view where
-  // it does, else the first.
+  // Features belong to the selected account. An unsupported feature never
+  // borrows another account's protocol or credentials.
   template <class Feature>
   [[nodiscard]] std::optional<mux::account_id> account_offering(Feature wanted) const {
-    if (const auto& current = root().main().current; current && mux::proto::offers(mux::ui::protocol_state_of(ui, *current), wanted))
-      return current;
-    for (const auto& [id, account] : model->accounts())
-      if (mux::proto::offers(mux::ui::protocol_state_of(ui, id), wanted))
-        return id;
-    return std::nullopt;
+    const auto current = root().main().current;
+    return current && mux::proto::offers(mux::ui::protocol_state_of(ui, *current), wanted)
+        ? current : std::nullopt;
   }
 };
 

@@ -175,7 +175,10 @@ inline auto account_page_row(const palette& colours, account_page_link link, con
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
           elided(nodes::Text(std::move(link.title), 15.0f, colours.text)))));
 }
-inline auto account_pages_view(const palette& colours, const protocol_state_t& state, const account_page_t& selected) {
+// Protocol UI overloads arrive after mux.ui is imported; resolve them when
+// the program instantiates the factory, as for the protocol page nodes.
+template <class Actions, class State>
+inline auto account_pages_view(const palette& colours, const State& state, const account_page_t& selected) {
   namespace c = skiff::compose;
   std::vector<account_page_link> links{
       {"Connection", account_page::connection{}, icon::sliders{}},
@@ -196,7 +199,7 @@ inline auto account_pages_view(const palette& colours, const protocol_state_t& s
   return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 0.0f, 0.0f}}), std::move(rows));
 }
 template <class Actions>
-using account_pages = decltype(account_pages_view(std::declval<const palette&>(), std::declval<const protocol_state_t&>(),
+using account_pages = decltype(account_pages_view<Actions>(std::declval<const palette&>(), std::declval<const protocol_state_t&>(),
     std::declval<const account_page_t&>()));
 
 // A section's title on a settings page, as Gajim sets them: small, bold, dim.
@@ -542,7 +545,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
                                             .width = kListWidth,
                                             .background = colours.sidebar})),
             parts{.add = add_row(colours, "Add account", {}, icon::plus{}),
-                  .pages = account_pages_view(colours, protocol_state_t{}, account_page::connection{}),
+                  .pages = account_pages_view<Actions>(colours, protocol_state_t{}, account_page::connection{}),
                   .message = nodes::Text("", 13.0f, colours.error)} {
         pages.setVisible(false);
         pages.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -722,7 +725,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   template <class Asked>
   void show_page(const account_page_t& page, const config::account_t& one, const model& now,
                  const std::vector<config::proxy_settings>& proxies, const config::theme_t& theme, const Asked& asked) {
-    pages = account_pages_view(*needs_.colours, pages_state, page);
+    pages = account_pages_view<Actions>(*needs_.colours, pages_state, page);
     this->show_detail(true);
     spl::visit(
         spl::overloaded{

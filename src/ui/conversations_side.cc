@@ -268,7 +268,7 @@ struct side_column : skiff::compose::Stacked {
   struct head_row : skiff::compose::Stacked {
     using explore_button = icon_button<sends<::mux::ui::request::open_explore>>;
     struct parts_t {
-      menu_button<Actions> menu;
+      decltype(menu_button(std::declval<const palette&>())) menu;
       nodes::Text name;
       // The top bar of spaces, after the name: there, empty or not, unless
       // the settings say otherwise -- something can always be put in it.
@@ -283,7 +283,7 @@ struct side_column : skiff::compose::Stacked {
                                        {.fillX = true,
                                         .height = 52.0f,
                                         .padding = {8.0f, 8.0f, 8.0f, 8.0f}})),
-          parts{.menu = menu_button<Actions>(colours),
+          parts{.menu = menu_button(colours),
                 .name = skiff::compose::styled(
                     {.alignSelf = scene::align::kMiddle},
                     nodes::Text("mux", 17.0f, colours.text, true)),

@@ -322,37 +322,19 @@ struct sets_nth {
 
 // Three lines at the top-left of the conversation list: a press pulls the
 // drawer out.
-template <class Actions>
-struct menu_button : skiff::compose::Specced {
-  // What its handlers ask for, returned.
-  using Answer = ::mux::ui::request::open_drawer;
-  // Three bars, and a plate under them while it is hovered or focused.
-  struct parts_t {
-    nodes::Icon bars;
-  } parts;
-
-  menu_button(const palette& colours)
-      : Specced({.width = 36.0f, .height = 36.0f, .cornerRadius = 8.0f, .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
-        parts{.bars = skiff::compose::styled({.fill = true},
-                                             nodes::Icon(IconShape{{{nodes::mark::rect{-8.0f, -7.0f, 8.0f, -5.0f, 1.0f}, 0.0f, true},
-                                                                    {nodes::mark::rect{-8.0f, -1.0f, 8.0f, 1.0f, 1.0f}, 0.0f, true},
-                                                                    {nodes::mark::rect{-8.0f, 5.0f, 8.0f, 7.0f, 1.0f}, 0.0f, true}}},
-                                                         colours.text))} {}
-
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool focusChangesAppearance() const { return true; }
-  std::optional<Answer> onClick(float, float) {
-    return ::mux::ui::request::open_drawer{};
-  }
-  [[nodiscard]] scene::Semantics semantics() const {
-    scene::Semantics out;
-    out.fRole = scene::semantic_role::button{};
-    out.fLabel = "Menu";
-    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
-    return out;
-  }
-};
+inline auto menu_button(const palette& colours) {
+  namespace c = skiff::compose;
+  // Queue the request through onPress, as the other buttons do. Returning
+  // it from onClick relied on the erased walks keeping handler answers;
+  // Android's static release walks could consume the tap without opening.
+  return c::onClick(request::open_drawer{},
+      c::styled({.width = 36.0f, .height = 36.0f, .cornerRadius = 8.0f,
+              .hoverBackground = colours.chosen, .focusBackground = colours.chosen},
+          nodes::Icon(IconShape{{{nodes::mark::rect{-8.0f, -7.0f, 8.0f, -5.0f, 1.0f}, 0.0f, true},
+                                {nodes::mark::rect{-8.0f, -1.0f, 8.0f, 1.0f, 1.0f}, 0.0f, true},
+                                {nodes::mark::rect{-8.0f, 5.0f, 8.0f, 7.0f, 1.0f}, 0.0f, true}}},
+                      colours.text)), "Menu");
+}
 
 // A kind of room event, as its row names it.
 [[nodiscard]] constexpr std::string_view label_of(room_event::joins) { return "Joins and leaves"; }

@@ -321,6 +321,41 @@ TEST(Composer, TakesWhatIsTypedIntoIt) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+// Android is built with static walks. A tap must also survive routing
+// without a carried model: the application delivers queued presses later.
+TEST(Drawer, MenuTapQueuesAnOpenRequestInPortraitAndLandscape) {
+  struct sink {
+    int opened = 0;
+    void take(const mux::ui::request::open_drawer&) { ++opened; }
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  for (const float width : {390.0f, 1000.0f}) {
+    auto button = mux::ui::menu_button(colours);
+    scene::Scene<decltype(button)> window{std::move(button)};
+    window.layoutIfNeeded(skia::SkRect::MakeWH(width, 720.0f));
+    const auto bounds = window.root().bounds();
+    EXPECT_FLOAT_EQ(bounds.width(), 36.0f);
+    EXPECT_FLOAT_EQ(bounds.height(), 36.0f);
+    EXPECT_EQ(window.root().semantics().fLabel, "Menu");
+    scene::hostWork().pressed.clear();
+    scene::hostWork().answers.clear();
+    scene::InputRouter router;
+    const std::array layers{scene::InputRouter::Layer{window.handle(), false}};
+    router.setLayers(layers);
+    // The Android long-press handler delivers a short tap as down then up.
+    router.pointer(scene::PointerEvent{scene::pointer::down{bounds.centerX(), bounds.centerY()}});
+    router.pointer(scene::PointerEvent{scene::pointer::up{bounds.centerX(), bounds.centerY()}});
+    const auto presses = std::exchange(scene::hostWork().pressed, {});
+    ASSERT_EQ(presses.size(), 1u);
+    EXPECT_TRUE(scene::hostWork().answers.empty());
+    for (const auto& path : presses)
+      ASSERT_TRUE(skiff::bind::press(window.root(), model, path, &requests));
+  }
+  EXPECT_EQ(requests.opened, 2);
+}
+
 // The drawer slides back out when closed, however long it was out.
 TEST(Drawer, SlidesOutAfterALongWhileOut) {
   skia::SkFont font;

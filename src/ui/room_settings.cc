@@ -391,7 +391,7 @@ inline auto room_general_page(const palette& colours, const room_settings_facts&
   return c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
                                 .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "General"),
-      explained(colours, "Room events shown in this room, for you: Default is as your account's."),
+      explained(colours, "Room events shown in this room, for you: As above follows the inherited settings."),
       chat_settings_view(colours, facts.chat),
       c::visible(facts.space, c::scoped<choices>(c::handlers(),
           c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),

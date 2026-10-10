@@ -567,7 +567,9 @@ inline Owner with_events_way(const Owner& now, const choice_level_t& level, std:
 template <class Owner>
 inline bool event_kind_shown(const Owner& now, const choice_level_t& level, const room_event_t& kind) {
   room_events_at(level) = events_of(now);
-  return events_in_effect(level).shows(kind);
+  const auto way = events_way_of(level, events_of(now));
+  if (way == kEventsAll || way == kEventsMessages) return way == kEventsAll;
+  return (way == kEventsAbove ? events_above(level) : events_in_effect(level)).shows(kind);
 }
 // Changes are data returned from the dropdown's bound node, never raw
 // application requests. Trying another model safely defers the change.
@@ -595,37 +597,54 @@ template <class Owner> struct event_kind_change {
     events_in(now, held);
   }
 };
-template <class Owner> struct choose_event_kind {
+template <class Owner> struct set_event_kind {
   using Answer = skiff::bind::Own<event_kind_change<Owner>>;
   choice_level_t level;
   room_event_t kind;
-  Answer operator()(std::size_t index) const { return skiff::bind::own(event_kind_change<Owner>{level, kind, index}); }
+  bool show;
+  Answer operator()() const { return skiff::bind::own(event_kind_change<Owner>{level, kind, show ? 1u : 2u}); }
 };
 template <class Owner>
+inline auto event_kind_button(const palette& colours, choice_level_t level, room_event_t kind, bool show) {
+  namespace c = skiff::compose;
+  return c::spec_for<Owner>([level, kind, show](const Owner& now) {
+    return scene::Spec{.selected = event_kind_shown(now, level, kind) == show};
+  }, c::onPress(set_event_kind<Owner>{level, kind, show}, c::column(
+      c::justified(c::vbox(0.0f, {.width = 70.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle,
+          .hoverBackground = colours.chosen, .selectedBackground = colours.accent,
+          .focusBackground = colours.chosen}), nodes::justify::middle{}),
+      c::shown_for<Owner>([level, kind, show](const Owner& now) {
+        return event_kind_shown(now, level, kind) == show;
+      }, c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(show ? "Show" : "Hide", 13.0f, colours.on_accent, true))),
+      c::shown_for<Owner>([level, kind, show](const Owner& now) {
+        return event_kind_shown(now, level, kind) != show;
+      }, c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(show ? "Show" : "Hide", 13.0f, colours.text, true)))), show ? "Show" : "Hide"));
+}
+template <class Owner>
 inline auto event_kind_row(const palette& colours, choice_level_t level, room_event_t kind) {
-  return skiff::compose::projected<Owner>([kind](const Owner& now) -> std::size_t {
-    const auto held = events_of(now);
-    const auto value = logic::choice_of(held.kinds, kind);
-    return value ? (*value ? 1 : 2) : 0;
-  }, make_choice_menu(colours, spl::visit([](auto one) { return std::string(label_of(one)); }, kind),
-      {"Default", "Show", "Hide"}, 0, choose_event_kind<Owner>{level, kind}));
+  namespace c = skiff::compose;
+  return c::spec_for<Owner>([level](const Owner& now) {
+    const bool custom = events_way_of(level, events_of(now)) == kEventsCustom;
+    return scene::Spec{.alpha = custom ? 1.0f : 0.4f, .disabled = !custom};
+  }, c::row(setting_row(),
+      setting_label(nodes::Text(spl::visit([](auto one) { return std::string(label_of(one)); }, kind), 14.0f, colours.text)),
+      event_kind_button<Owner>(colours, level, kind, true), event_kind_button<Owner>(colours, level, kind, false)));
 }
 template <class Owner>
 inline auto event_kinds_field(const palette& colours, choice_level_t level) {
   namespace c = skiff::compose;
   auto names = std::vector<std::string>{"All events", "Messages only", "Custom"};
-  if (has_level_above(level)) names.insert(names.begin(), "Default");
+  if (has_level_above(level)) names.insert(names.begin(), "As above");
   auto mode = c::projected<Owner>([level](const Owner& now) {
+    room_events_at(level) = events_of(now);
     return events_way_of(level, events_of(now)) - (has_level_above(level) ? 0 : 1);
   }, make_choice_menu(colours, "Room events", std::move(names), 0, choose_events_way<Owner>{level}));
+  mode.apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
   auto rows = std::ranges::to<std::vector>(std::views::transform(all_room_events, [&](const room_event_t& kind) {
     return event_kind_row<Owner>(colours, level, kind);
   }));
-  return c::scoped<Owner>(c::handlers(), c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      std::move(mode), c::shown_for<Owner>([level](const Owner& now) {
-        return events_way_of(level, events_of(now)) == kEventsCustom;
-      }, c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY,
-          .padding = {0.0f, 12.0f, 0.0f, 12.0f}}), std::move(rows)))));
+  return c::scoped<Owner>(c::handlers(), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      std::move(mode), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
 }
 
 // How far a search for a message jumped to pages back, at one level, as

@@ -1998,6 +1998,39 @@ TEST(Controls, RoomEventChoicesDispatchTypedModelEdits) {
   EXPECT_EQ(model.root().typing, false);
 }
 
+// No UI choice may be delivered as an application request. This sink makes
+// the test fail to compile if the wrong model attempts to dispatch one.
+namespace {
+struct room_events_no_requests {
+  template <class E> void take(const E&) = delete;
+};
+struct room_events_other_root { int unrelated = 0; };
+}
+TEST(Controls, RoomEventChoicesDeferToTheirOwningModel) {
+  mux::ui::palette colours;
+  auto field = mux::ui::event_kinds_field<mux::config::chat_choices>(colours, mux::ui::choice_level::chat{});
+  skiff::model::Model<room_events_other_root, skiff::bind::NoReactions> other;
+  skiff::model::Model<mux::config::chat_choices, skiff::bind::NoReactions> owner;
+  room_events_no_requests sink;
+  EXPECT_FALSE(skiff::bind::press(field, other, scene::Path{4}, &sink));
+  EXPECT_EQ(other.root().unrelated, 0);
+  ASSERT_TRUE(skiff::bind::press(field, owner, scene::Path{4}, &sink));
+  ASSERT_TRUE(owner.root().room_event_kinds.has_value());
+  EXPECT_FALSE(skiff::bind::press(field, other, scene::Path{5, 0, 2}, &sink));
+  ASSERT_TRUE(skiff::bind::press(field, owner, scene::Path{5, 0, 2}, &sink));
+  EXPECT_EQ(mux::logic::choice_of(owner.root().room_event_kinds, mux::all_room_events.front()), false);
+  ASSERT_TRUE(skiff::bind::press(field, owner, scene::Path{5, 0, 1}, &sink));
+  EXPECT_EQ(mux::logic::choice_of(owner.root().room_event_kinds, mux::all_room_events.front()), true);
+
+  // Release routing delivers at the node with a carried model, rather than
+  // replaying a path. It must defer in exactly the same way.
+  auto button = mux::ui::event_kind_button<mux::config::chat_choices>(
+      colours, mux::ui::choice_level::chat{}, mux::all_room_events.front(), false);
+  EXPECT_FALSE(skiff::bind::answerPress(button, skiff::bind::carryFrom(&other, &sink)));
+  EXPECT_TRUE(skiff::bind::answerPress(button, skiff::bind::carryFrom(&owner, &sink)));
+  EXPECT_EQ(mux::logic::choice_of(owner.root().room_event_kinds, mux::all_room_events.front()), false);
+}
+
 TEST(Reactions, Msc4027ImagesAndTextRenderTogetherInPanelBodies) {
   const auto body = mux::ui::reaction_body_of("before mxc://example/one mxc://example/two mxc://example/one after", {});
   ASSERT_TRUE(body.html.has_value());

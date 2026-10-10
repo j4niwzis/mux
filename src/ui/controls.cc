@@ -589,11 +589,9 @@ inline constexpr std::size_t kEventsAbove = 0, kEventsAll = 1, kEventsMessages =
   return *held.all ? kEventsAll : kEventsMessages;
 }
 
-// Typed choices are handled in the model's scope, rather than routed by
-// a dropdown's manual hit testing.
-struct choose_events_way { std::size_t way; };
-struct choose_event_kind { room_event_t kind; bool show; };
-
+// Each button edits its bound owner. The window tries several models for a
+// press; an Own change defers to the right one without leaking a UI event
+// to the application's request dispatcher when a scope is in another model.
 template <class Owner>
 inline Owner with_events_way(const Owner& now, const choice_level_t& level, std::size_t way) {
   room_events_at(level) = events_of(now);
@@ -621,14 +619,22 @@ inline auto events_way_row(const palette& colours, choice_level_t level, std::st
   namespace c = skiff::compose;
   return c::projected<Owner>([level, way](const Owner& now) {
     return events_way_of(level, events_of(now)) == way;
-  }, c::onClick(choose_events_way{way}, widgets::ChoiceRowField<bool>(colours.widgets, std::move(name), true)));
+  }, c::onClick(skiff::bind::own([level, way](Owner& now) {
+    now = with_events_way(now, level, way);
+  }), widgets::ChoiceRowField<bool>(colours.widgets, std::move(name), true)));
 }
 template <class Owner>
 inline auto event_kind_button(const palette& colours, choice_level_t level, room_event_t kind, bool show) {
   namespace c = skiff::compose;
   return c::spec_for<Owner>([level, kind, show](const Owner& now) {
     return scene::Spec{.selected = event_kind_shown(now, level, kind) == show};
-  }, c::onClick(choose_event_kind{kind, show}, c::column(
+  }, c::onClick(skiff::bind::own([level, kind, show](Owner& now) {
+    auto held = events_of(now);
+    if (events_way_of(level, held) != kEventsCustom) return;
+    if (!held.kinds) held.kinds.emplace();
+    logic::choice_in(*held.kinds, kind) = show;
+    events_in(now, held);
+  }), c::column(
       c::justified(c::vbox(0.0f, {.width = 70.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle,
           .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen}), nodes::justify::middle{}),
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(show ? "Show" : "Hide", 13.0f, colours.text))), show ? "Show" : "Hide"));
@@ -649,22 +655,7 @@ inline auto event_kinds_field(const palette& colours, choice_level_t level) {
   auto rows = std::ranges::to<std::vector>(std::views::transform(all_room_events, [&](const room_event_t& kind) {
     return event_kind_row<Owner>(colours, level, kind);
   }));
-  return c::scoped<Owner>(c::handlers(
-      c::handle<choose_events_way>([level](const choose_events_way& event, const auto&) {
-        return skiff::model::over<Owner>([level, event](Owner& now) {
-          now = with_events_way(now, level, event.way);
-        });
-      }),
-      c::handle<choose_event_kind>([level](const choose_event_kind& event, const auto&) {
-        return skiff::model::over<Owner>([level, event](Owner& now) {
-          auto held = events_of(now);
-          if (events_way_of(level, held) == kEventsCustom) {
-            if (!held.kinds) held.kinds.emplace();
-            logic::choice_in(*held.kinds, event.kind) = event.show;
-            events_in(now, held);
-          }
-        });
-      })), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return c::scoped<Owner>(c::handlers(), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           c::styled({.margin = {0.0f, 20.0f, 0.0f, 20.0f}}, nodes::Text("Room events", 14.0f, colours.text, true)),
           c::visible(has_level_above(level), events_way_row<Owner>(colours, level, "As above", kEventsAbove)),
           events_way_row<Owner>(colours, level, "All events", kEventsAll),

@@ -673,7 +673,7 @@ inline auto style_controls(const palette& colours, bool choose_base = true) {
       style_text_field<&style::theme_file>(colours, "Custom theme", "JSON palette file path; empty inherits"),
       style_text_field<&style::font>(colours, "Text font", "Installed family or font file path; empty inherits"),
       style_text_field<&style::monospace>(colours, "Code font", "Installed family or font file path; empty inherits"),
-      c::onPress(request::apply_style{}, c::styled({.fillX = true, .height = 36.0f},
+      c::onClick(request::apply_style{}, c::styled({.fillX = true, .height = 36.0f},
           widgets::Button<>(colours.widgets, "Apply fonts and theme")))));
 }
 

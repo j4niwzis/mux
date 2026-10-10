@@ -67,43 +67,20 @@ inline auto gif_cell(const palette& colours, std::string path) {
                                      .masking = true}),
           skiff::compose::styled({.fill = true, .cornerRadius = 6.0f}, std::move(image))));
 }
-template <class Actions> struct gif_grid : skiff::compose::Stacked {
-  using cell_t = decltype(gif_cell(std::declval<const palette&>(), std::string{}));
-  using cells_t = nodes::Flow<std::vector<cell_t>>;
-  struct parts_t {
-    nodes::Text empty;
-    nodes::ScrollContainer<cells_t> list{
-        cells_t({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {})};
-  } parts;
-  // The colours its cells are made in, as they change.
-  const palette* colours_ = nullptr;
-
-  gif_grid(const palette &colours)
-      : Stacked(
-            skiff::compose::vbox(0.0f, {.padding = {4.0f, 4.0f, 4.0f, 4.0f}})),
-        parts{.empty = skiff::compose::styled(
-                  {.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}},
-                  wrapped(nodes::Text(
-                      "No saved GIFs yet. Save one from a GIF's menu.", 13.0f,
-                      colours.dim)))},
-        colours_(&colours) {
-    auto& [empty, list] = parts;
-
-    list.apply({.fillX = true, .grow = scene::axes::kY});
-    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-  }
-  // The saved ones, as the program lists them: newest first.
-  void show(const std::vector<std::string>& paths) {
-    auto& cells = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
-    cells.clear();
-    cells.reserve(paths.size());
-    for (const std::string& one : paths)
-      cells.push_back(gif_cell(*colours_, one));
-    parts.empty.setVisible(paths.empty());
-    parts.list.invalidateLayout();
-    parts.list.scrollTo(0.0f);
-  }
-};
+inline auto gif_grid(const palette& colours, const std::vector<std::string>& paths) {
+  namespace c = skiff::compose;
+  auto cells = std::ranges::to<std::vector>(std::views::transform(paths, [&](const auto& path) {
+    return gif_cell(colours, path);
+  }));
+  return c::column(c::vbox(0.0f, {.padding = {4.0f, 4.0f, 4.0f, 4.0f}}),
+      c::visible(paths.empty(), c::styled({.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}},
+          wrapped(nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, colours.dim)))),
+      c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(
+          c::styled({.fillX = true, .autoSize = scene::axes::kY},
+              nodes::Flow<std::vector<decltype(gif_cell(colours, std::string()))>>(
+                  {.direction = nodes::direction::horizontal{}, .wrap = true}, std::move(cells))))));
+}
+using gif_grid_t = decltype(gif_grid(std::declval<const palette&>(), std::declval<const std::vector<std::string>&>()));
 
 // The input's emoji, as tdesktop's panel: a card over the chat, 345 wide
 // (emojiPanWidth), 278 to 640 high, rounded 8, its bottom right at the top
@@ -116,23 +93,22 @@ struct emoji_facts {
   float bottom = 0.0f;
   // The GIFs saved, for its GIF tab, as the program has them.
   std::vector<std::string> gifs;
+  popup_page_t page = popup_page::emoji{};
+  bool stickers = false;
+  bool files = false;
 };
-template <class Card> struct popup_tab_action {
-  Card* card;
-  popup_page_t page;
-  std::variant<scene::Taken, request::show_gifs> operator()() const {
-    if (auto asked = card->show(page))
-      return *asked;
-    return scene::Taken{};
-  }
-};
-template <class Card>
-auto popup_tab(const palette& colours, Card* card, popup_page_t page, std::string name) {
+inline bool page_available(const emoji_facts& facts, const popup_page_t& page) {
+  return spl::visit(spl::overloaded{
+      [](popup_page::emoji) { return true; },
+      [&](popup_page::stickers) { return facts.stickers; },
+      [&](popup_page::gifs) { return facts.files; }}, page);
+}
+inline auto popup_tab(const palette& colours, popup_page_t page, std::string name, bool selected, bool available) {
   namespace c = skiff::compose;
-  return c::onPress(popup_tab_action<Card>{card, std::move(page)},
+  return c::visible(available, c::onClick(request::select_emoji_page{std::move(page)},
       c::row(c::justified(c::hbox(0.0f, {.width = 80.0f, .height = 28.0f, .cornerRadius = 6.0f,
-          .hoverBackground = colours.chosen, .selectedBackground = colours.tile}), nodes::justify::middle{}),
-          c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(name, 13.0f, colours.text, true))), name);
+          .hoverBackground = colours.chosen, .selectedBackground = colours.tile, .selected = selected}), nodes::justify::middle{}),
+          c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(name, 13.0f, colours.text, true))), name));
 }
 
 template <class Actions> struct emoji_popup : skiff::compose::Specced {
@@ -150,21 +126,21 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
     card_t& operator=(card_t&&) = delete;
 
     // A swipe to the GIFs: what has been saved since, asked for.
-    using Answer = ::mux::ui::request::show_gifs;
+    using Answer = ::mux::ui::request::select_emoji_page;
     using panel_t = emoji_panel<insert_emoji_into<Actions>>;
-    using tab_t = decltype(popup_tab(std::declval<const palette&>(), std::declval<card_t*>(),
-        popup_page_t{popup_page::emoji{}}, std::string{}));
+    using tab_t = decltype(popup_tab(std::declval<const palette&>(), popup_page_t{popup_page::emoji{}}, std::string{}, false, true));
     using tabs_t = decltype(skiff::compose::row(skiff::compose::hbox(),
         std::declval<tab_t>(), std::declval<tab_t>(), std::declval<tab_t>()));
     // The colours it is made in: its tabs read them from it.
     const palette* colours_ = nullptr;
+    emoji_facts allowed_;
     struct parts_t {
       tabs_t tabs;
       panel_t panel;
       sticker_grid<Actions> stickers;
-      gif_grid<Actions> gifs;
+      gif_grid_t gifs;
     } parts;
-    card_t(const palette &colours, emoji_kept &kept)
+    card_t(const palette &colours, emoji_kept &kept, const emoji_facts& facts)
         : Stacked(skiff::compose::vbox(
               0.0f, {.width = 345.0f,
                      .height = 360.0f,
@@ -173,25 +149,24 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
                      .border = scene::Border{colours.band, 1.0f},
                      .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0),
                                              3.0f}})),
-          colours_(&colours),
+          colours_(&colours), allowed_(facts),
           parts{.tabs = skiff::compose::row(skiff::compose::hbox(4.0f, {.fillX = true, .height = 36.0f, .depth = 1.0f,
                     .padding = {4.0f, 8.0f, 4.0f, 8.0f}}),
-                    popup_tab(colours, this, popup_page::emoji{}, "Emoji"),
-                    popup_tab(colours, this, popup_page::stickers{}, "Stickers"),
-                    popup_tab(colours, this, popup_page::gifs{}, "GIFs")),
-                .panel = panel_t(colours, kept, insert_emoji_into<Actions>{},
-                                 {.fillX = true, .grow = scene::axes::kY, .masking = true}),
-                .stickers = sticker_grid<Actions>(
-                    colours, kept, {.fillX = true, .grow = scene::axes::kY, .masking = true}),
-                .gifs = skiff::compose::styled(
-                    {.fillX = true, .grow = scene::axes::kY, .masking = true},
-                    gif_grid<Actions>(colours))} {
+                    popup_tab(colours, popup_page::emoji{}, "Emoji", facts.page == popup_page_t(popup_page::emoji{}), true),
+                    popup_tab(colours, popup_page::stickers{}, "Stickers", facts.page == popup_page_t(popup_page::stickers{}), facts.stickers),
+                    popup_tab(colours, popup_page::gifs{}, "GIFs", facts.page == popup_page_t(popup_page::gifs{}), facts.files)),
+                .panel = skiff::compose::visible(facts.page == popup_page_t(popup_page::emoji{}),
+                    panel_t(colours, kept, insert_emoji_into<Actions>{}, {.fillX = true, .grow = scene::axes::kY, .masking = true})),
+                .stickers = skiff::compose::visible(facts.stickers && facts.page == popup_page_t(popup_page::stickers{}),
+                    sticker_grid<Actions>(colours, kept, {.fillX = true, .grow = scene::axes::kY, .masking = true})),
+                .gifs = skiff::compose::visible(facts.files && facts.page == popup_page_t(popup_page::gifs{}),
+                    skiff::compose::styled({.fillX = true, .grow = scene::axes::kY, .masking = true}, gif_grid(colours, facts.gifs)))} {
 
       // The card paints its own floating backdrop. Its full-window layer
       // has no fill; treating this as an inner panel drops the plate when
       // live blur is enabled.
       fState.setFloats(true);
-      (void)this->show(popup_page::emoji{});
+      page_at = static_cast<int>(facts.page.index());
     }
     // Docked as Telegram's apps have it, on a phone: across all of the window
     // over the field, square, its tabs a row along its bottom -- or a card
@@ -224,7 +199,7 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
       if (docked && press.button <= 1)
         swipe_from = skia::SkPoint{press.x, press.y};
     }
-    std::optional<::mux::ui::request::show_gifs> onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) {
+    std::optional<::mux::ui::request::select_emoji_page> onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) {
       const std::optional<skia::SkPoint> from = std::exchange(swipe_from, std::nullopt);
       if (!from)
         return std::nullopt;
@@ -233,31 +208,16 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
       if (std::abs(dx) < 90.0f || std::abs(dy) > std::abs(dx) * 0.5f)
         return std::nullopt;
       static const std::array<popup_page_t, 3> kPages{popup_page::emoji{}, popup_page::stickers{}, popup_page::gifs{}};
-      const int to = std::clamp(page_at + (dx < 0.0f ? 1 : -1), 0, 2);
-      if (to == page_at)
+      const auto pages = std::ranges::to<std::vector>(std::views::filter(kPages, [&](const auto& page) {
+        return page_available(allowed_, page);
+      }));
+      const auto current = std::ranges::find(pages, allowed_.page);
+      const int at = static_cast<int>(current - pages.begin());
+      const int to = std::clamp(at + (dx < 0.0f ? 1 : -1), 0, static_cast<int>(pages.size()) - 1);
+      if (to == at)
         return std::nullopt;
       reply.handle();
-      return this->show(kPages[static_cast<std::size_t>(to)]);
-    }
-    // One tab's page shown, the others hidden; the GIFs asked of the program
-    // as their tab opens, for what was saved since.
-    std::optional<::mux::ui::request::show_gifs> show(const popup_page_t& page) {
-      const auto [emoji, stickers, gifs] =
-          spl::visit(spl::overloaded{[](popup_page::emoji) { return std::array{true, false, false}; },
-                                [](popup_page::stickers) { return std::array{false, true, false}; },
-                                [](popup_page::gifs) { return std::array{false, false, true}; }},
-                     page);
-      parts.panel.setVisible(emoji);
-      parts.stickers.setVisible(stickers);
-      parts.gifs.setVisible(gifs);
-      page_at = emoji ? 0 : stickers ? 1 : 2;
-      std::get<0>(parts.tabs.fParts).fState.apply({.selected = emoji});
-      std::get<1>(parts.tabs.fParts).fState.apply({.selected = stickers});
-      std::get<2>(parts.tabs.fParts).fState.apply({.selected = gifs});
-      this->invalidateLayout();
-      if (gifs)
-        return ::mux::ui::request::show_gifs{};
-      return std::nullopt;
+      return request::select_emoji_page{pages[static_cast<std::size_t>(to)]};
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
   };
@@ -271,12 +231,9 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
   // What the window's parts tell one another: the docked panel's height.
   ui_shared* shared_ = nullptr;
 
-  emoji_popup(const ui_needs<Actions>& n, const emoji_facts& facts) : emoji_popup(n, facts.right, facts.bottom) { this->show_page(facts); }
-  // What it shows changed while it is up: the GIFs saved.
-  void show_page(const emoji_facts& facts) { parts.card.parts.gifs.show(facts.gifs); }
-  emoji_popup(const ui_needs<Actions> &n, float at_right, float at_bottom)
-      : Specced({.fill = true}), parts{.card = card_t(*n.colours, *n.emoji)},
-        right(at_right), bottom(at_bottom), shared_(n.shared) {}
+  emoji_popup(const ui_needs<Actions>& n, const emoji_facts& facts)
+      : Specced({.fill = true}), parts{.card = card_t(*n.colours, *n.emoji, facts)},
+        right(facts.right), bottom(facts.bottom), shared_(n.shared) {}
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
     constexpr float kMostWidth = 345.0f, kEdge = 10.0f;

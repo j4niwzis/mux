@@ -39,6 +39,7 @@ inline std::optional<emote> copied_emoji_at(std::string_view target) {
   return emote{.shortcode = std::move(code), .url = found->target, .body = found->plain};
 }
 struct emoji_kept {
+  bool custom_emoji = true;
   // The emoji picked lately, newest first, as tdesktop keeps them (at most 42).
   std::vector<std::string> recent_emoji;
   std::vector<emote> favourite_emoji;
@@ -85,14 +86,6 @@ struct emoji_kept {
     stickers_changed = true;
   }
 };
-
-// The input's popup's pages.
-namespace popup_page {
-struct emoji {};
-struct stickers {};
-struct gifs {};
-}  // namespace popup_page
-using popup_page_t = spl::variant<popup_page::emoji, popup_page::stickers, popup_page::gifs>;
 
 // How long the mouse rests on one before it is shown large.
 inline constexpr double kPreviewAfterMs = 450.0;

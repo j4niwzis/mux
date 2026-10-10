@@ -12,6 +12,9 @@ import mux.proto.matrix.requests;
 
 export namespace mux::proto::matrix {
 
+inline std::string directory_server(const state&, std::string_view address) {
+  return std::string(address.substr(address.find(':') + 1));
+}
 constexpr bool offers(const state&, feature::people_directory) { return true; }
 constexpr bool offers(const state&, feature::room_directory) { return true; }
 constexpr bool offers(const state&, feature::room_creation) { return true; }

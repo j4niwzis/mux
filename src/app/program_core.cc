@@ -61,7 +61,7 @@ void app::woken() {
                                  // The rooms put in Explore's facts: a further page
                                                                  // after those there, else in their place.
                                  mux::ui::change_shown<std::optional<mux::ui::explore_facts>>(showing, [&](auto& now) {
-                                   if (!now)
+                                   if (!now || !mux::ui::accepts_listing(*now, listed))
                                      return;
                                    auto rooms = listed.more && now->listing ? std::move(now->listing->rooms) : std::vector<mux::directory_room>{};
                                    rooms.insert(rooms.end(), listed.rooms.begin(), listed.rooms.end());
@@ -69,7 +69,7 @@ void app::woken() {
                                    now->loading = false;
                                  });
                                  // The own server's, for what the chat list searched.
-                                 if (listed.server.empty() && !listed.space)
+                                 if (root().main().current == std::optional(listed.by) && listed.server.empty() && !listed.space)
                                    root().main().found_rooms_elsewhere(listed.query, listed.rooms);
                                },
                                // Something the server refused: a notice saying why.
@@ -108,12 +108,13 @@ void app::woken() {
                                },
                                [&](const mux::change::people_found& found) {
                                  mux::ui::change_shown<std::optional<mux::ui::new_chat_facts>>(showing, [&](auto& now) {
-                                   if (now) {
+                                   if (now && now->by == std::optional(found.by) && now->query == found.query) {
                                      now->found = found.people;
-                                     now->query = found.query;
+                                     now->rows = mux::ui::people_rows(*now);
                                    }
                                  });
-                                 root().main().found_people_elsewhere(found.query, found.people);
+                                 if (root().main().current == std::optional(found.by))
+                                   root().main().found_people_elsewhere(found.query, found.people);
                                },
                                // A room looked up: its card filled, while it
                                // is up for that room still.

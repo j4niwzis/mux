@@ -550,6 +550,8 @@ class pictures_part {
   // The saved GIFs, newest first, to the input's GIF tab; each decoded on a
   // worker into the frames it plays, where it is not already.
   void apply(const request::show_gifs&) {
+    const auto chosen = s_->root().main().chosen;
+    if (!chosen || !mux::ui::may_send_files(s_->ui, chosen->account)) return;
     std::error_code failed;
     std::vector<std::pair<std::filesystem::file_time_type, std::string>> found;
     for (const auto& entry : std::filesystem::directory_iterator(gifs(), failed))

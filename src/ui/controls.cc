@@ -611,14 +611,10 @@ inline auto event_kind_button(const palette& colours, choice_level_t level, room
     return scene::Spec{.selected = event_kind_shown(now, level, kind) == show};
   }, c::onPress(set_event_kind<Owner>{level, kind, show}, c::column(
       c::justified(c::vbox(0.0f, {.width = 70.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle,
-          .hoverBackground = colours.chosen, .selectedBackground = colours.accent,
+          .hoverBackground = colours.chosen, .selectedBackground = colours.chosen,
           .focusBackground = colours.chosen}), nodes::justify::middle{}),
-      c::shown_for<Owner>([level, kind, show](const Owner& now) {
-        return event_kind_shown(now, level, kind) == show;
-      }, c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(show ? "Show" : "Hide", 13.0f, colours.on_accent, true))),
-      c::shown_for<Owner>([level, kind, show](const Owner& now) {
-        return event_kind_shown(now, level, kind) != show;
-      }, c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(show ? "Show" : "Hide", 13.0f, colours.text, true)))), show ? "Show" : "Hide"));
+      c::styled({.alignSelf = scene::align::kMiddle},
+          nodes::Text(show ? "Show" : "Hide", 13.0f, colours.text, true))), show ? "Show" : "Hide"));
 }
 template <class Owner>
 inline auto event_kind_row(const palette& colours, choice_level_t level, room_event_t kind) {
@@ -631,7 +627,8 @@ inline auto event_kind_row(const palette& colours, choice_level_t level, room_ev
       event_kind_button<Owner>(colours, level, kind, true), event_kind_button<Owner>(colours, level, kind, false)));
 }
 template <class Owner>
-inline auto event_kinds_field(const palette& colours, choice_level_t level) {
+inline auto event_kinds_field(const palette& colours, choice_level_t level,
+                              const std::vector<room_event_t>& kinds = std::vector<room_event_t>(all_room_events.begin(), all_room_events.end())) {
   namespace c = skiff::compose;
   auto names = std::vector<std::string>{"All events", "Messages only", "Custom"};
   if (has_level_above(level)) names.insert(names.begin(), "As above");
@@ -640,11 +637,11 @@ inline auto event_kinds_field(const palette& colours, choice_level_t level) {
     return events_way_of(level, events_of(now)) - (has_level_above(level) ? 0 : 1);
   }, make_choice_menu(colours, "Room events", std::move(names), 0, choose_events_way<Owner>{level}));
   mode.apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
-  auto rows = std::ranges::to<std::vector>(std::views::transform(all_room_events, [&](const room_event_t& kind) {
+  auto rows = std::ranges::to<std::vector>(std::views::transform(kinds, [&](const room_event_t& kind) {
     return event_kind_row<Owner>(colours, level, kind);
   }));
-  return c::scoped<Owner>(c::handlers(), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      std::move(mode), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
+  return c::visible(!kinds.empty(), c::scoped<Owner>(c::handlers(), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      std::move(mode), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))));
 }
 
 // How far a search for a message jumped to pages back, at one level, as
@@ -657,41 +654,35 @@ inline std::int64_t count_of(std::optional<std::int64_t> chosen, std::type_ident
 inline std::optional<std::int64_t> count_of(std::optional<std::int64_t> chosen, std::type_identity<std::optional<std::int64_t>>) {
   return chosen;
 }
+template <class Want, class Active, class Act>
+auto setting_button(const palette& colours, std::string name, float width, Active active, Act act) {
+  namespace c = skiff::compose;
+  return c::spec_for<Want>([active](const auto& now) { return scene::Spec{.selected = active(now)}; },
+      c::onPress(std::move(act), c::column(c::justified(
+          c::vbox(0.0f, {.width = width, .height = 28.0f, .alignSelf = scene::align::kMiddle,
+              .hoverBackground = colours.chosen, .selectedBackground = colours.chosen,
+              .focusBackground = colours.chosen}), nodes::justify::middle{}),
+          c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(name, 13.0f, colours.text, true))), name));
+}
 template <class T>
-struct jump_search_field : skiff::compose::Stacked {
-  static constexpr std::array<std::int64_t, 4> kChoices{500, 5000, 50000, 0};
-  // A count pressed: set as the part holds it.
-  struct pick {
-    using Answer = skiff::bind::Own<skiff::model::SetTo<T>>;
-    std::optional<std::int64_t> most;
-    Answer operator()() const { return skiff::bind::own(skiff::model::setTo(count_of(most, std::type_identity<T>{}))); }
+auto jump_search_field(const palette& colours, choice_level_t level) {
+  namespace c = skiff::compose;
+  constexpr std::array<std::int64_t, 4> counts{500, 5000, 50000, 0};
+  const auto shown = [top = !has_level_above(level)](const T& now) {
+    const auto said = said_of(now);
+    return top ? std::optional<std::int64_t>(said.value_or(5000)) : said;
   };
-  struct parts_t {
-    nodes::Text label;
-    segment<pick> fallback;
-    std::vector<segment<pick>> choices;
-  } parts;
-  bool top = false;
-  [[nodiscard]] static std::string label_of(std::int64_t most) {
-    return most == 0 ? std::string("No limit") : std::format("{}", most);
-  }
-  jump_search_field(const palette& colours, choice_level_t level)
-      : Stacked(setting_row()),
-        parts{.label = setting_label(nodes::Text("Look back for a message", 14.0f, colours.text)),
-              .fallback = skiff::compose::visible(has_level_above(level), setting_choice(64.0f, segment<pick>(colours, "Default", {std::nullopt}))),
-              .choices = kChoices | std::views::transform([&](std::int64_t most) {
-                           return setting_choice(64.0f, segment<pick>(colours, label_of(most), pick{most}));
-                         }) |
-                         std::ranges::to<std::vector>()},
-        top(!has_level_above(level)) {}
-  void read(const T& now) {
-    const std::optional<std::int64_t> said = said_of(now);
-    const std::optional<std::int64_t> shown = top ? std::optional<std::int64_t>(said.value_or(5000)) : said;
-    parts.fallback.set_active(!shown);
-    for (std::size_t i = 0; i < kChoices.size(); ++i)
-      parts.choices[i].set_active(shown == kChoices[i]);
-  }
-};
+  auto choices = std::ranges::to<std::vector>(std::views::transform(counts, [&](auto most) {
+    return setting_button<T>(colours, most == 0 ? std::string("No limit") : std::format("{}", most), 64.0f,
+        [shown, most](const T& now) { return shown(now) == most; },
+        sets<T>{count_of(most, std::type_identity<T>{})});
+  }));
+  return c::scoped<T>(c::handlers(), c::row(setting_row(),
+      setting_label(nodes::Text("Look back for a message", 14.0f, colours.text)),
+      c::visible(has_level_above(level), setting_button<T>(colours, "Default", 64.0f,
+          [shown](const T& now) { return !shown(now); }, sets<T>{count_of(std::nullopt, std::type_identity<T>{})})),
+      c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(choices))));
+}
 
 // Notifications, the same rows at every level: on, of mentions alone, the
 // sender's name, the text, a sound -- each a row bound to its field.
@@ -758,38 +749,22 @@ inline bool part_of(std::optional<bool> chosen, std::type_identity<bool>) { retu
 inline std::optional<bool> part_of(std::optional<bool> chosen, std::type_identity<std::optional<bool>>) { return chosen; }
 // Part: what a press sets -- the part shown, else one holding it, which
 // gives each segment what it sets as it reads the model.
-template <class Setting, class T, class Part = T>
-struct show_hide_field : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text label;
-    segment<sets<Part>> fallback, show, hide;
-  } parts;
-  bool top = false;
-  show_hide_field(const palette& colours, choice_level_t level)
-      : Stacked(setting_row()),
-        parts{.label = setting_label(nodes::Text(std::string(Setting::label), 14.0f, colours.text)),
-              .fallback = skiff::compose::visible(has_level_above(level), setting_choice(70.0f, segment<sets<Part>>(colours, "Default", {}))),
-              .show = setting_choice(70.0f, segment<sets<Part>>(colours, std::string(Setting::yes), {})),
-              .hide = setting_choice(70.0f, segment<sets<Part>>(colours, std::string(Setting::no), {}))},
-        top(!has_level_above(level)) {}
-  // Which is lit, and what each sets.
-  void show_value(std::optional<bool> shown) {
-    parts.fallback.set_active(!shown);
-    parts.show.set_active(shown == true);
-    parts.hide.set_active(shown == false);
-  }
-  void set_nexts(Part fallback, Part show, Part hide) {
-    parts.fallback.act.next = std::move(fallback);
-    parts.show.act.next = std::move(show);
-    parts.hide.act.next = std::move(hide);
-  }
-  void read(const T& now) {
-    const std::optional<bool> said = shown_of(now);
-    this->show_value(top ? std::optional<bool>(said.value_or(Setting::unsaid)) : said);
-    constexpr std::type_identity<T> as{};
-    this->set_nexts(part_of(std::nullopt, as), part_of(true, as), part_of(false, as));
-  }
-};
+template <class Setting, class T>
+auto show_hide_field(const palette& colours, choice_level_t level) {
+  namespace c = skiff::compose;
+  const auto shown = [top = !has_level_above(level)](const T& now) {
+    const auto said = shown_of(now);
+    return top ? std::optional<bool>(said.value_or(Setting::unsaid)) : said;
+  };
+  return c::scoped<T>(c::handlers(), c::row(setting_row(),
+      setting_label(nodes::Text(std::string(Setting::label), 14.0f, colours.text)),
+      c::visible(has_level_above(level), setting_button<T>(colours, "Default", 70.0f,
+          [shown](const T& now) { return !shown(now); }, sets<T>{part_of(std::nullopt, std::type_identity<T>{})})),
+      setting_button<T>(colours, std::string(Setting::yes), 70.0f,
+          [shown](const T& now) { return shown(now) == true; }, sets<T>{part_of(true, std::type_identity<T>{})}),
+      setting_button<T>(colours, std::string(Setting::no), 70.0f,
+          [shown](const T& now) { return shown(now) == false; }, sets<T>{part_of(false, std::type_identity<T>{})})));
+}
 
 // What a chat shows, at a level -- its room events, read receipts as faces,
 // link previews (and in direct messages), how far a jump looks back -- as

@@ -15,6 +15,14 @@ import skiff.model;
 
 export namespace mux::ui {
 
+// The picker page is part of what is shown, so data refreshes retain it.
+namespace popup_page {
+struct emoji { friend bool operator==(emoji, emoji) = default; };
+struct stickers { friend bool operator==(stickers, stickers) = default; };
+struct gifs { friend bool operator==(gifs, gifs) = default; };
+}
+using popup_page_t = spl::variant<popup_page::emoji, popup_page::stickers, popup_page::gifs>;
+
 // Lists of types, put together: the client's and every protocol's -- the
 // Manage tabs and pages, the account pages.
 template <class... Ts>
@@ -600,6 +608,7 @@ struct close_reactions {};
 struct back_reactions {};
 struct close_edit_history {};
 struct show_gifs {};
+struct select_emoji_page { popup_page_t page; };
 struct send_gif {
   std::string path;
 };

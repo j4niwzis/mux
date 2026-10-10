@@ -386,10 +386,20 @@ void account<Sink>::flush_notifications() {
   this->spawn_guarded([this] {
     struct finished { bool& busy; ~finished() { busy = false; } } done{notifications_busy_};
     while (api_ && !pending_notifications_.empty()) {
-      const auto [room, edit] = *pending_notifications_.begin();
+      const auto ready = std::ranges::find_if(pending_notifications_, [](const auto& entry) {
+        return entry.second.retry_at <= std::chrono::steady_clock::now();
+      });
+      if (ready == pending_notifications_.end()) return;
+      const auto [room, edit] = *ready;
       if (!save_notifications(room, edit.own, edit.effective)) {
-        sink_(change::notice{id_, "Notifications", "Some notification settings could not be saved on the server. They will be retried."});
-        return;
+        const auto latest = pending_notifications_.find(room);
+        if (latest == pending_notifications_.end() || latest->second.revision != edit.revision) continue;
+        if (latest->second.failures == 0)
+          sink_(change::notice{id_, "Notifications", "Some notification settings could not be saved on the server. They will be retried."});
+        auto& failed = latest->second;
+        failed.failures = std::min(failed.failures + 1, 6u);
+        failed.retry_at = std::chrono::steady_clock::now() + std::chrono::seconds(std::min(300u, 5u << failed.failures));
+        continue;
       }
       const auto current = pending_notifications_.find(room);
       if (current != pending_notifications_.end() && current->second.revision == edit.revision)
@@ -425,7 +435,7 @@ bool account<Sink>::save_notifications(std::optional<std::string> room, mux::not
         if (own && effective.on.value_or(true)) {
           const auto shadow = [&](const auto& rules, bool content) {
             if (!rules) return;
-            for (const auto& rule : *rules) {
+            for (const auto& rule : std::views::reverse(*rules)) {
               const bool notifies = rule.enabled && std::ranges::any_of(rule.actions, [](const knot::raw& raw) {
                 const auto action = knot::try_read<std::string>(raw.text);
                 return action && *action == "notify";
@@ -435,12 +445,14 @@ bool account<Sink>::save_notifications(std::optional<std::string> room, mux::not
               if (content && rule.pattern) conditions.push_back({.kind = "event_match", .key = "content.body", .pattern = rule.pattern});
               conditions.push_back({.kind = "event_match", .key = "room_id", .pattern = *room});
               success = bool(perform(*api_, put{.kind = put::kind_values::override_{}, .rule_id = prefix + rule.rule_id,
-                  .after = ".m.rule.master", .body = {.actions = with_sound(rule.actions, effective.sound.value_or(true)),
+                  .body = {.actions = with_sound(rule.actions, effective.sound.value_or(true)),
                   .conditions = std::move(conditions)}})) && success;
             }
           };
-          shadow(rules->override_, false);
+          // New user rules go below master automatically. Positioning
+          // relative to a server-default rule is rejected by Matrix.
           shadow(rules->content, true);
+          shadow(rules->override_, false);
         }
       } else success = false;
       erase(remove::kind_values::override_{});

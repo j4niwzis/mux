@@ -239,15 +239,15 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin 9b5959177fedcb539f9af5ec5429db4007182a09)
+set(mux_skiff_pin 05afd04da8a1f38fe21197c4828e5dd194f3c116)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
-  VERSION 0.1.2)
+  VERSION 0.1.0)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 64d0a626a6f9c01a330eeecf60e098b4cb370471
-  VERSION 0.1.2)
+  GIT_TAG 9755318db703772ec8e736934659912b9e09491d
+  VERSION 0.1.0)
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
@@ -273,7 +273,7 @@ else()
   set(mux_skiff_components)
   cme_options(skiff "SKIFF_UI OFF")
 endif()
-mux_find_package(skiff 0.1.2 COMPONENTS ${mux_skiff_components} REQUIRED)
+mux_find_package(skiff 0.1.0 COMPONENTS ${mux_skiff_components} REQUIRED)
 add_library(mux_config)
 # With the protocols' tags and what each keeps in the accounts file: the
 # settings read them, and everything above reads the settings.
@@ -387,7 +387,7 @@ if(MUX_UI)
       list(REMOVE_ITEM mux_platform_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/${common_name}")
     endif()
   endforeach()
-  mux_find_package(skiff-widgets 0.1.2 REQUIRED)
+  mux_find_package(skiff-widgets 0.1.0 REQUIRED)
 
   # The emoji face the window draws emoji with, as tdesktop has its own:
   # Noto Color Emoji, fetched once at a pinned commit and checked, and put

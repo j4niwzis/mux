@@ -332,13 +332,13 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
       skiff::compose::column(
           skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           event_kinds_field<choices>(colours, level, proto::room_event_kinds_of(state_before(chat.account.speaks))),
-          skiff::compose::bound<skiff::model::Field<&choices::receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
+          skiff::compose::bound<skiff::model::Field<&choices::receipts>>(show_hide_field<receipts_setting, std::optional<bool>, skiff::model::Field<&choices::receipts>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::previews>>(
-              show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
+              show_hide_field<link_previews_setting, std::optional<bool>, skiff::model::Field<&choices::previews>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::previews_direct>>(
-              show_hide_field<previews_direct_setting, std::optional<bool>>(colours, level)),
-          skiff::compose::bound<skiff::model::Field<&choices::typing>>(show_hide_field<typing_setting, std::optional<bool>>(colours, level)),
-          skiff::compose::bound<skiff::model::Field<&choices::jump_search>>(jump_search_field<std::optional<std::int64_t>>(colours, level))),
+              show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&choices::previews_direct>>(colours, level)),
+          skiff::compose::bound<skiff::model::Field<&choices::typing>>(show_hide_field<typing_setting, std::optional<bool>, skiff::model::Field<&choices::typing>>(colours, level)),
+          skiff::compose::bound<skiff::model::Field<&choices::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&choices::jump_search>>(colours, level))),
       chat);
 }
 
@@ -382,10 +382,10 @@ inline auto chat_notify_view(const palette& colours, const conversation_id& chat
       skiff::compose::column(
           skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           bound<config::chat_choices>(chat_on_field(colours)),
-          bound<skiff::model::Field<&notify::mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>>(colours, level)),
-          bound<skiff::model::Field<&notify::name>>(show_hide_field<notify_name_setting, std::optional<bool>>(colours, level)),
-          bound<skiff::model::Field<&notify::text>>(show_hide_field<notify_text_setting, std::optional<bool>>(colours, level)),
-          bound<skiff::model::Field<&notify::sound>>(show_hide_field<notify_sound_setting, std::optional<bool>>(colours, level))),
+          bound<skiff::model::Field<&notify::mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>, skiff::model::Field<&notify::mentions>>(colours, level)),
+          bound<skiff::model::Field<&notify::name>>(show_hide_field<notify_name_setting, std::optional<bool>, skiff::model::Field<&notify::name>>(colours, level)),
+          bound<skiff::model::Field<&notify::text>>(show_hide_field<notify_text_setting, std::optional<bool>, skiff::model::Field<&notify::text>>(colours, level)),
+          bound<skiff::model::Field<&notify::sound>>(show_hide_field<notify_sound_setting, std::optional<bool>, skiff::model::Field<&notify::sound>>(colours, level))),
       chat);
 }
 

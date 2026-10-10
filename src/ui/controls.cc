@@ -664,7 +664,9 @@ auto setting_button(const palette& colours, std::string name, float width, Activ
               .focusBackground = colours.chosen}), nodes::justify::middle{}),
           c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(name, 13.0f, colours.text, true))), name));
 }
-template <class T>
+// Bind every segment to the named field, rather than its scalar type:
+// another model walking the same window can contain many such scalars.
+template <class T, class Want>
 auto jump_search_field(const palette& colours, choice_level_t level) {
   namespace c = skiff::compose;
   constexpr std::array<std::int64_t, 4> counts{500, 5000, 50000, 0};
@@ -673,15 +675,15 @@ auto jump_search_field(const palette& colours, choice_level_t level) {
     return top ? std::optional<std::int64_t>(said.value_or(5000)) : said;
   };
   auto choices = std::ranges::to<std::vector>(std::views::transform(counts, [&](auto most) {
-    return setting_button<T>(colours, most == 0 ? std::string("No limit") : std::format("{}", most), 64.0f,
+    return setting_button<Want>(colours, most == 0 ? std::string("No limit") : std::format("{}", most), 64.0f,
         [shown, most](const T& now) { return shown(now) == most; },
         sets<T>{count_of(most, std::type_identity<T>{})});
   }));
-  return c::scoped<T>(c::handlers(), c::row(setting_row(),
+  return c::row(setting_row(),
       setting_label(nodes::Text("Look back for a message", 14.0f, colours.text)),
-      c::visible(has_level_above(level), setting_button<T>(colours, "Default", 64.0f,
+      c::visible(has_level_above(level), setting_button<Want>(colours, "Default", 64.0f,
           [shown](const T& now) { return !shown(now); }, sets<T>{count_of(std::nullopt, std::type_identity<T>{})})),
-      c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(choices))));
+      c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(choices)));
 }
 
 // Notifications, the same rows at every level: on, of mentions alone, the
@@ -749,21 +751,21 @@ inline bool part_of(std::optional<bool> chosen, std::type_identity<bool>) { retu
 inline std::optional<bool> part_of(std::optional<bool> chosen, std::type_identity<std::optional<bool>>) { return chosen; }
 // Part: what a press sets -- the part shown, else one holding it, which
 // gives each segment what it sets as it reads the model.
-template <class Setting, class T>
+template <class Setting, class T, class Want>
 auto show_hide_field(const palette& colours, choice_level_t level) {
   namespace c = skiff::compose;
   const auto shown = [top = !has_level_above(level)](const T& now) {
     const auto said = shown_of(now);
     return top ? std::optional<bool>(said.value_or(Setting::unsaid)) : said;
   };
-  return c::scoped<T>(c::handlers(), c::row(setting_row(),
+  return c::row(setting_row(),
       setting_label(nodes::Text(std::string(Setting::label), 14.0f, colours.text)),
-      c::visible(has_level_above(level), setting_button<T>(colours, "Default", 70.0f,
+      c::visible(has_level_above(level), setting_button<Want>(colours, "Default", 70.0f,
           [shown](const T& now) { return !shown(now); }, sets<T>{part_of(std::nullopt, std::type_identity<T>{})})),
-      setting_button<T>(colours, std::string(Setting::yes), 70.0f,
+      setting_button<Want>(colours, std::string(Setting::yes), 70.0f,
           [shown](const T& now) { return shown(now) == true; }, sets<T>{part_of(true, std::type_identity<T>{})}),
-      setting_button<T>(colours, std::string(Setting::no), 70.0f,
-          [shown](const T& now) { return shown(now) == false; }, sets<T>{part_of(false, std::type_identity<T>{})})));
+      setting_button<Want>(colours, std::string(Setting::no), 70.0f,
+          [shown](const T& now) { return shown(now) == false; }, sets<T>{part_of(false, std::type_identity<T>{})}));
 }
 
 // What a chat shows, at a level -- its room events, read receipts as faces,

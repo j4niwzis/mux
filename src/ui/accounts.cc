@@ -237,7 +237,7 @@ inline auto account_typing_view(const palette& colours, std::string address) {
   return skiff::compose::scoped<config::account_t>(
       skiff::compose::handlers(),
       skiff::compose::bound<skiff::model::Field<&config::account_shared::send_typing>>(
-          show_hide_field<typing_setting, std::optional<bool>>(colours, choice_level::account{})),
+          show_hide_field<typing_setting, std::optional<bool>, skiff::model::Field<&config::account_shared::send_typing>>(colours, choice_level::account{})),
       std::move(address));
 }
 inline auto account_chats_view(const palette& colours, std::string address) {
@@ -249,11 +249,11 @@ inline auto account_chats_view(const palette& colours, std::string address) {
       skiff::compose::column(
           skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           event_kinds_field<shared>(colours, level, proto::room_event_kinds_of(state_before(protocol_of(address)))),
-          bound<skiff::model::Field<&shared::show_receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
-          bound<skiff::model::Field<&shared::link_previews>>(show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&shared::show_receipts>>(show_hide_field<receipts_setting, std::optional<bool>, skiff::model::Field<&shared::show_receipts>>(colours, level)),
+          bound<skiff::model::Field<&shared::link_previews>>(show_hide_field<link_previews_setting, std::optional<bool>, skiff::model::Field<&shared::link_previews>>(colours, level)),
           bound<skiff::model::Field<&shared::previews_direct>>(
-              show_hide_field<previews_direct_setting, std::optional<bool>>(colours, level)),
-          bound<skiff::model::Field<&shared::jump_search>>(jump_search_field<std::optional<std::int64_t>>(colours, level))),
+              show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&shared::previews_direct>>(colours, level)),
+          bound<skiff::model::Field<&shared::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&shared::jump_search>>(colours, level))),
       std::move(address));
 }
 
@@ -341,11 +341,11 @@ inline auto account_notify_view(const palette& colours, std::string address) {
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          bound<skiff::model::Field<&shared::notify>>(show_hide_field<notify_on_setting, std::optional<bool>>(colours, level)),
-          bound<skiff::model::Field<&shared::notify_mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>>(colours, level)),
-          bound<skiff::model::Field<&shared::notify_name>>(show_hide_field<notify_name_setting, std::optional<bool>>(colours, level)),
-          bound<skiff::model::Field<&shared::notify_text>>(show_hide_field<notify_text_setting, std::optional<bool>>(colours, level)),
-          bound<skiff::model::Field<&shared::notify_sound>>(show_hide_field<notify_sound_setting, std::optional<bool>>(colours, level))),
+          bound<skiff::model::Field<&shared::notify>>(show_hide_field<notify_on_setting, std::optional<bool>, skiff::model::Field<&shared::notify>>(colours, level)),
+          bound<skiff::model::Field<&shared::notify_mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>, skiff::model::Field<&shared::notify_mentions>>(colours, level)),
+          bound<skiff::model::Field<&shared::notify_name>>(show_hide_field<notify_name_setting, std::optional<bool>, skiff::model::Field<&shared::notify_name>>(colours, level)),
+          bound<skiff::model::Field<&shared::notify_text>>(show_hide_field<notify_text_setting, std::optional<bool>, skiff::model::Field<&shared::notify_text>>(colours, level)),
+          bound<skiff::model::Field<&shared::notify_sound>>(show_hide_field<notify_sound_setting, std::optional<bool>, skiff::model::Field<&shared::notify_sound>>(colours, level))),
       std::move(address));
 }
 

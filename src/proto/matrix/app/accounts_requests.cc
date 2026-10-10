@@ -67,7 +67,7 @@ template void account<mux::app::post_change>::fetch_avatar(std::string source, s
 template void account<mux::app::post_change>::edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles);
 template void account<mux::app::post_change>::edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture);
 template void account<mux::app::post_change>::remove(std::string room, std::string event);
-template void account<mux::app::post_change>::react(std::string room, std::string target, std::string key, bool on);
+template void account<mux::app::post_change>::react(std::string room, std::string target, std::string key, bool on, std::optional<std::string> shortcode);
 template void account<mux::app::post_change>::pin(std::string room, std::string target, bool on);
 template void account<mux::app::post_change>::leave(std::string room);
 template void account<mux::app::post_change>::send(std::string room, std::string body, std::optional<std::string> reply_to, std::vector<mention> mentions, std::vector<styled_run> styles);

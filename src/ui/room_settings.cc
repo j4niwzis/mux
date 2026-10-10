@@ -347,11 +347,11 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
 // and sets the chat's choices whole.
 struct chat_notify_change {
   std::optional<bool> on;
-  auto operator()(const config::chat_choices& now) const {
+  config::chat_choices operator()(const config::chat_choices& now) const {
     auto next = now;
     next.muted = on == false;
     next.notify.on = on == true ? on : std::nullopt;
-    return skiff::model::setTo(std::move(next));
+    return next;
   }
 };
 struct set_chat_notify {

@@ -2565,3 +2565,30 @@ TEST(Info, RoomSwitchStartsAtTheTopAndSameRoomUpdatesKeepTheScroll) {
   EXPECT_EQ(panel.members_built, 60u);
   EXPECT_FALSE(panel.wants_more());
 }
+
+TEST(Controls, ChatNotificationChoicesApplyValuesAndPreserveOtherSettings) {
+  mux::config::chat_choices initial;
+  initial.muted = true;
+  initial.notify.on = true;
+  initial.notify.mentions = false;
+  initial.notify.sound = true;
+  initial.typing = false;
+  initial.previews = false;
+  using model_t = skiff::model::Model<mux::config::chat_choices, skiff::bind::NoReactions>;
+  model_t model(initial);
+  mux::ui::palette colours;
+  auto field = mux::ui::chat_on_field(colours);
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(field, model);
+  const auto id = std::get<2>(field.fParts).fState.id();
+  for (const auto& [button, on] : std::array<std::pair<std::uint32_t, std::optional<bool>>, 4>{
+           std::pair{2u, std::optional<bool>(true)}, {3u, false}, {1u, std::nullopt}, {2u, true}}) {
+    ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{button}));
+    binding.refresh(field, model);
+    auto expected = initial;
+    expected.muted = on == false;
+    expected.notify.on = on == true ? on : std::nullopt;
+    EXPECT_EQ(model.root(), expected);
+    EXPECT_EQ(std::get<2>(field.fParts).fState.id(), id);
+  }
+}

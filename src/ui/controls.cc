@@ -14,6 +14,7 @@ import skiff.nodes.text;
 import skiff.widgets.avatar;
 import skiff.widgets.button;
 import skiff.widgets.model;
+import skiff.widgets.textbox;
 import skiff.widgets.sliderbar;
 import skiff.model;
 import skiff.bind;
@@ -644,6 +645,38 @@ inline auto event_kinds_field(const palette& colours, choice_level_t level,
       std::move(mode), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))));
 }
 
+struct pick_style_theme {
+  using Answer = skiff::bind::Own<skiff::model::SetTo<std::optional<config::theme_t>>>;
+  Answer operator()(std::size_t index) const {
+    const std::array<std::optional<config::theme_t>, 5> values{std::nullopt, config::theme::classic{},
+        config::theme::day{}, config::theme::tinted{}, config::theme::night{}};
+    return skiff::bind::own(skiff::model::setTo(values.at(index)));
+  }
+};
+template <auto Member>
+inline auto style_text_field(const palette& colours, std::string label, std::string hint) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      nodes::Text(std::move(label), 13.0f, colours.dim),
+      c::bound<skiff::model::Field<Member>>(c::styled({.fillX = true, .height = 36.0f},
+          widgets::TextField<std::string>(colours.widgets, std::move(hint)))));
+}
+inline auto style_controls(const palette& colours, bool choose_base = true) {
+  namespace c = skiff::compose;
+  using style = config::style_settings;
+  auto theme = c::projected<skiff::model::Field<&style::theme>>([](const std::optional<config::theme_t>& now) {
+    return now ? now->index() + 1 : 0;
+  }, make_choice_menu(colours, "Theme", {"As above", "Classic", "Day", "Tinted", "Night"}, 0, pick_style_theme{}));
+  return c::scoped<style>(c::handlers(), c::column(
+      c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}}),
+      nodes::Text("FONTS AND THEME", 13.0f, colours.dim, true), c::visible(choose_base, std::move(theme)),
+      style_text_field<&style::theme_file>(colours, "Custom theme", "JSON palette file path; empty inherits"),
+      style_text_field<&style::font>(colours, "Text font", "Installed family or font file path; empty inherits"),
+      style_text_field<&style::monospace>(colours, "Code font", "Installed family or font file path; empty inherits"),
+      c::onPress(request::apply_style{}, c::styled({.fillX = true, .height = 36.0f},
+          widgets::Button<>(colours.widgets, "Apply fonts and theme")))));
+}
+
 // How far a search for a message jumped to pages back, at one level, as
 // the model holds it: a few numbers of events and No limit, and, where a
 // level above decides for it, Default. Bound to an optional count unsaid as
@@ -699,14 +732,6 @@ struct notify_on_setting : notify_setting_base<config::notify_setting::on> {
 struct notify_mentions_setting : notify_setting_base<config::notify_setting::mentions> {
   static constexpr std::string_view label = "Of messages";
   static constexpr std::string_view yes = "Mentions", no = "All";
-};
-struct notify_name_setting : notify_setting_base<config::notify_setting::name> {
-  static constexpr std::string_view label = "The sender's name";
-  static constexpr std::string_view yes = "Show", no = "Hide";
-};
-struct notify_text_setting : notify_setting_base<config::notify_setting::text> {
-  static constexpr std::string_view label = "The message's text";
-  static constexpr std::string_view yes = "Show", no = "Hide";
 };
 struct notify_sound_setting : notify_setting_base<config::notify_setting::sound> {
   static constexpr std::string_view label = "Sound";

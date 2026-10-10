@@ -27,6 +27,8 @@ class settings_part {
   settings_part(services& shared, kept_settings& kept, pictures_part& pictures)
       : s_(&shared), k_(&kept), pictures_(&pictures) {}
 
+  void apply(const request::apply_style&) { s_->rebuild_due = true; }
+
   // The limits, as kept: to the caches and the disk.
   void apply_limits() {
     pictures_->set_limits(k_->limits());

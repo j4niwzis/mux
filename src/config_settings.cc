@@ -59,12 +59,10 @@ consteval auto json_schema(knot::type<chat_marks>) { return knot::schema<chat_ma
 consteval auto json_schema(knot::type<marks_file>) { return knot::schema<marks_file>(); }
 
 // What notifies, and how, as Telegram Desktop's settings have it: a
-// notification on the desktop, with the sender's name and the message's
-// text or not, and a sound -- the chime, or a file -- by one backend.
+// notification on the desktop, and a sound -- the chime, or a file --
+// by one backend.
 struct notification_settings {
   bool desktop = true;
-  bool show_name = true;
-  bool show_text = true;
   bool sound = true;
   std::optional<bool> mentions_only;  // only @mentions and keywords notify
   notify_backend_t backend = notify_backend::native{};
@@ -80,8 +78,6 @@ struct notification_settings {
 };
 consteval auto json_schema(knot::type<notification_settings>) { return knot::schema<notification_settings>(); }
 [[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::desktop) { return &notification_settings::desktop; }
-[[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::show_name) { return &notification_settings::show_name; }
-[[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::show_text) { return &notification_settings::show_text; }
 [[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::sound) { return &notification_settings::sound; }
 [[nodiscard]] inline bool& flag_in(notification_settings& in, const notify_flag_t& flag) {
   return in.*spl::visit([](auto one) { return flag_member(one); }, flag);
@@ -93,8 +89,6 @@ struct chat_notify {
   std::string conversation;
   std::optional<notify_mode_t> mode;  // mentions or all, where chosen
   std::optional<bool> on;           // notifications on, where chosen (off: muted)
-  std::optional<bool> name;
-  std::optional<bool> text;
   std::optional<bool> sound;
   friend bool operator==(const chat_notify&, const chat_notify&) = default;
 };
@@ -106,6 +100,7 @@ consteval auto json_schema(knot::type<chat_notify>) { return knot::schema<chat_n
 // its password, its server -- is its kept type, mux::proto::<protocol>::kept
 // (through mux.proto.kept).
 struct account_shared {
+  style_settings style;
   bool enabled = true;
   std::optional<bool> read_receipts;
   std::optional<bool> send_typing;  // others' typing is always shown
@@ -122,11 +117,8 @@ struct account_shared {
   std::optional<std::int64_t> jump_search;
   std::optional<bool> notify;
   std::optional<bool> notify_sound;
-  // Whether only mentions and keywords notify, and what a notification
-  // shows: the sender's name, the message's text.
+  // Whether only mentions and keywords notify.
   std::optional<bool> notify_mentions;
-  std::optional<bool> notify_name;
-  std::optional<bool> notify_text;
   std::optional<std::string> proxy;
   std::optional<accent_said_t> colour;
   std::optional<bool> strip;
@@ -135,14 +127,12 @@ struct account_shared {
 consteval auto json_schema(knot::type<account_shared>) { return knot::schema<account_shared>(); }
 
 // Notifications, the same at every level -- every chat's, an account's, a
-// space's, a chat's: on or off, of every message or of mentions alone, the
-// sender's name and the text shown or not, a sound or not. Below the
+// space's, a chat's: on or off, of every message or of mentions alone,
+// a sound or not. Below the
 // client's, each unsaid where it is as the level above.
 struct notify_choices {
   std::optional<bool> on;
   std::optional<bool> mentions;
-  std::optional<bool> name;
-  std::optional<bool> text;
   std::optional<bool> sound;
   friend bool operator==(const notify_choices&, const notify_choices&) = default;
 };
@@ -163,20 +153,6 @@ struct mentions {
   static bool of(const notification_settings& every) { return every.mentions_only.value_or(false); }
   static void set(notification_settings& every, bool now) { every.mentions_only = now; }
 };
-struct name {
-  static constexpr bool unsaid = true;
-  static constexpr auto chat = &notify_choices::name;
-  static constexpr auto account = &account_shared::notify_name;
-  static bool of(const notification_settings& every) { return every.show_name; }
-  static void set(notification_settings& every, bool now) { every.show_name = now; }
-};
-struct text {
-  static constexpr bool unsaid = true;
-  static constexpr auto chat = &notify_choices::text;
-  static constexpr auto account = &account_shared::notify_text;
-  static bool of(const notification_settings& every) { return every.show_text; }
-  static void set(notification_settings& every, bool now) { every.show_text = now; }
-};
 struct sound {
   static constexpr bool unsaid = true;
   static constexpr auto chat = &notify_choices::sound;
@@ -186,16 +162,14 @@ struct sound {
 };
 }  // namespace notify_setting
 using notify_setting_t =
-    spl::variant<notify_setting::on, notify_setting::mentions, notify_setting::name, notify_setting::text, notify_setting::sound>;
+    spl::variant<notify_setting::on, notify_setting::mentions, notify_setting::sound>;
 // The client's, all said.
 [[nodiscard]] inline notify_choices notify_choices_of(const notification_settings& every) {
-  return {.on = every.desktop, .mentions = every.mentions_only.value_or(false), .name = every.show_name,
-          .text = every.show_text, .sound = every.sound};
+  return {.on = every.desktop, .mentions = every.mentions_only.value_or(false), .sound = every.sound};
 }
 // An account's, as it keeps them.
 [[nodiscard]] inline notify_choices notify_choices_of(const account_shared& one) {
-  return {.on = one.notify, .mentions = one.notify_mentions, .name = one.notify_name, .text = one.notify_text,
-          .sound = one.notify_sound};
+  return {.on = one.notify, .mentions = one.notify_mentions, .sound = one.notify_sound};
 }
 
 // What each protocol keeps of its own: its kept type, found by ADL on its tag

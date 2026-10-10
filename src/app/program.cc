@@ -246,6 +246,7 @@ struct app : kept_settings {
   // The theme's colours: handed to the window, which is made in them --
   // made again in new ones when the theme changes (rebuild_in_theme).
   mux::ui::palette colours;
+  std::optional<mux::config::style_settings> active_style;
   actions ask;
   window_scene scene_storage{mux::ui::ui_needs<actions>{.sound = &speaker, .colours = &colours, .emoji = &shared.emoji,
       .looks = &shared.looks, .paint = &shared.paint, .shared = &shared.ui}};

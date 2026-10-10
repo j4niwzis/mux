@@ -97,7 +97,7 @@ cme_declare_port(NAME chevron PROVIDES chevron
 cme_options(chevron "CHEVRON_TESTS OFF")
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG 97bda7d7da78a8f8fa109451b3c8b57cc6087e54
+  GIT_TAG 9814dbc29f56f43ce0fd60a4a55c5a69ae42aa42
   LICENSE AGPL-3.0-only
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
@@ -246,7 +246,7 @@ cme_declare_port(NAME skiff PROVIDES skiff
   VERSION 0.1.2)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG a0635bbd21ff3d1d19d761d1144b40b8db36cdbd
+  GIT_TAG 64d0a626a6f9c01a330eeecf60e098b4cb370471
   VERSION 0.1.2)
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on

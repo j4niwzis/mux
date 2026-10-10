@@ -25,7 +25,7 @@ import :proxies;
 export namespace mux::ui {
 
 // Settings' Notifications page, as Telegram Desktop's: a notification on
-// the desktop or not, the sender's name and the text in it or not, a sound
+// the desktop or not, a sound
 // or not; what shows it -- the desktop's own service, or mux's window; and
 // whether UnifiedPush wakes mux. Made of the model's widgets, each bound to
 // its setting by its member pointer: what is chosen is an edit of the
@@ -182,8 +182,11 @@ inline auto notification_settings_view(const palette& colours) {
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), spaced_title(colours, "NOTIFICATIONS"),
       setting_switch<&every::desktop>(colours, "Notifications"),
       setting_switch<&every::mentions_only, std::optional<bool>>(colours, "Only mentions and keywords"),
-      setting_switch<&every::show_name>(colours, "The sender's name"),
-      setting_switch<&every::show_text>(colours, "The message's text"), setting_switch<&every::sound>(colours, "Sound"),
+      setting_switch<&every::sound>(colours, "Sound"),
+      spaced_title(colours, "CUSTOM SOUND"),
+      skiff::compose::bound<skiff::model::Field<&every::sound_file>>(skiff::compose::styled(
+          {.fillX = true, .height = 36.0f, .margin = {4.0f, 20.0f, 4.0f, 20.0f}},
+          widgets::TextField<std::optional<std::string>>(colours.widgets, "Ogg Opus or Vorbis file; empty uses the default"))),
       spaced_title(colours, "SHOWN BY"), std::move(backend),
       spaced_note(colours, "System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
                            "shows mux's own, in a corner of the screen, as Telegram Desktop does."),

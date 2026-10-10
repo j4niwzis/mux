@@ -217,3 +217,37 @@ TEST(Config, ProxiesAndTheirAccountsAreKept) {
 }
 
 }  // namespace
+
+TEST(Config, StylesInheritEachFieldAndBuiltInThemesReplaceInheritedCustomFiles) {
+  using namespace mux::config;
+  const style_settings client{.theme = theme::day{}, .theme_file = "/themes/client.json", .font = "Inter", .monospace = "Fira Mono"};
+  const style_settings account{.font = "Noto Sans"};
+  const style_settings space{.theme = theme::night{}};
+  const style_settings room{.monospace = "/fonts/code.ttf"};
+  auto effective = filled_from(filled_from(filled_from(room, space), account), client);
+  EXPECT_EQ(effective.theme, std::optional<theme_t>(theme::night{}));
+  EXPECT_TRUE(effective.theme_file.empty());
+  EXPECT_EQ(effective.font, "Noto Sans");
+  EXPECT_EQ(effective.monospace, "/fonts/code.ttf");
+  EXPECT_EQ(filled_from(style_settings{}, client), client);
+}
+
+TEST(Config, ClientAccountSpaceAndRoomStylesSurviveSaving) {
+  mux::vault::vault vault;
+  scratch here;
+  const std::vector<mux::config::account_t> accounts{{
+    .own = mux::config::kept_t{matrix_account{.user_id = "@alice:example.org"}},
+    .shared = {.style = {.font = "Inter"}}}};
+  auto settings = mux::config::file_of(accounts);
+  settings.style = mux::config::style_settings{.font = "Noto Sans", .monospace = "Fira Mono"};
+  settings.room_events = std::vector<mux::config::room_events_choice>{
+    {.account = "@alice:example.org", .conversation = "!space:example.org", .style = {.theme_file = "/themes/space.json"}},
+    {.account = "@alice:example.org", .conversation = "!room:example.org", .style = {.font = "/fonts/room.ttf"}}};
+  ASSERT_TRUE(mux::config::save(here.dir / "settings.json", settings, vault));
+  const auto loaded = mux::config::load(here.dir / "settings.json", vault);
+  ASSERT_TRUE(loaded);
+  EXPECT_EQ(loaded->style, settings.style);
+  EXPECT_EQ(loaded->room_events, settings.room_events);
+  ASSERT_EQ(mux::config::accounts_of(*loaded).size(), 1u);
+  EXPECT_EQ(mux::config::accounts_of(*loaded).front().shared.style, accounts.front().shared.style);
+}

@@ -18,6 +18,8 @@ import mux.app.demo;
 import mux.app.store;
 import mux.app.requests;
 import mux.app.words;
+import mux.platform.fonts;
+import splice.bytes;
 
 namespace mux::app {
 
@@ -26,8 +28,20 @@ void app::rebuild_in_theme() {
   const float side_width = before.side_width;
   const float info_width = before.info_width;
   const float settings_at = root().settings_up() ? root().settings_up()->offset() : 0.0f;
-  mux::ui::use_scroll_bars(this->appearance().theme);
-  colours = mux::ui::palette_of(this->appearance().theme, this->appearance().accent, shared.looks.window.opacity);
+  const auto style = reads().style_of(root().main().current, root().main().chosen);
+  active_style = style;
+  const auto theme = style.theme.value_or(this->appearance().theme);
+  mux::ui::use_scroll_bars(theme);
+  colours = mux::ui::palette_of(theme, this->appearance().accent, shared.looks.window.opacity);
+  if (!style.theme_file.empty()) {
+    const auto text = spl::bytes::file_text(style.theme_file);
+    if (text) {
+      if (const auto custom = knot::try_read<mux::config::custom_theme>(*text)) mux::ui::apply_theme(colours, *custom);
+      else shared.notice("Theme", "The custom theme could not be read. Use a JSON palette file.");
+    } else shared.notice("Theme", "The custom theme file could not be opened.");
+  }
+  if (!mux::platform::fonts::select_fonts(style.font, style.monospace))
+    shared.notice("Fonts", "The selected font could not be loaded. Enter an installed family or a font file path.");
   accounts_screen.forget_login();
   shared.drawer_waits = false;
   root().rebuild();

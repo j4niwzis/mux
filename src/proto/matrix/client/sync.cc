@@ -797,8 +797,91 @@ void account<Sink>::load_kept() {
           content.status_msg};
 }
 
+struct notification_action {
+  std::string set_tweak;
+  std::optional<knot::raw> value;
+  friend consteval auto json_schema(knot::type<notification_action>) { return knot::schema<notification_action>(); }
+};
+inline bool notification_sound(const auto& rule) {
+  return std::ranges::any_of(rule.actions, [](const knot::raw& raw) {
+    const auto tweak = knot::try_read<notification_action>(raw.text);
+    if (!tweak || tweak->set_tweak != "sound" || !tweak->value) return false;
+    const auto value = knot::try_read<std::string>(tweak->value->text);
+    return value && !value->empty();
+  });
+}
+inline bool notification_enabled(const auto& rule) {
+  return rule.enabled && std::ranges::any_of(rule.actions, [](const knot::raw& raw) {
+    const auto action = knot::try_read<std::string>(raw.text);
+    return action && (*action == "notify" || *action == "coalesce");
+  });
+}
+template <class Sink>
+void account<Sink>::receive_notifications(const loom::ev::account_data_event& event) {
+  spl::visit(spl::overloaded{[&](const loom::ev::m_push_rules_content_t& content) {
+    if (!content.global) return;
+    const auto& rules = *content.global;
+    mux::notification_choices account;
+    account.on = true;
+    account.mentions = true;
+    if (rules.override_)
+      for (const auto& rule : *rules.override_)
+        if (rule.rule_id == ".m.rule.master") account.on = !rule.enabled;
+    if (rules.underride)
+      for (const auto& rule : *rules.underride)
+        if (std::ranges::contains(std::array<std::string_view, 4>{".m.rule.message", ".m.rule.encrypted",
+                ".m.rule.room_one_to_one", ".m.rule.encrypted_room_one_to_one"}, std::string_view(rule.rule_id))) {
+          if (notification_enabled(rule)) account.mentions = false;
+          if (rule.rule_id == ".m.rule.message") account.sound = notification_sound(rule);
+        }
+    if (!pending_notifications_.contains(std::nullopt)) sink_(change::notifications_changed{id_, std::nullopt, account});
+    std::map<std::string, mux::notification_choices> rooms;
+    if (rules.room)
+      for (const auto& rule : *rules.room) {
+        if (!rule.enabled) continue;
+        mux::notification_choices choices;
+        choices.on = true;
+        choices.mentions = !notification_enabled(rule);
+        choices.sound = notification_enabled(rule) ? std::optional<bool>(notification_sound(rule)) : std::nullopt;
+        rooms.insert_or_assign(rule.rule_id, choices);
+      }
+    if (rules.override_)
+      for (const auto& rule : *rules.override_) {
+        if (!rule.enabled || notification_enabled(rule) || !rule.conditions) continue;
+        for (const auto& condition : *rule.conditions)
+          if (condition.kind == "event_match" && condition.key == "room_id" && condition.pattern &&
+              rule.conditions->size() == 1) {
+            mux::notification_choices choices;
+            choices.on = false;
+            rooms.insert_or_assign(*condition.pattern, choices);
+          }
+      }
+    if (rules.override_)
+      for (const auto& rule : *rules.override_) {
+        if (!rule.enabled || !rule.conditions || !rule.rule_id.starts_with("net.mux.room.sound.")) continue;
+        for (const auto& condition : *rule.conditions)
+          if (condition.kind == "event_match" && condition.key == "room_id" && condition.pattern)
+            rooms[*condition.pattern].sound = notification_sound(rule);
+      }
+    for (const auto& room : notification_rooms_)
+      if (!rooms.contains(room)) {
+        mux::notification_choices choices;
+        choices.on.reset(); choices.mentions.reset(); choices.sound.reset();
+        if (!pending_notifications_.contains(room)) sink_(change::notifications_changed{id_, room, choices});
+      }
+    notification_rooms_.clear();
+    for (const auto& [room, choices] : rooms) {
+      notification_rooms_.insert(room);
+      if (!pending_notifications_.contains(room)) sink_(change::notifications_changed{id_, room, choices});
+    }
+  }, [](const auto&) {}}, event.content.data());
+}
+
 template <class Sink>
 void account<Sink>::tell(const loom::cs::sync::response& got) {
+  if (got.account_data && got.account_data->events)
+    for (const auto& event : *got.account_data->events) receive_notifications(event);
+  flush_notifications();
   // Presence: each m.presence is sent by the user it is about.
   if (got.presence && got.presence->events)
     for (const auto& event : *got.presence->events)

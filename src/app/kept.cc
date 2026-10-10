@@ -321,8 +321,6 @@ struct kept_settings {
   struct notify_decision {
     bool popup = false;
     bool sound = false;
-    bool show_name = true;
-    bool show_text = true;
   };
   // A chat's own notification choices -- or a space's -- as chosen for it:
   // muted is notifications off.
@@ -355,9 +353,7 @@ struct kept_settings {
     if (!this->notify_value(chat, setting::on{}) || (this->notify_value(chat, setting::mentions{}) && !mentions_me))
       return {};
     return {.popup = true,
-            .sound = this->notify_value(chat, setting::sound{}),
-            .show_name = this->notify_value(chat, setting::name{}),
-            .show_text = this->notify_value(chat, setting::text{})};
+            .sound = this->notify_value(chat, setting::sound{})};
   }
 
   // Which room events a chat shows, kind by kind: its own choices, its
@@ -427,6 +423,7 @@ struct kept_settings {
     const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
     const auto history_read = saved.history.value_or(mux::config::history_settings{});
     const auto proxies_read = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
+    looks_read.style = saved.style.value_or(mux::config::style_settings{});
     const auto notifications_read = saved.notifications.value_or(mux::config::notification_settings{});
     for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
       chats[chat_of(one.account, one.conversation)].notify = mux::config::notify_choices{
@@ -435,11 +432,10 @@ struct kept_settings {
                                                            [](mux::config::notify_mode::all) { return std::optional<bool>(false); },
                                                            [](const auto&) { return std::optional<bool>(); }},
                                         one.mode.value_or(mux::config::notify_mode_t{mux::config::notify_mode::by_default{}})),
-              .name = one.name,
-              .text = one.text,
               .sound = one.sound};
     for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{})) {
       auto& chosen = chats[chat_of(one.account, one.conversation)];
+      chosen.style = one.style;
       chosen.room_events = one.show;
       chosen.room_event_kinds = one.kinds;
       chosen.receipts = one.receipts;
@@ -541,6 +537,7 @@ struct kept_settings {
     out.cache = this->limits();
     out.sending = this->sending();
     out.history = this->history();
+    out.style = this->appearance().style;
     out.notifications = this->notifications();
     std::vector<mux::config::chat_notify> notify;
     std::vector<mux::config::room_events_choice> choices;
@@ -557,8 +554,6 @@ struct kept_settings {
                                         : mux::config::notify_mode_t{mux::config::notify_mode::all{}};
                           }),
                           .on = own.on,
-                          .name = own.name,
-                          .text = own.text,
                           .sound = own.sound});
       if (chosen.muted)
         muted.push_back({chat.account.address, chat.id});
@@ -576,7 +571,8 @@ struct kept_settings {
           .forum = chosen.forum ? std::optional<bool>(true) : std::nullopt,
           .hide_from_home = chosen.hidden_from_home ? std::optional<bool>(true) : std::nullopt,
           .bubbles = chosen.bubbles.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
-          .panels = chosen.panels.transform([](const auto& look) { return std::string(mux::config::word_of(look)); })};
+          .panels = chosen.panels.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
+          .style = chosen.style};
       if (one != mux::config::room_events_choice{.account = one.account, .conversation = one.conversation})
         choices.push_back(one);
     }

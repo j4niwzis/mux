@@ -6,6 +6,8 @@
 // sent and acknowledged; a later sync; stopped.
 import std;
 import mux.vault;
+import knot;
+import loom.ev;
 import splice;
 import mux.core;
 import mux.net;
@@ -376,3 +378,33 @@ TEST(Matrix, MediaFallsBackToOriginalsAndReusesUploads) {
 }
 
 }  // namespace
+
+TEST(Matrix, PushRulesUpdateAccountAndRoomPreferencesWithoutEchoingPendingEdits) {
+  mux::net::loop running;
+  auto tls = mux::net::client_tls();
+  std::vector<mux::change::notifications_changed> changes;
+  const auto sink = [&](mux::change_t event) {
+    spl::visit(spl::overloaded{[&](const mux::change::notifications_changed& now) { changes.push_back(now); },
+        [](const auto&) {}}, event);
+  };
+  mux::proto::matrix::client::account account(running, tls,
+      mux::proto::matrix::client::settings{.user_id = "@alice:example.org"}, sink);
+  const auto event = knot::try_read<loom::ev::account_data_event>(R"({"type":"m.push_rules","content":{"global":{
+    "override":[{"rule_id":".m.rule.master","default":true,"enabled":false,"actions":[]}],
+    "underride":[{"rule_id":".m.rule.message","default":true,"enabled":false,"actions":["notify"]}],
+    "room":[{"rule_id":"!room:example.org","default":false,"enabled":true,"actions":[]}]}}})");
+  ASSERT_TRUE(event);
+  account.receive_notifications(*event);
+  ASSERT_EQ(changes.size(), 2u);
+  EXPECT_EQ(changes.front().by.address, "@alice:example.org");
+  EXPECT_EQ(changes.front().choices.on, true);
+  EXPECT_EQ(changes.front().choices.mentions, true);
+  EXPECT_EQ(changes.back().room, "!room:example.org");
+  EXPECT_EQ(changes.back().choices.mentions, true);
+  EXPECT_FALSE(changes.back().choices.sound.has_value());
+  account.set_notifications("!room:example.org", {false, false, false}, {false, false, false});
+  changes.clear();
+  account.receive_notifications(*event);
+  ASSERT_EQ(changes.size(), 1u);
+  EXPECT_FALSE(changes.front().room.has_value());
+}

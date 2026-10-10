@@ -582,6 +582,36 @@ inline widgets::Theme widget_theme_of(config::theme::night) {
   }
   return out;
 }
+inline void apply_theme(palette& out, const config::custom_theme& custom) {
+  if (custom.background) out.background = *custom.background;
+  if (custom.sidebar) out.sidebar = *custom.sidebar;
+  if (custom.chosen) out.chosen = *custom.chosen;
+  if (custom.text) out.text = *custom.text;
+  if (custom.dim) out.dim = *custom.dim;
+  if (custom.accent) out.accent = *custom.accent;
+  if (custom.error) out.error = *custom.error;
+  if (custom.selected) out.selected = *custom.selected;
+  if (custom.selected_text) out.selected_text = *custom.selected_text;
+  if (custom.band) out.band = *custom.band;
+  if (custom.section) out.section = *custom.section;
+  if (custom.tile) out.tile = *custom.tile;
+  if (custom.sent_time) out.sent_time = *custom.sent_time;
+  if (custom.bubble) out.bubble = *custom.bubble;
+  if (custom.out_bubble) out.out_bubble = *custom.out_bubble;
+  if (custom.chat) out.chat = *custom.chat;
+  if (custom.chat_top) out.chat_top = *custom.chat_top;
+  if (custom.pattern) out.pattern = *custom.pattern;
+  if (custom.on_accent) out.on_accent = *custom.on_accent;
+  out.widgets.fSurface = out.sidebar;
+  out.widgets.fSurfaceHover = out.chosen;
+  out.widgets.fSurfaceActive = out.chosen;
+  out.widgets.fText = out.text;
+  out.widgets.fLabel = out.text;
+  out.widgets.fTextDim = out.dim;
+  out.widgets.fTextFaint = out.dim;
+  out.widgets.fAccent = out.accent;
+  out.widgets.fOnAccent = out.on_accent;
+}
 // skiff's scroll bars, as the theme has them.
 inline void use_scroll_bars(const config::theme_t& chosen) {
   const bool light = spl::visit([](auto one) { return one.light; }, chosen);

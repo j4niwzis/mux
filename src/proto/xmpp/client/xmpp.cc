@@ -259,6 +259,15 @@ class account {
     loop_->spawn([this] { run(); });
   }
 
+  // XEP-0492 stores a room's mode inside its private bookmark. Account
+  // defaults and sounds have no standard shared representation in XMPP.
+  void set_notifications(std::optional<std::string> room, notification_choices choices, notification_choices effective) {
+    if (!room || (!bookmarks_.contains(*room) && !rooms_.contains(*room))) return;
+    pending_notifications_.insert_or_assign(*room, tern::notifications::decision{
+        effective.on.value_or(true), effective.mentions.value_or(false)});
+    flush_notifications();
+  }
+
   // What an account of another protocol does and this does not -- avatars
   // (XEP-0084), reactions (XEP-0444), chat states (XEP-0085), files (HTTP
   // upload, XEP-0363), stickers, threads, pins, link previews,
@@ -839,6 +848,7 @@ class account {
     } else {
       log(id_, "no bookmarks");
     }
+    flush_notifications();
     // Restore every room joined here, including rooms whose bookmark could
     // not be saved. Drop occupants from the previous connection.
     std::ranges::for_each(rooms_, [](auto& entry) { entry.second.occupants.clear(); });
@@ -881,6 +891,17 @@ class account {
 
   // A room, as its bookmark says: in the list, and joined where it says to.
   void bookmarked(const std::string& jid, const tern::bookmarks::conference& mark) {
+    bookmarks_.insert_or_assign(jid, mark);
+    notification_choices choices;
+    if (mark.extensions)
+      for (const auto& child : mark.extensions->children)
+        spl::visit(spl::overloaded{[&](const tern::notifications::notify& notify) {
+          if (const auto chosen = tern::notifications::selected(notify)) {
+            choices.on = chosen->on;
+            choices.mentions = chosen->mentions;
+          }
+        }, [](const auto&) {}}, child.data());
+    if (!pending_notifications_.contains(jid)) sink_(change::notifications_changed{id_, jid, choices, false});
     sink_(change::conversation_updated{.id = {id_, jid},
                                        .kind = conversation_kind::group{},
                                        .name = mark.name.value_or(jid)});
@@ -929,7 +950,23 @@ class account {
   // not the conversation's.
   void on_message(const proto::message::chat& got) { this->text_message(got); }
   void on_message(const proto::message::normal& got) {
+    bookmark_event(got);
     if (!this->invitation_message(got)) this->text_message(got);
+  }
+  void on_message(const proto::message::headline& got) { bookmark_event(got); }
+  template <class Message> void bookmark_event(const Message& got) {
+    if (!got.from || bare(*got.from) != id_.address) return;
+    for (const auto& child : got.payload)
+      spl::visit(spl::overloaded{[&](const tern::bookmarks::event& event) {
+        if (!event.items || event.items->node != tern::bookmarks::bookmarks_namespace) return;
+        for (const auto& item : event.items->items)
+          spl::visit(spl::overloaded{[&](const tern::bookmarks::published& item) {
+            if (item.conference) bookmarked(item.id, *item.conference);
+          }, [&](const tern::bookmarks::retracted& item) {
+            bookmarks_.erase(item.id);
+            sink_(change::notifications_changed{id_, item.id, {}, false});
+          }}, item.data());
+      }, [](const auto&) {}}, child.data());
   }
   void on_message(const proto::message::error& got) {
     for (const auto& carried : got.payload)
@@ -1017,15 +1054,54 @@ class account {
   }
 
   struct room_creation { std::string name, topic; bool open = false; };
+  void flush_notifications() {
+    if (!session_ || notifications_busy_ || pending_notifications_.empty()) return;
+    notifications_busy_ = true;
+    this->spawn_guarded([this] {
+      struct finished { bool& busy; ~finished() { busy = false; } } done{notifications_busy_};
+      while (session_ && !pending_notifications_.empty()) {
+        const auto [room, wanted] = *pending_notifications_.begin();
+        if (!bookmarks_.contains(room) && !rooms_.contains(room)) { pending_notifications_.erase(room); continue; }
+        auto conference = bookmarks_.contains(room) ? bookmarks_.at(room) : tern::bookmarks::conference{
+            .name = room, .autojoin = "true", .nick = rooms_.at(room).nick};
+        if (!conference.extensions) conference.extensions.emplace();
+        auto& children = conference.extensions->children;
+        auto found = std::ranges::find_if(children, [](const auto& child) {
+          return child.template is<tern::notifications::notify>();
+        });
+        if (found == children.end()) {
+          children.emplace_back(tern::notifications::notify{});
+          found = std::prev(children.end());
+        }
+        const auto previous = tern::notifications::selected(found->template as<tern::notifications::notify>());
+        if (previous && previous->on == wanted.on && previous->mentions == wanted.mentions) {
+          pending_notifications_.erase(room);
+          continue;
+        }
+        tern::notifications::choose(found->template as<tern::notifications::notify>(), wanted);
+        const auto saved = session_->template try_request<tern::query::bookmark_save>({.query = {
+            .publish = {.item = {.id = room, .conference = conference}}}});
+        if (!saved) {
+          sink_(change::notice{id_, "Notifications", "The server could not save the room's notification mode."});
+          return; // Retain the latest edit for the next connection.
+        }
+        bookmarks_.insert_or_assign(room, std::move(conference));
+        const auto current = pending_notifications_.find(room);
+        if (current != pending_notifications_.end() && current->second.on == wanted.on && current->second.mentions == wanted.mentions)
+          pending_notifications_.erase(current);
+      }
+    });
+  }
   void save_room(std::string room, std::string name) {
     this->spawn_guarded([this, room = std::move(room), name = std::move(name)] {
       if (!session_) return;
+      auto conference = bookmarks_.contains(room) ? bookmarks_.at(room) : tern::bookmarks::conference{};
+      conference.name = name; conference.autojoin = "true"; conference.nick = user_;
       const auto info = session_->template try_request<tern::query::disco_info>({.to = id_.address});
       if (!info || !std::ranges::contains(info->features, std::string_view("http://jabber.org/protocol/pubsub#publish-options"),
                                          &tern::disco::feature::var) || !session_ ||
           !session_->template try_request<tern::query::bookmark_save>({.query = {
-              .publish = {.item = {.id = room, .conference = tern::bookmarks::conference{
-                  .name = name, .autojoin = "true", .nick = user_}}}}}))
+              .publish = {.item = {.id = room, .conference = conference}}}}))
         sink_(change::notice{id_, "Room bookmark", "The room is open, but the server could not save its private bookmark for reconnecting."});
     });
   }
@@ -1175,6 +1251,9 @@ class account {
     std::map<std::string, member> occupants;
   };
   std::map<std::string, room> rooms_;
+  std::map<std::string, tern::bookmarks::conference> bookmarks_;
+  std::map<std::string, tern::notifications::decision> pending_notifications_;
+  bool notifications_busy_ = false;
   std::map<std::string, room_creation> creating_;
   std::set<std::string> joining_;
   struct pending_invitation { std::string inviter; std::optional<std::string> password; };

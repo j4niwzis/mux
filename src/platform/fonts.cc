@@ -31,6 +31,8 @@ constexpr unsigned char open_sans_semibold[] = {
 }  // namespace mux::platform::fonts::shipped
 
 export namespace mux::platform::fonts {
+inline skia::Sp<skia::SkFontMgr> installed_manager;
+inline skia::Sp<skia::SkTypeface> default_monospace;
 
 // Open Sans, shipped, as Telegram Desktop's text is: regular, and semibold
 // for what is bold -- two faces, not one thickened. The system's fonts are
@@ -68,12 +70,14 @@ inline void load_fonts(const std::string& directory, skia::SkFont& font) {
   if (auto emoji = shipped_face(mux_noto_color_emoji, mux_noto_color_emoji_size))
     skiff::paint::fonts().addFallback(std::move(emoji));
   // Where a character no face loaded here has is looked for: the system's.
+  installed_manager = manager;
   skiff::paint::fonts().setFontManager(manager);
   // Code in a monospace face of the system's, as Telegram draws it: the
   // first of the usual ones that is there.
   for (const char* family : {"DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono", "Ubuntu Mono", "JetBrains Mono",
                              "Fira Mono", "Source Code Pro", "Cascadia Mono", "Consolas", "Menlo", "Courier New"})
     if (auto face = manager->matchFamilyStyle(family, skia::SkFontStyle())) {
+      default_monospace = face;
       skiff::paint::fonts().setMonospace(std::move(face));
       break;
     }
@@ -90,6 +94,34 @@ inline void load_fonts(const std::string& directory, skia::SkFont& font) {
     if (auto face = manager->matchFamilyStyleCharacter(nullptr, skia::SkFontStyle(), nullptr, 0, sample))
       skiff::paint::fonts().addFallback(std::move(face));
   }
+}
+
+inline bool select_fonts(std::string_view regular, std::string_view monospace) {
+  auto manager = installed_manager;
+  if (!manager) return regular.empty() && monospace.empty();
+  const auto face_for = [&](std::string_view name) {
+    const std::string named(name);
+    std::error_code error;
+    if (std::filesystem::is_regular_file(std::filesystem::path(named), error))
+      return manager->makeFromFile(named.c_str());
+    for (int index = 0; index < manager->countFamilies(); ++index) {
+      skia::SkString family;
+      manager->getFamilyName(index, &family);
+      if (named == family.c_str()) return manager->matchFamilyStyle(named.c_str(), skia::SkFontStyle());
+    }
+    return skia::Sp<skia::SkTypeface>{};
+  };
+  auto primary = regular.empty() ? manager->makeFromData(skia::SkData::MakeWithoutCopy(
+      shipped::open_sans_regular, sizeof shipped::open_sans_regular)) : face_for(regular);
+  auto code = monospace.empty() ? default_monospace : face_for(monospace);
+  if (!primary || (!monospace.empty() && !code)) return false;
+  if (regular.empty()) {
+    auto bold = manager->makeFromData(skia::SkData::MakeWithoutCopy(shipped::open_sans_semibold, sizeof shipped::open_sans_semibold));
+    skiff::paint::fonts().setPrimary(primary, std::move(bold));
+  } else skiff::paint::fonts().setPrimary(primary);
+  skiff::paint::fonts().setMonospace(std::move(code));
+  if (auto* font = skiff::paint::defaultFont()) font->setTypeface(std::move(primary));
+  return true;
 }
 
 }  // namespace mux::platform::fonts

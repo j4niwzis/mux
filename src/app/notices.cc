@@ -18,6 +18,7 @@ import mux.platform.push;
 import mux.app.network;
 import mux.app.services;
 import mux.app.requests;
+import splice.bytes;
 
 export namespace mux::app {
 
@@ -26,6 +27,38 @@ class notices_part {
   explicit notices_part(services& shared) : s_(&shared) {}
   notices_part(const notices_part&) = delete;
   notices_part& operator=(const notices_part&) = delete;
+
+  void receive(const mux::change::notifications_changed& now) {
+    const auto& p = now.choices;
+    if (now.room) {
+      const mux::conversation_id in{now.by, *now.room};
+      auto choices = s_->kept->own_of<&mux::config::chat_choices::notify>(in);
+      choices.on = p.on; choices.mentions = p.mentions;
+      if (now.sound_shared) choices.sound = p.sound;
+      s_->kept->choose<&mux::config::chat_choices::notify>(in, choices);
+      s_->kept->choose<&mux::config::chat_choices::muted>(in, p.on == false);
+    } else s_->kept->change_account(now.by.address, [&](auto& account) {
+      account.shared.notify = p.on;
+      account.shared.notify_mentions = p.mentions;
+      if (now.sound_shared) account.shared.notify_sound = p.sound;
+    });
+    remembered_.insert_or_assign({now.by, now.room}, current(now.by, now.room));
+  }
+  // Compare saved preferences, rather than the selected account. Incoming
+  // updates establish the baseline before this runs, so they are not echoed.
+  void sync_choices() {
+    for (const auto& account : s_->kept->accounts().values()) {
+      const auto by = kept_settings::id_of(account);
+      sync_one(by, std::nullopt);
+    }
+    for (const auto& account : s_->model->accounts().values())
+      for (const auto& chat : account.conversations.values()) sync_one(chat.id.account, chat.id.id);
+    for (const auto& in : s_->kept->state.root().chats.keys()) sync_one(in.account, in.id);
+    for (auto& [key, previous] : remembered_)
+      if (key.second && !s_->kept->state.root().chats.find(mux::conversation_id{key.first, *key.second}))
+        sync_one(key.first, key.second);
+    seeded_ = true;
+  }
 
   // A notification mux shows itself, in a window of its own: for the host.
   struct toast_due {
@@ -57,12 +90,12 @@ class notices_part {
     }
     const mux::conversation* chat = s_->model->find(said.in);
     std::string title = "mux";
-    if (decision.show_name && chat) {
+    if (chat) {
       const std::string who = mux::ui::sender_name(*chat, said.sender);
       title = mux::ui::is_group(*chat) ? std::format("{} ({})", who, mux::ui::display_name(*chat)) : who;
     }
     std::string text = "New message";
-    if (decision.show_text) {
+    {
       text = said.body.plain.empty() && said.attachment ? std::string("Picture or file") : said.body.plain;
       if (text.size() > 300) {
         // Cut where a character starts: half of one is not UTF-8, and the bus
@@ -163,10 +196,50 @@ class notices_part {
   }
 
  private:
+  struct preference_pair {
+    mux::notification_choices own, effective;
+    friend bool operator==(const preference_pair&, const preference_pair&) = default;
+  };
+  preference_pair current(const mux::account_id& by, const std::optional<std::string>& room) const {
+    const auto* account = s_->kept->settings_of(by.address);
+    mux::notification_choices own;
+    if (account) {
+      const auto& p = account->shared;
+      own = {p.notify, p.notify_mentions, p.notify_sound};
+    }
+    const auto& all = s_->kept->notifications();
+    mux::notification_choices effective{own.on.value_or(all.desktop), own.mentions.value_or(all.mentions_only.value_or(false)),
+        own.sound.value_or(all.sound)};
+    if (room) {
+      const mux::conversation_id in{by, *room};
+      const auto p = s_->kept->own_of<&mux::config::chat_choices::notify>(in);
+      own = {p.on, p.mentions, p.sound};
+      const auto muted = s_->kept->own_of<&mux::config::chat_choices::muted>(in);
+      if (muted) own.on = false;
+      effective = {s_->kept->notify_value(in, mux::config::notify_setting::on{}),
+          s_->kept->notify_value(in, mux::config::notify_setting::mentions{}),
+          s_->kept->notify_value(in, mux::config::notify_setting::sound{})};
+    }
+    return {own, effective};
+  }
+  void sync_one(const mux::account_id& by, const std::optional<std::string>& room) {
+    const auto now = current(by, room);
+    const auto [at, first] = remembered_.try_emplace(std::pair{by, room}, now);
+    if ((!first && at->second != now) || (first && seeded_ && now.own != mux::notification_choices{})) {
+      at->second = now;
+      s_->net->set_notifications(by, room, now.own, now.effective);
+    }
+  }
+  bool seeded_ = false;
+  std::map<std::pair<mux::account_id, std::optional<std::string>>, preference_pair> remembered_;
+
   // Shown by the backend chosen: the system's service, asked off the UI's
   // thread, with the system's own sound -- the user's, by default (#16873);
   // or mux's own window, with the chime.
   void show(const mux::conversation_id& in, std::string title, std::string text, bool sound) {
+    const auto& chosen = s_->kept->notifications().sound_file;
+    const bool custom = sound && chosen && !chosen->empty();
+    if (custom) { this->sound_only(true); sound = false; }
     spl::visit(spl::overloaded{[&](mux::config::notify_backend::native) {
                                        std::thread([title, text, sound] {
                                          if (!mux::platform::notifications::notify(title, text, sound))
@@ -182,8 +255,18 @@ class notices_part {
   }
   // A sound with nothing shown, or with mux's own window: the chime.
   void sound_only(bool sound) {
-    if (sound)
-      chime_.play();
+    if (!sound) return;
+    const auto& chosen = s_->kept->notifications().sound_file;
+    if (chosen && !chosen->empty()) {
+      if (sound_path_ != *chosen) {
+        sound_path_ = *chosen;
+        const auto bytes = spl::bytes::file_text(sound_path_);
+        custom_sound_ = bytes ? mux::platform::audio::decode(*bytes) : std::nullopt;
+        if (!custom_sound_) s_->notice("Notification sound", "The selected Ogg sound could not be loaded. Using the default chime.");
+      }
+      if (custom_sound_) { sound_player_.play("notification", *custom_sound_); return; }
+    }
+    chime_.play();
   }
   void show_page() {
     if (auto* up = s_->root().settings_up())
@@ -215,6 +298,9 @@ class notices_part {
   mux::logic::notification_history messages_;
   std::set<mux::conversation_id> invites_told_;
   mux::platform::audio::chime chime_;
+  mux::platform::audio::speaker sound_player_;
+  std::string sound_path_;
+  std::optional<mux::platform::audio::pcm> custom_sound_;
   std::shared_ptr<push_inbox> push_box_ = std::make_shared<push_inbox>();
   std::shared_ptr<std::atomic<bool>> push_forget_;
   std::jthread push_thread_;

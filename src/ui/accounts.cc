@@ -159,66 +159,45 @@ struct switch_row : skiff::compose::Stacked {
               .toggle = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(what)))} {}
 };
 
-// A page of an account's settings chosen from its list.
+struct account_page_link {
+  std::string title;
+  account_page_t page;
+  icon_t icon;
+};
+inline auto account_page_row(const palette& colours, account_page_link link, const account_page_t& selected) {
+  namespace c = skiff::compose;
+  const bool lit = link.page.index() == selected.index();
+  return c::onClick(request::account_page{std::move(link.page)}, c::row(
+      c::hbox(17.0f, {.fillX = true, .height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
+          .hoverBackground = colours.chosen, .selectedBackground = colours.chosen,
+          .focusBackground = colours.chosen, .selected = lit}),
+      c::styled({.alignSelf = scene::align::kMiddle}, icon_mark(colours, link.icon, 24.0f, 24.0f)),
+      c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+          elided(nodes::Text(std::move(link.title), 15.0f, colours.text)))));
+}
+inline auto account_pages_view(const palette& colours, const protocol_state_t& state, const account_page_t& selected) {
+  namespace c = skiff::compose;
+  std::vector<account_page_link> links{
+      {"Connection", account_page::connection{}, icon::sliders{}},
+      {"Privacy", account_page::privacy{}, icon::eye{}},
+      {"Notifications", account_page::notifications{}, icon::bell{}},
+      {"Appearance", account_page::appearance{}, icon::gear{}},
+      {"Chats", account_page::chats{}, icon::people{}}};
+  auto own = spl::visit([](const auto& now) {
+    return []<class... Pages>(proto::account_page_list<Pages...>) {
+      return std::vector<account_page_link>{{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...};
+    }(proto::account_pages_of(now));
+  }, state);
+  auto groups = std::array{std::move(links), std::move(own),
+      std::vector<account_page_link>{{"Proxy", account_page::proxy{}, icon::gear{}}}};
+  auto rows = std::ranges::to<std::vector>(std::views::transform(std::views::join(groups), [&](auto link) {
+    return account_page_row(colours, std::move(link), selected);
+  }));
+  return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 0.0f, 0.0f}}), std::move(rows));
+}
 template <class Actions>
-struct choose_account_page {
-  using Answer = ::mux::ui::request::account_page;
-  account_page_t page = account_page::connection{};
-  ::mux::ui::request::account_page operator()() { return ::mux::ui::request::account_page{page}; }
-};
-
-// An account's pages, in place of the list of accounts once one is chosen: a
-// line for each page of its settings, the one shown lit -- the client's, and
-// after Chats its protocol's own.
-template <class Actions> struct account_pages : skiff::compose::Stacked {
-  using row = row_item<choose_account_page<Actions>>;
-  // The colours its protocol's rows are made in, as they change.
-  const palette* colours_ = nullptr;
-  struct parts_t {
-    row connection;
-    row privacy;
-    row notifications;
-    row chats;
-    std::vector<row> own;  // its protocol's, as it lists them
-    row proxy;
-  } parts;
-
-  account_pages(const palette &colours)
-      : Stacked(
-            skiff::compose::vbox(0.0f, {.padding = {6.0f, 0.0f, 0.0f, 0.0f}})),
-        colours_(&colours),
-        parts{
-            .connection = row(colours, "Connection",
-                              {account_page::connection{}}, icon::sliders{}),
-            .privacy =
-                row(colours, "Privacy", {account_page::privacy{}}, icon::eye{}),
-            .notifications = row(colours, "Notifications",
-                                 {account_page::notifications{}}, icon::bell{}),
-            .chats =
-                row(colours, "Chats", {account_page::chats{}}, icon::people{}),
-            .proxy =
-                row(colours, "Proxy", {account_page::proxy{}}, icon::gear{})} {
-    this->light(account_page::connection{});
-  }
-  // A protocol's pages: each its title and icon, by its own overloads.
-  template <class... Pages>
-  void add(proto::account_page_list<Pages...>) {
-    (parts.own.emplace_back(*colours_, std::string(page_title(Pages{})), choose_account_page<Actions>{account_page_t{Pages{}}},
-                            page_icon(Pages{})),
-     ...);
-  }
-  // The rows of the chosen account's protocol.
-  void show_for(const protocol_state_t& state) {
-    parts.own.clear();
-    spl::visit([&](const auto& now) { this->add(proto::account_pages_of(now)); }, state);
-    this->invalidateLayout();
-  }
-  void light(const account_page_t& page) {
-    const auto lit = [&](row& one) { one.set_lit(one.act.page.index() == page.index()); };
-    std::ranges::for_each(std::array{&parts.connection, &parts.privacy, &parts.notifications, &parts.chats, &parts.proxy}, [&](row* one) { lit(*one); });
-    std::ranges::for_each(parts.own, lit);
-  }
-};
+using account_pages = decltype(account_pages_view(std::declval<const palette&>(), std::declval<const protocol_state_t&>(),
+    std::declval<const account_page_t&>()));
 
 // A section's title on a settings page, as Gajim sets them: small, bold, dim.
 inline nodes::Text section_title(const palette& colours, std::string text) {
@@ -331,6 +310,14 @@ template <class Actions> struct account_privacy : skiff::compose::Stacked {
   void say(std::string, bool) {}
 };
 
+inline auto account_appearance_view(const palette& colours, std::string address) {
+  namespace c = skiff::compose;
+  return c::scoped<config::account_t>(c::handlers(), c::column(
+      c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      section_title(colours, "APPEARANCE"), style_controls(colours)), std::move(address));
+}
+using account_appearance_t = decltype(account_appearance_view(std::declval<const palette&>(), std::string()));
+
 // An account's notification rows, bound to the account's own choices in the model, under a scope
 // at the account.
 inline auto account_notify_view(const palette& colours, std::string address) {
@@ -343,8 +330,6 @@ inline auto account_notify_view(const palette& colours, std::string address) {
           skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           bound<skiff::model::Field<&shared::notify>>(show_hide_field<notify_on_setting, std::optional<bool>, skiff::model::Field<&shared::notify>>(colours, level)),
           bound<skiff::model::Field<&shared::notify_mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>, skiff::model::Field<&shared::notify_mentions>>(colours, level)),
-          bound<skiff::model::Field<&shared::notify_name>>(show_hide_field<notify_name_setting, std::optional<bool>, skiff::model::Field<&shared::notify_name>>(colours, level)),
-          bound<skiff::model::Field<&shared::notify_text>>(show_hide_field<notify_text_setting, std::optional<bool>, skiff::model::Field<&shared::notify_text>>(colours, level)),
           bound<skiff::model::Field<&shared::notify_sound>>(show_hide_field<notify_sound_setting, std::optional<bool>, skiff::model::Field<&shared::notify_sound>>(colours, level))),
       std::move(address));
 }
@@ -521,6 +506,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   static constexpr float kListWidth = 280.0f;
 
   std::optional<std::string> selected;
+  protocol_state_t pages_state;
   // The proxy profiles, for adding an account through one.
   std::vector<config::proxy_settings> proxies;
 
@@ -556,7 +542,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
                                             .width = kListWidth,
                                             .background = colours.sidebar})),
             parts{.add = add_row(colours, "Add account", {}, icon::plus{}),
-                  .pages = account_pages<Actions>(colours),
+                  .pages = account_pages_view(colours, protocol_state_t{}, account_page::connection{}),
                   .message = nodes::Text("", 13.0f, colours.error)} {
         pages.setVisible(false);
         pages.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -569,7 +555,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
     // The client's pages, then each protocol's own: made by its page_type.
     using detail_t = typename variant_of_types<typename joined<
         type_list<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>, account_proxy<Actions>,
-                  account_chats<Actions>, account_notifications<Actions>>,
+                  account_chats<Actions>, account_notifications<Actions>, account_appearance_t>,
         typename page_nodes<typename protocol_account_pages<protocols>::type>::type>::type>::type;
     struct detail_column : skiff::compose::Stacked {
       // No account chosen, or the chosen one, or adding one.
@@ -736,7 +722,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   template <class Asked>
   void show_page(const account_page_t& page, const config::account_t& one, const model& now,
                  const std::vector<config::proxy_settings>& proxies, const config::theme_t& theme, const Asked& asked) {
-    pages.light(page);
+    pages = account_pages_view(*needs_.colours, pages_state, page);
     this->show_detail(true);
     spl::visit(
         spl::overloaded{
@@ -765,6 +751,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
                                          config::home_hides_of(one), config::home_direct_of(one), config::colour_of(one),
                                          config::strip_of(one), theme);
             },
+            [&](account_page::appearance) { detail.template emplace<account_appearance_t>(account_appearance_view(*needs_.colours, config::address_of(one))); },
             [&](account_page::proxy) { detail.template emplace<4>(*needs_.colours, proxies, config::proxy_of(one)); },
             // A protocol's own: its node, made for the program's actions.
             [&]<class Page>(Page) {
@@ -817,7 +804,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
     add.set_lit(false);
     selected = config::address_of(one);
     const std::string& address = config::address_of(one);
-    pages.show_for(protocol_state_of(*needs_.shared, account_id{protocol_of(address), address}));
+    pages_state = protocol_state_of(*needs_.shared, account_id{protocol_of(address), address});
     this->show_pages(true);
     this->show_page(account_page::connection{}, one, now);
     // Narrow: its settings -- its pages -- first, not the first of them.

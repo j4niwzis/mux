@@ -13,6 +13,7 @@ import skiff.model;
 import skiff.widgets.motion;
 import mux.core;
 import mux.config;
+import mux.kept_root;
 import mux.ui;
 import mux.protocols;
 import mux.logic.room_events;
@@ -2692,4 +2693,24 @@ TEST(Search, WindowWantsEmitAccountScopedRequests) {
   request = std::get_if<mux::ui::request::search_elsewhere>(&effects.front());
   ASSERT_NE(request, nullptr);
   EXPECT_FALSE(request->by.has_value());
+}
+
+TEST(Appearance, RoomStylesUseTheirOwnAccountAndNearestSpace) {
+  mux::kept_root kept;
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.org"};
+  const mux::account_id bob{mux::protocol::matrix{}, "@bob:example.org"};
+  const mux::conversation_id room{alice, "!room:example.org"}, space{alice, "!space:example.org"};
+  kept.looks.fValue.style = {.font = "Client font", .monospace = "Client code"};
+  kept.accounts.put(alice.address, mux::config::account_t{.shared = {.style = {.font = "Alice font"}}});
+  kept.accounts.put(bob.address, mux::config::account_t{.shared = {.style = {.font = "Bob font"}}});
+  kept.chats.put(space, mux::config::chat_choices{.style = {.theme = mux::config::theme::night{}}});
+  kept.chats.put(room, mux::config::chat_choices{.style = {.monospace = "Room code"}});
+  std::map<mux::conversation_id, mux::conversation_id> parents{{room, space}};
+  const mux::chat_settings reads{&kept, &parents};
+  const auto selected = reads.style_of(bob, room);
+  EXPECT_EQ(selected.font, "Alice font");
+  EXPECT_EQ(selected.monospace, "Room code");
+  EXPECT_EQ(selected.theme, std::optional<mux::config::theme_t>(mux::config::theme::night{}));
+  EXPECT_EQ(reads.style_of(bob, std::nullopt).font, "Bob font");
+  EXPECT_EQ(reads.style_of(std::nullopt, std::nullopt).font, "Client font");
 }

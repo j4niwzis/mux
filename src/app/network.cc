@@ -675,6 +675,12 @@ struct network {
             one.account);
     });
   }
+  void set_notifications(const mux::account_id& by, std::optional<std::string> room,
+                         mux::notification_choices choices, mux::notification_choices effective) {
+    this->on_account(by, [room, choices, effective](auto& account) -> decltype(void(account.set_notifications(room, choices, effective))) {
+      account.set_notifications(room, choices, effective);
+    });
+  }
   void verify_start(const mux::account_id& by, std::string user, std::optional<std::string> device) {
     this->on_account(by, [user = std::move(user), device = std::move(device)](auto& account) -> decltype(void(account.verify_start(user, device))) { account.verify_start(user, device); });
   }

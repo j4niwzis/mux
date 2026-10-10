@@ -150,6 +150,15 @@ class account {
   // the endpoint's own Matrix gateway where its push server has one -- once
   // logged in; none: forgotten here (the distributor drops it, and the
   // gateway refuses the server from then on).
+  void set_notifications(std::optional<std::string> room, mux::notification_choices choices, mux::notification_choices effective);
+  void receive_notifications(const loom::ev::account_data_event& event);
+  void flush_notifications();
+  bool save_notifications(std::optional<std::string> room, mux::notification_choices choices, mux::notification_choices effective);
+  struct notification_edit { mux::notification_choices own, effective; std::uint64_t revision; };
+  std::map<std::optional<std::string>, notification_edit> pending_notifications_;
+  std::uint64_t notification_revision_ = 0;
+  bool notifications_busy_ = false;
+  std::set<std::string> notification_rooms_;
   void set_pusher(std::optional<std::string> endpoint);
   // A push come: the long poll cut short, and the sync gone again at once.
   void sync_now();

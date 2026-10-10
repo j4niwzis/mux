@@ -383,8 +383,6 @@ inline auto chat_notify_view(const palette& colours, const conversation_id& chat
           skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           bound<config::chat_choices>(chat_on_field(colours)),
           bound<skiff::model::Field<&notify::mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>, skiff::model::Field<&notify::mentions>>(colours, level)),
-          bound<skiff::model::Field<&notify::name>>(show_hide_field<notify_name_setting, std::optional<bool>, skiff::model::Field<&notify::name>>(colours, level)),
-          bound<skiff::model::Field<&notify::text>>(show_hide_field<notify_text_setting, std::optional<bool>, skiff::model::Field<&notify::text>>(colours, level)),
           bound<skiff::model::Field<&notify::sound>>(show_hide_field<notify_sound_setting, std::optional<bool>, skiff::model::Field<&notify::sound>>(colours, level))),
       chat);
 }
@@ -409,6 +407,7 @@ inline auto room_general_page(const palette& colours, const room_settings_facts&
       c::visible(!proto::room_event_kinds_of(state_before(facts.speaks)).empty(),
           explained(colours, "Room events shown in this room, for you: As above follows the inherited settings.")),
       chat_settings_view(colours, facts.chat),
+      c::scoped<choices>(c::handlers(), style_controls(colours), facts.chat),
       c::visible(facts.space, c::scoped<choices>(c::handlers(),
           c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               part_heading(colours, "Shown as"),

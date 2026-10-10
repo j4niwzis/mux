@@ -28,6 +28,7 @@ struct room_events_choice {
   std::optional<bool> hide_from_home;  // a space: its rooms not in Home
   std::optional<std::string> bubbles;    // its bubbles, as word_of(bubble_look) says them
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
+  style_settings style;
   friend bool operator==(const room_events_choice&, const room_events_choice&) = default;
 };
 consteval auto json_schema(knot::type<room_events_choice>) { return knot::schema<room_events_choice>(); }
@@ -147,6 +148,7 @@ struct frame_settings {
 // a field, found in the model by its member pointer (Field<&chat_choices::
 // muted>); unsaid, as the level above.
 struct chat_choices {
+  style_settings style;
   bool muted = false;
   std::optional<bool> room_events;
   std::optional<room_event_kinds> room_event_kinds;
@@ -169,6 +171,7 @@ struct chat_choices {
 // opacity, scale and blur, the space bars and where each item is put, and
 // every chat's background, bubbles and panels.
 struct look_settings {
+  style_settings style;
   theme_t theme = theme::tinted{};
   accent_t accent = accent::theme_own{};
   renderer_t renderer = renderer::opengl{};
@@ -255,6 +258,7 @@ struct file {
   std::optional<std::vector<proxy_settings>> proxies;
   // The theme, "dark" or "light", and what draws the window, "opengl" or
   // "software". Nothing said is dark and OpenGL.
+  std::optional<style_settings> style;
   std::optional<theme_said_t> theme;
   std::optional<accent_said_t> accent;
   // Every chat's background, as word_of(wallpaper_t) says it; none, the theme's.

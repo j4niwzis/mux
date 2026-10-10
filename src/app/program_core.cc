@@ -140,6 +140,7 @@ void app::woken() {
                                  mux::ui::download_progress().insert_or_assign(how.source, how.done);
                                  scene.state().markDamaged();
                                },
+                                [&](const mux::change::notifications_changed& now) { notices.receive(now); },
                                // What an account's protocol is now: what is offered of it.
                                [&](const mux::change::protocol_state_changed& now) {
                                  shared.ui.protocol_states.insert_or_assign(now.account, now.now);
@@ -335,6 +336,7 @@ void app::show_looks() {
 // What the model's reactions asked for: the file written, UnifiedPush's
 // connector started or stopped; and the page up shown the model again.
 void app::settle_model() {
+  notices.sync_choices();
   for (const auto& effect : this->take_effects())
     std::visit(spl::overloaded{[&](const write_kept&) { (void)this->write(); },
                                [&](const looks_changed&) { this->show_looks(); },
@@ -487,6 +489,15 @@ void app::before_frame() {
   if (auto shown = root().emoji_pictures_shown(); shown != shared.ui.panel_pictures_shown) {
     shared.ui.panel_pictures_shown = std::move(shown);
     shared.ui.pictures_due = true;
+  }
+  const auto style = reads().style_of(root().main().current, root().main().chosen);
+  // Text fields save as they are edited; apply when the editor closes or
+  // its Apply button is pressed, so rebuilding cannot interrupt typing.
+  if ((!root().settings_up() && !root().manage_up() && !root().open_panel()) &&
+      (!active_style || *active_style != style)) {
+    active_style = style;
+    skiff::scene::forgetStyles();
+    shared.rebuild_due = true;
   }
   calls.tick();
   keep_selection(menu);

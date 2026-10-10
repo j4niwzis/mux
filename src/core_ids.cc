@@ -35,6 +35,12 @@ struct conversation_id {
   friend auto operator<=>(const conversation_id&, const conversation_id&) = default;
 };
 
+// Preferences shared with another client; transport and device tokens stay local.
+struct notification_choices {
+  std::optional<bool> on, mentions, sound;
+  friend bool operator==(const notification_choices&, const notification_choices&) = default;
+};
+
 namespace conversation_kind {
 struct direct {
   static constexpr bool one_to_one = true;

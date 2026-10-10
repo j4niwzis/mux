@@ -34,6 +34,7 @@ import loom.cs.content_repo;
 import loom.cs.authed_content_repo;
 import loom.cs.create_room;
 import loom.cs.account_data;
+import loom.cs.pushrules;
 import loom.cs.key_backup;
 import loom.cs.kicking;
 import loom.cs.banning;
@@ -354,6 +355,129 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
             }},
         change);
   });
+}
+
+// Sound actions are read once at the protocol boundary. Other tweaks stay
+// opaque and survive an edit, as do all unrelated push rules.
+struct sound_action {
+  std::string set_tweak;
+  std::optional<knot::raw> value;
+  knot::raw rest;
+  friend consteval auto json_schema(knot::type<sound_action>) { return knot::schema<sound_action>().member<"rest">(knot::rest); }
+};
+inline std::vector<knot::raw> with_sound(std::vector<knot::raw> actions, bool sound) {
+  std::erase_if(actions, [](const knot::raw& raw) {
+    const auto tweak = knot::try_read<sound_action>(raw.text);
+    return tweak && tweak->set_tweak == "sound";
+  });
+  if (sound) actions.push_back(knot::raw{R"({"set_tweak":"sound","value":"default"})"});
+  return actions;
+}
+template <class Sink>
+void account<Sink>::set_notifications(std::optional<std::string> room, mux::notification_choices choices,
+                                      mux::notification_choices effective) {
+  pending_notifications_.insert_or_assign(room, notification_edit{choices, effective, ++notification_revision_});
+  flush_notifications();
+}
+template <class Sink>
+void account<Sink>::flush_notifications() {
+  if (!api_ || notifications_busy_ || pending_notifications_.empty()) return;
+  notifications_busy_ = true;
+  this->spawn_guarded([this] {
+    struct finished { bool& busy; ~finished() { busy = false; } } done{notifications_busy_};
+    while (api_ && !pending_notifications_.empty()) {
+      const auto [room, edit] = *pending_notifications_.begin();
+      if (!save_notifications(room, edit.own, edit.effective)) {
+        sink_(change::notice{id_, "Notifications", "Some notification settings could not be saved on the server. They will be retried."});
+        return;
+      }
+      const auto current = pending_notifications_.find(room);
+      if (current != pending_notifications_.end() && current->second.revision == edit.revision)
+        pending_notifications_.erase(current);
+    }
+  });
+}
+template <class Sink>
+bool account<Sink>::save_notifications(std::optional<std::string> room, mux::notification_choices choices,
+                                       mux::notification_choices effective) {
+    using put = loom::cs::set_push_rule;
+    using enable = loom::cs::set_push_rule_enabled;
+    using remove = loom::cs::delete_push_rule;
+    bool success = true;
+    const auto actions = with_sound({knot::raw{R"("notify")"}}, effective.sound.value_or(true));
+    if (room) {
+      // The override is above mention rules, so a muted room stays muted.
+      const auto erase = [&](auto kind) {
+        const auto done = perform(*api_, remove{.kind = kind, .rule_id = *room});
+        if (!done && (!done.error().server || done.error().server->status != 404)) success = false;
+      };
+      // Mention and keyword rules precede room rules. Give their sound
+      // tweaks a room-scoped standard override without changing their match.
+      if (const auto rules = perform(*api_, loom::cs::get_push_rules_global{})) {
+        const std::string prefix = "net.mux.room.sound." + *room + ".";
+        if (rules->override_)
+          for (const auto& rule : *rules->override_)
+            if (rule.rule_id.starts_with(prefix)) {
+              const auto deleted = perform(*api_, remove{.kind = remove::kind_values::override_{}, .rule_id = rule.rule_id});
+              if (!deleted) success = false;
+            }
+        const bool own = choices.on || choices.mentions || choices.sound;
+        if (own && effective.on.value_or(true)) {
+          const auto shadow = [&](const auto& rules, bool content) {
+            if (!rules) return;
+            for (const auto& rule : *rules) {
+              const bool notifies = rule.enabled && std::ranges::any_of(rule.actions, [](const knot::raw& raw) {
+                const auto action = knot::try_read<std::string>(raw.text);
+                return action && *action == "notify";
+              });
+              if (!notifies || (!content && !rule.default_)) continue;
+              auto conditions = rule.conditions.value_or(std::vector<loom::def::push_condition_t>{});
+              if (content && rule.pattern) conditions.push_back({.kind = "event_match", .key = "content.body", .pattern = rule.pattern});
+              conditions.push_back({.kind = "event_match", .key = "room_id", .pattern = *room});
+              success = bool(perform(*api_, put{.kind = put::kind_values::override_{}, .rule_id = prefix + rule.rule_id,
+                  .after = ".m.rule.master", .body = {.actions = with_sound(rule.actions, effective.sound.value_or(true)),
+                  .conditions = std::move(conditions)}})) && success;
+            }
+          };
+          shadow(rules->override_, false);
+          shadow(rules->content, true);
+        }
+      } else success = false;
+      erase(remove::kind_values::override_{});
+      if (!choices.on && !choices.mentions && !choices.sound) erase(remove::kind_values::room{});
+      else if (!effective.on.value_or(true)) {
+        erase(remove::kind_values::room{});
+        success = bool(perform(*api_, put{.kind = put::kind_values::override_{}, .rule_id = *room,
+            .body = {.actions = {}, .conditions = std::vector<loom::def::push_condition_t>{
+                {.kind = "event_match", .key = "room_id", .pattern = *room}}}})) && success;
+      } else success = bool(perform(*api_, put{.kind = put::kind_values::room{}, .rule_id = *room,
+          .body = {.actions = effective.mentions.value_or(false) ? std::vector<knot::raw>{} : actions}})) && success;
+    } else {
+      success = bool(perform(*api_, enable{.kind = enable::kind_values::override_{}, .rule_id = ".m.rule.master",
+          .body = {.enabled = !effective.on.value_or(true)}}));
+      for (const std::string rule : {".m.rule.message", ".m.rule.encrypted", ".m.rule.room_one_to_one", ".m.rule.encrypted_room_one_to_one"}) {
+        success = bool(perform(*api_, enable{.kind = enable::kind_values::underride{}, .rule_id = rule,
+            .body = {.enabled = !effective.mentions.value_or(false)}})) && success;
+      }
+      // Read before editing: preserve highlight and future action types.
+      if (const auto rules = perform(*api_, loom::cs::get_push_rules_global{})) {
+        const auto update = [&](const auto& group, auto kind) {
+          if (!group) return;
+          for (const auto& rule : *group) {
+            const bool notifies = std::ranges::any_of(rule.actions, [](const knot::raw& raw) {
+              const auto action = knot::try_read<std::string>(raw.text);
+              return action && *action == "notify";
+            });
+            if (rule.default_ && notifies)
+              success = bool(perform(*api_, loom::cs::set_push_rule_actions{.kind = kind, .rule_id = rule.rule_id,
+                  .body = {.actions = with_sound(rule.actions, effective.sound.value_or(true))}})) && success;
+          }
+        };
+        update(rules->override_, loom::cs::set_push_rule_actions::kind_values::override_{});
+        update(rules->underride, loom::cs::set_push_rule_actions::kind_values::underride{});
+      } else success = false;
+    }
+    return success;
 }
 
 // A room encrypted from its first event: m.room.encryption in its initial

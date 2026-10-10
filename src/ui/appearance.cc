@@ -195,6 +195,7 @@ auto appearance_page(const ui_needs<Actions>& needs, const config::theme_t& them
       skiff::compose::column(
           skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           appearance_settings_view(colours, theme),
+          skiff::compose::scoped<config::look_settings>(skiff::compose::handlers(), style_controls(colours, false)),
           skiff::compose::styled({.margin = {6.0f, 10.0f, 0.0f, 10.0f}}, look_choices<Actions>(colours, *needs.looks, choice_level::everywhere{})),
           window_settings_view(colours), skiff::compose::visible(needs.looks->window.spaces, spaces_choices<Actions>(colours, *needs.shared)),
           frame_look_view(colours, needs.looks->window.see_through)));

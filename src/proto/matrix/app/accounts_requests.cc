@@ -97,6 +97,9 @@ template void account<mux::app::post_change>::cross_sign_device(const loom::cs::
 template void account<mux::app::post_change>::cross_sign_user(const std::string& user, const loom::cs::query_keys::response_t::cross_signing_key_t& master);
 template void account<mux::app::post_change>::cut_long_poll();
 template void account<mux::app::post_change>::sync_now();
+template void account<mux::app::post_change>::flush_notifications();
+template bool account<mux::app::post_change>::save_notifications(std::optional<std::string> room, mux::notification_choices choices, mux::notification_choices effective);
+template void account<mux::app::post_change>::set_notifications(std::optional<std::string> room, mux::notification_choices choices, mux::notification_choices effective);
 template void account<mux::app::post_change>::set_pusher(std::optional<std::string> endpoint);
 template void account<mux::app::post_change>::register_pusher();
 }  // namespace mux::proto::matrix::client

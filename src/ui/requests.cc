@@ -91,6 +91,7 @@ using message_menu = menu_facts;
 
 // The client's pages of an account's settings, every account's.
 namespace account_page {
+struct appearance { friend bool operator==(appearance, appearance) = default; };
 struct connection {};
 struct privacy {};
 struct notifications {};
@@ -114,9 +115,10 @@ struct protocol_account_pages<protocol_list<Tags...>> {
 // A page of an account's: the client's, or one of a protocol's.
 using account_page_t = typename variant_of_types<typename joined<
     type_list<account_page::connection, account_page::privacy, account_page::notifications, account_page::chats,
-              account_page::proxy>,
+              account_page::proxy, account_page::appearance>,
     typename protocol_account_pages<protocols>::type>::type>::type;
 namespace request {
+struct apply_style {};
 // One of the chosen account's pages asked for.
 struct account_page {
   account_page_t page = ::mux::ui::account_page::connection{};

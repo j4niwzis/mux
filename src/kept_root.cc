@@ -102,6 +102,28 @@ struct chat_settings {
     }
     return decltype(this->own_of<M>(chat)){};
   }
+  [[nodiscard]] config::style_settings style_of(const std::optional<account_id>& account,
+                                               const std::optional<conversation_id>& chat) const {
+    config::style_settings out;
+    if (chat) {
+      auto at = *chat;
+      for (int steps = 0; steps < 17; ++steps) {
+        out = config::filled_from(std::move(out), own_of<&config::chat_choices::style>(at));
+        const auto up = space_above->find(at);
+        if (up == space_above->end()) break;
+        at = up->second;
+      }
+    }
+    const auto owner = chat ? std::optional(chat->account) : account;
+    if (owner)
+      if (const auto* saved = settings_of(owner->address))
+        out = config::filled_from(std::move(out), saved->shared.style);
+    auto every = appearance().style;
+    every.theme = appearance().theme;
+    out = config::filled_from(std::move(out), every);
+    if (!out.theme) out.theme = appearance().theme;
+    return out;
+  }
   // A chat's look: the lowest level's that has one -- its own or its
   // space's, its account's, every chat's -- what it leaves unsaid taken
   // from the levels over it, in turn.

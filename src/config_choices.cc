@@ -36,6 +36,41 @@ struct night {
 };
 }  // namespace theme
 using theme_t = spl::variant<theme::classic, theme::day, theme::tinted, theme::night>;
+// Empty fields inherit the nearest room, space, account or client value.
+struct style_settings {
+  std::optional<theme_t> theme;
+  std::string theme_file;
+  std::string font;
+  std::string monospace;
+  friend bool operator==(const style_settings&, const style_settings&) = default;
+};
+consteval auto json_schema(knot::type<style_settings>) { return knot::schema<style_settings>(); }
+struct custom_theme {
+  std::string name;
+  std::optional<std::uint32_t> background;
+  std::optional<std::uint32_t> sidebar;
+  std::optional<std::uint32_t> chosen;
+  std::optional<std::uint32_t> text;
+  std::optional<std::uint32_t> dim;
+  std::optional<std::uint32_t> accent;
+  std::optional<std::uint32_t> error;
+  std::optional<std::uint32_t> selected, selected_text, band, section, tile, sent_time;
+  std::optional<std::uint32_t> bubble;
+  std::optional<std::uint32_t> out_bubble;
+  std::optional<std::uint32_t> chat;
+  std::optional<std::uint32_t> chat_top;
+  std::optional<std::uint32_t> pattern;
+  std::optional<std::uint32_t> on_accent;
+};
+consteval auto json_schema(knot::type<custom_theme>) { return knot::schema<custom_theme>(); }
+[[nodiscard]] inline style_settings filled_from(style_settings below, const style_settings& above) {
+  const bool own_theme = below.theme.has_value();
+  if (!below.theme) below.theme = above.theme;
+  if (below.theme_file.empty() && !own_theme) below.theme_file = above.theme_file;
+  if (below.font.empty()) below.font = above.font;
+  if (below.monospace.empty()) below.monospace = above.monospace;
+  return below;
+}
 // The accent a theme is drawn with: its own, or one of Telegram's circles --
 // each a shade of its own in each theme.
 namespace accent {
@@ -227,11 +262,9 @@ using notify_mode_t = spl::variant<notify_mode::by_default, notify_mode::all, no
 // The switches of the notifications page, each a member of its settings.
 namespace notify_flag {
 struct desktop {};
-struct show_name {};
-struct show_text {};
 struct sound {};
 }  // namespace notify_flag
-using notify_flag_t = spl::variant<notify_flag::desktop, notify_flag::show_name, notify_flag::show_text, notify_flag::sound>;
+using notify_flag_t = spl::variant<notify_flag::desktop, notify_flag::sound>;
 
 [[nodiscard]] constexpr std::string_view word_of(theme::classic) { return "classic"; }
 [[nodiscard]] constexpr std::string_view word_of(theme::day) { return "day"; }

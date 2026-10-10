@@ -376,7 +376,7 @@ template <class Actions> struct bubbles_picker : skiff::compose::Stacked {
                         "window (Appearance \u2192 Chat background \u2192 "
                         "Behind the whole window).",
                         12.0f, level.colours->dim)))),
-            .kinds = choice_menu<pick_kind_at>(
+            .kinds = make_choice_menu<pick_kind_at>(
                 *level.colours, "", kind_names(level), kind_index(level, part),
                 pick_kind_at{level, part, has_level_above(level.level)}),
             .opacity_label = nodes::Text("Opacity", 13.0f, level.colours->text),
@@ -504,8 +504,7 @@ template <class Actions> struct look_choices : skiff::compose::Stacked {
                       nodes::Text(note_of(looks, level), 13.0f, colours.dim))),
               .background = skiff::compose::styled(
                   {.margin = {0.0f, 10.0f, 0.0f, 10.0f}},
-                  choice_menu<pick_wallpaper_at>(
-                      colours, "", background_names(looks, level),
+                  make_choice_menu<pick_wallpaper_at>(colours, "", background_names(looks, level),
                       background_index(looks, level),
                       pick_wallpaper_at{level, has_level_above(level)})),
               .bubbles = skiff::compose::styled(

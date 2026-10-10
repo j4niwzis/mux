@@ -223,8 +223,7 @@ template <class Actions> struct xmpp_form : skiff::compose::Stacked {
               .password = field(colours, "Password", "Password"),
               .mode = skiff::compose::visible(
                   !from || creating,
-                  choice_menu<pick_mode>(
-                      colours, "Account",
+                  make_choice_menu<pick_mode>(colours, "Account",
                       {"Sign in to an account", "Create a new account"},
                       creating ? 1 : 0, pick_mode{this})),
               .asked = asked_part(colours),

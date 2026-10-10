@@ -371,94 +371,49 @@ struct menu_button : skiff::compose::Specced {
 [[nodiscard]] constexpr std::string_view label_of(room_event::reactions) { return "Reactions, each as a line"; }
 [[nodiscard]] constexpr std::string_view label_of(room_event::unreactions) { return "Reactions taken back"; }
 
-// A choice among a few, as a dropdown: a button saying the one in use and
-// a chevron; pressed, the options open under it, in the page, the one in
-// use marked; one pressed, chosen, and the list closed. The menu takes the
-// presses its parts let by -- it holds whether it is open, and nothing of
-// it is pointed at from its parts.
-template <class Choose> struct choice_menu : skiff::compose::Stacked {
-  Choose choose;  // told the index of the option pressed
-  bool open = false;
-  struct head_t : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text label;
-      nodes::Text value;
-      nodes::Icon chevron;
-    } parts;
-    head_t(const palette& colours, std::string label, std::string value)
-        : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .height = 36.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
-                                              .background = colours.tile, .hoverBackground = colours.chosen,
-                                              .border = scene::Border{colours.band, 1.0f}})),
-          parts{.label = skiff::compose::visible(!label.empty(), skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                                                                         nodes::Text(label, 13.0f, colours.dim))),
-                .value = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                                                elided(nodes::Text(std::move(value), 14.0f, colours.text))),
-                .chevron = skiff::compose::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle},
-                                                  nodes::Icon(shape_of(icon::down{}), colours.dim))} {}
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  };
-  struct option_t : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text name;
-    } parts;
-    option_t(const palette& colours, std::string name, bool chosen)
-        : Stacked(skiff::compose::hbox(0.0f, {.fillX = true, .height = 32.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
-                                              .hoverBackground = colours.chosen})),
-          parts{.name = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                               nodes::Text(std::move(name), 14.0f, chosen ? colours.accent : colours.text, chosen))} {}
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  };
-  struct parts_t {
-    head_t head;
-    std::vector<option_t> options;
-  } parts;
-  choice_menu(const palette &colours, std::string label,
-              const std::vector<std::string> &names, std::size_t current,
-              Choose c)
-      : Stacked(skiff::compose::vbox(
-            2.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        choose(std::move(c)),
-        parts{.head = head_t(colours, std::move(label),
-                             current < names.size() ? names[current]
-                                                    : std::string())} {
-    parts.options.reserve(names.size());
-    for (std::size_t i = 0; i < names.size(); ++i) {
-      parts.options.emplace_back(colours, names[i], i == current);
-      parts.options.back().setVisible(false);
+// The existing dropdown's head and option rows, built with combinators.
+// Selection and pointer capture are shared with the widget library.
+inline auto choice_menu_head(const palette& colours, std::string label, std::string value) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f,
+      .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
+      .background = colours.tile, .hoverBackground = colours.chosen, .border = scene::Border{colours.band, 1.0f}}),
+      c::visible(!label.empty(), c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(label, 13.0f, colours.dim)))),
+      c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 14.0f, colours.text))),
+      c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.dim)));
+}
+inline auto choice_menu_option(const palette& colours, std::string name) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(0.0f, {.fillX = true, .height = 32.0f,
+      .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = colours.chosen}),
+      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(name), 14.0f, colours.text)));
+}
+using choice_menu_head_t = decltype(choice_menu_head(std::declval<const palette&>(), std::string(), std::string()));
+using choice_menu_option_t = decltype(choice_menu_option(std::declval<const palette&>(), std::string()));
+struct show_choice_menu {
+  skia::SkColor text, accent;
+  void operator()(choice_menu_head_t& head, std::vector<choice_menu_option_t>& rows,
+                  const std::vector<std::string>& names, std::size_t current, bool) const {
+    std::get<1>(head.fParts).setText(current < names.size() ? names[current] : std::string());
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+      auto& label = std::get<0>(rows[i].fParts);
+      label.setColour(i == current ? accent : text);
+      label.setBold(i == current);
     }
-  }
-  void show_options(bool on) {
-    open = on;
-    for (option_t& each : parts.options)
-      each.setVisible(on);
-    this->invalidateLayout();
-    this->markDamaged();
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool onClick(float x, float y) {
-    if (parts.head.bounds().contains(x, y)) {
-      this->show_options(!open);
-      return true;
-    }
-    for (std::size_t i = 0; i < parts.options.size(); ++i)
-      if (parts.options[i].visible() && parts.options[i].bounds().contains(x, y)) {
-        this->show_options(false);
-        picked = i;
-        act_on(fState, choose, i);
-        return true;
-      }
-    return false;
-  }
-  // The option pressed last, and what its act answers with it.
-  std::size_t picked = 0;
-  auto onPress()
-    requires skiff::scene::Answering<Choose>
-  {
-    return choose(picked);
   }
 };
+template <class Choose>
+using choice_menu = widgets::ChoiceMenu<Choose, choice_menu_head_t, choice_menu_option_t, show_choice_menu>;
+template <class Choose>
+inline auto make_choice_menu(const palette& colours, std::string label,
+                             std::vector<std::string> names, std::size_t current, Choose choose) {
+  auto head = choice_menu_head(colours, std::move(label), current < names.size() ? names[current] : std::string());
+  auto rows = std::ranges::to<std::vector>(std::views::transform(names, [&](const std::string& name) {
+    return choice_menu_option(colours, name);
+  }));
+  return choice_menu<Choose>(std::move(names), current, std::move(choose), std::move(head), std::move(rows),
+      show_choice_menu{colours.text, colours.accent});
+}
 
 // The items of the space bars -- Home, Direct messages, each space -- each
 // with where it is: the side bar, the top one, both, or hidden.
@@ -483,7 +438,7 @@ struct spaces_choices : skiff::compose::Stacked {
     row(const palette& colours, const std::string& account, const space_item_shown& one)
         : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}})),
           parts{.name = nodes::Text(one.name, 14.0f, colours.text),
-                .where = choice_menu<pick_bars>(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"},
+                .where = make_choice_menu<pick_bars>(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"},
                                                 one.side && !one.top   ? 0
                                                 : one.top && !one.side ? 1
                                                 : one.side && one.top  ? 2
@@ -614,54 +569,63 @@ inline bool event_kind_shown(const Owner& now, const choice_level_t& level, cons
   room_events_at(level) = events_of(now);
   return events_in_effect(level).shows(kind);
 }
-template <class Owner>
-inline auto events_way_row(const palette& colours, choice_level_t level, std::string name, std::size_t way) {
-  namespace c = skiff::compose;
-  return c::projected<Owner>([level, way](const Owner& now) {
-    return events_way_of(level, events_of(now)) == way;
-  }, c::onClick(skiff::bind::own([level, way](Owner& now) {
-    now = with_events_way(now, level, way);
-  }), widgets::ChoiceRowField<bool>(colours.widgets, std::move(name), true)));
-}
-template <class Owner>
-inline auto event_kind_button(const palette& colours, choice_level_t level, room_event_t kind, bool show) {
-  namespace c = skiff::compose;
-  return c::spec_for<Owner>([level, kind, show](const Owner& now) {
-    return scene::Spec{.selected = event_kind_shown(now, level, kind) == show};
-  }, c::onClick(skiff::bind::own([level, kind, show](Owner& now) {
+// Changes are data returned from the dropdown's bound node, never raw
+// application requests. Trying another model safely defers the change.
+template <class Owner> struct events_way_change {
+  choice_level_t level;
+  std::size_t way;
+  void operator()(Owner& now) const { now = with_events_way(now, level, way); }
+};
+template <class Owner> struct choose_events_way {
+  using Answer = skiff::bind::Own<events_way_change<Owner>>;
+  choice_level_t level;
+  Answer operator()(std::size_t index) const {
+    return skiff::bind::own(events_way_change<Owner>{level, index + (has_level_above(level) ? 0 : 1)});
+  }
+};
+template <class Owner> struct event_kind_change {
+  choice_level_t level;
+  room_event_t kind;
+  std::size_t choice;
+  void operator()(Owner& now) const {
     auto held = events_of(now);
     if (events_way_of(level, held) != kEventsCustom) return;
     if (!held.kinds) held.kinds.emplace();
-    logic::choice_in(*held.kinds, kind) = show;
+    logic::choice_in(*held.kinds, kind) = choice == 0 ? std::nullopt : std::optional(choice == 1);
     events_in(now, held);
-  }), c::column(
-      c::justified(c::vbox(0.0f, {.width = 70.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle,
-          .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen}), nodes::justify::middle{}),
-      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(show ? "Show" : "Hide", 13.0f, colours.text))), show ? "Show" : "Hide"));
-}
+  }
+};
+template <class Owner> struct choose_event_kind {
+  using Answer = skiff::bind::Own<event_kind_change<Owner>>;
+  choice_level_t level;
+  room_event_t kind;
+  Answer operator()(std::size_t index) const { return skiff::bind::own(event_kind_change<Owner>{level, kind, index}); }
+};
 template <class Owner>
 inline auto event_kind_row(const palette& colours, choice_level_t level, room_event_t kind) {
-  namespace c = skiff::compose;
-  return c::spec_for<Owner>([level](const Owner& now) {
-    const bool custom = events_way_of(level, events_of(now)) == kEventsCustom;
-    return scene::Spec{.alpha = custom ? 1.0f : 0.4f, .disabled = !custom};
-  }, c::row(setting_row(),
-      setting_label(nodes::Text(spl::visit([](auto one) { return std::string(label_of(one)); }, kind), 14.0f, colours.text)),
-      event_kind_button<Owner>(colours, level, kind, true), event_kind_button<Owner>(colours, level, kind, false)));
+  return skiff::compose::projected<Owner>([kind](const Owner& now) -> std::size_t {
+    const auto held = events_of(now);
+    const auto value = logic::choice_of(held.kinds, kind);
+    return value ? (*value ? 1 : 2) : 0;
+  }, make_choice_menu(colours, spl::visit([](auto one) { return std::string(label_of(one)); }, kind),
+      {"Default", "Show", "Hide"}, 0, choose_event_kind<Owner>{level, kind}));
 }
 template <class Owner>
 inline auto event_kinds_field(const palette& colours, choice_level_t level) {
   namespace c = skiff::compose;
+  auto names = std::vector<std::string>{"All events", "Messages only", "Custom"};
+  if (has_level_above(level)) names.insert(names.begin(), "Default");
+  auto mode = c::projected<Owner>([level](const Owner& now) {
+    return events_way_of(level, events_of(now)) - (has_level_above(level) ? 0 : 1);
+  }, make_choice_menu(colours, "Room events", std::move(names), 0, choose_events_way<Owner>{level}));
   auto rows = std::ranges::to<std::vector>(std::views::transform(all_room_events, [&](const room_event_t& kind) {
     return event_kind_row<Owner>(colours, level, kind);
   }));
-  return c::scoped<Owner>(c::handlers(), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          c::styled({.margin = {0.0f, 20.0f, 0.0f, 20.0f}}, nodes::Text("Room events", 14.0f, colours.text, true)),
-          c::visible(has_level_above(level), events_way_row<Owner>(colours, level, "As above", kEventsAbove)),
-          events_way_row<Owner>(colours, level, "All events", kEventsAll),
-          events_way_row<Owner>(colours, level, "Messages only", kEventsMessages),
-          events_way_row<Owner>(colours, level, "Custom", kEventsCustom),
-          c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
+  return c::scoped<Owner>(c::handlers(), c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      std::move(mode), c::shown_for<Owner>([level](const Owner& now) {
+        return events_way_of(level, events_of(now)) == kEventsCustom;
+      }, c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY,
+          .padding = {0.0f, 12.0f, 0.0f, 12.0f}}), std::move(rows)))));
 }
 
 // How far a search for a message jumped to pages back, at one level, as

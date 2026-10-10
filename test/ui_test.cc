@@ -1977,25 +1977,68 @@ TEST(Reactions, MixedCustomEmojiKeepTheOriginalReactionKeyWhenClicked) {
   EXPECT_EQ(chip.onPress().key, "a reaction :party:");
 }
 
-TEST(Controls, RoomEventChoicesDispatchTypedModelEdits) {
+TEST(Accounts, MatrixCreationOptionRespondsToPointerInput) {
+  mux::ui::palette colours;
+  using form = mux::ui::form_of_t<mux::protocol::matrix, stub>;
+  scene::Scene<form> view(std::in_place, colours, std::nullopt);
+  view.state().apply({.width = 360.0f});
+  const auto viewport = skia::SkRect::MakeWH(380.0f, 1000.0f);
+  view.layoutIfNeeded(viewport);
+  auto& mode = view.root().parts.mode;
+  const auto head = mode.parts.head.bounds();
+  ASSERT_TRUE(view.dispatchPointer(scene::pointer::down{head.centerX(), head.centerY()}));
+  ASSERT_TRUE(mode.open);
+  ASSERT_TRUE(view.dispatchPointer(scene::pointer::up{head.centerX(), head.centerY()}));
+  view.layoutIfNeeded(viewport);
+  const auto option = mode.parts.options[1].bounds();
+  ASSERT_TRUE(view.dispatchPointer(scene::pointer::down{option.centerX(), option.centerY()}));
+  EXPECT_TRUE(view.root().creating);
+  EXPECT_EQ(mode.current, 1u);
+  EXPECT_EQ(std::get<1>(mode.parts.head.fParts).text(), "Create a new account");
+  EXPECT_FALSE(mode.open);
+  EXPECT_TRUE(view.root().parts.token.visible());
+  EXPECT_TRUE(view.root().parts.terms.visible());
+  EXPECT_TRUE(view.dispatchPointer(scene::pointer::up{option.centerX(), option.centerY()}));
+}
+
+TEST(Controls, RoomEventsDropdownRefreshesAndOnlyShowsCustomRows) {
   mux::config::chat_choices initial;
   initial.typing = false;
   skiff::model::Model<mux::config::chat_choices, skiff::bind::NoReactions> model(initial);
   mux::ui::palette colours;
   auto field = mux::ui::event_kinds_field<mux::config::chat_choices>(colours, mux::ui::choice_level::chat{});
+  auto& mode = std::get<0>(field.fParts);
+  auto& rows = std::get<1>(field.fParts);
   skiff::bind::Binding<decltype(model)> binding;
   binding.refresh(field, model);
-  ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{3}));
+  EXPECT_EQ(mode.current, 0u);
+  EXPECT_FALSE(rows.visible());
+  mode.picked = 2;
+  ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{0}));
+  binding.refresh(field, model);
   EXPECT_EQ(model.root().room_events, false);
-  EXPECT_EQ(model.root().typing, false);
+  EXPECT_EQ(mode.current, 2u);
+  EXPECT_FALSE(rows.visible());
+  mode.picked = 3;
+  ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{0}));
   binding.refresh(field, model);
-  ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{4}));
   ASSERT_TRUE(model.root().room_event_kinds.has_value());
-  EXPECT_EQ(mux::ui::events_way_of(mux::ui::choice_level::chat{}, mux::ui::events_of(model.root())), mux::ui::kEventsCustom);
+  EXPECT_EQ(mode.current, 3u);
+  EXPECT_TRUE(rows.visible());
+  ASSERT_FALSE(rows.fParts.empty());
+  auto& kind = rows.fParts.front();
+  EXPECT_FALSE(kind.disabled());
+  kind.picked = 1;
+  ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{1, 0}));
   binding.refresh(field, model);
-  ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{5, 0, 1}));
+  EXPECT_EQ(kind.current, 1u);
   EXPECT_EQ(mux::logic::choice_of(model.root().room_event_kinds, mux::all_room_events.front()), true);
   EXPECT_EQ(model.root().typing, false);
+  mode.picked = 1;
+  ASSERT_TRUE(skiff::bind::press(field, model, scene::Path{0}));
+  binding.refresh(field, model);
+  EXPECT_EQ(mode.current, 1u);
+  EXPECT_FALSE(rows.visible());
 }
 
 // No UI choice may be delivered as an application request. This sink makes
@@ -2006,29 +2049,24 @@ struct room_events_no_requests {
 };
 struct room_events_other_root { int unrelated = 0; };
 }
-TEST(Controls, RoomEventChoicesDeferToTheirOwningModel) {
+TEST(Controls, RoomEventsDropdownDefersToItsOwningModel) {
   mux::ui::palette colours;
   auto field = mux::ui::event_kinds_field<mux::config::chat_choices>(colours, mux::ui::choice_level::chat{});
   skiff::model::Model<room_events_other_root, skiff::bind::NoReactions> other;
   skiff::model::Model<mux::config::chat_choices, skiff::bind::NoReactions> owner;
   room_events_no_requests sink;
-  EXPECT_FALSE(skiff::bind::press(field, other, scene::Path{4}, &sink));
-  EXPECT_EQ(other.root().unrelated, 0);
-  ASSERT_TRUE(skiff::bind::press(field, owner, scene::Path{4}, &sink));
-  ASSERT_TRUE(owner.root().room_event_kinds.has_value());
-  EXPECT_FALSE(skiff::bind::press(field, other, scene::Path{5, 0, 2}, &sink));
-  ASSERT_TRUE(skiff::bind::press(field, owner, scene::Path{5, 0, 2}, &sink));
+  std::get<0>(field.fParts).picked = 3;
+  EXPECT_FALSE(skiff::bind::press(field, other, scene::Path{0}, &sink));
+  ASSERT_TRUE(skiff::bind::press(field, owner, scene::Path{0}, &sink));
+  auto& kind = std::get<1>(field.fParts).fParts.front();
+  kind.picked = 2;
+  EXPECT_FALSE(skiff::bind::press(field, other, scene::Path{1, 0}, &sink));
+  ASSERT_TRUE(skiff::bind::press(field, owner, scene::Path{1, 0}, &sink));
   EXPECT_EQ(mux::logic::choice_of(owner.root().room_event_kinds, mux::all_room_events.front()), false);
-  ASSERT_TRUE(skiff::bind::press(field, owner, scene::Path{5, 0, 1}, &sink));
+  kind.picked = 1;
+  EXPECT_FALSE(skiff::bind::answerPress(kind, skiff::bind::carryFrom(&other, &sink)));
+  EXPECT_TRUE(skiff::bind::answerPress(kind, skiff::bind::carryFrom(&owner, &sink)));
   EXPECT_EQ(mux::logic::choice_of(owner.root().room_event_kinds, mux::all_room_events.front()), true);
-
-  // Release routing delivers at the node with a carried model, rather than
-  // replaying a path. It must defer in exactly the same way.
-  auto button = mux::ui::event_kind_button<mux::config::chat_choices>(
-      colours, mux::ui::choice_level::chat{}, mux::all_room_events.front(), false);
-  EXPECT_FALSE(skiff::bind::answerPress(button, skiff::bind::carryFrom(&other, &sink)));
-  EXPECT_TRUE(skiff::bind::answerPress(button, skiff::bind::carryFrom(&owner, &sink)));
-  EXPECT_EQ(mux::logic::choice_of(owner.root().room_event_kinds, mux::all_room_events.front()), false);
 }
 
 TEST(Reactions, Msc4027ImagesAndTextRenderTogetherInPanelBodies) {

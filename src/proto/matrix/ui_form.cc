@@ -72,8 +72,7 @@ template <class Actions> struct matrix_form : skiff::compose::Stacked {
       : Stacked(skiff::compose::vbox(
             12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
         parts{.user_id = field(colours, "User ID", "@user:example.org"),
-              .way = choice_menu<pick_way>(
-                  colours, "Sign in",
+              .way = make_choice_menu<pick_way>(colours, "Sign in",
                   {"With a password", "In the browser, on the server's page"},
                   from && from->oauth.value_or(false) ? 1 : 0, pick_way{this}),
               .password = skiff::compose::visible(
@@ -83,16 +82,14 @@ template <class Actions> struct matrix_form : skiff::compose::Stacked {
               .device_name = field(colours, "Device name", "mux", "mux"),
               .mode = skiff::compose::visible(
                   !from.has_value(),
-                  choice_menu<pick_mode>(
-                      colours, "Account",
+                  make_choice_menu<pick_mode>(colours, "Account",
                       {"Sign in to an account", "Create a new account"}, 0,
                       pick_mode{this})),
               .token = skiff::compose::visible(
                   false, field(colours, "Registration token",
                                "where the server registers by invitation")),
               .terms = skiff::compose::visible(
-                  false, choice_menu<pick_terms>(
-                             colours, "The server's terms",
+                  false, make_choice_menu<pick_terms>(colours, "The server's terms",
                              {"Not agreed to", "I agree to the server's terms"},
                              0, pick_terms{this})),
               .end = form_end<Actions>(colours, from.has_value())} {

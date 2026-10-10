@@ -422,8 +422,7 @@ template <class Actions> struct account_chats : skiff::compose::Stacked {
             .looks =
                 look_choices<Actions>(colours, looks, choice_level::account{}),
             .spaces_title = section_title(colours, "SPACES"),
-            .home = choice_menu<pick_home>(
-                colours, "Home",
+            .home = make_choice_menu<pick_home>(colours, "Home",
                 {"As above", "Every chat", "Without chats spaces hold",
                  "Without those and direct messages"},
                 !home_hides                   ? 0

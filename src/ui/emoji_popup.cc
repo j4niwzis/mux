@@ -155,10 +155,12 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
                     popup_tab(colours, popup_page::emoji{}, "Emoji", facts.page == popup_page_t(popup_page::emoji{}), true),
                     popup_tab(colours, popup_page::stickers{}, "Stickers", facts.page == popup_page_t(popup_page::stickers{}), facts.stickers),
                     popup_tab(colours, popup_page::gifs{}, "GIFs", facts.page == popup_page_t(popup_page::gifs{}), facts.files)),
-                .panel = skiff::compose::visible(facts.page == popup_page_t(popup_page::emoji{}),
-                    panel_t(colours, kept, insert_emoji_into<Actions>{}, {.fillX = true, .grow = scene::axes::kY, .masking = true})),
-                .stickers = skiff::compose::visible(facts.stickers && facts.page == popup_page_t(popup_page::stickers{}),
-                    sticker_grid<Actions>(colours, kept, {.fillX = true, .grow = scene::axes::kY, .masking = true})),
+                .panel = panel_t(colours, kept, insert_emoji_into<Actions>{},
+                    {.fillX = true, .grow = scene::axes::kY, .masking = true,
+                     .visible = facts.page == popup_page_t(popup_page::emoji{})}),
+                .stickers = sticker_grid<Actions>(colours, kept,
+                    {.fillX = true, .grow = scene::axes::kY, .masking = true,
+                     .visible = facts.stickers && facts.page == popup_page_t(popup_page::stickers{})}),
                 .gifs = skiff::compose::visible(facts.files && facts.page == popup_page_t(popup_page::gifs{}),
                     skiff::compose::styled({.fillX = true, .grow = scene::axes::kY, .masking = true}, gif_grid(colours, facts.gifs)))} {
 

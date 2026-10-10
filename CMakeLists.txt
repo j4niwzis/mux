@@ -185,7 +185,7 @@ target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
         src/proto/xmpp/make.cc src/proto/matrix/make.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc src/logic/notifications.cc
         src/logic/link_base.cc src/proto/xmpp/links.cc src/proto/matrix/links.cc src/proto/links.cc
-        src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
+        src/logic/forwarding.cc src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
         src/logic/blurhash.cc src/logic/emoji.cc src/logic/reactions.cc src/logic/markdown.cc src/logic/room_events.cc)
 target_compile_features(mux_modules PUBLIC cxx_std_26)
 # The emoji's keywords, as Unicode's CLDR annotates them in English and in

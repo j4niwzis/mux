@@ -10,6 +10,7 @@ import mux.logic.reading;
 import mux.logic.drafts;
 import mux.logic.links;
 import mux.logic.messages;
+import mux.logic.forwarding;
 import mux.logic.blurhash;
 import mux.logic.markdown;
 import mux.logic.reactions;
@@ -218,4 +219,46 @@ TEST(Reactions, CopiedImageOverridesRoomNamesAndWorksWithoutItsPack) {
     EXPECT_EQ(one.label, "hi :neocat:!");
     EXPECT_TRUE(one.custom);
   }
+}
+
+TEST(Forwarding, KeepsQuotedCaptionLinksAndEmojiInsideForward) {
+  const std::string caption = "<blockquote>quoted text</blockquote><p><a href='https://example.org'>link</a>"
+                              "<img data-mx-emoticon src='mxc://server/emoji'></p>";
+  const auto parsed = mux::logic::unwrap_forward(
+      "<P><B>Forwarded from <a class='user' href='https://matrix.to/#/@alice:example.org'>"
+      "<span>Alice &amp; Bob</span></a></B></P>\n<blockquote>" + caption + "</blockquote>");
+  ASSERT_TRUE(parsed.has_value());
+  EXPECT_EQ(parsed->origin.from, "@alice:example.org");
+  EXPECT_EQ(parsed->origin.name, "Alice & Bob");
+  EXPECT_EQ(parsed->html, caption);
+}
+
+TEST(Forwarding, PeelsNestedAttributionsWithoutRemovingMessageQuotes) {
+  const std::string caption = "<blockquote>real quote</blockquote><a href='https://example.org'>link</a>";
+  const auto outer = mux::logic::unwrap_forward(
+      "<strong>Forwarded from <a href='https://matrix.to/#/@bob:example.org'>Bob</a></strong><blockquote>"
+      "<b>Forwarded from <a href='https://matrix.to/#/@alice:example.org'>Alice</a></b><blockquote>" + caption +
+      "</blockquote></blockquote>");
+  ASSERT_TRUE(outer.has_value());
+  const auto inner = mux::logic::unwrap_forward(outer->html);
+  ASSERT_TRUE(inner.has_value());
+  EXPECT_EQ(inner->origin.from, "@alice:example.org");
+  EXPECT_EQ(inner->html, caption);
+  EXPECT_FALSE(mux::logic::unwrap_forward(inner->html).has_value());
+}
+
+TEST(Forwarding, PreservesTextOutsideQuoteAndOrdinaryQuotes) {
+  EXPECT_FALSE(mux::logic::unwrap_forward("<blockquote>ordinary quote</blockquote>").has_value());
+  EXPECT_FALSE(mux::logic::unwrap_forward(
+      "<strong>Forwarded from <a href='https://matrix.to/#/@alice:example.org'>Alice</a></strong>"
+      "<blockquote>body</blockquote><p>additional message</p>").has_value());
+}
+
+TEST(Forwarding, KeepsLongCaptionAfterParserCompaction) {
+  const std::string caption = "<blockquote>" + std::string(9000, 'x') + "</blockquote><p>caption</p>";
+  const auto parsed = mux::logic::unwrap_forward(
+      "<strong>Forwarded from <a href='https://matrix.to/#/@alice:example.org'>Alice</a></strong>"
+      "<blockquote>" + caption + "</blockquote>");
+  ASSERT_TRUE(parsed.has_value());
+  EXPECT_EQ(parsed->html, caption);
 }

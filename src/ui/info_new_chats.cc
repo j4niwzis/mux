@@ -223,11 +223,11 @@ inline auto start_chat_view(const palette& colours, const new_chat_facts& facts)
   namespace c = skiff::compose;
   const auto words = proto::direct_chat_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol::matrix{}));
   return c::scoped<new_chat_facts>(start_chat_events{facts.by, facts.inviting}, c::column(
-      c::vbox(8.0f, {.fillX = true, .height = 560.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}}),
+      c::vbox(8.0f, {.fill = true, .padding = {0.0f, 12.0f, 16.0f, 12.0f}}),
       page_header<no_back, sends<request::close_new_chat>>(colours, facts.inviting ? "Invite to " + facts.room_name : "Start chat", {}, {}, false, true),
       c::styled({.fillX = true}, wrapped(nodes::Text(facts.inviting ? "Choose a contact or enter their full address to invite them to this room." : words.intro, 14.0f, colours.text))),
       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          c::styled({.height = 36.0f, .grow = scene::axes::kX},
+          c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX},
               widgets::TextBox<find_people_typed>(colours.widgets, words.hint, {})),
           c::styled({.width = 64.0f, .height = 34.0f},
               c::projected<new_chat_facts>(start_chat_request,
@@ -302,39 +302,57 @@ auto room_form_toggle(const palette& colours, std::string label) {
       c::styled({.grow = scene::axes::kX}, wrapped(nodes::Text(label, 13.0f, colours.text))),
       c::bound<skiff::model::Field<Member>>(widgets::ToggleField<bool>(colours.widgets)));
 }
+// Radio rows send changes to their bound field; their mark is projected from it.
+inline auto room_access_choice(const palette& colours, std::string label, room_access_t choice) {
+  namespace c = skiff::compose;
+  using access = skiff::model::Field<&room_draft::access>;
+  return c::spec_for<access>([choice](const auto& selected) { return scene::Spec{.selected = selected == choice}; },
+      c::onClick(skiff::bind::own(skiff::model::setTo(choice)),
+          c::row(c::hbox(16.0f, {.fillX = true, .height = 46.0f,
+                                .padding = {0.0f, 20.0f, 0.0f, 20.0f},
+                                .hoverBackground = colours.chosen}),
+              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  nodes::Text(label, 15.0f, colours.text)),
+              c::styled({.width = 20.0f, .alignSelf = scene::align::kMiddle},
+                  c::text_for<access>([choice](const auto& selected) {
+                    return selected == choice ? std::string("●") : std::string("○");
+                  }, nodes::Text("", 20.0f, colours.accent)))), label));
+}
 inline auto create_room_view(const palette& colours, const new_room_facts& facts) {
   namespace c = skiff::compose;
   using access = skiff::model::Field<&room_draft::access>;
   const auto form = proto::room_creation_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol::matrix{}), facts.own_server);
   return c::local<room_draft>(room_creation_events{facts, form}, c::column(
-      c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 22.0f, 18.0f, 22.0f}}),
+      c::vbox(8.0f, {.fill = true, .padding = {0.0f, 22.0f, 18.0f, 22.0f}}),
       page_header<no_back, sends<request::close_new_room>>(colours,
           facts.place ? std::string(facts.place->make_space ? "Create a space in " : "Create a room in ") + facts.place->name : "Create a room", {}, {}, false, true),
-      model_field<&room_draft::name>(colours, "Name", ""),
-      model_field<&room_draft::topic>(colours, "Topic (optional)", ""),
-      nodes::Text("Who can join", 13.0f, colours.dim),
-      c::bound<access>(widgets::ChoiceRowField<room_access_t>(colours.widgets, "Invite only", room_access::invited{})),
-      c::bound<access>(widgets::ChoiceRowField<room_access_t>(colours.widgets, "Anyone", room_access::everyone{})),
-      c::visible(facts.place.has_value(), c::bound<access>(widgets::ChoiceRowField<room_access_t>(
-          colours.widgets, "Space members", room_access::space{}))),
-      c::shown_for<access>([required = form.address_required](const auto& access) {
-        return required || access == room_access_t(room_access::everyone{});
-      }, model_field<&room_draft::address>(colours, "Address", form.address_hint)),
-      c::visible(form.encryption, c::shown_for<access>([](const auto& access) {
-        return access != room_access_t(room_access::everyone{});
-      }, room_form_toggle<&room_draft::encrypted>(colours, "Enable end-to-end encryption"))),
-      c::visible(form.federation, room_form_toggle<&room_draft::advanced>(colours, "Advanced")),
-      c::visible(form.federation, c::shown_for<skiff::model::Field<&room_draft::advanced>>([](bool shown) { return shown; },
-          room_form_toggle<&room_draft::federate>(colours, "Allow people from other servers"))),
+      c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(c::column(
+          c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          model_field<&room_draft::name>(colours, "Name", ""),
+          model_field<&room_draft::topic>(colours, "Topic (optional)", ""),
+          nodes::Text("Who can join", 13.0f, colours.dim),
+          room_access_choice(colours, "Invite only", room_access::invited{}),
+          room_access_choice(colours, "Anyone", room_access::everyone{}),
+          c::visible(facts.place.has_value(), room_access_choice(colours, "Space members", room_access::space{})),
+          c::shown_for<access>([required = form.address_required](const auto& access) {
+            return required || access == room_access_t(room_access::everyone{});
+          }, model_field<&room_draft::address>(colours, "Address", form.address_hint)),
+          c::visible(form.encryption, c::shown_for<access>([](const auto& access) {
+            return access != room_access_t(room_access::everyone{});
+          }, room_form_toggle<&room_draft::encrypted>(colours, "Enable end-to-end encryption"))),
+          c::visible(form.federation, room_form_toggle<&room_draft::advanced>(colours, "Advanced")),
+          c::visible(form.federation, c::shown_for<skiff::model::Field<&room_draft::advanced>>([](bool shown) { return shown; },
+              room_form_toggle<&room_draft::federate>(colours, "Allow people from other servers")))))),
       c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::justify::end{}),
-          widgets::SendButton<request::close_new_room>(colours.widgets, "Cancel", {}),
-          primary(widgets::SendButton<submit_room>(colours.widgets, facts.place && facts.place->make_space ? "Create space" : "Create room", {})))),
+          c::styled({.width = 90.0f, .height = 34.0f}, widgets::SendButton<request::close_new_room>(colours.widgets, "Cancel", {})),
+          c::styled({.width = 128.0f, .height = 34.0f},
+              primary(widgets::SendButton<submit_room>(colours.widgets, facts.place && facts.place->make_space ? "Create space" : "Create room", {}))))),
       room_draft{.access = facts.place ? room_access_t(room_access::space{}) : room_access_t(room_access::invited{}),
                  .encrypted = form.encryption});
 }
 using create_room_box_t = decltype(create_room_view(std::declval<const palette&>(), std::declval<const new_room_facts&>()));
 template <class Actions> using create_room_box = create_room_box_t;
-inline dialog_look content_look(std::type_identity<create_room_box_t>) { return {.size = dialog_size::fitting{480.0f}}; }
+inline dialog_look content_look(std::type_identity<create_room_box_t>) { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
 template <class Needs>
 auto make_content(std::type_identity<create_room_box_t>, const Needs& needs, const new_room_facts& facts) {
   return create_room_view(*needs.colours, facts);

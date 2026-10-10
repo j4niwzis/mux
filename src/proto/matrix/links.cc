@@ -21,6 +21,7 @@ struct room {  // !room:server or #alias:server, and a message in it
   std::string id;
   std::optional<std::string> event;
   std::vector<std::string> via;  // the servers to join through
+  std::optional<account_id> by;
   friend bool operator==(const room&, const room&) = default;
 };
 }  // namespace link
@@ -162,6 +163,14 @@ namespace link {
 
 // The chat a link names, where the model has it; and where it leads.
 [[nodiscard]] inline std::optional<conversation_id> chat_for(const link::room& one, const model& now) {
+  if (one.by) {
+    const auto* account = now.accounts().find(*one.by);
+    if (!account) return std::nullopt;
+    for (const auto& [key, chat] : account->conversations)
+      if (chat.id.id == one.id || chat.alias == std::optional(one.id) || std::ranges::contains(chat.other_aliases, one.id))
+        return chat.id;
+    return std::nullopt;
+  }
   return logic::chat_named(now, protocol::matrix{}, one.id);
 }
 // In a message: a person, by their name; a room, a place -- its pill
@@ -178,12 +187,18 @@ namespace link {
 // A room joined: opened. Not: joined through the account in view, or the
 // first Matrix one.
 [[nodiscard]] inline logic::link_step_t step_for(const link::room& one, const model& now, const std::optional<account_id>& current) {
-  if (const auto found = chat_for(one, now))
-    return logic::link_step::open_chat{*found, one.event};
-  const auto by = logic::account_speaking(now, current, protocol::matrix{});
-  if (!by)
+  const auto by = one.by ? one.by : logic::account_speaking(now, current, protocol::matrix{});
+  if (!by || by->speaks != protocol_t(protocol::matrix{}))
     return logic::link_step::say{"No Matrix account", "A Matrix account is needed to open that room."};
+  auto scoped = one;
+  scoped.by = by;
+  if (const auto found = chat_for(scoped, now))
+    return logic::link_step::open_chat{*found, one.event};
   return logic::link_step::join{*by, one.id, one.via};
+}
+inline room on_account(room one, const account_id& by) {
+  one.by = by;
+  return one;
 }
 
 }  // namespace link

@@ -31,6 +31,42 @@ import :timeline;
 
 export namespace mux::ui {
 
+struct server_search_facts {
+  std::vector<directory_room> rooms;
+  std::vector<found_person> people;
+  std::optional<account_id> by;
+  bool waiting = false;
+};
+template <class Actions>
+auto server_search_arguments(const palette& colours, const server_search_facts& facts) {
+  namespace c = skiff::compose;
+  auto rooms = std::ranges::to<std::vector>(std::views::transform(std::views::take(facts.rooms, 30), [&](const auto& room) {
+    return directory_room_row<Actions>(colours, room, std::string(), facts.by);
+  }));
+  auto people = std::ranges::to<std::vector>(std::views::transform(std::views::take(facts.people, 30), [&](const auto& person) {
+    return found_person_row(colours, person);
+  }));
+  const scene::Spec caption{.margin = {6.0f, 16.0f, 2.0f, 16.0f}};
+  return std::tuple{
+      c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 8.0f, 0.0f}}),
+      c::visible(!rooms.empty(), c::styled(caption, nodes::Text("Rooms", 13.0f, colours.dim, true))),
+      c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rooms)),
+      c::visible(!people.empty(), c::styled(caption, nodes::Text("People", 13.0f, colours.dim, true))),
+      c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(people)),
+      c::visible(facts.waiting || (facts.rooms.empty() && facts.people.empty()), c::styled(caption,
+          wrapped(nodes::Text(facts.waiting ? "Searching the server…" : "No rooms or people found.", 13.0f, colours.dim))))};
+}
+template <class Actions>
+using server_search_content_t = decltype(std::apply([](auto&&... parts) {
+  return skiff::compose::Box(std::forward<decltype(parts)>(parts)...);
+}, server_search_arguments<Actions>(std::declval<const palette&>(), std::declval<const server_search_facts&>())));
+template <class Actions>
+auto server_search_list(const palette& colours) {
+  return skiff::compose::mount<server_search_content_t<Actions>, server_search_facts>(
+      [colours = &colours](const auto& facts) { return server_search_arguments<Actions>(*colours, facts); },
+      {.fillX = true, .autoSize = scene::axes::kY});
+}
+
 // What the chat list shows: all the chats, those of a Matrix space, or
 // those of an XMPP roster group.
 namespace folder {
@@ -372,33 +408,7 @@ struct side_column : skiff::compose::Stacked {
     }
   };
   using found_list_t = nodes::ScrollContainer<nodes::Flow<std::vector<found_row>>>;
-  // Nothing joined matching what is searched: the rooms of the server's
-  // directory and the people of its user directory that do -- as Explore
-  // and Start chat list them, to join or to write to.
-  using room_rows_t = nodes::Flow<std::vector<directory_row<Actions>>>;
-  using people_rows_t = nodes::Flow<std::vector<found_person_row_t>>;
-  struct elsewhere_list : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text rooms_title;
-      room_rows_t rooms{room_rows_t({.spacingY = 0.0f, .wrap = false}, {})};
-      nodes::Text people_title;
-      people_rows_t people{people_rows_t({.spacingY = 0.0f, .wrap = false}, {})};
-      nodes::Text status;
-    } parts;
-    explicit elsewhere_list(const palette &colours)
-        : Stacked(skiff::compose::vbox(4.0f,
-                                       {.fillX = true,
-                                        .autoSize = scene::axes::kY,
-                                        .padding = {4.0f, 0.0f, 8.0f, 0.0f}})),
-          parts{.rooms_title = nodes::Text("Rooms", 13.0f, colours.dim, true),
-                .people_title = nodes::Text("People", 13.0f, colours.dim, true),
-                .status = wrapped(nodes::Text("", 13.0f, colours.dim))} {
-      for (nodes::Text* each : {&parts.rooms_title, &parts.people_title, &parts.status})
-        each->apply({.margin = {6.0f, 16.0f, 2.0f, 16.0f}});
-      parts.rooms.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.people.apply({.fillX = true, .autoSize = scene::axes::kY});
-    }
-  };
+  using elsewhere_list = decltype(server_search_list<Actions>(std::declval<const palette&>()));
   using elsewhere_t = nodes::ScrollContainer<elsewhere_list>;
   struct rest_t : skiff::compose::Stacked {
     struct parts_t {
@@ -431,7 +441,7 @@ struct side_column : skiff::compose::Stacked {
                 .elsewhere = skiff::compose::visible(
                     false, skiff::compose::styled(
                                {.fillX = true, .grow = scene::axes::kY},
-                               elsewhere_t(elsewhere_list(colours))))} {
+                               elsewhere_t(server_search_list<Actions>(colours))))} {
       parts.found.apply({.fillX = true, .grow = scene::axes::kY});
       std::get<0>(parts.found.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.found.setVisible(false);

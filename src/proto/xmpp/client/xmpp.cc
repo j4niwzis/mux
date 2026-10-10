@@ -403,6 +403,26 @@ class account {
       sink_(change::directory_listed{.by = id_, .server = server, .query = query, .rooms = std::move(rooms)});
     });
   }
+  // A join URI's room card: XEP-0030 identities supply the room name.
+  // Private rooms can refuse discovery while still allowing a join.
+  void preview_room(std::string room, const std::vector<std::string>&) {
+    this->spawn_guarded([this, room = std::move(room)] {
+      mux::room_preview preview{.id = room, .name = room, .alias = room};
+      if (!session_) {
+        preview.note = "Connect the XMPP account before joining this room.";
+      } else if (const auto info = session_->template try_request<tern::query::disco_info>({.to = room})) {
+        for (const auto& identity : info->identities)
+          if (identity.category == "conference" && identity.name) {
+            preview.name = *identity.name;
+            break;
+          }
+      } else {
+        preview.note = "The room did not provide a preview. You can still try to join it.";
+      }
+      sink_(change::room_previewed{id_, room, std::move(preview)});
+    });
+  }
+
   // A directory room joined with the account's normal nickname.
   void join(std::string room, const std::vector<std::string>&) {
     this->spawn_guarded([this, room = bare(room)] {

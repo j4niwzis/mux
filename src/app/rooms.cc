@@ -90,8 +90,8 @@ class rooms_part {
     s_->net->search_people(*by, one.query);
   }
   void apply(const request::search_elsewhere& one) {
-    const auto by = s_->root().main().current;
-    if (!by || s_->demo())
+    const auto by = one.by ? one.by : s_->root().main().current;
+    if (!by || by != s_->root().main().current || s_->demo())
       return;
     const auto state = mux::ui::protocol_state_of(s_->ui, *by);
     if (mux::proto::offers(state, mux::proto::feature::room_directory{}))
@@ -168,6 +168,11 @@ class rooms_part {
     const auto by = facts ? facts->by : std::nullopt;
     if (!by || s_->demo())
       return;
+    if (by->speaks == mux::protocol_t(mux::protocol::xmpp{}))
+      if (const auto room = mux::proto::xmpp::room_address(one.query)) {
+        this->apply(request::join_directory_room{room->jid, one.server});
+        return;
+      }
     if (auto link = mux::logic::link_of_id(one.query); link && mux::proto::owns_address(mux::ui::protocol_state_of(s_->ui, *by), one.query)) {
       mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt);
       s_->link_due = *link;
@@ -187,13 +192,18 @@ class rooms_part {
   // opened when it comes.
   void apply(const request::join_directory_room& one) {
     const auto& facts = s_->showing->root().explore.fValue;
-    const auto by = facts ? facts->by : s_->root().main().current;
+    const auto by = one.by ? one.by : facts ? facts->by : s_->root().main().current;
     if (!by || s_->demo())
       return;
     std::vector<std::string> via;
     if (!one.server.empty())
       via.push_back(one.server);
-    s_->joining = mux::logic::link_of_id(one.room);
+    if (by->speaks == mux::protocol_t(mux::protocol::xmpp{}))
+      s_->joining = mux::proto::xmpp::link::room{one.room, by};
+    else if (const auto link = mux::logic::link_of_id(one.room))
+      s_->joining = mux::logic::on_account(*link, *by);
+    else
+      s_->joining.reset();
     s_->net->join(*by, one.room, via);
     mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt);
   }

@@ -338,6 +338,7 @@ struct search_rooms {
 struct join_directory_room {
   std::string room;
   std::string server;
+  std::optional<account_id> by;
 };
 struct create_room {
   std::string name;
@@ -362,6 +363,7 @@ struct find_people {
 // directory and user directory asked.
 struct search_elsewhere {
   std::string query;
+  std::optional<account_id> by;
 };
 struct open_new_room {};
 // Leaving a space: the box asked for, with which of its rooms to leave; the

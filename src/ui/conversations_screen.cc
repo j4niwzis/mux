@@ -275,20 +275,15 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     this->show_elsewhere();
   }
   void show_elsewhere() {
-    auto& shown = std::get<0>(side.elsewhere.fChildren);
-    auto& rooms = std::get<0>(shown.parts.rooms.fChildren);
-    rooms.clear();
-    for (const directory_room& one : std::views::take(rooms_elsewhere, 30))
-      rooms.push_back(directory_room_row<Actions>(*needs_.colours, one, std::string()));
-    auto& people = std::get<0>(shown.parts.people.fChildren);
-    people.clear();
-    for (const found_person& one : std::views::take(people_elsewhere, 30))
-      people.push_back(found_person_row(*needs_.colours, one));
-    shown.parts.rooms_title.setVisible(!rooms.empty());
-    shown.parts.people_title.setVisible(!people.empty());
-    const bool waiting = !rooms_came || !people_came;
-    shown.parts.status.setText(waiting ? "Searching the server\u2026" : "No rooms or people found.");
-    shown.parts.status.setVisible(rooms.empty() && people.empty());
+    auto rooms = rooms_elsewhere;
+    if (current && last_model)
+      std::erase_if(rooms, [&](const auto& room) { return last_model->find(conversation_id{*current, room.id}); });
+    if (const auto address = room_address_for(current, asked_elsewhere))
+      if (std::ranges::none_of(rooms, [&](const auto& room) { return room.id == *address || room.alias == *address; }) &&
+          (!last_model || !last_model->find(conversation_id{*current, *address})))
+        rooms.insert(rooms.begin(), directory_room{.id = *address, .name = "Join room by address", .alias = *address});
+    std::get<0>(side.elsewhere.fChildren).read(std::optional(server_search_facts{
+        std::move(rooms), people_elsewhere, current, !rooms_came || !people_came}));
     side.elsewhere.scrollToStart();
     side.elsewhere.invalidateLayout();
     side.invalidateLayout();

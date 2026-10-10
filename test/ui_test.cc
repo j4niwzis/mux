@@ -9,6 +9,7 @@ import skiff.nodes.text;
 import skiff.scene;
 import skiff.bind;
 import skiff.model;
+import skiff.widgets.motion;
 import mux.core;
 import mux.config;
 import mux.ui;
@@ -2258,13 +2259,13 @@ TEST(RoomInvites, PickerRequestsKeepTheRoomAccountForBothProtocols) {
       std::tuple{xmpp, std::string("room@rooms.example.org"), std::string("bob@example.org")}}) {
     mux::ui::new_chat_facts facts{.query = user, .by = account,
         .inviting = mux::conversation_id{account, room_id}, .room_name = "Lounge"};
-    const auto event = mux::ui::start_chat_events{}.on(mux::ui::start_chat_go{}, facts).fEvent;
+    const auto event = mux::ui::start_chat_request(facts);
     ASSERT_TRUE(event.has_value());
     const auto& invite = spl::get<mux::ui::request::invite_to_room>(*event);
     EXPECT_EQ(invite.room, *facts.inviting);
     EXPECT_EQ(invite.user, user);
     facts.inviting.reset();
-    const auto direct = mux::ui::start_chat_events{}.on(mux::ui::start_chat_go{}, facts).fEvent;
+    const auto direct = mux::ui::start_chat_request(facts);
     ASSERT_TRUE(direct.has_value());
     EXPECT_EQ(spl::get<mux::ui::request::start_direct>(*direct).user, user);
   }
@@ -2591,4 +2592,50 @@ TEST(Controls, ChatNotificationChoicesApplyValuesAndPreserveOtherSettings) {
     EXPECT_EQ(model.root(), expected);
     EXPECT_EQ(std::get<2>(field.fParts).fState.id(), id);
   }
+}
+
+TEST(RoomCreation, DialogRefreshesLocalChoicesWithoutAnotherModelChange) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct cleanup { ~cleanup() { skiff::paint::defaultFont() = nullptr; } } clear;
+  mux::ui::palette colours;
+  const mux::ui::new_room_facts facts{.own_server = "example.org",
+      .by = mux::account_id{mux::protocol::matrix{}, "@alice:example.org"}};
+  skiff::widgets::Dialog<mux::ui::create_room_box_t> dialog;
+  auto& view = dialog.open(mux::ui::create_room_view(colours, facts));
+  mux::ui::shown_model owner(mux::ui::shown_root{});
+  skiff::bind::Binding<mux::ui::shown_model> binding;
+  binding.refresh(dialog, owner);
+  auto& form = std::get<0>(std::get<1>(view.fParts).fChildren);
+  const auto revision = owner.revision();
+  // Dialog children: scrim, sheet, content. Form: scroll, content, Anyone.
+  ASSERT_TRUE(skiff::bind::press(dialog, owner, scene::Path{2, 1, 0, 4}));
+  binding.refresh(dialog, owner);
+  EXPECT_EQ(owner.revision(), revision);
+  EXPECT_EQ(view.fModel.root().access, mux::ui::room_access_t(mux::ui::room_access::everyone{}));
+  EXPECT_TRUE(std::get<4>(form.fParts).state().selected());
+  EXPECT_TRUE(std::get<6>(form.fParts).visible());
+  EXPECT_FALSE(std::get<7>(form.fParts).visible());
+  ASSERT_TRUE(skiff::bind::press(dialog, owner, scene::Path{2, 1, 0, 3}));
+  binding.refresh(dialog, owner);
+  EXPECT_TRUE(std::get<7>(form.fParts).visible());
+  // Encryption toggle is the second child of its row.
+  ASSERT_TRUE(skiff::bind::press(dialog, owner, scene::Path{2, 1, 0, 7, 1}));
+  binding.refresh(dialog, owner);
+  EXPECT_FALSE(view.fModel.root().encrypted);
+  const auto& footer = std::get<2>(view.fParts);
+  EXPECT_GT(std::get<0>(footer.fParts).state().fWidth, 0.0f);
+  EXPECT_GT(std::get<1>(footer.fParts).state().fWidth, 0.0f);
+}
+
+TEST(Search, RoomAddressSuggestionsRespectSelectedProtocol) {
+  const mux::account_id xmpp{mux::protocol::xmpp{}, "alice@example.org"};
+  const mux::account_id matrix{mux::protocol::matrix{}, "@alice:example.org"};
+  EXPECT_EQ(mux::ui::room_address_for(xmpp, "lounge@conference.example.org"),
+            std::optional<std::string>("lounge@conference.example.org"));
+  EXPECT_EQ(mux::ui::room_address_for(matrix, "#lounge:example.org"),
+            std::optional<std::string>("#lounge:example.org"));
+  EXPECT_FALSE(mux::ui::room_address_for(matrix, "lounge@conference.example.org").has_value());
+  EXPECT_FALSE(mux::ui::room_address_for(xmpp, "#lounge:example.org").has_value());
+  EXPECT_FALSE(mux::ui::room_address_for(matrix, "@alice:example.org").has_value());
 }

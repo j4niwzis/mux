@@ -26,7 +26,7 @@ class room_card_part {
   // A link to a room not joined: its card, at once, looking it up -- filled
   // when its server answers (previewed), and joined from there.
   void look_up(const mux::logic::link_step::join& step, const mux::logic::link_t& link) {
-    looked_ = looked_up{step, link};
+    looked_ = looked_up{step, mux::logic::on_account(link, step.by)};
     mux::ui::show(*s_->showing, std::optional(mux::ui::room_card_facts{step.room, mux::room_preview{.note = "Looking it up\u2026"}}));
     s_->net->preview_room(step.by, step.room, step.via);
   }
@@ -52,7 +52,7 @@ class room_card_part {
       return;
     for (const auto& [id, account] : s_->model->accounts())
       for (const auto& [key, chat] : account.conversations)
-        if (!shown.preview.id.empty() && chat.id.id == shown.preview.id) {
+        if (id == shown.by && !shown.preview.id.empty() && chat.id.id == shown.preview.id) {
           mux::ui::show<mux::ui::room_card_facts>(*s_->showing, std::nullopt);
           s_->chat_due = chat.id;
           return;

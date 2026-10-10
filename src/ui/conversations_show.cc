@@ -928,20 +928,20 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   for (scene::Node* shown : std::initializer_list<scene::Node*>{&header, &chat.area, &line})
     shown->setVisible(open);
   chat.hint.setVisible(!none && !chosen.has_value());
-  // Nothing joined matching what is searched -- two letters or more --
+  // A search of two letters or more also asks the selected account's server --
   // the server is asked for rooms and people that do, once for each
   // thing typed.
   const std::string& typed = side.search.field.text();
   const bool find_rooms = current && proto::offers(protocol_state_of(*needs_.shared, *current), proto::feature::room_directory{});
   const bool find_people = current && proto::offers(protocol_state_of(*needs_.shared, *current), proto::feature::people_directory{});
-  const bool elsewhere = (find_rooms || find_people) && !wanted.empty() && listing.chats.empty() && typed.size() >= 2;
+  const bool elsewhere = (find_rooms || find_people) && !wanted.empty() && typed.size() >= 2;
   if (elsewhere && typed != asked_elsewhere) {
     asked_elsewhere = typed;
     rooms_elsewhere.clear();
     people_elsewhere.clear();
     rooms_came = !find_rooms;
     people_came = !find_people;
-    if (wants_) want(*wants_, ::mux::ui::request::search_elsewhere{typed});
+    if (wants_) want(*wants_, ::mux::ui::request::search_elsewhere{typed, current});
     this->show_elsewhere();
   } else if (!elsewhere && !asked_elsewhere.empty()) {
     asked_elsewhere.clear();
@@ -950,6 +950,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     this->show_elsewhere();
   }
   side.elsewhere.setVisible(elsewhere);
+  side.list.setVisible(!listing.chats.empty() || !elsewhere);
   no_chats.setVisible(!none && listing.chats.empty() && !elsewhere);
   chat.empty.setVisible(none);
   this->show_info();

@@ -262,3 +262,61 @@ TEST(Forwarding, KeepsLongCaptionAfterParserCompaction) {
   ASSERT_TRUE(parsed.has_value());
   EXPECT_EQ(parsed->html, caption);
 }
+
+namespace {
+using namespace mux;
+
+TEST(Links, XmppRoomAddressesAndJoinUris) {
+  using mux::proto::xmpp::room_address;
+  EXPECT_EQ(room_address("room@conference.example.org"),
+            std::optional(mux::proto::xmpp::link::room{"room@conference.example.org", std::nullopt}));
+  EXPECT_EQ(room_address("Room@Conference.Example.ORG"),
+            std::optional(mux::proto::xmpp::link::room{"room@conference.example.org", std::nullopt}));
+  EXPECT_EQ(logic::link_of("xmpp:room%40conference.example.org?join"),
+            std::optional<logic::link_t>(mux::proto::xmpp::link::room{"room@conference.example.org", std::nullopt}));
+  EXPECT_FALSE(room_address("room name").has_value());
+  EXPECT_FALSE(room_address("@conference.example.org").has_value());
+  EXPECT_FALSE(room_address("room@").has_value());
+  EXPECT_FALSE(room_address("room@conference.example.org/nick").has_value());
+  EXPECT_FALSE(room_address("xmpp:person@example.org?message").has_value());
+}
+
+TEST(Links, XmppRoomJoinUsesSelectedAccountAndWaitsForItsOwnRoom) {
+  model now;
+  const account_id first{protocol::xmpp{}, "first@example.org"};
+  const account_id second{protocol::xmpp{}, "second@example.org"};
+  const std::string jid = "room@conference.example.org";
+  now.apply(change::connection_changed{first, connection::online{}});
+  now.apply(change::connection_changed{second, connection::online{}});
+  now.apply(change::conversation_updated{.id = {first, jid}, .kind = conversation_kind::group{}});
+  const proto::xmpp::link::room selected{jid, second};
+  EXPECT_EQ(logic::where_to(now, selected, first),
+            logic::link_step_t(logic::link_step::join{second, jid, {}}));
+  EXPECT_FALSE(logic::chat_of(now, selected).has_value());
+  now.apply(change::conversation_updated{.id = {second, jid}, .kind = conversation_kind::group{}});
+  EXPECT_EQ(logic::chat_of(now, selected), std::optional(conversation_id{second, jid}));
+  EXPECT_EQ(logic::where_to(now, selected, first),
+            logic::link_step_t(logic::link_step::open_chat{{second, jid}, std::nullopt}));
+}
+
+}  // namespace
+
+namespace {
+TEST(Links, MatrixPendingRoomJoinKeepsItsSelectedAccount) {
+  using namespace mux;
+  model now;
+  const account_id first{protocol::matrix{}, "@first:example.org"};
+  const account_id second{protocol::matrix{}, "@second:example.org"};
+  now.apply(change::connection_changed{first, connection::online{}});
+  now.apply(change::connection_changed{second, connection::online{}});
+  now.apply(change::conversation_updated{.id = {first, "!room:example.org"},
+      .kind = conversation_kind::group{}, .alias = "#lounge:example.org"});
+  const auto link = logic::on_account(proto::matrix::link::room{"#lounge:example.org", std::nullopt, {}}, second);
+  EXPECT_FALSE(logic::chat_of(now, link).has_value());
+  EXPECT_EQ(logic::where_to(now, link, first),
+            logic::link_step_t(logic::link_step::join{second, "#lounge:example.org", {}}));
+  now.apply(change::conversation_updated{.id = {second, "!room:example.org"},
+      .kind = conversation_kind::group{}, .alias = "#lounge:example.org"});
+  EXPECT_EQ(logic::chat_of(now, link), std::optional(conversation_id{second, "!room:example.org"}));
+}
+}  // namespace

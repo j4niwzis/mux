@@ -14,6 +14,7 @@ export import mux.proto.links;
 export namespace mux::logic {
 
 namespace links_defaults {
+inline auto on_account(const auto& one, const account_id&) { return one; }
 constexpr type_tag<link_list<>> links_type(const auto&) { return {}; }
 inline std::optional<std::monostate> read_link(const auto&, std::string_view) { return std::nullopt; }
 inline std::optional<std::monostate> read_id(const auto&, std::string_view) { return std::nullopt; }
@@ -86,6 +87,14 @@ std::optional<link_t> first_id(protocol_list<Tags...>, std::string_view word) {
 [[nodiscard]] inline std::optional<link_t> link_of(std::string_view url) { return first_link(protocols{}, url); }
 // An ID as it is written -- typed, or said in a message -- read the same way.
 [[nodiscard]] inline std::optional<link_t> link_of_id(std::string_view word) { return first_id(protocols{}, word); }
+
+// A pending join stays on the account that was selected when it was asked.
+[[nodiscard]] inline link_t on_account(const link_t& where, const account_id& by) {
+  return spl::visit([&](const auto& kind) -> link_t {
+    using links_defaults::on_account;
+    return on_account(kind, by);
+  }, where);
+}
 
 // The chat a link names, where the model has it.
 [[nodiscard]] inline std::optional<conversation_id> chat_of(const model& now, const link_t& where) {

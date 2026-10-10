@@ -109,28 +109,18 @@ void part_apply(menu_part& self, const request::reply_to& one) {
 }
 
 void part_apply(menu_part& self, const request::menu_quote_reply&) {
-  const std::string selected = self.target_.selection ? self.target_.copied : std::string();
+  const auto selected = self.target_.selection ? self.target_.copied_fragment : std::nullopt;
+  const auto plain = self.target_.selection ? self.target_.copied : std::string();
   part_apply(self, request::menu_reply{});
-  if (selected.empty())
-    return;
-  std::string quote;
-  for (std::size_t at = 0; at <= selected.size();) {
-    const std::size_t end = std::min(selected.find('\n', at), selected.size());
-    quote += "> ";
-    quote += std::string_view(selected).substr(at, end - at);
-    quote += '\n';
-    at = end + 1;
-  }
-  quote += '\n';
+  if (plain.empty()) return;
+  const auto fragment = selected.value_or(skiff::scene::clipboardFragment(plain, {}));
   // Into the field that answers it: the thread's, where it is answered there.
   auto& screen = self.s_->root().main();
   if (screen.parts.threads.answering == self.target_.id) {
-    auto& field = screen.parts.threads.parts.line.parts.input.parts.field;
-    field.setText(quote + std::string(field.text()));
+    mux::ui::prepend_quote(screen.parts.threads.parts.line.parts.input.parts.field, fragment);
     return;
   }
-  auto& line = screen.line;
-  line.set_text(quote + std::string(line.text()));
+  mux::ui::prepend_quote(screen.line.parts.input.parts.field, fragment);
 }
 
 void part_apply(menu_part& self, const request::menu_reply&) {

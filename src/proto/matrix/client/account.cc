@@ -203,7 +203,7 @@ class account {
   // each as a message in it; an answer sent in one.
   void list_threads(std::string room);
   void load_thread(std::string room, std::string root);
-  void send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to);
+  void send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles = {});
   // The user directory searched: people_found for what was asked.
   void search_people(std::string term);
   // What this account knows of a person's encryption identity, said

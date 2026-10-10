@@ -54,6 +54,7 @@ struct menu_facts {
   bool own = false;
   std::string text;    // all of it
   std::string copied;  // what Copy takes: the selection, or all of it
+  std::optional<skiff::scene::ClipboardFragment> copied_fragment;
   bool selection = false;
   std::vector<seen_reader> seen;
   std::optional<std::string> media;  // a picture's or a file's source
@@ -438,6 +439,7 @@ struct send_in_thread {
   std::string root;
   std::string text;
   std::optional<std::string> reply_to;  // an answer in it answered
+  std::vector<styled_run> styles;
 };
 struct menu_thread {};
 struct open_packs {};

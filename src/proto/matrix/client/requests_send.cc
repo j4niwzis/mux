@@ -547,12 +547,12 @@ void account<Sink>::load_thread(std::string room, std::string root) {
 }
 
 template <class Sink>
-void account<Sink>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to) {
+void account<Sink>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles) {
   this->spawn_sending([this, room = std::move(room), body = std::move(body), root = std::move(root), latest = std::move(latest),
-                 reply_to = std::move(reply_to)] {
+                 reply_to = std::move(reply_to), styles = std::move(styles)] {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
-    const auto html = html_of(body, emotes_in(room));
+    const auto html = html_of(body, emotes_in(room), styles);
     sink_(change::message_added{message{.in = in,
                                         .id = txn,
                                         .sender = id_.address,

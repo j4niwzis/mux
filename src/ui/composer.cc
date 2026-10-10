@@ -24,6 +24,34 @@ import :message;
 
 export namespace mux::ui {
 
+// Prefix each displayed line as a quote, shifting its inline images by
+// the added markers. Image identity comes from the selection, not a pack.
+[[nodiscard]] inline scene::ClipboardFragment quoted_fragment(const scene::ClipboardFragment& selected) {
+  std::string display;
+  std::vector<scene::ClipboardAtom> atoms;
+  for (std::size_t at = 0; at <= selected.display.size();) {
+    const std::size_t end = std::min(selected.display.find('\n', at), selected.display.size());
+    display += "> ";
+    const std::size_t start = display.size();
+    display.append(selected.display, at, end - at);
+    for (auto atom : selected.atoms)
+      if (atom.first >= at && atom.last <= end) {
+        atom.first = start + atom.first - at;
+        atom.last = start + atom.last - at;
+        atoms.push_back(std::move(atom));
+      }
+    display += '\n';
+    at = end + 1;
+  }
+  display += '\n';
+  return scene::clipboardFragment(std::move(display), std::move(atoms));
+}
+
+inline void prepend_quote(auto& field, const scene::ClipboardFragment& selected) {
+  field.select(0, 0);
+  field.insertFragment(quoted_fragment(selected));
+}
+
 // An edge between two parts of the window, to drag: the pointer turns into
 // a resize arrow over it, and a drag asks `on_drag(x)` for the edge to be at
 // x. It draws a thin line where `with_line`.

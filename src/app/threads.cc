@@ -58,7 +58,7 @@ class threads_part {
     std::string latest = one.root;
     if (const auto found = chat->threads.find(one.root); found != chat->threads.end() && !found->second.empty())
       latest = found->second.back().id;
-    s_->net->send_in_thread(*chosen, one.text, one.root, latest, one.reply_to);
+    s_->net->send_in_thread(*chosen, one.text, one.root, latest, one.reply_to, one.styles);
   }
 
  private:

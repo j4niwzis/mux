@@ -111,6 +111,8 @@ void sink::operator()(mux::change_t one) const {
   if (room_there && !to->sent) {
     to->sent = true;
     to->account->send("!r:x.org", "from mux");
+    to->account->send_in_thread("!r:x.org", "> :neocat:\n\nreply", "$root", "$root", "$quoted",
+        {{2, 10, mux::run_style::custom_emoji{"mxc://original/neocat"}}});
     to->account->react("!r:x.org", "$m1", "mxc://remote/neocat", true, ":neocat:");
     to->account->react("!r:x.org", "$m1", "hi mxc://remote/neocat", true, "hi :neocat:");
     to->account->react("!r:x.org", "$m1", "👍", true);
@@ -129,7 +131,7 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
 
   std::vector<request> heard;
   recorder seen{.running = &running};
-  int syncs = 0, reactions_sent = 0;
+  int syncs = 0, reactions_sent = 0, messages_sent = 0;
   std::array<int, 3> initial_updates{};
   running.spawn([&] {
     for (;;) {
@@ -158,14 +160,16 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
                     "ephemeral":{"events":[{"type":"m.receipt","content":{
                       "$m1":{"m.read":{"@b:x.org":{"ts":15}}}}}]}}}}})";
                 }
-                if (syncs >= 3 && reactions_sent == 4)
+                if (syncs >= 3 && reactions_sent == 4 && messages_sent == 2)
                   seen.account->stop();
               }
             } else if (one->target.find("/send/m.reaction/") != std::string::npos) {
               ++reactions_sent;
               body = R"({"event_id":"$reaction)" + std::to_string(reactions_sent) + R"("})";
             } else if (one->target.find("/send/m.room.message/") != std::string::npos) {
-              body = R"({"event_id":"$sent"})";
+              ++messages_sent;
+              body = one->body.find("m.thread") != std::string::npos
+                         ? R"({"event_id":"$threadsent"})" : R"({"event_id":"$sent"})";
             }
             wire->write(answer(body));
             wire->flush();
@@ -224,6 +228,15 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   EXPECT_EQ(sent_one->id, "$sent");
   EXPECT_EQ(sent_one->delivery, mux::delivery_t{mux::delivery::sent{}});
 
+  // The quoted image source survives sending into a thread.
+  const auto thread_message = std::ranges::find_if(heard, [](const auto& one) {
+    return one.target.find("/send/m.room.message/") != std::string::npos &&
+           one.body.find("m.thread") != std::string::npos;
+  });
+  ASSERT_NE(thread_message, heard.end());
+  EXPECT_NE(thread_message->body.find("mxc://original/neocat"), std::string::npos);
+  EXPECT_NE(thread_message->body.find("data-mx-emoticon"), std::string::npos);
+  EXPECT_NE(thread_message->body.find("$quoted"), std::string::npos);
   // The wire keeps media identities separate from both MSC4027 label names.
   const auto reactions = std::ranges::to<std::vector>(std::views::filter(heard, [](const auto& one) {
     return one.target.find("/send/m.reaction/") != std::string::npos;

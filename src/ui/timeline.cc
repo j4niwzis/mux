@@ -194,7 +194,8 @@ template <class Actions>
   facts.own = one.outgoing;
   facts.text = one.plain;
   facts.selection = one.parts.body.parts.text.hasSelection();
-  facts.copied = facts.selection ? one.parts.body.parts.text.selected() : one.plain;
+  if (facts.selection) facts.copied_fragment = one.parts.body.parts.text.selectedFragment();
+  facts.copied = facts.copied_fragment ? facts.copied_fragment->text : one.plain;
   if (one.said.attachment) {
     facts.media = one.said.attachment->video.value_or(one.said.attachment->source);
     facts.media_name = one.said.attachment->name;

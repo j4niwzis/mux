@@ -2435,3 +2435,49 @@ TEST(StartChat, BoundGoEmitsRealRequestsAndRowsIgnoreOtherModels) {
   EXPECT_TRUE(spl::holds_alternative<mux::ui::request::invite_to_room>(*asked));
   EXPECT_EQ(spl::get<mux::ui::request::invite_to_room>(*asked).room, *facts.inviting);
 }
+
+TEST(Composer, QuotedEmojiKeepTheirOriginalSourcesAndDraftFormatting) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
+  stub program;
+  ui_state ui;
+  auto needs = ui.needs(program);
+  mux::ui::conversations_screen<stub> screen(needs);
+  auto& field = screen.line.parts.input.parts.field;
+  field.insertAtom("\u2003", "mxc://draft/emoji", ":draft:", true);
+  field.insertText(" words");
+  field.setSpans({{3, 9, mux::run_style::bold{}}});
+  const auto selection = scene::clipboardFragment("Hi \u2003!\n\u2003", {
+      {3, 6, "mxc://original/first", ":neocat:", true},
+      {8, 11, "mxc://original/second", ":neocat:", true}});
+  const auto quote = mux::ui::quoted_fragment(selection);
+  EXPECT_EQ(quote.text, "> Hi :neocat:!\n> :neocat:\n\n");
+  EXPECT_EQ(quote.display, "> Hi \u2003!\n> \u2003\n\n");
+  ASSERT_EQ(quote.atoms.size(), 2u);
+  EXPECT_EQ(quote.atoms[0].first, 5u);
+  EXPECT_EQ(quote.atoms[1].first, 12u);
+  mux::ui::prepend_quote(field, selection);
+  EXPECT_EQ(screen.line.plain(), "> Hi :neocat:!\n> :neocat:\n\n:draft: words");
+  ASSERT_EQ(field.atoms().size(), 3u);
+  EXPECT_EQ(field.atoms()[0].target, "mxc://original/first");
+  EXPECT_EQ(field.atoms()[1].target, "mxc://original/second");
+  EXPECT_EQ(field.atoms()[2].target, "mxc://draft/emoji");
+  ASSERT_EQ(field.spans().size(), 1u);
+  EXPECT_EQ(field.spans()[0].first, quote.display.size() + 3);
+  const auto runs = screen.line.styles();
+  EXPECT_EQ(std::ranges::count_if(runs, [](const auto& run) {
+    return spl::holds_alternative<mux::run_style::custom_emoji>(run.style);
+  }), 3);
+  auto& thread = screen.parts.threads;
+  thread.open = "$root";
+  thread.answering = "$quoted";
+  mux::ui::prepend_quote(thread.parts.line.parts.input.parts.field, selection);
+  const auto sent = thread.send();
+  ASSERT_TRUE(sent);
+  EXPECT_EQ(sent->text, quote.text);
+  EXPECT_EQ(sent->reply_to, "$quoted");
+  ASSERT_EQ(sent->styles.size(), 2u);
+  EXPECT_EQ(spl::get<mux::run_style::custom_emoji>(sent->styles[0].style).url, "mxc://original/first");
+  EXPECT_EQ(spl::get<mux::run_style::custom_emoji>(sent->styles[1].style).url, "mxc://original/second");
+}

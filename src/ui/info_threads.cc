@@ -300,7 +300,7 @@ template <class Actions> struct threads_panel : skiff::compose::Stacked {
     const std::string text = parts.line.plain();
     if (!open || text.empty())
       return asked;
-    asked = ::mux::ui::request::send_in_thread{*open, text, answering};
+    asked = ::mux::ui::request::send_in_thread{*open, text, answering, parts.line.styles()};
     parts.line.clear();
     this->stop_answering();
     return asked;

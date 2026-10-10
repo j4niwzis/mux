@@ -514,14 +514,14 @@ struct network {
     });
   }
   void send_in_thread(const mux::conversation_id& in, std::string body, std::string root, std::string latest,
-                      std::optional<std::string> reply_to) {
+                      std::optional<std::string> reply_to, std::vector<mux::styled_run> styles) {
     loop.post([this, in, body = std::move(body), root = std::move(root), latest = std::move(latest),
-               reply_to = std::move(reply_to)] {
+               reply_to = std::move(reply_to), styles = std::move(styles)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.send_in_thread(in.id, body, root, latest, reply_to))) { a.send_in_thread(in.id, body, root, latest, reply_to); }, *account);
+                ask_if_able([&](auto& a) -> decltype(void(a.send_in_thread(in.id, body, root, latest, reply_to, styles))) { a.send_in_thread(in.id, body, root, latest, reply_to, styles); }, *account);
             },
             one.account);
     });

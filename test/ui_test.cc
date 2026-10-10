@@ -2094,6 +2094,38 @@ TEST(Controls, RoomEventsAllSurvivesReopeningAndOpeningItsHeader) {
   exercise(false);
 }
 
+TEST(Controls, RoomEventsReadSavedChoiceInsideManageDialog) {
+  using choices = mux::config::chat_choices;
+  const mux::account_id account{mux::protocol::matrix{}, "@alice:example.org"};
+  const mux::conversation_id room{account, "!room:example.org"};
+  struct root { skiff::model::Keyed<mux::conversation_id, choices> chats; } initial;
+  choices saved;
+  saved.room_events = true;
+  initial.chats.put(room, saved);
+  skiff::model::Model<root, skiff::bind::NoReactions> model(std::move(initial));
+  mux::ui::palette colours;
+  mux::ui::looks_shown looks;
+  mux::ui::room_settings_facts facts;
+  facts.chat = room;
+  facts.speaks = mux::protocol::matrix{};
+  const auto reopen = [&](std::size_t expected) {
+    mux::ui::room_settings<stub> dialog(&colours, &looks, facts);
+    skiff::bind::Binding<decltype(model)> binding;
+    binding.refresh(dialog, model);
+    auto& general = spl::get<mux::ui::room_general_page_t>(dialog.holder().parts.page);
+    auto& settings = std::get<2>(general.fParts);
+    auto& events = std::get<0>(settings.fParts);
+    EXPECT_EQ(std::get<0>(events.fParts).current, expected);
+  };
+  reopen(1u); // All events, from the model rather than the dialog snapshot.
+  saved.room_events = false;
+  model.apply(skiff::model::put<choices>(room, saved));
+  reopen(2u);
+  saved.room_events.reset();
+  model.apply(skiff::model::put<choices>(room, saved));
+  reopen(0u);
+}
+
 // No UI choice may be delivered as an application request. This sink makes
 // the test fail to compile if the wrong model attempts to dispatch one.
 namespace {

@@ -238,8 +238,8 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # Without one, skiff is built as skiff.model alone, and no Skia is asked for.
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
-# editor menu facts and elapsed-time animation fixes from this revision.
-set(mux_skiff_pin 54c7a4691437d1582db0efea9291d84d5ef47995)
+# editor menu facts, elapsed-time animation, and held-page binding fixes.
+set(mux_skiff_pin 9b5959177fedcb539f9af5ec5429db4007182a09)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}

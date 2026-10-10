@@ -108,8 +108,8 @@ auto explore_view(const palette& colours, const explore_facts& facts) {
           wrapped(nodes::Text(status, 13.0f, colours.dim)))),
       c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(
           c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))),
-      c::visible(more, c::styled({.fillX = true, .height = 32.0f, .disabled = facts.loading,
-                                .margin = {6.0f, 10.0f, 0.0f, 10.0f}},
+      c::visible(more, c::styled({.fillX = true, .height = 32.0f,
+                                .margin = {6.0f, 10.0f, 0.0f, 10.0f}, .disabled = facts.loading},
           widgets::SendButton<request::search_rooms>(colours.widgets, "Load more",
               {facts.listing ? facts.listing->server : facts.server,
                facts.listing ? facts.listing->query : facts.query,

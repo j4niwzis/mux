@@ -408,3 +408,37 @@ TEST(Matrix, PushRulesUpdateAccountAndRoomPreferencesWithoutEchoingPendingEdits)
   ASSERT_EQ(changes.size(), 1u);
   EXPECT_FALSE(changes.front().room.has_value());
 }
+
+TEST(Matrix, AccountSoundFollowsActiveMentionRulesAndProtectsPendingChoices) {
+  mux::net::loop running;
+  auto tls = mux::net::client_tls();
+  std::vector<mux::change::notifications_changed> changes;
+  const auto sink = [&](mux::change_t event) {
+    spl::visit(spl::overloaded{[&](const mux::change::notifications_changed& now) { changes.push_back(now); },
+        [](const auto&) {}}, event);
+  };
+  mux::proto::matrix::client::account account(running, tls,
+      mux::proto::matrix::client::settings{.user_id = "@alice:example.org"}, sink);
+  const auto playing = knot::try_read<loom::ev::account_data_event>(R"({"type":"m.push_rules","content":{"global":{
+    "override":[{"rule_id":".m.rule.is_user_mention","default":true,"enabled":true,
+      "actions":["notify",{"set_tweak":"sound","value":"default"}]}],
+    "underride":[{"rule_id":".m.rule.message","default":true,"enabled":false,"actions":[]}]}}})");
+  const auto silent = knot::try_read<loom::ev::account_data_event>(R"({"type":"m.push_rules","content":{"global":{
+    "override":[{"rule_id":".m.rule.is_user_mention","default":true,"enabled":true,"actions":["notify"]}],
+    "underride":[{"rule_id":".m.rule.message","default":true,"enabled":false,
+      "actions":["notify",{"set_tweak":"sound","value":"default"}]}]}}})");
+  ASSERT_TRUE(playing);
+  ASSERT_TRUE(silent);
+  account.receive_notifications(*playing);
+  ASSERT_EQ(changes.size(), 1u);
+  EXPECT_EQ(changes.back().choices.mentions, true);
+  EXPECT_EQ(changes.back().choices.sound, true);
+  changes.clear();
+  account.receive_notifications(*silent);
+  ASSERT_EQ(changes.size(), 1u);
+  EXPECT_EQ(changes.back().choices.sound, false);
+  account.set_notifications(std::nullopt, {true, true, true}, {true, true, true});
+  changes.clear();
+  account.receive_notifications(*silent);
+  EXPECT_TRUE(changes.empty());
+}

@@ -816,6 +816,16 @@ inline bool notification_enabled(const auto& rule) {
     return action && (*action == "notify" || *action == "coalesce");
   });
 }
+inline bool notification_account_sound(const auto& rules) {
+  const auto sounds = [](const auto& group) {
+    return group && std::ranges::any_of(*group, [](const auto& rule) {
+      return rule.default_ && notification_enabled(rule) && notification_sound(rule);
+    });
+  };
+  // Ordinary messages can be disabled or silent while mentions still
+  // play a sound. Read the active rules rather than only .m.rule.message.
+  return sounds(rules.override_) || sounds(rules.underride);
+}
 template <class Sink>
 void account<Sink>::receive_notifications(const loom::ev::account_data_event& event) {
   spl::visit(spl::overloaded{[&](const loom::ev::m_push_rules_content_t& content) {
@@ -832,8 +842,8 @@ void account<Sink>::receive_notifications(const loom::ev::account_data_event& ev
         if (std::ranges::contains(std::array<std::string_view, 4>{".m.rule.message", ".m.rule.encrypted",
                 ".m.rule.room_one_to_one", ".m.rule.encrypted_room_one_to_one"}, std::string_view(rule.rule_id))) {
           if (notification_enabled(rule)) account.mentions = false;
-          if (rule.rule_id == ".m.rule.message") account.sound = notification_sound(rule);
         }
+    account.sound = notification_account_sound(rules);
     if (!pending_notifications_.contains(std::nullopt)) sink_(change::notifications_changed{id_, std::nullopt, account});
     std::map<std::string, mux::notification_choices> rooms;
     if (rules.room)

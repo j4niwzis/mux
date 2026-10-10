@@ -63,7 +63,7 @@ TEST(Store, EditEventIdsSurviveReopening) {
   }
   mux::app::message_store reopened;
   reopened.vault = &vault;
-  const auto saved = reopened.read(room);
+  const auto saved = reopened.everything(room);
   ASSERT_TRUE(saved.contains("$original"));
   const auto& restored = saved.at("$original");
   ASSERT_EQ(restored.versions.size(), 2u);

@@ -6,6 +6,7 @@ import skia;
 import skiff.paint;
 import skiff.nodes.image;
 import skiff.nodes.text;
+import skiff.nodes.flow;
 import skiff.scene;
 import skiff.bind;
 import skiff.model;
@@ -1292,7 +1293,7 @@ TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
   frame(1332.0);
   ASSERT_NE(settings.appearance(), nullptr);
   auto& bubbles = std::get<1>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles;
-  EXPECT_EQ(bubbles.parts.kinds.parts.head.parts.value.text(), "Translucent");
+  EXPECT_EQ(std::get<1>(bubbles.parts.kinds.parts.head.fParts).text(), "Translucent");
   EXPECT_EQ(bubbles.parts.opacity_label.text(), "Opacity: 65%");
   EXPECT_NEAR(bubbles.parts.opacity.fraction(), 55.0f / 90.0f, 0.001f);
   EXPECT_NEAR(settings.offset(), offset, 1.0f);
@@ -1301,7 +1302,7 @@ TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
   ui.looks.everywhere.bubbles = mux::config::bubble_look{mux::config::bubbles::frosted{}, 80};
   ui.looks.bubbles_everywhere = *ui.looks.everywhere.bubbles;
   frame(1348.0);
-  EXPECT_EQ(std::get<1>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles.parts.kinds.parts.head.parts.value.text(), "Frosted");
+  EXPECT_EQ(std::get<1>(std::get<1>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles.parts.kinds.parts.head.fParts).text(), "Frosted");
 
   // A queued refresh must not reopen a page the user just left.
   settings.show_appearance(theme, accent);
@@ -2016,7 +2017,7 @@ TEST(Controls, RoomEventsDropdownKeepsDisabledShowHideRows) {
   initial.typing = false;
   skiff::model::Model<mux::config::chat_choices, skiff::bind::NoReactions> model(initial);
   mux::ui::palette colours;
-  auto field = mux::ui::event_kinds_field<mux::config::chat_choices>(colours, mux::ui::choice_level::chat{});
+  auto field = mux::ui::event_kinds_field<mux::config::chat_choices>(colours, mux::choice_level::chat{});
   auto& mode = std::get<0>(field.fParts);
   auto& rows = std::get<1>(field.fParts);
   skiff::bind::Binding<decltype(model)> binding;
@@ -2136,7 +2137,7 @@ struct room_events_other_root { int unrelated = 0; };
 }
 TEST(Controls, RoomEventsDropdownDefersToItsOwningModel) {
   mux::ui::palette colours;
-  auto field = mux::ui::event_kinds_field<mux::config::chat_choices>(colours, mux::ui::choice_level::chat{});
+  auto field = mux::ui::event_kinds_field<mux::config::chat_choices>(colours, mux::choice_level::chat{});
   skiff::model::Model<room_events_other_root, skiff::bind::NoReactions> other;
   skiff::model::Model<mux::config::chat_choices, skiff::bind::NoReactions> owner;
   room_events_no_requests sink;
@@ -2320,7 +2321,7 @@ TEST(Controls, ScalarSettingsIgnoreOtherModelsAndChangeOnlyTheirNamedField) {
   using field = skiff::model::Field<&choices::receipts>;
   mux::ui::palette colours;
   auto view = mux::ui::show_hide_field<mux::ui::receipts_setting, std::optional<bool>, field>(
-      colours, mux::ui::choice_level::chat{});
+      colours, mux::choice_level::chat{});
   // The window model contains many bools and optional bools. This control
   // belongs to the settings model, even when the window binding walks it.
   mux::ui::shown_model shown(mux::ui::shown_root{});
@@ -2339,7 +2340,7 @@ TEST(Controls, ScalarSettingsIgnoreOtherModelsAndChangeOnlyTheirNamedField) {
   EXPECT_EQ(model.root().typing, true);
   EXPECT_TRUE(std::get<2>(view.fParts).fState.fSelected);
   auto limit = mux::ui::jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&choices::jump_search>>(
-      colours, mux::ui::choice_level::chat{});
+      colours, mux::choice_level::chat{});
   window_binding.refresh(limit, shown);
   binding.refresh(limit, model);
   ASSERT_TRUE(skiff::bind::press(limit, model, scene::Path{2, 0}));

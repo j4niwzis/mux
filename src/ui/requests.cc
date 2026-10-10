@@ -348,6 +348,8 @@ struct create_room {
   bool space_members = false;
   bool make_space = false;
 };
+struct open_room_invite { mux::conversation_id room; };
+struct invite_to_room { mux::conversation_id room; std::string user; };
 // Element's Start chat and Create a room: people searched for, a room's
 // box opened and closed; and a text put on the clipboard (one's link).
 struct find_people {

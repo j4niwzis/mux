@@ -26,6 +26,11 @@ inline std::string directory_server(const state&, std::string_view address) {
 // The current XMPP client does not emit service events into the timeline.
 // Keep their controls absent until those events are implemented.
 inline std::vector<room_event_t> room_event_kinds(const state&) { return {}; }
+inline part::chat_rights chat_rights(const state& now, const conversation& chat) {
+  const bool group = spl::visit(spl::overloaded{
+      [](conversation_kind::group) { return true; }, [](const auto&) { return false; }}, chat.kind);
+  return {now.online, now.online && group && !chat.invite, false};
+}
 
 // Edits as XMPP has them: one's own last message corrected, and no other
 // (Last Message Correction, XEP-0308).

@@ -97,7 +97,7 @@ cme_declare_port(NAME chevron PROVIDES chevron
 cme_options(chevron "CHEVRON_TESTS OFF")
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG 0daada1cbe7a9a40c0e648c5b76225efd2523f47
+  GIT_TAG 97bda7d7da78a8f8fa109451b3c8b57cc6087e54
   LICENSE AGPL-3.0-only
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")

@@ -150,13 +150,17 @@ template <class Actions> struct forward_box : skiff::compose::Stacked {
 
 // Someone found: their picture, name and ID; pressed, the chat with them --
 // in Start chat, and in the chat list where nothing joined matches.
-inline auto found_person_row(const palette& colours, const found_person& one) {
+template <class Event>
+inline auto person_pick_row(const palette& colours, const found_person& one, Event event) {
   const std::string name = one.name.empty() ? one.id : one.name;
-  return skiff::compose::onClick(request::start_direct{one.id}, skiff::compose::row(
+  return skiff::compose::onClick(std::move(event), skiff::compose::row(
       skiff::compose::hbox(12.0f, {.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
           .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
       avatar_mark(one.id, name, 36.0f),
       two_lines(colours, name, one.id, 14.0f, 2.0f)), name);
+}
+inline auto found_person_row(const palette& colours, const found_person& one) {
+  return person_pick_row(colours, one, request::start_direct{one.id});
 }
 using found_person_row_t = decltype(found_person_row(std::declval<const palette&>(), std::declval<const found_person&>()));
 
@@ -173,7 +177,14 @@ struct new_chat_facts {
   std::string query;
   std::optional<account_id> by;
   skiff::model::Keyed<std::string, found_person> rows;
+  std::optional<conversation_id> inviting;
+  std::string room_name;
 };
+using choose_person_request = spl::variant<request::start_direct, request::invite_to_room>;
+inline choose_person_request choose_person(const std::optional<conversation_id>& room, std::string user) {
+  if (room) return request::invite_to_room{*room, std::move(user)};
+  return request::start_direct{std::move(user)};
+}
 inline bool direct_address(const new_chat_facts& facts, std::string_view text) {
   if (!facts.by || !proto::owns_address(state_before(facts.by->speaks), text)) return false;
   return text.starts_with('@') ? text.find(':') != std::string_view::npos : text.find('@') != std::string_view::npos;
@@ -194,6 +205,8 @@ struct find_people_typed {
 };
 struct start_chat_go {};
 struct start_chat_events {
+  std::optional<account_id> by;
+  std::optional<conversation_id> inviting;
   auto on(const request::find_people& event, const new_chat_facts& now) const {
     auto next = now;
     next.query = event.query;
@@ -202,38 +215,41 @@ struct start_chat_events {
     return std::tuple{skiff::model::over<new_chat_facts>(skiff::model::setTo(std::move(next))), skiff::model::Up{event}};
   }
   auto on(start_chat_go, const new_chat_facts& now) const {
-    std::optional<request::start_direct> asked;
-    if (direct_address(now, now.query)) asked = request::start_direct{now.query};
-    else if (!now.rows.empty()) asked = request::start_direct{(*now.rows.begin()).first};
+    std::optional<choose_person_request> asked;
+    if (direct_address(now, now.query)) asked = choose_person(now.inviting, now.query);
+    else if (!now.rows.empty()) asked = choose_person(now.inviting, (*now.rows.begin()).first);
     return skiff::model::Up{asked};
   }
 };
 inline auto start_chat_view(const palette& colours, const new_chat_facts& facts) {
   namespace c = skiff::compose;
   const auto words = proto::direct_chat_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol::matrix{}));
-  return c::scoped<new_chat_facts>(start_chat_events{}, c::column(
+  return c::scoped<new_chat_facts>(start_chat_events{facts.by, facts.inviting}, c::column(
       c::vbox(8.0f, {.fillX = true, .height = 560.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}}),
-      page_header<no_back, sends<request::close_new_chat>>(colours, "Start chat", {}, {}, false, true),
-      c::styled({.fillX = true}, wrapped(nodes::Text(words.intro, 14.0f, colours.text))),
+      page_header<no_back, sends<request::close_new_chat>>(colours, facts.inviting ? "Invite to " + facts.room_name : "Start chat", {}, {}, false, true),
+      c::styled({.fillX = true}, wrapped(nodes::Text(facts.inviting ? "Choose a contact or enter their full address to invite them to this room." : words.intro, 14.0f, colours.text))),
       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           c::styled({.height = 36.0f, .grow = scene::axes::kX},
               widgets::TextBox<find_people_typed>(colours.widgets, words.hint, {})),
           c::styled({.width = 64.0f, .height = 34.0f},
-              primary(widgets::SendButton<start_chat_go>(colours.widgets, "Go", {})))),
+              primary(widgets::SendButton<start_chat_go>(colours.widgets, facts.inviting ? "Invite" : "Go", {})))),
       c::text_for<new_chat_facts>([](const auto& now) {
         return now.query.empty() ? std::string("Suggestions") : now.rows.empty() ? std::string("No results") : std::string("Results");
       }, nodes::Text("", 12.0f, colours.dim, true)),
       c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(
-          c::each<std::string, found_person>([colours = &colours](const auto& person) {
-            return found_person_row(*colours, person);
+          c::each<std::string, found_person>([colours = &colours, room = facts.inviting](const auto& person) {
+            return person_pick_row(*colours, person, choose_person(room, person.id));
           }, c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY})))),
-      c::styled({.fillX = true}, wrapped(nodes::Text("You can share your address with someone you haven't chatted with yet.", 13.0f, colours.dim))),
-      nodes::Text(facts.own_link, 13.0f, colours.accent),
-      widgets::SendButton<request::copy_text>(colours.widgets, "Copy link", {facts.own_link})));
+      c::visible(!facts.inviting, c::styled({.fillX = true}, wrapped(nodes::Text("You can share your address with someone you haven't chatted with yet.", 13.0f, colours.dim)))),
+      c::visible(!facts.inviting, nodes::Text(facts.own_link, 13.0f, colours.accent)),
+      c::visible(!facts.inviting, widgets::SendButton<request::copy_text>(colours.widgets, "Copy link", {facts.own_link}))));
 }
 using start_chat_box_t = decltype(start_chat_view(std::declval<const palette&>(), std::declval<const new_chat_facts&>()));
 template <class Actions> using start_chat_box = start_chat_box_t;
 inline bool content_persistent(std::type_identity<start_chat_box_t>) { return true; }
+inline bool content_matches(const start_chat_box_t& up, const new_chat_facts& facts) {
+  return up.fHandlers.by == facts.by && up.fHandlers.inviting == facts.inviting;
+}
 inline dialog_look content_look(std::type_identity<start_chat_box_t>) { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
 template <class Needs>
 auto make_content(std::type_identity<start_chat_box_t>, const Needs& needs, const new_chat_facts& facts) {

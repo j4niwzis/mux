@@ -2249,3 +2249,67 @@ TEST(Emoji, UnsupportedTabsAreUnavailableAndHidden) {
   EXPECT_FALSE(std::get<1>(tabs).visible());
   EXPECT_FALSE(std::get<2>(tabs).visible());
 }
+
+TEST(RoomInvites, PickerRequestsKeepTheRoomAccountForBothProtocols) {
+  const mux::account_id matrix{mux::protocol::matrix{}, "@alice:example.org"};
+  const mux::account_id xmpp{mux::protocol::xmpp{}, "alice@example.org"};
+  for (const auto& [account, room_id, user] : std::array{
+      std::tuple{matrix, std::string("!room:example.org"), std::string("@bob:example.org")},
+      std::tuple{xmpp, std::string("room@rooms.example.org"), std::string("bob@example.org")}}) {
+    mux::ui::new_chat_facts facts{.query = user, .by = account,
+        .inviting = mux::conversation_id{account, room_id}, .room_name = "Lounge"};
+    const auto event = mux::ui::start_chat_events{}.on(mux::ui::start_chat_go{}, facts).fEvent;
+    ASSERT_TRUE(event.has_value());
+    const auto& invite = spl::get<mux::ui::request::invite_to_room>(*event);
+    EXPECT_EQ(invite.room, *facts.inviting);
+    EXPECT_EQ(invite.user, user);
+    facts.inviting.reset();
+    const auto direct = mux::ui::start_chat_events{}.on(mux::ui::start_chat_go{}, facts).fEvent;
+    ASSERT_TRUE(direct.has_value());
+    EXPECT_EQ(spl::get<mux::ui::request::start_direct>(*direct).user, user);
+  }
+}
+
+TEST(RoomInvites, ExistingAddMemberButtonSendsTheRoomEvenWithNoListedMembers) {
+  using panel = mux::ui::info_panel<stub>;
+  mux::ui::palette colours;
+  const mux::conversation_id room{{mux::protocol::matrix{}, "@alice:example.org"}, "!room:example.org"};
+  auto header = panel::members_head(colours, panel::members_heading{0, room, true});
+  auto& button = std::get<2>(header.fParts);
+  EXPECT_TRUE(button.visible());
+  EXPECT_EQ(button.onPress().room, room);
+  auto denied = panel::members_head(colours, panel::members_heading{0, room, false});
+  EXPECT_FALSE(std::get<2>(denied.fParts).visible());
+}
+
+TEST(Controls, ScalarSettingsIgnoreOtherModelsAndChangeOnlyTheirNamedField) {
+  using choices = mux::config::chat_choices;
+  using field = skiff::model::Field<&choices::receipts>;
+  mux::ui::palette colours;
+  auto view = mux::ui::show_hide_field<mux::ui::receipts_setting, std::optional<bool>, field>(
+      colours, mux::ui::choice_level::chat{});
+  // The window model contains many bools and optional bools. This control
+  // belongs to the settings model, even when the window binding walks it.
+  mux::ui::shown_model shown(mux::ui::shown_root{});
+  skiff::bind::Binding<decltype(shown)> window_binding;
+  window_binding.refresh(view, shown);
+  choices initial;
+  initial.receipts = false;
+  initial.typing = true;
+  skiff::model::Model<choices, skiff::bind::NoReactions> model(initial);
+  skiff::bind::Binding<decltype(model)> binding;
+  binding.refresh(view, model);
+  EXPECT_TRUE(std::get<3>(view.fParts).fState.fSelected);
+  ASSERT_TRUE(skiff::bind::press(view, model, scene::Path{2}));
+  binding.refresh(view, model);
+  EXPECT_EQ(model.root().receipts, true);
+  EXPECT_EQ(model.root().typing, true);
+  EXPECT_TRUE(std::get<2>(view.fParts).fState.fSelected);
+  auto limit = mux::ui::jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&choices::jump_search>>(
+      colours, mux::ui::choice_level::chat{});
+  window_binding.refresh(limit, shown);
+  binding.refresh(limit, model);
+  ASSERT_TRUE(skiff::bind::press(limit, model, scene::Path{2, 0}));
+  EXPECT_EQ(model.root().jump_search, 500);
+  EXPECT_EQ(model.root().receipts, true);
+}

@@ -212,8 +212,13 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
     requires requires { make_content(std::type_identity<Content>{}, *needs, facts); }
   {
     if constexpr (requires { content_persistent(std::type_identity<Content>{}); }) {
-      if (content_persistent(std::type_identity<Content>{}) && this->shown())
-        return;
+      if (content_persistent(std::type_identity<Content>{}) && this->shown()) {
+        if constexpr (requires { content_matches(*this->shown(), facts); }) {
+          if (content_matches(*this->shown(), facts)) return;
+        } else {
+          return;
+        }
+      }
     }
     (void)this->open(make_content(std::type_identity<Content>{}, *needs, facts));
   }

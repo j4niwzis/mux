@@ -26,6 +26,30 @@ class rooms_part {
   rooms_part(const rooms_part&) = delete;
   rooms_part& operator=(const rooms_part&) = delete;
 
+  void apply(const request::open_room_invite& one) {
+    const auto* chat = s_->model->find(one.room);
+    if (!chat || !mux::ui::is_group(*chat) || chat->invite ||
+        !mux::proto::chat_rights(mux::ui::protocol_state_of(s_->ui, one.room.account), *chat).invite)
+      return;
+    mux::ui::new_chat_facts facts{.by = one.room.account, .inviting = one.room, .room_name = mux::ui::display_name(*chat)};
+    if (const auto* own = s_->model->accounts().find(one.room.account))
+      facts.people = std::ranges::to<std::vector>(std::views::transform(
+          std::views::filter(own->conversations.values(), [](const auto& in) { return !mux::ui::is_group(in); }),
+          [&](const auto& in) { return mux::found_person{.id = mux::ui::contact_of(s_->ui, in), .name = mux::ui::display_name(in), .avatar = in.avatar}; }));
+    std::ranges::sort(facts.people, {}, &mux::found_person::name);
+    facts.rows = mux::ui::people_rows(facts);
+    mux::ui::show(*s_->showing, std::optional(std::move(facts)));
+  }
+  void apply(const request::invite_to_room& one) {
+    const auto* chat = s_->model->find(one.room);
+    const mux::ui::new_chat_facts facts{.by = one.room.account};
+    if (!chat || !mux::ui::is_group(*chat) || chat->invite || !mux::ui::direct_address(facts, one.user) ||
+        !mux::proto::chat_rights(mux::ui::protocol_state_of(s_->ui, one.room.account), *chat).invite || s_->demo())
+      return;
+    s_->net->manage(one.room, mux::room_action::invite{one.user});
+    mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
+  }
+
   // A new chat: its box; a direct chat or a group asked of the account whose
   // chats are listed -- or, for a direct chat with someone it already has
   // one with, that chat shown.

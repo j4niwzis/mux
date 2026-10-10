@@ -235,27 +235,22 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
       }
     }
   };
-  struct members_head : skiff::compose::Stacked {
-    using add_button = icon_button<not_yet<Actions>>;
-    struct parts_t {
-      icon_view_t people;
-      nodes::Text title;
-      add_button add_member;
-    } parts;
-    members_head(const palette &colours, std::size_t count)
-        : Stacked(skiff::compose::hbox(
-              10.0f, {.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}})),
-          parts{
-              .people = icon_view(colours, icon::people{}),
-              .title = skiff::compose::styled(
-                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                  nodes::Text(
-                      std::format("{} MEMBER{}", count, count == 1 ? "" : "S"),
-                      13.0f, colours.dim, true)),
-              .add_member =
-                  add_button(colours, icon::add_person{}, {"Adding members"})} {
-    }
+  struct members_heading {
+    std::size_t count = 0;
+    conversation_id room;
+    bool invite = false;
+    friend bool operator==(const members_heading&, const members_heading&) = default;
   };
+  static auto members_head(const palette& colours, const members_heading& facts) {
+    namespace c = skiff::compose;
+    return c::row(c::hbox(10.0f, {.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}}),
+        icon_view(colours, icon::people{}),
+        c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text(
+            std::format("{} MEMBER{}", facts.count, facts.count == 1 ? "" : "S"), 13.0f, colours.dim, true)),
+        c::visible(facts.invite, icon_button<sends<request::open_room_invite>>(
+            colours, icon::add_person{}, {facts.room})));
+  }
+  using members_head_t = decltype(members_head(std::declval<const palette&>(), std::declval<const members_heading&>()));
   using member_entry = std::pair<member, std::string>;
   using kept_member = nodes::KeptRow<std::string, member_entry, member_row_t>;
   using member_rows = nodes::Flow<std::vector<kept_member>>;
@@ -266,7 +261,7 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
       nodes::Memo<view, head> upper;
       nodes::Box<> band_2;
       // The members' head, as a function of how many there are.
-      nodes::Memo<std::size_t, members_head> members_header;
+      nodes::Memo<members_heading, members_head_t> members_header;
       // The members, reconciled: the rows kept while they show the same.
       member_rows members{{.spacingY = 0.0f, .wrap = false}, {}};
     } parts;
@@ -282,7 +277,7 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
   column& content = std::get<0>(parts.scroll.fChildren);
   nodes::Memo<view, head>& upper = content.parts.upper;
   nodes::Box<>& band_2 = content.parts.band_2;
-  nodes::Memo<std::size_t, members_head>& members_header = content.parts.members_header;
+  nodes::Memo<members_heading, members_head_t>& members_header = content.parts.members_header;
   member_rows& members = content.parts.members;
   // The group's view, to come back to from a member's page.
   view group_view;
@@ -400,8 +395,10 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
             },
             [](const kept_member& row, const auto& each) { return row.fView == each; }))
       members.invalidateLayout();
-    members_header.show(static_cast<std::size_t>(std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count)),
-                        [this](std::size_t count) { return members_head(*colours_, count); });
+    members_header.show(members_heading{
+        static_cast<std::size_t>(std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count)), one.id,
+        !one.invite && proto::chat_rights(protocol_state_of(*shared_, one.id.account), one).invite},
+        [this](const auto& facts) { return members_head(*colours_, facts); });
     this->render();
   }
   void open_member(std::string id) {

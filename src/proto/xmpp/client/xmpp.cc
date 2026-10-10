@@ -279,6 +279,59 @@ class account {
       sink_(change::room_created{chat});
     });
   }
+  // Room management is dispatched by action type. Invitations go through
+  // the room so its server checks the inviter's privileges.
+  void manage(std::string room, const room_action_t& action) {
+    spl::visit(spl::overloaded{
+        [&](const room_action::invite& invite) { this->invite_to(room, invite.user); },
+        [&](const auto&) { sink_(change::refused{id_, "This XMPP room action is not implemented."}); }}, action);
+  }
+  void invite_to(std::string room, std::string user) {
+    this->spawn_guarded([this, room = std::move(room), user = std::move(user)] {
+      const auto jid = tern::jid::parse(user);
+      if (!jid || jid->local().empty()) {
+        sink_(change::refused{id_, "Enter the invitee's JID, such as user@example.com."}); return;
+      }
+      if (!session_ || !rooms_.contains(room)) {
+        sink_(change::refused{id_, "Join the XMPP room before inviting someone."}); return;
+      }
+      const auto target = jid->bare().str();
+      const auto info = session_->template try_request<tern::query::disco_info>({.to = room});
+      if (!info) { sink_(change::refused{id_, "The room did not answer its access query."}); return; }
+      if (std::ranges::contains(info->features, std::string_view("muc_membersonly"), &tern::disco::feature::var)) {
+        // Verify existing affiliations before granting membership. In
+        // particular, never turn an existing owner/admin into a member.
+        bool allowed = false, banned = false, complete = true;
+        std::ranges::for_each(tern::muc::affiliation_lists, [&](auto rank) {
+          if (!complete || !session_) { complete = false; return; }
+          const auto list = session_->template try_request<tern::query::muc_affiliations>(
+              {.to = room, .query = {.item = {.affiliation = std::string(rank)}}});
+          if (!list) { complete = false; return; }
+          std::ranges::for_each(list->items, [&](const auto& item) {
+            if (!item.jid || bare(*item.jid) != target) return;
+            const auto admission = tern::muc::admission_of(item);
+            allowed = allowed || admission.allowed;
+            banned = banned || admission.banned;
+          });
+        });
+        if (banned) {
+          sink_(change::refused{id_, "That user is banned from the room."}); return;
+        }
+        // A member can be permitted to invite without being permitted to
+        // read every affiliation list. Let the service grant admission in
+        // that case; never overwrite an affiliation we could not verify.
+        if (complete && !allowed && (!session_ || !session_->template try_request<tern::query::muc_affiliate>(
+              {.to = room, .query = {.item = {.jid = target, .affiliation = "member"}}}))) {
+          sink_(change::refused{id_, "The service refused to grant the invitee room membership."}); return;
+        }
+      }
+      if (!session_) return;
+      proto::message::normal invite{.to = room};
+      invite.payload.emplace_back(tern::muc::user{.invitations = {{.to = target}}});
+      session_->send(invite);
+      sink_(change::notice{id_, "Room invitation", "An invitation was sent to " + target + "."});
+    });
+  }
   // XEP-0045 creates a room by joining a new JID. Only status 201 on our
   // own presence permits configuration; an existing room is never changed.
   void create_room(std::string name, std::string topic, bool open, std::string address,
@@ -447,6 +500,16 @@ class account {
   // A room left: unavailable to it, and the conversation gone.
   void leave(std::string room) {
     this->spawn_guarded([this, room = std::move(room)] {
+      if (const auto invite = invitations_.find(room); invite != invitations_.end()) {
+        if (session_) {
+          proto::message::normal declined{.to = room};
+          declined.payload.emplace_back(tern::muc::user{.declined = tern::muc::decline{.to = invite->second.inviter}});
+          session_->send(declined);
+        }
+        invitations_.erase(invite);
+        sink_(change::conversation_removed{{id_, room}});
+        return;
+      }
       const auto found = rooms_.find(room);
       if (found == rooms_.end())
         return;
@@ -754,7 +817,9 @@ class account {
   void join(const std::string& jid, const std::string& nick) {
     rooms_[jid].nick = nick;
     proto::presence::available joining{.to = jid + "/" + nick};
-    joining.payload.emplace_back(tern::muc::join{.history = tern::muc::history{.maxstanzas = "50"}});
+    const auto invite = invitations_.find(jid);
+    joining.payload.emplace_back(tern::muc::join{.history = tern::muc::history{.maxstanzas = "50"},
+        .password = invite == invitations_.end() ? std::nullopt : invite->second.password});
     session_->send(joining);
   }
 
@@ -789,7 +854,37 @@ class account {
   // A chat or a normal message with a body is a message; anything else is
   // not the conversation's.
   void on_message(const proto::message::chat& got) { this->text_message(got); }
-  void on_message(const proto::message::normal& got) { this->text_message(got); }
+  void on_message(const proto::message::normal& got) {
+    if (!this->invitation_message(got)) this->text_message(got);
+  }
+  void on_message(const proto::message::error& got) {
+    for (const auto& carried : got.payload)
+      if (const auto* user = carried.template get_if<tern::muc::user>(); user && !user->invitations.empty()) {
+        sink_(change::refused{id_, "The XMPP room refused the invitation."});
+        return;
+      }
+  }
+  bool invitation_message(const proto::message::normal& got) {
+    if (!got.from) return false;
+    const auto address = tern::jid::parse(*got.from);
+    if (!address || address->local().empty() || !address->resource().empty()) return false;
+    const auto room = address->bare().str();
+    for (const auto& carried : got.payload)
+      if (const auto* user = carried.template get_if<tern::muc::user>()) {
+        if (user->declined) {
+          sink_(change::notice{id_, "Room invitation", user->declined->from.value_or("The user") + " declined the invitation to " + room + "."});
+          return true;
+        }
+        for (const auto& invite : user->invitations) {
+          if (!invite.from || rooms_.contains(room)) continue;
+          invitations_.insert_or_assign(room, pending_invitation{*invite.from, user->password});
+          sink_(change::conversation_updated{.id = {id_, room}, .kind = conversation_kind::group{},
+              .name = room, .invite = invite_info{.from = *invite.from}});
+          return true;
+        }
+      }
+    return false;
+  }
   // A room's message: the room is the conversation, the occupant the sender,
   // and one's own nick says it was sent from here -- the room's echo of it.
   void on_message(const proto::message::groupchat& got) {
@@ -966,6 +1061,7 @@ class account {
       for (const auto& carried : got.payload)
         if (const auto* user = carried.template get_if<tern::muc::user>(); user && tern::muc::flags_of(*user).self) {
           joining_.erase(room);
+          invitations_.erase(room);
           const conversation_id chat{id_, room};
           sink_(change::conversation_updated{.id = chat, .kind = conversation_kind::group{}, .name = room});
           sink_(change::history_position{chat, std::string()});
@@ -1007,6 +1103,8 @@ class account {
   std::map<std::string, room> rooms_;
   std::map<std::string, room_creation> creating_;
   std::set<std::string> joining_;
+  struct pending_invitation { std::string inviter; std::optional<std::string> password; };
+  std::map<std::string, pending_invitation> invitations_;
   session_type* session_ = nullptr;
   net::stream* wire_ = nullptr;
   std::uint64_t sent_ = 0;

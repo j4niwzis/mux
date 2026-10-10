@@ -242,7 +242,9 @@ void account<Sink>::manage(std::string room, room_action_t action) {
               set("m.room.topic", content);
             },
             [&](const room_action::invite& one) {
-              told("invite", perform(*api_, loom::cs::invite_user{.room_id = room, .body = {.user_id = one.user}}));
+              const auto done = perform(*api_, loom::cs::invite_user{.room_id = room, .body = {.user_id = one.user}});
+              if (done) sink_(change::notice{id_, "Room invitation", "An invitation was sent to " + one.user + "."});
+              else sink_(change::refused{id_, "Could not invite " + one.user + ": " + done.error().said()});
             },
             [&](const room_action::kick& one) {
               told("remove", perform(*api_, loom::cs::kick{.room_id = room, .body = {.user_id = one.user}}));

@@ -4,6 +4,10 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 set(mux_about_source "${CMAKE_CURRENT_SOURCE_DIR}")
 set(mux_about_binary "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(mux_modules PRIVATE "${mux_about_binary}/generated")
+file(GLOB mux_about_license_files CONFIGURE_DEPENDS
+    "${mux_about_source}/cmake/licenses/ffmpeg/COPYING.*")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${mux_about_source}/cmake/about.py" ${mux_about_license_files})
 # A new commit or branch must refresh the identity even when no CMake file
 # changed. git-path also handles linked worktrees.
 foreach(ref HEAD HEAD_REF)
@@ -112,7 +116,7 @@ function(mux_about_metadata)
     set(actual "")
     foreach(package IN LISTS provides)
       get_property(found GLOBAL PROPERTY CME_PROVIDED_VERSION_${package})
-      if(found)
+      if(found MATCHES "^[0-9]+(\\.[0-9]+)*([-+~][A-Za-z0-9._+-]+)?$")
         set(actual "${found}")
         break()
       endif()

@@ -13,6 +13,7 @@ module;
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/avutil.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/imgutils.h>
 #include <libswresample/swresample.h>
@@ -72,6 +73,10 @@ export namespace mux::platform::video {
 
 // Whether videos play in the window, in this build.
 inline constexpr bool kPlays = true;
+// Report the library actually loaded, including system builds whose GPL
+// options differ from the source provider's default LGPL configuration.
+inline std::string_view ffmpeg_version() { return av_version_info(); }
+inline std::string_view ffmpeg_license() { return avcodec_license(); }
 
 // The sound it plays: interleaved float stereo, at this rate.
 inline constexpr int kRate = 48000;

@@ -11,6 +11,8 @@ export namespace mux::platform::video {
 
 // Whether videos play in the window, in this build.
 inline constexpr bool kPlays = false;
+inline std::string_view ffmpeg_version() { return {}; }
+inline std::string_view ffmpeg_license() { return {}; }
 
 class player {
  public:

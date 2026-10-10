@@ -5,6 +5,7 @@ export module mux.ui:about;
 import std;
 import skiff.compose;
 import skiff.nodes.text;
+import mux.platform.video;
 import :base;
 import :icons;
 import :controls;
@@ -23,7 +24,30 @@ inline auto about_words(const palette& colours, std::string text) {
       {.fillX = true, .margin = {8.0f, 20.0f, 8.0f, 20.0f}},
       nodes::Text(std::move(text), 14.0f, colours.text)));
 }
-inline auto library_link(const palette& colours, const library_info& library) {
+inline library_info library_details(const library_info& info) {
+  auto result = info;
+  if (info.id == "ffmpeg" && platform::video::kPlays) {
+    result.version = platform::video::ffmpeg_version();
+    const auto license = platform::video::ffmpeg_license();
+    result.license = license;
+    const std::array<std::pair<std::string_view, std::string_view>, 4> names{{
+        {"LGPL version 2.1 or later", "LGPL-2.1-or-later"},
+        {"LGPL version 3 or later", "LGPL-3.0-or-later"},
+        {"GPL version 2 or later", "GPL-2.0-or-later"},
+        {"GPL version 3 or later", "GPL-3.0-or-later"}}};
+    for (const auto& [description, spdx] : names) {
+      if (license != description) continue;
+      result.license = spdx;
+      const auto text = std::ranges::find(about_data::ffmpeg_licenses, spdx,
+          [](const auto& entry) { return entry.first; });
+      if (text != about_data::ffmpeg_licenses.end()) result.license_text = text->second;
+      break;
+    }
+  }
+  return result;
+}
+inline auto library_link(const palette& colours, const library_info& info) {
+  const auto library = library_details(info);
   return settings_link(colours, std::format("{} · {} · {}", library.name, library.version, library.license),
                        icon::gear{}, request::settings_library{std::string(library.id)});
 }
@@ -49,7 +73,7 @@ using about_page_t = decltype(about_page(std::declval<const palette&>()));
 inline auto library_page(const palette& colours, std::string_view id) {
   const library_info missing{id, id, "Unknown", {}, "Unknown", {}, {}, {}};
   const auto* found = library_of(id);
-  const auto& library = found ? *found : missing;
+  const auto library = library_details(found ? *found : missing);
   auto dependencies = library.dependencies | std::views::transform([&](std::string_view dep) {
     const auto* info = library_of(dep);
     return library_link(colours, info ? *info : missing);

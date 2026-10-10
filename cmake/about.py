@@ -1,6 +1,7 @@
 """Generate About metadata from the configured provider and Cargo graph."""
 import argparse
 import json
+import re
 from pathlib import Path
 import subprocess
 
@@ -26,6 +27,35 @@ def license_text(source, explicit=""):
                          p.name.upper().split(".")[0] in {"LICENSE", "LICENCE", "COPYING", "NOTICE", "COPYRIGHT"})
     candidates += sorted(p for p in root.glob("LICENSES/*") if p.is_file())
     return "\n\n".join(p.name + "\n" + p.read_text(errors="replace") for p in dict.fromkeys(candidates) if p.is_file())
+
+
+def library_version(record):
+    reported = record.get("version", "")
+    if re.fullmatch(r"[0-9]+(?:\.[0-9]+)*(?:[-+~][A-Za-z0-9._+-]+)?", reported):
+        return reported
+    source = Path(record["source"]) if record.get("source") else None
+    # A source project's literal version describes this checkout. The
+    # provider can accidentally export a tool's executable path as VERSION.
+    if source and (source / "CMakeLists.txt").is_file():
+        cmake = re.sub(r"#[^\n]*", "", (source / "CMakeLists.txt").read_text())
+        project = re.search(r"\bproject\s*\(([^)]*)\)", cmake, re.I)
+        if project:
+            version = re.search(r'\bVERSION\s+"?([0-9]+(?:\.[0-9]+)*)(?=["\s]|$)', project[1], re.I)
+            if version:
+                return version[1]
+    return record.get("revision") or "Not reported by installed package"
+
+
+def ffmpeg_licenses():
+    root = Path(__file__).parent / "licenses" / "ffmpeg"
+    def read(name):
+        return name + "\n" + (root / name).read_text()
+    return {
+        "LGPL-2.1-or-later": read("COPYING.LGPLv2.1"),
+        "LGPL-3.0-or-later": read("COPYING.LGPLv3") + "\n\n" + read("COPYING.GPLv3"),
+        "GPL-2.0-or-later": read("COPYING.GPLv2"),
+        "GPL-3.0-or-later": read("COPYING.GPLv3"),
+    }
 
 
 def cargo_records(record):
@@ -81,12 +111,12 @@ def generate(args):
     for record in records:
         crates += cargo_records(record)
         record["label"] = record["name"]
-        record["revision"] = git(record["source"], "rev-parse", "HEAD") or record.get("GIT_TAG", "")
+        record["revision"] = git(record["source"], "rev-parse", "HEAD") or (record.get("GIT_TAG", "") if record["source"] else "")
         record["license"] = record.get("LICENSE") or "See license text"
         record["repository"] = ("https://github.com/" + record["GITHUB_REPOSITORY"] if record.get("GITHUB_REPOSITORY")
                                 else record.get("GIT_REPOSITORY") or record.get("URL") or "")
         record["license_text"] = license_text(record["source"])
-        record["version"] = record["version"] or record["revision"] or "Not reported by installed package"
+        record["version"] = library_version(record)
     records += crates
     records = sorted({r["name"]: r for r in records}.values(), key=lambda r: r["label"].casefold())
     # Keep only the current build's direct libraries and their dependencies;
@@ -112,6 +142,11 @@ def generate(args):
     text = "// Generated from this build's resolved dependencies.\nnamespace about_data {\n"
     for key, value in metadata.items():
         text += "inline constexpr std::string_view " + key + " = " + literal(value) + ";\n"
+    ffmpeg = ffmpeg_licenses() if "ffmpeg" in inventory and "ffmpeg" in current else {}
+    text += "inline constexpr std::array<std::pair<std::string_view, std::string_view>, " + str(len(ffmpeg)) + "> ffmpeg_licenses{{\n"
+    for license, contents in ffmpeg.items():
+        text += "  {" + literal(license) + ", " + literal(contents) + "},\n"
+    text += "}};\n"
     text += "inline const std::vector<library_info> libraries{\n"
     for record in records:
         fields = [record[k] for k in ("name", "label", "version", "revision", "license", "repository", "license_text")]

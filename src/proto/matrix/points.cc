@@ -179,15 +179,11 @@ inline std::vector<banner> composer_banners(const state& now, const conversation
       spl::overloaded{
           [](trust::verified) { return std::vector<banner>{}; },
           [&](trust::unverified) {
-            return std::vector<banner>{{std::format("\u26A0 {} is not verified. Messages are encrypted to them, but verify "
-                                                    "them to be sure who reads them.",
-                                                    name),
+            return std::vector<banner>{{std::format("Verify {} to confirm their identity.", name),
                                         part::tone::accent{}, "Verify", them}};
           },
           [&](trust::changed) {
-            return std::vector<banner>{{std::format("\u26A0 {}'s identity was reset. Verify them again, or withdraw the "
-                                                    "verification on their card.",
-                                                    name),
+            return std::vector<banner>{{std::format("{}'s identity changed. Verify them again.", name),
                                         part::tone::danger{}, "Verify again", them}};
           }},
       *trust);

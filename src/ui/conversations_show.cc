@@ -969,15 +969,16 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
   const std::string said = std::ranges::to<std::string>(std::views::join_with(std::views::transform(banners, &proto::part::banner::text), '\n'));
   // The first's button, where it has one.
   const std::string label = banners.empty() ? std::string() : banners.front().button;
-  auto& button = chat.parts.banner_button;
+  auto& bar = chat.parts.banner;
+  auto& button = bar.parts.verify;
   if (label.empty() == button.has_value()) {
     if (label.empty())
       button.reset();
     else {
       button.emplace(needs_.colours->widgets, label, banner_press{this});
-      button->apply({.width = 120.0f, .height = 30.0f, .alignSelf = scene::align::kEnd,
-                     .margin = {4.0f, 14.0f, 6.0f, 14.0f}});
+      button->apply({.width = 112.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle});
     }
+    bar.invalidateLayout();
     chat.invalidateLayout();
   } else if (button)
     button->setLabel(label);
@@ -999,13 +1000,16 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
           this->place_composer_view(make_composer_view(now, *one, type_tag<Actions>{}));
         },
         protocol_state_of(*needs_.shared, one->id.account));
-  auto& bar = chat.parts.trust_warning;
   if (!banners.empty())
     bar.apply({.background = (tone_colour(*needs_.colours, banners.front().tone) & 0x00FFFFFFu) | (0x22u << 24)});
-  if (bar.text() != said)
-    bar.setText(said);
-  if (bar.visible() != !said.empty()) {
-    bar.setVisible(!said.empty());
+  if (bar.parts.text.text() != said)
+    bar.parts.text.setText(said);
+  if (one && said.empty())
+    dismissed_banners.erase(one->id);
+  const auto dismissed = one ? dismissed_banners.find(one->id) : dismissed_banners.end();
+  const bool visible = !said.empty() && (dismissed == dismissed_banners.end() || dismissed->second != said);
+  if (bar.visible() != visible) {
+    bar.setVisible(visible);
     chat.invalidateLayout();
   }
 }

@@ -78,6 +78,8 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   std::optional<conversation_id> chosen;
   // The account whose chats are listed.
   std::optional<account_id> current;
+  // Dismissed warnings stay hidden for this chat until their text changes.
+  std::map<conversation_id, std::string> dismissed_banners;
   // Which of the chat's pins the bar shows, by its place among them: the
   // one above the view (the newest until that is worked out).
   std::size_t pinned_step = 0;
@@ -643,6 +645,28 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     const conversations_screen* screen;
     Answer operator()() const { return {*screen->chosen}; }
   };
+  struct banner_close {
+    using Answer = ::mux::ui::request::dismiss_banner;
+    const conversations_screen* screen;
+    Answer operator()() const { return {*screen->chosen}; }
+  };
+  struct composer_banner : skiff::compose::Stacked {
+    struct parts_t {
+      nodes::Text text;
+      std::optional<widgets::Button<banner_press>> verify;
+      icon_button<banner_close> close;
+    } parts;
+    composer_banner(const palette& colours, conversations_screen* screen)
+        : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
+                                             .padding = {10.0f, 12.0f, 10.0f, 12.0f}})),
+          parts{.text = skiff::compose::styled(
+                    {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                    wrapped(nodes::Text("", 13.0f, colours.text))),
+                .close = icon_button<banner_close>(colours, icon::close{}, {screen})} {
+      parts.close.apply({.alignSelf = scene::align::kMiddle});
+      this->setVisible(false);
+    }
+  };
   // A node of the chat's protocol's own over the composer (a Telegram bot's
   // keyboard): listed by composer_views(state, type_tag<Actions>), made for
   // a chat by make_composer_view, found by ADL; none by default.
@@ -761,8 +785,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
       emoji_list emojis;
       // Over the composer: what the chat's protocol says there -- Matrix's
       // warning that the other is not verified, or was reset.
-      nodes::Text trust_warning;
-      std::optional<widgets::Button<banner_press>> banner_button;
+      composer_banner banner;
       std::optional<composer_view_holder> their_view;
       composer_bar<Actions> line;
       empty_state empty;
@@ -775,7 +798,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     composer_bar<Actions>& line = parts.line;
     empty_state& empty = parts.empty;
     select_hint& hint = parts.hint;
-    chat_column(const ui_needs<Actions> &n)
+    chat_column(const ui_needs<Actions> &n, conversations_screen* screen)
         : Stacked(skiff::compose::vbox(
               0.0f, {.fillY = true,
                      .grow = scene::axes::kX,
@@ -791,13 +814,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
               .mentions =
                   skiff::compose::visible(false, mention_list(*n.colours)),
               .emojis = skiff::compose::visible(false, emoji_list(*n.colours)),
-              .trust_warning = skiff::compose::visible(
-                  false, skiff::compose::styled(
-                             {.fillX = true,
-                              .padding = {6.0f, 14.0f, 6.0f, 14.0f},
-                              .background = (n.colours->accent & 0x00FFFFFFu) |
-                                            (0x22u << 24)},
-                             wrapped(nodes::Text("", 13.0f, n.colours->text)))),
+              .banner = composer_banner(*n.colours, screen),
               .line = composer_bar<Actions>(n),
               .empty = empty_state(*n.colours)} {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
@@ -882,7 +899,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
       : Stacked(skiff::compose::hbox(0.0f, {.fill = true})), needs_(n),
         parts{.side = side_column(*n.colours),
               .edge = side_edge(*n.colours, resize_sidebar_to<Actions>{}),
-              .chat = chat_column(n),
+              .chat = chat_column(n, this),
               .info_edge =
                   info_edge_t(*n.colours, resize_info_to<Actions>{}, false),
               .info = info_panel<Actions>(*n.colours, *n.shared),
@@ -1533,7 +1550,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
 
   // What the chat's protocol says over the composer (proto::composer_banners):
   // Matrix's warning where the other is not verified, for one. Its banners
-  // one under the other, the bar in the first's tone.
+  // share a dismissible bar in the first's tone.
   void place_head_view(std::nullopt_t) {}
   template <class View>
   void place_head_view(std::optional<View> made) {
@@ -1545,6 +1562,13 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   void place_composer_view(std::optional<View> made) {
     if (made)
       chat.parts.their_view.emplace(std::move(*made));
+  }
+  void dismiss_banner(const conversation_id& in) {
+    if (chosen != in || !chat.parts.banner.visible())
+      return;
+    dismissed_banners.insert_or_assign(in, chat.parts.banner.parts.text.text());
+    chat.parts.banner.setVisible(false);
+    chat.invalidateLayout();
   }
   void show_banners(const conversation* one, const model& now);
   void show_conversation(const model& now);

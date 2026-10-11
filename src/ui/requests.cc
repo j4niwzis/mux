@@ -700,6 +700,9 @@ struct settings_animations {};
 struct banner_pressed {
   conversation_id in;
 };
+struct dismiss_banner {
+  conversation_id in;
+};
 // One of a person's card's buttons of its protocol's own: by where it is
 // among them.
 struct card_action {

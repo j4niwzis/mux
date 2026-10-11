@@ -130,6 +130,7 @@ void app::apply(const request::banner_pressed& one) {
   if (const mux::conversation* chat = model->find(one.in))
     mux::proto::banner_asked(mux::ui::protocol_state_of(shared.ui, one.in.account), *chat, *model, taker{this});
 }
+void app::apply(const request::dismiss_banner& one) { root().main().dismiss_banner(one.in); }
 void app::apply(const request::card_action& one) {
   mux::proto::person_action_asked(mux::ui::protocol_state_of(shared.ui, one.by), one.by, one.who, one.index, taker{this});
 }

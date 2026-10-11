@@ -2970,3 +2970,50 @@ TEST(Verification, EmojiWrapWithinPhoneWidthsWithoutChangingOrder) {
   }
   skiff::paint::defaultFont() = nullptr;
 }
+
+TEST(Composer, VerificationBannerFitsPhonesAndStaysDismissedUntilItChanges) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct cleanup { ~cleanup() { skiff::paint::defaultFont() = nullptr; } } clear;
+  stub program;
+  ui_state ui;
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.org"};
+  const mux::conversation_id room{alice, "!direct:example.org"};
+  const std::string bob = "@bob:example.org";
+  ui.shared.protocol_states[alice] = mux::proto::matrix::state{.online = true};
+  mux::model known;
+  known.apply(mux::change::conversation_updated{.id = room, .name = "Bob", .encrypted = true});
+  known.apply(mux::change::members_changed{room, {{.id = alice.address}, {.id = bob}}, {}});
+  known.apply(mux::change::trust_changed{alice, bob, mux::trust::unverified{}});
+  mux::ui::conversations_screen<stub> screen(ui.needs(program));
+  screen.chosen = room;
+  screen.show_banners(known.find(room), known);
+  auto& banner = screen.chat.parts.banner;
+  ASSERT_TRUE(banner.visible());
+  ASSERT_TRUE(banner.parts.verify);
+  for (float width : {320.0f, 360.0f, 585.0f}) {
+    scene::layout(banner, skia::SkRect::MakeWH(width, 200.0f));
+    const auto text = banner.parts.text.bounds();
+    const auto verify = banner.parts.verify->bounds();
+    const auto close = banner.parts.close.bounds();
+    EXPECT_GE(text.fLeft, 12.0f);
+    EXPECT_LE(text.fRight, verify.fLeft);
+    EXPECT_LE(verify.fRight, close.fLeft);
+    EXPECT_LE(close.fRight, width - 12.0f);
+    EXPECT_LE(text.fBottom, banner.bounds().fBottom - 10.0f);
+  }
+  EXPECT_EQ(banner.parts.verify->onPress().in, room);
+  screen.dismiss_banner(banner.parts.close.onPress().in);
+  EXPECT_FALSE(banner.visible());
+  screen.show_banners(known.find(room), known);
+  EXPECT_FALSE(banner.visible());
+  known.apply(mux::change::trust_changed{alice, bob, mux::trust::changed{}});
+  screen.show_banners(known.find(room), known);
+  EXPECT_TRUE(banner.visible());
+  EXPECT_EQ(banner.parts.verify->semantics().fLabel, "Verify again");
+  known.apply(mux::change::trust_changed{alice, bob, mux::trust::verified{}});
+  screen.show_banners(known.find(room), known);
+  EXPECT_FALSE(banner.visible());
+  EXPECT_FALSE(banner.parts.verify);
+  EXPECT_FALSE(screen.dismissed_banners.contains(room));
+}

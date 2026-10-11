@@ -96,7 +96,7 @@ struct id_line_t : skiff::compose::Stacked {
       : Stacked(skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
               .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen,
               .focusBackground = colours.chosen})),
-        copied_(link.empty() ? text : link), confirmation_(link.empty() ? label + " copied" : "Link copied"),
+        copied_(link.empty() ? text : link), confirmation_(link.empty() ? label + " · copied" : label + " · link copied, with its servers"),
         label_("Copy " + label),
         parts{.value = wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(std::move(text), 14.0f, colours.accent, false, true))),
               .feedback = wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(std::move(label), 13.0f, colours.accent)))} {

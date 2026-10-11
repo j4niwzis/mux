@@ -1578,7 +1578,7 @@ TEST(Controls, CopyIdRequestShowsConfirmationWithoutBindingRefresh) {
   // The confirmation is set immediately; no binding refresh is needed.
   ASSERT_EQ(requests.copied.size(), 1u);
   EXPECT_EQ(requests.copied.front(), "https://matrix.to/#/#room:example.com");
-  EXPECT_EQ(label.text(), "Link copied");
+  EXPECT_EQ(label.text(), "ID · link copied, with its servers");
   EXPECT_EQ(label.fState.id(), id);
   EXPECT_EQ(model.root(), 0);
 }
@@ -1621,7 +1621,7 @@ TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
     binding.refresh(view.root(), model);
     view.layoutIfNeeded(viewport);
     const auto& feedback = view.root().parts.feedback;
-    EXPECT_EQ(feedback.text(), link.empty() ? "ID copied" : "Link copied");
+    EXPECT_EQ(feedback.text(), link.empty() ? "ID · copied" : "ID · link copied, with its servers");
     EXPECT_GT(feedback.bounds().width(), 0.0f);
     EXPECT_GT(feedback.bounds().height(), 0.0f);
     EXPECT_TRUE(view.root().bounds().contains(feedback.bounds()));
@@ -2758,7 +2758,7 @@ TEST(Controls, MemoizedRoomIdKeepsCopyFeedbackWithoutAnOuterModelChange) {
   const auto id = label.fState.id();
   ASSERT_TRUE(skiff::bind::press(header, model, scene::Path{0}, &requests));
   ASSERT_EQ(requests.copied.size(), 1u);
-  EXPECT_EQ(label.text(), "Link copied");
+  EXPECT_EQ(label.text(), "ID · link copied, with its servers");
   EXPECT_EQ(label.fState.id(), id);
   EXPECT_EQ(model.root(), 0);
 }
@@ -3090,5 +3090,5 @@ TEST(Info, MatrixProfileIdCopiesItsLinkAndImmediatelyConfirmsIt) {
   mux::ui::person_card<stub>::details details(ui.colours, ui.shared, alice, bob, facts);
   const auto copied = details.parts.id.onPress();
   EXPECT_EQ(copied.text, "https://matrix.to/#/@bob:example.org");
-  EXPECT_EQ(details.parts.id.parts.feedback.text(), "Link copied");
+  EXPECT_EQ(details.parts.id.parts.feedback.text(), "ID · link copied, with its servers");
 }

@@ -21,6 +21,27 @@ message said(std::string id, std::string text, bool outgoing = false) {
                  .outgoing = outgoing};
 }
 
+TEST(Model, PackMetadataSharesStorageAndRetainsOldRevisions) {
+  model kept;
+  emote_list images{{.shortcode = "party", .url = "mxc://example/party", .body = "Party"}};
+  const conversation_id other{romeo, "other@example.net"};
+  kept.apply(change::conversation_updated{.id = with_juliet, .emotes = images, .stickers = images});
+  kept.apply(change::conversation_updated{.id = other, .emotes = images});
+  ASSERT_NE(kept.find(with_juliet), nullptr);
+  ASSERT_NE(kept.find(other), nullptr);
+  EXPECT_EQ(kept.find(with_juliet)->emotes.data(), images.data());
+  EXPECT_EQ(kept.find(with_juliet)->stickers.data(), images.data());
+  EXPECT_EQ(kept.find(other)->emotes.data(), images.data());
+  emote_list picker = kept.find(with_juliet)->emotes;
+  kept.apply(change::conversation_updated{.id = with_juliet,
+      .emotes = {{.shortcode = "new", .url = "mxc://example/new"}}});
+  images = {};
+  EXPECT_EQ(picker.front().shortcode, "party");
+  EXPECT_EQ(kept.find(other)->emotes.data(), picker.data());
+  EXPECT_EQ(kept.find(with_juliet)->emotes.front().shortcode, "new");
+  EXPECT_NE(kept.find(with_juliet)->emotes.data(), picker.data());
+}
+
 TEST(Model, SavedReadMarkerSurvivesOlderAndUnknownReceipts) {
   model kept;
   kept.apply(change::conversation_updated{.id = with_juliet});

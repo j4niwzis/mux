@@ -94,8 +94,8 @@ struct conversation_updated {
   std::int64_t member_count = 0;
   std::optional<std::string> alias;
   std::vector<std::string> pinned;
-  std::vector<emote> emotes;
-  std::vector<emote> stickers;
+  emote_list emotes;
+  emote_list stickers;
   room_part_t theirs;  // its protocol's own part of it
   // Upgraded away: the room it continues in (m.room.tombstone), and what
   // its tombstone said; and the room this one continues, where it does.

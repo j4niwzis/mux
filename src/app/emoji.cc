@@ -93,8 +93,8 @@ void open_at(emoji_part& self, float right, float top) {
   self.s_->emoji.custom_emoji = chosen && mux::proto::offers(mux::ui::protocol_state_of(self.s_->ui, chosen->account),
                                                           mux::proto::feature::sticker_packs{});
   self.s_->emoji.pack_account = chosen ? std::optional(chosen->account) : std::nullopt;
-  self.s_->emoji.chat_emotes = chat ? chat->emotes : std::vector<mux::emote>{};
-  self.s_->emoji.chat_stickers = chat ? chat->stickers : std::vector<mux::emote>{};
+  self.s_->emoji.chat_emotes = chat ? chat->emotes : mux::emote_list{};
+  self.s_->emoji.chat_stickers = chat ? chat->stickers : mux::emote_list{};
   // Under a finger, in place of the on-screen keyboard, as Telegram's: the
   // field let go of, the keyboard goes down; tapping the field again closes
   // the panel and brings the keyboard back.

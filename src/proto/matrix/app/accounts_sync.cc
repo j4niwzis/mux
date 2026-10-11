@@ -34,8 +34,8 @@ template void account<mux::app::post_change>::tell(const loom::cs::sync::respons
 template auto account<mux::app::post_change>::avatar_of(const std::string& room, const loom::client::joined_room& kept) const -> std::optional<std::string>;
 template auto account<mux::app::post_change>::direct(const std::string& room) const -> bool;
 template void account<mux::app::post_change>::conversation(const conversation_id& in, const loom::client::joined_room& kept);
-template auto account<mux::app::post_change>::emotes_of(const loom::client::joined_room& kept, bool stickers) const -> std::vector<mux::emote>;
-template auto account<mux::app::post_change>::emotes_in(const std::string& room) const -> std::vector<mux::emote>;
+template auto account<mux::app::post_change>::emotes_of(const loom::client::joined_room& kept, bool stickers) const -> mux::emote_list;
+template auto account<mux::app::post_change>::emotes_in(const std::string& room) const -> mux::emote_list;
 template void account<mux::app::post_change>::members(const conversation_id& in, const loom::client::joined_room& kept);
 // What the members above call, defined in the same partition: made here
 // too, for nothing instantiates them elsewhere.

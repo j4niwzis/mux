@@ -275,6 +275,88 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   EXPECT_TRUE(put);
 }
 
+TEST(Matrix, SharedAccountPacksReuseStorageUntilTheirContentChanges) {
+  const auto certificate = mux::test::self_signed();
+  mux::net::loop running;
+  auto server_tls = mux::net::server_tls(certificate.certificate_pem, certificate.key_pem);
+  auto client_tls = mux::net::client_tls();
+  mux::net::trust(client_tls, certificate.certificate_pem);
+  mux::net::listener listening(running);
+  recorder seen{.running = &running, .sent = true};
+  const mux::account_id me{mux::protocol::matrix{}, "@pack-cache:x.org"};
+  const mux::conversation_id first{me, "!one:x.org"}, second{me, "!two:x.org"};
+  mux::emote_list original, metadata_only;
+  int syncs = 0;
+  bool finished = false;
+  running.spawn([&] {
+    for (;;) {
+      auto socket = listening.accept();
+      auto wire = std::make_shared<mux::net::stream>(running, server_tls, std::move(socket));
+      running.spawn([&, wire] {
+        if (!wire->accept_tls()) return;
+        std::string pending;
+        for (auto it = wire->input().begin(); it != std::default_sentinel; ++it) {
+          pending += *it;
+          while (auto one = take(pending)) {
+            std::string body = "{}";
+            if (one->target.starts_with("/_matrix/client/v3/login"))
+              body = R"({"user_id":"@pack-cache:x.org","access_token":"tok","device_id":"DEV"})";
+            else if (one->target.starts_with("/_matrix/client/v3/sync")) {
+              ++syncs;
+              if (syncs == 1)
+                body = R"({"next_batch":"packs1","account_data":{"events":[{
+                  "type":"im.ponies.user_emotes","content":{"images":{
+                    "party":{"url":"mxc://x.org/old","usage":["emoticon","sticker"]}}}}]},
+                  "rooms":{"join":{"!one:x.org":{},"!two:x.org":{}}}})";
+              else if (syncs == 2) {
+                if (const auto* room = seen.model.find(first)) original = room->emotes;
+                body = R"({"next_batch":"packs2","rooms":{"join":{"!one:x.org":{"state":{"events":[{
+                  "type":"m.room.name","state_key":"","event_id":"$name","sender":"@pack-cache:x.org",
+                  "origin_server_ts":1,"content":{"name":"Renamed"}}]}}}}})";
+              } else if (syncs == 3) {
+                if (const auto* room = seen.model.find(first)) metadata_only = room->emotes;
+                body = R"({"next_batch":"packs3","account_data":{"events":[{
+                  "type":"im.ponies.user_emotes","content":{"images":{
+                    "party":{"url":"mxc://x.org/new","usage":["emoticon","sticker"]}}}}]}})";
+              } else {
+                finished = true;
+                seen.account->stop();
+                body = R"({"next_batch":"packs4"})";
+              }
+            }
+            wire->write(answer(body));
+            wire->flush();
+          }
+        }
+      });
+    }
+  });
+  mux::vault::vault vault;
+  seen.account.emplace(running, client_tls, mux::proto::matrix::client::settings{
+      .user_id = me.address, .password = "pw",
+      .homeserver = "https://127.0.0.1:" + std::to_string(listening.port()),
+      .sync_timeout = std::chrono::milliseconds(0), .vault = &vault}, sink{&seen});
+  running.spawn([&] { running.sleep(std::chrono::seconds(5)); running.stop(); });
+  seen.account->start();
+  running.run();
+  ASSERT_TRUE(finished);
+  ASSERT_EQ(original.size(), 1u);
+  EXPECT_EQ(original.data(), metadata_only.data());
+  EXPECT_EQ(original.front().url, "mxc://x.org/old");
+  const auto* one = seen.model.find(first);
+  const auto* two = seen.model.find(second);
+  ASSERT_NE(one, nullptr);
+  ASSERT_NE(two, nullptr);
+  ASSERT_EQ(one->emotes.size(), 1u);
+  ASSERT_EQ(two->emotes.size(), 1u);
+  EXPECT_EQ(one->emotes.front().url, "mxc://x.org/new");
+  EXPECT_EQ(one->emotes.data(), two->emotes.data());
+  ASSERT_EQ(one->stickers.size(), 1u);
+  ASSERT_EQ(two->stickers.size(), 1u);
+  EXPECT_EQ(one->stickers.data(), two->stickers.data());
+  EXPECT_NE(one->emotes.data(), original.data());
+}
+
 struct media_sink {
   bool* online;
   std::vector<mux::change::avatar_loaded>* pictures;

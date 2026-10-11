@@ -725,8 +725,8 @@ class account {
   // A state event's content, as a tree; null where the room has none.
   // The custom emoji usable in a room: the user's own (im.ponies.user_emotes)
   // and the room's packs (im.ponies.room_emotes), a shortcode once.
-  [[nodiscard]] std::vector<mux::emote> emotes_of(const loom::client::joined_room& kept, bool stickers = false) const;
-  [[nodiscard]] std::vector<mux::emote> emotes_in(const std::string& room) const;
+  [[nodiscard]] mux::emote_list emotes_of(const loom::client::joined_room& kept, bool stickers = false) const;
+  [[nodiscard]] mux::emote_list emotes_in(const std::string& room) const;
 
   // Who is in a room, as its state says: those joined, by their names there.
   // Who is in a room: all of it, where it was asked for (/joined_members),
@@ -819,6 +819,10 @@ class account {
   std::set<std::string> announced_;
   http::pool* api_ = nullptr;
   loom::client::state state_;
+  // A source includes its event type: two formats may use the same state key.
+  using pack_source = std::tuple<std::optional<std::string>, std::string, std::string>;
+  using pack_sources = std::vector<pack_source>;
+  mutable std::map<std::pair<bool, pack_sources>, mux::emote_list> emote_lists_;
   bool snapshot_dirty_ = false;
   // Simplified sliding sync (MSC4186), where the server has it: whether it
   // is used, where its last answer left off, and how many rooms its list

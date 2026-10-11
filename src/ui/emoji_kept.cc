@@ -44,7 +44,7 @@ struct emoji_kept {
   std::vector<std::string> recent_emoji;
   std::vector<emote> favourite_emoji;
   // The custom emoji and stickers of the chat the panel is opened over.
-  std::vector<emote> chat_emotes, chat_stickers;
+  emote_list chat_emotes, chat_stickers;
   std::optional<account_id> pack_account;
   // The stickers sent lately, newest first, as tdesktop's Recent (at most
   // 20); and the favourites, from a sticker's menu, in any chat.

@@ -92,7 +92,7 @@ void part_apply(menu_part& self, const request::message_menu& one) {
     chat = self.s_->model->find(*chosen);
   }
   self.s_->emoji.pack_account = chosen ? std::optional(chosen->account) : std::nullopt;
-  self.s_->emoji.chat_emotes = chat ? chat->emotes : std::vector<emote>{};
+  self.s_->emoji.chat_emotes = chat ? chat->emotes : emote_list{};
   mux::ui::show(*self.s_->showing, std::optional(one));
   // The menu takes the keys, as tdesktop's: the arrows go through it,
   // Enter does what is lit, Esc closes it. Nothing lit until an arrow.

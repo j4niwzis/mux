@@ -557,7 +557,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
       pack_icons.push_back(kept_->favourite_emoji.front().url);
       packs.push_back(picker_tab(*colours_, this, all.size() - 1, pack_icons.back()));
     }
-    std::ranges::for_each(grouped_emotes(kept_->custom_emoji ? kept_->chat_emotes : std::vector<emote>{}, "Custom emoji"), [&](const auto& pack) {
+    std::ranges::for_each(grouped_emotes(kept_->custom_emoji ? kept_->chat_emotes : emote_list{}, "Custom emoji"), [&](const auto& pack) {
       const auto& [name, images] = pack;
       all.push_back(make_section(this, name, images));
       pack_icons.push_back(images.front().pack_avatar.value_or(images.front().url));
@@ -583,7 +583,7 @@ template <class Pick> struct emoji_panel : skiff::compose::Stacked {
     auto& all = this->sections();
     all.clear();
     all.push_back(make_section(this, "Search results", logic::emoji_found(query)));
-    auto available = kept_->custom_emoji ? kept_->chat_emotes : std::vector<emote>{};
+    std::vector<emote> available = kept_->custom_emoji ? kept_->chat_emotes.get() : std::vector<emote>{};
     for (const auto& one : kept_->custom_emoji ? kept_->favourite_emoji : std::vector<emote>{})
       if (std::ranges::none_of(available, [&](const emote& other) { return other.url == one.url; })) available.push_back(one);
     // Rich clipboard atoms retain the original source even if a different

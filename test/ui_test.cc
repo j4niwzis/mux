@@ -2506,6 +2506,50 @@ TEST(StartChat, BoundGoEmitsRealRequestsAndRowsIgnoreOtherModels) {
   EXPECT_EQ(spl::get<mux::ui::request::invite_to_room>(*asked).room, *facts.inviting);
 }
 
+TEST(Composer, BlankQuotedLinesAcceptTheCursorAndTyping) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
+  stub program;
+  ui_state ui;
+  mux::ui::conversations_screen<stub> screen(ui.needs(program));
+  auto& field = screen.line.parts.input.parts.field;
+  field.apply({.width = 300.0f});
+  const std::string text = "> first\n> \n> \n> last";
+  for (const auto& [row, offset] : {std::pair{1, std::size_t{10}}, std::pair{2, std::size_t{13}}}) {
+    field.setText(text);
+    field.select(0, 0);
+    scene::layout(field, skia::SkRect::MakeWH(300.0f, 200.0f));
+    const auto box = field.bounds();
+    scene::PointerReply pointer;
+    const float y = box.fTop + 6.0f + (static_cast<float>(row) + 0.5f) * 13.0f * 1.3f;
+    field.onPointer(scene::phase::target{}, scene::pointer::down{box.fLeft + 12.0f, y}, pointer);
+    field.onPointer(scene::phase::target{}, scene::pointer::up{box.fLeft + 12.0f, y}, pointer);
+    EXPECT_EQ(field.selectionRange(), (std::pair{offset, offset}));
+    scene::Reply reply;
+    field.onText(scene::phase::target{}, scene::text::commit{"X"}, reply);
+    auto expected = text;
+    expected.insert(offset, "X");
+    EXPECT_EQ(field.text(), expected);
+  }
+  field.setText(text);
+  field.select(2, 2);
+  scene::layout(field, skia::SkRect::MakeWH(300.0f, 200.0f));
+  scene::Reply key;
+  field.onKey(scene::phase::target{}, scene::key::down{scene::keys::kDown, {}}, key);
+  EXPECT_EQ(field.selectionRange(), (std::pair{std::size_t{10}, std::size_t{10}}));
+  field.onKey(scene::phase::target{}, scene::key::down{scene::keys::kDown, {}}, key);
+  EXPECT_EQ(field.selectionRange(), (std::pair{std::size_t{13}, std::size_t{13}}));
+  field.onKey(scene::phase::target{}, scene::key::down{scene::keys::kUp, {}}, key);
+  EXPECT_EQ(field.selectionRange(), (std::pair{std::size_t{10}, std::size_t{10}}));
+  // The prefix of an empty quoted paragraph is editable; a code fence is
+  // a decoration, and its closing fence is not laid out at all.
+  EXPECT_TRUE(mux::ui::field_quotes::look("> ", 0).caret);
+  EXPECT_TRUE(mux::ui::field_quotes::look("> > ", 0).caret);
+  EXPECT_FALSE(mux::ui::field_quotes::look("> ```", 0).caret);
+  EXPECT_TRUE(mux::ui::field_quotes::look("> ```\n> ```", 6).collapsed);
+}
+
 TEST(Composer, QuotedEmojiKeepTheirOriginalSourcesAndDraftFormatting) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;

@@ -170,7 +170,13 @@ template <class Act> auto action(const palette& colours, std::string label, Act 
 }
 
 // General: profile, options, addresses, and advanced options in Cinny's order.
-struct remove_avatar {}, save_profile {}, create_address {}, upgrade_room {}, cancel_upgrade {}, save_power {}, delete_power {};
+struct remove_avatar {};
+struct save_profile {};
+struct create_address {};
+struct upgrade_room {};
+struct cancel_upgrade {};
+struct save_power {};
+struct delete_power {};
 template <class Box> struct general_draft { Box* box; std::string name, topic, address, version, creators; std::optional<std::string> avatar; };
 template <class Box> struct general_actions {
   struct choose_access {

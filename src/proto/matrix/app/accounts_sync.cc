@@ -31,6 +31,7 @@ template bool account<mux::app::post_change>::save_kept() const;
 template void account<mux::app::post_change>::load_kept();
 template void account<mux::app::post_change>::receive_notifications(const loom::ev::account_data_event& event);
 template void account<mux::app::post_change>::tell(const loom::cs::sync::response& got);
+template void account<mux::app::post_change>::tell_presence(const loom::cs::sync::response& got);
 template auto account<mux::app::post_change>::avatar_of(const std::string& room, const loom::client::joined_room& kept) const -> std::optional<std::string>;
 template auto account<mux::app::post_change>::direct(const std::string& room) const -> bool;
 template void account<mux::app::post_change>::conversation(const conversation_id& in, const loom::client::joined_room& kept);

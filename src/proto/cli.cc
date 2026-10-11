@@ -62,6 +62,10 @@ std::string name_of(const mux::conversation_kind_t& kind) {
 
 namespace said {
 using namespace mux;
+std::string of(const change::notifications_changed& one) {
+  return one.by.address + ": notification settings changed" +
+         (one.room ? " in " + *one.room : std::string());
+}
 std::string of(const change::connection_changed& one) {
   return std::format("{} is {}", one.account.address, name_of(one.state));
 }

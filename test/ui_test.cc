@@ -2763,6 +2763,10 @@ TEST(RoomCreation, DialogRefreshesLocalChoicesWithoutAnotherModelChange) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;
   struct cleanup { ~cleanup() { skiff::paint::defaultFont() = nullptr; } } clear;
+  struct sink {
+    void take(const mux::ui::request::create_room&) {}
+    void take(const mux::ui::request::close_new_room&) {}
+  } requests;
   mux::ui::palette colours;
   const mux::ui::new_room_facts facts{.own_server = "example.org",
       .by = mux::account_id{mux::protocol::matrix{}, "@alice:example.org"}};
@@ -2774,23 +2778,23 @@ TEST(RoomCreation, DialogRefreshesLocalChoicesWithoutAnotherModelChange) {
   auto& form = std::get<0>(std::get<1>(view.fParts).fChildren);
   const auto revision = owner.revision();
   // Dialog children: scrim, sheet, content. Form: scroll, content, Anyone.
-  ASSERT_TRUE(skiff::bind::press(dialog, owner, scene::Path{2, 1, 0, 4}));
+  ASSERT_TRUE(skiff::bind::press(dialog, owner, scene::Path{2, 1, 0, 4}, &requests));
   binding.refresh(dialog, owner);
   EXPECT_EQ(owner.revision(), revision);
   EXPECT_EQ(view.fModel.root().access, mux::ui::room_access_t(mux::ui::room_access::everyone{}));
-  EXPECT_TRUE(std::get<4>(form.fParts).state().selected());
+  EXPECT_TRUE(std::get<4>(form.fParts).fState.selected());
   EXPECT_TRUE(std::get<6>(form.fParts).visible());
   EXPECT_FALSE(std::get<7>(form.fParts).visible());
-  ASSERT_TRUE(skiff::bind::press(dialog, owner, scene::Path{2, 1, 0, 3}));
+  ASSERT_TRUE(skiff::bind::press(dialog, owner, scene::Path{2, 1, 0, 3}, &requests));
   binding.refresh(dialog, owner);
   EXPECT_TRUE(std::get<7>(form.fParts).visible());
   // Encryption toggle is the second child of its row.
-  ASSERT_TRUE(skiff::bind::press(dialog, owner, scene::Path{2, 1, 0, 7, 1}));
+  ASSERT_TRUE(skiff::bind::press(dialog, owner, scene::Path{2, 1, 0, 7, 1}, &requests));
   binding.refresh(dialog, owner);
   EXPECT_FALSE(view.fModel.root().encrypted);
   const auto& footer = std::get<2>(view.fParts);
-  EXPECT_GT(std::get<0>(footer.fParts).state().fWidth, 0.0f);
-  EXPECT_GT(std::get<1>(footer.fParts).state().fWidth, 0.0f);
+  EXPECT_GT(std::get<0>(footer.fParts).fState.fWidth, 0.0f);
+  EXPECT_GT(std::get<1>(footer.fParts).fState.fWidth, 0.0f);
 }
 
 TEST(Search, RoomAddressSuggestionsRespectSelectedProtocol) {

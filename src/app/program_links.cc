@@ -65,6 +65,9 @@ void app::go_to_message(const mux::conversation_id& in, std::string id, std::opt
 
 void app::follow(const mux::logic::link_t& where) {
   auto& screen = root().main();
+  // A link in the chat belongs to its account, even when another account
+  // is selected in the sidebar. Without a chat, use that selection.
+  const auto by = screen.chosen ? std::optional(screen.chosen->account) : screen.current;
   spl::visit(spl::overloaded{[&](const mux::logic::link_step::open_chat& step) {
                                if (step.event)
                                  this->go_to_linked(step.chat, *step.event);
@@ -81,7 +84,7 @@ void app::follow(const mux::logic::link_t& where) {
                                // from there.
                                room_card.look_up(step, where);
                              }},
-             mux::logic::where_to(*model, where, screen.current));
+             mux::logic::where_to(*model, where, by));
 }
 
 // A link's message gone to. An answer in a thread -- or a thread's root --

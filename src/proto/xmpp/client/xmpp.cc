@@ -187,6 +187,17 @@ using proto = tern::client;
 
 // A JID's bare part: what a conversation is kept under.
 inline std::string bare(std::string_view jid) { return std::string(jid.substr(0, jid.find('/'))); }
+// A presence can carry affiliation and role in separate MUC items. They
+// describe one occupant, with the real account reduced to its bare JID.
+inline muc_person muc_person_of(std::string nick, const auto& items) {
+  muc_person person{.nick = std::move(nick), .affiliation = "none", .role = "none"};
+  std::ranges::for_each(items, [&](const auto& item) {
+    if (item.jid) person.jid = bare(*item.jid);
+    if (item.affiliation) person.affiliation = *item.affiliation;
+    if (item.role) person.role = *item.role;
+  });
+  return person;
+}
 // A JID's resource: in a room, the occupant's nick.
 inline std::string resource_of(std::string_view jid) {
   const auto slash = jid.find('/');
@@ -622,7 +633,7 @@ class account {
                 .values = field.value,
                 .options = std::ranges::to<std::vector<std::pair<std::string, std::string>>>(std::views::transform(field.options,
                     [](const auto& option) { return std::pair{option.label.value_or(option.value), option.value}; })),
-                .required = field.required.has_value()};
+                .required = field.required.has_value(), .use = muc_field_use_of(field.var.value_or(""))};
           }));
         } else {
           found->second.settings.configuring = false;
@@ -664,10 +675,12 @@ class account {
       auto form = *found->second.form;
       // Use the parsed server fields for validation, never the UI's copy of
       // their type or choices. Unrecognised fields remain opaque and unchanged.
+      const bool protected_room = muc_password_protected(found->second.settings.fields, fields);
       for (auto& field : form.fields) {
         if (!field.var) continue;
         const auto original = std::ranges::find(found->second.settings.fields, *field.var, &muc_field::var);
         if (original == found->second.settings.fields.end()) continue;
+        if (!muc_field_applicable(original->use, protected_room)) continue;
         const auto rules = rules_of(original->kind);
         if (!rules.editable) continue;
         const auto answer = std::ranges::find(fields, *field.var, &muc_field::var);
@@ -1781,21 +1794,16 @@ class account {
     const bool renamed = std::ranges::any_of(muc->statuses, [](const auto& s) { return s.code == "303"; });
     auto& occupants = found->second.occupants;
     if (here) {
+      auto person = muc_person_of(nick, muc->items);
       member one{.id = *got.from, .name = nick};
-      for (const auto& carried : got.payload)
-        if (const auto* user = carried.template get_if<tern::muc::user>())
-          for (const auto& item : user->items) {
-            if (spl::visit([](auto rank) { return rank.shown_as_affiliation; }, muc_rank_of(item.affiliation)))
-              one.role = item.affiliation;
-            else if (spl::visit([](auto rank) { return rank.shown_as_role; }, muc_rank_of(item.role)))
-              one.role = item.role;
-          }
+      if (spl::visit([](auto rank) { return rank.shown_as_affiliation; }, muc_rank_of(person.affiliation)))
+        one.role = person.affiliation;
+      else if (spl::visit([](auto rank) { return rank.shown_as_role; }, muc_rank_of(person.role)))
+        one.role = person.role;
       occupants[nick] = std::move(one);
       std::erase_if(settings.people, [&](const muc_person& p) { return p.nick == nick; });
-      for (const auto& item : muc->items) {
-        settings.people.push_back({item.jid ? bare(*item.jid) : "", nick, item.affiliation.value_or("none"), item.role.value_or("none")});
-        if (self) { settings.affiliation = item.affiliation.value_or("none"); settings.role = item.role.value_or("none"); }
-      }
+      if (self) { settings.affiliation = person.affiliation; settings.role = person.role; }
+      settings.people.push_back(std::move(person));
       if (self) { found->second.nick = nick; settings.nick = nick; settings.joined = true; }
 
     } else {

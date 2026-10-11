@@ -260,3 +260,22 @@ TEST(XmppSettings, RolesAndUploadUseServerFacts) {
   room.role = "participant"; room.joined = false; chat.theirs = room;
   EXPECT_FALSE(proto::xmpp::chat_rights(state, chat).post);
 }
+
+TEST(XmppSettings, PasswordDependsOnProtectionWithoutTrustingAnswerMetadata) {
+  using namespace mux::proto::xmpp;
+  const muc_field protection{.var = "muc#roomconfig_passwordprotectedroom",
+      .kind = muc_kind::boolean{}, .values = {"0"},
+      .use = muc_field_use_of("muc#roomconfig_passwordprotectedroom")};
+  const muc_field password{.var = "muc#roomconfig_roomsecret", .kind = muc_kind::text_private{},
+      .required = true, .use = muc_field_use_of("muc#roomconfig_roomsecret")};
+  const std::vector<muc_field> original{protection, password};
+  auto answers = original;
+  EXPECT_FALSE(muc_password_protected(original, answers));
+  EXPECT_FALSE(muc_field_applicable(password.use, muc_password_protected(original, answers)));
+  answers[0].values = {"1"};
+  answers[0].use = muc_field_use::general{};
+  EXPECT_TRUE(muc_password_protected(original, answers));
+  EXPECT_TRUE(muc_field_applicable(password.use, muc_password_protected(original, answers)));
+  EXPECT_TRUE(muc_field_applicable(protection.use, false));
+  EXPECT_TRUE(muc_field_applicable(muc_field_use_of("server-custom-field"), false));
+}

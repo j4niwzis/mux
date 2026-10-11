@@ -37,13 +37,43 @@ inline std::optional<bool> muc_boolean_of(std::string_view value) {
   const auto found = std::ranges::find(known, value, &decltype(known)::value_type::first);
   return found == known.end() ? std::nullopt : std::optional(found->second);
 }
+namespace muc_field_use {
+struct general {}; struct password_protection {}; struct password {};
+}
+using muc_field_use_t = spl::variant<muc_field_use::general,
+    muc_field_use::password_protection, muc_field_use::password>;
+inline muc_field_use_t muc_field_use_of(std::string_view name) {
+  static const std::array<std::pair<std::string_view, muc_field_use_t>, 2> known{{
+      {"muc#roomconfig_passwordprotectedroom", muc_field_use::password_protection{}},
+      {"muc#roomconfig_roomsecret", muc_field_use::password{}}}};
+  const auto found = std::ranges::find(known, name, &decltype(known)::value_type::first);
+  return found == known.end() ? muc_field_use_t{muc_field_use::general{}} : found->second;
+}
 struct muc_field {
   std::string var, label, description;
   muc_kind_t kind = muc_kind::text_single{};
   std::vector<std::string> values;
   std::vector<std::pair<std::string, std::string>> options;
   bool required = false;
+  muc_field_use_t use;
 };
+inline bool muc_field_applicable(const muc_field_use_t& use, bool password_protected) {
+  return spl::visit(spl::overloaded{
+      [](muc_field_use::general) { return true; },
+      [](muc_field_use::password_protection) { return true; },
+      [&](muc_field_use::password) { return password_protected; }}, use);
+}
+inline bool muc_password_protected(const auto& original, const auto& answers) {
+  const auto protection = std::ranges::find_if(original, [](const auto& field) {
+    return spl::visit(spl::overloaded{
+        [](muc_field_use::password_protection) { return true; },
+        [](const auto&) { return false; }}, field.use);
+  });
+  if (protection == std::ranges::end(original)) return true;
+  const auto answer = std::ranges::find(answers, protection->var, &muc_field::var);
+  const auto& values = answer == std::ranges::end(answers) ? protection->values : answer->values;
+  return values.empty() || muc_boolean_of(values.front()).value_or(true);
+}
 struct muc_field_rules { bool editable = true, multiple = false, choices = false, jid = false, boolean = false; };
 inline muc_field_rules rules_of(const muc_kind_t& kind) {
   return spl::visit(spl::overloaded{

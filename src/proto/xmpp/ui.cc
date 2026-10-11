@@ -499,6 +499,11 @@ struct config_row : skiff::compose::Stacked {
   };
   struct parts_t { config_label label; editor input; } parts;
   muc_field original;
+  bool applicable = true, field_visible = true;
+  void set_applicable(bool on) {
+    applicable = on;
+    this->setVisible(on && field_visible);
+  }
   config_row(const palette& colours, const muc_field& f)
       : Stacked(skiff::compose::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .maxWidth = 435.0f, .alignSelf = scene::align::kStart})),
         parts{.label = config_label(colours, f), .input = editor(colours, f)}, original(f) {
@@ -507,9 +512,10 @@ struct config_row : skiff::compose::Stacked {
         [&](muc_kind::jid_single) {}, [&](muc_kind::jid_multi) {}, [&](muc_kind::boolean) {},
         [&](muc_kind::list_single) {}, [&](muc_kind::list_multi) {},
         [&](muc_kind::fixed) { parts.label.setVisible(false); },
-        [&](muc_kind::hidden) { setVisible(false); }, [&](muc_kind::unsupported) {}}, f.kind);
+        [&](muc_kind::hidden) { field_visible = false; setVisible(false); }, [&](muc_kind::unsupported) {}}, f.kind);
   }
   muc_field answer() const {
+    if (!applicable) return original;
     auto out = original;
     const auto& input = parts.input.parts;
     spl::visit(spl::overloaded{
@@ -528,6 +534,7 @@ struct config_row : skiff::compose::Stacked {
     return out;
   }
   bool validate() {
+    if (!applicable) return true;
     const auto current = answer();
     auto error = validate_muc_value(current, current.values);
     if (!error && rules_of(current.kind).jid && !std::ranges::all_of(current.values, [](const auto& jid) {
@@ -598,7 +605,7 @@ template <class Box> struct configuration_page : skiff::compose::Stacked {
     Answer operator()() const {
       page->submitted = true;
       page->parts.submit.setEnabled(false);
-      page->parts.feedback.setText("Applying…"); page->parts.feedback.setVisible(true);
+      page->parts.feedback.setText("Saving…"); page->parts.feedback.setVisible(true);
       page->parts.refresh.setEnabled(false);
       std::ranges::for_each(page->parts.fields, [](auto& row) { row.setDisabled(true); });
       return {std::ranges::to<std::vector<muc_field>>(std::views::transform(page->parts.fields, &config_row::answer))};
@@ -607,9 +614,9 @@ template <class Box> struct configuration_page : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text title, instructions;
     button_for<sends<request::refresh_muc>> refresh;
-    std::vector<config_row> fields;
     widgets::Button<save> submit;
     nodes::Text feedback;
+    std::vector<config_row> fields;
   } parts;
   configuration_page(Box* box, const room_settings_facts& facts)
       : Stacked(skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
@@ -619,17 +626,32 @@ template <class Box> struct configuration_page : skiff::compose::Stacked {
                 ? std::ranges::to<std::string>(std::views::join_with(settings_of(facts).instructions, std::string_view("\n")))
                 : "You need Owner permission to change the configuration.", 13.0f, box->colours_->dim)),
             .refresh = button_for<sends<request::refresh_muc>>(box->colours_->widgets, "Refresh", {}),
+            .submit = widgets::Button<save>(box->colours_->widgets, "Save", {this}),
+            .feedback = wrapped(nodes::Text("", 13.0f, box->colours_->dim)),
             .fields = std::ranges::to<std::vector<config_row>>(std::views::transform(settings_of(facts).fields,
-                [&](const auto& field) { return config_row(*box->colours_, field); })),
-            .submit = widgets::Button<save>(box->colours_->widgets, "Apply", {this}),
-            .feedback = wrapped(nodes::Text("", 13.0f, box->colours_->dim))} {
+                [&](const auto& field) { return config_row(*box->colours_, field); }))} {
     parts.title.setVisible(!settings_of(facts).title.empty());
     parts.instructions.setVisible(!parts.instructions.text().empty());
     parts.submit.setEnabled(false);
     parts.submit.setVisible(settings_of(facts).configuring);
-    parts.submit.apply({.height = 32.0f, .alignSelf = scene::align::kEnd});
-    parts.refresh.apply({.height = 32.0f, .alignSelf = scene::align::kEnd});
+    parts.submit.apply({.width = 100.0f, .height = 32.0f, .alignSelf = scene::align::kStart});
+    parts.refresh.apply({.width = 100.0f, .height = 32.0f, .alignSelf = scene::align::kStart});
     parts.feedback.setVisible(false);
+    refresh_dependencies();
+  }
+  void refresh_dependencies() {
+    const auto protection = std::ranges::find_if(parts.fields, [](const auto& row) {
+      return spl::visit(spl::overloaded{
+          [](muc_field_use::password_protection) { return true; },
+          [](const auto&) { return false; }}, row.original.use);
+    });
+    const bool protected_room = protection == parts.fields.end() ||
+        protection->parts.input.parts.check.on();
+    std::ranges::for_each(parts.fields, [&](auto& row) {
+      spl::visit(spl::overloaded{
+          [&](muc_field_use::password) { row.set_applicable(protected_room); },
+          [](const auto&) {}}, row.original.use);
+    });
   }
   void configuration_failed(std::string reason) {
     submitted = false;
@@ -642,11 +664,42 @@ template <class Box> struct configuration_page : skiff::compose::Stacked {
   bool wantsTick() const { return !submitted; }
   void update(double) {
     parts.submit.action().page = this;
+    refresh_dependencies();
     const bool valid = std::ranges::count_if(parts.fields, [](auto& row) { return !row.validate(); }) == 0;
     const bool modified = std::ranges::any_of(parts.fields, &config_row::modified);
     parts.submit.setEnabled(!submitted && valid && modified);
   }
 };
+// Affiliation belongs to a bare account; role belongs to a joined occupant.
+// Merge the two lists without inventing duplicate accounts, while keeping
+// each nickname's role when one account joins from several clients.
+inline std::vector<std::string> permission_rows(const muc_room& room) {
+  struct entry { std::string jid, affiliation; std::map<std::string, std::string> occupants; };
+  std::map<std::pair<bool, std::string>, entry> people;
+  std::ranges::for_each(room.people, [&](const auto& person) {
+    const auto key = std::pair{person.jid.empty(), person.jid.empty() ? person.nick : person.jid};
+    auto& kept = people[key];
+    kept.jid = person.jid;
+    kept.affiliation = person.affiliation;
+    kept.occupants.insert_or_assign(person.nick, person.role);
+  });
+  std::ranges::for_each(room.affiliations, [&](const auto& person) {
+    auto& kept = people[{false, person.jid}];
+    kept.jid = person.jid;
+    kept.affiliation = person.affiliation;
+  });
+  return std::ranges::to<std::vector<std::string>>(std::views::transform(people, [](const auto& item) {
+    const auto& person = item.second;
+    auto text = person.jid.empty() ? item.first.second : person.jid;
+    text += " · Affiliation: " + person.affiliation;
+    const auto occupants = std::views::transform(person.occupants, [](const auto& occupant) {
+      return occupant.first + " (Role: " + occupant.second + ")";
+    });
+    if (!person.occupants.empty())
+      text += " · " + std::ranges::to<std::string>(std::views::join_with(occupants, std::string_view(", ")));
+    return text;
+  }));
+}
 template <class Box> struct roles_page : skiff::compose::Stacked {
   struct grant {
     roles_page* page;
@@ -675,6 +728,12 @@ template <class Box> struct roles_page : skiff::compose::Stacked {
     field reason, confirm;
     widgets::Button<destroy> remove;
   } parts;
+  bool wantsTick() const { return true; }
+  void update(double) {
+    parts.affiliation.action().page = this;
+    parts.role.action().page = this;
+    parts.remove.action().page = this;
+  }
   roles_page(Box* box, const room_settings_facts& facts)
       : Stacked(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
         parts{.heading = tab_heading(*box->colours_, "Roles & Permissions"),
@@ -688,8 +747,9 @@ template <class Box> struct roles_page : skiff::compose::Stacked {
             .confirm = field(*box->colours_, "Confirm room address", facts.id),
             .remove = widgets::Button<destroy>(box->colours_->widgets, "Destroy room", {this, facts.id})} {
     const auto& room = settings_of(facts);
-    for (const auto& person : room.people) parts.people.push_back(wrapped(nodes::Text(person.nick + " · " + person.affiliation + " · " + person.role + (person.jid.empty() ? "" : " · " + person.jid), 13.0f, box->colours_->text)));
-    for (const auto& person : room.affiliations) parts.people.push_back(wrapped(nodes::Text(person.jid + " · " + person.affiliation, 13.0f, box->colours_->text)));
+    parts.people = std::ranges::to<std::vector<nodes::Text>>(std::views::transform(permission_rows(room), [&](auto text) {
+      return wrapped(nodes::Text(std::move(text), 13.0f, box->colours_->text));
+    }));
     parts.affiliation.apply({.height = 32.0f, .disabled = room.affiliation != "owner" && room.affiliation != "admin"});
     parts.role.apply({.height = 32.0f, .disabled = room.role != "moderator"});
     const bool owner = room.affiliation == "owner";

@@ -641,6 +641,7 @@ template <class Box> struct configuration_page : skiff::compose::Stacked {
   bool submitted = false;
   bool wantsTick() const { return !submitted; }
   void update(double) {
+    parts.submit.action().page = this;
     const bool valid = std::ranges::count_if(parts.fields, [](auto& row) { return !row.validate(); }) == 0;
     const bool modified = std::ranges::any_of(parts.fields, &config_row::modified);
     parts.submit.setEnabled(!submitted && valid && modified);
@@ -714,4 +715,15 @@ inline ui::icon_t tab_icon(roles) { return ui::icon::people{}; }
 template <class Box> constexpr type_tag<manage_detail::room_page<Box>> page_type(room, type_tag<Box>) { return {}; }
 template <class Box> constexpr type_tag<manage_detail::configuration_page<Box>> page_type(configuration, type_tag<Box>) { return {}; }
 template <class Box> constexpr type_tag<manage_detail::roles_page<Box>> page_type(roles, type_tag<Box>) { return {}; }
+}
+
+export namespace mux::proto::xmpp::settings {
+struct profile_policy {
+  static constexpr bool banners = false;
+  static auto presences() { return std::vector<std::pair<std::string, availability_t>>{{"Online", availability::online{}}, {"Free to chat", availability::chat{}}, {"Away", availability::away{}}, {"Extended away", availability::extended_away{}}, {"Do not disturb", availability::do_not_disturb{}}, {"Offline", availability::offline{}}}; }
+};
+constexpr std::string_view page_title(profile) { return "Profile"; }
+inline ui::icon_t page_icon(profile) { return ui::icon::info{}; }
+template <class Actions>
+constexpr type_tag<ui::profile_editor<Actions, profile_policy>> page_type(profile, type_tag<Actions>) { return {}; }
 }

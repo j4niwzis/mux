@@ -122,10 +122,16 @@ struct person_facts {
   std::optional<trust_t> trust;
   // Their sessions, each verified or not, where their keys were listed.
   std::vector<change::device_view> devices;
+  profile_details profile;
 };
 [[nodiscard]] inline person_facts person_of(const ui_shared& shared, const conversation* in, const model& now, const account_id& account,
                                             const std::string& id) {
   person_facts out{id, presence_of(shared, now, account, id)};
+  if (const auto* kept = now.accounts().find(account))
+    if (const auto found = kept->profiles.find(id); found != kept->profiles.end()) {
+      if (found->second.name && !found->second.name->empty()) out.name = *found->second.name;
+      out.profile = found->second.details;
+    }
   out.trust = now.trust_of(account, id);
   if (const auto* listed = now.devices_of(account, id))
     out.devices = *listed;

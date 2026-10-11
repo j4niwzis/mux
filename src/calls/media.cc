@@ -30,6 +30,9 @@ class media_session {
  public:
   media_session(const std::vector<ice_server>& servers, Wake wake) : wake_(std::move(wake)) {
     rtc::Configuration config;
+    // Signalling owns negotiation: adding the track must not send an offer
+    // before the call controller requests one.
+    config.disableAutoNegotiation = true;
     config.iceServers = std::ranges::to<std::vector>(std::views::transform(servers, [](const ice_server& one) { return server_of(one); }));
     pc_ = std::make_unique<rtc::PeerConnection>(config);
     pc_->onLocalDescription([this](rtc::Description given) {
@@ -86,20 +89,27 @@ class media_session {
   // Calling: the offer, to come as said::description.
   void offer() {
     this->start_sound();
-    pc_->setLocalDescription(rtc::Description::Type::Offer);
+    negotiate([&] { pc_->setLocalDescription(rtc::Description::Type::Offer); });
   }
   // Called and answering: their offer, ours to come as said::description.
   void answer(const session_description& offer) {
     this->start_sound();
-    pc_->setRemoteDescription(rtc::Description(offer.sdp, rtc::Description::Type::Offer));
-    pc_->setLocalDescription(rtc::Description::Type::Answer);
+    negotiate([&] {
+      pc_->setRemoteDescription(rtc::Description(offer.sdp, rtc::Description::Type::Offer));
+      pc_->setLocalDescription(rtc::Description::Type::Answer);
+    });
   }
   // Calling, and answered: their answer.
   void answered(const session_description& answer) {
-    pc_->setRemoteDescription(rtc::Description(answer.sdp, rtc::Description::Type::Answer));
+    negotiate([&] { pc_->setRemoteDescription(rtc::Description(answer.sdp, rtc::Description::Type::Answer)); });
   }
   // An address of theirs.
-  void add_candidate(const ice_candidate& one) { pc_->addRemoteCandidate(rtc::Candidate(one.line, one.mid)); }
+  void add_candidate(const ice_candidate& one) {
+    // Matrix sends an empty candidate to mark the end of gathering.
+    if (one.line.empty()) return;
+    try { pc_->addRemoteCandidate(rtc::Candidate(one.line, one.mid)); }
+    catch (const std::exception&) { tell(said::failed{}); }
+  }
   // The microphone off, or on again: silence sent while it is off.
   void mute(bool off) { muted_.store(off); }
   [[nodiscard]] bool muted() const { return muted_.load(); }
@@ -111,6 +121,10 @@ class media_session {
   }
 
  private:
+  template <class Action> void negotiate(Action action) {
+    try { action(); }
+    catch (const std::exception&) { tell(said::failed{}); }
+  }
   static constexpr int kPayload = 111;
   static constexpr rtc::SSRC kSsrc = 0x6d757831;  // "mux1"
   static constexpr int kMostBytes = 1275;          // the largest Opus frame

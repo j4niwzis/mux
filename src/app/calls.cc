@@ -39,7 +39,7 @@ struct active_call {
   call_state_t state;
   std::string their_party;
   calls::session_description offer;
-  std::vector<calls::ice_candidate> early;
+  std::map<std::string, std::vector<calls::ice_candidate>> early;
   std::vector<calls::ice_candidate> candidates_out;
   std::chrono::steady_clock::time_point ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
   std::unique_ptr<calls::media_session<wake_window>> media;
@@ -120,10 +120,11 @@ class calls_part {
                                      [&](const change::call_said::candidates& them) {
                                        if (!this->is_current(one) || one.mine)
                                          return;
-                                       if (current_->media)
+                                       if (!current_->their_party.empty() && one.party != current_->their_party) return;
+                                       if (current_->media && !holds<call_state::ringing_out>() && !holds<call_state::starting>())
                                          std::ranges::for_each(them.them, [&](const auto& each) { current_->media->add_candidate(each); });
                                        else
-                                         current_->early.insert_range(current_->early.end(), them.them);
+                                         current_->early[one.party].insert_range(current_->early[one.party].end(), them.them);
                                      },
                                      // Ended by them: why, as Element says it.
                                      [&](const change::call_said::hangup& done) {
@@ -144,7 +145,7 @@ class calls_part {
                                      },
                                      [&](const change::call_said::select_answer& chosen) {
                                        // Answered by another of the user's sessions: not this one's.
-                                       if (this->is_current(one) && !current_->outgoing && chosen.party != own_party_)
+                                       if (this->is_current(one) && !current_->outgoing && !own_party_.empty() && chosen.party != own_party_)
                                          this->end("Answered on another device");
                                      }},
                   one.said);
@@ -152,14 +153,16 @@ class calls_part {
   void take(const change::call_servers& one) {
     if (!current_ || current_->in.account != one.account || !holds<call_state::starting>())
       return;
+    own_party_ = one.party;
     current_->media = std::make_unique<session>(one.servers, *s_->wake);
-    std::ranges::for_each(std::exchange(current_->early, {}), [&](const auto& each) { current_->media->add_candidate(each); });
     if (current_->outgoing) {
       current_->media->offer();
       current_->state = call_state::ringing_out{};
     } else {
       current_->media->answer(current_->offer);
+      add_early_candidates();
       current_->state = call_state::connecting{};
+      current_->ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
     }
     this->show();
   }
@@ -179,7 +182,7 @@ class calls_part {
       return;
     }
     if (current_->media)
-      std::ranges::for_each(current_->media->take(), [&](const calls::said_t& said) { this->connection_said(said); });
+      std::ranges::for_each(current_->media->take(), [&](const calls::said_t& said) { if (current_) this->connection_said(said); });
     if (current_ && !current_->candidates_out.empty())
       s_->net->call(current_->in, current_->id,
                     change::call_said_t{change::call_said::candidates{std::exchange(current_->candidates_out, {})}});
@@ -189,6 +192,12 @@ class calls_part {
       s_->net->call(current_->in, current_->id,
                     change::call_said_t{change::call_said::hangup{change::call_end_t{change::call_end::timed_out{}}}});
       this->end("No answer");
+    }
+    if (current_ && (holds<call_state::starting>() || holds<call_state::connecting>()) &&
+        std::chrono::steady_clock::now() > current_->ring_until) {
+      s_->net->call(current_->in, current_->id,
+          change::call_said_t{change::call_said::hangup{change::call_end::failed{}}});
+      this->end("Connection timed out");
     }
     // Shown as it is now -- its time going on, the chat shown changed --
     // where that changed what is shown.
@@ -204,7 +213,7 @@ class calls_part {
     return current_ && spl::visit(spl::overloaded{[](const State&) { return true; }, [](const auto&) { return false; }},
                                      current_->state);
   }
-  [[nodiscard]] bool is_current(const change::call_signalled& one) const { return current_ && current_->id == one.call; }
+  [[nodiscard]] bool is_current(const change::call_signalled& one) const { return current_ && current_->in == one.in && current_->id == one.call; }
 
   void invited(const change::call_signalled& one, const change::call_said::invite& invite) {
     if (one.mine)
@@ -239,9 +248,16 @@ class calls_part {
       return;
     current_->their_party = one.party;
     current_->media->answered(answer.it);
+    add_early_candidates();
     s_->net->call(current_->in, current_->id, change::call_said_t{change::call_said::select_answer{one.party}});
     current_->state = call_state::connecting{};
+    current_->ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
     this->show();
+  }
+  void add_early_candidates() {
+    auto queued = std::exchange(current_->early, {});
+    if (const auto found = queued.find(current_->their_party); found != queued.end())
+      std::ranges::for_each(found->second, [&](const auto& candidate) { current_->media->add_candidate(candidate); });
   }
   void connection_said(const calls::said_t& said) {
     spl::visit(spl::overloaded{[&](const calls::said::description& ours) {

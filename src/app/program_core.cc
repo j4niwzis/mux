@@ -172,6 +172,21 @@ void app::woken() {
     paging.keep(one);
   }
   model->chats().endBatch();
+  // Refresh profile cards after their facts have reached the model.
+  const auto refresh_person = [&](const account_id& by, const std::string& user) {
+    if (person_open_ && person_open_->first.account == by && person_open_->second == user) {
+      const auto [chat, who] = *person_open_;
+      mux::ui::show(showing, std::optional(mux::ui::person_shown{chat.account, who,
+          mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, who)}));
+    }
+  };
+  std::ranges::for_each(changes, [&](const auto& changed) {
+    spl::visit(spl::overloaded{
+        [&](const mux::change::profile_found& profile) { refresh_person(profile.by, profile.user); },
+        [&](const mux::change::presence_changed& presence) { refresh_person(presence.account, presence.contact); },
+        [](const auto&) {}}, changed);
+  });
+
   for (auto& [in, ids] : deleted_on_disk)
     work.run([this, in, ids = std::move(ids)]() -> workers::done_t {
       store.mark_deleted_on_disk(in, ids);

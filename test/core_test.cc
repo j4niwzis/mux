@@ -174,6 +174,25 @@ TEST(Model, Conversation) {
   EXPECT_EQ(one->unread, 2);
 }
 
+TEST(Model, ProfilesKeepDetailsAcrossBasicRefreshesAndReportSaveResults) {
+  model kept;
+  const profile_details details{.banner = "mxc://example/banner",
+      .pronouns = {{"en", "she/her"}}, .biography = {"Biography", "<b>Biography</b>"}};
+  kept.apply(change::profile_found{romeo, with_juliet.id, "Juliet", "mxc://example/avatar", details});
+  kept.apply(change::profile_found{romeo, with_juliet.id, "New name", "mxc://example/avatar"});
+  const auto& profile = kept.accounts().at(romeo).profiles.at(with_juliet.id);
+  EXPECT_EQ(profile.name, "New name");
+  EXPECT_EQ(profile.details, details);
+  kept.apply(change::profile_saved{romeo, "Refused"});
+  EXPECT_EQ(kept.accounts().at(romeo).profile_result, 1u);
+  EXPECT_EQ(kept.accounts().at(romeo).profile_error, "Refused");
+  kept.apply(change::profile_saved{romeo, {}});
+  EXPECT_EQ(kept.accounts().at(romeo).profile_result, 2u);
+  EXPECT_FALSE(kept.accounts().at(romeo).profile_error);
+  kept.apply(change::profile_found{romeo, with_juliet.id, "New name", {}, profile_details{}});
+  EXPECT_FALSE(kept.accounts().at(romeo).profiles.at(with_juliet.id).details.banner);
+}
+
 // A window of history opened away from the newest: what is live comes
 // only as the latest, until paging forward meets the newest.
 TEST(Model, AWindowAwayFromTheNewest) {

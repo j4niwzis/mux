@@ -56,6 +56,21 @@ auto person_cover(const palette& colours, const std::string& key, const person_f
 template <class Actions>
 using person_cover_t = decltype(person_cover<Actions>(std::declval<const palette&>(), "", std::declval<const person_facts&>()));
 
+inline nodes::Text profile_biography(const palette& colours, const body& biography) {
+  auto text = wrapped(nodes::Text(biography.plain, 14.0f, colours.text));
+  if (biography.html) {
+    auto read = read_html(*biography.html);
+    text.setText(std::move(read.text)); text.setStyles(std::move(read.styles), colours.accent);
+    text.setLinks(std::move(read.spans), colours.accent);
+  }
+  text.apply({.fillX = true, .margin = {8.0f, 22.0f, 8.0f, 22.0f}});
+  text.setSelectable(true);
+  return text;
+}
+inline std::string profile_pronouns(const profile_details& profile) {
+  return std::ranges::to<std::string>(std::views::join_with(
+      std::views::transform(profile.pronouns, &pronouns::summary), std::string_view(" · ")));
+}
 template <class Actions> struct person_card : skiff::compose::Stacked {
   // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
   // it shows, a 24th of the window down within 20 and 40.
@@ -97,7 +112,9 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
   const palette* colours_ = nullptr;
   struct parts_t {
     top_bar top;
+    nodes::Image<from_thumbnails> banner;
     person_cover_t<Actions> face;
+    nodes::Text pronouns, biography;
     nodes::Box<> band;
     id_line_t id;
     action_tile_t<message_them> message;
@@ -126,7 +143,13 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
                                         .padding = {0.0f, 0.0f, 16.0f, 0.0f}})),
         colours_(&colours),
         parts{.top = page_header<no_back, close_act>(colours, "User info", {}, {}, false, true),
+              .banner = skiff::compose::visible(facts.profile.banner.has_value(), skiff::compose::styled(
+                  {.fillX = true, .height = 130.0f}, nodes::Image<from_thumbnails>(from_thumbnails{facts.profile.banner.value_or("")}))),
               .face = person_cover<Actions>(colours, key, facts),
+              .pronouns = skiff::compose::visible(!facts.profile.pronouns.empty(), skiff::compose::styled(
+                  {.fillX = true, .margin = {0.0f, 22.0f, 8.0f, 22.0f}}, wrapped(nodes::Text(profile_pronouns(facts.profile), 13.0f, colours.dim)))),
+              .biography = skiff::compose::visible(!facts.profile.biography.plain.empty() || facts.profile.biography.html.has_value(),
+                  profile_biography(colours, facts.profile.biography)),
               .band = section_band(colours),
               .id = id_line(colours, key, ""),
               .message =

@@ -592,6 +592,7 @@ void account<Sink>::run() {
         return perform(syncing,
                        loom::cs::sync{.filter = std::string(kFilter),
                                       .since = state_.since,
+                                      .set_presence = chosen_presence_,
                                       .timeout = first ? 0 : how_.sync_timeout.count()},
                        first ? std::chrono::seconds(600)
                              : std::chrono::duration_cast<std::chrono::seconds>(how_.sync_timeout) +

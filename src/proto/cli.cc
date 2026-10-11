@@ -118,6 +118,7 @@ std::string of(const change::message_encrypted& one) {
 }
 std::string of(const change::event_missing& one) { return std::format("{} has no {}", one.in.id, one.id); }
 std::string of(const change::profile_found& one) { return std::format("profile of {}", one.user); }
+std::string of(const change::profile_saved& one) { return one.error ? "profile edit refused: " + *one.error : "profile saved"; }
 std::string of(const change::people_found& one) {
   return std::format("{} found for {}", one.people.size(), one.query);
 }

@@ -40,6 +40,7 @@ import loom.cs.sync;
 import loom.cs.typing;
 import loom.cs.wellknown;
 import loom.cs.profile;
+import loom.cs.presence;
 import loom.cs.device_management;
 import mux.config;
 import mux.core;
@@ -258,17 +259,263 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
   });
 }
 
+// MSC4247, MSC4427 and MSC4440 are parsed directly from the profile
+// response. Their unstable names are aliases at this boundary, never keys
+// looked up in the generated API's opaque additional JSON.
+namespace profile_wire {
+struct pronoun {
+  std::string language, summary;
+  friend consteval auto json_schema(knot::type<pronoun>) { return knot::schema<pronoun>(); }
+};
+namespace mime {
+struct plain { static constexpr std::string_view json_value = "text/plain"; };
+struct html { static constexpr std::string_view json_value = "text/html"; };
+}
+using mime_t = spl::variant<mime::plain, mime::html, std::string>;
+struct representation {
+  std::string body;
+  std::optional<mime_t> mimetype;
+  friend consteval auto json_schema(knot::type<representation>) { return knot::schema<representation>(); }
+};
+struct biography {
+  std::vector<representation> text;
+  friend consteval auto json_schema(knot::type<biography>) {
+    return knot::schema<biography>().member<"text">(knot::key("m.text"));
+  }
+};
+struct profile {
+  std::optional<std::string> displayname, avatar_url, banner, unstable_banner;
+  std::optional<std::vector<pronoun>> pronouns, unstable_pronouns;
+  std::optional<biography> bio, unstable_bio;
+  friend consteval auto json_schema(knot::type<profile>) {
+    return knot::schema<profile>()
+        .member<"banner">(knot::key("m.banner_url"))
+        .member<"unstable_banner">(knot::key("chat.commet.profile_banner"))
+        .member<"pronouns">(knot::key("m.pronouns"))
+        .member<"unstable_pronouns">(knot::key("io.fsky.nyx.pronouns"))
+        .member<"bio">(knot::key("m.biography"))
+        .member<"unstable_bio">(knot::key("gay.fomx.biography"));
+  }
+};
+struct get {
+  std::string user_id;
+  using response = profile;
+  auto to_head() const { return loom::cs::get_user_profile{.user_id = user_id}.to_head(); }
+  void write_body(auto&&) const {}
+  auto to_send() const { return loom::detail::collect_request(*this); }
+};
+inline body biography_of(const biography& bio) {
+  std::optional<std::string> plain, html;
+  std::ranges::for_each(bio.text, [&](const auto& text) {
+    spl::visit(spl::overloaded{
+        [&](mime::plain) { if (!plain) plain = text.body; },
+        [&](mime::html) { if (!html) html = text.body; },
+        [](const std::string&) {}}, text.mimetype.value_or(mime::plain{}));
+  });
+  return {plain.value_or(""), std::move(html)};
+}
+inline profile_details details_of(const profile& wire) {
+  profile_details out{.banner = wire.banner ? wire.banner : wire.unstable_banner};
+  const auto& pronouns = wire.pronouns ? wire.pronouns : wire.unstable_pronouns;
+  if (pronouns) out.pronouns = std::ranges::to<std::vector<mux::pronouns>>(
+      std::views::transform(*pronouns, [](const auto& p) { return mux::pronouns{p.language, p.summary}; }));
+  const auto& bio = wire.bio ? wire.bio : wire.unstable_bio;
+  if (bio) out.biography = biography_of(*bio);
+  return out;
+}
+struct display_name {
+  static constexpr std::string_view key = "displayname";
+  std::string displayname;
+  friend consteval auto json_schema(knot::type<display_name>) { return knot::schema<display_name>(); }
+};
+struct banner_key { static constexpr std::string_view value = "chat.commet.profile_banner"; };
+struct stable_banner_key { static constexpr std::string_view value = "m.banner_url"; };
+struct pronouns_key { static constexpr std::string_view value = "io.fsky.nyx.pronouns"; };
+struct stable_pronouns_key { static constexpr std::string_view value = "m.pronouns"; };
+struct biography_key { static constexpr std::string_view value = "gay.fomx.biography"; };
+struct stable_biography_key { static constexpr std::string_view value = "m.biography"; };
+template <class Key, class Value> struct field {
+  static constexpr std::string_view key = Key::value;
+  Value value;
+  friend consteval auto json_schema(knot::type<field>) { return knot::schema<field>().template member<"value">(knot::key(key)); }
+};
+using banner = field<banner_key, std::string>;
+using stable_banner = field<stable_banner_key, std::string>;
+using pronouns = field<pronouns_key, std::vector<pronoun>>;
+using stable_pronouns = field<stable_pronouns_key, std::vector<pronoun>>;
+using bio = field<biography_key, biography>;
+using stable_bio = field<stable_biography_key, biography>;
+template <class Field> struct put {
+  std::string user;
+  Field body;
+  bool unstable = false;
+  using response = knot::raw;
+  auto to_head() const {
+    auto head = loom::cs::set_profile_field{.user_id = user, .key_name = std::string(Field::key)}.to_head();
+    if (unstable) head.target = "/_matrix/client/unstable/uk.tcpip.msc4133/profile/" + loom::percent_encoded(user) + "/" + loom::percent_encoded(Field::key);
+    return head;
+  }
+  void write_body(auto&& sink) const { knot::write_chunks(std::forward<decltype(sink)>(sink), body); }
+  auto to_send() const { return loom::detail::collect_request(*this); }
+};
+template <class Field> struct remove {
+  std::string user;
+  bool unstable = false;
+  using response = knot::raw;
+  auto to_head() const {
+    auto head = loom::cs::delete_profile_field{.user_id = user, .key_name = std::string(Field::key)}.to_head();
+    if (unstable) head.target = "/_matrix/client/unstable/uk.tcpip.msc4133/profile/" + loom::percent_encoded(user) + "/" + loom::percent_encoded(Field::key);
+    return head;
+  }
+  void write_body(auto&&) const {}
+  auto to_send() const { return loom::detail::collect_request(*this); }
+};
+
+}
+
 template <class Sink>
 void account<Sink>::fetch_profile(std::string user) {
   this->spawn_guarded([this, user = std::move(user)] {
-    if (!api_)
-      return;
-    auto got = perform(*api_, loom::cs::get_user_profile{.user_id = user});
+    if (!api_) return;
+    auto got = perform(*api_, profile_wire::get{user});
     if (!got) {
       log(id_, "no profile of {}: {}", user, got.error().said());
       return;
     }
-    sink_(change::profile_found{id_, user, got->displayname, got->avatar_url});
+    sink_(change::profile_found{id_, user, got->displayname, got->avatar_url, profile_wire::details_of(*got)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::set_profile(user_profile profile) {
+  this->spawn_guarded([this, profile = std::move(profile)] {
+    if (!api_) { sink_(change::profile_saved{id_, "The account is offline."}); return; }
+    const auto current = perform(*api_, profile_wire::get{id_.address});
+    if (!current) { sink_(change::profile_saved{id_, current.error().said()}); return; }
+    std::optional<std::string> error;
+    const auto send_request = [&](auto request) {
+      if (error) return;
+      if (!api_) { error = "Disconnected before the profile could be saved."; return; }
+      auto done = perform(*api_, request);
+      // An unrecognised endpoint permits the MSC4133 fallback. Never
+      // retry authorization failures through another API.
+      if (!done && done.error().server && done.error().server->status == 404 && api_) {
+        request.unstable = true;
+        done = perform(*api_, request);
+      }
+      if (!done) error = done.error().said();
+    };
+    const auto send = [&](auto field) { send_request(profile_wire::put{id_.address, std::move(field)}); };
+    send(profile_wire::display_name{profile.name.value_or("")});
+    auto pronouns = std::ranges::to<std::vector<profile_wire::pronoun>>(std::views::transform(profile.details.pronouns,
+        [](const auto& p) { return profile_wire::pronoun{p.language, p.summary}; }));
+    if (current->pronouns) send(profile_wire::stable_pronouns{std::move(pronouns)});
+    else send(profile_wire::pronouns{std::move(pronouns)});
+    profile_wire::biography biography{{profile_wire::representation{profile.details.biography.plain, profile_wire::mime::plain{}}}};
+    if (profile.details.biography.html) biography.text.insert(biography.text.begin(), {*profile.details.biography.html, profile_wire::mime::html{}});
+    if (current->bio) send(profile_wire::stable_bio{std::move(biography)});
+    else send(profile_wire::bio{std::move(biography)});
+    if (profile.details.banner && !profile.details.banner->empty()) {
+      if (current->banner) send(profile_wire::stable_banner{*profile.details.banner});
+      else send(profile_wire::banner{*profile.details.banner});
+    } else {
+      if (current->banner) send_request(profile_wire::remove<profile_wire::stable_banner>{id_.address});
+      if (current->unstable_banner) send_request(profile_wire::remove<profile_wire::banner>{id_.address});
+    }
+    if (!error) sink_(change::profile_found{id_, id_.address, profile.name, profile.avatar, profile.details});
+    sink_(change::profile_saved{id_, std::move(error)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::upload_profile_banner(std::string bytes, std::string name, std::string mime) {
+  this->spawn_guarded([this, bytes = std::move(bytes), name = std::move(name), mime = std::move(mime)] {
+    auto uri = upload_content(bytes, name, mime);
+    if (!uri) { sink_(change::profile_saved{id_, uri.error().said()}); return; }
+    if (!api_) { sink_(change::profile_saved{id_, "Disconnected before the banner could be saved."}); return; }
+    auto current = perform(*api_, profile_wire::get{id_.address});
+    if (!current) { sink_(change::profile_saved{id_, current.error().said()}); return; }
+    const auto put = [&](auto field) {
+      auto request = profile_wire::put{id_.address, field};
+      auto done = perform(*api_, request);
+      if (!done && done.error().server && done.error().server->status == 404 && api_) {
+        request.unstable = true; done = perform(*api_, request);
+      }
+      return done;
+    };
+    auto saved = current->banner ? put(profile_wire::stable_banner{*uri}) : put(profile_wire::banner{*uri});
+    if (!saved) { sink_(change::profile_saved{id_, saved.error().said()}); return; }
+    auto details = profile_wire::details_of(*current); details.banner = *uri;
+    sink_(change::profile_found{id_, id_.address, current->displayname, current->avatar_url, std::move(details)});
+    sink_(change::profile_saved{id_, {}});
+  });
+}
+template <class Sink>
+void account<Sink>::remove_profile_banner() {
+  this->spawn_guarded([this] {
+    if (!api_) { sink_(change::profile_saved{id_, "The account is offline."}); return; }
+    auto current = perform(*api_, profile_wire::get{id_.address});
+    if (!current) { sink_(change::profile_saved{id_, current.error().said()}); return; }
+    const auto remove = [&](auto request) {
+      if (!api_) return std::expected<knot::raw, failure>(std::unexpected(failure{{}, "The account is offline."}));
+      auto done = perform(*api_, request);
+      if (!done && done.error().server && done.error().server->status == 404 && api_) {
+        request.unstable = true; done = perform(*api_, request);
+      }
+      return done;
+    };
+    if (current->banner) {
+      auto done = remove(profile_wire::remove<profile_wire::stable_banner>{id_.address});
+      if (!done) { sink_(change::profile_saved{id_, done.error().said()}); return; }
+    }
+    if (current->unstable_banner) {
+      auto done = remove(profile_wire::remove<profile_wire::banner>{id_.address});
+      if (!done) { sink_(change::profile_saved{id_, done.error().said()}); return; }
+    }
+    auto details = profile_wire::details_of(*current); details.banner.reset();
+    sink_(change::profile_found{id_, id_.address, current->displayname, current->avatar_url, std::move(details)});
+    sink_(change::profile_saved{id_, {}});
+  });
+}
+
+template <class Sink>
+void account<Sink>::fetch_presence(std::string user) {
+  this->spawn_guarded([this, user = std::move(user)] {
+    if (!api_) return;
+    auto got = perform(*api_, loom::cs::get_presence{.user_id = user});
+    if (!got) return;
+    using values = loom::cs::get_presence::response_t::presence_values;
+    auto state = spl::visit(spl::overloaded{
+        [](values::online) -> availability_t { return availability::online{}; },
+        [](values::unavailable) -> availability_t { return availability::away{}; },
+        [](values::offline) -> availability_t { return availability::offline{}; },
+        [](const std::string&) -> availability_t { return availability::offline{}; }}, got->presence);
+    sink_(change::presence_changed{id_, user, {std::move(state), got->status_msg}});
+  });
+}
+
+template <class Sink>
+void account<Sink>::set_presence(presence now) {
+  this->spawn_guarded([this, now = std::move(now)] {
+    if (!api_) return;
+    using values = loom::cs::set_presence::body_t::presence_values;
+    auto state = spl::visit(spl::overloaded{
+        [](availability::online) -> loom::cs::set_presence::body_t::presence_t { return values::online{}; },
+        [](availability::chat) -> loom::cs::set_presence::body_t::presence_t { return values::online{}; },
+        [](availability::away) -> loom::cs::set_presence::body_t::presence_t { return values::unavailable{}; },
+        [](availability::extended_away) -> loom::cs::set_presence::body_t::presence_t { return values::unavailable{}; },
+        [](availability::do_not_disturb) -> loom::cs::set_presence::body_t::presence_t { return values::unavailable{}; },
+        [](availability::offline) -> loom::cs::set_presence::body_t::presence_t { return values::offline{}; }}, now.state);
+    auto done = perform(*api_, loom::cs::set_presence{.user_id = id_.address, .body = {.presence = state, .status_msg = now.status}});
+    if (!done) { sink_(change::refused{id_, "Presence: " + done.error().said()}); return; }
+    using sync_values = loom::cs::sync::set_presence_values;
+    chosen_presence_ = spl::visit(spl::overloaded{
+        [](values::online) -> loom::cs::sync::set_presence_t { return sync_values::online{}; },
+        [](values::unavailable) -> loom::cs::sync::set_presence_t { return sync_values::unavailable{}; },
+        [](values::offline) -> loom::cs::sync::set_presence_t { return sync_values::offline{}; },
+        [](const std::string& unknown) -> loom::cs::sync::set_presence_t { return unknown; }}, state);
+    cut_long_poll();
+    sink_(change::presence_changed{id_, id_.address, now});
   });
 }
 

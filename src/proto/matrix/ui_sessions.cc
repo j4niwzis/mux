@@ -412,3 +412,14 @@ constexpr type_tag<settings_detail::account_sessions<Actions>> page_type(session
   return {};
 }
 }  // namespace mux::proto::matrix::settings
+
+export namespace mux::proto::matrix::settings {
+struct profile_policy {
+  static constexpr bool banners = true;
+  static auto presences() { return std::vector<std::pair<std::string, availability_t>>{{"Online", availability::online{}}, {"Away", availability::away{}}, {"Offline", availability::offline{}}}; }
+};
+constexpr std::string_view page_title(profile) { return "Profile"; }
+inline ui::icon_t page_icon(profile) { return ui::icon::info{}; }
+template <class Actions>
+constexpr type_tag<ui::profile_editor<Actions, profile_policy>> page_type(profile, type_tag<Actions>) { return {}; }
+}

@@ -202,6 +202,144 @@ template <class Actions>
 using account_pages = decltype(account_pages_view<Actions>(std::declval<const palette&>(), std::declval<const protocol_state_t&>(),
     std::declval<const account_page_t&>()));
 
+// A protocol supplies its presence choices and whether it publishes banners.
+// The editor reads common model data and sends common requests.
+template <class Actions, class Policy>
+struct profile_editor : skiff::compose::Stacked {
+  struct choose { void operator()(std::size_t) const {} };
+  struct save {
+    profile_editor* page;
+    using Answer = request::save_profile;
+    Answer operator()() const {
+      page->pending = true;
+      page->parts.feedback.setText("Saving…");
+      return {page->by, page->answer()};
+    }
+  };
+  struct presence_save {
+    profile_editor* page;
+    using Answer = request::save_presence;
+    Answer operator()() const {
+      const auto choices = Policy::presences();
+      return {page->by, {choices.at(page->parts.availability.current).second,
+          page->parts.status.text().empty() ? std::nullopt : std::optional(page->parts.status.text())}};
+    }
+  };
+  account_id by;
+  const model* known;
+  user_profile loaded;
+  std::uint64_t result = 0;
+  bool pending = false, initialized = false, presence_initialized = false;
+  struct parts_t {
+    nodes::Text title;
+    field name, language, pronouns, biography;
+    button_for<sends<request::pick_profile_banner>> banner;
+    button_for<sends<request::remove_profile_banner>> remove_banner;
+    widgets::Button<save> submit;
+    nodes::Text feedback;
+    choice_menu<choose> availability;
+    field status;
+    widgets::Button<presence_save> presence;
+  } parts;
+  profile_editor(const palette& colours, const ui_shared&, const config::account_t& saved, const model& now)
+      : Stacked(skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        by{protocol_of(config::address_of(saved)), config::address_of(saved)}, known(&now),
+        parts{.title = nodes::Text("Profile", 20.0f, colours.text, true),
+            .name = field(colours, "Display name", "Your name"),
+            .language = field(colours, "Pronouns language", "en", "en"),
+            .pronouns = field(colours, "Pronouns", "One set per line"),
+            .biography = field(colours, "About you", "Your biography"),
+            .banner = button_for<sends<request::pick_profile_banner>>(colours.widgets, "Choose banner…", {by}),
+            .remove_banner = button_for<sends<request::remove_profile_banner>>(colours.widgets, "Remove banner", {by}),
+            .submit = widgets::Button<save>(colours.widgets, "Save profile", {this}),
+            .feedback = wrapped(nodes::Text("", 13.0f, colours.dim)),
+            .availability = make_choice_menu(colours, "Presence", std::ranges::to<std::vector<std::string>>(
+                std::views::transform(Policy::presences(), [](const auto& p) { return p.first; })), 0, choose{}),
+            .status = field(colours, "Status", "What you are doing"),
+            .presence = widgets::Button<presence_save>(colours.widgets, "Set presence", {this})} {
+    parts.pronouns.multi_line(3); parts.biography.multi_line(6);
+    parts.banner.setVisible(Policy::banners); parts.remove_banner.setVisible(Policy::banners);
+    std::ranges::for_each(std::array<scene::Node*, 4>{&parts.banner, &parts.remove_banner, &parts.submit, &parts.presence},
+        [](auto* node) { node->apply({.height = 36.0f}); });
+    if (const auto* account = known->accounts().find(by)) result = account->profile_result;
+    reload();
+  }
+  request::refresh_profile asked_as_it_opens() const { return {by}; }
+  static std::vector<std::string> lines_of(std::string_view text) {
+    return std::ranges::to<std::vector<std::string>>(std::views::transform(
+        std::views::filter(std::views::split(text, '\n'), [](const auto& line) { return !std::ranges::empty(line); }),
+        [](const auto& line) { return std::ranges::to<std::string>(line); }));
+  }
+  user_profile answer() const {
+    auto out = loaded;
+    out.name = parts.name.text();
+    // Editing one language retains the other language representations.
+    const auto same_language = [&](const auto& p) { return p.language == parts.language.text(); };
+    const auto existing = std::ranges::to<std::vector<std::string>>(
+        std::views::transform(std::views::filter(out.details.pronouns, same_language), &mux::pronouns::summary));
+    const auto edited = lines_of(parts.pronouns.text());
+    if (existing != edited) {
+      const auto first = std::ranges::find_if(out.details.pronouns, same_language);
+      const auto position = first - out.details.pronouns.begin();
+      std::erase_if(out.details.pronouns, same_language);
+      auto replacements = std::ranges::to<std::vector<mux::pronouns>>(std::views::transform(edited,
+          [&](const auto& summary) { return mux::pronouns{parts.language.text(), summary}; }));
+      out.details.pronouns.insert(out.details.pronouns.begin() + position, replacements.begin(), replacements.end());
+    }
+    if (parts.biography.text() != loaded.details.biography.plain)
+      out.details.biography = {parts.biography.text(), {}};
+    return out;
+  }
+  void reload() {
+    const auto* account = known->accounts().find(by);
+    if (!account) return;
+    const auto profile = account->profiles.find(by.address);
+    if (profile == account->profiles.end()) return;
+    loaded = profile->second; initialized = true;
+    parts.name.parts.box.setText(loaded.name.value_or(""));
+    if (!loaded.details.pronouns.empty()) parts.language.parts.box.setText(loaded.details.pronouns.front().language);
+    parts.pronouns.parts.box.setText(std::ranges::to<std::string>(std::views::join_with(
+        std::views::transform(std::views::filter(loaded.details.pronouns,
+            [&](const auto& p) { return p.language == parts.language.text(); }), &mux::pronouns::summary), std::string_view("\n"))));
+    parts.biography.parts.box.setText(loaded.details.biography.plain);
+  }
+  bool wantsTick() const { return true; }
+  void update(double) {
+    // Pages move into the panel's variant; actions must point at that final address.
+    parts.submit.action().page = this; parts.presence.action().page = this;
+    const auto* account = known->accounts().find(by);
+    if (account && account->profile_result != result) {
+      result = account->profile_result;
+      if (pending && !account->profile_error) reload();
+      pending = false;
+      parts.feedback.setText(account->profile_error.value_or("Profile saved."));
+    }
+    if (!initialized) reload();
+    if (account) {
+      if (!presence_initialized) {
+        if (const auto current = account->presences.find(by.address); current != account->presences.end()) {
+          const auto choices = Policy::presences();
+          const auto selected = std::ranges::find(choices, current->second.state,
+              [](const auto& choice) { return choice.second; });
+          if (selected != choices.end()) parts.availability.read(selected - choices.begin());
+          parts.status.parts.box.setText(current->second.status.value_or(""));
+          presence_initialized = true;
+        }
+      }
+      if (const auto current = account->profiles.find(by.address); current != account->profiles.end())
+        loaded.details.banner = current->second.details.banner;
+    }
+    const auto current = answer();
+    parts.submit.setEnabled(initialized && !pending && current != loaded &&
+        (current.details.pronouns.empty() || !parts.language.text().empty()));
+    parts.name.setDisabled(pending); parts.language.setDisabled(pending);
+    parts.pronouns.setDisabled(pending); parts.biography.setDisabled(pending);
+    parts.remove_banner.setEnabled(loaded.details.banner.has_value());
+    parts.banner.setEnabled(!pending);
+    parts.remove_banner.setEnabled(!pending && loaded.details.banner.has_value());
+  }
+};
+
 // A section's title on a settings page, as Gajim sets them: small, bold, dim.
 inline nodes::Text section_title(const palette& colours, std::string text) {
   return nodes::Text(std::move(text), 13.0f, colours.dim, true);

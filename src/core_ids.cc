@@ -118,6 +118,23 @@ struct body {
   friend bool operator==(const body&, const body&) = default;
 };
 
+// Global profile data, independent of its protocol's wire representation.
+struct pronouns {
+  std::string language, summary;
+  friend bool operator==(const pronouns&, const pronouns&) = default;
+};
+struct profile_details {
+  std::optional<std::string> banner;
+  std::vector<mux::pronouns> pronouns;
+  mux::body biography;
+  friend bool operator==(const profile_details&, const profile_details&) = default;
+};
+struct user_profile {
+  std::optional<std::string> name, avatar;
+  profile_details details;
+  friend bool operator==(const user_profile&, const user_profile&) = default;
+};
+
 namespace delivery {
 struct sending {
   friend bool operator==(const sending&, const sending&) = default;
@@ -761,6 +778,9 @@ struct account {
   connection_t state = connection::offline{};
   std::string display_name;
   skiff::model::Keyed<std::string, conversation> conversations;  // by conversation id
+  std::map<std::string, user_profile> profiles;
+  std::uint64_t profile_result = 0;
+  std::optional<std::string> profile_error;
   std::map<std::string, presence> presences;          // by contact
 };
 

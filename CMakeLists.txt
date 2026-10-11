@@ -97,13 +97,13 @@ cme_declare_port(NAME chevron PROVIDES chevron
 cme_options(chevron "CHEVRON_TESTS OFF")
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG 507dafeb6b5eb71881d4b2d57542f3801ef33598
+  GIT_TAG b51f8bdd947f1a0a2710fdfd6ac4b847100db7c3
   LICENSE AGPL-3.0-only
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG e4b88f0bd2efe1d1c0e0d0568e6584950b6cd3cf
+  GIT_TAG 0f420b898441cb2518deaa6877f0b314ac9450aa
   VERSION 0.1.1
   LICENSE AGPL-3.0-only
   TARGETS loom)
@@ -168,7 +168,7 @@ mux_find_package(chevron 0.2 REQUIRED)
 mux_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.
-mux_find_package(loom 0.1.1 COMPONENTS state crypto cs-joining cs-leaving cs-login cs-registration cs-oauth_server_metadata cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-device_management cs-room_upgrades cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher cs-pushrules cs-voip REQUIRED)
+mux_find_package(loom 0.1.1 COMPONENTS state crypto cs-joining cs-leaving cs-login cs-registration cs-oauth_server_metadata cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-presence cs-device_management cs-room_upgrades cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher cs-pushrules cs-voip REQUIRED)
 # End-to-end encryption: Olm and Megolm, by vodozemac -- the kazv project's
 # C++ bindings, a Rust library built by cargo through cmake-everywhere.
 mux_find_package(vodozemac REQUIRED)

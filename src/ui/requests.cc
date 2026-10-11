@@ -152,6 +152,11 @@ struct add_account_of {  // a protocol's form, to add an account of it
 struct select_account {
   std::string address;
 };
+struct refresh_profile { account_id by; };
+struct save_profile { account_id by; user_profile profile; };
+struct save_presence { account_id by; mux::presence now; };
+struct pick_profile_banner { account_id by; };
+struct remove_profile_banner { account_id by; };
 struct toggle_advanced {};
 struct toggle_plain {};
 struct submit_login {};

@@ -14,6 +14,7 @@ import mux.config;
 import mux.net;
 import mux.media;
 import mux.platform.dialogs;
+import mux.platform.files;
 import mux.platform.push;
 import mux.ui;
 import skiff.paint;
@@ -26,6 +27,31 @@ import mux.app.words;
 
 namespace mux::app {
 
+void app::apply(const request::refresh_profile& one) {
+  net->fetch_profile(one.by, one.by.address);
+  net->fetch_presence(one.by, one.by.address);
+}
+void app::apply(const request::save_profile& one) { net->set_profile(one.by, one.profile); }
+void app::apply(const request::save_presence& one) { net->set_presence(one.by, one.now); }
+void app::apply(const request::pick_profile_banner& one) {
+  picking_profile_banner_ = one.by;
+  shared.system_dialogs->choose_files();
+}
+void app::apply(const request::remove_profile_banner& one) { net->remove_profile_banner(one.by); }
+bool app::profile_files_given(const std::vector<std::string>& paths, bool dropped) {
+  if (!picking_profile_banner_ || dropped) return false;
+  const auto by = *std::exchange(picking_profile_banner_, std::nullopt);
+  if (paths.empty()) return true;
+  auto bytes = mux::platform::files::read(paths.front());
+  const auto kind = bytes ? mux::media::picture_of(*bytes) : std::nullopt;
+  if (!kind || !skia::decodeImage(bytes->data(), bytes->size())) {
+    shared.notice("Profile banner", "Choose an image mux can show."); return true;
+  }
+  net->upload_profile_banner(by, std::move(*bytes), mux::platform::files::name(paths.front()),
+      std::string(mux::media::mimetype_of(*kind)));
+  return true;
+}
+
 // A person's info: a box in the middle of the window, as tdesktop's.
 void app::apply(const request::open_member_info& one) {
   const auto chosen = shared.managed();
@@ -35,6 +61,8 @@ void app::apply(const request::open_member_info& one) {
   mux::ui::show(showing, std::optional(mux::ui::person_shown{chosen->account, one.id, mux::ui::person_of(shared.ui, in, *model, chosen->account, one.id)}));
   person_open_ = std::pair{*chosen, one.id};
   if (!shared.demo()) {
+    net->fetch_profile(chosen->account, one.id);
+    net->fetch_presence(chosen->account, one.id);
     net->ask_trust(chosen->account, one.id);
     net->ask_devices(chosen->account, one.id);
   }

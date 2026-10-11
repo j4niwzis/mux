@@ -287,6 +287,12 @@ class account {
   // A person's profile -- their name and picture -- from their server:
   // profile_found, for one met outside the rooms, a forward's sender.
   void fetch_profile(std::string user);
+  void set_profile(user_profile profile);
+  void upload_profile_banner(std::string bytes, std::string name, std::string mime);
+  void remove_profile_banner();
+  std::expected<std::string, failure> upload_content(const std::string& bytes, std::string_view name, std::string_view mime);
+  void fetch_presence(std::string user);
+  void set_presence(presence now);
   // Its sessions (devices), as Element's Sessions: listed; one renamed;
   // some signed out -- the server asking for the password, it is given
   // (the one typed, else the one logged in with).
@@ -758,6 +764,8 @@ class account {
   // sync of a login, and the sync kept on disk told again at a start. Its
   // events are shown, but mark no mention or reaction as unseen and ring
   // no call -- a login showed every old mention as new.
+  std::map<std::string, bool> legacy_calls_;
+  std::optional<loom::cs::sync::set_presence_t> chosen_presence_;
   bool telling_history_ = false;
   // Whether an event placed so is news: come at the end, not from history.
   // (Whether an event so placed is news is placed_as_news(), a plain

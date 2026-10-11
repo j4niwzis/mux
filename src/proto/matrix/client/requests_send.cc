@@ -406,8 +406,15 @@ void account<Sink>::call(std::string room, std::string call_id, change::call_sai
     if (!api_)
       return;
     const std::string party = how_.device_id.value_or("mux");
-    const std::string version = "1";
+    const auto remembered = legacy_calls_.find(call_id);
+    const bool legacy = remembered != legacy_calls_.end() && remembered->second;
+    const spl::variant<std::string, std::int64_t> version = legacy
+        ? spl::variant<std::string, std::int64_t>{std::int64_t{0}}
+        : spl::variant<std::string, std::int64_t>{std::string("1")};
     // Each kind of signal, as its event: its type, and its content.
+    const bool selection = spl::visit(spl::overloaded{[](const change::call_said::select_answer&) { return true; },
+        [](const auto&) { return false; }}, what);
+    if (legacy && selection) return;
     const auto [type, body] = spl::visit(
         spl::overloaded{
             [&](const change::call_said::invite& one) {
@@ -460,6 +467,12 @@ void account<Sink>::call(std::string room, std::string call_id, change::call_sai
               return std::pair{std::string("m.call.hangup"), as_body(content)};
             },
             [&](const change::call_said::reject&) {
+              if (legacy) {
+                loom::ev::m_call_hangup_content_t content{};
+                content.call_id = call_id; content.version = version;
+                content.reason = loom::ev::m_call_hangup_content_t::reason_values::user_hangup{};
+                return std::pair{std::string("m.call.hangup"), as_body(content)};
+              }
               loom::ev::m_call_reject_content_t content{};
               content.call_id = call_id;
               content.version = version;
@@ -495,7 +508,7 @@ void account<Sink>::call_servers() {
                 }), [](const auto& one) { return one.has_value(); }), [](const auto& one) { return *one; }));
     else
       log(id_, "no TURN servers: {}", got.error().said());
-    sink_(change::call_servers{id_, std::move(servers)});
+    sink_(change::call_servers{id_, std::move(servers), how_.device_id.value_or("mux")});
   });
 }
 

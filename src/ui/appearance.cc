@@ -185,23 +185,47 @@ inline auto frame_look_view(const palette& colours, bool see_through) {
                                  "when mux starts again; from then on, "
                                  "changes here apply at once."));
 }
+// Keep the large sections separately owned. Building the whole expression
+// by value also copied its nested controls through several argument packs;
+// Android's UI thread has a much smaller stack than desktop threads.
+template <class Actions>
+struct appearance_page_node : skiff::compose::Stacked {
+  using heading = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
+  using themes = decltype(appearance_settings_view(std::declval<const palette&>(), config::theme_t{}));
+  using fonts = decltype(skiff::compose::scoped<config::look_settings>(skiff::compose::handlers(),
+      style_controls(std::declval<const palette&>(), false)));
+  using spaces = decltype(window_settings_view(std::declval<const palette&>()));
+  using frame = decltype(frame_look_view(std::declval<const palette&>(), false));
+  struct parts_t {
+    heading header;
+    std::unique_ptr<themes> theme;
+    std::unique_ptr<fonts> style;
+    std::unique_ptr<look_choices<Actions>> looks;
+    std::unique_ptr<spaces> window;
+    std::unique_ptr<spaces_choices<Actions>> bars;
+    std::unique_ptr<frame> rendering;
+  } parts;
+  appearance_page_node(const ui_needs<Actions>& needs, const config::theme_t& theme)
+      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.header = skiff::compose::styled({.depth = 1.0f, .background = needs.colours->sidebar},
+                  page_header<sends<request::settings_home>, sends<request::close_settings>>(*needs.colours, "Appearance", {}, {}, true, true)),
+            .theme = std::make_unique<themes>(appearance_settings_view(*needs.colours, theme)),
+            .style = std::make_unique<fonts>(skiff::compose::scoped<config::look_settings>(
+                skiff::compose::handlers(), style_controls(*needs.colours, false))),
+            .looks = std::make_unique<look_choices<Actions>>(*needs.colours, *needs.looks, choice_level::everywhere{}),
+            .window = std::make_unique<spaces>(window_settings_view(*needs.colours)),
+            .bars = std::make_unique<spaces_choices<Actions>>(*needs.colours, *needs.shared),
+            .rendering = std::make_unique<frame>(frame_look_view(*needs.colours, needs.looks->window.see_through))} {
+    parts.looks->apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
+    parts.bars->setVisible(needs.looks->window.spaces);
+  }
+};
 template <class Actions>
 auto appearance_page(const ui_needs<Actions>& needs, const config::theme_t& theme, const config::accent_t&) {
-  const auto& colours = *needs.colours;
-  using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
-  return skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Appearance", {}, {}, true, true)),
-      skiff::compose::column(
-          skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          appearance_settings_view(colours, theme),
-          skiff::compose::scoped<config::look_settings>(skiff::compose::handlers(), style_controls(colours, false)),
-          skiff::compose::styled({.margin = {6.0f, 10.0f, 0.0f, 10.0f}}, look_choices<Actions>(colours, *needs.looks, choice_level::everywhere{})),
-          window_settings_view(colours), skiff::compose::visible(needs.looks->window.spaces, spaces_choices<Actions>(colours, *needs.shared)),
-          frame_look_view(colours, needs.looks->window.see_through)));
+  return appearance_page_node<Actions>(needs, theme);
 }
 template <class Actions>
-using appearance_page_t = decltype(appearance_page(std::declval<const ui_needs<Actions>&>(), config::theme_t{}, config::accent_t{}));
+using appearance_page_t = appearance_page_node<Actions>;
 
 // Settings' Rendering page: what draws the window, from the next start.
 // The Rendering page's frames: a toggle bound to each of frame_settings'

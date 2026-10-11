@@ -307,7 +307,10 @@ struct profile_found {
   std::string user;
   std::optional<std::string> name;
   std::optional<std::string> avatar;
+  std::optional<profile_details> details;
 };
+// Completion of an explicit profile edit. UI drafts survive a refusal.
+struct profile_saved { account_id by; std::optional<std::string> error; };
 // A server's public directory, searched: what it listed.
 struct directory_listed {
   account_id by;
@@ -402,6 +405,7 @@ struct call_signalled {
 struct call_servers {
   account_id account;
   std::vector<calls::ice_server> servers;
+  std::string party;
 };
 
 }  // namespace change
@@ -409,7 +413,7 @@ struct call_servers {
 // The changes every protocol says, here; and each protocol's own, from its
 // change list -- changes_type(state), found by ADL in its folder (mux.proto.
 // <p>.changes), none where it gives none -- all one variant.
-using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::threads_listed, change::call_signalled, change::call_servers>;
+using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved, change::threads_listed, change::call_signalled, change::call_servers>;
 namespace changes_defaults {
 constexpr type_tag<change_list<>> changes_type(const auto&) { return {}; }
 }  // namespace changes_defaults
@@ -1074,7 +1078,16 @@ class model {
   }
   void on(const change::directory_listed&) {}  // the window's: the Explore dialog
   void on(const change::people_found&) {}  // the window's: the Start chat dialog
-  void on(const change::profile_found&) {}  // the window's: a pill's picture
+  void on(const change::profile_saved& one) {
+    this->in_account(one.by, [&](account& kept) { ++kept.profile_result; kept.profile_error = one.error; });
+  }
+  void on(const change::profile_found& one) {
+    this->in_account(one.by, [&](account& kept) {
+      auto& profile = kept.profiles[one.user];
+      profile.name = one.name; profile.avatar = one.avatar;
+      if (one.details) profile.details = *one.details;
+    });
+  }
   void on(const change::refused&) {}  // the window's: a notice
   void on(const change::trust_changed& one) {
     trust_.insert_or_assign({one.by, one.user}, one.now);

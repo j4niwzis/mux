@@ -45,10 +45,11 @@ constexpr dialog_list<tool::devtools, tool::uia> dialogs(const state&) { return 
 // Its own account pages: its encryption, and its sessions under
 // cross-signing and the key backup.
 namespace settings {
+struct profile {};
 struct encryption {};
 struct sessions {};
 }  // namespace settings
-constexpr account_page_list<settings::encryption, settings::sessions> account_pages(const state&) { return {}; }
+constexpr account_page_list<settings::profile, settings::encryption, settings::sessions> account_pages(const state&) { return {}; }
 
 // A direct chat is a room: whom it is with, the member who is not the account.
 inline std::string direct_contact(const state&, const conversation& one) {

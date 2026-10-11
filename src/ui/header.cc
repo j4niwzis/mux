@@ -69,23 +69,22 @@ struct verification_view {
   using skiff::compose::styled;
   return skiff::compose::column(skiff::compose::vbox(4.0f, {.width = 52.0f, .autoSize = scene::axes::kY}),
                                 styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::string(picture), 30.0f, colours.text)),
-                                styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::string(name), 11.0f, colours.dim)));
+                                styled({.fillX = true, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(std::string(name), 11.0f, colours.dim))));
 }
 using emoji_cell_t = decltype(emoji_cell(std::declval<const palette&>(), {}, {}));
-// The seven to compare, in a row: none where nothing is compared.
-[[nodiscard]] inline skiff::compose::Many<emoji_cell_t> emoji_row(const palette& colours, const verification_step_t& step) {
-  const std::array<int, 7> none{};
-  const std::array<int, 7>& indices = spl::visit(spl::overloaded{[](const verification_step::compare& shown) -> const std::array<int, 7>& { return shown.emoji; },
-                                                                 [&](const auto&) -> const std::array<int, 7>& { return none; }},
-                                                 step);
-  const bool comparing = &indices != &none;
-  return skiff::compose::visible(
-      comparing, skiff::compose::many(skiff::compose::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                      comparing ? indices | std::views::transform([&](int index) {
-                                        const auto& [picture, name] = sas_emoji[static_cast<std::size_t>(index & 63)];
-                                        return emoji_cell(colours, picture, name);
-                                      }) | std::ranges::to<std::vector>()
-                                                : std::vector<emoji_cell_t>{}));
+// The seven to compare wrap in their original order on narrow screens.
+[[nodiscard]] inline nodes::Flow<std::vector<emoji_cell_t>> emoji_row(const palette& colours, const verification_step_t& step) {
+  auto cells = spl::visit(spl::overloaded{
+      [&](const verification_step::compare& shown) {
+        return std::ranges::to<std::vector>(std::views::transform(shown.emoji, [&](int index) {
+          const auto& [picture, name] = sas_emoji[static_cast<std::size_t>(index & 63)];
+          return emoji_cell(colours, picture, name);
+        }));
+      }, [](const auto&) { return std::vector<emoji_cell_t>{}; }}, step);
+  const bool comparing = !cells.empty();
+  return skiff::compose::visible(comparing, skiff::compose::styled(
+      {.fillX = true, .autoSize = scene::axes::kY},
+      nodes::Flow<std::vector<emoji_cell_t>>({.direction = nodes::direction::horizontal{}, .spacingX = 8.0f, .spacingY = 12.0f, .wrap = true}, std::move(cells))));
 }
 
 // Which of a verification's buttons its step shows.
@@ -111,7 +110,7 @@ using emoji_cell_t = decltype(emoji_cell(std::declval<const palette&>(), {}, {})
 // its step says.
 template <class Actions>
 using verification_box_of =
-    skiff::compose::Box<nodes::Text, nodes::Text, skiff::compose::Many<emoji_cell_t>, button_for<sends<request::verify_accept_now>>,
+    skiff::compose::Box<nodes::Text, nodes::Text, nodes::Flow<std::vector<emoji_cell_t>>, button_for<sends<request::verify_accept_now>>,
                         button_for<sends<request::verify_cancel_now>>, button_for<sends<request::verify_match>>,
                         button_for<sends<request::verify_mismatch>>, button_for<sends<request::close_verification>>>;
 template <class Actions>

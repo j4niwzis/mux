@@ -226,6 +226,11 @@ class pictures_part {
         want(*screen.current, url, key);
     }
     for (const auto& [id, account] : s_->model->accounts())
+      for (const auto& [user, profile] : account.profiles) {
+        want(id, profile.avatar, user);
+        if (profile.details.banner) this->want_thumbnail(id, *profile.details.banner);
+      }
+    for (const auto& [id, account] : s_->model->accounts())
       for (const auto& [key, one] : account.conversations) {
         want(id, one.avatar, one.id.id);
         if (screen.chosen == one.id) {

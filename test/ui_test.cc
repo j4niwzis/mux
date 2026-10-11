@@ -1328,7 +1328,7 @@ TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
   ui.looks.bubbles_everywhere = *ui.looks.everywhere.bubbles;
   frame(1332.0);
   ASSERT_NE(settings.appearance(), nullptr);
-  auto& bubbles = std::get<2>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles;
+  auto& bubbles = settings.appearance()->parts.looks->parts.bubbles;
   EXPECT_EQ(std::get<1>(bubbles.parts.kinds.parts.head.fParts).text(), "Translucent");
   EXPECT_EQ(bubbles.parts.opacity_label.text(), "Opacity: 65%");
   EXPECT_NEAR(bubbles.parts.opacity.fraction(), 55.0f / 90.0f, 0.001f);
@@ -1338,7 +1338,7 @@ TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
   ui.looks.everywhere.bubbles = mux::config::bubble_look{mux::config::bubbles::frosted{}, 80};
   ui.looks.bubbles_everywhere = *ui.looks.everywhere.bubbles;
   frame(1348.0);
-  EXPECT_EQ(std::get<1>(std::get<2>(std::get<1>(settings.appearance()->fParts).fParts).parts.bubbles.parts.kinds.parts.head.fParts).text(), "Frosted");
+  EXPECT_EQ(std::get<1>(settings.appearance()->parts.looks->parts.bubbles.parts.kinds.parts.head.fParts).text(), "Frosted");
 
   // A queued refresh must not reopen a page the user just left.
   settings.show_appearance(theme, accent);
@@ -2848,4 +2848,31 @@ TEST(Appearance, RoomStylesUseTheirOwnAccountAndNearestSpace) {
   EXPECT_EQ(selected.theme, std::optional<mux::config::theme_t>(mux::config::theme::night{}));
   EXPECT_EQ(reads.style_of(bob, std::nullopt).font, "Bob font");
   EXPECT_EQ(reads.style_of(std::nullopt, std::nullopt).font, "Client font");
+}
+
+
+TEST(Verification, EmojiWrapWithinPhoneWidthsWithoutChangingOrder) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  mux::ui::palette colours;
+  const mux::verification_step_t step = mux::verification_step::compare{{0, 1, 2, 3, 4, 5, 6}};
+  for (float width : {240.0f, 320.0f, 390.0f}) {
+    auto row = mux::ui::emoji_row(colours, step);
+    scene::layout(row, skia::SkRect::MakeWH(width, 400.0f));
+    const auto& cells = std::get<0>(row.fChildren);
+    ASSERT_EQ(cells.size(), 7u);
+    for (std::size_t i = 0; i < cells.size(); ++i) {
+      const auto box = cells[i].bounds();
+      EXPECT_GE(box.fLeft, 0.0f);
+      EXPECT_LE(box.fRight, width);
+      EXPECT_EQ(std::get<0>(cells[i].fParts).text(), mux::sas_emoji[i].first);
+      if (i != 0) {
+        const auto previous = cells[i - 1].bounds();
+        if (box.fTop == previous.fTop) EXPECT_GE(box.fLeft, previous.fRight);
+        else EXPECT_GE(box.fTop, previous.fBottom);
+      }
+    }
+    EXPECT_GT(cells.back().bounds().fTop, cells.front().bounds().fTop);
+  }
+  skiff::paint::defaultFont() = nullptr;
 }

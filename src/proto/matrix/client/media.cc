@@ -110,30 +110,25 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
   });
 }
 
-// An image uploaded for a pack: its mxc://, said as pack_picture_uploaded.
+// One upload boundary, shared by pack pictures and profile banners.
+template <class Sink>
+std::expected<std::string, failure> account<Sink>::upload_content(const std::string& bytes, std::string_view name, std::string_view mime) {
+  if (!api_) return std::unexpected(failure{{}, "The account is offline."});
+  const std::string target = "/_matrix/media/v3/upload?filename=" + loom::percent_encoded(name);
+  try {
+    const auto got = api_->request("POST", target, bytes, token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
+        std::chrono::seconds(120), mime.empty() ? std::string_view("application/octet-stream") : mime);
+    if (got.status == 200)
+      if (auto answer = knot::try_read<upload_answer>(std::string_view(got.body))) return std::move(answer->content_uri);
+    return std::unexpected(failure{{}, "The server refused the image upload."});
+  } catch (const net::failure& failed) { return std::unexpected(failure{{}, failed.what()}); }
+}
 template <class Sink>
 void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes) {
   this->spawn_guarded([this, picture = std::move(picture), bytes = std::move(bytes)]() mutable {
-    std::optional<std::string> uri;
-    if (api_) {
-      std::string target = "/_matrix/media/v3/upload?filename=";
-      target.append_range(percent_encoded(picture.body));
-      try {
-        const auto got = api_->request("POST", target, bytes, token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
-                                       std::chrono::seconds(120),
-                                       picture.mimetype.empty() ? std::string_view("application/octet-stream")
-                                                                : std::string_view(picture.mimetype));
-        if (got.status == 200)
-          if (auto answer = knot::try_read<upload_answer>(std::string_view(got.body)))
-            uri = std::move(answer->content_uri);
-        if (!uri)
-          log(id_, "upload of {} failed: {} {}", picture.body, got.status, got.body.substr(0, 200));
-      } catch (const net::failure& failed) {
-        log(id_, "upload of {} failed: {}", picture.body, failed.what());
-      }
-    }
-    picture.url = uri.value_or("");
-    sink_(proto::matrix::pack_picture_uploaded{.by = id_, .picture = std::move(picture), .done = uri.has_value()});
+    auto uploaded = upload_content(bytes, picture.body, picture.mimetype);
+    picture.url = uploaded.value_or("");
+    sink_(proto::matrix::pack_picture_uploaded{.by = id_, .picture = std::move(picture), .done = uploaded.has_value()});
   });
 }
 

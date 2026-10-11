@@ -85,29 +85,47 @@ inline auto section_band(const palette& colours) {
 // Declared: a column of these, nothing placed by hand.
 // An ID, whole -- wrapped, never cut -- and copied when pressed: a chat's
 // or a person's.
-struct id_feedback { bool copied = false; };
-struct copy_id_line {};
-struct id_copy_events {
-  std::string copied;
-  auto on(copy_id_line, const id_feedback&) const {
-    return std::tuple{skiff::model::over<id_feedback>(skiff::model::setTo(id_feedback{true})),
-                      skiff::model::Up{request::copy_text{copied}}};
+struct id_line_t : skiff::compose::Stacked {
+  using Answer = request::copy_text;
+  std::string copied_, confirmation_, label_;
+  struct parts_t {
+    nodes::Text value;
+    nodes::Text feedback;
+  } parts;
+  id_line_t(const palette& colours, std::string text, std::string link, std::string label = "ID")
+      : Stacked(skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
+              .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen,
+              .focusBackground = colours.chosen})),
+        copied_(link.empty() ? text : link), confirmation_(link.empty() ? label + " copied" : "Link copied"),
+        label_("Copy " + label),
+        parts{.value = wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(std::move(text), 14.0f, colours.accent, false, true))),
+              .feedback = wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(std::move(label), 13.0f, colours.accent)))} {
+    fState.setCursor(scene::cursor::hand{});
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool focusChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    scene::pressLater(fState);
+    return true;
+  }
+  request::copy_text onPress() {
+    // Update the clicked row before delivering the clipboard request. A
+    // cached info panel need not be refreshed to show its confirmation.
+    parts.feedback.setText(confirmation_);
+    return {copied_};
+  }
+  [[nodiscard]] scene::Semantics semantics() const {
+    scene::Semantics out;
+    out.fRole = scene::semantic_role::button{};
+    out.fLabel = label_;
+    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
+    return out;
   }
 };
 inline auto id_line(const palette& colours, std::string text, std::string link, std::string label = "ID") {
-  const bool a_link = !link.empty();
-  const std::string copied = a_link ? link : text;
-  return skiff::compose::local<id_feedback>(id_copy_events{copied},
-      skiff::compose::onClick(copy_id_line{}, skiff::compose::column(
-          skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
-              .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen,
-              .focusBackground = colours.chosen}),
-          wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(text, 14.0f, colours.accent, false, true))),
-          skiff::compose::text_for<id_feedback>([label, a_link](const id_feedback& now) {
-              return !now.copied ? label : a_link ? std::string("Link copied") : label + " copied";
-            }, wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(label, 13.0f, colours.accent))))), "Copy " + label));
+  return id_line_t(colours, std::move(text), std::move(link), std::move(label));
 }
-using id_line_t = decltype(id_line(std::declval<const palette&>(), "", ""));
 
 // A person's name and how they are, as a chat knows them: a member's, with
 // their role; the other side of a direct chat; anyone else by their address.

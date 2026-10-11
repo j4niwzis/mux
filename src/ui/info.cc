@@ -302,9 +302,8 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
                   group,
                   muted,
                   false};
-    if (group)
-      if (auto link = proto::room_link(protocol_state_of(*shared_, one.id.account), one))
-        group_view.copied = std::move(*link);
+    if (auto link = proto::room_link(protocol_state_of(*shared_, one.id.account), one))
+      group_view.copied = std::move(*link);
     group_view.topic = one.topic.value_or("");
     group_view.leavable = proto::can_leave(protocol_state_of(*shared_, one.id.account), one);
     if (one.alias)
@@ -389,6 +388,8 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
         shown.status = group_view.status;
       }
     }
+    if (person)
+      shown.copied = proto::person_link(protocol_state_of(*shared_, account), *person).value_or("");
     upper.show(shown, [this](const view& v) { return head_of(this, v); });
     const bool list = shown.group && !shown.of_person;
     band_2.setVisible(list);

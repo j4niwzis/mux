@@ -1560,7 +1560,7 @@ TEST(Controls, PersonSearchRowSendsItsIdAndNamesItsAction) {
   EXPECT_EQ(std::get<0>(std::get<1>(row.fParts).fParts).text(), "Alice");
 }
 
-TEST(Controls, CopyIdRequestUpdatesOnlyItsLocalFeedback) {
+TEST(Controls, CopyIdRequestShowsConfirmationWithoutBindingRefresh) {
   struct sink {
     std::vector<std::string> copied;
     void take(const mux::ui::request::copy_text& request) { copied.push_back(request.text); }
@@ -1571,11 +1571,11 @@ TEST(Controls, CopyIdRequestUpdatesOnlyItsLocalFeedback) {
   auto row = mux::ui::id_line(colours, "#room:example.com", "https://matrix.to/#/#room:example.com");
   skiff::bind::Binding<model_t> binding;
   binding.refresh(row, model);
-  auto& label = std::get<1>(row.fParts);
+  auto& label = row.parts.feedback;
   const auto id = label.fState.id();
   EXPECT_EQ(label.text(), "ID");
   ASSERT_TRUE(skiff::bind::press(row, model, scene::Path{}, &requests));
-  binding.refresh(row, model);
+  // The confirmation is set immediately; no binding refresh is needed.
   ASSERT_EQ(requests.copied.size(), 1u);
   EXPECT_EQ(requests.copied.front(), "https://matrix.to/#/#room:example.com");
   EXPECT_EQ(label.text(), "Link copied");
@@ -1608,7 +1608,7 @@ TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
     scene::InputRouter router;
     const std::array layers{scene::InputRouter::Layer{view.handle(), false}};
     router.setLayers(layers);
-    auto& text = std::get<0>(view.root().fParts);
+    auto& text = view.root().parts.value;
     const auto box = text.bounds();
     ASSERT_GT(box.width(), 0.0f);
     ASSERT_GT(box.height(), 0.0f);
@@ -1620,7 +1620,7 @@ TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
     for (const auto& path : presses) ASSERT_TRUE(skiff::bind::press(view.root(), model, path, &requests));
     binding.refresh(view.root(), model);
     view.layoutIfNeeded(viewport);
-    const auto& feedback = std::get<1>(view.root().fParts);
+    const auto& feedback = view.root().parts.feedback;
     EXPECT_EQ(feedback.text(), link.empty() ? "ID copied" : "Link copied");
     EXPECT_GT(feedback.bounds().width(), 0.0f);
     EXPECT_GT(feedback.bounds().height(), 0.0f);
@@ -2754,10 +2754,9 @@ TEST(Controls, MemoizedRoomIdKeepsCopyFeedbackWithoutAnOuterModelChange) {
   header.show(1, [&](int) { return mux::ui::id_line(colours, "!room:example.com", "https://matrix.to/#/!room:example.com"); });
   skiff::bind::Binding<model_t> binding;
   binding.refresh(header, model);
-  auto& label = std::get<1>(header.content()->fParts);
+  auto& label = header.content()->parts.feedback;
   const auto id = label.fState.id();
   ASSERT_TRUE(skiff::bind::press(header, model, scene::Path{0}, &requests));
-  binding.refresh(header, model);
   ASSERT_EQ(requests.copied.size(), 1u);
   EXPECT_EQ(label.text(), "Link copied");
   EXPECT_EQ(label.fState.id(), id);
@@ -3079,4 +3078,17 @@ TEST(Connections, ChatWarningUsesItsOwnAccountAndOnlyAppearsWhenNeeded) {
   screen.chosen.reset();
   screen.show_connections(known);
   EXPECT_FALSE(screen.chat.parts.connection.visible());
+}
+
+TEST(Info, MatrixProfileIdCopiesItsLinkAndImmediatelyConfirmsIt) {
+  ui_state ui;
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.org"};
+  const std::string bob = "@bob:example.org";
+  ui.shared.protocol_states[alice] = mux::proto::matrix::state{.online = true};
+  mux::ui::person_facts facts;
+  facts.name = "Bob";
+  mux::ui::person_card<stub>::details details(ui.colours, ui.shared, alice, bob, facts);
+  const auto copied = details.parts.id.onPress();
+  EXPECT_EQ(copied.text, "https://matrix.to/#/@bob:example.org");
+  EXPECT_EQ(details.parts.id.parts.feedback.text(), "Link copied");
 }

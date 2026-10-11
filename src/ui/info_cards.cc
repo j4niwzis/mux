@@ -181,7 +181,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
         : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
           parts{.cover = profile_cover<Actions>(colours, key, facts),
                 .band = section_band(colours),
-                .id = id_line(colours, key, ""),
+                .id = id_line(colours, key, proto::person_link(protocol_state_of(shared, account), key).value_or("")),
                 .message =
                     action_tile<message_them>(colours, "Message", icon::send{},
                                               {conversation_id{account, key}}),

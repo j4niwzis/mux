@@ -1578,9 +1578,56 @@ TEST(Controls, CopyIdRequestUpdatesOnlyItsLocalFeedback) {
   binding.refresh(row, model);
   ASSERT_EQ(requests.copied.size(), 1u);
   EXPECT_EQ(requests.copied.front(), "https://matrix.to/#/#room:example.com");
-  EXPECT_EQ(label.text(), "ID · link copied, with its servers");
+  EXPECT_EQ(label.text(), "Link copied");
   EXPECT_EQ(label.fState.id(), id);
   EXPECT_EQ(model.root(), 0);
+}
+
+TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
+  auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
+  auto face = manager ? manager->matchFamilyStyle("DejaVu Sans", skia::SkFontStyle()) : nullptr;
+  if (!face) GTEST_SKIP() << "Needs a font for wrapping";
+  skiff::paint::fonts().setPrimary(face);
+  skia::SkFont font(face);
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
+  struct sink {
+    std::vector<std::string> copied;
+    void take(const mux::ui::request::copy_text& request) { copied.push_back(request.text); }
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  mux::ui::palette colours;
+  const std::string id = "@someone-with-a-long-name:example.com";
+  for (const std::string link : {std::string(), std::string("https://matrix.to/#/") + id}) {
+    model_t model(0);
+    scene::Scene<mux::ui::id_line_t> view{mux::ui::id_line(colours, id, link)};
+    skiff::bind::Binding<model_t> binding;
+    binding.refresh(view.root(), model);
+    const auto viewport = skia::SkRect::MakeWH(240.0f, 640.0f);
+    view.layoutIfNeeded(viewport);
+    scene::InputRouter router;
+    const std::array layers{scene::InputRouter::Layer{view.handle(), false}};
+    router.setLayers(layers);
+    auto& text = std::get<0>(view.root().fParts);
+    const auto box = text.bounds();
+    ASSERT_GT(box.width(), 0.0f);
+    ASSERT_GT(box.height(), 0.0f);
+    scene::hostWork().pressed.clear();
+    router.pointer(scene::PointerEvent{scene::pointer::down{box.centerX(), box.centerY()}});
+    router.pointer(scene::PointerEvent{scene::pointer::up{box.centerX(), box.centerY()}});
+    const auto presses = std::exchange(scene::hostWork().pressed, {});
+    ASSERT_EQ(presses.size(), 1u);
+    for (const auto& path : presses) ASSERT_TRUE(skiff::bind::press(view.root(), model, path, &requests));
+    binding.refresh(view.root(), model);
+    view.layoutIfNeeded(viewport);
+    const auto& feedback = std::get<1>(view.root().fParts);
+    EXPECT_EQ(feedback.text(), link.empty() ? "ID copied" : "Link copied");
+    EXPECT_GT(feedback.bounds().width(), 0.0f);
+    EXPECT_GT(feedback.bounds().height(), 0.0f);
+    EXPECT_TRUE(view.root().bounds().contains(feedback.bounds()));
+    ASSERT_FALSE(requests.copied.empty());
+    EXPECT_EQ(requests.copied.back(), link.empty() ? id : link);
+  }
 }
 
 TEST(Proxies, LocalEditorPressesSendTypedSaveAndDeleteRequests) {
@@ -2712,7 +2759,7 @@ TEST(Controls, MemoizedRoomIdKeepsCopyFeedbackWithoutAnOuterModelChange) {
   ASSERT_TRUE(skiff::bind::press(header, model, scene::Path{0}, &requests));
   binding.refresh(header, model);
   ASSERT_EQ(requests.copied.size(), 1u);
-  EXPECT_EQ(label.text(), "ID · link copied, with its servers");
+  EXPECT_EQ(label.text(), "Link copied");
   EXPECT_EQ(label.fState.id(), id);
   EXPECT_EQ(model.root(), 0);
 }

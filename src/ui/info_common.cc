@@ -104,8 +104,8 @@ inline auto id_line(const palette& colours, std::string text, std::string link, 
               .focusBackground = colours.chosen}),
           wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(text, 14.0f, colours.accent, false, true))),
           skiff::compose::text_for<id_feedback>([label, a_link](const id_feedback& now) {
-              return !now.copied ? label : a_link ? label + " · link copied, with its servers" : label + " · copied";
-            }, nodes::Text(label, 12.0f, colours.dim))), "Copy " + label));
+              return !now.copied ? label : a_link ? std::string("Link copied") : label + " copied";
+            }, wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(label, 13.0f, colours.accent))))), "Copy " + label));
 }
 using id_line_t = decltype(id_line(std::declval<const palette&>(), "", ""));
 

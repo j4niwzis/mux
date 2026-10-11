@@ -682,8 +682,8 @@ struct in_chat {
 // what is written, and the send arrow on the right. The chat's, and a
 // thread's: one composer, told where it writes.
 // A bar over the field that says something and offers two ways on: the
-// line, cut short where the room runs out, then the two buttons -- the
-// second the one to take (Retry all, Approve).
+// explanation wraps above two equally sized buttons, so both stay visible
+// on phones. The second is the main action (Resend all, Approve).
 // A round button in the stack over the list's corner: up or not, at its
 // place in the stack.
 inline void place_in_corner(auto& button, bool up, int slot) {
@@ -698,17 +698,28 @@ inline void place_in_corner(auto& button, bool up, int slot) {
 
 template <class First, class Second>
 struct two_choice_bar : skiff::compose::Stacked {
+  struct actions_row : skiff::compose::Stacked {
+    struct parts_t {
+      widgets::Button<First> first;
+      widgets::Button<Second> second;
+    } parts;
+    actions_row(const palette& colours, std::string first_name, First first, std::string second_name, Second second)
+        : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+          parts{.first = widgets::Button<First>(colours.widgets, std::move(first_name), std::move(first)),
+                .second = primary(widgets::Button<Second>(colours.widgets, std::move(second_name), std::move(second)))} {
+      parts.first.apply({.height = 36.0f, .grow = scene::axes::kX});
+      parts.second.apply({.height = 36.0f, .grow = scene::axes::kX});
+    }
+  };
   struct parts_t {
     nodes::Text said;
-    widgets::Button<First> first;
-    widgets::Button<Second> second;
+    actions_row actions;
   } parts;
   two_choice_bar(const palette& colours, std::string said, skia::SkColor said_colour, std::string first_name, First first,
                  std::string second_name, Second second)
-      : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 12.0f, 6.0f, 12.0f}})),
-        parts{.said = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(said), 13.0f, said_colour))),
-              .first = widgets::Button<First>(colours.widgets, std::move(first_name), std::move(first)),
-              .second = primary(widgets::Button<Second>(colours.widgets, std::move(second_name), std::move(second)))} {}
+      : Stacked(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}})),
+        parts{.said = skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::move(said), 13.0f, said_colour))),
+              .actions = actions_row(colours, std::move(first_name), std::move(first), std::move(second_name), std::move(second))} {}
 };
 
 // Keep the successor action inside the available width, including a narrow
@@ -800,7 +811,7 @@ struct composer_bar : skiff::compose::Stacked {
         colours_(n.colours),
         parts{.divider = skiff::compose::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(n.colours->band)),
               .unsent = skiff::compose::visible(false, unsent_row(*n.colours, "Some of your messages have not been sent", n.colours->error,
-                                                                  "Delete all", {}, "Retry all", {})),
+                                                                  "Delete all", {}, "Resend all", {})),
               .context_line = skiff::compose::visible(false, context_row(*n.colours, std::move(cancel))),
               .input = input_row(*n.colours, std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji),
                                  std::move(send)),

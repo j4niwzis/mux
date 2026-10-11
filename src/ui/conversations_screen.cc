@@ -772,6 +772,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     struct parts_t {
       // The head, as a function of the chat shown.
       header_t header;
+      connection_bar connection;
       search_bar<Actions> search;
       selection_bar_t<Actions> selection;
       // The pinned message, under the head, where the chat has any.
@@ -805,6 +806,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
                      .background = n.looks->window.behind ? skia::SkColor{0}
                                                           : n.colours->chat})),
           parts{
+              .connection = connection_bar(*n.colours),
               .search = search_bar<Actions>(n),
               .selection = selection_bar(n),
               .call = call_layer(
@@ -997,6 +999,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
         header.go_back(now);
       single = now;
       single_width = box.width();
+      if (last_model) this->show_connections(*last_model);
       this->show_info();
     }
     this->nodes::Stack::layoutChildren();
@@ -1569,6 +1572,11 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     dismissed_banners.insert_or_assign(in, chat.parts.banner.parts.text.text());
     chat.parts.banner.setVisible(false);
     chat.invalidateLayout();
+  }
+  void show_connections(const model& now) {
+    side.parts.connection.show(current ? now.accounts().find(*current) : nullptr);
+    chat.parts.connection.show(chosen ? now.accounts().find(chosen->account) : nullptr,
+                                single || (chosen && current != chosen->account));
   }
   void show_banners(const conversation* one, const model& now);
   void show_conversation(const model& now);

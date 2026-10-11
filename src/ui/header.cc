@@ -24,6 +24,32 @@ import :names;
 
 export namespace mux::ui {
 
+// Connection status is shared by the list and the chat, for every protocol.
+[[nodiscard]] inline std::string connection_notice(const connection_t& state) {
+  return spl::visit(spl::overloaded{
+      [](connection::offline) { return std::string("Offline"); },
+      [](const connection::connecting& one) {
+        return one.reason ? "Reconnecting: " + *one.reason : std::string("Connecting…");
+      },
+      [](connection::online) { return std::string(); },
+      [](const connection::failed& one) { return "Connection failed: " + one.error; }}, state);
+}
+struct connection_bar : skiff::compose::Stacked {
+  struct parts_t { nodes::Text text; } parts;
+  connection_bar(const palette& colours)
+      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
+                                           .padding = {8.0f, 12.0f, 8.0f, 12.0f},
+                                           .background = (colours.error & 0x00FFFFFFu) | (0x22u << 24)})),
+        parts{.text = skiff::compose::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.text)))} {
+    this->setVisible(false);
+  }
+  void show(const account* one, bool enabled = true) {
+    const auto text = one && enabled ? connection_notice(one->state) : std::string();
+    if (parts.text.text() != text) parts.text.setText(text);
+    if (this->visible() != !text.empty()) this->setVisible(!text.empty());
+  }
+};
+
 // Something not there yet, said in a box over the window.
 // A notice's box: as high as what it says, its heading and text wrapped,
 // and selectable, to be copied.

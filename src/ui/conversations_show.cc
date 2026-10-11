@@ -859,6 +859,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     rooms_elsewhere.clear();
     people_elsewhere.clear();
   }
+  this->show_connections(now);
   // What the chat list's menus offer: the account shown, and the accounts
   // there are to move a chat to.
   side.current_account = current;
@@ -1016,6 +1017,7 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
 
 template <class Actions>
 void conversations_screen<Actions>::show_conversation(const model& now) {
+  this->show_connections(now);
   // Whether the reader was at the newest: then the view follows it; and
   // where the view was, for the chat being left.
   const bool was_at_end = timeline.atEnd(40.0f);

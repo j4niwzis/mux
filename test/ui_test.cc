@@ -3017,3 +3017,66 @@ TEST(Composer, VerificationBannerFitsPhonesAndStaysDismissedUntilItChanges) {
   EXPECT_FALSE(banner.parts.verify);
   EXPECT_FALSE(screen.dismissed_banners.contains(room));
 }
+
+TEST(Composer, UnsentMessagesHaveVisibleResendControlsOnPhones) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct cleanup { ~cleanup() { skiff::paint::defaultFont() = nullptr; } } clear;
+  stub program;
+  ui_state ui;
+  mux::ui::composer_bar<stub> composer(ui.needs(program));
+  composer.show_unsent(true);
+  auto& bar = composer.parts.unsent;
+  ASSERT_TRUE(bar.visible());
+  for (float width : {260.0f, 320.0f, 585.0f}) {
+    scene::layout(bar, skia::SkRect::MakeWH(width, 200.0f));
+    const auto first = bar.parts.actions.parts.first.bounds();
+    const auto second = bar.parts.actions.parts.second.bounds();
+    EXPECT_GT(first.width(), 0.0f);
+    EXPECT_GT(second.width(), 0.0f);
+    EXPECT_GE(first.fLeft, 12.0f);
+    EXPECT_LE(first.fRight, second.fLeft);
+    EXPECT_LE(second.fRight, width - 12.0f);
+    EXPECT_GE(first.fTop, bar.parts.said.bounds().fBottom);
+  }
+  EXPECT_EQ(bar.parts.actions.parts.second.semantics().fLabel, "Resend all");
+  static_assert(std::same_as<decltype(bar.parts.actions.parts.second.onPress()), mux::ui::request::retry_unsent>);
+  composer.show_unsent(false);
+  EXPECT_FALSE(bar.visible());
+}
+
+TEST(Connections, ChatWarningUsesItsOwnAccountAndOnlyAppearsWhenNeeded) {
+  stub program;
+  ui_state ui;
+  mux::ui::conversations_screen<stub> screen(ui.needs(program));
+  mux::model known;
+  const mux::account_id first{mux::protocol::matrix{}, "@alice:example.org"};
+  const mux::account_id second{mux::protocol::xmpp{}, "bob@example.org"};
+  known.apply(mux::change::connection_changed{first, mux::connection::failed{"Server unavailable"}});
+  known.apply(mux::change::connection_changed{second, mux::connection::online{}});
+  screen.current = first;
+  screen.chosen = mux::conversation_id{first, "!chat:example.org"};
+  screen.show_connections(known);
+  EXPECT_TRUE(screen.side.parts.connection.visible());
+  EXPECT_FALSE(screen.chat.parts.connection.visible());
+  screen.single = true;
+  screen.show_connections(known);
+  EXPECT_TRUE(screen.chat.parts.connection.visible());
+  screen.single = false;
+  screen.chosen = mux::conversation_id{second, "someone@example.org"};
+  screen.show_connections(known);
+  EXPECT_FALSE(screen.chat.parts.connection.visible());
+  known.apply(mux::change::connection_changed{second, mux::connection::connecting{"Connection lost"}});
+  screen.show_connections(known);
+  EXPECT_EQ(screen.chat.parts.connection.parts.text.text(), "Reconnecting: Connection lost");
+  EXPECT_TRUE(screen.chat.parts.connection.visible());
+  known.apply(mux::change::connection_changed{second, mux::connection::failed{"Timed out"}});
+  screen.show_connections(known);
+  EXPECT_EQ(screen.chat.parts.connection.parts.text.text(), "Connection failed: Timed out");
+  known.apply(mux::change::connection_changed{second, mux::connection::online{}});
+  screen.show_connections(known);
+  EXPECT_FALSE(screen.chat.parts.connection.visible());
+  screen.chosen.reset();
+  screen.show_connections(known);
+  EXPECT_FALSE(screen.chat.parts.connection.visible());
+}

@@ -649,6 +649,7 @@ struct side_column : skiff::compose::Stacked {
   };
   struct parts_t {
     head_row head;
+    connection_bar connection;
     body_t body;
     // A right press's menu, over the rest: a space's, or a chat's.
     std::optional<space_menu> menu;
@@ -679,7 +680,7 @@ struct side_column : skiff::compose::Stacked {
       : Stacked(skiff::compose::vbox(
             0.0f, {.fillY = true, .background = colours.sidebar})),
         colours_(&colours),
-        parts{.head = head_row(colours), .body = body_t(colours)} {}
+        parts{.head = head_row(colours), .connection = connection_bar(colours), .body = body_t(colours)} {}
 
   // ---- an item dragged from a bar to the other, or along one ------------
   struct drag_t {

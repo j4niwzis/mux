@@ -11,6 +11,8 @@ import mux.proto.matrix.links;
 import mux.proto.matrix.requests;
 
 export namespace mux::proto::matrix {
+constexpr bool offers(const state&, feature::server_previews) { return true; }
+
 
 inline std::string directory_server(const state&, std::string_view address) {
   return std::string(address.substr(address.find(':') + 1));

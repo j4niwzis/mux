@@ -45,6 +45,7 @@ struct creation_form {
 struct chat_form { std::string hint, intro; };
 // What a protocol may have, each a type: asked of it by offers().
 namespace feature {
+struct server_previews {}; // server-side URL preview service
 struct people_directory {};  // people looked up on its servers
 struct room_directory {};    // rooms listed, searched and joined from a server's directory
 struct room_creation {};     // rooms made

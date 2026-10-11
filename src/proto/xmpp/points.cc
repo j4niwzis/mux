@@ -26,10 +26,40 @@ inline std::string directory_server(const state&, std::string_view address) {
 // The current XMPP client does not emit service events into the timeline.
 // Keep their controls absent until those events are implemented.
 inline std::vector<room_event_t> room_event_kinds(const state&) { return {}; }
+namespace request {
+struct refresh_muc {};
+struct configure_muc { std::vector<muc_field> fields; };
+struct muc_identity { std::string nick; };
+struct rejoin_muc { std::string nick, password; };
+struct muc_privilege { std::string user, affiliation, role; };
+struct destroy_muc { std::string reason; };
+}
+constexpr request_list<request::refresh_muc, request::configure_muc, request::muc_identity,
+    request::muc_privilege, request::destroy_muc, request::rejoin_muc> requests_of(const state&) { return {}; }
+inline const muc_room& muc_of(const conversation& chat) {
+  static const muc_room empty;
+  const auto* room = chat.theirs.template get_if<muc_room>();
+  return room ? *room : empty;
+}
+constexpr bool can_upload(const state& now) { return now.online && now.upload; }
+inline part::person_rights person_rights(const state& now, const conversation& chat, std::string_view who) {
+  const auto& room = muc_of(chat);
+  const auto found = std::ranges::find(room.people, who, [](const muc_person& p) { return p.nick; });
+  const auto occupant = std::ranges::find_if(room.people, [&](const muc_person& p) { return chat.id.id + "/" + p.nick == who; });
+  const auto target = occupant != room.people.end() ? occupant : found;
+  if (!now.online || !room.joined || target == room.people.end() || target->nick == room.nick) return {};
+  const bool owner = room.affiliation == "owner";
+  const bool admin = owner || room.affiliation == "admin";
+  const bool protected_user = target->affiliation == "owner" || (!owner && target->affiliation == "admin");
+  return {room.role == "moderator" && !protected_user && target->role != "moderator",
+      admin && !protected_user && !target->jid.empty()};
+}
 inline part::chat_rights chat_rights(const state& now, const conversation& chat) {
   const bool group = spl::visit(spl::overloaded{
       [](conversation_kind::group) { return true; }, [](const auto&) { return false; }}, chat.kind);
-  return {now.online, now.online && group && !chat.invite, false};
+  const auto& room = muc_of(chat);
+  return {now.online && (!group || (room.joined && room.role != "visitor" && room.role != "none")),
+      now.online && group && room.joined && !chat.invite, false};
 }
 
 // Edits as XMPP has them: one's own last message corrected, and no other

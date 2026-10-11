@@ -7,6 +7,7 @@ import splice;
 import mux.core;
 import mux.net;
 import mux.proto.xmpp.client;
+import mux.protocols;
 import gtest;
 
 #include "gtest/gtest-macros.h"
@@ -29,13 +30,17 @@ const std::string script =
     // The server's disco#info, asked first: no archive (XEP-0313).
     "<iq type='result' id='tern-1' from='example.com'><query xmlns='http://jabber.org/protocol/disco#info'>"
     "<identity category='server' type='im'/></query></iq>"
-    "<iq type='result' id='tern-2'><query xmlns='jabber:iq:roster'>"
+    "<iq type='result' id='tern-2'><query xmlns='http://jabber.org/protocol/disco#items'/></iq>"
+    "<iq type='result' id='tern-3'><query xmlns='http://jabber.org/protocol/disco#info'/></iq>"
+    "<iq type='result' id='tern-4'><query xmlns='jabber:iq:roster'>"
     "<item jid='nurse@example.com' subscription='both' name='Nurse'/>"
     "<item jid='romeo@example.net' subscription='both'/></query></iq>"
-    "<iq type='result' id='tern-3'><pubsub xmlns='http://jabber.org/protocol/pubsub'>"
+    "<iq type='result' id='tern-5'><pubsub xmlns='http://jabber.org/protocol/pubsub'>"
     "<items node='urn:xmpp:bookmarks:1'><item id='balcony@rooms.example.com'>"
     "<conference xmlns='urn:xmpp:bookmarks:1' name='The Balcony' autojoin='true'><nick>user</nick></conference>"
     "</item></items></pubsub></iq>"
+    "<presence from='balcony@rooms.example.com'/>"
+    "<message from='balcony@rooms.example.com' type='groupchat'><subject>Balcony subject</subject></message>"
     "<presence from='balcony@rooms.example.com/juliet'><x xmlns='http://jabber.org/protocol/muc#user'>"
     "<item affiliation='owner' role='moderator'/></x></presence>"
     "<presence from='balcony@rooms.example.com/user'><x xmlns='http://jabber.org/protocol/muc#user'>"
@@ -114,10 +119,14 @@ TEST(Xmpp, AScriptedSession) {
   const mux::conversation* balcony = model.find({me, "balcony@rooms.example.com"});
   ASSERT_NE(balcony, nullptr);
   EXPECT_EQ(balcony->name, "The Balcony");
+  EXPECT_EQ(balcony->topic, "Balcony subject");
+  EXPECT_FALSE(std::ranges::any_of(balcony->members, [](const auto& m) { return m.id == "balcony@rooms.example.com"; }));
   ASSERT_EQ(balcony->members.size(), 2u);
   EXPECT_EQ(balcony->members[0].name, "juliet");
   EXPECT_EQ(balcony->members[0].role, "owner");
   EXPECT_EQ(balcony->members[1].name, "user");
+  ASSERT_TRUE(balcony->theirs.get_if<mux::proto::xmpp::muc_room>() != nullptr);
+  EXPECT_TRUE(balcony->theirs.get_if<mux::proto::xmpp::muc_room>()->joined);
   ASSERT_EQ(balcony->timeline.size(), 1u);
   EXPECT_EQ(balcony->timeline[0].sender, "balcony@rooms.example.com/juliet");
   EXPECT_EQ(balcony->timeline[0].body.plain, "Wherefore art thou?");
@@ -209,3 +218,35 @@ TEST(Xmpp, DisablingDuringBackoffStopsConnectionAttempts) {
 }
 
 }  // namespace
+
+TEST(XmppSettings, ValidatesServerFormConstraints) {
+  using mux::proto::xmpp::validate_muc_value;
+  using mux::proto::xmpp::muc_field;
+  EXPECT_FALSE(validate_muc_value(muc_field{.type = "boolean"}, {"1"}));
+  EXPECT_TRUE(validate_muc_value(muc_field{.type = "boolean"}, {"perhaps"}));
+  EXPECT_TRUE(validate_muc_value(muc_field{.type = "text-single", .required = true}, {""}));
+  EXPECT_TRUE(validate_muc_value(muc_field{.type = "text-single"}, {"one", "two"}));
+  const muc_field list{.type = "list-multi", .options = {{"Members", "members"}, {"Moderators", "moderators"}}};
+  EXPECT_FALSE(validate_muc_value(list, {"members", "moderators"}));
+  EXPECT_TRUE(validate_muc_value(list, {"everyone"}));
+}
+
+TEST(XmppSettings, RolesAndUploadUseServerFacts) {
+  using namespace mux;
+  proto::xmpp::state state{.online = true};
+  EXPECT_FALSE(proto::xmpp::can_upload(state));
+  state.upload = true;
+  EXPECT_TRUE(proto::xmpp::can_upload(state));
+  conversation chat{.id = {account_id{protocol::xmpp{}, "me@example.org"}, "room@conference.example.org"}, .kind = conversation_kind::group{}};
+  proto::xmpp::muc_room room{.nick = "me", .affiliation = "admin", .role = "moderator", .joined = true,
+      .people = {{"juliet@example.org", "juliet", "member", "participant"}, {"owner@example.org", "owner", "owner", "moderator"}}};
+  chat.theirs = room;
+  EXPECT_TRUE(proto::xmpp::person_rights(state, chat, "room@conference.example.org/juliet").kick);
+  EXPECT_TRUE(proto::xmpp::person_rights(state, chat, "room@conference.example.org/juliet").ban);
+  EXPECT_FALSE(proto::xmpp::person_rights(state, chat, "room@conference.example.org/owner").kick);
+  EXPECT_FALSE(proto::xmpp::person_rights(state, chat, "room@conference.example.org/owner").ban);
+  room.role = "visitor"; chat.theirs = room;
+  EXPECT_FALSE(proto::xmpp::chat_rights(state, chat).post);
+  room.role = "participant"; room.joined = false; chat.theirs = room;
+  EXPECT_FALSE(proto::xmpp::chat_rights(state, chat).post);
+}

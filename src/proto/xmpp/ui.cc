@@ -21,6 +21,7 @@ import mux.config;
 import mux.proto.kept;
 import mux.proto.xmpp.changes;
 import mux.ui;
+import mux.proto.xmpp;
 
 namespace mux::proto::xmpp::form_detail {
 using namespace ::mux::ui;
@@ -332,3 +333,183 @@ constexpr type_tag<form<Actions>> form_type_for(const kept&, type_tag<Actions>) 
 }
 
 }  // namespace mux::proto::xmpp
+
+namespace mux::proto::xmpp::manage_detail {
+using namespace ::mux::ui;
+inline const muc_room& settings_of(const room_settings_facts& facts) {
+  static const muc_room empty;
+  const auto* room = facts.theirs.template get_if<muc_room>();
+  return room ? *room : empty;
+}
+inline std::vector<std::string> lines_of(std::string text) {
+  std::vector<std::string> lines;
+  std::size_t start = 0;
+  while (start < text.size()) {
+    const auto end = text.find('\n', start);
+    auto line = text.substr(start, end == text.npos ? text.npos : end - start);
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    lines.push_back(std::move(line));
+    if (end == text.npos) break;
+    start = end + 1;
+  }
+  return lines;
+}
+struct config_row : skiff::compose::Stacked {
+  struct parts_t { nodes::Text note; field input; } parts;
+  muc_field original;
+  config_row(const palette& colours, const muc_field& f)
+      : Stacked(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.note = wrapped(nodes::Text(help(f), 12.0f, colours.dim)),
+            .input = field(colours, f.label + (f.required ? " (required)" : ""), f.type == "boolean" ? "0 or 1" : "Value",
+                std::ranges::to<std::string>(std::views::join_with(f.values, std::string_view("\n"))))}, original(f) {
+    this->setVisible(f.type != "hidden");
+    parts.input.setVisible(f.type != "fixed");
+    parts.input.parts.box.setMasked(f.type == "text-private");
+    if (f.type == "text-multi" || f.type == "jid-multi" || f.type == "list-multi") {
+      parts.input.parts.box.setSingleLine(false);
+      parts.input.parts.box.apply({.height = 90.0f});
+    }
+  }
+  static std::string help(const muc_field& f) {
+    std::string out = f.description;
+    if (f.type == "fixed") for (const auto& v : f.values) out += "\n" + v;
+    if (f.type == "boolean") out += "\n0: off; 1: on.";
+    if (f.type == "list-multi" || f.type == "jid-multi" || f.type == "text-multi") out += "\nOne value per line.";
+    for (const auto& [label, value] : f.options) out += "\n" + label + ": " + value;
+    return out;
+  }
+  muc_field answer() const {
+    auto out = original;
+    if (out.type == "hidden" || out.type == "fixed") return out;
+    out.values = lines_of(parts.input.text());
+    if (out.type != "text-multi" && out.type != "jid-multi" && out.type != "list-multi")
+      out.values = {parts.input.text()};
+    if (!out.required && out.type != "boolean" && parts.input.text().empty()) out.values.clear();
+    return out;
+  }
+};
+template <class Box> struct room_page : skiff::compose::Stacked {
+  struct save {
+    room_page* page;
+    using Answer = request::configure_muc;
+    Answer operator()() const {
+      Answer out;
+      for (const auto& row : page->parts.fields) out.fields.push_back(row.answer());
+      return out;
+    }
+  };
+  struct topic_press {
+    room_page* page;
+    using Answer = ::mux::ui::request::room_act;
+    Answer operator()() const { return {room_action::retopic{page->parts.topic.text()}}; }
+  };
+  struct nick_press {
+    room_page* page;
+    using Answer = request::muc_identity;
+    Answer operator()() const { return {page->parts.nick.text()}; }
+  };
+  struct rejoin_press {
+    room_page* page;
+    using Answer = request::rejoin_muc;
+    Answer operator()() const { return {page->parts.nick.text(), page->parts.password.text()}; }
+  };
+  struct parts_t {
+    nodes::Text heading, status;
+    field topic;
+    widgets::Button<topic_press> set_topic;
+    field nick;
+    widgets::Button<nick_press> set_nick;
+    field password;
+    widgets::Button<rejoin_press> rejoin;
+    button_for<sends<request::refresh_muc>> refresh;
+    nodes::Text configuration;
+    std::vector<config_row> fields;
+    widgets::Button<save> submit;
+  } parts;
+  room_page(Box* box, const room_settings_facts& facts)
+      : Stacked(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
+        parts{.heading = tab_heading(*box->colours_, "Room"),
+            .status = wrapped(nodes::Text("Nickname: " + settings_of(facts).nick + " · " + settings_of(facts).affiliation + " · " + settings_of(facts).role, 13.0f, box->colours_->dim)),
+            .topic = field(*box->colours_, "Subject", "Room subject", facts.topic),
+            .set_topic = widgets::Button<topic_press>(box->colours_->widgets, "Change subject", {this}),
+            .nick = field(*box->colours_, "Nickname", "Your nickname", settings_of(facts).nick),
+            .set_nick = widgets::Button<nick_press>(box->colours_->widgets, "Change nickname", {this}),
+            .password = field(*box->colours_, "Room password", "Password, if required"),
+            .rejoin = widgets::Button<rejoin_press>(box->colours_->widgets, "Join room", {this}),
+            .refresh = button_for<sends<request::refresh_muc>>(box->colours_->widgets, "Refresh room settings", {}),
+            .configuration = wrapped(nodes::Text(settings_of(facts).configuring ? "Room configuration (server fields)" : "Room configuration is available to the room owner. Refresh to load it.", 13.0f, box->colours_->dim)),
+            .submit = widgets::Button<save>(box->colours_->widgets, "Save configuration", {this})} {
+    for (const auto& f : settings_of(facts).fields) parts.fields.emplace_back(*box->colours_, f);
+    parts.submit.setVisible(settings_of(facts).configuring);
+    parts.password.parts.box.setMasked(true);
+    parts.password.setVisible(!settings_of(facts).joined); parts.rejoin.setVisible(!settings_of(facts).joined);
+    parts.set_nick.setVisible(settings_of(facts).joined);
+    parts.rejoin.apply({.height = 32.0f});
+    for (scene::Node* n : std::initializer_list<scene::Node*>{&parts.submit, &parts.set_topic, &parts.set_nick, &parts.refresh}) n->apply({.height = 32.0f});
+  }
+};
+template <class Box> struct roles_page : skiff::compose::Stacked {
+  struct grant {
+    roles_page* page;
+    bool affiliation;
+    using Answer = request::muc_privilege;
+    Answer operator()() const {
+      const auto rank = page->parts.rank.text();
+      return {page->parts.user.text(), affiliation ? rank : "", affiliation ? "" : rank};
+    }
+  };
+  struct destroy {
+    roles_page* page;
+    std::string room;
+    using Answer = std::optional<request::destroy_muc>;
+    Answer operator()() const {
+      if (page->parts.confirm.text() != room) return {};
+      return request::destroy_muc{page->parts.reason.text()};
+    }
+  };
+  struct parts_t {
+    nodes::Text heading, explanation;
+    std::vector<nodes::Text> people;
+    field user, rank;
+    widgets::Button<grant> affiliation, role;
+    nodes::Text destruction;
+    field reason, confirm;
+    widgets::Button<destroy> remove;
+  } parts;
+  roles_page(Box* box, const room_settings_facts& facts)
+      : Stacked(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
+        parts{.heading = tab_heading(*box->colours_, "Roles & Permissions"),
+            .explanation = wrapped(nodes::Text("Affiliations use a real bare JID: none, member, admin, owner, outcast (ban). Roles use an occupant nickname: visitor, participant, moderator, none (kick). The server checks your privileges.", 13.0f, box->colours_->dim)),
+            .user = field(*box->colours_, "User JID or occupant nickname", "user@example.org or nickname"),
+            .rank = field(*box->colours_, "Affiliation or role", "member"),
+            .affiliation = widgets::Button<grant>(box->colours_->widgets, "Set affiliation", {this, true}),
+            .role = widgets::Button<grant>(box->colours_->widgets, "Set occupant role", {this, false}),
+            .destruction = wrapped(nodes::Text("Destroy room permanently (owner only). Type the room address to confirm.", 13.0f, box->colours_->error)),
+            .reason = field(*box->colours_, "Reason", "Optional reason"),
+            .confirm = field(*box->colours_, "Confirm room address", facts.id),
+            .remove = widgets::Button<destroy>(box->colours_->widgets, "Destroy room", {this, facts.id})} {
+    const auto& room = settings_of(facts);
+    for (const auto& person : room.people) parts.people.push_back(wrapped(nodes::Text(person.nick + " · " + person.affiliation + " · " + person.role + (person.jid.empty() ? "" : " · " + person.jid), 13.0f, box->colours_->text)));
+    for (const auto& person : room.affiliations) parts.people.push_back(wrapped(nodes::Text(person.jid + " · " + person.affiliation, 13.0f, box->colours_->text)));
+    parts.affiliation.apply({.height = 32.0f, .disabled = room.affiliation != "owner" && room.affiliation != "admin"});
+    parts.role.apply({.height = 32.0f, .disabled = room.role != "moderator"});
+    const bool owner = room.affiliation == "owner";
+    parts.destruction.setVisible(owner); parts.reason.setVisible(owner); parts.confirm.setVisible(owner);
+    parts.remove.setVisible(owner); parts.remove.apply({.height = 32.0f});
+  }
+};
+}
+export namespace mux::proto::xmpp {
+namespace manage { struct room {}; struct roles {}; }
+constexpr ui::manage_tab_list<manage::room, manage::roles> manage_tabs(const state&) { return {}; }
+}
+export namespace mux::proto::xmpp::manage {
+inline bool tab_visible(room, const ui::room_settings_facts& facts) { return facts.group; }
+inline bool tab_visible(roles, const ui::room_settings_facts& facts) { return facts.group; }
+constexpr std::string_view tab_title(room) { return "Room"; }
+constexpr std::string_view tab_title(roles) { return "Roles & Permissions"; }
+inline ui::icon_t tab_icon(room) { return ui::icon::people{}; }
+inline ui::icon_t tab_icon(roles) { return ui::icon::people{}; }
+template <class Box> constexpr type_tag<manage_detail::room_page<Box>> page_type(room, type_tag<Box>) { return {}; }
+template <class Box> constexpr type_tag<manage_detail::roles_page<Box>> page_type(roles, type_tag<Box>) { return {}; }
+}

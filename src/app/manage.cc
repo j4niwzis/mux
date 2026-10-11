@@ -100,12 +100,16 @@ class manage_part {
     const mux::conversation* chat = s_->model->find(id);
     if (!chat)
       return;
+    s_->net->on_account_of(id, [room = id.id](auto& account)
+        -> decltype(void(account.fetch_room_settings(room))) { account.fetch_room_settings(room); });
     mux::ui::room_settings_facts facts{.id = chat->id.id,
                                        .name = chat->name,
                                        .topic = chat->topic.value_or(""),
                                        .alias = chat->alias,
                                        .other_aliases = chat->other_aliases,
                                        .encrypted = chat->encrypted,
+                                       .group = chat->kind.template get_if<conversation_kind::direct>() == nullptr,
+                                       .leavable = mux::proto::can_leave(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat),
                                        .theirs = chat->theirs,
                                        .notify = k_->notify_choices_of(chat->id),
                                        .events_all = k_->own_of<&mux::app::chat_choices::room_events>(chat->id),

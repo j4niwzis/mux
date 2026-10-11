@@ -111,20 +111,21 @@ class connection {
   response request(std::string_view method, std::string_view target, std::string_view body = {},
                    std::optional<std::string_view> bearer = std::nullopt,
                    std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {},
-                   const Progress* progress = nullptr, std::string_view accept = "application/json") {
+                   const Progress* progress = nullptr, std::string_view accept = "application/json",
+                   std::span<const std::pair<std::string, std::string>> headers = {}) {
     const turn mine(*this);
     // Cut short by abort(): opened afresh, not the stream it left.
     if (std::exchange(aborted_, false))
       stream_.reset();
     const bool reused = stream_.has_value();
     try {
-      return once(method, target, body, bearer, timeout, type, progress, accept);
+      return once(method, target, body, bearer, timeout, type, progress, accept, headers);
     } catch (const net::failure& failed) {
       // Stopped by its progress: not a closed connection, not tried again.
       if (!reused || failed.code == asio::error::operation_aborted)
         throw;
       stream_.reset();
-      return once(method, target, body, bearer, timeout, type, progress, accept);
+      return once(method, target, body, bearer, timeout, type, progress, accept, headers);
     }
   }
 
@@ -183,7 +184,8 @@ class connection {
   template <class Progress = no_progress>
   response once(std::string_view method, std::string_view target, std::string_view body,
                 std::optional<std::string_view> bearer, std::chrono::seconds timeout, std::string_view type = {},
-                const Progress* progress = nullptr, std::string_view accept = "application/json") {
+                const Progress* progress = nullptr, std::string_view accept = "application/json",
+                   std::span<const std::pair<std::string, std::string>> headers = {}) {
     if (!stream_)
       open();
     beast::http::request<beast::http::string_body> out;
@@ -202,6 +204,7 @@ class connection {
       out.set(beast::http::field::content_type, type.empty() ? std::string_view("application/json") : type);
       out.body() = std::string(body);
     }
+    for (const auto& [name, value] : headers) out.insert(name, value);
     out.prepare_payload();
     beast::get_lowest_layer(*stream_).expires_after(timeout);
     const auto asked_at = std::chrono::steady_clock::now();

@@ -299,7 +299,7 @@ struct kept_settings {
   // Whether a chat's link previews come from the sites themselves: its own
   // choice, its space's, its account's, else every account's.
   [[nodiscard]] bool previews_direct(const conversation_id& chat) {
-    return this->reads().previews_direct(chat);
+    return !proto::offers(state_before(chat.account.speaks), proto::feature::server_previews{}) || this->reads().previews_direct(chat);
   }
   // Whether others in a chat are told one is typing: its own choice, its
   // space's, its account's, else every account's.

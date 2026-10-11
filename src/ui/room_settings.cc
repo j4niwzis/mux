@@ -43,6 +43,8 @@ struct room_settings_facts {
   std::optional<std::string> alias;
   std::vector<std::string> other_aliases;
   bool encrypted = false;
+  bool group = true;
+  bool leavable = true;
   // Its protocol's part (Matrix: its rules and levels), for its pages.
   room_part_t theirs;
   // Its notifications, as chosen for it (muted: off).
@@ -113,6 +115,7 @@ template <class... Tabs>
 struct manage_tab_list {};
 namespace manage_defaults {
 constexpr manage_tab_list<> manage_tabs(const auto&) { return {}; }
+constexpr bool tab_visible(const auto&, const room_settings_facts&) { return true; }
 // And what a protocol keeps while its pages are made again: none by default.
 struct no_part {};
 constexpr type_tag<no_part> manage_part_type(const auto&) { return {}; }
@@ -335,8 +338,9 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
           skiff::compose::bound<skiff::model::Field<&choices::receipts>>(show_hide_field<receipts_setting, std::optional<bool>, skiff::model::Field<&choices::receipts>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::previews>>(
               show_hide_field<link_previews_setting, std::optional<bool>, skiff::model::Field<&choices::previews>>(colours, level)),
-          skiff::compose::bound<skiff::model::Field<&choices::previews_direct>>(
-              show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&choices::previews_direct>>(colours, level)),
+          skiff::compose::visible(proto::offers(state_before(chat.account.speaks), proto::feature::server_previews{}),
+              skiff::compose::bound<skiff::model::Field<&choices::previews_direct>>(
+                  show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&choices::previews_direct>>(colours, level))),
           skiff::compose::bound<skiff::model::Field<&choices::typing>>(show_hide_field<typing_setting, std::optional<bool>, skiff::model::Field<&choices::typing>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&choices::jump_search>>(colours, level))),
       chat);
@@ -407,7 +411,6 @@ inline auto room_general_page(const palette& colours, const room_settings_facts&
       c::visible(!proto::room_event_kinds_of(state_before(facts.speaks)).empty(),
           explained(colours, "Room events shown in this room, for you: As above follows the inherited settings.")),
       chat_settings_view(colours, facts.chat),
-      c::scoped<choices>(c::handlers(), style_controls(colours), facts.chat),
       c::visible(facts.space, c::scoped<choices>(c::handlers(),
           c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               part_heading(colours, "Shown as"),
@@ -416,9 +419,9 @@ inline auto room_general_page(const palette& colours, const room_settings_facts&
                   : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
               c::shown_for<skiff::model::Field<&choices::forum>>([](bool forum) { return !forum; },
                   space_choice_row<&choices::hidden_from_home>(colours, "Its rooms not in Home"))), facts.chat)),
-      part_heading(colours, "Leave room"),
+      c::visible(facts.leavable, part_heading(colours, "Leave room")),
       c::styled({.width = 130.0f, .height = 32.0f},
-          button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {})));
+          c::visible(facts.leavable, button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {}))));
 }
 using room_general_page_t = decltype(room_general_page(std::declval<const palette&>(), std::declval<const room_settings_facts&>()));
 
@@ -506,7 +509,8 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
     } parts;
     template <class... Tabs>
     void add(room_settings* box, manage_tab_list<Tabs...>) {
-      (parts.protocol.emplace_back(*box->colours_, std::string(tab_title(Tabs{})), tab_icon(Tabs{}), pick_tab{box, settings_tab_t{Tabs{}}}), ...);
+      using manage_defaults::tab_visible;
+      ([&] { if (tab_visible(Tabs{}, box->facts)) parts.protocol.emplace_back(*box->colours_, std::string(tab_title(Tabs{})), tab_icon(Tabs{}), pick_tab{box, settings_tab_t{Tabs{}}}); }(), ...);
     }
     explicit tab_list(room_settings *box)
         : Stacked(skiff::compose::vbox(
@@ -566,14 +570,16 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   struct looks_page : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text heading;
+      decltype(skiff::compose::scoped<config::chat_choices>(skiff::compose::handlers(), style_controls(std::declval<const palette&>()), std::declval<conversation_id>())) fonts;
       look_choices<Actions> choices;
     } parts;
-    looks_page(room_settings *box, const room_settings_facts &)
+    looks_page(room_settings *box, const room_settings_facts &facts)
         : Stacked(skiff::compose::vbox(
               6.0f, {.fillX = true,
                      .autoSize = scene::axes::kY,
                      .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
           parts{.heading = tab_heading(*box->colours_, "Appearance"),
+                .fonts = skiff::compose::scoped<config::chat_choices>(skiff::compose::handlers(), style_controls(*box->colours_), facts.chat),
                 .choices = look_choices<Actions>(*box->colours_, *box->looks_,
                                                  choice_level::chat{})} {}
   };

@@ -233,8 +233,9 @@ inline auto account_chats_view(const palette& colours, std::string address) {
           event_kinds_field<shared>(colours, level, proto::room_event_kinds_of(state_before(protocol_of(address)))),
           bound<skiff::model::Field<&shared::show_receipts>>(show_hide_field<receipts_setting, std::optional<bool>, skiff::model::Field<&shared::show_receipts>>(colours, level)),
           bound<skiff::model::Field<&shared::link_previews>>(show_hide_field<link_previews_setting, std::optional<bool>, skiff::model::Field<&shared::link_previews>>(colours, level)),
-          bound<skiff::model::Field<&shared::previews_direct>>(
-              show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&shared::previews_direct>>(colours, level)),
+          skiff::compose::visible(proto::offers(state_before(protocol_of(address)), proto::feature::server_previews{}),
+              bound<skiff::model::Field<&shared::previews_direct>>(
+                  show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&shared::previews_direct>>(colours, level))),
           bound<skiff::model::Field<&shared::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&shared::jump_search>>(colours, level))),
       std::move(address));
 }

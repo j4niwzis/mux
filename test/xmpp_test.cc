@@ -220,15 +220,25 @@ TEST(Xmpp, DisablingDuringBackoffStopsConnectionAttempts) {
 }  // namespace
 
 TEST(XmppSettings, ValidatesServerFormConstraints) {
-  using mux::proto::xmpp::validate_muc_value;
-  using mux::proto::xmpp::muc_field;
-  EXPECT_FALSE(validate_muc_value(muc_field{.type = "boolean"}, {"1"}));
-  EXPECT_TRUE(validate_muc_value(muc_field{.type = "boolean"}, {"perhaps"}));
-  EXPECT_TRUE(validate_muc_value(muc_field{.type = "text-single", .required = true}, {""}));
-  EXPECT_TRUE(validate_muc_value(muc_field{.type = "text-single"}, {"one", "two"}));
-  const muc_field list{.type = "list-multi", .options = {{"Members", "members"}, {"Moderators", "moderators"}}};
-  EXPECT_FALSE(validate_muc_value(list, {"members", "moderators"}));
-  EXPECT_TRUE(validate_muc_value(list, {"everyone"}));
+  using namespace mux::proto::xmpp;
+  const auto validate = [](const muc_field& field, std::initializer_list<std::string> values) {
+    return validate_muc_value(field, values);
+  };
+  EXPECT_FALSE(validate(muc_field{.kind = muc_kind::boolean{}}, {"1"}));
+  EXPECT_FALSE(validate(muc_field{.kind = muc_kind::boolean{}, .required = true}, {"0"}));
+  EXPECT_FALSE(validate(muc_field{.kind = muc_kind::boolean{}}, {"false"}));
+  EXPECT_FALSE(validate(muc_field{.kind = muc_kind::boolean{}}, {"true"}));
+  EXPECT_TRUE(validate(muc_field{.kind = muc_kind::boolean{}}, {"perhaps"}));
+  EXPECT_TRUE(validate(muc_field{.kind = muc_kind::boolean{}}, {}));
+  EXPECT_TRUE(validate(muc_field{.required = true}, {""}));
+  EXPECT_TRUE(validate(muc_field{}, {"one", "two"}));
+  const muc_field list{.kind = muc_kind::list_multi{},
+      .options = {{"Members", "members"}, {"Moderators", "moderators"}}};
+  EXPECT_FALSE(validate(list, {"members", "moderators"}));
+  EXPECT_TRUE(validate(list, {"everyone"}));
+  EXPECT_FALSE(validate(muc_field{.kind = muc_kind::hidden{}, .required = true}, {}));
+  EXPECT_FALSE(validate(muc_field{.kind = muc_kind::fixed{}, .required = true}, {}));
+  EXPECT_FALSE(validate(muc_field{.kind = muc_kind_of("future-field"), .required = true}, {}));
 }
 
 TEST(XmppSettings, RolesAndUploadUseServerFacts) {

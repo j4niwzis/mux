@@ -16,6 +16,13 @@ import mux.proto.xmpp;
 import mux.app.network;
 
 namespace mux::proto::xmpp::app_detail {
+// Failure re-enables the live form without throwing away the owner's draft.
+template <class Page>
+  requires requires(Page& page, std::string reason) { page.configuration_failed(std::move(reason)); }
+void fail_configuration(Page& page, const std::string& reason) { page.configuration_failed(reason); }
+template <class Page>
+  requires (!requires(Page& page, std::string reason) { page.configuration_failed(std::move(reason)); })
+void fail_configuration(Page&, const std::string&) {}
 // What the server asks, in the form that shows it -- XMPP's -- and in no other.
 template <class Form>
   requires requires(Form& form, const registration_asked& asked) { form.show_registration(asked); }
@@ -60,6 +67,13 @@ void program_told(App& app, const muc_settings_loaded& loaded) {
     panel->facts.theirs = loaded.settings;
     panel->show_again();
   }
+}
+template <class App>
+void program_told(App& app, const muc_configuration_failed& failed) {
+  const auto chosen = app.shared.managed();
+  if (!chosen || chosen->account != failed.account || chosen->id != failed.room) return;
+  if (auto* panel = app.root().manage_up())
+    spl::visit([&](auto& page) { app_detail::fail_configuration(page, failed.reason); }, panel->holder().parts.page);
 }
 template <class App, class Request>
 void muc_request(App& app, const Request& one) {

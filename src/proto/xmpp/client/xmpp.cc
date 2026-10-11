@@ -456,14 +456,17 @@ class account {
         if (found->second.settings.affiliation == "owner" && answer && answer->form) {
           found->second.form = std::move(*answer->form);
           auto& settings = found->second.settings;
-          settings.fields.clear(); settings.configuring = true;
-          for (const auto& field : found->second.form->fields) {
-            muc_field out{.var = field.var.value_or(""), .type = field.type.value_or("text-single"),
-                .label = field.label.value_or(field.var.value_or("")), .description = field.desc.value_or(""),
-                .values = field.value, .required = field.required.has_value()};
-            for (const auto& option : field.options) out.options.emplace_back(option.label.value_or(option.value), option.value);
-            settings.fields.push_back(std::move(out));
-          }
+          settings.configuring = true;
+          settings.title = found->second.form->title.value_or("");
+          settings.instructions = found->second.form->instructions;
+          settings.fields = std::ranges::to<std::vector<muc_field>>(std::views::transform(found->second.form->fields, [](const auto& field) {
+            return muc_field{.var = field.var.value_or(""), .label = field.label.value_or(field.var.value_or("")),
+                .description = field.desc.value_or(""), .kind = muc_kind_of(field.type.value_or("text-single")),
+                .values = field.value,
+                .options = std::ranges::to<std::vector<std::pair<std::string, std::string>>>(std::views::transform(field.options,
+                    [](const auto& option) { return std::pair{option.label.value_or(option.value), option.value}; })),
+                .required = field.required.has_value()};
+          }));
         } else {
           found->second.settings.configuring = false;
           found->second.settings.fields.clear();
@@ -493,30 +496,49 @@ class account {
   void change_muc(std::string address, const request::refresh_muc&) { fetch_room_settings(std::move(address)); }
   void change_muc(std::string address, const request::configure_muc& asked) {
     this->spawn_guarded([this, address = std::move(address), fields = asked.fields] {
+      const auto refuse = [&](std::string message) {
+        sink_(muc_configuration_failed{id_, address, message});
+        sink_(change::refused{id_, std::move(message)});
+      };
       const auto found = rooms_.find(address);
       if (!session_ || found == rooms_.end() || found->second.settings.affiliation != "owner" || !found->second.form) {
-        sink_(change::refused{id_, "Only the room owner can configure this room."}); return;
+        refuse("Only the room owner can configure this room."); return;
       }
       auto form = *found->second.form;
+      // Use the parsed server fields for validation, never the UI's copy of
+      // their type or choices. Unrecognised fields remain opaque and unchanged.
       for (auto& field : form.fields) {
-        if (!field.var || field.type == "hidden" || field.type == "fixed") continue;
-        const auto value = std::ranges::find(fields, *field.var, &muc_field::var);
-        if (value == fields.end()) continue;
-        if (auto error = validate_muc_value(muc_field{.var = *field.var, .type = field.type.value_or("text-single"),
-              .options = std::ranges::to<std::vector<std::pair<std::string, std::string>>>(field.options | std::views::transform([](const auto& o) { return std::pair{o.label.value_or(o.value), o.value}; })),
-              .required = field.required.has_value()}, value->values)) {
-          sink_(change::refused{id_, *field.var + ": " + *error}); return;
+        if (!field.var) continue;
+        const auto original = std::ranges::find(found->second.settings.fields, *field.var, &muc_field::var);
+        if (original == found->second.settings.fields.end()) continue;
+        const auto rules = rules_of(original->kind);
+        if (!rules.editable) continue;
+        const auto answer = std::ranges::find(fields, *field.var, &muc_field::var);
+        if (answer == fields.end()) continue;
+        if (auto error = validate_muc_value(*original, answer->values)) {
+          refuse(original->label + ": " + *error); return;
         }
-        if (field.type == "jid-single" || field.type == "jid-multi")
-          for (const auto& jid : value->values) if (!tern::jid::parse(jid)) {
-            sink_(change::refused{id_, *field.var + ": enter valid JIDs."}); return;
-          }
-        field.value = value->values;
+        if (rules.jid && !std::ranges::all_of(answer->values, [](const auto& jid) {
+              return jid.empty() || tern::jid::parse(jid).has_value();
+            })) {
+          refuse(original->label + ": enter valid JIDs."); return;
+        }
+        field.value = answer->values;
       }
       form.type = "submit";
-      std::erase_if(form.fields, [](const auto& field) { return field.type == "fixed" || !field.var; });
+      std::erase_if(form.fields, [&](const auto& field) {
+        if (!field.var) return true;
+        const auto original = std::ranges::find(found->second.settings.fields, *field.var, &muc_field::var);
+        return original != found->second.settings.fields.end() && spl::visit(spl::overloaded{
+            [](muc_kind::fixed) { return true; },
+            [](muc_kind::text_single) { return false; }, [](muc_kind::text_private) { return false; },
+            [](muc_kind::text_multi) { return false; }, [](muc_kind::jid_single) { return false; },
+            [](muc_kind::jid_multi) { return false; }, [](muc_kind::boolean) { return false; },
+            [](muc_kind::list_single) { return false; }, [](muc_kind::list_multi) { return false; },
+            [](muc_kind::hidden) { return false; }, [](muc_kind::unsupported) { return false; }}, original->kind);
+      });
       if (!session_->template try_request<tern::query::muc_configure>({.to = address, .query = {std::move(form)}})) {
-        sink_(change::refused{id_, "The server refused the room configuration."}); return;
+        refuse("The server refused the room configuration."); return;
       }
       fetch_room_settings(address);
     });

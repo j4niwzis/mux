@@ -39,6 +39,26 @@ auto model_field(const palette& colours, std::string label, std::string placehol
   return model_field<Member>(colours, nodes::Text(std::move(label), 13.0f, colours.dim), std::move(placeholder), masked, margin);
 }
 
+// A locally edited checkbox, using the widget library's toggle input and
+// checkbox presentation. Its value is collected with the rest of the form.
+struct check_press { void operator()() const {} };
+struct check_box : widgets::internal::Toggle<check_press, widgets::internal::CheckboxLook> {
+  using Base = widgets::internal::Toggle<check_press, widgets::internal::CheckboxLook>;
+  std::string label, hint;
+  check_box(const palette& colours, bool checked, std::string name = {}, std::string description = {})
+      : Base(colours.widgets, {}), label(std::move(name)), hint(std::move(description)) { setOnNow(checked); }
+  bool onClick(float x, float y) {
+    if (!bounds().contains(x, y)) return false;
+    setOnNow(!on());
+    return Base::onClick(x, y);
+  }
+  scene::Semantics semantics() const {
+    auto out = Base::semantics();
+    out.fLabel = label; out.fHint = hint;
+    return out;
+  }
+};
+
 // ---- a form row: a caption and a field -----------------------------------
 
 struct field : skiff::compose::Stacked {

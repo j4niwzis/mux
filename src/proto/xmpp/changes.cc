@@ -52,7 +52,9 @@ struct registered {
 
 struct muc_settings_loaded { account_id account; std::string room; muc_room settings; };
 inline std::string describe(const muc_settings_loaded& one) { return one.room + ": room settings received"; }
-using changes = change_list<registration_asked, registered, muc_settings_loaded>;
+struct muc_configuration_failed { account_id account; std::string room, reason; };
+inline std::string describe(const muc_configuration_failed& one) { return one.room + ": " + one.reason; }
+using changes = change_list<registration_asked, registered, muc_settings_loaded, muc_configuration_failed>;
 constexpr type_tag<changes> changes_type(const state&) { return {}; }
 
 // As the command line says them.

@@ -41,6 +41,7 @@ void app::woken() {
   // Deletions of what is not held in memory, by chat: looked for on disk on
   // a worker, each chat's file read once for all of its (mark_deleted_on_disk).
   std::map<mux::conversation_id, std::vector<std::string>> deleted_on_disk;
+  bool person_presence_changed = false;
   // One batch of edits for all that came: what binds to the chats told
   // once, after.
   model->chats().beginBatch();
@@ -80,7 +81,6 @@ void app::woken() {
                                [&](const mux::change::profile_found& found) {
                                  pictures.avatar_changed(found.user, found.avatar);
                                  pictures.profile_avatars.insert_or_assign(found.user, found.avatar);
-                                 pictures.ask();
                                },
                                [&](const mux::change::members_changed& changed) {
                                  for (const auto& member : changed.members)
@@ -146,6 +146,13 @@ void app::woken() {
                                  shared.ui.protocol_states.insert_or_assign(now.account, now.now);
                                  this->refresh();
                                },
+                               [&](const mux::change::presence_changed& now) {
+                                 if (!person_open_ || person_open_->first.account != now.account || person_open_->second != now.contact) return;
+                                 const auto* account = model->accounts().find(now.account);
+                                 if (!account) { person_presence_changed = true; return; }
+                                 const auto previous = account->presences.find(now.contact);
+                                 person_presence_changed = person_presence_changed || previous == account->presences.end() || previous->second != now.now;
+                               },
                                // A protocol's own: what the program does with it, as the
                                // protocol says (mux.app.proto); nothing by default.
                                [&](const auto& theirs) {
@@ -182,8 +189,15 @@ void app::woken() {
   };
   std::ranges::for_each(changes, [&](const auto& changed) {
     spl::visit(spl::overloaded{
-        [&](const mux::change::profile_found& profile) { refresh_person(profile.by, profile.user); },
-        [&](const mux::change::presence_changed& presence) { refresh_person(presence.account, presence.contact); },
+        [&](const mux::change::profile_found& profile) {
+          // Fetch only after the model contains the new banner URL.
+          shared.ui.pictures_due = true;
+          refresh_person(profile.by, profile.user);
+        },
+        [&](const mux::change::presence_changed& presence) {
+          // An unchanged presence snapshot must not reset the card's scroll.
+          if (person_presence_changed) refresh_person(presence.account, presence.contact);
+        },
         [](const auto&) {}}, changed);
   });
 

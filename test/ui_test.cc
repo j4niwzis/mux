@@ -507,6 +507,53 @@ TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
   EXPECT_FLOAT_EQ(card->parts.scroll.current(), 0.0f);
 }
 
+TEST(UserInfo, LongProfilesScrollWithTheBannerBeforeTheId) {
+  auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
+  skia::Sp<skia::SkTypeface> face;
+  for (const char* family : {"DejaVu Sans", "Noto Sans", "Liberation Sans"})
+    if (manager && !face) face = manager->matchFamilyStyle(family, skia::SkFontStyle());
+  ASSERT_TRUE(face);
+  skiff::paint::fonts().setPrimary(face);
+  skia::SkFont font(face);
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
+  stub program;
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
+  mux::ui::person_facts facts{.name = "A user", .status = "online",
+      .profile = {.banner = "mxc://example/banner", .pronouns = {{"en", "they/them"}}}};
+  for (int i = 0; i < 100; ++i) facts.profile.biography.plain += "A long biography that wraps on a phone.\n\n";
+  const mux::account_id account{mux::protocol::matrix{}, "@me:example.com"};
+  ui.show(window.root().layer().person, std::optional{mux::ui::person_shown{account, "@user:example.com", facts}});
+  auto* card = window.root().layer().person.shown();
+  ASSERT_NE(card, nullptr);
+  auto& scroll = card->parts.scroll;
+  auto& details = std::get<0>(scroll.fChildren);
+  double now = 1000.0;
+  for (const auto viewport : {skia::SkRect::MakeWH(1000.0f, 720.0f), skia::SkRect::MakeWH(360.0f, 640.0f),
+                              skia::SkRect::MakeWH(640.0f, 360.0f)}) {
+    for (int i = 0; i < 30; ++i) {
+      window.update(now += 16.0);
+      window.layoutIfNeeded(viewport);
+    }
+    EXPECT_TRUE(viewport.contains(card->bounds()));
+    EXPECT_GT(scroll.bounds().height(), 0.0f);
+    EXPECT_GT(scroll.extent(), scroll.bounds().height());
+    EXPECT_GE(scroll.bounds().fTop, card->parts.top.bounds().fBottom);
+    const auto title = card->parts.top.bounds();
+    EXPECT_EQ(details.parts.cover.parts.banner.bounds(), details.parts.cover.bounds());
+    EXPECT_FLOAT_EQ(details.parts.cover.parts.banner.fState.alpha(), 1.0f);
+    EXPECT_LE(details.parts.cover.bounds().fBottom, details.parts.band.bounds().fTop);
+    EXPECT_LE(details.parts.band.bounds().fBottom, details.parts.id.bounds().fTop);
+    scroll.scrollToEnd(false);
+    window.layoutIfNeeded(viewport);
+    EXPECT_NEAR(scroll.current(), scroll.extent(), 1.0f);
+    EXPECT_EQ(card->parts.top.bounds(), title);
+    EXPECT_LE(details.parts.id.bounds().fBottom - scroll.current(), scroll.bounds().fBottom + 1.0f);
+    EXPECT_GE(details.parts.id.bounds().fTop - scroll.current(), scroll.bounds().fTop - 1.0f);
+  }
+}
+
 // A long chat scrolled with the wheel, a frame at a time: how long update,
 // layout and drawing take, printed, and the whole held to a frame of a
 // 60 Hz screen. Then a message arriving at the bottom, the same way.

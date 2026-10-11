@@ -17,6 +17,10 @@ import mux.app.network;
 import mux.app.kept;
 import mux.app.services;
 import mux.app.requests;
+import mux.platform.files;
+import mux.platform.dialogs;
+import mux.media;
+import skia;
 
 export namespace mux::app {
 
@@ -85,6 +89,29 @@ class manage_part {
     s_->manage_target.reset();
     mux::ui::show<mux::ui::room_settings_facts>(*s_->showing, std::nullopt);
   }
+  void apply(const request::pick_room_avatar& one) {
+    if (s_->demo()) return;
+    picking_avatar_ = one.room;
+    s_->system_dialogs->choose_files();
+  }
+  bool took_files(const std::vector<std::string>& paths, bool dropped) {
+    if (!picking_avatar_ || dropped) return false;
+    const auto room = *std::exchange(picking_avatar_, std::nullopt);
+    if (paths.empty()) return true;
+    auto bytes = mux::platform::files::read(paths.front());
+    const auto kind = bytes ? mux::media::picture_of(*bytes) : std::nullopt;
+    if (!kind || !skia::decodeImage(bytes->data(), bytes->size())) {
+      s_->notice("Room Avatar", "Choose an image mux can show."); return true;
+    }
+    if (auto* box = s_->root().manage_up(); box && box->facts.chat == room) {
+      auto& kept = box->template part<mux::proto::matrix::state>();
+      kept.pending = true; kept.error.clear(); box->show_again();
+    }
+    s_->net->on_account_of(room, [room = room.id, bytes = std::move(*bytes), name = mux::platform::files::name(paths.front()),
+        mime = std::string(mux::media::mimetype_of(*kind))](auto& account)
+        -> decltype(void(account.upload_room_avatar(room, bytes, name, mime))) { account.upload_room_avatar(room, bytes, name, mime); });
+    return true;
+  }
   // Done to the room being read, by its account.
   void apply(const request::room_act& one) {
     const auto chosen = s_->managed();
@@ -105,6 +132,7 @@ class manage_part {
     mux::ui::room_settings_facts facts{.id = chat->id.id,
                                        .name = chat->name,
                                        .topic = chat->topic.value_or(""),
+                                       .avatar = chat->avatar,
                                        .alias = chat->alias,
                                        .other_aliases = chat->other_aliases,
                                        .encrypted = chat->encrypted,
@@ -158,6 +186,7 @@ class manage_part {
     mux::ui::show(*s_->showing, std::optional(facts));
   }
 
+  std::optional<mux::conversation_id> picking_avatar_;
   services* s_;
   kept_settings* k_;
 };

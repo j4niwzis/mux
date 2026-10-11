@@ -124,6 +124,18 @@ std::expected<std::string, failure> account<Sink>::upload_content(const std::str
   } catch (const net::failure& failed) { return std::unexpected(failure{{}, failed.what()}); }
 }
 template <class Sink>
+void account<Sink>::upload_room_avatar(std::string room, std::string bytes, std::string name, std::string mime) {
+  this->spawn_guarded([this, room = std::move(room), bytes = std::move(bytes), name = std::move(name), mime = std::move(mime)] {
+    auto uploaded = upload_content(bytes, name, mime);
+    if (!uploaded) {
+      sink_(proto::matrix::room_avatar_uploaded{{id_, room}, {}, uploaded.error().said()});
+      return;
+    }
+    sink_(proto::matrix::room_avatar_uploaded{{id_, room}, std::move(*uploaded), {}});
+  });
+}
+
+template <class Sink>
 void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes) {
   this->spawn_guarded([this, picture = std::move(picture), bytes = std::move(bytes)]() mutable {
     auto uploaded = upload_content(bytes, picture.body, picture.mimetype);

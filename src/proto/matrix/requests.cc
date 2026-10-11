@@ -12,46 +12,6 @@ import mux.proto;
 
 export namespace mux::proto::matrix {
 
-// What Matrix changes of a room beyond what every protocol does: who may
-// join, who reads its history, who has a say and what a thing done asks,
-// encryption, its version.
-namespace room_change {
-struct set_join_rule {
-  join_rule_t rule;
-};
-struct set_history {
-  history_rule_t rule;
-};
-struct set_power {
-  std::string user;
-  std::int64_t level = 0;
-};
-struct encrypt {};  // for good: it cannot be turned off
-struct set_need {  // the level a thing done asks
-  power_need_t need;
-  std::int64_t level = 0;
-};
-// Upgraded to a room version: a new room made, this one tombstoned.
-struct upgrade {
-  std::string version;
-};
-// The level any kind of event asks, by its type -- one of the list's or not.
-struct set_event_need {
-  std::string event;
-  std::int64_t level = 0;
-};
-// A space's room or space: listed in it (m.space.child), or no longer.
-struct add_child {
-  std::string room;
-};
-struct remove_child {
-  std::string room;
-};
-}  // namespace room_change
-using room_change_t = spl::variant<room_change::set_join_rule, room_change::set_history, room_change::set_power,
-                                      room_change::encrypt, room_change::set_need, room_change::upgrade,
-                                      room_change::set_event_need, room_change::add_child, room_change::remove_child>;
-
 namespace request {
 // A room changed, as Matrix changes one: the room being managed.
 struct change_room {

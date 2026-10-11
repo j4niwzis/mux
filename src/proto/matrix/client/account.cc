@@ -184,6 +184,8 @@ class account {
   void manage(std::string room, room_action_t action);
   // What Matrix changes of a room beyond that: rules, levels, encryption, version.
   void change_room(std::string room, proto::matrix::room_change_t change);
+  void fetch_room_settings(std::string room);
+  void upload_room_avatar(std::string room, std::string bytes, std::string name, std::string mime);
   // Messages sent on to another room in order: their content as it is -- a picture's
   // or a file's URL with it, so nothing is uploaded again -- less what tied
   // it to its own room (the reply it was).

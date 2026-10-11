@@ -73,7 +73,7 @@ void program_told(App& app, const muc_configuration_failed& failed) {
   const auto chosen = app.shared.managed();
   if (!chosen || chosen->account != failed.account || chosen->id != failed.room) return;
   if (auto* panel = app.root().manage_up())
-    spl::visit([&](auto& page) { app_detail::fail_configuration(page, failed.reason); }, panel->holder().parts.page);
+    spl::visit([&](auto& page) { app_detail::fail_configuration(page, failed.reason); }, panel->page());
 }
 template <class App, class Request>
 void muc_request(App& app, const Request& one) {

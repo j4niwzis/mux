@@ -141,6 +141,22 @@ template <class App>
 void program_told(App& app, const state_listed& listed) {
   app.root().template open_dialog<devtools_page<typename App::accounts::actions_type>>(listed.entries);
 }
+// Only the room and account that requested the read may receive it.
+template <class App>
+void program_told(App& app, const management_loaded& one) {
+  if (auto* box = app.root().manage_up(); box && box->facts.chat == one.in)
+    manage_detail::loaded(box, one);
+}
+template <class App>
+void program_told(App& app, const room_avatar_uploaded& one) {
+  if (auto* box = app.root().manage_up(); box && box->facts.chat == one.in)
+    manage_detail::avatar_uploaded(box, one);
+}
+template <class App>
+void program_told(App& app, const management_saved& one) {
+  if (auto* box = app.root().manage_up(); box && box->facts.chat == one.in)
+    manage_detail::completed(box, one);
+}
 // Packs: listed, saved, an image uploaded -- in their dialog.
 template <class App>
 void program_told(App& app, const packs_listed& listed) {

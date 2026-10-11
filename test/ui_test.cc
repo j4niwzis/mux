@@ -2305,9 +2305,11 @@ TEST(Controls, RoomEventsReadSavedChoiceInsideManageDialog) {
   facts.speaks = mux::protocol::matrix{};
   const auto reopen = [&](std::size_t expected) {
     mux::ui::room_settings<stub> dialog(&colours, &looks, facts);
+    dialog.show_tab(mux::ui::settings_tab::general{});
+    dialog.update(0.0);
     skiff::bind::Binding<decltype(model)> binding;
     binding.refresh(dialog, model);
-    auto& general = spl::get<mux::ui::room_general_page_t>(dialog.holder().parts.page);
+    auto& general = spl::get<mux::ui::room_general_page_t>(dialog.page());
     auto& settings = std::get<2>(general.fParts);
     auto& events = std::get<0>(settings.fParts);
     EXPECT_EQ(std::get<0>(events.fParts).current, expected);
@@ -3122,4 +3124,128 @@ TEST(Info, MatrixProfileIdCopiesItsLinkAndImmediatelyConfirmsIt) {
   const auto copied = details.parts.id.onPress();
   EXPECT_EQ(copied.text, "https://matrix.to/#/@bob:example.org");
   EXPECT_EQ(details.parts.id.parts.feedback.text(), "ID · link copied, with its servers");
+}
+
+namespace {
+struct manage_test_box {
+  mux::ui::palette colours;
+  const mux::ui::palette* colours_ = &colours;
+  mux::ui::room_settings_facts facts;
+  mux::proto::matrix::manage_detail::part kept;
+  std::size_t refreshed = 0;
+  template <class State> auto& part() { return kept; }
+  void show_again() { ++refreshed; }
+};
+}
+
+TEST(RoomManagement, FailedPermissionSavePreservesTheDraftAndSavedRules) {
+  namespace matrix = mux::proto::matrix;
+  namespace manage = matrix::manage_detail;
+  manage_test_box box;
+  box.facts.mine = 100;
+  auto& rules = matrix::rules_in(box.facts.theirs);
+  rules.needs.events_default = 0;
+  rules.needs.state_default = 50;
+  const manage::permission_t message = manage::event_permission{"m.reaction", false};
+  const manage::permission_t state = manage::event_permission{"org.matrix.msc3401.call.member"};
+  EXPECT_EQ(manage::required(rules.needs, message), 0);
+  EXPECT_EQ(manage::required(rules.needs, state), 50);
+  typename manage::permission_actions<manage_test_box>::choose{&box, message, {0, 50}}(1);
+  ASSERT_TRUE(box.kept.permissions);
+  EXPECT_EQ(manage::required(rules.needs, message), 0);
+  EXPECT_EQ(manage::required(*box.kept.permissions, message), 50);
+  const auto asked = typename manage::permission_actions<manage_test_box>::apply{&box}();
+  ASSERT_TRUE(asked);
+  EXPECT_TRUE(box.kept.pending);
+  EXPECT_FALSE(typename manage::permission_actions<manage_test_box>::apply{&box}());
+  manage::completed(&box, matrix::management_saved{box.facts.chat, asked->change, "Forbidden"});
+  EXPECT_FALSE(box.kept.pending);
+  ASSERT_TRUE(box.kept.permissions);
+  EXPECT_EQ(box.kept.error, "Forbidden");
+  EXPECT_EQ(manage::required(rules.needs, message), 0);
+  const auto retry = typename manage::permission_actions<manage_test_box>::apply{&box}();
+  ASSERT_TRUE(retry);
+  manage::completed(&box, matrix::management_saved{box.facts.chat, retry->change, {}});
+  EXPECT_FALSE(box.kept.permissions);
+  EXPECT_EQ(manage::required(rules.needs, message), 50);
+}
+
+TEST(RoomManagement, EncryptionChangesOnlyAfterConfirmationAndAcknowledgement) {
+  namespace matrix = mux::proto::matrix;
+  namespace manage = matrix::manage_detail;
+  manage_test_box box;
+  box.facts.mine = 100;
+  typename manage::general_actions<manage_test_box>::encryption enable{&box};
+  EXPECT_FALSE(enable());
+  EXPECT_TRUE(box.kept.confirming_encryption);
+  EXPECT_FALSE(box.facts.encrypted);
+  const auto asked = enable();
+  ASSERT_TRUE(asked);
+  EXPECT_FALSE(box.facts.encrypted);
+  manage::completed(&box, matrix::management_saved{box.facts.chat, asked->change, "Forbidden"});
+  EXPECT_FALSE(box.facts.encrypted);
+  EXPECT_FALSE(enable());
+  const auto retry = enable();
+  ASSERT_TRUE(retry);
+  manage::completed(&box, matrix::management_saved{box.facts.chat, retry->change, {}});
+  EXPECT_TRUE(box.facts.encrypted);
+  EXPECT_FALSE(enable());
+}
+
+TEST(RoomManagement, SwitchingPagesPreservesTypedProfileAndDeveloperDrafts) {
+  namespace manage = mux::proto::matrix::manage_detail;
+  manage_test_box box;
+  box.facts.name = "Garden";
+  manage::preserve_draft(manage::general_draft<manage_test_box>{&box, "New garden", "Topic", "garden", "12", "@bob:example.org"});
+  ASSERT_TRUE(box.kept.profile);
+  EXPECT_EQ(box.kept.profile->name, "New garden");
+  EXPECT_EQ(box.kept.local_address, "garden");
+  EXPECT_EQ(box.kept.upgrade_creators, "@bob:example.org");
+  manage::preserve_draft(manage::developer_draft<manage_test_box>{&box, "m.tag", "{}"});
+  EXPECT_EQ(box.kept.account_type, "m.tag");
+  EXPECT_EQ(box.kept.account_json, "{}");
+}
+
+TEST(RoomManagement, NarrowScreensStartWithNavigationAndReturnToIt) {
+  mux::ui::palette colours;
+  mux::ui::looks_shown looks;
+  mux::ui::room_settings_facts facts;
+  facts.speaks = mux::protocol::matrix{};
+  mux::ui::room_settings<stub> dialog(&colours, &looks, facts);
+  scene::layout(dialog, skia::SkRect::MakeWH(390.0f, 620.0f));
+  dialog.update(0.0);
+  EXPECT_TRUE(dialog.navigation);
+  EXPECT_TRUE(dialog.tabs().visible());
+  EXPECT_FALSE(dialog.content().visible());
+  typename decltype(dialog)::pick_tab{&dialog, mux::proto::matrix::manage::members{}}();
+  dialog.update(0.0);
+  EXPECT_FALSE(dialog.navigation);
+  EXPECT_FALSE(dialog.tabs().visible());
+  EXPECT_TRUE(dialog.content().visible());
+  EXPECT_FALSE(typename decltype(dialog)::close_it{&dialog}());
+  EXPECT_TRUE(dialog.navigation);
+  EXPECT_TRUE(typename decltype(dialog)::close_it{&dialog}());
+  scene::layout(dialog, skia::SkRect::MakeWH(860.0f, 620.0f));
+  dialog.update(0.0);
+  EXPECT_TRUE(dialog.tabs().visible());
+  EXPECT_TRUE(dialog.content().visible());
+}
+
+TEST(RoomManagement, UploadedAvatarsStayInTheProfileDraftUntilSave) {
+  namespace matrix = mux::proto::matrix;
+  namespace manage = matrix::manage_detail;
+  manage_test_box box;
+  box.facts.mine = 100;
+  box.kept.pending = true;
+  box.kept.profile = matrix::room_change::set_profile{.name = "New garden"};
+  manage::avatar_uploaded(&box, matrix::room_avatar_uploaded{box.facts.chat, "mxc://example.org/new", {}});
+  EXPECT_FALSE(box.kept.pending);
+  ASSERT_TRUE(box.kept.profile);
+  EXPECT_EQ(box.kept.profile->name, "New garden");
+  EXPECT_EQ(box.kept.profile->avatar, "mxc://example.org/new");
+  EXPECT_FALSE(box.facts.avatar);
+  const auto change = *box.kept.profile;
+  manage::completed(&box, matrix::management_saved{box.facts.chat, change, {}});
+  EXPECT_EQ(box.facts.avatar, "mxc://example.org/new");
+  EXPECT_FALSE(box.kept.profile);
 }

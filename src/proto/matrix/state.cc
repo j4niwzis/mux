@@ -5,6 +5,7 @@ export module mux.proto.matrix.state;
 
 import std;
 import splice;
+import knot;
 import mux.proto.identity;
 
 export namespace mux::proto::matrix {
@@ -158,6 +159,99 @@ struct room_rules {
   std::string replaced_why;
   std::optional<std::string> predecessor;
 };
+// Cinny's named power levels are separate from the room's permissions.
+struct power_tag {
+  struct icon_t {
+    std::optional<std::string> key;
+    knot::raw rest;
+    friend consteval auto json_schema(knot::type<icon_t>) { return knot::schema<icon_t>().member<"rest">(knot::rest); }
+  };
+  std::string name;
+  std::optional<std::string> color;
+  std::optional<icon_t> icon;
+  knot::raw rest;
+  friend consteval auto json_schema(knot::type<power_tag>) { return knot::schema<power_tag>().member<"rest">(knot::rest); }
+};
+namespace membership_view {
+struct joined {};
+struct invited {};
+struct left {};
+struct kicked {};
+struct banned {};
+struct knocked {};
+struct unknown {};
+}
+using membership_view_t = spl::variant<membership_view::joined, membership_view::invited, membership_view::left,
+    membership_view::kicked, membership_view::banned, membership_view::knocked, membership_view::unknown>;
+struct managed_member {
+  std::string id, name;
+  std::optional<std::string> avatar;
+  membership_view_t membership;
+  std::int64_t timestamp = 0;
+};
+struct managed_account_data { std::string type, json; };
+struct room_management {
+  std::vector<std::string> local_aliases;
+  std::optional<bool> directory;
+  std::vector<std::string> versions;
+  std::string default_version;
+  std::map<std::string, power_tag> tags;
+  std::vector<managed_member> members;
+  std::vector<managed_account_data> account_data;
+};
+// What Matrix changes of a room beyond what every protocol does: who may
+// join, who reads its history, who has a say and what a thing done asks,
+// encryption, its version.
+namespace room_change {
+struct set_join_rule {
+  join_rule_t rule;
+};
+struct set_history {
+  history_rule_t rule;
+};
+struct set_power {
+  std::string user;
+  std::int64_t level = 0;
+};
+struct encrypt {};  // for good: it cannot be turned off
+struct set_need {  // the level a thing done asks
+  power_need_t need;
+  std::int64_t level = 0;
+};
+// Upgraded to a room version: a new room made, this one tombstoned.
+struct upgrade {
+  std::string version;
+  std::optional<std::vector<std::string>> creators;
+};
+// The level any kind of event asks, by its type -- one of the list's or not.
+struct set_event_need {
+  std::string event;
+  std::int64_t level = 0;
+};
+// Permission edits are sent together in one state event, preserving users
+// and extension fields from the latest server content.
+struct set_permissions { power_needs before, after; };
+struct set_tags { std::map<std::string, power_tag> tags; };
+struct set_directory { bool published = false; };
+struct create_alias { std::string alias; };
+struct delete_alias { std::string alias; };
+struct set_addresses { std::optional<std::string> main; std::vector<std::string> published; };
+struct set_account_data { std::string type, json; };
+struct set_profile { std::optional<std::string> name, topic, avatar; };
+// A space's room or space: listed in it (m.space.child), or no longer.
+struct add_child {
+  std::string room;
+};
+struct remove_child {
+  std::string room;
+};
+}  // namespace room_change
+using room_change_t = spl::variant<room_change::set_join_rule, room_change::set_history, room_change::set_power,
+                                      room_change::encrypt, room_change::set_need, room_change::upgrade,
+                                      room_change::set_event_need, room_change::add_child, room_change::remove_child,
+                                      room_change::set_permissions, room_change::set_tags, room_change::set_directory,
+                                      room_change::create_alias, room_change::delete_alias, room_change::set_addresses, room_change::set_profile, room_change::set_account_data>;
+
 constexpr room_part_list<room_rules> room_parts(const state&) { return {}; }
 
 }  // namespace mux::proto::matrix

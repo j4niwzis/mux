@@ -9,9 +9,23 @@ export module mux.proto.matrix.changes;
 import std;
 import splice;
 import mux.core.ids;
+import mux.proto.matrix.state;
 
 export namespace mux::proto::matrix {
 
+// Room management reads and writes report back to the page that requested
+// them. A failed write leaves its draft available for another attempt.
+struct management_loaded {
+  conversation_id in;
+  room_management data;
+  std::string error;
+};
+struct room_avatar_uploaded { conversation_id in; std::string uri, error; };
+struct management_saved {
+  conversation_id in;
+  room_change_t change;
+  std::string error;
+};
 struct verification_changed {
   account_id by;
   std::string txn;
@@ -119,10 +133,13 @@ struct sign_in_page {
   std::string url;
 };
 
-using changes = change_list<session_given, registration_page, sign_in_page, verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused, uia_in_browser>;
+using changes = change_list<management_loaded, management_saved, room_avatar_uploaded, session_given, registration_page, sign_in_page, verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused, uia_in_browser>;
 constexpr type_tag<changes> changes_type(const state&) { return {}; }
 
 // As the command line says them.
+inline std::string describe(const room_avatar_uploaded& one) { return one.error.empty() ? "Room avatar uploaded: " + one.in.id : one.error; }
+inline std::string describe(const management_loaded& one) { return "Room settings: " + one.in.id; }
+inline std::string describe(const management_saved& one) { return one.error.empty() ? "Room settings saved: " + one.in.id : one.error; }
 inline std::string describe(const session_given& one) { return one.account.address + " was given a session"; }
 inline std::string describe(const registration_page& one) { return one.account.address + ": registering on " + one.url; }
 inline std::string describe(const sign_in_page& one) { return one.account.address + ": signing in on " + one.url; }

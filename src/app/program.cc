@@ -124,6 +124,7 @@ struct app : kept_settings {
   void files_given(std::vector<std::string> paths, bool dropped) {
     if (took_files(packs, paths, dropped))
       return;
+    if (manage.took_files(paths, dropped)) return;
     if (looks.took_files(paths, dropped))
       return;
     if (profile_files_given(paths, dropped)) return;

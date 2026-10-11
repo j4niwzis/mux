@@ -23,6 +23,8 @@ import loom.cs.relations;
 import loom.cs.threads_list;
 import loom.cs.room_summary;
 import loom.cs.list_public_rooms;
+import loom.cs.directory;
+import loom.cs.capabilities;
 import loom.cs.space_hierarchy;
 import loom.cs.room_send;
 import loom.cs.rooms;
@@ -261,21 +263,83 @@ void account<Sink>::manage(std::string room, room_action_t action) {
   });
 }
 
+template <class Sink>
+void account<Sink>::fetch_room_settings(std::string room) {
+  this->spawn_guarded([this, room = std::move(room)] {
+    proto::matrix::management_loaded out{{id_, room}};
+    if (!api_) { out.error = "The account is not connected."; sink_(std::move(out)); return; }
+    const auto failure = [&](const auto& got) { if (!got) out.error += got.error().said() + "\n"; };
+    const auto aliases = perform(*api_, loom::cs::get_local_aliases{.room_id = room});
+    if (aliases) out.data.local_aliases = aliases->aliases; else failure(aliases);
+    const auto visibility = perform(*api_, loom::cs::get_room_visibility_on_directory{.room_id = room});
+    if (visibility && visibility->visibility) {
+      using values = loom::cs::get_room_visibility_on_directory::response_t::visibility_values;
+      out.data.directory = spl::visit(spl::overloaded{[](values::public_) { return true; }, [](const auto&) { return false; }}, *visibility->visibility);
+    } else failure(visibility);
+    const auto capabilities = perform(*api_, loom::cs::get_capabilities{});
+    if (capabilities && capabilities->capabilities.m_room_versions) {
+      const auto& versions = *capabilities->capabilities.m_room_versions;
+      out.data.versions = std::ranges::to<std::vector<std::string>>(std::views::keys(versions.available));
+      out.data.default_version = versions.default_;
+    } else failure(capabilities);
+    const auto tags = perform(*api_, loom::cs::get_room_state_with_key{
+        .room_id = room, .event_type = "in.cinny.room.power_level_tags", .state_key = ""});
+    if (tags) {
+      const auto typed = knot::try_read<std::map<std::string, proto::matrix::power_tag>>(tags->text);
+      if (typed) out.data.tags = *typed;
+    }
+    const auto members = perform(*api_, loom::cs::get_members_by_room{.room_id = room});
+    if (members && members->chunk) {
+      const auto mapped = std::views::transform(*members->chunk, [&](const auto& event) {
+        using namespace proto::matrix;
+        return spl::visit(spl::overloaded{[&](const loom::ev::m_room_member_content_t& content) -> std::optional<managed_member> {
+          if (!event.state_key) return std::nullopt;
+          using values = loom::ev::m_room_member_content_t::membership_values;
+          const auto status = spl::visit(spl::overloaded{
+              [](values::join) -> membership_view_t { return membership_view::joined{}; },
+              [](values::invite) -> membership_view_t { return membership_view::invited{}; },
+              [](values::ban) -> membership_view_t { return membership_view::banned{}; },
+              [](values::knock) -> membership_view_t { return membership_view::knocked{}; },
+              [&](values::leave) -> membership_view_t { return event.sender == *event.state_key ? membership_view_t{membership_view::left{}} : membership_view_t{membership_view::kicked{}}; },
+              [](const std::string&) -> membership_view_t { return membership_view::unknown{}; }}, content.membership);
+          return managed_member{*event.state_key, content.displayname.value_or(*event.state_key), content.avatar_url, status, event.origin_server_ts};
+        }, [](const auto&) -> std::optional<managed_member> { return std::nullopt; }}, event.content.data());
+      });
+      out.data.members = std::ranges::to<std::vector<proto::matrix::managed_member>>(std::views::transform(
+          std::views::filter(mapped, [](const auto& member) { return member.has_value(); }), [](const auto& member) { return *member; }));
+    } else failure(members);
+    if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
+      out.data.account_data = std::ranges::to<std::vector<proto::matrix::managed_account_data>>(std::views::transform(
+          kept->second.account_data, [](const auto& entry) { return proto::matrix::managed_account_data{entry.first, spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, entry.second.content.data())}; }));
+    sink_(std::move(out));
+  });
+}
+
 // What Matrix changes of a room beyond what every protocol does.
 template <class Sink>
 void account<Sink>::change_room(std::string room, proto::matrix::room_change_t change) {
   this->spawn_guarded([this, room = std::move(room), change = std::move(change)] {
-    if (!api_)
+    if (!api_) {
+      sink_(proto::matrix::management_saved{{id_, room}, change, "The account is not connected."});
       return;
-    const auto set = [&](std::string type, const auto& content) { this->set_room_state(room, std::move(type), content); };
+    }
+    std::string error;
+    const auto set = [&](std::string type, const auto& content, std::string key = {}) {
+      if (!error.empty()) return;
+      const auto done = perform(*api_, loom::cs::set_room_state_with_key{
+          .room_id = room, .event_type = std::move(type), .state_key = std::move(key), .body = as_body(content)});
+      if (!done) error = done.error().said();
+    };
     // The room's power levels as they are now: what a change is made on.
     const auto power_levels = [&] {
-      if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
-        if (const auto* now = kept->second.state.template content<power_levels_content>("m.room.power_levels"))
-          return *now;
-      return power_levels_content{};
+      const auto got = perform(*api_, loom::cs::get_room_state_with_key{
+          .room_id = room, .event_type = "m.room.power_levels", .state_key = ""});
+      if (!got) { error = got.error().said(); return power_levels_content{}; }
+      const auto typed = knot::try_read<power_levels_content>(got->text);
+      if (!typed) { error = "The room's power levels could not be read."; return power_levels_content{}; }
+      return *typed;
     };
-    const auto told = [&](const char* what, auto done) { this->told_failing(room, what, done); };
+    const auto told = [&](const char*, const auto& done) { if (!done) error = done.error().said(); };
     spl::visit(
         spl::overloaded{
             [&](const proto::matrix::room_change::set_join_rule& one) {
@@ -332,7 +396,7 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
             },
             // Upgraded: the server makes the new room and tombstones this one.
             [&](const proto::matrix::room_change::upgrade& one) {
-              told("upgrade", perform(*api_, loom::cs::upgrade_room{.room_id = room, .body = {.new_version = one.version}}));
+              told("upgrade", perform(*api_, loom::cs::upgrade_room{.room_id = room, .body = {.new_version = one.version, .additional_creators = one.creators}}));
             },
             // Any kind of event's: by its type, in the power levels' events.
             [&](const proto::matrix::room_change::set_event_need& one) {
@@ -342,18 +406,73 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
               content.events->insert_or_assign(one.event, static_cast<std::int64_t>(one.level));
               set("m.room.power_levels", content);
             },
+            [&](const proto::matrix::room_change::set_account_data& one) {
+              if (!knot::try_read<std::map<std::string, knot::raw>>(one.json)) { error = "The content must be a JSON object."; return; }
+              told("save account data", perform(*api_, loom::cs::set_account_data_per_room{
+                  .user_id = id_.address, .room_id = room, .type = one.type, .body = knot::raw{one.json}}));
+            },
+            [&](const proto::matrix::room_change::set_profile& one) {
+              if (one.name) { loom::ev::m_room_name_content_t content; content.name = *one.name; set("m.room.name", content); }
+              if (one.topic) { loom::ev::m_room_topic_content_t content; content.topic = *one.topic; set("m.room.topic", content); }
+              if (one.avatar) { loom::ev::m_room_avatar_content_t content; content.url = *one.avatar; set("m.room.avatar", content); }
+            },
+            [&](const proto::matrix::room_change::set_addresses& one) {
+              loom::ev::m_room_canonical_alias_content_t content;
+              content.alias = one.main;
+              content.alt_aliases = std::ranges::to<std::vector<std::string>>(std::views::filter(one.published, [&](const auto& alias) { return !one.main || alias != *one.main; }));
+              set("m.room.canonical_alias", content);
+            },
+            [&](const proto::matrix::room_change::create_alias& one) {
+              told("create address", perform(*api_, loom::cs::set_room_alias{.room_alias = one.alias, .body = {.room_id = room}}));
+            },
+            [&](const proto::matrix::room_change::delete_alias& one) {
+              told("delete address", perform(*api_, loom::cs::delete_room_alias{.room_alias = one.alias}));
+            },
+            [&](const proto::matrix::room_change::set_directory& one) {
+              using body = loom::cs::set_room_visibility_on_directory::body_t;
+              body content;
+              content.visibility = one.published ? body::visibility_t{body::visibility_values::public_{}} : body::visibility_t{body::visibility_values::private_{}};
+              told("publish room", perform(*api_, loom::cs::set_room_visibility_on_directory{.room_id = room, .body = content}));
+            },
+            [&](const proto::matrix::room_change::set_tags& one) { set("in.cinny.room.power_level_tags", one.tags); },
+            [&](const proto::matrix::room_change::set_permissions& one) {
+              auto content = power_levels();
+              const auto assign = [&](auto before, auto after, auto& target) { if (before != after) target = after; };
+              assign(one.before.users_default, one.after.users_default, content.users_default);
+              assign(one.before.events_default, one.after.events_default, content.events_default);
+              assign(one.before.state_default, one.after.state_default, content.state_default);
+              assign(one.before.invite, one.after.invite, content.invite);
+              assign(one.before.kick, one.after.kick, content.kick);
+              assign(one.before.ban, one.after.ban, content.ban);
+              assign(one.before.redact, one.after.redact, content.redact);
+              if (one.before.notify_room != one.after.notify_room) {
+                if (!content.notifications) content.notifications.emplace();
+                content.notifications->room = one.after.notify_room;
+              }
+              std::ranges::for_each(one.after.events, [&](const auto& item) {
+                const auto was = one.before.events.find(item.first);
+                if (was == one.before.events.end() || was->second != item.second) {
+                  if (!content.events) content.events.emplace();
+                  content.events->insert_or_assign(item.first, item.second);
+                }
+              });
+              set("m.room.power_levels", content);
+            },
             // Listed in the space, keyed by the room: through its own
             // server where its ID names one, else through this account's.
             [&](const proto::matrix::room_change::add_child& one) {
               loom::ev::m_space_child_content_t content;
               content.via = {this->server_of(one.room)};
-              this->set_room_state(room, "m.space.child", content, one.room);
+              set("m.space.child", content, one.room);
             },
             // No longer: its entry with no via, which the spec reads as none.
             [&](const proto::matrix::room_change::remove_child& one) {
-              this->set_room_state(room, "m.space.child", loom::ev::m_space_child_content_t{}, one.room);
+              set("m.space.child", loom::ev::m_space_child_content_t{}, one.room);
             }},
         change);
+    const bool saved = error.empty();
+    sink_(proto::matrix::management_saved{{id_, room}, change, std::move(error)});
+    if (saved) this->fetch_room_settings(room);
   });
 }
 

@@ -397,6 +397,9 @@ struct message {
   std::string reaction_key;
   // What its protocol has of it beyond this (message_parts), or none.
   message_part theirs;
+  // A local echo's position while its server timestamp is unknown. Delivery
+  // acknowledgements keep it; a received copy replaces it with server time.
+  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> local_order;
   friend bool operator==(const message&, const message&) = default;
 };
 

@@ -144,7 +144,7 @@ TEST(Model, ConfirmedEchoMovesBeforePendingMessagesByServerTime) {
   EXPECT_TRUE(std::ranges::is_sorted(kept.find(with_juliet)->timeline, {}, &message::at));
 }
 
-TEST(Model, AcknowledgingAnOlderLocalEchoRestoresChronologicalOrder) {
+TEST(Model, AcknowledgementKeepsLocalPositionUntilServerEcho) {
   model kept;
   auto received = said("recent", "received");
   received.at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::minutes(37));
@@ -155,8 +155,49 @@ TEST(Model, AcknowledgingAnOlderLocalEchoRestoresChronologicalOrder) {
   kept.apply(change::message_added{local});
   EXPECT_EQ(kept.find(with_juliet)->timeline.back().id, "txn");
   kept.apply(change::message_acknowledged{with_juliet, "txn", "confirmed"});
-  EXPECT_EQ(kept.find(with_juliet)->timeline.front().id, "confirmed");
+  EXPECT_EQ(kept.find(with_juliet)->timeline.back().id, "confirmed");
+  EXPECT_EQ(kept.find(with_juliet)->timeline.back().at, local.at);
+  kept.apply(change::delivery_changed{with_juliet, "confirmed", delivery::delivered{}});
+  EXPECT_EQ(kept.find(with_juliet)->timeline.back().id, "confirmed");
+  auto history = received;
+  history.id = "history";
+  history.at -= std::chrono::minutes(1);
+  kept.apply(change::message_added{history, placement::at_start{}});
+  EXPECT_EQ(kept.find(with_juliet)->timeline.back().id, "confirmed");
+  local.id = "confirmed";
+  local.delivery = delivery::sent{};
+  local.at = received.at + std::chrono::seconds(1);
+  kept.apply(change::message_added{local});
+  EXPECT_EQ(kept.find(with_juliet)->timeline.back().id, "confirmed");
+  EXPECT_FALSE(kept.find(with_juliet)->timeline.back().local_order);
   EXPECT_TRUE(std::ranges::is_sorted(kept.find(with_juliet)->timeline, {}, &message::at));
+}
+
+TEST(Model, LocalMessagesKeepSendOrderAcrossReversedAcknowledgements) {
+  for (bool threaded : {false, true}) {
+    model kept;
+    auto recent = said("recent", "received");
+    recent.at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::minutes(37));
+    if (threaded) recent.thread = "root";
+    kept.apply(change::message_added{recent});
+    auto first = said("first", "first", true);
+    first.at = recent.at - std::chrono::minutes(1);
+    first.delivery = delivery::sending{};
+    first.thread = recent.thread;
+    auto second = first;
+    second.id = "second";
+    second.at -= std::chrono::seconds(1);
+    kept.apply(change::message_added{first});
+    kept.apply(change::message_added{second});
+    kept.apply(change::message_acknowledged{with_juliet, "second", "second-sent"});
+    kept.apply(change::delivery_changed{with_juliet, "first", delivery::failed{}});
+    const auto* chat = kept.find(with_juliet);
+    const auto& rows = threaded ? chat->threads.at("root") : chat->timeline;
+    ASSERT_EQ(rows.size(), 3u);
+    EXPECT_EQ(rows[0].id, "recent");
+    EXPECT_EQ(rows[1].id, "first");
+    EXPECT_EQ(rows[2].id, "second-sent");
+  }
 }
 
 TEST(Model, Conversation) {

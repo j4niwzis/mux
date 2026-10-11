@@ -8,6 +8,24 @@ import mux.core;
 
 export namespace mux::logic {
 
+// Selected messages in their displayed order. Keep each timeline's order
+// when timestamps tie, including optimistic messages awaiting their echo.
+// A quoted copy never replaces the version already kept in a timeline.
+[[nodiscard]] inline std::vector<const message*> selected_messages(const conversation& chat, const auto& ids) {
+  const auto chosen = [&](const auto& messages) {
+    return std::views::transform(std::views::filter(messages, [&](const message& one) {
+      return !one.redacted && std::ranges::find(ids, one.id) != std::ranges::end(ids);
+    }), [](const message& one) { return &one; });
+  };
+  auto ordered = std::ranges::to<std::vector>(chosen(chat.timeline));
+  ordered.append_range(chosen(std::views::join(std::views::values(chat.threads))));
+  ordered.append_range(chosen(std::views::values(chat.quoted)));
+  std::set<std::string_view> seen;
+  std::erase_if(ordered, [&](const message* one) { return !seen.insert(one->id).second; });
+  std::ranges::stable_sort(ordered, {}, [](const message* one) { return one->local_order.value_or(one->at); });
+  return ordered;
+}
+
 // A reaction pressed: put where the user's is not, taken back where it is.
 [[nodiscard]] inline bool reaction_turns_on(const message& said, const std::string& key, const std::string& me) {
   const auto who = said.reactions.find(key);

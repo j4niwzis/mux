@@ -355,14 +355,14 @@ struct network {
             one.account);
     });
   }
-  // A message forwarded, within the account it is of.
-  void forward(const mux::conversation_id& from, std::string event, const mux::conversation_id& to) {
-    loop.post([this, from, event = std::move(event), to] {
+  // An ordered batch forwarded within its account, as one protocol request.
+  void forward(const mux::conversation_id& from, std::vector<std::string> events, const mux::conversation_id& to) {
+    loop.post([this, from, events = std::move(events), to] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == from.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.forward(from.id, event, to.id))) { a.forward(from.id, event, to.id); }, *account);
+                ask_if_able([&](auto& a) -> decltype(void(a.forward(from.id, events, to.id))) { a.forward(from.id, events, to.id); }, *account);
             },
             one.account);
     });

@@ -222,40 +222,44 @@ struct forwarded_mark {
 };
 
 template <class Sink>
-void account<Sink>::forward(std::string from, std::string event, std::string to) {
-  this->spawn_sending([this, from = std::move(from), event = std::move(event), to = std::move(to)] {
-    if (!api_)
-      return;
-    auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = from, .event_id = event});
-    if (!got) {
-      log(id_, "could not fetch {} to forward: {}", event, got.error().said());
-      return;
+void account<Sink>::forward(std::string from, std::vector<std::string> events, std::string to) {
+  this->spawn_sending([this, from = std::move(from), events = std::move(events), to = std::move(to)] {
+    // Fetching and sending each event finishes before the next begins.
+    // Separate fibers let a faster fetch overtake an earlier selection.
+    for (const auto& event : events) {
+      if (!api_)
+        return;
+      auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = from, .event_id = event});
+      if (!got) {
+        log(id_, "could not fetch {} to forward: {}", event, got.error().said());
+        continue;
+      }
+      // A message's content as it is typed, without what it answered or
+      // replaced: sent on as a message of its own. Anything else is not
+      // forwarded.
+      std::optional<loom::ev::m_room_message_content_t> content;
+      spl::visit(spl::overloaded{[&](const loom::ev::m_room_message_content_t& one) { content = one; },
+                                       [](const auto&) {}},
+                    got->content.data());
+      if (!content) {
+        log(id_, "{} is not a message: not forwarded", event);
+        continue;
+      }
+      content->m_relates_to.reset();
+      content->m_new_content.reset();
+      // As MSC2723 forwards: the content as it was, and where it is from
+      // beside it -- no words added to it; a client shows the forward its way.
+      content->rest = as_body(forwarded_mark{.forwarded = {.event_id = event,
+                                                           .room_id = from,
+                                                           .sender = got->sender,
+                                                           .origin_server_ts = static_cast<std::int64_t>(got->origin_server_ts)}});
+      auto done = this->send_room_event(loom::cs::send_message{.room_id = to,
+                                                        .event_type = "m.room.message",
+                                                        .txn_id = this->transaction(),
+                                                        .body = as_body(*content)});
+      if (!done)
+        log(id_, "could not forward {} to {}: {}", event, to, done.error().said());
     }
-    // A message's content as it is typed, without what it answered or
-    // replaced: sent on as a message of its own. Anything else is not
-    // forwarded.
-    std::optional<loom::ev::m_room_message_content_t> content;
-    spl::visit(spl::overloaded{[&](const loom::ev::m_room_message_content_t& one) { content = one; },
-                                     [](const auto&) {}},
-                  got->content.data());
-    if (!content) {
-      log(id_, "{} is not a message: not forwarded", event);
-      return;
-    }
-    content->m_relates_to.reset();
-    content->m_new_content.reset();
-    // As MSC2723 forwards: the content as it was, and where it is from
-    // beside it -- no words added to it; a client shows the forward its way.
-    content->rest = as_body(forwarded_mark{.forwarded = {.event_id = event,
-                                                         .room_id = from,
-                                                         .sender = got->sender,
-                                                         .origin_server_ts = static_cast<std::int64_t>(got->origin_server_ts)}});
-    auto done = this->send_room_event(loom::cs::send_message{.room_id = to,
-                                                      .event_type = "m.room.message",
-                                                      .txn_id = this->transaction(),
-                                                      .body = as_body(*content)});
-    if (!done)
-      log(id_, "could not forward {} to {}: {}", event, to, done.error().said());
   });
 }
 

@@ -431,8 +431,7 @@ void part_apply(menu_part& self, const request::forward_to& one) {
   if (!self.forwarding_ || self.s_->demo())
     return;
   const auto [from, events] = *std::exchange(self.forwarding_, std::nullopt);
-  for (const std::string& event : events)
-    self.s_->net->forward(from, event, one.to);
+  self.s_->net->forward(from, events, one.to);
   self.s_->notice("Forward", "Forwarded to " + [&] {
     const conversation* to = self.s_->model->find(one.to);
     return to ? mux::ui::display_name(*to) : one.to.id;
@@ -484,10 +483,7 @@ void part_apply(menu_part& self, const request::react& one) {
   const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
   if (!chat)
     return {};
-  auto all = std::views::transform(self.selected_, [&](const std::string& id) { return mux::ui::held_message(*chat, id); });
-  auto chosen = std::ranges::to<std::vector>(std::views::filter(all, [](const message* one) { return one && !one->redacted; }));
-  std::ranges::sort(chosen, [](const message* a, const message* b) { return std::tie(a->at, a->id) < std::tie(b->at, b->id); });
-  return chosen;
+  return mux::logic::selected_messages(*chat, self.selected_);
 }
 
 void show_selection(menu_part& self) {

@@ -184,10 +184,10 @@ class account {
   void manage(std::string room, room_action_t action);
   // What Matrix changes of a room beyond that: rules, levels, encryption, version.
   void change_room(std::string room, proto::matrix::room_change_t change);
-  // A message sent on to another room: its content as it is -- a picture's
+  // Messages sent on to another room in order: their content as it is -- a picture's
   // or a file's URL with it, so nothing is uploaded again -- less what tied
   // it to its own room (the reply it was).
-  void forward(std::string from, std::string event, std::string to);
+  void forward(std::string from, std::vector<std::string> events, std::string to);
   // A room made: a direct chat with someone -- written into m.direct, as
   // other clients know it is one -- or a group, private, with a name.
   void create_direct(std::string user);

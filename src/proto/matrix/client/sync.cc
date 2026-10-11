@@ -599,7 +599,7 @@ void account<Sink>::run() {
       loom::cs::sliding_sync ask{.pos = sliding_pos_, .timeout = sliding_first ? 0 : how_.sync_timeout.count()};
       ask.body.lists.emplace("all", loom::cs::sliding_sync::body_t::list_t{.ranges = {{0, sliding_range_ - 1}},
                                                                              .required_state = kRequiredState,
-                                                                             .timeline_limit = 20});
+                                                                             .timeline_limit = 1});
       // The room being read: more of its newest, wherever it is in the list.
       if (followed_room_)
         ask.body.room_subscriptions = std::map<std::string, loom::cs::sliding_sync::body_t::subscription_t>{
@@ -726,9 +726,11 @@ bool account<Sink>::save_kept() const {
     return false;
   using response = loom::cs::sync::response;
   using joined_t = response::rooms_t::joined_room_t;
-  response out;
-  out.next_batch = *state_.since;
-  std::map<std::string, joined_t> join;
+  // Serialize one room at a time instead of duplicating every typed event
+  // in the account while the complete JSON checkpoint is also being built.
+  std::string checkpoint = "{\"next_batch\":" + knot::to_json_string(*state_.since) +
+                           ",\"rooms\":{\"join\":{";
+  bool comma = false;
   for (const auto& [room, kept] : state_.joined) {
     joined_t one;
     std::vector<loom::ev::timeline_event> state_events;
@@ -745,17 +747,22 @@ bool account<Sink>::save_kept() const {
     for (const auto& [type, event] : kept.account_data)
       data.push_back(event);
     one.account_data = joined_t::account_data_t{.events = std::move(data)};
-    join.emplace(room, std::move(one));
+    if (std::exchange(comma, true))
+      checkpoint += ',';
+    checkpoint += knot::to_json_string(room);
+    checkpoint += ':';
+    checkpoint += knot::to_json_string(one);
   }
-  out.rooms = response::rooms_t{.join = std::move(join)};
+  checkpoint += "}},\"account_data\":";
   std::vector<loom::client::other_event> data;
   for (const auto& [type, event] : state_.account_data)
     data.push_back(event);
-  out.account_data = response::account_data_t{.events = std::move(data)};
+  checkpoint += knot::to_json_string(response::account_data_t{.events = std::move(data)});
+  checkpoint += '}';
   // Through the vault: the rooms' events and state, sealed where local data
   // is encrypted.
   const std::filesystem::path where = this->kept_file();
-  if (!how_.vault->write_file(where, knot::to_json_string(out))) {
+  if (!how_.vault->write_file(where, checkpoint)) {
     log(id_, "the sync could not be kept in {}", where.string());
     return false;
   }

@@ -103,7 +103,7 @@ cme_declare_port(NAME tern PROVIDES tern
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG cf76d9f2c7179b411944f6e24df05f4335da8d7a
+  GIT_TAG e4b88f0bd2efe1d1c0e0d0568e6584950b6cd3cf
   VERSION 0.1.1
   LICENSE AGPL-3.0-only
   TARGETS loom)
@@ -239,7 +239,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin fc82ec949e73c8c87447c37e4a8863c4e9da8f04)
+set(mux_skiff_pin cca3f3c24d97bb32b2b8b1666982e04140ff83cd)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}

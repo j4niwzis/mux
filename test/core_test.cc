@@ -21,6 +21,25 @@ message said(std::string id, std::string text, bool outgoing = false) {
                  .outgoing = outgoing};
 }
 
+TEST(Model, TrimmingInactiveHistoryReleasesItsCapacity) {
+  model kept;
+  for (int i = 0; i < 100; ++i) {
+    auto one = said(std::to_string(i), "message");
+    one.at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(i));
+    kept.apply(change::message_added{std::move(one)});
+  }
+  kept.trim(1, with_juliet);
+  ASSERT_EQ(kept.find(with_juliet)->timeline.size(), 100u);
+  kept.trim(1, std::nullopt);
+  const auto* chat = kept.find(with_juliet);
+  ASSERT_NE(chat, nullptr);
+  ASSERT_EQ(chat->timeline.size(), 1u);
+  EXPECT_LE(chat->timeline.capacity(), 1u);
+  EXPECT_EQ(chat->timeline.back().id, "99");
+  EXPECT_FALSE(chat->detached);
+  EXPECT_EQ(chat->history_from, "");
+}
+
 TEST(Model, PackMetadataSharesStorageAndRetainsOldRevisions) {
   model kept;
   emote_list images{{.shortcode = "party", .url = "mxc://example/party", .body = "Party"}};

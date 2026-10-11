@@ -68,9 +68,9 @@ struct sticker_kept {
 // it is, and has only its own protocol's keys.
 // How much is kept, in memory and on disk: what the Storage page sets.
 struct cache_limits {
-  std::int64_t messages_in_memory = 5000;
+  std::int64_t messages_in_memory = 500;
   std::int64_t messages_on_disk_mb = 512;
-  std::int64_t pictures_in_memory_mb = 32;
+  std::int64_t pictures_in_memory_mb = 4;
   std::int64_t pictures_on_disk_mb = 512;
   // Deleted messages kept on disk, apart from the rest: none said is 256.
   std::optional<std::int64_t> deleted_on_disk_mb;

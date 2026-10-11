@@ -597,7 +597,8 @@ class model {
     for (const conversation_id& id : trimmed)
       this->in_chat(id, [](conversation& chat) {
         const message last = newest(chat) ? *newest(chat) : chat.timeline.back();
-        chat.timeline.assign(1, last);
+        // Release the old backing allocation as well as its messages.
+        chat.timeline = std::vector<message>{last};
         chat.detached = false;
         chat.future_from.reset();
         chat.history_from = std::string();  // from the newest

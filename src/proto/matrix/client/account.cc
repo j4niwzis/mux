@@ -127,6 +127,9 @@ class account {
  public:
   account(net::loop& loop, net::tls& tls, settings how, Sink sink)
       : loop_(&loop), tls_(&tls), how_(std::move(how)), sink_(std::move(sink)) {
+    // Displayed history lives in the message store. The protocol only needs
+    // a short suffix for gap detection and reaction sender lookup.
+    state_.timeline_limit = 20;
     id_ = account_id{protocol::matrix{}, how_.user_id};
     const auto colon = how_.user_id.find(':');
     localpart_ = how_.user_id.substr(how_.user_id.starts_with('@') ? 1 : 0,

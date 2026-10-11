@@ -409,3 +409,20 @@ TEST(Model, OptimisticEditEchoAssignsItsIdWithoutInventingAnotherVersion) {
   EXPECT_EQ(latest.versions[1].event, "$edit1");
   EXPECT_EQ(latest.latest_edit_event, "$edit2");
 }
+
+TEST(Model, PresenceRevisionTracksStatusChangesWithoutDuplicateRefreshes) {
+  model kept;
+  const account_id other{protocol::xmpp{}, "other@example.net"};
+  kept.apply(change::presence_changed{other, with_juliet.id, {availability::away{}, "Working"}});
+  kept.apply(change::presence_changed{romeo, with_juliet.id, {availability::online{}, {}}});
+  ASSERT_NE(kept.accounts().find(romeo), nullptr);
+  EXPECT_EQ(kept.accounts().find(romeo)->presence_revision, 1u);
+  kept.apply(change::presence_changed{romeo, with_juliet.id, {availability::online{}, {}}});
+  EXPECT_EQ(kept.accounts().find(romeo)->presence_revision, 1u);
+  kept.apply(change::presence_changed{romeo, with_juliet.id, {availability::online{}, "Available"}});
+  EXPECT_EQ(kept.accounts().find(romeo)->presence_revision, 2u);
+  EXPECT_EQ(kept.accounts().find(other)->presence_revision, 1u);
+  kept.apply(change::presence_changed{romeo, with_juliet.id, {availability::offline{}, {}}});
+  EXPECT_EQ(kept.accounts().find(romeo)->presence_revision, 3u);
+  EXPECT_EQ(kept.accounts().find(romeo)->presences.at(with_juliet.id).state, availability_t{availability::offline{}});
+}

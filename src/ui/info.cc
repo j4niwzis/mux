@@ -96,7 +96,7 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
   // Whose members those are, at which revision of them.
   std::optional<conversation_id> members_of;
   std::uint64_t members_revision = 0;
-  std::uint64_t trust_seen = 0;
+  std::uint64_t trust_seen = 0, presence_seen = 0;
   // Only the first of them made, and more as the list is scrolled near its
   // end, as Qt's fetchMore: a big room has thousands, each with its role,
   // badges and presence worked out, and all of them were made at every
@@ -315,11 +315,14 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
     if (members_of != one.id)
       members_made = kMembersStep;
     const std::size_t making = std::min(members_made, one.members.size());
+    const auto* owner = now.accounts().find(one.id.account);
+    const auto presence_revision = owner ? owner->presence_revision : 0;
     const bool same_members = members_of == one.id && members_revision == one.members_revision &&
-                              trust_seen == now.trust_revision() && members_built == making;
+                              trust_seen == now.trust_revision() && presence_seen == presence_revision && members_built == making;
     members_of = one.id;
     members_revision = one.members_revision;
     trust_seen = now.trust_revision();
+    presence_seen = presence_revision;
     members_total = one.members.size();
     if (!same_members) {
       shown_members.clear();

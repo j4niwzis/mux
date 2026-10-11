@@ -722,6 +722,7 @@ class account {
   // What the rooms a sync named look like now, and what their timelines
   // brought.
   void tell(const loom::cs::sync::response& got);
+  void tell_presence(const loom::cs::sync::response& got);
 
   // A room's picture: its own, or, for a chat with one other person, theirs.
   std::optional<std::string> avatar_of(const std::string& room, const loom::client::joined_room& kept) const;

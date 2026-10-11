@@ -23,6 +23,7 @@ import loom.cs.redaction;
 import loom.cs.room_send;
 import loom.cs.rooms;
 import loom.cs.sync;
+import loom.cs.filter;
 import loom.cs.typing;
 import loom.cs.wellknown;
 import mux.config;
@@ -565,6 +566,22 @@ void account<Sink>::run() {
 
   std::chrono::seconds backoff(1);
   while (!stopping_) {
+    // MSC4186 has no presence extension. A room-free classic sync supplies
+    // a presence snapshot. Never advance its cursor: /sync also carries
+    // to-device messages, and acknowledging them here could discard keys
+    // before the sliding sync's encryption extension receives them.
+    if (sliding_ && api_) {
+      using filter = loom::cs::define_filter::filter_t;
+      static const auto presence_filter = knot::to_json_string(filter{
+          .presence = filter::event_filter_t{.types = std::vector<std::string>{"m.presence"}},
+          .account_data = filter::event_filter_2_t{.types = std::vector<std::string>{}},
+          .room = filter::room_filter_t{.rooms = std::vector<std::string>{}}});
+      auto presences = perform(*api_, loom::cs::sync{
+          .filter = presence_filter, .set_presence = chosen_presence_, .timeout = 0}, std::chrono::seconds(15));
+      if (presences) tell_presence(*presences);
+      if (stopping_) return;
+    }
+
     // Lighter than the server's whole state: a room's last messages (the
     // rest is paged back to) and only the members who speak in them. The
     // first sync still gathers every room, and on a large account the
@@ -896,10 +913,7 @@ void account<Sink>::receive_notifications(const loom::ev::account_data_event& ev
 }
 
 template <class Sink>
-void account<Sink>::tell(const loom::cs::sync::response& got) {
-  if (got.account_data && got.account_data->events)
-    for (const auto& event : *got.account_data->events) receive_notifications(event);
-  flush_notifications();
+void account<Sink>::tell_presence(const loom::cs::sync::response& got) {
   // Presence: each m.presence is sent by the user it is about.
   if (got.presence && got.presence->events)
     for (const auto& event : *got.presence->events)
@@ -909,6 +923,14 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
                               },
                               [](const auto&) {}},
                    event.content.data());
+}
+
+template <class Sink>
+void account<Sink>::tell(const loom::cs::sync::response& got) {
+  if (got.account_data && got.account_data->events)
+    for (const auto& event : *got.account_data->events) receive_notifications(event);
+  flush_notifications();
+  tell_presence(got);
   const auto affects_packs = [](const auto& event) {
     return spl::visit(spl::overloaded{
         [](const loom::ev::im_ponies_user_emotes_content_t&) { return true; },

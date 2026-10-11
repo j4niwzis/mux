@@ -785,6 +785,7 @@ struct account {
   std::uint64_t profile_result = 0;
   std::optional<std::string> profile_error;
   std::map<std::string, presence> presences;          // by contact
+  std::uint64_t presence_revision = 0;
 };
 
 // ---------------------------------------------------------------------------

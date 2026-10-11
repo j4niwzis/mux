@@ -343,7 +343,13 @@ class account {
   void fetch_profile(std::string user) {
     this->spawn_guarded([this, user = std::move(user)] {
       if (!session_) return;
-      auto card = session_->template try_request<tern::query::profile_items>({.to = user});
+      std::string address = user;
+      if (const auto room = rooms_.find(bare(user)); room != rooms_.end()) {
+        const auto& people = room->second.settings.people;
+        const auto person = std::ranges::find(people, resource_of(user), &muc_person::nick);
+        if (person != people.end() && !person->jid.empty()) address = person->jid;
+      }
+      auto card = session_->template try_request<tern::query::profile_items>({.to = address});
       if (card && card->items) {
         const auto found = std::ranges::find_if(card->items->items, [](const auto& item) { return item.profile.has_value(); });
         if (found != card->items->items.end()) {
@@ -353,7 +359,7 @@ class account {
         }
       }
       if (!session_) return;
-      if (auto legacy = session_->template try_request<tern::query::legacy_profile_get>({.to = user}))
+      if (auto legacy = session_->template try_request<tern::query::legacy_profile_get>({.to = address}))
         sink_(change::profile_found{id_, user, legacy->name ? legacy->name : legacy->nickname, {},
             profile_details{.biography = {legacy->description.value_or(""), {}}}});
       else if (user == id_.address)

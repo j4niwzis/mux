@@ -213,6 +213,7 @@ struct profile_editor : skiff::compose::Stacked {
     Answer operator()() const {
       page->pending = true;
       page->parts.feedback.setText("Saving…");
+      page->parts.feedback.setVisible(true);
       return {page->by, page->answer()};
     }
   };
@@ -260,7 +261,8 @@ struct profile_editor : skiff::compose::Stacked {
     parts.pronouns.multi_line(3); parts.biography.multi_line(6);
     parts.banner.setVisible(Policy::banners); parts.remove_banner.setVisible(Policy::banners);
     std::ranges::for_each(std::array<scene::Node*, 4>{&parts.banner, &parts.remove_banner, &parts.submit, &parts.presence},
-        [](auto* node) { node->apply({.height = 36.0f}); });
+        [](auto* node) { node->apply({.fillX = true, .height = 36.0f}); });
+    parts.feedback.setVisible(false);
     if (const auto* account = known->accounts().find(by)) result = account->profile_result;
     reload();
   }
@@ -313,6 +315,7 @@ struct profile_editor : skiff::compose::Stacked {
       if (pending && !account->profile_error) reload();
       pending = false;
       parts.feedback.setText(account->profile_error.value_or("Profile saved."));
+      parts.feedback.setVisible(true);
     }
     if (!initialized) reload();
     if (account) {

@@ -721,7 +721,13 @@ class model {
       this->in_account(one.id.account, [&](account& kept) { (void)kept.conversations.take(one.id.id); });
   }
   void on(const change::presence_changed& one) {
-    this->in_account(one.account, [&](account& kept) { kept.presences[one.contact] = one.now; });
+    this->in_account(one.account, [&](account& kept) {
+      const auto found = kept.presences.find(one.contact);
+      if (found == kept.presences.end() || found->second != one.now) {
+        kept.presences.insert_or_assign(one.contact, one.now);
+        ++kept.presence_revision;
+      }
+    });
   }
   // Reactions come before the message they are on is here (it is further
   // back, or in a thread not loaded): kept until it comes, then put on it.

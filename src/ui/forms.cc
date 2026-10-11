@@ -89,14 +89,17 @@ struct field : skiff::compose::Stacked {
 };
 
 // A link put on what is selected in the message field, as tdesktop's
-// EditLinkBox: its text and its URL, the forms' own fields; Done puts it on,
+// EditLinkBox: its text and its URL, the forms' own fields; Apply puts it on,
 // Esc or Cancel leaves the field as it was.
 // A link being put on what is selected: the text, and the link it has.
 struct link_facts {
   std::string text;
   std::string url;
 };
-struct link_draft { std::string text, url; };
+struct link_draft {
+  std::string text, url;
+  link_facts original;
+};
 struct submit_link {};
 struct link_events {
   auto on(submit_link, const link_draft& draft) const {
@@ -109,10 +112,20 @@ inline auto link_box(const palette& colours, const link_facts& facts) {
       skiff::compose::styled({.fillX = true}, nodes::Text(facts.url.empty() ? "Add link" : "Edit link", 17.0f, colours.text, true)),
       model_field<&link_draft::text>(colours, "Text", "Text"),
       model_field<&link_draft::url>(colours, "URL", "https://"),
-      widgets::SendButton<submit_link>(colours.widgets, "Done", {}),
-      widgets::SendButton<request::close_link>(colours.widgets, "Cancel", {})), link_draft{facts.text, facts.url});
+      skiff::compose::row(skiff::compose::hbox(8.0f, {.fillX = true, .height = 36.0f}),
+          skiff::compose::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX},
+              widgets::SendButton<request::close_link>(colours.widgets, "Cancel", {})),
+          skiff::compose::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX},
+              primary(widgets::SendButton<submit_link>(colours.widgets, "Apply", {}))))),
+      link_draft{facts.text, facts.url, facts});
 }
 using link_box_t = decltype(link_box(std::declval<const palette&>(), std::declval<const link_facts&>()));
+// Keep the local draft and focused fields while the same link is shown.
+inline bool content_persistent(std::type_identity<link_box_t>) { return true; }
+inline bool content_matches(const link_box_t& up, const link_facts& facts) {
+  const auto& original = up.fModel.root().original;
+  return original.text == facts.text && original.url == facts.url;
+}
 inline dialog_look content_look(std::type_identity<link_box_t>) { return {.size = dialog_size::fitting{400.0f}}; }
 template <class Needs>
 auto make_content(std::type_identity<link_box_t>, const Needs& needs, const link_facts& facts) {

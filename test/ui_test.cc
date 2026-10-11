@@ -1619,7 +1619,7 @@ TEST(Forms, LinkEditorSubmitsItsModelFields) {
       skiff::model::setTo(std::string("Changed"))));
   skiff::bind::Binding<model_t> binding;
   binding.refresh(box, model);
-  ASSERT_TRUE(skiff::bind::press(box, model, scene::Path{3}, &requests));
+  ASSERT_TRUE(skiff::bind::press(box, model, scene::Path{3, 1}, &requests));
   ASSERT_TRUE(requests.saved.has_value());
   EXPECT_EQ(requests.saved->text, "Changed");
   EXPECT_EQ(requests.saved->url, "https://example.com");
@@ -1634,6 +1634,58 @@ TEST(Forms, ExpressionDialogUsesItsFactoryAndDeclaredLook) {
   dialog.read(std::optional(mux::ui::link_facts{"Text", "https://example.com"}));
   ASSERT_NE(dialog.shown(), nullptr);
   EXPECT_EQ(dialog.shown()->fModel.root().text, "Text");
+  const auto original_id = dialog.shown()->id();
+  dialog.shown()->fModel.apply(skiff::model::over<skiff::model::Field<&mux::ui::link_draft::text>>(
+      skiff::model::setTo(std::string("Edited"))));
+  dialog.read(std::optional(mux::ui::link_facts{"Text", "https://example.com"}));
+  ASSERT_NE(dialog.shown(), nullptr);
+  EXPECT_EQ(dialog.shown()->id(), original_id);
+  EXPECT_EQ(dialog.shown()->fModel.root().text, "Edited");
+  dialog.read(std::optional(mux::ui::link_facts{"Another", "https://other.example"}));
+  EXPECT_EQ(dialog.shown()->fModel.root().text, "Another");
+  EXPECT_EQ(dialog.shown()->fModel.root().url, "https://other.example");
+}
+
+TEST(Forms, LinkEditorActionsAreVisibleAndReceivePointerPresses) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
+  struct sink {
+    int applied = 0, cancelled = 0;
+    void take(const mux::ui::request::set_link&) { ++applied; }
+    void take(const mux::ui::request::close_link&) { ++cancelled; }
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  for (const float width : {240.0f, 390.0f, 1000.0f}) {
+    auto box = mux::ui::link_box(colours, {"Text", "https://example.com"});
+    scene::Scene<decltype(box)> window{std::move(box)};
+    window.layoutIfNeeded(skia::SkRect::MakeWH(width, 400.0f));
+    auto& footer = std::get<3>(window.root().fParts);
+    const auto cancel = std::get<0>(footer.fParts).bounds();
+    const auto apply = std::get<1>(footer.fParts).bounds();
+    EXPECT_LT(cancel.fRight, apply.fLeft);
+    scene::InputRouter router;
+    const std::array layers{scene::InputRouter::Layer{window.handle(), false}};
+    router.setLayers(layers);
+    for (const auto bounds : {cancel, apply}) {
+      ASSERT_GT(bounds.width(), 0.0f);
+      ASSERT_GE(bounds.height(), 36.0f);
+      EXPECT_GE(bounds.fLeft, window.root().bounds().fLeft);
+      EXPECT_LE(bounds.fRight, window.root().bounds().fRight);
+      EXPECT_LE(bounds.fBottom, window.root().bounds().fBottom);
+      scene::hostWork().pressed.clear();
+      router.pointer(scene::PointerEvent{scene::pointer::down{bounds.centerX(), bounds.centerY()}});
+      router.pointer(scene::PointerEvent{scene::pointer::up{bounds.centerX(), bounds.centerY()}});
+      const auto presses = std::exchange(scene::hostWork().pressed, {});
+      ASSERT_EQ(presses.size(), 1u);
+      for (const auto& path : presses)
+        ASSERT_TRUE(skiff::bind::press(window.root(), model, path, &requests));
+    }
+  }
+  EXPECT_EQ(requests.applied, 3);
+  EXPECT_EQ(requests.cancelled, 3);
 }
 
 TEST(Forms, PassphraseSubmissionReadsBoundModel) {

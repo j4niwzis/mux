@@ -110,9 +110,10 @@ struct id_line_t : skiff::compose::Stacked {
     return true;
   }
   request::copy_text onPress() {
-    // Update the clicked row before delivering the clipboard request. A
-    // cached info panel need not be refreshed to show its confirmation.
+    // The confirmation can wrap to more lines. Invalidate the whole row
+    // so a cached info panel lays it out and repaints at the next frame.
     parts.feedback.setText(confirmation_);
+    this->invalidateLayout();
     return {copied_};
   }
   [[nodiscard]] scene::Semantics semantics() const {

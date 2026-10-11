@@ -1604,7 +1604,12 @@ TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
     skiff::bind::Binding<model_t> binding;
     binding.refresh(view.root(), model);
     const auto viewport = skia::SkRect::MakeWH(240.0f, 640.0f);
+    view.update(0.0);
     view.layoutIfNeeded(viewport);
+    (void)view.finishFrame();
+    view.update(16.0);
+    view.layoutIfNeeded(viewport);
+    EXPECT_TRUE(view.finishFrame().fDamage.isEmpty());
     scene::InputRouter router;
     const std::array layers{scene::InputRouter::Layer{view.handle(), false}};
     router.setLayers(layers);
@@ -1618,13 +1623,20 @@ TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
     const auto presses = std::exchange(scene::hostWork().pressed, {});
     ASSERT_EQ(presses.size(), 1u);
     for (const auto& path : presses) ASSERT_TRUE(skiff::bind::press(view.root(), model, path, &requests));
-    binding.refresh(view.root(), model);
-    view.layoutIfNeeded(viewport);
+    // A settled scene must show the wrapped confirmation in its next
+    // frame, without a binding refresh or a changed viewport.
+    view.update(32.0);
+    EXPECT_TRUE(view.layoutIfNeeded(viewport));
     const auto& feedback = view.root().parts.feedback;
     EXPECT_EQ(feedback.text(), link.empty() ? "ID · copied" : "ID · link copied, with its servers");
     EXPECT_GT(feedback.bounds().width(), 0.0f);
     EXPECT_GT(feedback.bounds().height(), 0.0f);
     EXPECT_TRUE(view.root().bounds().contains(feedback.bounds()));
+    EXPECT_GT(feedback.bounds().height(), link.empty() ? 0.0f : 26.0f);
+    const auto frame = view.finishFrame();
+    EXPECT_TRUE(std::ranges::any_of(frame.fDamageRects, [&](const auto& piece) {
+      return skia::SkRect::Intersects(piece, feedback.bounds());
+    }));
     ASSERT_FALSE(requests.copied.empty());
     EXPECT_EQ(requests.copied.back(), link.empty() ? id : link);
   }
@@ -2743,6 +2755,9 @@ TEST(Composer, QuotedEmojiKeepTheirOriginalSourcesAndDraftFormatting) {
 }
 
 TEST(Controls, MemoizedRoomIdKeepsCopyFeedbackWithoutAnOuterModelChange) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  struct clear_font { ~clear_font() { skiff::paint::defaultFont() = nullptr; } } clear;
   struct sink {
     std::vector<std::string> copied;
     void take(const mux::ui::request::copy_text& request) { copied.push_back(request.text); }
@@ -2750,10 +2765,19 @@ TEST(Controls, MemoizedRoomIdKeepsCopyFeedbackWithoutAnOuterModelChange) {
   using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
   model_t model(0);
   mux::ui::palette colours;
-  skiff::nodes::Memo<int, mux::ui::id_line_t> header;
+  scene::Scene<skiff::nodes::Memo<int, mux::ui::id_line_t>> view;
+  auto& header = view.root();
+  header.fState.apply({.fillX = true, .autoSize = scene::axes::kY});
   header.show(1, [&](int) { return mux::ui::id_line(colours, "!room:example.com", "https://matrix.to/#/!room:example.com"); });
   skiff::bind::Binding<model_t> binding;
   binding.refresh(header, model);
+  const auto viewport = skia::SkRect::MakeWH(240.0f, 640.0f);
+  view.update(0.0);
+  view.layoutIfNeeded(viewport);
+  (void)view.finishFrame();
+  view.update(16.0);
+  view.layoutIfNeeded(viewport);
+  EXPECT_TRUE(view.finishFrame().fDamage.isEmpty());
   auto& label = header.content()->parts.feedback;
   const auto id = label.fState.id();
   ASSERT_TRUE(skiff::bind::press(header, model, scene::Path{0}, &requests));
@@ -2761,6 +2785,13 @@ TEST(Controls, MemoizedRoomIdKeepsCopyFeedbackWithoutAnOuterModelChange) {
   EXPECT_EQ(label.text(), "ID · link copied, with its servers");
   EXPECT_EQ(label.fState.id(), id);
   EXPECT_EQ(model.root(), 0);
+  view.update(32.0);
+  EXPECT_TRUE(view.layoutIfNeeded(viewport));
+  EXPECT_TRUE(header.bounds().contains(label.bounds()));
+  const auto frame = view.finishFrame();
+  EXPECT_TRUE(std::ranges::any_of(frame.fDamageRects, [&](const auto& piece) {
+    return skia::SkRect::Intersects(piece, label.bounds());
+  }));
 }
 
 TEST(Composer, ReplacementActionRemainsVisibleInNarrowPanes) {

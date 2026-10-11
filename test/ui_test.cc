@@ -3212,6 +3212,11 @@ TEST(RoomManagement, NarrowScreensStartWithNavigationAndReturnToIt) {
   mux::ui::room_settings_facts facts;
   facts.speaks = mux::protocol::matrix{};
   mux::ui::room_settings<stub> dialog(&colours, &looks, facts);
+  EXPECT_EQ(&dialog.context.facts, &dialog.facts);
+  EXPECT_EQ(&dialog.context.template part<mux::proto::matrix::state>(),
+            &dialog.template part<mux::proto::matrix::state>());
+  dialog.context.show_again();
+  EXPECT_TRUE(dialog.settling());
   scene::layout(dialog, skia::SkRect::MakeWH(390.0f, 620.0f));
   dialog.update(0.0);
   EXPECT_TRUE(dialog.navigation);

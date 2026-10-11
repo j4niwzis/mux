@@ -500,7 +500,7 @@ struct config_row : skiff::compose::Stacked {
   struct parts_t { config_label label; editor input; } parts;
   muc_field original;
   config_row(const palette& colours, const muc_field& f)
-      : Stacked(skiff::compose::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .maxWidth = 435.0f, .alignSelf = scene::align::kMiddle})),
+      : Stacked(skiff::compose::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .maxWidth = 435.0f, .alignSelf = scene::align::kStart})),
         parts{.label = config_label(colours, f), .input = editor(colours, f)}, original(f) {
     spl::visit(spl::overloaded{
         [&](muc_kind::text_single) {}, [&](muc_kind::text_private) {}, [&](muc_kind::text_multi) {},

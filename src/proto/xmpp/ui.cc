@@ -356,7 +356,7 @@ inline std::vector<std::string> lines_of(std::string_view text) {
 struct config_label : nodes::Text {
   std::string description;
   config_label(const palette& colours, const muc_field& f)
-      : Text(f.label + (f.required ? " *" : ""), 13.0f, colours.text), description(f.description) {
+      : nodes::Text(f.label + (f.required ? " *" : ""), 13.0f, colours.text), description(f.description) {
     this->setWrapped(true);
     this->apply({.width = 120.0f, .alignSelf = scene::align::kMiddle});
   }

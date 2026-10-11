@@ -431,7 +431,12 @@ void part_apply(menu_part& self, const request::forward_to& one) {
   if (!self.forwarding_ || self.s_->demo())
     return;
   const auto [from, events] = *std::exchange(self.forwarding_, std::nullopt);
-  self.s_->net->forward(from, events, one.to);
+  const auto* chat = self.s_->model->find(from);
+  auto sources = std::ranges::to<std::vector>(std::views::transform(events, [&](const std::string& id) {
+    const message* kept = chat ? mux::ui::held_message(*chat, id) : nullptr;
+    return kept ? mux::logic::forward_source_of(*kept) : forward_source{.event = id};
+  }));
+  self.s_->net->forward(from, std::move(sources), one.to);
   self.s_->notice("Forward", "Forwarded to " + [&] {
     const conversation* to = self.s_->model->find(one.to);
     return to ? mux::ui::display_name(*to) : one.to.id;

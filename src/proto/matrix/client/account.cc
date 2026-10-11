@@ -187,7 +187,7 @@ class account {
   // Messages sent on to another room in order: their content as it is -- a picture's
   // or a file's URL with it, so nothing is uploaded again -- less what tied
   // it to its own room (the reply it was).
-  void forward(std::string from, std::vector<std::string> events, std::string to);
+  void forward(std::string from, std::vector<forward_source> events, std::string to);
   // A room made: a direct chat with someone -- written into m.direct, as
   // other clients know it is one -- or a group, private, with a name.
   void create_direct(std::string user);

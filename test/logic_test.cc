@@ -355,3 +355,24 @@ TEST(Messages, SelectionKeepsThreadOrderForTiedTimestamps) {
   EXPECT_EQ(chosen[0], &chat.threads.at("root")[0]);
   EXPECT_EQ(chosen[1], &chat.threads.at("root")[1]);
 }
+
+TEST(Messages, ForwardUsesTheCurrentEditedBodyAndOriginalEventId) {
+  message one;
+  one.id = "$original";
+  one.body = {"Before", "<b>Before</b>"};
+  EXPECT_FALSE(logic::forward_source_of(one).replacement);
+  one.versions.push_back({.body = one.body, .event = one.id});
+  one.edited = true;
+  one.latest_edit_event = "$edit";
+  one.body = {"After", "<i>After</i>"};
+  const auto source = logic::forward_source_of(one);
+  EXPECT_EQ(source.event, "$original");
+  ASSERT_TRUE(source.replacement);
+  EXPECT_EQ(*source.replacement, one.body);
+  one.body = {"Plain edit", {}};
+  const auto plain = logic::forward_source_of(one);
+  ASSERT_TRUE(plain.replacement);
+  EXPECT_EQ(plain.replacement->plain, "Plain edit");
+  EXPECT_FALSE(plain.replacement->html);
+  EXPECT_EQ(source.replacement->plain, "After");
+}

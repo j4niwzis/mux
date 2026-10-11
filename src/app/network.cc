@@ -356,7 +356,7 @@ struct network {
     });
   }
   // An ordered batch forwarded within its account, as one protocol request.
-  void forward(const mux::conversation_id& from, std::vector<std::string> events, const mux::conversation_id& to) {
+  void forward(const mux::conversation_id& from, std::vector<mux::forward_source> events, const mux::conversation_id& to) {
     loop.post([this, from, events = std::move(events), to] {
       for (auto& one : accounts)
         spl::visit(

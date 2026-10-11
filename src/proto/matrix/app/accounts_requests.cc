@@ -64,7 +64,7 @@ template account<mux::app::post_change>::uia_way_t account<mux::app::post_change
 template void account<mux::app::post_change>::finish_cross_signing(const crypto::cross_signing_secrets& secrets, const std::string& master_pub, const std::string& self_pub);
 template std::string account<mux::app::post_change>::server_of(const std::string& room) const;
 template void account<mux::app::post_change>::create_group(std::string name);
-template void account<mux::app::post_change>::forward(std::string from, std::vector<std::string> events, std::string to);
+template void account<mux::app::post_change>::forward(std::string from, std::vector<forward_source> events, std::string to);
 template void account<mux::app::post_change>::fetch_quoted(std::string room, std::string target);
 template void account<mux::app::post_change>::load_context(std::string room, std::string target);
 template void account<mux::app::post_change>::load_newer(std::string room, std::string from);

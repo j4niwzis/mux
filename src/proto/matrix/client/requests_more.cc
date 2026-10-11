@@ -222,11 +222,12 @@ struct forwarded_mark {
 };
 
 template <class Sink>
-void account<Sink>::forward(std::string from, std::vector<std::string> events, std::string to) {
+void account<Sink>::forward(std::string from, std::vector<forward_source> events, std::string to) {
   this->spawn_sending([this, from = std::move(from), events = std::move(events), to = std::move(to)] {
     // Fetching and sending each event finishes before the next begins.
     // Separate fibers let a faster fetch overtake an earlier selection.
-    for (const auto& event : events) {
+    for (const auto& source : events) {
+      const auto& event = source.event;
       if (!api_)
         return;
       auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = from, .event_id = event});
@@ -245,9 +246,14 @@ void account<Sink>::forward(std::string from, std::vector<std::string> events, s
         log(id_, "{} is not a message: not forwarded", event);
         continue;
       }
+      if (source.replacement) {
+        content->body = source.replacement->plain;
+        content->formatted_body = source.replacement->html;
+        content->format = source.replacement->html ? std::optional<std::string>("org.matrix.custom.html") : std::nullopt;
+      }
       content->m_relates_to.reset();
       content->m_new_content.reset();
-      // As MSC2723 forwards: the content as it was, and where it is from
+      // As MSC2723 forwards: the current content, and where it is from
       // beside it -- no words added to it; a client shows the forward its way.
       content->rest = as_body(forwarded_mark{.forwarded = {.event_id = event,
                                                            .room_id = from,

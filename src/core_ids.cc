@@ -118,6 +118,14 @@ struct body {
   friend bool operator==(const body&, const body&) = default;
 };
 
+// A forward keeps the original event's attribution and media. An edited
+// message supplies the latest body shown by the client, not an old version.
+struct forward_source {
+  std::string event;
+  std::optional<mux::body> replacement;
+  friend bool operator==(const forward_source&, const forward_source&) = default;
+};
+
 // Global profile data, independent of its protocol's wire representation.
 struct pronouns {
   std::string language, summary;

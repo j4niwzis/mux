@@ -8,6 +8,10 @@ import mux.core;
 
 export namespace mux::logic {
 
+[[nodiscard]] inline forward_source forward_source_of(const message& one) {
+  return {one.id, one.edited ? std::optional(one.body) : std::nullopt};
+}
+
 // Selected messages in their displayed order. Keep each timeline's order
 // when timestamps tie, including optimistic messages awaiting their echo.
 // A quoted copy never replaces the version already kept in a timeline.

@@ -3212,6 +3212,7 @@ TEST(RoomManagement, NarrowScreensStartWithNavigationAndReturnToIt) {
   mux::ui::room_settings_facts facts;
   facts.speaks = mux::protocol::matrix{};
   mux::ui::room_settings<stub> dialog(&colours, &looks, facts);
+  static_assert(std::same_as<std::invoke_result_t<typename decltype(dialog)::pick_tab&>, skiff::model::Nothing>);
   EXPECT_EQ(&dialog.context.facts, &dialog.facts);
   EXPECT_EQ(&dialog.context.template part<mux::proto::matrix::state>(),
             &dialog.template part<mux::proto::matrix::state>());

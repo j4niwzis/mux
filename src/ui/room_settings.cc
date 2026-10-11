@@ -517,10 +517,11 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   struct pick_tab {
     room_settings* box;
     settings_tab_t tab;
-    void operator()() const {
+    skiff::model::Nothing operator()() const {
       box->to_top = true;
       box->navigation = false; box->picked = true;
       box->show_tab(tab);
+      return {};
     }
   };
 

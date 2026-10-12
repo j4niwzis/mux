@@ -24,6 +24,8 @@ struct room {  // !room:server or #alias:server, and a message in it
   std::optional<account_id> by;
   friend bool operator==(const room&, const room&) = default;
 };
+// The room it names, by its id or alias.
+[[nodiscard]] inline std::optional<std::string> room_id_of(const room& one) { return one.id; }
 }  // namespace link
 using any_link = spl::variant<link::person, link::room>;
 constexpr type_tag<logic::link_list<link::person, link::room>> links_type(const state&) { return {}; }

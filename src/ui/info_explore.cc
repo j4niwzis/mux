@@ -18,18 +18,14 @@ import :controls;
 import :themes;
 import :forms;
 export namespace mux::ui {
+// The room an address typed names: one its protocol joins at once, else the
+// room a link to it names.
 inline std::optional<std::string> room_address_for(const std::optional<account_id>& by, std::string_view query) {
   if (!by) return std::nullopt;
-  if (by->speaks == protocol_t(protocol::xmpp{})) {
-    const auto room = proto::xmpp::room_address(query);
-    return room ? std::optional(room->jid) : std::nullopt;
-  }
+  if (auto room = proto::directory_room(by->speaks, query)) return room;
   auto link = mux::logic::link_of_id(query);
   if (!link) link = mux::logic::link_of(query);
-  if (!link) return std::nullopt;
-  return spl::visit(spl::overloaded{
-      [](const proto::matrix::link::room& room) { return std::optional(room.id); },
-      [](const auto&) { return std::optional<std::string>(); }}, *link);
+  return link ? mux::logic::linked_room(*link) : std::nullopt;
 }
 template <class Actions> struct directory_join {
   using Answer = std::variant<request::explore_space, request::join_directory_room>;
@@ -115,7 +111,7 @@ auto explore_view(const palette& colours, const explore_facts& facts) {
       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 6.0f, 0.0f, 6.0f}}),
           c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX},
               model_field<&explore_draft::query>(colours, "Find a room",
-                  facts.by && facts.by->speaks == protocol_t(protocol::xmpp{}) ? "Name or room@conference.example.org" : "Name, topic, or address")),
+                  std::string(facts.by ? proto::directory_hint(facts.by->speaks) : std::string_view("Name, topic, or address")))),
           c::visible(!facts.space, c::styled({.width = 170.0f, .relativeSize = scene::axes::kNone},
               model_field<&explore_draft::server>(colours, "Server", facts.own_server))),
           c::styled({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},

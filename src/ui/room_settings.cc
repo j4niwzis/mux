@@ -121,6 +121,8 @@ constexpr bool tab_visible(const auto&, const room_settings_facts&) { return tru
 // And what a protocol keeps while its pages are made again: none by default.
 struct no_part {};
 constexpr type_tag<no_part> manage_part_type(const auto&) { return {}; }
+// A room avatar being sent: what a part shows of it, where it shows any.
+constexpr void avatar_sending(auto&) {}
 }  // namespace manage_defaults
 // Asked of a state type the caller names: dependent on it, so found where
 // the dialog is made, not here.
@@ -529,6 +531,14 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   template <class Tag> using tabs_of_t = typename context_type::template tabs_of_t<Tag>;
   using protocol_tabs = typename context_type::protocol_tabs;
   template <class State> [[nodiscard]] auto& part() { return context.template part<State>(); }
+  // A room avatar being sent: each protocol's part told.
+  void avatar_sending() {
+    std::apply([](auto&... parts) {
+      using manage_defaults::avatar_sending;
+      (avatar_sending(parts), ...);
+    }, context.protocol_parts);
+    show_again();
+  }
   template <class Tab>
   using page_of_t = typename decltype(page_type(Tab{}, type_tag<context_type>{}))::type;
   template <class List>

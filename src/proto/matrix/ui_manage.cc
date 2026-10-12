@@ -132,6 +132,8 @@ template <class Box> void loaded(Box* box, const management_loaded& one) {
     if (found != kept.data.state_events.end()) { kept.state_source = found->json; kept.state_json = found->content_json; }
   }
 }
+// A room avatar being sent: shown as pending, the last error gone.
+inline void avatar_sending(part& kept) { kept.pending = true; kept.error.clear(); }
 template <class Box> void avatar_uploaded(Box* box, const room_avatar_uploaded& one) {
   auto& kept = box->template part<state>();
   box->show_again(); // Preserve fields before adding the upload to their draft.

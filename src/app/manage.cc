@@ -103,10 +103,8 @@ class manage_part {
     if (!kind || !skia::decodeImage(bytes->data(), bytes->size())) {
       s_->notice("Room Avatar", "Choose an image mux can show."); return true;
     }
-    if (auto* box = s_->root().manage_up(); box && box->facts.chat == room) {
-      auto& kept = box->template part<mux::proto::matrix::state>();
-      kept.pending = true; kept.error.clear(); box->show_again();
-    }
+    if (auto* box = s_->root().manage_up(); box && box->facts.chat == room)
+      box->avatar_sending();
     s_->net->on_account_of(room, [room = room.id, bytes = std::move(*bytes), name = mux::platform::files::name(paths.front()),
         mime = std::string(mux::media::mimetype_of(*kind))](auto& account)
         -> decltype(void(account.upload_room_avatar(room, bytes, name, mime))) { account.upload_room_avatar(room, bytes, name, mime); });

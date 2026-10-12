@@ -60,6 +60,17 @@ std::optional<link_t> as_some_link(const std::optional<Theirs>& read) {
     return as_link(*read);
   return std::nullopt;
 }
+// The room a link names, by its id, where its kind names one: found by ADL
+// in the kind's namespace; none by default.
+namespace link_defaults {
+inline std::optional<std::string> room_id_of(const auto&) { return std::nullopt; }
+}  // namespace link_defaults
+[[nodiscard]] inline std::optional<std::string> linked_room(const link_t& link) {
+  return spl::visit([](const auto& kind) {
+    using link_defaults::room_id_of;
+    return room_id_of(kind);
+  }, link);
+}
 template <class Tag>
 std::optional<link_t> read_link_of(std::string_view url) {
   using links_defaults::read_link;

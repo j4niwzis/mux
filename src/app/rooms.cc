@@ -168,11 +168,10 @@ class rooms_part {
     const auto by = facts ? facts->by : std::nullopt;
     if (!by || s_->demo())
       return;
-    if (by->speaks == mux::protocol_t(mux::protocol::xmpp{}))
-      if (const auto room = mux::proto::xmpp::room_address(one.query)) {
-        this->apply(request::join_directory_room{room->jid, one.server});
-        return;
-      }
+    if (auto room = mux::proto::directory_room(by->speaks, one.query)) {
+      this->apply(request::join_directory_room{std::move(*room), one.server});
+      return;
+    }
     if (auto link = mux::logic::link_of_id(one.query); link && mux::proto::owns_address(mux::ui::protocol_state_of(s_->ui, *by), one.query)) {
       mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt);
       s_->link_due = *link;
@@ -198,8 +197,13 @@ class rooms_part {
     std::vector<std::string> via;
     if (!one.server.empty())
       via.push_back(one.server);
-    if (by->speaks == mux::protocol_t(mux::protocol::xmpp{}))
-      s_->joining = mux::proto::xmpp::link::room{one.room, by};
+    // The protocol's own link to it, where it has one; else the room's.
+    const auto own = spl::visit([&]<class Tag>(Tag) {
+      using mux::proto::directory_defaults::directory_link;
+      return mux::logic::as_some_link(directory_link(mux::state_of<Tag>{}, one.room, *by));
+    }, by->speaks);
+    if (own)
+      s_->joining = own;
     else if (const auto link = mux::logic::link_of_id(one.room))
       s_->joining = mux::logic::on_account(*link, *by);
     else

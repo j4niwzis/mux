@@ -128,4 +128,32 @@ inline constexpr struct person_action_asked_t {
   }
 } person_action_asked{};
 
+// Explore, as a protocol has it: the hint in its search field; a room's
+// address typed there that is joined at once, not looked up (XMPP's
+// XEP-0045 rooms); and the link a room joined from its directory is opened
+// by once it comes, in the protocol's own link type (as_some_link makes it
+// any link). Asked of the protocol's default state, by its tag: only which
+// protocol the account speaks is known where they are asked.
+namespace directory_defaults {
+constexpr std::string_view directory_hint(const auto&) { return "Name, topic, or address"; }
+inline std::optional<std::string> directory_room(const auto&, std::string_view) { return std::nullopt; }
+inline std::optional<std::monostate> directory_link(const auto&, std::string_view, const account_id&) { return std::nullopt; }
+}  // namespace directory_defaults
+inline constexpr struct directory_hint_t {
+  std::string_view operator()(const protocol_t& which) const {
+    return spl::visit([]<class Tag>(Tag) {
+      using directory_defaults::directory_hint;
+      return std::string_view(directory_hint(state_of<Tag>{}));
+    }, which);
+  }
+} directory_hint{};
+inline constexpr struct directory_room_t {
+  std::optional<std::string> operator()(const protocol_t& which, std::string_view query) const {
+    return spl::visit([&]<class Tag>(Tag) {
+      using directory_defaults::directory_room;
+      return directory_room(state_of<Tag>{}, query);
+    }, which);
+  }
+} directory_room{};
+
 }  // namespace mux::proto

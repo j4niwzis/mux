@@ -221,7 +221,7 @@ using person_rows_t = decltype(skiff::compose::many(skiff::compose::vbox(),
     person_rows(std::declval<const palette&>(), std::declval<const new_chat_facts&>())));
 inline auto start_chat_view(const palette& colours, const new_chat_facts& facts) {
   namespace c = skiff::compose;
-  const auto words = proto::direct_chat_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol::matrix{}));
+  const auto words = proto::direct_chat_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol_t{}));
   return c::scoped<new_chat_facts>(start_chat_events{facts.by, facts.inviting}, c::column(
       c::vbox(8.0f, {.fill = true, .padding = {0.0f, 12.0f, 16.0f, 12.0f}}),
       page_header<no_back, sends<request::close_new_chat>>(colours, facts.inviting ? "Invite to " + facts.room_name : "Start chat", {}, {}, false, true),
@@ -321,7 +321,7 @@ inline auto room_access_choice(const palette& colours, std::string label, room_a
 inline auto create_room_view(const palette& colours, const new_room_facts& facts) {
   namespace c = skiff::compose;
   using access = skiff::model::Field<&room_draft::access>;
-  const auto form = proto::room_creation_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol::matrix{}), facts.own_server);
+  const auto form = proto::room_creation_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol_t{}), facts.own_server);
   return c::local<room_draft>(room_creation_events{facts, form}, c::column(
       c::vbox(8.0f, {.fill = true, .padding = {0.0f, 22.0f, 18.0f, 22.0f}}),
       page_header<no_back, sends<request::close_new_room>>(colours,

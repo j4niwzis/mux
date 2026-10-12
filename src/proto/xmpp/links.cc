@@ -41,6 +41,16 @@ constexpr type_tag<logic::link_list<link::address, link::room>> links_type(const
   return link::room{parsed->str(), std::nullopt};
 }
 
+// Explore: a room's address typed in is joined at once, not looked up; a
+// room joined from the directory is opened by its own link, on the account.
+[[nodiscard]] constexpr std::string_view directory_hint(const state&) { return "Name or room@conference.example.org"; }
+[[nodiscard]] inline std::optional<std::string> directory_room(const state&, std::string_view query) {
+  return room_address(query).transform([](const link::room& room) { return room.jid; });
+}
+[[nodiscard]] inline std::optional<any_link> directory_link(const state&, std::string_view room, const account_id& by) {
+  return any_link{link::room{std::string(room), by}};
+}
+
 // xmpp:<jid>[?...]
 [[nodiscard]] inline std::optional<any_link> read_link(const state&, std::string_view url) {
   constexpr std::string_view scheme = "xmpp:";

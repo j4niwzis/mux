@@ -35,6 +35,12 @@ namespace contract {
 struct media_pages {
   static constexpr std::string_view name = "the media panel's pages";
 };
+// A message's menu, its rows after Save As (mux.ui:context_menu):
+//   extend(c, f, type_tag<Actions>, palette, menu_facts) -> its row: shown,
+//   or not, as the facts say, and what it sends its plugin's own
+struct message_menu {
+  static constexpr std::string_view name = "a message's menu";
+};
 // The program's parts (mux.app.program): extend(c, f, services&) -> a part,
 // offered the requests as the program's own are.
 struct program_parts {

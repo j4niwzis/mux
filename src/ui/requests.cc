@@ -565,7 +565,14 @@ struct insert_emoji {
 };
 // The GIFs: one saved from its menu, the saved ones shown in the input's
 // panel, and one of them sent.
-struct menu_save_gif {};
+// A file shown, its whole kept where it is asked to be -- a GIF among the
+// saved ones -- from the disk where it is kept once it has loaded; said as
+// the asker words it.
+struct keep_whole {
+  std::string source;
+  std::string to;  // the file it is written to
+  std::string title, not_loaded, kept;
+};
 struct menu_pin {};
 // A message's reactions as the events they are, in a window of their own.
 struct menu_reactions {};

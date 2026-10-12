@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.plugin.gifs.app -- The GIFs' part of the program: the saved ones read
 // from where they are kept, for their page, each decoded on a worker into
-// the frames it plays.
+// the frames it plays; and one kept among them, from a message's menu.
 export module mux.plugin.gifs.app;
 
 import std;
@@ -11,7 +11,6 @@ import mux.platform.files;
 import mux.ui;
 import mux.app.services;
 import mux.app.workers;
-import mux.app.pictures;
 import mux.plugin.gifs.types;
 
 export namespace mux::plugins::gifs {
@@ -20,6 +19,18 @@ struct part {
   app::services* s_ = nullptr;
   // What is being decoded now: not asked twice.
   std::set<std::string> decoding_;
+  // Where the saved GIFs are kept: with the program's state, not its cache,
+  // which is pruned.
+  static std::filesystem::path saved() { return config::state_path("gifs"); }
+
+  // One kept among them, by its source: named by it, so saving it twice keeps
+  // one; written anew, so it comes first. The pictures part has its whole.
+  template <class Asked>
+  void apply(const save& one, const Asked& asked) {
+    ui::show<ui::menu_facts>(*s_->showing, std::nullopt);
+    asked(ui::request::keep_whole{one.source, (saved() / config::file_name_of(one.source)).string(), "GIFs",
+                                  "The GIF has not loaded yet. Save it once it plays.", "Saved to your GIFs."});
+  }
 
   // The saved GIFs, newest first, to their page; each decoded on a worker
   // into the frames it plays, where it is not already.
@@ -27,7 +38,7 @@ struct part {
     const auto chosen = s_->root().main().chosen;
     if (!chosen || !ui::may_send_files(s_->ui, chosen->account)) return;
     std::error_code failed;
-    auto kept = std::filesystem::directory_iterator(app::pictures_part::gifs(), failed) |
+    auto kept = std::filesystem::directory_iterator(saved(), failed) |
                 std::views::filter([&](const auto& entry) { return entry.is_regular_file(failed); }) |
                 std::views::transform([&](const auto& entry) { return std::pair{entry.last_write_time(failed), entry.path().string()}; }) |
                 std::ranges::to<std::vector>();

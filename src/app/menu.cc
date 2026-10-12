@@ -63,7 +63,6 @@ void part_apply(menu_part& self, const request::selection_forward&);
 void keep_selection(menu_part& self);
 void part_apply(menu_part& self, const request::menu_edit_history&);
 void part_apply(menu_part& self, const request::forward_to& one);
-void part_apply(menu_part& self, const request::menu_save_gif&);
 void part_apply(menu_part& self, const request::menu_delete&);
 void part_apply(menu_part& self, const request::menu_react& one);
 void part_apply(menu_part& self, const request::react& one);
@@ -441,12 +440,6 @@ void part_apply(menu_part& self, const request::forward_to& one) {
     const conversation* to = self.s_->model->find(one.to);
     return to ? mux::ui::display_name(*to) : one.to.id;
   }());
-}
-
-void part_apply(menu_part& self, const request::menu_save_gif&) {
-  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  if (self.target_.media)
-    self.pictures_->save_gif(*self.target_.media);
 }
 
 void part_apply(menu_part& self, const request::menu_delete&) {

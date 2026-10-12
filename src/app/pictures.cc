@@ -536,25 +536,21 @@ class pictures_part {
     });
   }
 
-  // A GIF kept among the saved ones: its whole, from the disk where it is
-  // kept once it has played. Named by its source, so saving it twice keeps
-  // one; touched, so it comes first.
-  void save_gif(const std::string& source) {
-    const auto kept = kept_file(media_use::whole{}, source);
+  // A file shown, its whole kept where it is asked to be: from the disk
+  // where it is kept once it has loaded; written anew, so it is touched.
+  void apply(const request::keep_whole& one) {
+    const auto kept = kept_file(media_use::whole{}, one.source);
     auto bytes_read = kept ? spl::bytes::file_text(*kept) : std::nullopt;
     if (!bytes_read) {
-      s_->notice("GIFs", "The GIF has not loaded yet. Save it once it plays.");
+      s_->notice(one.title, one.not_loaded);
       return;
     }
-    std::string bytes = std::move(*bytes_read);
+    const std::filesystem::path to(one.to);
     std::error_code failed;
-    std::filesystem::create_directories(gifs(), failed);
-    std::ofstream(gifs() / mux::config::file_name_of(source), std::ios::binary) << bytes;
-    s_->notice("GIFs", "Saved to your GIFs.");
+    std::filesystem::create_directories(to.parent_path(), failed);
+    std::ofstream(to, std::ios::binary) << *bytes_read;
+    s_->notice(one.title, one.kept);
   }
-  // Where the saved GIFs are kept: with the program's state, not its cache,
-  // which is pruned. Read by the GIFs plugin, for its page.
-  static std::filesystem::path gifs() { return mux::config::state_path("gifs"); }
 
   // A picture or a file saved where the user says: the system's dialog
   // first, offering Downloads and its name -- a picture's type added where

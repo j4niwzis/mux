@@ -17,6 +17,7 @@ import skiff.widgets.textbox;
 import mux.core;
 import mux.config;
 import mux.logic.emoji;
+import mux.plugins.types;
 import :base;
 import :icons;
 import :controls;
@@ -252,7 +253,24 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
     using fave_row = row_item<sends<::mux::ui::request::menu_fave_sticker>>;
     using copy_image_row = row_item<sends<::mux::ui::request::menu_copy_image>>;
     using save_row = row_item<sends<::mux::ui::request::menu_save>>;
-    using gif_row = row_item<sends<::mux::ui::request::menu_save_gif>>;
+    // The rows plugins add to a message's menu (contract::message_menu),
+    // after Save As, in the plugins' order: each made by its extend(), found
+    // where the window is instantiated, which imports them (mux.plugins.ui).
+    template <class List>
+    struct plugin_rows;
+    template <class... Features>
+    struct plugin_rows<plugin_list<Features...>> {
+      template <class Feature>
+      static auto row_of(const palette& colours, const menu_facts& facts) {
+        static_assert(requires { extend(contract::message_menu{}, type_tag<Feature>{}, type_tag<Actions>{}, colours, facts); },
+                      composition::broken<contract::message_menu, Feature>());
+        return extend(contract::message_menu{}, type_tag<Feature>{}, type_tag<Actions>{}, colours, facts);
+      }
+      using nodes_t =
+          std::tuple<decltype(row_of<Features>(std::declval<const palette&>(), std::declval<const menu_facts&>()))...>;
+      static nodes_t nodes(const palette& colours, const menu_facts& facts) { return nodes_t{row_of<Features>(colours, facts)...}; }
+    };
+    using rows_t = plugin_rows<composition::providers<contract::message_menu, enabled_plugins>>;
     using pin_row = row_item<sends<::mux::ui::request::menu_pin>>;
     using reactions_row = row_item<sends<::mux::ui::request::menu_reactions>>;
     using forward_row = row_item<sends<::mux::ui::request::menu_forward>>;
@@ -283,7 +301,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
       decltype(emoji_favourite_row(std::declval<const palette&>(), std::declval<const emoji_kept&>(), std::optional<emote>{})) fave_emoji;
       copy_image_row copy_image;
       save_row save;
-      gif_row save_gif;
+      typename rows_t::nodes_t added;
       reactions_row reactions;
       forward_row forward;
       source_row source;
@@ -297,7 +315,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
       std::optional<emoji_panel<react_with<Actions>>> emoji;
     } parts;
     void expand() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, fave_emoji, copy_image, save, save_gif, reactions, forward, source, history, select,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, fave_emoji, copy_image, save, added, reactions, forward, source, history, select,
              remove, seen_band, seen, emoji] = parts;
       if (emoji)
         return;
@@ -324,12 +342,13 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
     // The items, once the list is down over them: gone, the menu keeping
     // its size by its least height.
     void hide_items() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, fave_emoji, copy_image, save, save_gif, reactions, forward, source, history, select, remove,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, fave_emoji, copy_image, save, added, reactions, forward, source, history, select, remove,
              seen_band, seen, emoji] = parts;
       for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_url, &fave, &fave_emoji, &copy_image, &save,
-                                                                   &save_gif, &reactions, &forward, &source,
+                                                                   &reactions, &forward, &source,
                                                                    &remove, &seen_band, &seen})
         item->setVisible(false);
+      std::apply([](auto&... row) { (row.setVisible(false), ...); }, added);
       this->invalidateLayout();
     }
     static constexpr float kEmojiLeast = 220.0f;
@@ -432,10 +451,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
                   facts.media.has_value(),
                   save_row(colours, "Save As…", {}, icon::send{}, std::nullopt,
                            menu_row_look)),
-              .save_gif = skiff::compose::visible(
-                  facts.media.has_value() && facts.moving,
-                  gif_row(colours, "Save GIF", {}, icon::check{}, std::nullopt,
-                          menu_row_look)),
+              .added = rows_t::nodes(colours, facts),
               .reactions = skiff::compose::visible(
                   !facts.id.empty() && (facts.can.react || facts.reaction_count > 0),
                   reactions_row(
@@ -469,7 +485,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
                                          nodes::Box<>(colours.band)),
               .seen = seen_row<Actions>(colours, facts.seen)} {
       fState.setFloats(true);  // over the chat: frosted live, where asked
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, fave_emoji, copy_image, save, save_gif, reactions, forward, source, history, select,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, fave_emoji, copy_image, save, added, reactions, forward, source, history, select,
              remove, seen_band, seen, emoji] = parts;
       // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
       // 13px normalFont's line -- 33 high -- the icon 15 in, the text 54 in.

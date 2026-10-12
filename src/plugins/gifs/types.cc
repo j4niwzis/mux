@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.plugin.gifs.types -- What the GIFs plugin names, and what it says it
-// provides: a page of the media panel, and a part of the program. Light:
-// mux.ui sees it, to know the page and what is shown on it.
+// provides: a page of the media panel, a row of a message's menu, and a part
+// of the program. Light: mux.ui sees it, to know the page and what is shown
+// on it.
 export module mux.plugin.gifs.types;
 
 import std;
@@ -22,8 +23,12 @@ struct shown {
   std::vector<std::string> paths;
   friend bool operator==(const shown&, const shown&) = default;
 };
-// Asked of the program: the saved GIFs, as its page is opened.
+// Asked of the program: the saved GIFs, as its page is opened; and one
+// kept among them, from a message's menu, by its source.
 struct show {};
+struct save {
+  std::string source;
+};
 
 consteval bool provides(contract::media_pages, type_tag<feature>) { return true; }
 constexpr type_tag<page> page_type(contract::media_pages, type_tag<feature>) { return {}; }
@@ -33,6 +38,7 @@ constexpr std::string_view tab_name(page) { return "GIFs"; }
 constexpr bool shown_where(page, const auto& facts) { return facts.files; }
 constexpr show opened(page) { return {}; }
 
+consteval bool provides(contract::message_menu, type_tag<feature>) { return true; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
 
 }  // namespace mux::plugins::gifs

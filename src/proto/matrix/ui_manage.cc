@@ -260,7 +260,9 @@ struct upgrade_room {};
 struct cancel_upgrade {};
 struct save_power {};
 struct delete_power {};
-template <class Box> struct general_draft { Box* box; std::string name, topic, address, version, creators; std::optional<std::string> avatar; std::shared_ptr<widgets::TextArea<>> topic_input{}; };
+// The view owns each editor; its draft keeps a stable, non-owning pointer
+// so skiff can construct the draft while compiling its field indices.
+template <class Box> struct general_draft { Box* box; std::string name, topic, address, version, creators; std::optional<std::string> avatar; widgets::TextArea<>* topic_input = nullptr; };
 template <class Box> struct general_actions {
   struct choose_access {
     Box* box; std::vector<join_rule_t> rules;
@@ -499,7 +501,7 @@ template <class Box> auto general_page(Box* box, const room_settings_facts& fact
       draft{box, kept.profile && kept.profile->name ? *kept.profile->name : facts.name,
           kept.profile && kept.profile->topic ? *kept.profile->topic : facts.topic, kept.local_address,
           kept.upgrade_version.empty() ? kept.data.default_version : kept.upgrade_version, kept.upgrade_creators,
-          kept.profile ? kept.profile->avatar : std::nullopt, std::move(topic_input)});
+          kept.profile ? kept.profile->avatar : std::nullopt, topic_input.get()});
 }
 
 // Members: the same membership filters and power-first ordering as Cinny.
@@ -879,7 +881,7 @@ template <class Box> auto packs_page(Box* box, const room_settings_facts& facts)
 struct save_account_data {};
 struct choose_account_data { std::size_t index; };
 struct select_account_data { using Answer = choose_account_data; choose_account_data operator()(std::size_t index) const { return {index}; } };
-template <class Box> struct developer_draft { Box* box; std::string type, json; std::shared_ptr<widgets::TextArea<>> content{}; };
+template <class Box> struct developer_draft { Box* box; std::string type, json; widgets::TextArea<>* content = nullptr; };
 template <class Box> struct developer_events {
   Box* box;
   auto on(save_account_data, const developer_draft<Box>& draft) const {
@@ -932,7 +934,7 @@ template <class Box> auto developer_page(Box* box, const room_settings_facts& fa
           c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), settings_section_heading(colours, "Content"), content),
           c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               action(colours, "Save", sends<save_account_data>{}, !kept.pending),
-              action(colours, "Cancel", edit_section<Box>{box, editor::account_form, false}))))), draft{box, kept.account_type, kept.account_json, std::move(content)});
+              action(colours, "Cancel", edit_section<Box>{box, editor::account_form, false}))))), draft{box, kept.account_type, kept.account_json, content.get()});
 }
 template <class Page> requires requires(Page& page) { preserve_draft(page.fModel.root()); }
 void preserve_manage_page(Page& page) { preserve_draft(page.fModel.root()); }

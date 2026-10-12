@@ -5,4 +5,4 @@ module mux.core;
 import std;
 import skiff.model;
 
-template class skiff::model::Model<mux::chats_root, mux::chats_reactions>;
+template void skiff::model::Model<mux::chats_root, mux::chats_reactions>::endBatch();

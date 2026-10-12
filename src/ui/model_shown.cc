@@ -5,4 +5,4 @@ module mux.ui;
 import std;
 import skiff.model;
 
-template class skiff::model::Model<mux::ui::shown_root, mux::ui::shown_reactions>;
+template void skiff::model::Model<mux::ui::shown_root, mux::ui::shown_reactions>::endBatch();

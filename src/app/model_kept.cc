@@ -5,4 +5,4 @@ module mux.app.kept;
 import std;
 import skiff.model;
 
-template class skiff::model::Model<mux::app::kept_root, mux::app::kept_reactions>;
+template void skiff::model::Model<mux::app::kept_root, mux::app::kept_reactions>::endBatch();

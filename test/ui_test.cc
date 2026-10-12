@@ -3403,6 +3403,19 @@ TEST(Appearance, AvatarRoundingIsProportionalAndAppliesToTheSharedComponent) {
   EXPECT_FALSE(std::get<1>(invalid).fEvent);
 }
 
+TEST(Appearance, LocalThemeColourFieldsRefreshWithoutAKeyedList) {
+  mux::ui::palette colours;
+  auto editor = mux::ui::theme_details_view(colours, mux::config::theme::day{}, {});
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t outer(0);
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(editor, outer);
+  auto& details = std::get<1>(editor.fParts);
+  auto& fields = std::get<2>(details.fParts);
+  static_assert(std::tuple_size_v<decltype(fields.fParts)> == 19);
+  EXPECT_TRUE(editor.fModel.root().colours.background.empty());
+}
+
 TEST(Appearance, ThemeConfigurationValidatesColorsAndPreservesAlpha) {
   EXPECT_EQ(mux::ui::theme_colour_of("#123456"), 0xff123456u);
   EXPECT_EQ(mux::ui::theme_colour_of("80123456"), 0x80123456u);
@@ -3414,7 +3427,7 @@ TEST(Appearance, ThemeConfigurationValidatesColorsAndPreservesAlpha) {
   custom.corner_radius = 14.0;
   const mux::config::theme_t selected = mux::config::theme::day{};
   auto draft = mux::ui::theme_details_initial(selected, {{"day", custom}});
-  EXPECT_EQ(draft.colours.at(0).value, "#112233");
+  EXPECT_EQ(draft.colours.background, "#112233");
   EXPECT_EQ(draft.corner, "14");
   const auto saved = mux::ui::theme_details_events{}.on(mux::ui::save_theme_details{}, draft);
   const auto& asked = std::get<1>(saved).fEvent;

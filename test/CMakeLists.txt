@@ -36,12 +36,25 @@ target_compile_options(mux_test_certificate PUBLIC
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
   $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 
-foreach(one IN ITEMS core net xmpp matrix media logic)
+# Each protocol's own tests, <name>_test.cc, where it is turned on.
+foreach(one IN LISTS mux_protocols)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${one}_test.cc")
+    add_executable(mux-${one}-test ${one}_test.cc)
+    target_link_libraries(mux-${one}-test PRIVATE mux_modules mux_test_certificate ${mux_gtest})
+    add_test(NAME ${one} COMMAND mux-${one}-test)
+  endif()
+endforeach()
+
+# The rest try every protocol side by side: built where all are turned on.
+if(NOT mux_all_protocols)
+  message(STATUS "Tests: only the protocols' own, as not every protocol is turned on")
+  return()
+endif()
+foreach(one IN ITEMS core net media logic)
   add_executable(mux-${one}-test ${one}_test.cc)
   target_link_libraries(mux-${one}-test PRIVATE mux_${one} ${mux_gtest})
   add_test(NAME ${one} COMMAND mux-${one}-test)
 endforeach()
-target_link_libraries(mux-matrix-test PRIVATE mux_test_certificate)
 
 add_executable(mux-config-test config_test.cc)
 target_link_libraries(mux-config-test PRIVATE mux_config ${mux_gtest})

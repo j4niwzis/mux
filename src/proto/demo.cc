@@ -3,5 +3,4 @@
 // demo of its own is added here.
 export module mux.proto.demo;
 
-export import mux.proto.xmpp.demo;
-export import mux.proto.matrix.demo;
+export import mux.proto.enabled.demo;  // every protocol turned on's

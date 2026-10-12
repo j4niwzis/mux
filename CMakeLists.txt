@@ -176,15 +176,15 @@ mux_find_package(vodozemac REQUIRED)
 # One library of mux's modules, as the libraries it stands on have: modules
 # are what separates them. The window's two join it where the window is
 # built.
+# The protocols turned on, each from its own folder (cmake/protocols.cmake).
+include(cmake/protocols.cmake)
 add_library(mux_modules)
-target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/calls/types.cc src/core_ids.cc src/proto/matrix/changes.cc src/proto/xmpp/changes.cc src/proto/changes.cc src/proto/proto.cc src/proto/xmpp/points.cc src/proto/matrix/points.cc src/proto/matrix/requests.cc src/proto/protocols.cc
-        src/core.cc src/net.cc src/proto/xmpp/client/xmpp.cc src/http.cc src/preview.cc src/proto/matrix/client/matrix.cc src/media.cc
-        src/proto/matrix/client/base.cc src/proto/matrix/client/oauth.cc src/proto/matrix/client/names.cc src/proto/matrix/client/account.cc src/proto/matrix/client/requests.cc src/proto/matrix/client/requests_more.cc src/proto/matrix/client/requests_send.cc src/proto/matrix/client/sync.cc src/proto/matrix/client/sync_crypto.cc src/proto/matrix/client/sync_keys.cc
-        src/proto/matrix/client/events.cc src/proto/matrix/client/media.cc
-        src/proto/xmpp/make.cc src/proto/matrix/make.cc src/proto/clients.cc
+target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
+  FILES ${mux_protocol_core} ${mux_enabled_core}
+        src/calls/types.cc src/core_ids.cc src/proto/changes.cc src/proto/proto.cc src/proto/protocols.cc
+        src/core.cc src/net.cc src/http.cc src/preview.cc src/media.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc src/logic/notifications.cc
-        src/logic/link_base.cc src/proto/xmpp/links.cc src/proto/matrix/links.cc src/proto/links.cc
+        src/logic/link_base.cc src/proto/links.cc
         src/logic/forwarding.cc src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
         src/logic/blurhash.cc src/logic/emoji.cc src/logic/reactions.cc src/logic/markdown.cc src/logic/room_events.cc)
 target_compile_features(mux_modules PUBLIC cxx_std_26)
@@ -277,14 +277,14 @@ mux_find_package(skiff 0.1.0 COMPONENTS ${mux_skiff_components} REQUIRED)
 add_library(mux_config)
 # With the protocols' tags and what each keeps in the accounts file: the
 # settings read them, and everything above reads the settings.
-target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/proto/identity.cc src/proto/tags.cc src/proto/xmpp/kept.cc src/proto/matrix/kept.cc src/proto/kept.cc
-        src/proto/xmpp/state.cc src/proto/matrix/state.cc src/proto/state.cc src/config_choices.cc src/config_settings.cc src/config_looks.cc src/config_limits.cc src/config_accounts.cc src/config.cc)
+target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
+  FILES ${mux_protocol_config} ${mux_enabled_config}
+        src/proto/identity.cc src/proto/tags.cc src/proto/kept.cc src/proto/state.cc src/config_choices.cc src/config_settings.cc src/config_looks.cc src/config_limits.cc src/config_accounts.cc src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})
 target_link_libraries(mux_config PUBLIC knot splice mux_vault skiff::model)
 target_link_libraries(mux_modules PUBLIC mux_config splice)
-foreach(name IN ITEMS core net xmpp http matrix media logic)
+foreach(name IN ITEMS core net http media logic ${mux_protocols})
   add_library(mux_${name} ALIAS mux_modules)
 endforeach()
 
@@ -420,10 +420,10 @@ if(MUX_UI)
   target_sources(mux_modules PRIVATE src/telegram_pattern.cc)
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_art_dir})
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_pattern})
-  target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-    FILES ${mux_platform_sources} ${mux_calls_sources} src/ui.cc
+  target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
+    FILES ${mux_protocol_ui} ${mux_enabled_ui} ${mux_platform_sources} ${mux_calls_sources} src/ui.cc
           src/kept_root.cc src/ui/base.cc src/ui/requests.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations_show.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/about.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/call_bar.cc src/ui/window.cc
-          src/proto/xmpp/ui.cc src/proto/matrix/ui_form.cc src/proto/matrix/ui_manage.cc src/proto/matrix/ui_sessions.cc src/proto/matrix/ui_tools.cc src/proto/matrix/ui.cc src/proto/ui.cc)
+          src/proto/ui.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries} ${mux_calls_libraries})
   if(ANDROID)
@@ -453,12 +453,10 @@ if(MUX_UI)
   # they are used, in network.cc's unit, all of them in the optimiser's sight.
   set(mux_split $<NOT:$<CONFIG:Release>>)
   target_compile_definitions(mux PRIVATE $<${mux_split}:MUX_SPLIT_ACCOUNTS>)
-  target_sources(mux PRIVATE
-    $<${mux_split}:src/proto/matrix/app/accounts_sync.cc>
-    $<${mux_split}:src/proto/matrix/app/accounts_requests.cc>
-    $<${mux_split}:src/proto/matrix/app/accounts_events.cc>
-    $<${mux_split}:src/proto/matrix/app/accounts_media.cc>
-    $<${mux_split}:src/proto/xmpp/app/accounts.cc>)
+  set(mux_split_sources ${mux_protocol_split})
+  list(TRANSFORM mux_split_sources PREPEND "$<${mux_split}:")
+  list(TRANSFORM mux_split_sources APPEND ">")
+  target_sources(mux PRIVATE ${mux_split_sources})
   target_sources(mux PRIVATE
     $<${mux_erased}:src/app/walks_window.cc>
     $<${mux_erased}:src/app/walks_chats.cc>
@@ -479,12 +477,13 @@ if(MUX_UI)
   # of what it does, the protocols' glue: module units that import the UI and
   # the accounts and instantiate little -- a target of their own.
   add_library(mux_app OBJECT)
-  target_sources(mux_app PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-    FILES src/app/sink.cc src/proto/accounts.cc src/proto/xmpp/demo.cc src/proto/matrix/demo.cc src/proto/demo.cc src/app/network.cc src/app/workers.cc src/app/demo.cc
+  target_sources(mux_app PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
+    FILES ${mux_protocol_app} ${mux_enabled_demo} ${mux_enabled_app}
+          src/app/sink.cc ${mux_generated}/proto/accounts.cc src/proto/demo.cc src/app/network.cc src/app/workers.cc src/app/demo.cc
           src/app/store.cc src/app/requests.cc src/app/words.cc src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc
           src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc
           src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/emoji.cc src/app/accounts.cc
-          src/app/local_data.cc src/app/calls.cc src/app/marks.cc src/app/history.cc src/proto/matrix/app.cc src/proto/xmpp/app.cc src/proto/app.cc)
+          src/app/local_data.cc src/app/calls.cc src/app/marks.cc src/app/history.cc src/proto/app.cc)
   target_sources(mux_app PRIVATE src/app/shown_binding.cc)
   target_compile_definitions(mux_app PUBLIC $<${mux_split}:MUX_SPLIT_ACCOUNTS>)
   target_link_libraries(mux_app PUBLIC mux_modules)
@@ -510,7 +509,7 @@ if(MUX_UI)
 endif()
 
 if(MUX_CLI)
-  add_executable(mux-cli src/proto/cli.cc)
+  add_executable(mux-cli ${mux_generated}/proto/cli.cc)
   target_link_libraries(mux-cli PRIVATE mux_modules)
 endif()
 

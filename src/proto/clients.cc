@@ -4,5 +4,4 @@
 // beside its tag.
 export module mux.proto.clients;
 
-export import mux.proto.xmpp.make;
-export import mux.proto.matrix.make;
+export import mux.proto.enabled.make;  // every protocol turned on's

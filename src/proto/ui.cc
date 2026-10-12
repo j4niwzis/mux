@@ -5,5 +5,4 @@
 // of its own is added here; one with none is not.
 export module mux.ui.proto;
 
-export import mux.ui.proto.xmpp;
-export import mux.ui.proto.matrix;
+export import mux.proto.enabled.ui;  // every protocol turned on's

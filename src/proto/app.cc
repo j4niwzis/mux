@@ -6,8 +6,7 @@
 // come to the default, nothing done.
 export module mux.app.proto;
 
-export import mux.app.proto.matrix;
-export import mux.app.proto.xmpp;
+export import mux.proto.enabled.app;  // every protocol turned on's
 
 export namespace mux::app::defaults {
 // A change the program does nothing with of its own: the model's alone.

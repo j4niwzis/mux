@@ -5,8 +5,7 @@
 export module mux.proto.kept;
 
 export import mux.proto.tags;
-export import mux.proto.xmpp.kept;
-export import mux.proto.matrix.kept;
+export import mux.proto.enabled.kept;  // every protocol turned on's
 
 // What an account's own keeps through an edit, and of a session its server
 // gave: nothing, unless its protocol says (carry_over, take_session, by ADL

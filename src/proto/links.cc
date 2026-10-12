@@ -3,5 +3,4 @@
 // follows them through. A protocol is added here beside its tag.
 export module mux.proto.links;
 
-export import mux.proto.xmpp.links;
-export import mux.proto.matrix.links;
+export import mux.proto.enabled.links;  // every protocol turned on's

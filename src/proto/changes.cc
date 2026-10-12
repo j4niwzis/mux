@@ -3,5 +3,4 @@
 // change_t. A protocol with changes of its own is added here.
 export module mux.proto.changes;
 
-export import mux.proto.matrix.changes;
-export import mux.proto.xmpp.changes;
+export import mux.proto.enabled.changes;  // every protocol turned on's

@@ -11,9 +11,7 @@ import mux.config;
 export import mux.proto.tags;
 export import mux.proto.kept;
 export import mux.proto;
-export import mux.proto.xmpp;
-export import mux.proto.matrix;
-export import mux.proto.matrix.requests;
+export import mux.proto.enabled.points;  // every protocol turned on's
 
 export namespace mux::proto {
 

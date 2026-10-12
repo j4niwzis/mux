@@ -8,6 +8,15 @@ export module mux.proto.identity;
 
 import std;
 
+export namespace mux {
+// A list of protocols, by their tags: the one of those turned on --
+// mux::protocols, written by CMake (mux.proto.enabled.list) -- is what
+// protocol_t is one of, and what is asked in turn where a protocol has to be
+// found -- an address's, a link's.
+template <class... Tags>
+struct protocol_list {};
+}  // namespace mux
+
 export namespace mux::proto {
 
 // Its comparisons written out, not defaulted: clang 23 crashes generating a

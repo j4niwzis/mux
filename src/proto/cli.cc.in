@@ -13,9 +13,7 @@ import std;
 import splice;
 import mux.core;
 import mux.net;
-import mux.proto.xmpp.client;
-import mux.proto.matrix.client;
-import mux.config;
+@mux_account_imports@import mux.config;
 import mux.proto.clients;
 import mux.vault;
 
@@ -199,10 +197,8 @@ void keyboard(mux::net::loop& loop, Account& account) {
 
 // Each protocol's account, made at namespace scope: clang 23 crashed on
 // format strings first made deep inside one's instantiation (see
-// app/network.cc).
-template class mux::proto::xmpp::client::account<print_change>;
-template class mux::proto::matrix::client::account<print_change>;
-
+// app/network.cc). A line for each protocol turned on, put in by CMake.
+@mux_cli_accounts@
 int main(int argc, char** argv) {
   if (argc < 2 || argc > 4) {
     std::println(std::cerr, "usage: {} <user@domain> [host [port]] | <@user:server> [homeserver URL]", argv[0]);

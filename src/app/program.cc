@@ -119,12 +119,17 @@ struct app : kept_settings {
   local_data_part local_data{shared, *this};
   // Each plugin's part that says it has one (contract::program_parts), after
   // the program's own, in the plugins' order.
+  // Their types named without calling for them: a member function's deduced
+  // type is not known while the class is still being read.
+  template <class List>
+  struct plugin_parts_list;
   template <class... Features>
-  static auto plugin_parts_of(plugin_list<Features...>, services& shared) {
-    return std::tuple{extend(contract::program_parts{}, type_tag<Features>{}, shared)...};
-  }
-  decltype(plugin_parts_of(composition::providers<contract::program_parts, enabled_plugins>{}, std::declval<services&>())) plugin_parts =
-      plugin_parts_of(composition::providers<contract::program_parts, enabled_plugins>{}, shared);
+  struct plugin_parts_list<plugin_list<Features...>> {
+    using type = std::tuple<decltype(extend(contract::program_parts{}, type_tag<Features>{}, std::declval<services&>()))...>;
+    static type made(services& shared) { return type{extend(contract::program_parts{}, type_tag<Features>{}, shared)...}; }
+  };
+  using plugin_parts_t = plugin_parts_list<composition::providers<contract::program_parts, enabled_plugins>>;
+  typename plugin_parts_t::type plugin_parts = plugin_parts_t::made(shared);
   // A change the accounts made, to each plugin's part that takes it -- a
   // call's signalling, the calls part's -- and their time between events.
   template <class Part, class Change>

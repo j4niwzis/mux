@@ -123,8 +123,13 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
     }
     // Into the timeline, oldest first, by their time: between what was there
     // and what the sync brought.
-    for (const auto& one : std::views::reverse(gap))
-      this->event(in, one, placement::in_window{});
+    // A call's signals in the gap are news still: the call part judges
+    // each by its call and an invite by its lifetime.
+    {
+      const calls_live_while news{calls_live_, true};
+      for (const auto& one : std::views::reverse(gap))
+        this->event(in, one, placement::in_window{});
+    }
     // The reactions to what the user sent: known by who sent it, where the
     // pages or the room's last events held it.
     const auto kept = state_.joined.find(room);

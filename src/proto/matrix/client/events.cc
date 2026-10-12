@@ -459,11 +459,15 @@ void account<Sink>::decrypt_waiting(const std::string& session) {
     return;
   const auto waiting = std::move(found->second);
   undecrypted_.erase(found);
-  for (const undecrypted_event& one : waiting)
+  for (const undecrypted_event& one : waiting) {
+    // News when it came: news to a call still, whose invite says, by its
+    // lifetime, whether it is too late.
+    const calls_live_while news{calls_live_, placed_as_news(one.where)};
     this->event(one.in, one.event,
                 spl::visit(spl::overloaded{[](placement::aside aside) -> placement_t { return aside; },
                                                  [](const auto&) -> placement_t { return placement::in_window{}; }},
                               one.where));
+  }
 }
 template <class Sink>
 void account<Sink>::decrypt_all_waiting() {
@@ -715,7 +719,7 @@ void account<Sink>::call_signal(const conversation_id& in, const loom::ev::timel
   // are rejected by their expiry in the call controller.
   const bool invite = spl::visit(spl::overloaded{[](const change::call_said::invite&) { return true; },
       [](const auto&) { return false; }}, said);
-  const bool live = placed_as_news(where) && (!telling_history_ || invite);
+  const bool live = (placed_as_news(where) || calls_live_) && (!telling_history_ || invite);
   if (!live)
     return;
   // This session's own, echoed by the sync: nothing to tell.

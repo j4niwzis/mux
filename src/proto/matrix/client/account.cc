@@ -770,6 +770,17 @@ class account {
   std::map<std::string, bool> legacy_calls_;
   std::optional<loom::cs::sync::set_presence_t> chosen_presence_;
   bool telling_history_ = false;
+  // Events told now are news to a call, though they go into the window:
+  // a live sync's gap caught up (the sliding sync brings only a room's
+  // newest event, and Element sends an invite and its candidates, an answer
+  // and its candidates, back to back), or news decrypted once its key came.
+  bool calls_live_ = false;
+  struct calls_live_while {
+    bool& live;
+    bool was;
+    explicit calls_live_while(bool& flag, bool now) : live(flag), was(flag) { live = was || now; }
+    ~calls_live_while() { live = was; }
+  };
   // Whether an event placed so is news: come at the end, not from history.
   // (Whether an event so placed is news is placed_as_news(), a plain
   // function, with telling_history_: an inline member of this template

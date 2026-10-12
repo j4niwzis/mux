@@ -925,10 +925,10 @@ template <class Actions> struct window : skiff::compose::Specced {
       return std::views::transform(urls, [kind](const std::string& url) { return emote_picture{url, kind}; });
     };
     if (up) {
-      const auto stickers = up->parts.card.parts.stickers.pictures_shown();
       const auto emoji = up->parts.card.parts.panel.pictures_shown();
-      shown.append_range(pictures(stickers, emote_kind::sticker));
       shown.append_range(pictures(emoji, emote_kind::emoji));
+      // And those of the plugins' pages that show pictures: the stickers'.
+      std::apply([&](auto&... page) { (shown.append_range(pictures_of(page)), ...); }, up->parts.card.parts.pages);
     }
     if (auto* menu = layer().menu.shown(); menu && menu->parts.menu.parts.emoji) {
       const auto emoji = menu->parts.menu.parts.emoji->pictures_shown();

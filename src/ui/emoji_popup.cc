@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:emoji_popup -- The emoji popup: its pages -- emoji, stickers, and
-// each a plugin gives it (contract::media_pages) -- and what a pick does.
+// mux.ui:emoji_popup -- The emoji popup: its pages -- its emoji, and each a
+// plugin gives it (contract::media_pages) -- and what a pick does.
 export module mux.ui:emoji_popup;
 
 import std;
@@ -64,8 +64,8 @@ struct emoji_facts {
   float right = 0.0f;
   float bottom = 0.0f;
   popup_page_t page = popup_page::emoji{};
-  bool stickers = false;
-  bool files = false;
+  bool stickers = false;  // the account sends stickers
+  bool files = false;     // and files
   // What is shown on each plugin's page, as the program has it.
   pages_shown_t pages;
 };
@@ -73,14 +73,22 @@ struct emoji_facts {
 inline bool page_available(const emoji_facts& facts, const popup_page_t& page) {
   return spl::visit(spl::overloaded{
       [](popup_page::emoji) { return true; },
-      [&](popup_page::stickers) { return facts.stickers; },
       [&](const auto& theirs) { return shown_where(theirs, facts); }}, page);
 }
 // The pages in their order: what a swipe goes through.
 template <class... Features>
-std::array<popup_page_t, 2 + sizeof...(Features)> all_pages(plugin_list<Features...>) {
-  return {popup_page::emoji{}, popup_page::stickers{},
-          typename decltype(page_type(contract::media_pages{}, type_tag<Features>{}))::type{}...};
+std::array<popup_page_t, 1 + sizeof...(Features)> all_pages(plugin_list<Features...>) {
+  return {popup_page::emoji{}, typename decltype(page_type(contract::media_pages{}, type_tag<Features>{}))::type{}...};
+}
+// The emote pictures a page shows, for the program to fetch: where it says.
+template <class Page>
+  requires requires(Page& page) { page.emote_pictures_shown(); }
+std::vector<emote_picture> pictures_of(std::optional<Page>& page) {
+  return page ? page->emote_pictures_shown() : std::vector<emote_picture>{};
+}
+template <class Page>
+std::vector<emote_picture> pictures_of(std::optional<Page>&) {
+  return {};
 }
 inline auto popup_tab(const palette& colours, popup_page_t page, std::string name, bool selected, bool available) {
   namespace c = skiff::compose;
@@ -98,7 +106,9 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
   emoji_popup& operator=(emoji_popup&&) = delete;
 
   // The plugins' pages: each its tab, and its node from its extend(), made
-  // where the window is instantiated, which imports them (mux.plugins.ui).
+  // where the window is instantiated, which imports them (mux.plugins.ui) --
+  // each in a slot of its own, built there (composition::put): a page may
+  // point at its own parts.
   template <class List>
   struct plugin_pages;
   template <class... Features>
@@ -108,22 +118,30 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
     template <class Feature>
     using shown_t = typename decltype(shown_type(contract::media_pages{}, type_tag<Feature>{}))::type;
     template <class Feature>
-    static auto page_of(const ui_needs<Actions>& needs, const emoji_facts& facts) {
+    static auto made(const ui_needs<Actions>& needs, const emoji_facts& facts) {
       static_assert(requires { extend(contract::media_pages{}, type_tag<Feature>{}, needs, std::get<shown_t<Feature>>(facts.pages)); },
                     composition::broken<contract::media_pages, Feature>());
-      const bool on = facts.page == popup_page_t(page_t<Feature>{}) && page_available(facts, page_t<Feature>{});
-      return skiff::compose::visible(on, skiff::compose::styled({.fillX = true, .grow = scene::axes::kY, .masking = true},
-          extend(contract::media_pages{}, type_tag<Feature>{}, needs, std::get<shown_t<Feature>>(facts.pages))));
+      return extend(contract::media_pages{}, type_tag<Feature>{}, needs, std::get<shown_t<Feature>>(facts.pages));
     }
-    using nodes_t = std::tuple<decltype(page_of<Features>(std::declval<const ui_needs<Actions>&>(), std::declval<const emoji_facts&>()))...>;
-    static nodes_t nodes(const ui_needs<Actions>& needs, const emoji_facts& facts) {
-      return nodes_t{page_of<Features>(needs, facts)...};
+    using nodes_t = std::tuple<std::optional<composition::node_t<decltype(made<Features>(
+        std::declval<const ui_needs<Actions>&>(), std::declval<const emoji_facts&>()))>>...>;
+    // Each built in its slot, shown where it is the page chosen.
+    template <class Feature, class Slot>
+    static void place(Slot& slot, const ui_needs<Actions>& needs, const emoji_facts& facts) {
+      composition::put(slot, made<Feature>(needs, facts))
+          .apply({.fillX = true, .grow = scene::axes::kY, .masking = true,
+                  .visible = facts.page == popup_page_t(page_t<Feature>{}) && page_available(facts, page_t<Feature>{})});
+    }
+    static void build(nodes_t& slots, const ui_needs<Actions>& needs, const emoji_facts& facts) {
+      [&]<std::size_t... At>(std::index_sequence<At...>) {
+        (place<Features>(std::get<At>(slots), needs, facts), ...);
+      }(std::index_sequence_for<Features...>{});
     }
     template <class Tab>
-    static auto tabs(const palette& colours, const emoji_facts& facts, Tab emoji, Tab stickers) {
+    static auto tabs(const palette& colours, const emoji_facts& facts, Tab emoji) {
       return skiff::compose::row(skiff::compose::hbox(4.0f, {.fillX = true, .height = 36.0f, .depth = 1.0f,
                                                               .padding = {4.0f, 8.0f, 4.0f, 8.0f}}),
-          std::move(emoji), std::move(stickers),
+          std::move(emoji),
           popup_tab(colours, page_t<Features>{}, std::string(tab_name(page_t<Features>{})),
                     facts.page == popup_page_t(page_t<Features>{}), page_available(facts, page_t<Features>{}))...);
     }
@@ -142,14 +160,13 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
     using panel_t = emoji_panel<insert_emoji_into<Actions>>;
     using tab_t = decltype(popup_tab(std::declval<const palette&>(), popup_page_t{popup_page::emoji{}}, std::string{}, false, true));
     using tabs_t = decltype(pages_t::tabs(std::declval<const palette&>(), std::declval<const emoji_facts&>(),
-                                          std::declval<tab_t>(), std::declval<tab_t>()));
+                                          std::declval<tab_t>()));
     // The colours it is made in: its tabs read them from it.
     const palette* colours_ = nullptr;
     emoji_facts allowed_;
     struct parts_t {
       tabs_t tabs;
       panel_t panel;
-      sticker_grid<Actions> stickers;
       typename pages_t::nodes_t pages;
     } parts;
     card_t(const ui_needs<Actions>& needs, const emoji_facts& facts)
@@ -165,15 +182,11 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
                                              3.0f}})),
           colours_(&colours), allowed_(facts),
           parts{.tabs = pages_t::tabs(colours, facts,
-                    popup_tab(colours, popup_page::emoji{}, "Emoji", facts.page == popup_page_t(popup_page::emoji{}), true),
-                    popup_tab(colours, popup_page::stickers{}, "Stickers", facts.page == popup_page_t(popup_page::stickers{}), facts.stickers)),
+                    popup_tab(colours, popup_page::emoji{}, "Emoji", facts.page == popup_page_t(popup_page::emoji{}), true)),
                 .panel = panel_t(colours, kept, insert_emoji_into<Actions>{},
                     {.fillX = true, .grow = scene::axes::kY, .masking = true,
-                     .visible = facts.page == popup_page_t(popup_page::emoji{})}),
-                .stickers = sticker_grid<Actions>(colours, kept,
-                    {.fillX = true, .grow = scene::axes::kY, .masking = true,
-                     .visible = facts.stickers && facts.page == popup_page_t(popup_page::stickers{})}),
-                .pages = pages_t::nodes(needs, facts)} {
+                     .visible = facts.page == popup_page_t(popup_page::emoji{})})} {
+      pages_t::build(parts.pages, needs, facts);
 
       // The card paints its own floating backdrop. Its full-window layer
       // has no fill; treating this as an inner panel drops the plate when

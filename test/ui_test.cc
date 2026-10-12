@@ -1116,7 +1116,7 @@ TEST(Emoji, GifTabReceivesPointerPressesOnDesktopAndPhone) {
     ui.show(window.root().layer().emoji, std::optional(facts));
     auto& refreshed = window.root().layer().emoji.shown()->parts.card;
     EXPECT_EQ(refreshed.page_at, 2);
-    EXPECT_TRUE(std::get<0>(refreshed.parts.pages).visible());
+    EXPECT_TRUE(std::get<1>(refreshed.parts.pages)->visible());
     EXPECT_FALSE(refreshed.parts.panel.visible());
   }
   skiff::paint::defaultFont() = nullptr;
@@ -2518,7 +2518,7 @@ TEST(Emoji, UnsupportedTabsAreUnavailableAndHidden) {
   ui_state ui;
   const mux::ui::emoji_facts facts{};
   EXPECT_TRUE(mux::ui::page_available(facts, mux::ui::popup_page::emoji{}));
-  EXPECT_FALSE(mux::ui::page_available(facts, mux::ui::popup_page::stickers{}));
+  EXPECT_FALSE(mux::ui::page_available(facts, mux::plugins::stickers::page{}));
   EXPECT_FALSE(mux::ui::page_available(facts, mux::plugins::gifs::page{}));
   mux::ui::emoji_popup<stub> popup(ui.needs(program), facts);
   const auto& tabs = popup.parts.card.parts.tabs.fParts;

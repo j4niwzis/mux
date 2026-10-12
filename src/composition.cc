@@ -30,13 +30,16 @@ namespace contract {
 // The media panel's pages beside its emoji and stickers (mux.ui:emoji_popup):
 //   page_type(c, f)  -> type_tag<its page>: in popup_page_t, what is shown
 //   shown_type(c, f) -> type_tag<what is shown on it>: in emoji_facts
-//   tab_name(page), shown_where(page, facts), opened(page): of its page
-//   extend(c, f, needs, shown) -> its node, in the window
+//   tab_name(page), shown_where(page, facts): of its page; opened(page),
+//   what it asks for as it is chosen, where it asks something
+//   extend(c, f, needs, shown) -> its node, or in_place<node, args...> where
+//   it may not move, in the window; emote_pictures_shown(), where it shows
+//   pictures the program fetches
 struct media_pages {
   static constexpr std::string_view name = "the media panel's pages";
 };
 // A message's menu, its rows after Save As (mux.ui:context_menu):
-//   extend(c, f, type_tag<Actions>, palette, menu_facts) -> its row: shown,
+//   extend(c, f, type_tag<Actions>, palette, emoji_kept, menu_facts) -> its row: shown,
 //   or not, as the facts say, and what it sends its plugin's own
 struct message_menu {
   static constexpr std::string_view name = "a message's menu";
@@ -82,6 +85,33 @@ struct providers_of<Contract, plugin_list<Features...>> {
 };
 template <class Contract, class List>
 using providers = typename providers_of<Contract, List>::type;
+
+// What a contribution makes, put where it is kept -- a std::optional slot,
+// which the walks go into: a node that may move, as it is; one that may not
+// (it points at its own parts), as its constructor's arguments, in_place,
+// built at its slot. Overloads, not a test of the type.
+template <class Node, class... Args>
+struct in_place {
+  std::tuple<Args...> args;
+};
+template <class Made>
+struct node_of {
+  using type = Made;
+};
+template <class Node, class... Args>
+struct node_of<in_place<Node, Args...>> {
+  using type = Node;
+};
+template <class Made>
+using node_t = typename node_of<Made>::type;
+template <class Node>
+Node& put(std::optional<Node>& slot, Node&& made) {
+  return slot.emplace(std::move(made));
+}
+template <class Node, class... Args>
+Node& put(std::optional<Node>& slot, in_place<Node, Args...>&& made) {
+  return std::apply([&](auto&&... arg) -> Node& { return slot.emplace(std::forward<decltype(arg)>(arg)...); }, std::move(made.args));
+}
 
 // What the build says where a plugin says it provides a contract and what it
 // gives does not compile: a static_assert's message, made while compiling.

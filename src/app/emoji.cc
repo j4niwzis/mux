@@ -31,8 +31,11 @@ struct emoji_part {
       chosen = true;
     });
     if (chosen)
-      spl::visit(spl::overloaded{[](mux::ui::popup_page::emoji) {}, [](mux::ui::popup_page::stickers) {},
-                                 [&](const auto& theirs) { asked(opened(theirs)); }},
+      spl::visit(spl::overloaded{[](mux::ui::popup_page::emoji) {},
+                                 [&](const auto& theirs) {
+                                   using mux::ui::page_defaults::opened;
+                                   asked(opened(theirs));
+                                 }},
                  one.page);
   }
 

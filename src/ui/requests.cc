@@ -17,17 +17,21 @@ import skiff.model;
 export namespace mux::ui {
 
 // The picker page is part of what is shown, so data refreshes retain it:
-// its emoji, its stickers, and each page a plugin gives the media panel
+// its emoji, and each page a plugin gives the media panel
 // (contract::media_pages), in the plugins' order.
 namespace popup_page {
 struct emoji { friend bool operator==(emoji, emoji) = default; };
-struct stickers { friend bool operator==(stickers, stickers) = default; };
 }
 template <class... Features>
 consteval auto popup_pages_of(plugin_list<Features...>) {
-  return type_tag<spl::variant<popup_page::emoji, popup_page::stickers,
+  return type_tag<spl::variant<popup_page::emoji,
       typename decltype(page_type(contract::media_pages{}, type_tag<Features>{}))::type...>>{};
 }
+// What a plugin's page asks for as it is chosen: nothing, where it says
+// nothing (opened).
+namespace page_defaults {
+constexpr proto::part::no_request opened(const auto&) { return {}; }
+}  // namespace page_defaults
 using media_page_plugins = composition::providers<contract::media_pages, enabled_plugins>;
 using popup_page_t = typename decltype(popup_pages_of(media_page_plugins{}))::type;
 // What is shown on each plugin's page, beside the others' (emoji_facts).
@@ -202,7 +206,6 @@ struct copy_picture {
 struct return_to_chat {};
 struct menu_copy_link {};
 struct menu_copy_url {};
-struct menu_fave_sticker {};
 struct favourite_emoji { emote emoji; };
 struct react {
   std::string id;

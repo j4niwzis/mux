@@ -38,7 +38,6 @@ void part_apply(menu_part& self, const request::menu_reply&);
 void part_apply(menu_part& self, const request::menu_edit&);
 void part_apply(menu_part& self, const request::menu_copy&);
 void part_apply(menu_part& self, const request::menu_copy_link&);
-void part_apply(menu_part& self, const request::menu_fave_sticker&);
 void part_apply(menu_part& self, const request::menu_copy_url&);
 void part_apply(menu_part& self, const request::menu_copy_image&);
 void part_apply(menu_part& self, const request::menu_thread&);
@@ -161,12 +160,6 @@ void part_apply(menu_part& self, const request::menu_copy&) {
 void part_apply(menu_part& self, const request::menu_copy_link&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
   skiff::scene::setClipboardText(self.target_.link);
-}
-
-void part_apply(menu_part& self, const request::menu_fave_sticker&) {
-  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  if (self.target_.sticker)
-    self.s_->emoji.flip_favourite(*self.target_.sticker);
 }
 
 void part_apply(menu_part& self, const request::menu_copy_url&) {

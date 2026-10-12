@@ -39,7 +39,10 @@ class media_session {
       this->tell(said::description{{kind_of(given.type()), std::string(given)}});
     });
     pc_->onLocalCandidate([this](rtc::Candidate given) {
-      this->tell(said::candidate{{std::string(given), given.mid()}});
+      // As the browser takes it: "candidate:...", not the SDP line
+      // "a=candidate:..." its string is -- Element refuses that one, and
+      // never had an address of ours.
+      this->tell(said::candidate{{given.candidate(), given.mid()}});
     });
     pc_->onStateChange([this](rtc::PeerConnection::State state) {
       switch (state) {

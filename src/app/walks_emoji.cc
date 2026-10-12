@@ -7,6 +7,10 @@
 module mux.app.requests;
 import std;
 import skiff.scene;
+// What binds each node -- its table's binding entry, found by ADL in
+// skiff.bind -- must be seen where the tables are made, or the runtime
+// binding walks pass every node here by.
+import skiff.bind;
 import mux.ui;
 
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::emoji_popup<mux::app::actions>>() noexcept {

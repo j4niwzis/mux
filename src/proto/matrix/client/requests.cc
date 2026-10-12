@@ -308,10 +308,14 @@ void account<Sink>::fetch_room_settings(std::string room) {
       out.data.members = std::ranges::to<std::vector<proto::matrix::managed_member>>(std::views::transform(
           std::views::filter(mapped, [](const auto& member) { return member.has_value(); }), [](const auto& member) { return *member; }));
     } else failure(members);
-    if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
+    if (const auto kept = state_.joined.find(room); kept != state_.joined.end()) {
+      out.data.state_events = std::ranges::to<std::vector<proto::matrix::managed_state_event>>(std::views::transform(
+          kept->second.state.events, [](const auto& entry) { return proto::matrix::managed_state_event{entry.first.first, entry.first.second, knot::to_pretty_json_string(entry.second)}; }));
       out.data.account_data = std::ranges::to<std::vector<proto::matrix::managed_account_data>>(std::views::transform(
           kept->second.account_data, [](const auto& entry) { return proto::matrix::managed_account_data{entry.first, spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, entry.second.content.data())}; }));
+    }
     sink_(std::move(out));
+    this->list_packs(room);
   });
 }
 

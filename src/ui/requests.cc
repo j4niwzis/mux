@@ -452,7 +452,7 @@ struct send_in_thread {
 };
 struct menu_thread {};
 struct open_packs {};
-struct open_room_packs {};
+struct open_room_packs { std::optional<std::string> key{}; };
 struct close_packs {};
 struct save_pack {
   mux::emote_pack pack;

@@ -20,6 +20,9 @@ export namespace mux::ui {
 // type, drawn by its own overload.
 namespace icon {
 struct none {};
+struct lock {};
+struct terminal {};
+struct room {};
 struct person {};
 struct gear {};
 struct power {};
@@ -63,7 +66,7 @@ using icon_t = spl::variant<icon::none, icon::person, icon::gear, icon::power, i
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
                             icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile,
                             icon::play, icon::pause, icon::download, icon::compass, icon::threads, icon::phone,
-                            icon::hang_up, icon::microphone, icon::microphone_off>;
+                            icon::hang_up, icon::microphone, icon::microphone_off, icon::lock, icon::terminal, icon::room>;
 
 // Each icon's shape, as data, in points from the middle of its box -- about
 // 20 across -- for nodes::Icon to draw.
@@ -73,6 +76,20 @@ namespace marks = nodes::mark;
 namespace steps = nodes::path_step;
 
 [[nodiscard]] inline IconShape shape_of(icon::none) { return {}; }
+[[nodiscard]] inline IconShape shape_of(icon::lock) {
+  return {{{marks::rect{-7.0f, -1.0f, 7.0f, 9.0f, 2.0f}, 1.7f},
+           {marks::arc{-4.0f, -9.0f, 4.0f, 1.0f, 180.0f, 180.0f}, 1.7f},
+           {marks::line{0.0f, 3.0f, 0.0f, 6.0f}, 1.7f}}};
+}
+[[nodiscard]] inline IconShape shape_of(icon::room) {
+  return {{{marks::line{-3.0f, -8.0f, -5.0f, 8.0f}, 1.7f}, {marks::line{5.0f, -8.0f, 3.0f, 8.0f}, 1.7f},
+           {marks::line{-8.0f, -3.0f, 8.0f, -3.0f}, 1.7f}, {marks::line{-8.0f, 3.0f, 8.0f, 3.0f}, 1.7f}}};
+}
+[[nodiscard]] inline IconShape shape_of(icon::terminal) {
+  return {{{marks::rect{-9.0f, -7.0f, 9.0f, 7.0f, 1.0f}, 1.5f},
+           {marks::line{-5.0f, -3.0f, -2.0f, 0.0f}, 1.5f}, {marks::line{-2.0f, 0.0f, -5.0f, 3.0f}, 1.5f},
+           {marks::line{1.0f, 3.0f, 5.0f, 3.0f}, 1.5f}}};
+}
 // A handset, filled, as the call buttons of Telegram and Element draw it:
 // the earpiece at the upper left, the mouthpiece at the lower right, the
 // grip curving between them.

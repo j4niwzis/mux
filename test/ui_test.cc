@@ -3216,6 +3216,78 @@ TEST(RoomManagement, FailedPermissionSavePreservesTheDraftAndSavedRules) {
   EXPECT_EQ(manage::required(rules.needs, message), 50);
 }
 
+TEST(RoomManagement, PowersOverviewAndEditorAreSeparateAndChangesWaitForApply) {
+  namespace matrix = mux::proto::matrix;
+  namespace manage = matrix::manage_detail;
+  manage_test_box box;
+  box.facts.mine = 100;
+  auto overview = manage::permissions_page(&box, box.facts);
+  EXPECT_TRUE(std::get<1>(overview.fParts).visible());
+  EXPECT_FALSE(std::get<2>(overview.fParts).visible());
+  manage::edit_section<manage_test_box>{&box, manage::editor::powers}();
+  auto editor = manage::permissions_page(&box, box.facts);
+  EXPECT_FALSE(std::get<1>(editor.fParts).visible());
+  EXPECT_TRUE(std::get<2>(editor.fParts).visible());
+  manage::power_events<manage_test_box> events{&box};
+  const auto saved = events.on(manage::save_power{}, manage::power_draft<manage_test_box>{&box, "75", "Bot", "#91cfdf", ""});
+  EXPECT_FALSE(saved.fEvent);
+  EXPECT_TRUE(box.kept.data.tags.empty());
+  ASSERT_TRUE(box.kept.tag_draft);
+  EXPECT_EQ(box.kept.tag_draft->at("75").name, "Bot");
+  const auto asked = manage::apply_tags<manage_test_box>{&box}();
+  ASSERT_TRUE(asked);
+  manage::completed(&box, matrix::management_saved{box.facts.chat, asked->change, "Forbidden"});
+  EXPECT_TRUE(box.kept.data.tags.empty());
+  EXPECT_TRUE(box.kept.tag_draft);
+  const auto retry = manage::apply_tags<manage_test_box>{&box}();
+  ASSERT_TRUE(retry);
+  manage::completed(&box, matrix::management_saved{box.facts.chat, retry->change, {}});
+  EXPECT_EQ(box.kept.data.tags.at("75").name, "Bot");
+  EXPECT_FALSE(box.kept.tag_draft);
+}
+
+TEST(RoomManagement, MatrixUsesFiveNavigationEntriesAndAPageHeader) {
+  mux::ui::palette colours;
+  mux::ui::looks_shown looks;
+  mux::ui::room_settings_facts facts;
+  facts.speaks = mux::protocol::matrix{};
+  mux::ui::room_settings<stub> dialog(&colours, &looks, facts);
+  EXPECT_FALSE(dialog.parts.header.visible());
+  EXPECT_TRUE(dialog.pane_header().visible());
+  EXPECT_EQ(dialog.context.presentation.navigation_width, 222.0f);
+  EXPECT_EQ(std::get<1>(dialog.tabs().fParts).fParts.size(), 5u);
+  EXPECT_FALSE(std::get<2>(dialog.tabs().fParts).visible());
+  EXPECT_FALSE(std::get<3>(dialog.tabs().fParts).visible());
+  EXPECT_FALSE(std::get<4>(dialog.tabs().fParts).visible());
+  dialog.show_tab(mux::proto::matrix::manage::roles{});
+  dialog.update(0.0);
+  EXPECT_EQ(std::get<1>(dialog.pane_header().fParts).text(), "Permissions");
+}
+
+TEST(RoomManagement, CompactSelectorsLeaveRoomForTheirLabels) {
+  auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
+  auto face = manager ? manager->matchFamilyStyle("DejaVu Sans", skia::SkFontStyle()) : nullptr;
+  if (!face) GTEST_SKIP() << "Needs a font for layout";
+  skia::SkFont font(face);
+  skiff::paint::defaultFont() = &font;
+  struct cleanup { ~cleanup() { skiff::paint::defaultFont() = nullptr; } } clear;
+  namespace manage = mux::proto::matrix::manage_detail;
+  const auto colours = mux::proto::matrix::manage_style(mux::proto::matrix::state{}, mux::ui::palette{}).colours;
+  auto row = manage::tile(colours, "Send Messages", "",
+      manage::compact_choice(colours, "", {"Member 1 & Above", "Admin & Above"}, 0,
+          [](std::size_t) { return skiff::model::Nothing{}; }));
+  auto& tile = std::get<0>(row.fParts);
+  auto& label = std::get<0>(tile.fParts);
+  auto& selector = std::get<1>(tile.fParts);
+  for (float width : {330.0f, 556.0f}) {
+    scene::layout(row, skia::SkRect::MakeWH(width, 200.0f));
+    EXPECT_GT(label.bounds().width(), 0.0f);
+    EXPECT_LE(label.bounds().fRight, selector.bounds().fLeft);
+    EXPECT_LE(selector.bounds().fRight, width - 12.0f);
+    EXPECT_LE(selector.bounds().width(), 180.0f);
+  }
+}
+
 TEST(RoomManagement, EncryptionChangesOnlyAfterConfirmationAndAcknowledgement) {
   namespace matrix = mux::proto::matrix;
   namespace manage = matrix::manage_detail;

@@ -45,13 +45,13 @@ void part_apply(packs_part& self, const request::open_packs&) {
     self.s_->net->list_packs(*self.account_, std::nullopt);
 }
 
-void part_apply(packs_part& self, const request::open_room_packs&) {
+void part_apply(packs_part& self, const request::open_room_packs& one) {
   const auto chosen = self.s_->managed();
   const mux::conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
   if (!chat || !mux::proto::offers(mux::ui::protocol_state_of(self.s_->ui, chat->id.account), mux::proto::feature::sticker_packs{}))
     return;
   self.account_ = chat->id.account;
-  mux::ui::show(*self.s_->showing, std::optional(mux::ui::packs_facts{chat->id.id, mux::proto::chat_rights(mux::ui::protocol_state_of(self.s_->ui, chat->id.account), *chat).edit_packs}));
+  mux::ui::show(*self.s_->showing, std::optional(mux::ui::packs_facts{chat->id.id, mux::proto::chat_rights(mux::ui::protocol_state_of(self.s_->ui, chat->id.account), *chat).edit_packs, one.key}));
   if (!self.s_->demo())
     self.s_->net->list_packs(*self.account_, chat->id.id);
 }

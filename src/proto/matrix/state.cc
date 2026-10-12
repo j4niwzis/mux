@@ -190,6 +190,7 @@ struct managed_member {
   std::int64_t timestamp = 0;
 };
 struct managed_account_data { std::string type, json; };
+struct managed_state_event { std::string type, key, json; };
 struct room_management {
   std::vector<std::string> local_aliases;
   std::optional<bool> directory;
@@ -198,6 +199,7 @@ struct room_management {
   std::map<std::string, power_tag> tags;
   std::vector<managed_member> members;
   std::vector<managed_account_data> account_data;
+  std::vector<managed_state_event> state_events;
 };
 // What Matrix changes of a room beyond what every protocol does: who may
 // join, who reads its history, who has a say and what a thing done asks,

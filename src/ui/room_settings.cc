@@ -12,6 +12,7 @@ import skiff.scene;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
+import skiff.nodes.image;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
 import skiff.widgets.button;
@@ -24,6 +25,7 @@ import mux.core;
 import mux.config;
 import mux.protocols;
 import :base;
+import :avatars;
 import :icons;
 import :controls;
 import :themes;
@@ -447,6 +449,34 @@ inline void preserve_manage_input(auto&) {}
 template <class Page> requires requires(Page& page) { preserve_manage_page(page); }
 void preserve_manage_input(Page& page) { preserve_manage_page(page); }
 
+inline auto settings_room_avatar(const palette& colours, const room_settings_facts& facts, float size, icon_t icon) {
+  namespace c = skiff::compose;
+  const auto has_icon = spl::visit([](auto one) { return drawn(one); }, icon);
+  return c::column(c::vbox(0.0f, {.width = size, .height = size, .alignSelf = scene::align::kMiddle,
+      .cornerRadius = 4.0f, .background = colours.accent, .masking = true}),
+      c::visible(!has_icon, c::styled({.place = scene::anchor::kCentre}, nodes::Text(initials_of(facts.name), size * 0.4f, colours.on_accent))),
+      c::visible(has_icon, c::styled({.place = scene::anchor::kCentre, .width = size * 0.65f, .height = size * 0.65f}, nodes::Icon(shape_of(icon), colours.on_accent))),
+      c::styled({.place = scene::anchor::kCentre, .width = size, .height = size, .cornerRadius = 4.0f}, nodes::Image<from_avatars>({facts.id})));
+}
+struct room_manage_style {
+  palette colours;
+  bool page_header = false;
+  float navigation_width = 220.0f;
+};
+namespace manage_defaults {
+inline room_manage_style manage_style(const auto&, const palette& colours) { return {colours}; }
+inline bool manage_close_editor(const auto&, auto&) { return false; }
+inline icon_t manage_avatar_icon(const auto&, const room_settings_facts&) { return icon::none{}; }
+}
+template <class State> auto manage_style_of(const State& state, const palette& colours) {
+  using manage_defaults::manage_style;
+  return manage_style(state, colours);
+}
+
+template <class State> auto manage_avatar_icon_of(const State& state, const room_settings_facts& facts) {
+  using manage_defaults::manage_avatar_icon;
+  return manage_avatar_icon(state, facts);
+}
 template <class Actions> struct room_settings;
 
 // Page factories need a complete type while the dialog's child types are
@@ -454,6 +484,7 @@ template <class Actions> struct room_settings;
 template <class Actions> struct room_settings_context {
   using actions_type = Actions;
   room_settings<Actions>* owner;
+  room_manage_style presentation;
   const palette* colours_;
   const looks_shown* looks_;
   room_settings_facts facts;
@@ -477,6 +508,10 @@ template <class Actions> struct room_settings_context {
     return std::get<index_in<proto::id<State>>(protocols{})>(protocol_parts);
   }
   void show_again();
+  room_settings_context(room_settings<Actions>* owner, const palette* colours, const looks_shown* looks,
+                        const room_settings_facts& shown)
+      : owner(owner), presentation(spl::visit([&](auto tag) { return manage_style_of(state_of<decltype(tag)>{}, *colours); }, shown.speaks)),
+        colours_(&presentation.colours), looks_(looks), facts(shown) {}
 };
 
 template <class Actions> struct room_settings : skiff::compose::Stacked {
@@ -487,7 +522,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   room_settings& operator=(room_settings&&) = delete;
 
   // The dialog it is shown in.
-  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{860.0f, 620.0f}}; }
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{802.0f, 684.0f}}; }
   using actions_type = Actions;
   using context_type = room_settings_context<Actions>;
   context_type context;
@@ -528,10 +563,10 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   // ---- the tabs down the left ------------------------------------------------
   static auto tab_row(const palette& colours, std::string text, icon_t icon, pick_tab what) {
     namespace c = skiff::compose;
-    return c::onPress(std::move(what), c::row(c::hbox(10.0f, {.fillX = true, .height = 40.0f,
+    return c::onPress(std::move(what), c::row(c::hbox(8.0f, {.fillX = true, .height = 40.0f,
         .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f,
-        .hoverBackground = colours.chosen, .selectedBackground = colours.chosen}),
-        c::styled({.alignSelf = scene::align::kMiddle}, icon_mark(colours, icon)),
+        .hoverBackground = colours.background, .selectedBackground = colours.tile}),
+        c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, icon_mark(colours, icon)),
         c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(text), 14.0f, colours.text)))));
   }
   using tab_row_t = decltype(tab_row(std::declval<const palette&>(), "", icon_t{}, pick_tab{}));
@@ -547,13 +582,14 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   static auto tab_list(context_type* box) {
     namespace c = skiff::compose;
     auto protocol = spl::visit([&](auto tag) { return protocol_rows(box, tabs_of_t<decltype(tag)>{}); }, box->facts.speaks);
-    return c::column(c::vbox(2.0f, {.fillY = true, .width = 220.0f, .padding = {4.0f, 12.0f, 12.0f, 12.0f}}),
-        c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), avatar_mark(box->facts.id, box->facts.name, 32.0f),
-            c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(box->facts.name, 15.0f, box->colours_->text, true)))),
+    return c::column(c::vbox(0.0f, {.fillY = true, .width = box->presentation.navigation_width, .padding = {0.0f, 8.0f, 32.0f, 8.0f}, .background = box->colours_->sidebar}),
+        c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), settings_room_avatar(*box->colours_, box->facts, 24.0f, spl::visit([&](auto tag) { return manage_avatar_icon_of(state_of<decltype(tag)>{}, box->facts); }, box->facts.speaks)),
+            c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(box->facts.name, 18.0f, box->colours_->text, true))),
+            c::visible(false, icon_button<sends<::mux::ui::request::close_manage>>(*box->colours_, icon::close{}, {}))),
         c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(protocol)),
-        tab_row(*box->colours_, spl::visit([](auto tag) { return std::string(preferences_title(state_of<decltype(tag)>{})); }, box->facts.speaks), icon::gear{}, {box->owner, settings_tab::general{}}),
-        tab_row(*box->colours_, "Notifications", icon::bell{}, {box->owner, settings_tab::notifications{}}),
-        tab_row(*box->colours_, "Appearance", icon::eye{}, {box->owner, settings_tab::looks{}}));
+        c::visible(!box->presentation.page_header, tab_row(*box->colours_, spl::visit([](auto tag) { return std::string(preferences_title(state_of<decltype(tag)>{})); }, box->facts.speaks), icon::gear{}, {box->owner, settings_tab::general{}})),
+        c::visible(!box->presentation.page_header, tab_row(*box->colours_, "Notifications", icon::bell{}, {box->owner, settings_tab::notifications{}})),
+        c::visible(!box->presentation.page_header, tab_row(*box->colours_, "Appearance", icon::eye{}, {box->owner, settings_tab::looks{}})));
   }
   using tab_list_t = decltype(tab_list(std::declval<context_type*>()));
   static auto tab_rows(tab_list_t& list) {
@@ -622,6 +658,11 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
     room_settings* box;
     using Answer = std::optional<::mux::ui::request::close_manage>;
     Answer operator()() const {
+      using manage_defaults::manage_close_editor;
+      const bool editor = spl::visit([&](auto tab) {
+        return std::apply([&](auto&... part) { return (manage_close_editor(tab, part) || ...); }, box->context.protocol_parts);
+      }, box->tab);
+      if (editor) { box->show_again(); return std::nullopt; }
       if (box->narrow && !box->navigation) { box->show_navigation(); return std::nullopt; }
       return ::mux::ui::request::close_manage{};
     }
@@ -630,7 +671,11 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   static auto body_row(context_type* box, page_t first) {
     namespace c = skiff::compose;
     return c::row(c::hbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), tab_list(box),
-        c::styled({.fillY = true, .grow = scene::axes::kX}, nodes::ScrollContainer<page_holder_t>(page_holder(std::move(first)))));
+        c::column(c::vbox(0.0f, {.fillY = true, .relativeSize = scene::axes::kY, .grow = scene::axes::kX,
+                                 .background = box->colours_->background}),
+            c::visible(box->presentation.page_header, page_header<back_it, close_it>(*box->colours_, "General", {box->owner}, {box->owner}, false, true)),
+            c::styled({.fillX = true, .relativeSize = scene::axes::kX, .grow = scene::axes::kY},
+                nodes::ScrollContainer<page_holder_t>(page_holder(std::move(first))))));
   }
   using body_row_t = decltype(body_row(std::declval<context_type*>(), std::declval<page_t>()));
   struct parts_t { header_t header; body_row_t body; } parts;
@@ -648,17 +693,21 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   room_settings(const ui_needs<Actions>& n, const room_settings_facts& shown) : room_settings(n.colours, n.looks, shown) {}
   room_settings(const palette *colours, const looks_shown *looks,
                 const room_settings_facts &shown)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})), context{this, colours, looks, shown, {}}, colours_(context.colours_),
+      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})), context{this, colours, looks, shown}, colours_(context.colours_),
         looks_(context.looks_), facts(context.facts),
         parts{.header = page_header<back_it, close_it>(*colours, "Room Settings - " + shown.name, {this}, {this}, false, true),
               .body =
                   body_row(&context, page_t(std::in_place_index<0>, room_general_page(*colours, shown)))} {
+    parts.header.setVisible(!context.presentation.page_header);
+    this->apply({.background = colours_->background});
     tab = spl::visit([](auto tag) -> settings_tab_t { return initial_manage_tab(state_of<decltype(tag)>{}); }, facts.speaks);
     this->rebuild();
   }
 
   [[nodiscard]] auto& tabs() { return std::get<0>(parts.body.fParts); }
-  [[nodiscard]] auto& content() { return std::get<1>(parts.body.fParts); }
+  [[nodiscard]] auto& pane() { return std::get<1>(parts.body.fParts); }
+  [[nodiscard]] auto& content() { return std::get<1>(pane().fParts); }
+  [[nodiscard]] auto& pane_header() { return std::get<0>(pane().fParts); }
   [[nodiscard]] page_holder_t& holder() { return std::get<0>(content().fChildren); }
   [[nodiscard]] page_t& page() { return std::get<0>(holder().fParts); }
   void show_navigation() {
@@ -669,9 +718,12 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   void arrange_navigation() {
     const bool menu = !narrow || navigation;
     tabs().setVisible(menu);
-    tabs().apply({.width = narrow ? measured_width : 220.0f});
+    tabs().apply({.width = narrow ? measured_width : context.presentation.navigation_width});
+    std::get<2>(std::get<0>(tabs().fParts).fParts).setVisible(narrow && navigation);
+    pane().setVisible(!narrow || !navigation);
     content().setVisible(!narrow || !navigation);
     std::get<0>(parts.header.fParts).setVisible(narrow && !navigation);
+    std::get<0>(pane_header().fParts).setVisible(narrow && !navigation);
     this->invalidateLayout();
   }
   // A tab shown from current facts at the next frame.
@@ -710,7 +762,13 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
                         else page.template emplace<page_of_t<decltype(theirs)>>(&context, facts);
                       }},
                   to);
-    std::ranges::for_each(tab_rows(tabs()), [&](auto* row) { row->apply({.selected = !navigation && row->fMake.tab.index() == tab.index()}); });
+    std::get<1>(pane_header().fParts).setText(spl::visit([](auto one) { return std::string(tab_title(one)); }, tab));
+    std::get<1>(pane_header().fParts).setFontSize(20.0f);
+    std::ranges::for_each(tab_rows(tabs()), [&](auto* row) {
+      const bool selected = !navigation && row->fMake.tab.index() == tab.index();
+      row->apply({.selected = selected});
+      std::get<1>(row->fParts).setBold(selected);
+    });
     this->arrange_navigation();
     if (std::exchange(to_top, false))
       content().scrollTo(0.0f);

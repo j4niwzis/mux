@@ -13,6 +13,10 @@ import skiff.compose;
 import skiff.model;
 import skiff.nodes.flow;
 import skiff.nodes.text;
+import skiff.nodes.icon;
+import skiff.widgets.dropdown;
+import skiff.widgets.sliderbar;
+import skiff.widgets.textarea;
 import skiff.widgets.button;
 import mux.core;
 import mux.config;
@@ -35,9 +39,16 @@ struct part {
   bool confirming_encryption = false, confirming_upgrade = false;
   std::optional<power_needs> permissions;
   std::optional<room_change::set_profile> profile;
+  bool profile_editor = false, powers_editor = false, power_form = false;
+  std::optional<std::int64_t> editing_power;
+  std::optional<std::map<std::string, power_tag>> tag_draft;
+  std::set<std::int64_t> deleted_powers;
   std::string local_address, upgrade_version, upgrade_creators;
   std::string tag_power, tag_name, tag_color, tag_icon;
   std::string account_type, account_json;
+  bool developer_tools = false, expanded_state = false, expanded_account_data = false, account_editor = false;
+  std::vector<emote_pack> packs;
+  std::string pack_name;
   std::string member_query;
   std::size_t member_filter = 0, member_order = 0;
 };
@@ -129,8 +140,8 @@ template <class Box> void completed(Box* box, const management_saved& one) {
         [&](const room_change::set_history& change) { rules.history = change.rule; },
         [&](room_change::encrypt) { facts.encrypted = true; },
         [&](const room_change::set_permissions& change) { rules.needs = change.after; rules.power_default = change.after.users_default; kept.permissions.reset(); },
-        [&](const room_change::set_tags& change) { kept.data.tags = change.tags;  },
-        [&](const room_change::set_profile& change) { if (change.name) facts.name = *change.name; if (change.topic) facts.topic = *change.topic; if (change.avatar) facts.avatar = change.avatar->empty() ? std::nullopt : change.avatar; kept.profile.reset(); },
+        [&](const room_change::set_tags& change) { kept.data.tags = change.tags; kept.tag_draft.reset(); kept.deleted_powers.clear(); },
+        [&](const room_change::set_profile& change) { if (change.name) facts.name = *change.name; if (change.topic) facts.topic = *change.topic; if (change.avatar) facts.avatar = change.avatar->empty() ? std::nullopt : change.avatar; kept.profile.reset(); kept.profile_editor = false; },
         [&](const room_change::set_addresses& change) { facts.alias = change.main; facts.other_aliases = std::ranges::to<std::vector<std::string>>(std::views::filter(change.published, [&](const auto& alias) { return !change.main || alias != *change.main; })); },
         [&](const room_change::set_directory& change) { kept.data.directory = change.published; },
         [&](const room_change::set_power& change) { rules.powers.insert_or_assign(change.user, change.level);
@@ -150,25 +161,96 @@ template <class Box> void completed(Box* box, const management_saved& one) {
   box->show_again();
 }
 
+// Folds 2.7.2: S100=4, S200=8, S300=12, S400=16, S700=32.
+// Page content, cards and controls use the same tokens as Cinny's components.
 inline skiff::compose::Look page_look() {
-  return skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
-      .padding = {8.0f, 24.0f, 24.0f, 24.0f}});
+  return skiff::compose::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY,
+      .padding = {16.0f, 16.0f, 100.0f, 16.0f}});
 }
-// A setting tile uses the same wrapped label node as the client's radio
-// choices, with its control beside it and the description under its title.
-template <class Control> auto tile(const palette& colours, std::string title, std::string description, Control control) {
+inline auto section_title(const palette& colours, std::string title) {
+  return nodes::Text(std::move(title), 12.0f, colours.text);
+}
+template <class... Children> auto card(const palette& colours, Children... children) {
+  return skiff::compose::column(skiff::compose::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY,
+      .padding = {12.0f, 12.0f, 12.0f, 12.0f}, .cornerRadius = 8.0f, .background = colours.tile}), std::move(children)...);
+}
+template <class... Children> auto section(const palette& colours, std::string title, Children... children) {
+  return skiff::compose::column(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      section_title(colours, std::move(title)), std::move(children)...);
+}
+template <class Control> auto setting_tile(const palette& colours, std::string title, std::string description, Control control) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
-      .padding = {14.0f, 14.0f, 14.0f, 14.0f}, .cornerRadius = 8.0f, .background = colours.tile}),
-      c::column(c::vbox(4.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX}),
+  const bool described = !description.empty();
+  return c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::column(c::vbox(4.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX}),
           wrapped(nodes::Text(std::move(title), 14.0f, colours.text)),
-          wrapped(nodes::Text(std::move(description), 13.0f, colours.dim))), std::move(control));
+          c::visible(described, wrapped(nodes::Text(std::move(description), 12.0f, colours.dim)))),
+      c::styled({.alignSelf = scene::align::kMiddle}, std::move(control)));
 }
-template <class Act> auto action(const palette& colours, std::string label, Act act, bool allowed = true) {
-  return skiff::compose::styled({.width = 130.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle, .disabled = !allowed},
-      widgets::Button<Act>(colours.widgets, std::move(label), std::move(act)));
+template <class Control> auto tile(const palette& colours, std::string title, std::string description, Control control) {
+  return card(colours, setting_tile(colours, std::move(title), std::move(description), std::move(control)));
 }
-
+enum class action_style { secondary, primary, success };
+template <class Act> auto action(const palette& colours, std::string label, Act act, bool allowed = true, action_style style = action_style::secondary) {
+  namespace c = skiff::compose;
+  auto spoken = label;
+  const bool dark = (colours.background & 0xffu) < 128;
+  const auto background = style == action_style::primary ? colours.accent : style == action_style::success ? (dark ? 0xff85e0bau : 0xff00844cu) : colours.chosen;
+  const auto ink = style == action_style::secondary ? colours.text : style == action_style::primary ? colours.widgets.fOnAccent : (dark ? 0xff0f3d2au : 0xffffffffu);
+  return c::onPress(std::move(act), c::row(c::hbox(0.0f, {.height = 32.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 4.0f, .background = background, .hoverBackground = colours.widgets.fSurfaceHover, .border = scene::Border{colours.widgets.fSurfaceActive, style == action_style::secondary ? 1.0f : 0.0f}, .alpha = allowed ? 1.0f : 0.38f, .disabled = !allowed}),
+      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 12.0f, ink))), std::move(spoken));
+}
+template <class Act> auto switch_control(const palette& colours, bool on, Act act, bool allowed = true) {
+  auto toggle = widgets::Toggle<Act>(colours.widgets, std::move(act));
+  toggle.setOnNow(on);
+  toggle.apply({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle, .disabled = !allowed});
+  return toggle;
+}
+inline auto choice_head(const palette& colours, std::string value) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(4.0f, {.fillX = true, .height = 24.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f},
+      .cornerRadius = 12.0f, .background = colours.chosen, .hoverBackground = colours.widgets.fSurfaceHover}),
+      c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.text)),
+      c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 12.0f, colours.text))));
+}
+template <class Choose> auto compact_choice(const palette& colours, std::string,
+    std::vector<std::string> names, std::size_t selected, Choose choose) {
+  const auto value = selected < names.size() ? names[selected] : std::string();
+  const auto width = std::clamp(static_cast<float>(value.size()) * 6.5f + 32.0f, 72.0f, 180.0f);
+  auto head = choice_head(colours, value);
+  auto rows = std::ranges::to<std::vector>(std::views::transform(names, [&](const auto& name) { return choice_menu_option(colours, name); }));
+  auto menu = widgets::ChoiceMenu<Choose, decltype(head), choice_menu_option_t, show_choice_menu>(
+      std::move(names), selected, std::move(choose), std::move(head), std::move(rows), show_choice_menu{colours.text, colours.accent});
+  menu.apply({.width = width, .relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle});
+  return menu;
+}
+inline auto multiline_input(const palette& colours, std::string text, std::string placeholder, float height = 96.0f) {
+  auto input = std::make_shared<widgets::TextArea<>>(colours.widgets, std::move(placeholder));
+  input->setText(std::move(text));
+  input->setSingleLine(false);
+  input->setMaxLines(6);
+  input->apply({.fillX = true, .height = height, .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 4.0f,
+                .background = colours.chosen, .border = scene::Border{colours.widgets.fSurfaceActive, 1.0f}});
+  return input;
+}
+enum class editor { profile, powers, power, developer, state_events, account_data, account_form };
+template <class Box> struct edit_section {
+  Box* box; editor target; bool open = true;
+  skiff::model::Nothing operator()() const {
+    box->show_again();
+    auto& kept = box->template part<state>();
+    switch (target) {
+      case editor::profile: kept.profile_editor = open; if (!open) kept.profile.reset(); break;
+      case editor::powers: kept.powers_editor = open; break;
+      case editor::power: kept.power_form = open; if (open) { kept.editing_power.reset(); kept.tag_power.clear(); kept.tag_name.clear(); kept.tag_color.clear(); kept.tag_icon.clear(); } break;
+      case editor::developer: kept.developer_tools = !kept.developer_tools; break;
+      case editor::state_events: kept.expanded_state = !kept.expanded_state; break;
+      case editor::account_data: kept.expanded_account_data = !kept.expanded_account_data; break;
+      case editor::account_form: kept.account_editor = open; break;
+    }
+    return {};
+  }
+};
 // General: profile, options, addresses, and advanced options in Cinny's order.
 struct remove_avatar {};
 struct save_profile {};
@@ -177,7 +259,7 @@ struct upgrade_room {};
 struct cancel_upgrade {};
 struct save_power {};
 struct delete_power {};
-template <class Box> struct general_draft { Box* box; std::string name, topic, address, version, creators; std::optional<std::string> avatar; };
+template <class Box> struct general_draft { Box* box; std::string name, topic, address, version, creators; std::optional<std::string> avatar; std::shared_ptr<widgets::TextArea<>> topic_input{}; };
 template <class Box> struct general_actions {
   struct choose_access {
     Box* box; std::vector<join_rule_t> rules;
@@ -253,8 +335,8 @@ template <class Box> auto access_menu(Box* box) {
     rules.emplace_back(join_rule::open{}); names.emplace_back("Public");
     const auto selected = std::ranges::find_if(rules, [&](const auto& rule) { return rule.index() == rules_of(facts.theirs).join_rule.index(); });
     const auto index = static_cast<std::size_t>(selected - rules.begin());
-    return skiff::compose::styled({.width = 180.0f, .disabled = !editable(box, power_need::change_access{})},
-        make_choice_menu(*box->colours_, "", std::move(names), index, typename general_actions<Box>::choose_access{box, std::move(rules)}));
+    return skiff::compose::styled({.relativeSize = scene::axes::kNone, .disabled = !editable(box, power_need::change_access{})},
+        compact_choice(*box->colours_, "", std::move(names), index, typename general_actions<Box>::choose_access{box, std::move(rules)}));
   }
 
 template <class Box> struct general_events {
@@ -262,7 +344,8 @@ template <class Box> struct general_events {
   auto on(save_profile, const general_draft<Box>& draft) const {
     room_change::set_profile change;
     if (editable(box, power_need::rename{}) && draft.name != box->facts.name) change.name = draft.name;
-    if (editable(box, power_need::retopic{}) && draft.topic != box->facts.topic) change.topic = draft.topic;
+    const auto& topic = draft.topic_input ? draft.topic_input->text() : draft.topic;
+    if (editable(box, power_need::retopic{}) && topic != box->facts.topic) change.topic = topic;
     if (editable(box, power_need::change_avatar{}) && draft.avatar && *draft.avatar != box->facts.avatar.value_or("")) change.avatar = draft.avatar;
     return skiff::model::Up{change.name || change.topic || change.avatar ? submit(box, std::move(change)) : std::nullopt};
   }
@@ -302,7 +385,8 @@ template <class Box> void preserve_draft(const general_draft<Box>& draft) {
   auto& kept = draft.box->template part<state>();
   room_change::set_profile profile;
   if (draft.name != draft.box->facts.name) profile.name = draft.name;
-  if (draft.topic != draft.box->facts.topic) profile.topic = draft.topic;
+  const auto& topic = draft.topic_input ? draft.topic_input->text() : draft.topic;
+  if (topic != draft.box->facts.topic) profile.topic = topic;
   if (draft.avatar && *draft.avatar != draft.box->facts.avatar.value_or("")) profile.avatar = draft.avatar;
   kept.profile = profile.name || profile.topic || profile.avatar ? std::optional(profile) : std::nullopt;
   kept.local_address = draft.address; kept.upgrade_version = draft.version; kept.upgrade_creators = draft.creators;
@@ -339,7 +423,7 @@ template <class Box> auto space_children(Box* box, const room_settings_facts& fa
             return c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                 nodes::Text(child.name, 14.0f, box->colours_->text), action(*box->colours_, "Remove", remove_child<Box>{box, child.id}, editable(box, power_need::change_settings{})));
           }))), c::styled({.disabled = !editable(box, power_need::change_settings{})},
-          make_choice_menu(*box->colours_, "Add Room", names, rooms.size(), choose_child<Box>{box, rooms}))));
+          compact_choice(*box->colours_, "Add Room", names, rooms.size(), choose_child<Box>{box, rooms}))));
 }
 inline auto related_room(const palette& colours, std::string label, const std::optional<std::string>& room) {
   return skiff::compose::visible(room.has_value(), action(colours, std::move(label),
@@ -348,6 +432,8 @@ inline auto related_room(const palette& colours, std::string label, const std::o
 template <class Box> auto general_page(Box* box, const room_settings_facts& facts) {
   namespace c = skiff::compose; using acts = general_actions<Box>; using draft = general_draft<Box>;
   const auto& colours = *box->colours_; const auto& kept = box->template part<state>();
+  auto topic_input = multiline_input(colours, kept.profile && kept.profile->topic ? *kept.profile->topic : facts.topic, "");
+  topic_input->apply({.disabled = !editable(box, power_need::retopic{})});
   auto published = facts.other_aliases;
   if (facts.alias && !std::ranges::contains(published, *facts.alias)) published.insert(published.begin(), *facts.alias);
   auto rows = [&](const auto& aliases, bool local) {
@@ -355,41 +441,64 @@ template <class Box> auto general_page(Box* box, const room_settings_facts& fact
         std::views::transform(aliases, [&](const auto& alias) { return address_row(box, alias, std::ranges::contains(published, alias), local); })));
   };
   return c::local<draft>(general_events<Box>{box}, c::column(page_look(),
-      tab_heading(colours, "General"), explained(colours, kept.pending ? "Saving…" : kept.loading ? "Loading…" : kept.error),
-      c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), avatar_mark(facts.id, facts.name, 88.0f),
-          c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          action(colours, "Upload Avatar", sends<::mux::ui::request::pick_room_avatar>{{facts.chat}}, editable(box, power_need::change_avatar{})),
-          action(colours, "Remove Avatar", sends<remove_avatar>{}, editable(box, power_need::change_avatar{})))),
-      c::shown_for<skiff::model::Field<&draft::avatar>>([](const auto& avatar) { return avatar.has_value(); }, explained(colours, "Avatar change pending. Save to apply.")),
-      c::styled({.disabled = !editable(box, power_need::rename{})}, model_field<&draft::name>(colours, "Name", "")),
-      c::styled({.disabled = !editable(box, power_need::retopic{})}, model_field<&draft::topic>(colours, "Topic", "")),
-      action(colours, "Save", sends<save_profile>{}, editable(box, power_need::rename{}) || editable(box, power_need::retopic{}) || editable(box, power_need::change_avatar{})),
-      part_heading(colours, "Options"),
-      tile(colours, facts.space ? "Space Access" : "Room Access", "Change how people can join the room.", access_menu(box)),
-      tile(colours, "Message History Visibility", "Changes to history visibility will only apply to future messages.",
-          c::styled({.width = 180.0f, .disabled = !editable(box, power_need::change_history{})}, make_choice_menu(colours, "",
-              {"All Messages", "After Invite", "After Join", "All Messages (Guests)"}, rules_of(facts.theirs).history.index(), typename acts::choose_history{box}))),
-      tile(colours, "Room Encryption", "Once enabled, encryption cannot be disabled!",
-          action(colours, facts.encrypted ? "Enabled" : kept.confirming_encryption ? "Enable E2E Encryption" : "Enable", typename acts::encryption{box}, !facts.encrypted && editable(box, power_need::encrypt{}))),
-      c::visible(kept.confirming_encryption, explained(colours, "Are you sure? Once enabled, encryption cannot be disabled!")),
-      c::visible(kept.confirming_encryption, action(colours, "Cancel", typename acts::encryption{box, true})),
-      tile(colours, "Publish to Directory", "List the room in the public directory to make it discoverable by others.",
-          action(colours, kept.data.directory.value_or(false) ? "Published" : "Publish", typename acts::directory{box}, editable(box, power_need::change_address{}) && kept.data.directory.has_value())),
-      part_heading(colours, "Addresses"), part_heading(colours, "Published Addresses"), rows(published, false),
-      part_heading(colours, "Local Addresses"), rows(kept.data.local_aliases, true),
-      model_field<&draft::address>(colours, "New Local Address", "address"), action(colours, "Save", sends<create_address>{}, !kept.pending),
-      space_children(box, facts), part_heading(colours, "Advanced Options"), explained(colours, "Current version: " + rules_of(facts.theirs).version),
-      related_room(colours, "Previous Room", rules_of(facts.theirs).predecessor),
-      related_room(colours, "Replacement Room", rules_of(facts.theirs).replaced_by),
-      c::visible(kept.confirming_upgrade, explained(colours, "Upgrading creates a replacement room. Members will need to move to the new room.")),
-      c::visible(kept.confirming_upgrade, model_field<&draft::version>(colours, "Room Version", "")),
-      c::visible(kept.confirming_upgrade, model_field<&draft::creators>(colours, "Additional Creators (version 12 or newer)", "Space-separated Matrix IDs")),
-      action(colours, "Upgrade", sends<upgrade_room>{}, editable(box, power_need::upgrade{}) && !kept.data.versions.empty()),
-      c::visible(kept.confirming_upgrade, action(colours, "Cancel", sends<cancel_upgrade>{}))),
+      c::visible(kept.pending || kept.loading || !kept.error.empty(), explained(colours, kept.pending ? "Saving…" : kept.loading ? "Loading…" : kept.error)),
+      section(colours, "Profile", card(colours,
+          c::visible(!kept.profile_editor, c::row(c::hbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::column(c::vbox(12.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX}),
+                  c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                      wrapped(nodes::Text(facts.name, 16.0f, colours.text)),
+                      c::visible(!facts.topic.empty(), wrapped(nodes::Text(facts.topic, 12.0f, colours.text)))),
+                  c::visible(editable(box, power_need::rename{}) || editable(box, power_need::retopic{}) || editable(box, power_need::change_avatar{}),
+                      action(colours, "Edit", edit_section<Box>{box, editor::profile}))), settings_room_avatar(colours, facts, 96.0f, facts.encrypted ? icon_t{icon::lock{}} : icon_t{icon::room{}}))),
+          c::visible(kept.profile_editor, c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::row(c::hbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  c::column(c::vbox(4.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX}),
+                      section_title(colours, "Avatar"),
+                      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                          action(colours, "Upload", sends<::mux::ui::request::pick_room_avatar>{{facts.chat}}, editable(box, power_need::change_avatar{})),
+                          action(colours, "Remove", sends<remove_avatar>{}, editable(box, power_need::change_avatar{})))),
+                  settings_room_avatar(colours, facts, 96.0f, facts.encrypted ? icon_t{icon::lock{}} : icon_t{icon::room{}})),
+              c::shown_for<skiff::model::Field<&draft::avatar>>([](const auto& avatar) { return avatar.has_value(); }, explained(colours, "Avatar change pending. Save to apply.")),
+              c::styled({.disabled = !editable(box, power_need::rename{})}, model_field<&draft::name>(colours, "Name", "")),
+              c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), section_title(colours, "Topic"), topic_input),
+              c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  action(colours, "Save", sends<save_profile>{}, editable(box, power_need::rename{}) || editable(box, power_need::retopic{}) || editable(box, power_need::change_avatar{}), action_style::success),
+                  action(colours, "Cancel", edit_section<Box>{box, editor::profile, false})))))),
+      section(colours, "Options",
+          tile(colours, facts.space ? "Space Access" : "Room Access", facts.space ? "Change how people can join the space." : "Change how people can join the room.", access_menu(box)),
+          tile(colours, "Message History Visibility", "Changes to history visibility will only apply to future messages. The visibility of existing history will have no effect.",
+              c::styled({.relativeSize = scene::axes::kNone, .disabled = !editable(box, power_need::change_history{})}, compact_choice(colours, "",
+                  {"All Messages", "After Invite", "After Join", "All Messages (Guests)"}, rules_of(facts.theirs).history.index(), typename acts::choose_history{box}))),
+          tile(colours, "Room Encryption", facts.encrypted ? "Messages in this room are protected by end-to-end encryption." : "Once enabled, encryption cannot be disabled!",
+              action(colours, facts.encrypted ? "Enabled" : kept.confirming_encryption ? "Enable E2E Encryption" : "Enable", typename acts::encryption{box}, facts.encrypted || editable(box, power_need::encrypt{}), facts.encrypted ? action_style::success : action_style::primary)),
+          c::visible(kept.confirming_encryption, card(colours,
+              explained(colours, "Are you sure? Once enabled, encryption cannot be disabled!"),
+              action(colours, "Cancel", typename acts::encryption{box, true}))),
+          tile(colours, "Publish to Directory", facts.space ? "List the space in the public directory to make it discoverable by others." : "List the room in the public directory to make it discoverable by others.",
+              switch_control(colours, kept.data.directory.value_or(false), typename acts::directory{box}, editable(box, power_need::change_address{}) && kept.data.directory.has_value()))),
+      section(colours, "Addresses",
+          card(colours, section_title(colours, "Published Addresses"), rows(published, false)),
+          card(colours, section_title(colours, "Local Addresses"), rows(kept.data.local_aliases, true),
+              c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&draft::address>(colours, "", "New address")),
+                  action(colours, "Save", sends<create_address>{}, !kept.pending)))),
+      space_children(box, facts),
+      section(colours, "Advanced Options",
+          tile(colours, facts.space ? "Upgrade Space" : "Upgrade Room", "Current version: " + rules_of(facts.theirs).version,
+              action(colours, "Upgrade", sends<upgrade_room>{}, editable(box, power_need::upgrade{}) && !kept.data.versions.empty())),
+          related_room(colours, "Previous Room", rules_of(facts.theirs).predecessor),
+          related_room(colours, "Replacement Room", rules_of(facts.theirs).replaced_by),
+          c::visible(kept.confirming_upgrade, card(colours,
+              explained(colours, "Upgrading creates a replacement room. Members will need to move to the new room."),
+              model_field<&draft::version>(colours, "Room Version", ""),
+              model_field<&draft::creators>(colours, "Additional Creators (version 12 or newer)", "Space-separated Matrix IDs"),
+              c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  action(colours, "Upgrade", sends<upgrade_room>{}, editable(box, power_need::upgrade{})),
+                  action(colours, "Cancel", sends<cancel_upgrade>{})))))),
       draft{box, kept.profile && kept.profile->name ? *kept.profile->name : facts.name,
           kept.profile && kept.profile->topic ? *kept.profile->topic : facts.topic, kept.local_address,
           kept.upgrade_version.empty() ? kept.data.default_version : kept.upgrade_version, kept.upgrade_creators,
-          kept.profile ? kept.profile->avatar : std::nullopt});
+          kept.profile ? kept.profile->avatar : std::nullopt, std::move(topic_input)});
 }
 
 // Members: the same membership filters and power-first ordering as Cinny.
@@ -432,8 +541,8 @@ template <class Box> auto managed_member_row(Box* box, const managed_member& mem
   auto names = std::ranges::to<std::vector<std::string>>(std::views::transform(values, [&](auto value) { return power_name(value, kept.data); }));
   return c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, member_row(*box->colours_, mux::member{member.id, member.name, std::nullopt, member.avatar}, power_name(level, kept.data))),
-      c::styled({.width = 160.0f, .disabled = !editable(box, power_need::change_permissions{}) || level == kCreatorPower || (level >= box->facts.mine && member.id != box->facts.chat.account.address)},
-          make_choice_menu(*box->colours_, "", std::move(names), selected, choose_member_power<Box>{box, member.id, std::move(values)})));
+      c::styled({.relativeSize = scene::axes::kNone, .disabled = !editable(box, power_need::change_permissions{}) || level == kCreatorPower || (level >= box->facts.mine && member.id != box->facts.chat.account.address)},
+          compact_choice(*box->colours_, "", std::move(names), selected, choose_member_power<Box>{box, member.id, std::move(values)})));
 }
 template <class Box> auto member_rows(Box* box, const member_listing& listing) {
   namespace c = skiff::compose;
@@ -468,11 +577,11 @@ template <class Box> auto members_page(Box* box, const room_settings_facts& fact
   };
   using rows_t = decltype(member_rows(box, member_listing{}));
   return c::local<draft>(member_events<Box>{}, c::column(page_look(),
-      tab_heading(*box->colours_, "Members"), explained(*box->colours_, kept.error),
+      c::visible(!kept.error.empty(), explained(*box->colours_, kept.error)),
       model_field<&draft::query>(*box->colours_, "", "Search"),
-      make_choice_menu(*box->colours_, "", {"Joined", "Invited", "Left", "Kicked", "Banned"}, kept.member_filter, select_filter{}),
-      make_choice_menu(*box->colours_, "", {"A to Z", "Z to A", "Newest", "Oldest"}, kept.member_order, select_order{}),
-      c::visible(editable(box, power_need::invite{}), action(*box->colours_, "Invite", sends<::mux::ui::request::open_room_invite>{{facts.chat}})),
+      c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::justify::end{}),
+          compact_choice(*box->colours_, "", {"Joined", "Invited", "Left", "Kicked", "Banned"}, kept.member_filter, select_filter{}),
+          compact_choice(*box->colours_, "", {"A to Z", "Z to A", "Newest", "Oldest"}, kept.member_order, select_order{})),
       c::derived<draft>(listing, c::mount<rows_t, member_listing>([box](const member_listing& data) {
         return std::tuple{member_rows(box, data)};
       }, {.fillX = true, .autoSize = scene::axes::kY}))), draft{box, kept.member_query, kept.member_filter, kept.member_order});
@@ -540,14 +649,17 @@ template <class Box> struct power_events {
       const auto need = event == rules.needs.events.end() ? rules.needs.state_default : event->second;
       if (!number || name.empty() || box->facts.mine < need) return skiff::model::Up{std::optional<request::change_room>{}};
       if (box->facts.mine != kCreatorPower && *number > box->facts.mine) return skiff::model::Up{std::optional<request::change_room>{}};
-      auto tags = box->template part<state>().data.tags;
+      auto tags = box->template part<state>().tag_draft.value_or(box->template part<state>().data.tags);
       auto& tag = tags[std::to_string(*number)];
       tag.name = name;
       const auto color = draft.color;
       tag.color = color.empty() ? std::nullopt : std::optional(color);
       const auto icon = draft.icon;
       if (!icon.empty()) { if (!tag.icon) tag.icon.emplace(); tag.icon->key = icon; } else tag.icon.reset();
-      return skiff::model::Up{submit(box, room_change::set_tags{std::move(tags)})};
+      box->show_again();
+      box->template part<state>().tag_draft = std::move(tags);
+      box->template part<state>().power_form = false;
+      return skiff::model::Up{std::optional<request::change_room>{}};
     }
   auto on(delete_power, const power_draft<Box>& draft) const {
     const auto number = integer(draft.power);
@@ -557,9 +669,12 @@ template <class Box> struct power_events {
     if (!number || box->template part<state>().pending || box->facts.mine < need ||
         std::ranges::contains(power_values(rules, room_management{}), *number))
       return skiff::model::Up{std::optional<request::change_room>{}};
-    auto tags = box->template part<state>().data.tags;
+    auto tags = box->template part<state>().tag_draft.value_or(box->template part<state>().data.tags);
     if (!tags.erase(std::to_string(*number))) return skiff::model::Up{std::optional<request::change_room>{}};
-    return skiff::model::Up{submit(box, room_change::set_tags{std::move(tags)})};
+    box->show_again();
+      box->template part<state>().tag_draft = std::move(tags);
+      box->template part<state>().power_form = false;
+      return skiff::model::Up{std::optional<request::change_room>{}};
   }
 };
 template <class Box> void preserve_draft(const power_draft<Box>& draft) {
@@ -567,85 +682,253 @@ template <class Box> void preserve_draft(const power_draft<Box>& draft) {
   kept.tag_power = draft.power; kept.tag_name = draft.name;
   kept.tag_color = draft.color; kept.tag_icon = draft.icon;
 }
+[[nodiscard]] inline skia::SkColor power_colour(std::int64_t power, const room_management& data) {
+  if (const auto found = data.tags.find(std::to_string(power)); found != data.tags.end() && found->second.color) {
+    auto text = std::string_view(*found->second.color);
+    if (text.starts_with('#')) text.remove_prefix(1);
+    std::uint32_t value = 0;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value, 16);
+    if (text.size() == 6 && error == std::errc{} && end == text.data() + text.size()) return 0xff000000u | value;
+  }
+  static const std::map<std::int64_t, skia::SkColor> defaults{{9001, 0xffff6a00u}, {150, 0xffff6a7fu}, {101, 0xff0000ffu},
+      {100, 0xff0088ffu}, {50, 0xff1fd81fu}, {0, 0xff91cfdfu}, {-1, 0xff888888u}};
+  const auto found = defaults.find(power);
+  return found == defaults.end() ? 0xff888888u : found->second;
+}
+inline auto power_chip(const palette& colours, std::string name, skia::SkColor colour) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(4.0f, {.height = 24.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .padding = {0.0f, 8.0f, 0.0f, 8.0f}, .cornerRadius = 4.0f, .background = colours.chosen}),
+      c::styled({.width = 14.0f, .height = 14.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::dot{colour}), colour)),
+      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(name), 14.0f, colours.text)));
+}
+template <class Box> auto power_chips(Box* box) {
+  namespace c = skiff::compose;
+  const auto& rules = rules_of(box->facts.theirs); const auto& kept = box->template part<state>();
+  auto chips = c::many(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
+      std::views::transform(power_values(rules, kept.data), [&](auto value) {
+        return power_chip(*box->colours_, power_name(value, kept.data), power_colour(value, kept.data));
+      })));
+  chips.fStack.wrap = true;
+  return chips;
+}
 template <class Box> auto permission_row(Box* box, const permission_item& item) {
   const auto& rules = rules_of(box->facts.theirs);
   const auto& kept = box->template part<state>();
   const auto& draft = kept.permissions ? *kept.permissions : rules.needs;
   const auto current = required(draft, item.location);
+  const bool user = spl::visit(spl::overloaded{
+      [](const power_need_t& need) { return spl::visit(spl::overloaded{[](power_need::default_role) { return true; }, [](auto) { return false; }}, need); },
+      [](const event_permission&) { return false; }}, item.location);
   auto values = power_values(rules, kept.data);
   if (!std::ranges::contains(values, current)) values.push_back(current);
   std::ranges::sort(values, std::greater{});
-  const auto names = std::ranges::to<std::vector<std::string>>(std::views::transform(values, [&](auto value) { return power_name(value, kept.data) + " & Above"; }));
+  const auto names = std::ranges::to<std::vector<std::string>>(std::views::transform(values, [&](auto value) { return power_name(value, kept.data) + (user ? "" : " & Above"); }));
   const auto selected = static_cast<std::size_t>(std::ranges::find(values, current) - values.begin());
-  return tile(*box->colours_, item.title, current != required(rules.needs, item.location) ? "Unsaved change" : "",
-      skiff::compose::styled({.width = 180.0f, .disabled = !editable(box, power_need::change_permissions{}) || required(rules.needs, item.location) > box->facts.mine},
-          make_choice_menu(*box->colours_, "", names, selected, typename permission_actions<Box>::choose{box, item.location, std::move(values)})));
+  return setting_tile(*box->colours_, item.title, user ? "Default power level for all users." : "",
+      skiff::compose::styled({.relativeSize = scene::axes::kNone, .disabled = !editable(box, power_need::change_permissions{}) || required(rules.needs, item.location) > box->facts.mine},
+          compact_choice(*box->colours_, "", names, selected, typename permission_actions<Box>::choose{box, item.location, std::move(values)})));
 }
 template <class Box> auto permission_section(Box* box, const permission_group& group) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      part_heading(*box->colours_, group.title),
-      c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
-          std::views::transform(group.items, [&](const auto& item) { return permission_row(box, item); }))));
+  auto rows = c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .cornerRadius = 8.0f,
+                                   .background = box->colours_->tile}), std::ranges::to<std::vector>(
+      std::views::transform(group.items, [&](const auto& item) {
+        return c::styled({.padding = {12.0f, 12.0f, 12.0f, 12.0f}}, permission_row(box, item));
+      })));
+  return section(*box->colours_, group.title, std::move(rows));
+}
+template <class Box> struct edit_power {
+  Box* box; std::int64_t power;
+  skiff::model::Nothing operator()() const {
+    box->show_again();
+    auto& kept = box->template part<state>();
+    const auto& tags = kept.tag_draft ? *kept.tag_draft : kept.data.tags;
+    const auto found = tags.find(std::to_string(power));
+    kept.tag_power = std::to_string(power); kept.tag_name = power_name(power, kept.data);
+    kept.tag_color = found != tags.end() ? found->second.color.value_or("") : "";
+    kept.tag_icon = found != tags.end() && found->second.icon ? found->second.icon->key.value_or("") : "";
+    kept.power_form = true; kept.editing_power = power;
+    return {};
+  }
+};
+template <class Box> struct delete_tag {
+  Box* box; std::int64_t power;
+  skiff::model::Nothing operator()() const {
+    auto& kept = box->template part<state>();
+    if (kept.pending || std::ranges::contains(power_values(rules_of(box->facts.theirs), room_management{}), power)) return {};
+    if (!kept.deleted_powers.erase(power)) kept.deleted_powers.insert(power);
+    box->show_again();
+    return {};
+  }
+};
+template <class Box> struct apply_tags {
+  Box* box; bool reset = false;
+  std::optional<request::change_room> operator()() const {
+    auto& kept = box->template part<state>();
+    if (kept.pending) return {};
+    if (reset) { kept.tag_draft.reset(); kept.deleted_powers.clear(); box->show_again(); return {}; }
+    if (!kept.tag_draft && kept.deleted_powers.empty()) return {};
+    auto tags = kept.tag_draft.value_or(kept.data.tags);
+    std::ranges::for_each(kept.deleted_powers, [&](auto value) { tags.erase(std::to_string(value)); });
+    return submit(box, room_change::set_tags{std::move(tags)});
+  }
+};
+template <class Box> auto power_form_view(Box* box) {
+  namespace c = skiff::compose; using draft = power_draft<Box>;
+  const auto& colours = *box->colours_; const auto& kept = box->template part<state>();
+  return c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                      c::styled({.width = 80.0f, .relativeSize = scene::axes::kNone}, model_field<&draft::color>(colours, "Color", "#91cfdf")),
+                      c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&draft::name>(colours, "Name", "Bot")),
+                      c::styled({.width = 80.0f, .relativeSize = scene::axes::kNone, .disabled = kept.editing_power.has_value()}, model_field<&draft::power>(colours, "Power", "75"))),
+                  model_field<&draft::icon>(colours, "Icon", "Emoji or mxc:// image"),
+                  c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                      action(colours, "Save", sends<save_power>{}, !kept.pending),
+                      action(colours, "Cancel", edit_section<Box>{box, editor::power, false})));
 }
 template <class Box> auto permissions_page(Box* box, const room_settings_facts& facts) {
   namespace c = skiff::compose; using draft = power_draft<Box>; using acts = permission_actions<Box>;
   const auto& colours = *box->colours_; const auto& kept = box->template part<state>(); const auto& rules = rules_of(facts.theirs);
   const auto permission = rules.needs.events.find("in.cinny.room.power_level_tags");
   const bool tags_allowed = facts.mine >= (permission == rules.needs.events.end() ? rules.needs.state_default : permission->second);
+  const bool founders = std::ranges::any_of(rules.powers, [](const auto& user) { return user.second == kCreatorPower; });
+  auto effective = kept.data;
+  if (kept.tag_draft) effective.tags = *kept.tag_draft;
   return c::local<draft>(power_events<Box>{box}, c::column(page_look(),
-      tab_heading(colours, "Permissions"), explained(colours, kept.pending ? "Saving…" : kept.error),
-      part_heading(colours, "Power Levels"), explained(colours, "Manage and customize incremental power levels for users."),
-      c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
-          std::views::transform(power_values(rules, kept.data), [&](auto value) { return nodes::Text(std::format("{} · {}", power_name(value, kept.data), value), 14.0f, colours.accent); }))),
-      c::visible(tags_allowed, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          model_field<&draft::power>(colours, "Power", "75"), model_field<&draft::name>(colours, "Name", "Bot"),
-          model_field<&draft::color>(colours, "Color", "#91cfdf"), model_field<&draft::icon>(colours, "Icon", "Emoji or mxc:// image"),
-          action(colours, "Save", sends<save_power>{}, !kept.pending),
-          action(colours, "Delete Unused", sends<delete_power>{}, !kept.pending))),
-      c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
-          std::views::transform(permission_groups(), [&](const auto& group) { return permission_section(box, group); }))),
-      c::visible(kept.permissions.has_value(), explained(colours, "You have unsaved changes.")),
-      c::visible(kept.permissions.has_value(), action(colours, "Apply", typename acts::apply{box}, editable(box, power_need::change_permissions{}))),
-      c::visible(kept.permissions.has_value(), action(colours, "Reset", typename acts::apply{box, true}, !kept.pending))),
+      c::visible(kept.pending || !kept.error.empty(), explained(colours, kept.pending ? "Saving…" : kept.error)),
+      c::visible(!kept.powers_editor, c::column(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::visible(founders, card(colours,
+                  setting_tile(colours, "Founders", "Founding members has all permissions and can only be changed during upgrade.", c::column()),
+                  power_chip(colours, "Founder", 0xff0000ffu))),
+              card(colours, setting_tile(colours, "Power Levels", "Manage and customize incremental power levels for users.",
+                  c::visible(tags_allowed, action(colours, "Edit", edit_section<Box>{box, editor::powers}))), power_chips(box))),
+          c::many(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
+              std::views::transform(permission_groups(), [&](const auto& group) { return permission_section(box, group); }))),
+          c::visible(kept.permissions.has_value(), card(colours,
+              explained(colours, "You have unsaved changes."),
+              c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  action(colours, "Reset", typename acts::apply{box, true}, !kept.pending),
+                  action(colours, "Apply Changes", typename acts::apply{box}, editable(box, power_need::change_permissions{}), action_style::success)))))),
+      c::visible(kept.powers_editor, section(colours, "Power Levels",
+          card(colours, setting_tile(colours, "New Power Level", "Create a new power level.",
+              c::visible(!kept.power_form, action(colours, "Create", edit_section<Box>{box, editor::power}))),
+              c::visible(kept.power_form && !kept.editing_power, power_form_view(box))),
+          c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
+              std::views::transform(power_values(rules, effective), [&](auto value) {
+                return card(colours, setting_tile(colours, power_name(value, effective), std::format("({})", value),
+                    c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth}),
+                        action(colours, kept.deleted_powers.contains(value) ? "Undo" : "Delete", delete_tag<Box>{box, value},
+                            !kept.pending && !std::ranges::contains(power_values(rules, room_management{}), value)),
+                        action(colours, "Edit", edit_power<Box>{box, value}, !kept.pending && !kept.deleted_powers.contains(value)))),
+                    c::visible(kept.power_form && kept.editing_power == value, power_form_view(box)));
+              }))),
+          c::visible(kept.tag_draft.has_value() || !kept.deleted_powers.empty(), card(colours,
+              explained(colours, "Changes saved! Apply when ready."),
+              c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  action(colours, "Reset", apply_tags<Box>{box, true}, !kept.pending),
+                  action(colours, "Apply Changes", apply_tags<Box>{box}, !kept.pending, action_style::success)))),
+          action(colours, "Permissions", edit_section<Box>{box, editor::powers, false})))),
       draft{box, kept.tag_power, kept.tag_name, kept.tag_color, kept.tag_icon});
 }
 
-template <class Box> auto packs_page(Box* box, const room_settings_facts&) {
-  return skiff::compose::column(page_look(), tab_heading(*box->colours_, "Emojis & Stickers"),
-      explained(*box->colours_, "Manage this room's emoji and sticker packs."),
-      action(*box->colours_, "Room Packs", sends<::mux::ui::request::open_room_packs>{}));
+struct create_pack {};
+template <class Box> struct pack_draft { Box* box; std::string name; };
+template <class Box> struct pack_events {
+  auto on(create_pack, const pack_draft<Box>& draft) const {
+    const auto& rules = rules_of(draft.box->facts.theirs);
+    const auto found = rules.needs.events.find("im.ponies.room_emotes");
+    const auto need = found == rules.needs.events.end() ? rules.needs.state_default : found->second;
+    std::optional<request::save_room_pack> answer;
+    if (!draft.name.empty() && draft.box->facts.mine >= need) {
+      emote_pack pack;
+      pack.chat = draft.box->facts.id; pack.name = draft.name; pack.key = draft.name;
+      std::ranges::replace(pack.key, ' ', '-');
+      const auto& packs = draft.box->template part<state>().packs;
+      const auto stem = pack.key;
+      for (std::size_t suffix = 1; std::ranges::any_of(packs, [&](const auto& existing) { return existing.key == pack.key; }); ++suffix)
+        pack.key = std::format("{}-{}", stem, suffix);
+      answer = request::save_room_pack{std::move(pack)};
+    }
+    return skiff::model::Up{std::move(answer)};
+  }
+};
+template <class Box> void preserve_draft(const pack_draft<Box>& draft) { draft.box->template part<state>().pack_name = draft.name; }
+template <class Box> auto packs_page(Box* box, const room_settings_facts& facts) {
+  namespace c = skiff::compose; using draft = pack_draft<Box>;
+  const auto& colours = *box->colours_; const auto& kept = box->template part<state>();
+  const auto& rules = rules_of(facts.theirs);
+  const auto need = rules.needs.events.find("im.ponies.room_emotes");
+  const bool editable = facts.mine >= (need == rules.needs.events.end() ? rules.needs.state_default : need->second);
+  return c::local<draft>(pack_events<Box>{}, c::column(page_look(), section(colours, "Room Packs",
+      c::visible(editable, card(colours,
+          setting_tile(colours, "New Pack", "Add your own emoji and sticker pack to use in room.", c::column()),
+          c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&draft::name>(colours, "Name", "Pack name")),
+              action(colours, "Create", sends<create_pack>{})))),
+      c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
+          std::views::transform(kept.packs, [&](const auto& pack) {
+            return card(colours, setting_tile(colours, pack.name.empty() ? "Unnamed Pack" : pack.name,
+                std::format("{} images", pack.pictures.size()), action(colours, "View", sends<::mux::ui::request::open_room_packs>{{pack.key}})));
+          }))), c::visible(kept.packs.empty(), explained(colours, "No packs found.")))), draft{box, kept.pack_name});
 }
 struct save_account_data {};
 struct choose_account_data { std::size_t index; };
 struct select_account_data { choose_account_data operator()(std::size_t index) const { return {index}; } };
-template <class Box> struct developer_draft { Box* box; std::string type, json; };
+template <class Box> struct developer_draft { Box* box; std::string type, json; std::shared_ptr<widgets::TextArea<>> content{}; };
 template <class Box> struct developer_events {
   Box* box;
   auto on(save_account_data, const developer_draft<Box>& draft) const {
-    return skiff::model::Up{draft.type.empty() ? std::nullopt : submit(box, room_change::set_account_data{draft.type, draft.json})};
+    return skiff::model::Up{draft.type.empty() ? std::nullopt : submit(box, room_change::set_account_data{draft.type, draft.content ? draft.content->text() : draft.json})};
   }
   auto on(choose_account_data event, const developer_draft<Box>& draft) const {
     auto next = draft;
     const auto& entries = box->template part<state>().data.account_data;
     if (event.index < entries.size()) { next.type = entries[event.index].type; next.json = entries[event.index].json; }
+    box->show_again();
+    auto& kept = box->template part<state>();
+    kept.account_editor = true; kept.account_type = next.type; kept.account_json = next.json;
+    if (next.content) next.content->setText(next.json);
     return skiff::model::over<developer_draft<Box>>(skiff::model::setTo(std::move(next)));
   }
 };
 template <class Box> void preserve_draft(const developer_draft<Box>& draft) {
-  auto& kept = draft.box->template part<state>(); kept.account_type = draft.type; kept.account_json = draft.json;
+  auto& kept = draft.box->template part<state>(); kept.account_type = draft.type; kept.account_json = draft.content ? draft.content->text() : draft.json;
 }
 template <class Box> auto developer_page(Box* box, const room_settings_facts& facts) {
   namespace c = skiff::compose; using draft = developer_draft<Box>;
   const auto& kept = box->template part<state>(); const auto& colours = *box->colours_;
+  auto content = multiline_input(colours, kept.account_json.empty() ? "{}" : kept.account_json, "{}", 240.0f);
   const auto names = std::ranges::to<std::vector<std::string>>(std::views::transform(kept.data.account_data, &managed_account_data::type));
-  return c::local<draft>(developer_events<Box>{box}, c::column(page_look(), tab_heading(colours, "Developer Tools"),
-      explained(colours, kept.pending ? "Saving…" : kept.error), part_heading(colours, "Options"), id_line(colours, facts.id, "", "Room ID"),
-      action(colours, "State Events", sends<request::explore_state>{}), action(colours, "Send Event", sends<request::open_send_custom>{}),
-      part_heading(colours, "Account Data"), explained(colours, "Private personalization data stored within room."),
-      make_choice_menu(colours, "Select Account Data", names, names.size(), select_account_data{}),
-      model_field<&draft::type>(colours, "Type", ""), model_field<&draft::json>(colours, "Content", "{}"),
-      action(colours, "Save", sends<save_account_data>{}, !kept.pending)), draft{box, kept.account_type, kept.account_json});
+  return c::local<draft>(developer_events<Box>{box}, c::column(page_look(),
+      c::visible(kept.pending || !kept.error.empty(), explained(colours, kept.pending ? "Saving…" : kept.error)),
+      c::visible(!kept.account_editor, c::column(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          section(colours, "Options",
+              tile(colours, "Enable Developer Tools", "", switch_control(colours, kept.developer_tools, edit_section<Box>{box, editor::developer})),
+              c::visible(kept.developer_tools, tile(colours, "Room ID", "Copy room ID to clipboard. (\"" + facts.id + "\")",
+                  action(colours, "Copy", sends<::mux::ui::request::copy_text>{{facts.id}})))),
+          c::visible(kept.developer_tools, section(colours, "Data",
+              tile(colours, "New Message Event", "Create and send a new message event within the room.", action(colours, "Compose", sends<request::open_send_custom>{})),
+              card(colours, setting_tile(colours, "Room State", "State events of the room.",
+                  action(colours, kept.expanded_state ? "Collapse" : "Expand", edit_section<Box>{box, editor::state_events})),
+                  c::visible(kept.expanded_state, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                      section_title(colours, std::format("Events — Total: {}", kept.data.state_events.size())),
+                      action(colours, "Add New", sends<request::open_send_custom>{}),
+                      c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
+                          std::views::transform(kept.data.state_events, [&](const auto& event) {
+                            return setting_tile(colours, event.type, event.key, action(colours, "Edit", sends<request::explore_state>{}));
+                          })))))),
+              card(colours, setting_tile(colours, "Account Data", "Private personalization data stored within room.",
+                  action(colours, kept.expanded_account_data ? "Collapse" : "Expand", edit_section<Box>{box, editor::account_data})),
+                  c::visible(kept.expanded_account_data, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                      action(colours, "Add New", edit_section<Box>{box, editor::account_form}),
+                      compact_choice(colours, "", names, names.size(), select_account_data{})))))))),
+      c::visible(kept.account_editor, section(colours, "Account Data",
+          model_field<&draft::type>(colours, "Type", ""),
+          c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), section_title(colours, "Content"), content),
+          c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              action(colours, "Save", sends<save_account_data>{}, !kept.pending),
+              action(colours, "Cancel", edit_section<Box>{box, editor::account_form, false}))))), draft{box, kept.account_type, kept.account_json, std::move(content)});
 }
 template <class Page> requires requires(Page& page) { preserve_draft(page.fModel.root()); }
 void preserve_manage_page(Page& page) { preserve_draft(page.fModel.root()); }
@@ -656,19 +939,50 @@ namespace manage { struct room {}; struct members {}; struct roles {}; struct pa
 constexpr ui::manage_tab_list<manage::room, manage::members, manage::roles, manage::packs, manage::advanced> manage_tabs(const state&) { return {}; }
 constexpr type_tag<manage_detail::part> manage_part_type(const state&) { return {}; }
 constexpr manage::room manage_initial_tab(const state&) { return {}; }
+inline ui::icon_t manage_avatar_icon(const state&, const ui::room_settings_facts& facts) {
+  return facts.encrypted ? ui::icon_t{ui::icon::lock{}} : ui::icon_t{ui::icon::room{}};
+}
+inline ui::room_manage_style manage_style(const state&, const ui::palette& original) {
+  auto colours = original;
+  const bool dark = (original.background & 0xffu) < 128;
+  colours.sidebar = dark ? 0xff1a1a1au : 0xffdededeu;
+  colours.background = dark ? 0xff262626u : 0xffeaeaeau;
+  colours.tile = dark ? 0xff333333u : 0xffdededeu;
+  colours.chosen = dark ? 0xff404040u : 0xffc7c7c7u;
+  colours.text = dark ? 0xfff2f2f2u : 0xff000000u;
+  colours.dim = dark ? 0xffb6b6b6u : 0xff666666u;
+  colours.band = dark ? 0xff595959u : 0xffa6a6a6u;
+  colours.accent = dark ? 0xffbdb6ecu : 0xff1858d5u;
+  colours.on_accent = colours.background;
+  colours.widgets.fOnAccent = dark ? 0xff2c2843u : 0xffffffffu;
+  colours.widgets.fSurface = colours.chosen;
+  colours.widgets.fSurfaceHover = dark ? 0xff4d4d4du : 0xffbfbfbfu;
+  colours.widgets.fSurfaceActive = dark ? 0xff666666u : 0xff999999u;
+  colours.widgets.fText = colours.text; colours.widgets.fTextDim = colours.dim;
+  colours.widgets.fFontSize = 12.0f; colours.widgets.fRowHeight = 32.0f; colours.widgets.fCorner = 4.0f;
+  return {colours, true, 222.0f};
+}
 constexpr std::string_view manage_preferences_title(const state&) { return "Preferences"; }
 }
 export namespace mux::proto::matrix::manage {
+inline bool manage_close_editor(roles, manage_detail::part& kept) {
+  if (!kept.powers_editor) return false;
+  kept.power_form = false; kept.powers_editor = false;
+  return true;
+}
+inline bool manage_close_editor(advanced, manage_detail::part& kept) {
+  return std::exchange(kept.account_editor, false);
+}
 constexpr std::string_view tab_title(room) { return "General"; }
 constexpr std::string_view tab_title(members) { return "Members"; }
 constexpr std::string_view tab_title(roles) { return "Permissions"; }
 constexpr std::string_view tab_title(packs) { return "Emojis & Stickers"; }
 constexpr std::string_view tab_title(advanced) { return "Developer Tools"; }
 inline ui::icon_t tab_icon(room) { return ui::icon::gear{}; }
-inline ui::icon_t tab_icon(members) { return ui::icon::people{}; }
-inline ui::icon_t tab_icon(roles) { return ui::icon::eye{}; }
+inline ui::icon_t tab_icon(members) { return ui::icon::person{}; }
+inline ui::icon_t tab_icon(roles) { return ui::icon::lock{}; }
 inline ui::icon_t tab_icon(packs) { return ui::icon::smile{}; }
-inline ui::icon_t tab_icon(advanced) { return ui::icon::sliders{}; }
+inline ui::icon_t tab_icon(advanced) { return ui::icon::terminal{}; }
 template <class Box> auto make_manage_page(room, Box* box, const ui::room_settings_facts& facts) { return manage_detail::general_page(box, facts); }
 template <class Box> constexpr auto page_type(room tab, type_tag<Box>) { return type_tag<decltype(make_manage_page(tab, std::declval<Box*>(), std::declval<const ui::room_settings_facts&>()))>{}; }
 template <class Box> auto make_manage_page(members, Box* box, const ui::room_settings_facts& facts) { return manage_detail::members_page(box, facts); }

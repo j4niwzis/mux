@@ -13,6 +13,8 @@ import mux.proto;
 export namespace mux::proto::matrix {
 
 namespace request {
+// A pack created or edited from the room's settings.
+struct save_room_pack { mux::emote_pack pack; };
 // A room changed, as Matrix changes one: the room being managed.
 struct change_room {
   room_change_t change;
@@ -135,7 +137,7 @@ constexpr request_list<request::setup_cross_signing, request::restore_cross_sign
                        request::sign_out_unverified, request::reset_backup, request::delete_backup, request::export_room_keys,
                        request::import_room_keys, request::verify_session, request::sign_out_sessions, request::rename_session,
                        request::refresh_sessions, request::verify_them, request::explore_state,
-                       request::open_send_custom, request::send_custom, request::change_room, request::continue_uia,
+                       request::open_send_custom, request::send_custom, request::save_room_pack, request::change_room, request::continue_uia,
                        request::cancel_uia>
 requests_of(const state&) {
   return {};

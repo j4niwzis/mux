@@ -53,6 +53,7 @@ export namespace mux::ui {
 struct packs_facts {
   std::optional<std::string> room;
   bool editable = false;
+  std::optional<std::string> key{};
 };
 template <class Box>
 struct pack_open {
@@ -99,6 +100,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
   ui_shared* shared_ = nullptr;
   std::optional<std::string> room;  // the room's packs, or one's own
   bool may_edit = true;
+  std::optional<std::string> initial_key;
   std::vector<emote_pack> packs;  // as last listed
   emote_pack draft;               // the pack open, as it is edited
   bool open = false;              // a pack open, not the list
@@ -305,7 +307,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
     nodes::ScrollContainer<pictures_t> pictures{pictures_t({.spacingY = 0.0f, .wrap = false}, {})};
     edit_buttons edit_actions;
   } parts;
-  packs_box(const ui_needs<Actions>& n, const packs_facts& facts) : packs_box(*n.colours, *n.shared, facts.room, facts.editable) {}
+  packs_box(const ui_needs<Actions>& n, const packs_facts& facts) : packs_box(*n.colours, *n.shared, facts.room, facts.editable) { initial_key = facts.key; }
   packs_box(const palette &colours, ui_shared &shared,
             std::optional<std::string> in, bool editable)
       : Stacked(skiff::compose::vbox(8.0f,
@@ -340,6 +342,10 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
   // opened at once, as there is one.
   void show_packs(std::vector<emote_pack> listed) {
     packs = std::move(listed);
+    if (auto key = std::exchange(initial_key, std::nullopt)) {
+      const auto found = std::ranges::find(packs, *key, &emote_pack::key);
+      if (found != packs.end()) { this->open_pack(static_cast<std::size_t>(found - packs.begin())); return; }
+    }
     if (!room && !packs.empty()) {
       this->open_pack(0);
       return;

@@ -160,10 +160,26 @@ void program_told(App& app, const management_saved& one) {
 // Packs: listed, saved, an image uploaded -- in their dialog.
 template <class App>
 void program_told(App& app, const packs_listed& listed) {
+  if (auto* box = app.root().manage_up(); box && box->facts.chat.account == listed.by && listed.room == box->facts.id) {
+    box->show_again();
+    box->template part<state>().packs = listed.packs;
+  }
   app.root().show_packs(listed.packs);
 }
 template <class App>
 void program_told(App& app, const pack_saved& saved) {
+  if (auto* box = app.root().manage_up(); box && box->facts.chat.account == saved.by && saved.pack.chat == box->facts.id) {
+    box->show_again();
+    auto& kept = box->template part<state>();
+    if (saved.done) {
+      if (saved.removed) std::erase_if(kept.packs, [&](const auto& pack) { return pack.key == saved.pack.key; });
+      else {
+        const auto found = std::ranges::find(kept.packs, saved.pack.key, &mux::emote_pack::key);
+        if (found == kept.packs.end()) kept.packs.push_back(saved.pack); else *found = saved.pack;
+        kept.pack_name.clear();
+      }
+    } else kept.error = "The pack was not saved.";
+  }
   app.root().pack_saved(saved.pack, saved.removed, saved.done);
 }
 template <class App>
@@ -282,6 +298,13 @@ void program_asked(App& app, const change_room& one) {
     return;
   app.net->on_account_of(*chosen, [room = chosen->id, change = one.change](auto& account)
                                       -> decltype(void(account.change_room(room, change))) { account.change_room(room, change); });
+}
+template <class App>
+void program_asked(App& app, const save_room_pack& one) {
+  const auto chosen = app.shared.managed();
+  if (!chosen || app.shared.demo() || one.pack.chat != chosen->id) return;
+  app.net->on_account_of(*chosen, [pack = one.pack](auto& account)
+      -> decltype(void(account.save_pack(pack))) { account.save_pack(pack); });
 }
 // The developer tools: for the room being managed, by its account.
 template <class App>

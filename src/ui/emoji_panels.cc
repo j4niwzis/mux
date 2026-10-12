@@ -175,7 +175,8 @@ inline std::vector<emoji_group> emoji_groups_of(const emoji_kept& kept, const em
   const std::vector<emote> chat = kept.custom_emoji ? kept.chat_emotes.get() : std::vector<emote>{};
   if (!query.text.empty()) {
     std::vector<emoji_group> out{{"Search results", emoji_items(logic::emoji_found(query.text)), std::nullopt, "\u23F2", std::nullopt}};
-    std::string_view label = typed_reaction(kept, query).label;
+    const auto typed = typed_reaction(kept, query);
+    std::string_view label = typed.label;
     if (label.starts_with(':')) label.remove_prefix(1);
     if (label.ends_with(':')) label.remove_suffix(1);
     const std::string wanted = logic::folded(label);

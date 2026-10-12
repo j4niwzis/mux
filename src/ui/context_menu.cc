@@ -337,14 +337,14 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
       // drawn on top of them and pressed first.
       typename tops_t::overs_t overs;
     } parts;
-    bool unrolled = false;
+    bool unrolled_now = false;
     // As Telegram's: what a head unrolls takes the room the items had under
     // it, and unrolls down over them from the top; they stay under it until
     // it is down, and the menu keeps its size -- grown only where the items
     // left too little room for a list.
     template <std::size_t At>
     void unroll_top() {
-      if (std::exchange(unrolled, true))
+      if (std::exchange(unrolled_now, true))
         return;
       const skia::SkRect box = fState.contentBox();
       const float top = std::get<At>(parts.tops).bounds().fBottom;
@@ -379,7 +379,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
     skiff::paint::Tween unroll{0.0f, 220.0f};
     [[nodiscard]] bool settling() const { return unroll.moving(); }
     void update(double now_ms) {
-      if (unroll.step(now_ms) && unrolled) {
+      if (unroll.step(now_ms) && unrolled_now) {
         std::apply([&](auto&... over) { ((over ? over->apply({.height = unroll.value()}) : void()), ...); }, parts.overs);
         if (!unroll.moving())
           this->hide_items();

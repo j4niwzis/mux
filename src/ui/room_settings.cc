@@ -76,6 +76,7 @@ struct room_settings_facts {
   // those that may be added to it.
   std::vector<named_room> children;
   std::vector<named_room> addable;
+  std::vector<member> members;
   // A space: whether it holds spaces, and whether it is shown as a forum.
   bool space = false;
   bool holds_spaces = false;
@@ -449,15 +450,6 @@ inline void preserve_manage_input(auto&) {}
 template <class Page> requires requires(Page& page) { preserve_manage_page(page); }
 void preserve_manage_input(Page& page) { preserve_manage_page(page); }
 
-inline auto settings_room_avatar(const palette& colours, const room_settings_facts& facts, float size, icon_t icon) {
-  namespace c = skiff::compose;
-  const auto has_icon = spl::visit([](auto one) { return drawn(one); }, icon);
-  return c::column(c::vbox(0.0f, {.width = size, .height = size, .alignSelf = scene::align::kMiddle,
-      .cornerRadius = colours.widgets.fCorner, .background = colours.accent, .masking = true}),
-      c::visible(!has_icon, c::styled({.place = scene::anchor::kCentre}, nodes::Text(initials_of(facts.name), size * 0.4f, colours.on_accent))),
-      c::visible(has_icon, c::styled({.place = scene::anchor::kCentre, .width = size * 0.65f, .height = size * 0.65f}, nodes::Icon(shape_of(icon), colours.on_accent))),
-      c::styled({.place = scene::anchor::kCentre, .width = size, .height = size, .cornerRadius = colours.widgets.fCorner}, nodes::Image<from_avatars>({facts.id})));
-}
 struct room_manage_style {
   palette colours;
   bool page_header = false;
@@ -585,7 +577,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
     namespace c = skiff::compose;
     auto protocol = spl::visit([&](auto tag) { return protocol_rows(box, tabs_of_t<decltype(tag)>{}); }, box->facts.speaks);
     return c::column(c::vbox(0.0f, {.fillY = true, .width = box->presentation.navigation_width, .padding = {0.0f, 8.0f, 32.0f, 8.0f}, .background = box->colours_->sidebar}),
-        c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), settings_room_avatar(*box->colours_, box->facts, 24.0f, spl::visit([&](auto tag) { return manage_avatar_icon_of(state_of<decltype(tag)>{}, box->facts); }, box->facts.speaks)),
+        c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), avatar_mark(box->facts.id, box->facts.name, 24.0f),
             c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(box->facts.name, 18.0f, box->colours_->text, true))),
             c::visible(false, icon_button<sends<::mux::ui::request::close_manage>>(*box->colours_, icon::close{}, {}))),
         c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(protocol)),
@@ -715,7 +707,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
               .body =
                   body_row(&context, page_t(std::in_place_index<0>, room_general_page(*colours, shown)))} {
     parts.header.setVisible(!context.presentation.page_header);
-    this->apply({.background = colours_->background});
+    this->apply({.cornerRadius = std::max(10.0f, colours_->widgets.fCorner), .background = colours_->background, .masking = true});
     tab = spl::visit([](auto tag) -> settings_tab_t { return initial_manage_tab(state_of<decltype(tag)>{}); }, facts.speaks);
     this->rebuild();
   }

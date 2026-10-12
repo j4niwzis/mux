@@ -156,6 +156,7 @@ class manage_part {
                                        .hidden_from_home = k_->own_of<&mux::app::chat_choices::hidden_from_home>(chat->id),
                                        .speaks = chat->id.account.speaks};
     facts.chat = chat->id;
+    facts.members = chat->members;
     // Its own choices there to be bound to, chosen or not.
     k_->ensure_chat(chat->id);
     // The spaces it is in: those of its account whose rooms list it. A

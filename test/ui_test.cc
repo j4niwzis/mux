@@ -3363,6 +3363,40 @@ TEST(RoomManagement, StateSaveKeepsFailedDraftAndReturnsToTheAcknowledgedEvent) 
   EXPECT_EQ(box.kept.data.state_events.front().key, "key");
 }
 
+TEST(RoomManagement, MembersAreMountedImmediatelyAndUseTheRoomListWhileLoading) {
+  namespace manage = mux::proto::matrix::manage_detail;
+  manage_test_box box;
+  box.facts.members = {{"@alice:example.org", "Alice", std::nullopt, std::nullopt}};
+  auto members = manage::available_members(box.kept.data, box.facts);
+  ASSERT_EQ(members.size(), 1u);
+  EXPECT_EQ(members.front().name, "Alice");
+  auto page = manage::members_page(&box, box.facts);
+  auto& rows = std::get<3>(page.fParts);
+  ASSERT_TRUE(rows.shown());
+  EXPECT_TRUE(rows.visible());
+  EXPECT_EQ(std::get<0>(rows.shown()->fParts).fParts.size(), 1u);
+  box.kept.data.members = {{"@bob:example.org", "Bob", std::nullopt,
+      mux::proto::matrix::membership_view::joined{}, 0}};
+  members = manage::available_members(box.kept.data, box.facts);
+  ASSERT_EQ(members.size(), 1u);
+  EXPECT_EQ(members.front().name, "Bob");
+}
+
+TEST(RoomManagement, SettingsUseSharedAvatarsAndClipTheirRoundedSurfaces) {
+  namespace manage = mux::proto::matrix::manage_detail;
+  mux::ui::palette colours;
+  auto card = manage::card(colours, nodes::Text("Settings", 14.0f, colours.text));
+  EXPECT_GE(card.fState.fCornerRadius, 10.0f);
+  EXPECT_TRUE(card.fState.fMasking);
+  mux::ui::looks_shown looks;
+  mux::ui::room_settings_facts facts;
+  facts.speaks = mux::protocol::matrix{};
+  mux::ui::room_settings<stub> dialog(&colours, &looks, facts);
+  EXPECT_GE(dialog.fState.fCornerRadius, 10.0f);
+  EXPECT_TRUE(dialog.fState.fMasking);
+  static_assert(std::same_as<std::remove_cvref_t<decltype(std::get<0>(std::get<0>(dialog.tabs().fParts).fParts))>, mux::ui::avatar_mark>);
+}
+
 TEST(RoomManagement, MatrixKeepsNativeSettingsAndThemeAlongsideProtocolPages) {
   mux::ui::palette colours;
   mux::ui::looks_shown looks;

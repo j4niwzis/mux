@@ -201,7 +201,7 @@ inline auto settings_section_heading(const palette& colours, std::string title) 
 template <class... Children> auto settings_surface(const palette& colours, skia::SkColor background,
     scene::Margin padding, float gap, Children... children) {
   return skiff::compose::column(skiff::compose::vbox(gap, {.fillX = true, .autoSize = scene::axes::kY,
-      .padding = padding, .cornerRadius = colours.widgets.fCorner, .background = background}), std::move(children)...);
+      .padding = padding, .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = background, .masking = true}), std::move(children)...);
 }
 template <class... Children> auto card(const palette& colours, Children... children) {
   return settings_surface(colours, colours.tile, {12.0f, 12.0f, 12.0f, 12.0f}, 16.0f, std::move(children)...);
@@ -554,7 +554,7 @@ template <class Box> auto general_page(Box* box, const room_settings_facts& fact
                       wrapped(nodes::Text(facts.name, 16.0f, colours.text)),
                       c::visible(!facts.topic.empty(), wrapped(nodes::Text(facts.topic, 12.0f, colours.text)))),
                   c::visible(editable(box, power_need::rename{}) || editable(box, power_need::retopic{}) || editable(box, power_need::change_avatar{}),
-                      action(colours, "Edit", edit_section<Box>{box, editor::profile}))), settings_room_avatar(colours, facts, 96.0f, facts.encrypted ? icon_t{icon::lock{}} : icon_t{icon::room{}}))),
+                      action(colours, "Edit", edit_section<Box>{box, editor::profile}))), avatar_mark(facts.id, facts.name, 96.0f))),
           c::visible(kept.profile_editor, c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               c::row(c::hbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   c::column(c::vbox(4.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX}),
@@ -562,7 +562,7 @@ template <class Box> auto general_page(Box* box, const room_settings_facts& fact
                       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                           action(colours, "Upload", sends<::mux::ui::request::pick_room_avatar>{{facts.chat}}, editable(box, power_need::change_avatar{})),
                           action(colours, "Remove", sends<remove_avatar>{}, editable(box, power_need::change_avatar{})))),
-                  settings_room_avatar(colours, facts, 96.0f, facts.encrypted ? icon_t{icon::lock{}} : icon_t{icon::room{}})),
+                  avatar_mark(facts.id, facts.name, 96.0f)),
               c::shown_for<skiff::model::Field<&draft::avatar>>([](const auto& avatar) { return avatar.has_value(); }, explained(colours, "Avatar change pending. Save to apply.")),
               c::styled({.disabled = !editable(box, power_need::rename{})}, model_field<&draft::name>(colours, "Name", "")),
               c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), settings_section_heading(colours, "Topic"), topic_input),
@@ -643,6 +643,12 @@ template <class Box> void preserve_draft(const member_draft<Box>& draft) {
   kept.member_query = draft.query; kept.member_filter = draft.filter; kept.member_order = draft.order;
 }
 struct member_listing { std::vector<managed_member> rows; std::string empty; };
+[[nodiscard]] inline std::vector<managed_member> available_members(const room_management& data, const room_settings_facts& facts) {
+  if (!data.members.empty()) return data.members;
+  return std::ranges::to<std::vector<managed_member>>(std::views::transform(facts.members, [](const auto& member) {
+    return managed_member{member.id, member.name, member.avatar, membership_view::joined{}, 0};
+  }));
+}
 template <class Box> struct choose_member_power {
   Box* box; std::string user; std::vector<std::int64_t> values;
   using Answer = std::optional<request::change_room>;
@@ -681,7 +687,7 @@ template <class Box> auto members_page(Box* box, const room_settings_facts& fact
     const auto& kept = box->template part<state>();
     const auto& rules = rules_of(box->facts.theirs);
     const auto wanted = logic::folded(now.query);
-    auto rows = std::ranges::to<std::vector<managed_member>>(std::views::filter(kept.data.members, [&](const auto& member) {
+    auto rows = std::ranges::to<std::vector<managed_member>>(std::views::filter(available_members(kept.data, box->facts), [&](const auto& member) {
       return member.membership.index() == now.filter && (wanted.empty() || logic::folded(member.name).contains(wanted) || logic::folded(member.id).contains(wanted));
     }));
     std::ranges::stable_sort(rows, [&](const auto& a, const auto& b) {
@@ -698,15 +704,20 @@ template <class Box> auto members_page(Box* box, const room_settings_facts& fact
     return member_listing{std::move(rows), kept.loading ? "Loading…" : std::format("No {} Members", labels.at(now.filter))};
   };
   using rows_t = decltype(member_rows(box, member_listing{}));
+  auto rows = c::mount<rows_t, member_listing>([box](const member_listing& data) {
+    return std::tuple{member_rows(box, data)};
+  }, {.fillX = true, .autoSize = scene::axes::kY});
+  const draft initial{box, kept.member_query, kept.member_filter, kept.member_order};
+  // Protocol metadata can replace this page without changing the outer model.
+  // Populate the mount now, rather than waiting for another binding revision.
+  rows.read(std::optional{listing(initial)});
   return c::local<draft>(member_events<Box>{}, c::column(page_look(),
       c::visible(!kept.error.empty(), explained(*box->colours_, kept.error)),
       model_field<&draft::query>(*box->colours_, "", "Search"),
       c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::justify::end{}),
           compact_choice(*box->colours_, "", {"Joined", "Invited", "Left", "Kicked", "Banned"}, kept.member_filter, select_filter{}),
           compact_choice(*box->colours_, "", {"A to Z", "Z to A", "Newest", "Oldest"}, kept.member_order, select_order{})),
-      c::derived<draft>(listing, c::mount<rows_t, member_listing>([box](const member_listing& data) {
-        return std::tuple{member_rows(box, data)};
-      }, {.fillX = true, .autoSize = scene::axes::kY}))), draft{box, kept.member_query, kept.member_filter, kept.member_order});
+      c::derived<draft>(listing, std::move(rows))), initial);
 }
 
 // Permissions: named powers, then Users, Messages, Calls, Moderation,
@@ -869,7 +880,7 @@ template <class Box> auto permission_row(Box* box, const permission_item& item) 
 }
 template <class Box> auto permission_section(Box* box, const permission_group& group) {
   namespace c = skiff::compose;
-  auto rows = c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .cornerRadius = box->colours_->widgets.fCorner,
+  auto rows = c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .cornerRadius = std::max(10.0f, box->colours_->widgets.fCorner),
                                    .background = box->colours_->tile}), std::ranges::to<std::vector>(
       std::views::transform(group.items, [&](const auto& item) {
         return c::styled({.padding = {12.0f, 12.0f, 12.0f, 12.0f}}, permission_row(box, item));
@@ -1230,7 +1241,7 @@ constexpr ui::manage_tab_list<manage::room, manage::members, manage::roles, mana
 constexpr type_tag<manage_detail::part> manage_part_type(const state&) { return {}; }
 constexpr manage::room manage_initial_tab(const state&) { return {}; }
 inline ui::icon_t manage_avatar_icon(const state&, const ui::room_settings_facts& facts) {
-  return facts.encrypted ? ui::icon_t{ui::icon::lock{}} : ui::icon_t{ui::icon::room{}};
+  return facts.encrypted ? ui::icon_t{ui::icon::lock{}} : ui::icon_t{ui::icon::none{}};
 }
 inline ui::room_manage_style manage_style(const state&, const ui::palette& original) {
   return {original, true, 222.0f};

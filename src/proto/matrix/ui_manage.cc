@@ -235,6 +235,7 @@ inline auto multiline_input(const palette& colours, std::string text, std::strin
 }
 enum class editor { profile, powers, power, developer, state_events, account_data, account_form };
 template <class Box> struct edit_section {
+  using Answer = skiff::model::Nothing;
   Box* box; editor target; bool open = true;
   skiff::model::Nothing operator()() const {
     box->show_again();
@@ -505,8 +506,8 @@ template <class Box> auto general_page(Box* box, const room_settings_facts& fact
 // The query is kept by the page while only the displayed rows are replaced.
 struct member_filter { std::size_t value; };
 struct member_order { std::size_t value; };
-struct select_filter { member_filter operator()(std::size_t value) const { return {value}; } };
-struct select_order { member_order operator()(std::size_t value) const { return {value}; } };
+struct select_filter { using Answer = member_filter; member_filter operator()(std::size_t value) const { return {value}; } };
+struct select_order { using Answer = member_order; member_order operator()(std::size_t value) const { return {value}; } };
 template <class Box> struct member_draft { Box* box; std::string query; std::size_t filter = 0, order = 0; };
 template <class Box> struct member_events {
   auto on(member_filter event, const member_draft<Box>&) const {
@@ -738,6 +739,7 @@ template <class Box> auto permission_section(Box* box, const permission_group& g
   return section(*box->colours_, group.title, std::move(rows));
 }
 template <class Box> struct edit_power {
+  using Answer = skiff::model::Nothing;
   Box* box; std::int64_t power;
   skiff::model::Nothing operator()() const {
     box->show_again();
@@ -752,6 +754,7 @@ template <class Box> struct edit_power {
   }
 };
 template <class Box> struct delete_tag {
+  using Answer = skiff::model::Nothing;
   Box* box; std::int64_t power;
   skiff::model::Nothing operator()() const {
     auto& kept = box->template part<state>();
@@ -762,6 +765,7 @@ template <class Box> struct delete_tag {
   }
 };
 template <class Box> struct apply_tags {
+  using Answer = std::optional<request::change_room>;
   Box* box; bool reset = false;
   std::optional<request::change_room> operator()() const {
     auto& kept = box->template part<state>();
@@ -874,7 +878,7 @@ template <class Box> auto packs_page(Box* box, const room_settings_facts& facts)
 }
 struct save_account_data {};
 struct choose_account_data { std::size_t index; };
-struct select_account_data { choose_account_data operator()(std::size_t index) const { return {index}; } };
+struct select_account_data { using Answer = choose_account_data; choose_account_data operator()(std::size_t index) const { return {index}; } };
 template <class Box> struct developer_draft { Box* box; std::string type, json; std::shared_ptr<widgets::TextArea<>> content{}; };
 template <class Box> struct developer_events {
   Box* box;

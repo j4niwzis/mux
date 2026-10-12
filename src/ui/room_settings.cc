@@ -550,6 +550,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
 
   // ---- what is asked ---------------------------------------------------------
   struct pick_tab {
+    using Answer = skiff::model::Nothing;
     room_settings* box;
     settings_tab_t tab;
     skiff::model::Nothing operator()() const {

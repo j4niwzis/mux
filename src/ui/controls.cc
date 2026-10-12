@@ -375,7 +375,9 @@ using choice_menu_head_t = decltype(choice_menu_head(std::declval<const palette&
 using choice_menu_option_t = decltype(choice_menu_option(std::declval<const palette&>(), std::string()));
 struct show_choice_menu {
   skia::SkColor text, accent;
-  void operator()(choice_menu_head_t& head, std::vector<choice_menu_option_t>& rows,
+  // Both the labelled head and a compact head keep their value second.
+  template <class Head>
+  void operator()(Head& head, std::vector<choice_menu_option_t>& rows,
                   const std::vector<std::string>& names, std::size_t current, bool) const {
     std::get<1>(head.fParts).setText(current < names.size() ? names[current] : std::string());
     for (std::size_t i = 0; i < rows.size(); ++i) {

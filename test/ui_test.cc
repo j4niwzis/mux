@@ -3246,7 +3246,124 @@ TEST(RoomManagement, PowersOverviewAndEditorAreSeparateAndChangesWaitForApply) {
   EXPECT_FALSE(box.kept.tag_draft);
 }
 
-TEST(RoomManagement, MatrixUsesFiveNavigationEntriesAndAPageHeader) {
+TEST(RoomManagement, LocalAddressSelectionUsesBulkActionsAndKeepsTheMainAlias) {
+  namespace matrix = mux::proto::matrix;
+  namespace manage = matrix::manage_detail;
+  manage_test_box box;
+  box.facts.mine = 100;
+  box.facts.alias = "#main:example.org";
+  box.facts.other_aliases = {"#other:example.org"};
+  EXPECT_FALSE(box.kept.local_addresses_expanded);
+  manage::expand_addresses<manage_test_box>{&box}();
+  EXPECT_TRUE(box.kept.local_addresses_expanded);
+  manage::select_address<manage_test_box>{&box, "#main:example.org"}();
+  manage::select_address<manage_test_box>{&box, "#other:example.org"}();
+  using action = manage::selected_addresses<manage_test_box>;
+  const auto asked = action{&box, action::kind::unpublish}();
+  ASSERT_TRUE(asked);
+  spl::visit(spl::overloaded{[&](const matrix::room_change::set_addresses& change) {
+    EXPECT_EQ(change.main, box.facts.alias);
+    EXPECT_TRUE(change.published.empty());
+  }, [](const auto&) { FAIL(); }}, asked->change);
+  manage::completed(&box, matrix::management_saved{box.facts.chat, asked->change, "Forbidden"});
+  EXPECT_EQ(box.kept.selected_aliases.size(), 2u);
+  EXPECT_EQ(box.facts.other_aliases.size(), 1u);
+  const auto retry = action{&box, action::kind::unpublish}();
+  ASSERT_TRUE(retry);
+  manage::completed(&box, matrix::management_saved{box.facts.chat, retry->change, {}});
+  EXPECT_TRUE(box.kept.selected_aliases.empty());
+  EXPECT_EQ(box.facts.alias, "#main:example.org");
+  EXPECT_TRUE(box.facts.other_aliases.empty());
+}
+
+TEST(RoomManagement, NewAddressesTrimSpacesAndClearOnlyAfterSuccess) {
+  namespace matrix = mux::proto::matrix;
+  namespace manage = matrix::manage_detail;
+  manage_test_box box;
+  box.facts.chat.account.address = "@alice:example.org";
+  manage::general_draft<manage_test_box> draft{&box};
+  draft.address = "  new room  ";
+  box.kept.local_address = draft.address;
+  const auto asked = manage::general_events<manage_test_box>{&box}.on(manage::create_address{}, draft);
+  ASSERT_TRUE(asked.fEvent);
+  spl::visit(spl::overloaded{[](const matrix::room_change::create_alias& change) {
+    EXPECT_EQ(change.alias, "#new-room:example.org");
+  }, [](const auto&) { FAIL(); }}, asked.fEvent->change);
+  manage::completed(&box, matrix::management_saved{box.facts.chat, asked.fEvent->change, "Already in use"});
+  EXPECT_EQ(box.kept.local_address, draft.address);
+  manage::completed(&box, matrix::management_saved{box.facts.chat, asked.fEvent->change, {}});
+  EXPECT_TRUE(box.kept.local_address.empty());
+}
+
+TEST(RoomManagement, CustomEventOverridesCanBeAddedEditedAndRemovedBeforeApply) {
+  namespace matrix = mux::proto::matrix;
+  namespace manage = matrix::manage_detail;
+  manage_test_box box;
+  box.facts.mine = 100;
+  auto& rules = matrix::rules_in(box.facts.theirs);
+  rules.needs.events = {{"org.example.existing", 50}, {"m.room.name", 50}};
+  manage::power_draft<manage_test_box> draft{&box};
+  draft.event = "org.example.new"; draft.level = "75";
+  manage::power_events<manage_test_box>{&box}.on(manage::add_custom_permission{}, draft);
+  ASSERT_TRUE(box.kept.permissions);
+  EXPECT_EQ(box.kept.permissions->events.at(draft.event), 75);
+  EXPECT_FALSE(rules.needs.events.contains(draft.event));
+  manage::permission_actions<manage_test_box>::choose{&box, manage::event_permission{draft.event}, {50, 75}}(0);
+  EXPECT_EQ(box.kept.permissions->events.at(draft.event), 50);
+  manage::remove_custom_permission<manage_test_box>{&box, "org.example.existing"}();
+  EXPECT_FALSE(box.kept.permissions->events.contains("org.example.existing"));
+  EXPECT_EQ(box.kept.permissions->events.at("m.room.name"), 50);
+  EXPECT_EQ(rules.needs.events.at("org.example.existing"), 50);
+  EXPECT_FALSE(manage::standard_permission_events().contains("org.example.existing"));
+  EXPECT_TRUE(manage::standard_permission_events().contains("m.room.name"));
+}
+
+TEST(RoomManagement, StateEventsGroupByTypeAndOpenTheSelectedKeyAndContent) {
+  namespace matrix = mux::proto::matrix;
+  namespace manage = matrix::manage_detail;
+  manage_test_box box;
+  box.kept.data.state_events = {{"org.example.z", "b", "full-b", "content-b"},
+      {"org.example.a", "", "full-default", "content-default"}, {"org.example.z", "a", "full-a", "content-a"}};
+  const auto groups = manage::grouped_state_events(box.kept.data);
+  ASSERT_EQ(groups.size(), 2u);
+  EXPECT_EQ(groups.begin()->first, "org.example.a");
+  EXPECT_EQ(groups.at("org.example.z").front().key, "a");
+  manage::state_navigation<manage_test_box>{&box, manage::state_screen::view, "org.example.z", "b"}();
+  EXPECT_EQ(box.kept.state_page, manage::state_screen::view);
+  EXPECT_EQ(box.kept.state_key, "b");
+  EXPECT_EQ(box.kept.state_source, "full-b");
+  EXPECT_EQ(box.kept.state_json, "content-b");
+  manage::state_navigation<manage_test_box>{&box, manage::state_screen::compose, "org.example.z", ""}();
+  EXPECT_EQ(box.kept.state_page, manage::state_screen::compose);
+  EXPECT_EQ(box.kept.state_type, "org.example.z");
+  EXPECT_TRUE(box.kept.state_key.empty());
+  EXPECT_EQ(box.kept.state_json, "{}");
+}
+
+TEST(RoomManagement, StateSaveKeepsFailedDraftAndReturnsToTheAcknowledgedEvent) {
+  namespace matrix = mux::proto::matrix;
+  namespace manage = matrix::manage_detail;
+  manage_test_box box;
+  box.facts.mine = 100;
+  box.kept.state_page = manage::state_screen::edit;
+  manage::developer_draft<manage_test_box> draft{&box};
+  draft.state_type = "org.example.state"; draft.state_key = "key"; draft.state_json = "{\"enabled\":true}";
+  manage::preserve_draft(draft);
+  const auto asked = manage::developer_events<manage_test_box>{&box}.on(manage::save_state_event{}, draft);
+  ASSERT_TRUE(asked.fEvent);
+  manage::completed(&box, matrix::management_saved{box.facts.chat, asked.fEvent->change, "Invalid JSON"});
+  EXPECT_EQ(box.kept.state_page, manage::state_screen::edit);
+  EXPECT_EQ(box.kept.state_json, draft.state_json);
+  EXPECT_EQ(box.kept.error, "Invalid JSON");
+  const matrix::managed_state_event saved{draft.state_type, draft.state_key, "acknowledged full event", draft.state_json};
+  manage::completed(&box, matrix::management_saved{box.facts.chat, asked.fEvent->change, {}, saved});
+  EXPECT_EQ(box.kept.state_page, manage::state_screen::view);
+  EXPECT_EQ(box.kept.state_source, saved.json);
+  ASSERT_EQ(box.kept.data.state_events.size(), 1u);
+  EXPECT_EQ(box.kept.data.state_events.front().key, "key");
+}
+
+TEST(RoomManagement, MatrixKeepsNativeSettingsAndThemeAlongsideProtocolPages) {
   mux::ui::palette colours;
   mux::ui::looks_shown looks;
   mux::ui::room_settings_facts facts;
@@ -3255,13 +3372,39 @@ TEST(RoomManagement, MatrixUsesFiveNavigationEntriesAndAPageHeader) {
   EXPECT_FALSE(dialog.parts.header.visible());
   EXPECT_TRUE(dialog.pane_header().visible());
   EXPECT_EQ(dialog.context.presentation.navigation_width, 222.0f);
+  EXPECT_EQ(dialog.context.presentation.colours.background, colours.background);
+  EXPECT_EQ(dialog.context.presentation.colours.accent, colours.accent);
+  EXPECT_EQ(dialog.context.presentation.colours.widgets.fCorner, colours.widgets.fCorner);
   EXPECT_EQ(std::get<1>(dialog.tabs().fParts).fParts.size(), 5u);
-  EXPECT_FALSE(std::get<2>(dialog.tabs().fParts).visible());
-  EXPECT_FALSE(std::get<3>(dialog.tabs().fParts).visible());
-  EXPECT_FALSE(std::get<4>(dialog.tabs().fParts).visible());
+  EXPECT_TRUE(std::get<2>(dialog.tabs().fParts).visible());
+  EXPECT_TRUE(std::get<3>(dialog.tabs().fParts).visible());
+  EXPECT_TRUE(std::get<4>(dialog.tabs().fParts).visible());
+  dialog.show_tab(mux::ui::settings_tab::general{});
+  dialog.update(0.0);
+  EXPECT_EQ(std::get<1>(dialog.pane_header().fParts).text(), "Preferences");
   dialog.show_tab(mux::proto::matrix::manage::roles{});
   dialog.update(0.0);
   EXPECT_EQ(std::get<1>(dialog.pane_header().fParts).text(), "Permissions");
+}
+
+TEST(RoomManagement, StateEditorUsesThePageHeaderToReturnToDeveloperTools) {
+  namespace matrix = mux::proto::matrix;
+  namespace manage = matrix::manage_detail;
+  mux::ui::palette colours;
+  mux::ui::looks_shown looks;
+  mux::ui::room_settings_facts facts;
+  facts.speaks = mux::protocol::matrix{};
+  mux::ui::room_settings<stub> dialog(&colours, &looks, facts);
+  auto& kept = dialog.template part<matrix::state>();
+  kept.state_page = manage::state_screen::view;
+  dialog.show_tab(matrix::manage::advanced{});
+  dialog.update(0.0);
+  EXPECT_TRUE(std::get<0>(dialog.pane_header().fParts).visible());
+  EXPECT_EQ(std::get<1>(dialog.pane_header().fParts).text(), "Developer Tools");
+  std::get<1>(dialog.pane_header().fParts).onPress();
+  dialog.update(0.0);
+  EXPECT_EQ(kept.state_page, manage::state_screen::overview);
+  EXPECT_FALSE(std::get<0>(dialog.pane_header().fParts).visible());
 }
 
 TEST(RoomManagement, CompactSelectorsLeaveRoomForTheirLabels) {

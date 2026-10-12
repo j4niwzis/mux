@@ -310,7 +310,7 @@ void account<Sink>::fetch_room_settings(std::string room) {
     } else failure(members);
     if (const auto kept = state_.joined.find(room); kept != state_.joined.end()) {
       out.data.state_events = std::ranges::to<std::vector<proto::matrix::managed_state_event>>(std::views::transform(
-          kept->second.state.events, [](const auto& entry) { return proto::matrix::managed_state_event{entry.first.first, entry.first.second, knot::to_pretty_json_string(entry.second)}; }));
+          kept->second.state.events, [](const auto& entry) { return proto::matrix::managed_state_event{entry.first.first, entry.first.second, knot::to_pretty_json_string(entry.second), spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, entry.second.content.data())}; }));
       out.data.account_data = std::ranges::to<std::vector<proto::matrix::managed_account_data>>(std::views::transform(
           kept->second.account_data, [](const auto& entry) { return proto::matrix::managed_account_data{entry.first, spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, entry.second.content.data())}; }));
     }
@@ -328,6 +328,7 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
       return;
     }
     std::string error;
+    std::optional<proto::matrix::managed_state_event> saved_state;
     const auto set = [&](std::string type, const auto& content, std::string key = {}) {
       if (!error.empty()) return;
       const auto done = perform(*api_, loom::cs::set_room_state_with_key{
@@ -410,6 +411,26 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
               content.events->insert_or_assign(one.event, static_cast<std::int64_t>(one.level));
               set("m.room.power_levels", content);
             },
+            [&](const proto::matrix::room_change::set_state_event& one) {
+              // Developer-authored content is validated at the request boundary;
+              // unknown fields stay opaque rather than entering the room model.
+              if (!knot::try_read<std::map<std::string, knot::raw>>(one.json)) {
+                error = "The content must be a JSON object.";
+                return;
+              }
+              const auto done = perform(*api_, loom::cs::set_room_state_with_key{
+                  .room_id = room, .event_type = one.type, .state_key = one.key, .body = knot::raw{one.json}});
+              told("save state event", done);
+              if (done) {
+                const auto event = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = done->event_id});
+                if (event) {
+                  saved_state = proto::matrix::managed_state_event{one.type, one.key, knot::to_pretty_json_string(*event),
+                      spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, event->content.data())};
+                  if (auto joined = state_.joined.find(room); joined != state_.joined.end())
+                    joined->second.state.events.insert_or_assign(std::pair{one.type, one.key}, *event);
+                }
+              }
+            },
             [&](const proto::matrix::room_change::set_account_data& one) {
               if (!knot::try_read<std::map<std::string, knot::raw>>(one.json)) { error = "The content must be a JSON object."; return; }
               told("save account data", perform(*api_, loom::cs::set_account_data_per_room{
@@ -432,6 +453,11 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
             [&](const proto::matrix::room_change::delete_alias& one) {
               told("delete address", perform(*api_, loom::cs::delete_room_alias{.room_alias = one.alias}));
             },
+            [&](const proto::matrix::room_change::delete_aliases& one) {
+              std::ranges::for_each(one.aliases, [&](const auto& alias) {
+                if (error.empty()) told("delete address", perform(*api_, loom::cs::delete_room_alias{.room_alias = alias}));
+              });
+            },
             [&](const proto::matrix::room_change::set_directory& one) {
               using body = loom::cs::set_room_visibility_on_directory::body_t;
               body content;
@@ -453,6 +479,10 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
                 if (!content.notifications) content.notifications.emplace();
                 content.notifications->room = one.after.notify_room;
               }
+              // Remove only explicitly deleted overrides; keep concurrent server additions.
+              std::ranges::for_each(one.before.events, [&](const auto& item) {
+                if (content.events && !one.after.events.contains(item.first)) content.events->erase(item.first);
+              });
               std::ranges::for_each(one.after.events, [&](const auto& item) {
                 const auto was = one.before.events.find(item.first);
                 if (was == one.before.events.end() || was->second != item.second) {
@@ -475,7 +505,7 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
             }},
         change);
     const bool saved = error.empty();
-    sink_(proto::matrix::management_saved{{id_, room}, change, std::move(error)});
+    sink_(proto::matrix::management_saved{{id_, room}, change, std::move(error), std::move(saved_state)});
     if (saved) this->fetch_room_settings(room);
   });
 }

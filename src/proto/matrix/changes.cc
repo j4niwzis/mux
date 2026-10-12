@@ -25,6 +25,7 @@ struct management_saved {
   conversation_id in;
   room_change_t change;
   std::string error;
+  std::optional<managed_state_event> saved_state;
 };
 struct verification_changed {
   account_id by;

@@ -190,7 +190,7 @@ struct managed_member {
   std::int64_t timestamp = 0;
 };
 struct managed_account_data { std::string type, json; };
-struct managed_state_event { std::string type, key, json; };
+struct managed_state_event { std::string type, key, json, content_json; };
 struct room_management {
   std::vector<std::string> local_aliases;
   std::optional<bool> directory;
@@ -237,8 +237,10 @@ struct set_tags { std::map<std::string, power_tag> tags; };
 struct set_directory { bool published = false; };
 struct create_alias { std::string alias; };
 struct delete_alias { std::string alias; };
+struct delete_aliases { std::vector<std::string> aliases; };
 struct set_addresses { std::optional<std::string> main; std::vector<std::string> published; };
 struct set_account_data { std::string type, json; };
+struct set_state_event { std::string type, key, json; };
 struct set_profile { std::optional<std::string> name, topic, avatar; };
 // A space's room or space: listed in it (m.space.child), or no longer.
 struct add_child {
@@ -252,7 +254,7 @@ using room_change_t = spl::variant<room_change::set_join_rule, room_change::set_
                                       room_change::encrypt, room_change::set_need, room_change::upgrade,
                                       room_change::set_event_need, room_change::add_child, room_change::remove_child,
                                       room_change::set_permissions, room_change::set_tags, room_change::set_directory,
-                                      room_change::create_alias, room_change::delete_alias, room_change::set_addresses, room_change::set_profile, room_change::set_account_data>;
+                                      room_change::create_alias, room_change::delete_alias, room_change::delete_aliases, room_change::set_addresses, room_change::set_profile, room_change::set_account_data, room_change::set_state_event>;
 
 constexpr room_part_list<room_rules> room_parts(const state&) { return {}; }
 

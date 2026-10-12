@@ -44,6 +44,7 @@ struct minus {};
 struct search {};  // a magnifier
 struct up {};      // a chevron up
 struct down {};    // a chevron down
+struct right {};   // a chevron right
 struct download {};
 struct compass {};  // Explore rooms
 struct phone {};   // a handset: a call
@@ -66,7 +67,7 @@ using icon_t = spl::variant<icon::none, icon::person, icon::gear, icon::power, i
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
                             icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile,
                             icon::play, icon::pause, icon::download, icon::compass, icon::threads, icon::phone,
-                            icon::hang_up, icon::microphone, icon::microphone_off, icon::lock, icon::terminal, icon::room>;
+                            icon::hang_up, icon::microphone, icon::microphone_off, icon::lock, icon::terminal, icon::room, icon::right>;
 
 // Each icon's shape, as data, in points from the middle of its box -- about
 // 20 across -- for nodes::Icon to draw.
@@ -254,6 +255,9 @@ namespace steps = nodes::path_step;
 }
 [[nodiscard]] inline IconShape shape_of(icon::down) {
   return {{{marks::line{-6.0f, -3.0f, 0.0f, 3.0f}, 2.0f}, {marks::line{0.0f, 3.0f, 6.0f, -3.0f}, 2.0f}}};
+}
+[[nodiscard]] inline IconShape shape_of(icon::right) {
+  return {{{marks::line{-3.0f, -6.0f, 3.0f, 0.0f}, 2.0f}, {marks::line{3.0f, 0.0f, -3.0f, 6.0f}, 2.0f}}};
 }
 // tdesktop's media viewer's: an arrow down onto a line.
 [[nodiscard]] inline IconShape shape_of(icon::download) {

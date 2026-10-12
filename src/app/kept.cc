@@ -609,3 +609,9 @@ struct kept_settings {
 };
 
 }  // namespace mux::app
+
+// Made once (src/app/model_kept.cc): an edit's end of batch -- the model's reactions and
+// its change log, a walk over the whole root's type -- was made again in
+// every unit that edited this model. In a named module, members defined in a
+// class are not implicitly inline: the other units call these.
+extern template class skiff::model::Model<mux::app::kept_root, mux::app::kept_reactions>;

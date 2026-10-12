@@ -209,6 +209,8 @@ foreach(pair "en;514bc93ac647211d0f422f63978d1eeec6aa759d0cd8c3e8c5da6cf5a536784
   endif()
 endforeach()
 target_sources(mux_modules PRIVATE src/emoji_keywords.cc)
+# The models, each made once (extern elsewhere).
+target_sources(mux_modules PRIVATE src/model_chats.cc src/ui/model_shown.cc)
 set_property(SOURCE src/emoji_keywords.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_cldr_dir})
 set_property(SOURCE src/emoji_keywords.cc APPEND PROPERTY OBJECT_DEPENDS "${mux_cldr_dir}/en.xml;${mux_cldr_dir}/ru.xml")
 # The flags that decide which std module a target gets: the same on every
@@ -479,6 +481,8 @@ if(MUX_UI)
   target_sources(mux_app PRIVATE src/app/shown_binding.cc)
   target_compile_definitions(mux_app PUBLIC $<${mux_split}:MUX_SPLIT_ACCOUNTS>)
   target_link_libraries(mux_app PUBLIC mux_modules)
+  # The kept settings model, made once (extern in mux.app.kept).
+  target_sources(mux_app PRIVATE src/app/model_kept.cc)
   # The program itself: its module, beside its implementation units.
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src FILES src/app/program.cc)
   # What the program does, a part each: the module's implementation units.

@@ -24,6 +24,11 @@ import gtest;
 #include "gtest/gtest-macros.h"
 
 namespace {
+// What a picker page is made of, reached as a test reaches it: the Local
+// under its preview, a column -- the search, then for the emoji panel what
+// is typed as a reaction, then the sections.
+auto& emoji_groups_in(auto& panel) { return std::get<2>(panel.parts.page.fParts); }
+auto& sticker_packs_in(auto& page) { return std::get<2>(page.parts.page.fParts); }
 
 namespace scene = skiff::scene;
 
@@ -851,17 +856,17 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
   const auto fill = ui.paint.under(popup.parts.card.fState, ui.colours.sidebar, &canvas, 1.0f);
   EXPECT_TRUE(fill.has_value());
   EXPECT_TRUE(scene::detail::liveBackdrops().contains(popup.parts.card.id()));
-  auto& panel = popup.parts.card.parts.panel;
-  auto& sections = panel.sections();
+  auto& groups = emoji_groups_in(popup.parts.card.parts.panel);
+  auto& sections = groups.parts();
   ASSERT_FALSE(sections.empty());
   const auto& cells = mux::ui::cell_section_cells(sections.front());
   ASSERT_GE(cells.size(), 2u);
   EXPECT_GT(cells[1].bounds().fLeft, cells[0].bounds().fLeft)
       << "side by side: the card " << popup.parts.card.bounds().width() << " wide, the list "
-      << panel.parts.list.bounds().width() << ", the first group " << sections.front().bounds().width()
+      << groups.fList.bounds().width() << ", the first group " << sections.front().bounds().width()
       << ", its cells " << std::get<1>(sections.front().fParts).bounds().width();
   EXPECT_FLOAT_EQ(cells[1].bounds().fTop, cells[0].bounds().fTop);
-  EXPECT_GT(panel.parts.list.extent(), 0.0f) << "the list: " << panel.parts.list.bounds().height() << " high";
+  EXPECT_GT(groups.fList.extent(), 0.0f) << "the list: " << groups.fList.bounds().height() << " high";
   skiff::paint::defaultFont() = nullptr;
 }
 
@@ -989,7 +994,7 @@ TEST(Emoji, FixedCategoriesStayVisibleWhileCustomPacksArePaged) {
       kept.chat_emotes.push_back(std::move(emoji));
     }
     using pick = mux::ui::insert_emoji_into<stub>;
-    scene::Scene<mux::ui::emoji_panel<pick>> window{std::in_place, colours, kept, pick{}, scene::Spec{.fill = true}};
+    scene::Scene<mux::ui::emoji_panel_t<pick>> window{mux::ui::emoji_panel(colours, kept, pick{})};
     auto& panel = window.root();
     double clock = 1000.0;
     const auto frame = [&] {
@@ -1000,11 +1005,12 @@ TEST(Emoji, FixedCategoriesStayVisibleWhileCustomPacksArePaged) {
       }
     };
     frame();
-    auto& categories = mux::ui::emoji_category_tabs(panel.parts.footer);
-    auto& packs = mux::ui::emoji_pack_tabs(panel.parts.footer);
+    auto& strip = emoji_groups_in(panel).fStrip;
+    auto& categories = strip.fFirst.fParts;
+    auto& packs = strip.fThen.buttons();
     ASSERT_GT(categories.size(), 1u);
     ASSERT_EQ(packs.size(), 32u);
-    const auto category_row = std::get<0>(panel.parts.footer.fParts).bounds();
+    const auto category_row = strip.fFirst.bounds();
     const auto check_categories = [&] {
       for (const auto& tab : categories) {
         EXPECT_TRUE(tab.visible());
@@ -1013,17 +1019,21 @@ TEST(Emoji, FixedCategoriesStayVisibleWhileCustomPacksArePaged) {
         EXPECT_NEAR(tab.bounds().centerY(), categories.front().bounds().centerY(), 0.5f);
       }
     };
+    // Only the page's icons are asked for: hidden tabs must not keep evicted
+    // animations decoding again.
     const auto check_requested_icons = [&] {
-      const auto wanted = panel.pictures_shown();
+      std::vector<mux::emote_picture> wanted;
+      mux::ui::emote_pictures_in(panel, skia::SkRect::MakeWH(width, 400.0f), wanted);
       for (std::size_t i = 0; i < packs.size(); ++i)
-        EXPECT_EQ(std::ranges::contains(wanted, panel.pack_icons[i]), packs[i].visible());
+        EXPECT_EQ(std::ranges::contains(wanted, "mxc://example.com/icon" + std::to_string(i), &mux::emote_picture::source),
+                  packs[i].visible());
     };
     check_categories();
     check_requested_icons();
     EXPECT_TRUE(packs.front().visible());
     EXPECT_FALSE(packs.back().visible());
     for (std::size_t i = 0; i < packs.size(); ++i) {
-      panel.page_packs(true);
+      strip.fThen.page(true);
       frame();
     }
     EXPECT_TRUE(packs.back().visible());
@@ -1037,24 +1047,23 @@ TEST(Stickers, PackTabsStayWithinTheFooterAndAllRemainReachable) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;
   struct restore_font { ~restore_font() { skiff::paint::defaultFont() = nullptr; } } reset;
-  struct panel { void bring(std::size_t) {} } owner;
   mux::ui::palette colours;
-  using tab_t = decltype(mux::ui::picker_tab(colours, &owner, 0, std::nullopt));
-  using footer_t = decltype(mux::ui::picker_footer<tab_t>());
+  mux::ui::emoji_kept kept;
+  for (int i = 0; i < 32; ++i)
+    kept.chat_stickers.push_back({.shortcode = "s" + std::to_string(i), .url = "mxc://example.com/s" + std::to_string(i),
+                                  .pack = "Pack " + std::to_string(i)});
   for (const float width : {180.0f, 320.0f}) {
-    scene::Scene<footer_t> window{std::in_place, mux::ui::picker_footer<tab_t>()};
-    auto& footer = window.root();
-    auto& tabs = mux::ui::picker_tabs(footer);
-    for (std::size_t i = 0; i < 32; ++i)
-      tabs.push_back(mux::ui::picker_tab(colours, &owner, i, std::nullopt, "x"));
-    footer.invalidateLayout();
+    scene::Scene<mux::plugins::stickers::page_t> window{mux::plugins::stickers::page(colours, kept)};
+    auto& footer = sticker_packs_in(window.root()).fStrip.fView;
     const auto frame = [&](double clock) {
       window.update(clock);
-      window.layoutIfNeeded(skia::SkRect::MakeWH(width, 36.0f));
+      window.layoutIfNeeded(skia::SkRect::MakeWH(width, 400.0f));
       (void)window.finishFrame();
     };
     for (int i = 0; i < 4; ++i)
       frame(1000.0 + i * 16.0);
+    auto& tabs = std::get<0>(footer.fChildren).fParts;
+    ASSERT_EQ(tabs.size(), 32u);
     ASSERT_GT(footer.extent(), 0.0f);
     for (const auto& tab : tabs) {
       EXPECT_GE(tab.bounds().fLeft, footer.bounds().fLeft);
@@ -2665,26 +2674,23 @@ TEST(Emoji, SearchSendsTypedAndCopiedCustomEmojiAsMediaKeys) {
   mux::ui::emoji_kept kept;
   kept.chat_emotes = {{.shortcode = "neocat", .url = "mxc://room/neocat"}};
   using pick = mux::plugins::reactions::react_with<stub>;
-  scene::Scene<mux::ui::emoji_panel<pick>> window{std::in_place, colours, kept, pick{}, scene::Spec{.fill = true}};
-  auto& panel = window.root();
-  panel.search(":neocat");
-  ASSERT_TRUE(panel.parts.text_option.has_value());
-  auto typed = panel.parts.text_option->onPress();
+  const mux::ui::emoji_events<pick> events{pick{}, &kept};
+  mux::ui::emoji_draft draft;
+  draft.query = {":neocat", {}};
+  auto typed = events.on(mux::ui::pick_typed{}, draft).fEvent;
   EXPECT_EQ(typed.key, "mxc://room/neocat");
   EXPECT_EQ(typed.shortcode, std::optional<std::string>(":neocat:"));
-  scene::clipboardCandidate() = scene::clipboardFragment("\u2003", {{0, 3, "mxc://remote/original", ":neocat:", true}});
-  scene::setClipboardText(":neocat:");
-  scene::Reply reply;
-  panel.parts.field.onKey(scene::phase::target{}, scene::key::down{scene::keys::kV,
-      scene::Modifiers{}.with<scene::modifier::control>()}, reply);
-  ASSERT_TRUE(panel.parts.text_option.has_value());
-  auto copied = panel.parts.text_option->onPress();
+  // A picture pasted into the search keeps its own source, whatever the
+  // chat calls the same name.
+  draft.query = {"\u2003", {{0, 3, "mxc://remote/original", ":neocat:", true}}};
+  auto copied = events.on(mux::ui::pick_typed{}, draft).fEvent;
   EXPECT_EQ(copied.key, "mxc://remote/original");
   EXPECT_EQ(copied.shortcode, std::optional<std::string>(":neocat:"));
-  panel.parts.field.onText(scene::phase::target{}, scene::text::commit{" hello"}, reply);
-  auto mixed = panel.parts.text_option->onPress();
+  draft.query.text += " hello";
+  auto mixed = events.on(mux::ui::pick_typed{}, draft).fEvent;
   EXPECT_EQ(mixed.key, "mxc://remote/original hello");
   EXPECT_EQ(mixed.shortcode, std::optional<std::string>(":neocat: hello"));
+}
 }
 
 TEST(StartChat, BoundGoEmitsRealRequestsAndRowsIgnoreOtherModels) {

@@ -241,11 +241,10 @@ auto extend(contract::message_menu_top, type_tag<feature>, type_tag<Actions>, co
       c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), quick_reactions(colours, std::move(unroll)),
           c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band))));
 }
-// What it unrolls: every emoji, a press reacting with it -- built where it
-// is kept, as it points at its own parts.
+// What it unrolls: every emoji, a press reacting with it.
 template <class Actions>
 auto unrolled(contract::message_menu_top, type_tag<feature>, type_tag<Actions>, const palette& colours, emoji_kept& kept) {
-  return composition::in_place<emoji_panel<react_with<Actions>>, const palette&, emoji_kept&, react_with<Actions>>{{colours, kept, {}}};
+  return emoji_panel(colours, kept, react_with<Actions>{});
 }
 // Unrolled: its arrow put away.
 template <class Head>

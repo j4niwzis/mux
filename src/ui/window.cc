@@ -985,18 +985,15 @@ template <class Actions> struct window : skiff::compose::Specced {
   [[nodiscard]] std::vector<emote_picture> emoji_pictures_shown() {
     auto* up = layer().emoji.shown();
     std::vector<emote_picture> shown;
-    const auto pictures = [](const auto& urls, emote_kind kind) {
-      return std::views::transform(urls, [kind](const std::string& url) { return emote_picture{url, kind}; });
-    };
+    // Those the panel's pages show, in view: the emoji's, every plugin's.
     if (up) {
-      const auto emoji = up->parts.card.parts.panel.pictures_shown();
-      shown.append_range(pictures(emoji, emote_kind::emoji));
-      // And those the plugins' pages show, in view: the stickers'.
       const skia::SkRect view = up->parts.card.bounds();
+      emote_pictures_in(up->parts.card.parts.panel, view, shown);
       std::apply([&](auto&... page) { ((page ? emote_pictures_in(*page, view, shown) : void()), ...); }, up->parts.card.parts.pages);
     }
+    // And those of what a message's menu unrolled: every emoji.
     if (auto* menu = layer().menu.shown())
-      std::apply([&](auto&... over) { (shown.append_range(pictures(unrolled_pictures(over), emote_kind::emoji)), ...); },
+      std::apply([&](auto&... over) { ((over ? emote_pictures_in(*over, menu->parts.menu.bounds(), shown) : void()), ...); },
                  menu->parts.menu.parts.overs);
     auto& screen = main();
     if (screen.chat.parts.emojis.visible())

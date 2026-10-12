@@ -40,6 +40,12 @@ struct search {
   std::string query;
   friend bool operator==(const search&, const search&) = default;
 };
+// A tab pressed while a search is shown: the search left, every pack shown
+// again, and its pack brought.
+struct leave_search {};
+struct search_events {
+  auto on(leave_search) const { return skiff::model::over<skiff::model::Field<&search::query>>(skiff::model::setTo(std::string())); }
+};
 
 // The packs as the chat has them: Recent -- those sent lately that the chat
 // still has -- then the favourites, whichever chat they came from, then
@@ -118,18 +124,19 @@ inline auto page(const palette& colours, emoji_kept& kept) {
   namespace c = skiff::compose;
   auto field = widgets::TextField<std::string>(colours.widgets, "Search stickers");
   field.setSearchIcon(true);
-  auto packs = c::sections<pack>(c::vbox(4.0f, {.fill = true}), c::vbox(0.0f), c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  auto packs = c::sections<pack>(c::vbox(4.0f, {.fill = true}), c::vbox(0.0f),
       [&colours](const pack& one) { return tab(colours, one); },
       [&colours, &kept](const pack& one) {
         return cell_section(colours, one.name,
                             one.stickers | std::views::transform([&](const emote& each) { return cell(colours, kept, each); }) |
                                 std::ranges::to<std::vector>(),
                             source_pack(one.stickers, one.name), kept.pack_account);
-      });
-  packs.fStrip.apply({.fillX = true, .height = 36.0f});
-  std::get<0>(packs.fStrip.fChildren).fStack.wrap = true;  // the tabs wrap, the strip scrolling them
+      },
+      // The footer: the tabs in rows that wrap, 36 high, scrolled to the one lit.
+      c::wrapped<pack>(c::vbox(0.0f, {.fillX = true, .height = 36.0f}), c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+      [](std::size_t) { return leave_search{}; });
   return with_preview(colours, kept,
-      c::local<search>(c::handlers(),
+      c::local<search>(search_events{},
           c::column(picker_look(),
               c::styled({.fillX = true, .height = 32.0f, .margin = {0.0f, 7.0f, 0.0f, 0.0f}},
                         c::bound<skiff::model::Field<&search::query>>(std::move(field))),
@@ -138,7 +145,11 @@ inline auto page(const palette& colours, emoji_kept& kept) {
                             wrapped(nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, colours.dim)))),
               c::styled({.fillX = true, .grow = scene::axes::kY},
                   c::projected<skiff::model::Field<&search::query>>(
-                      [&kept](const std::string& query) { return packs_of(kept, query); }, std::move(packs))))));
+                      [&kept](const std::string& query) {
+                        // A search's results, every pack's tab still there, none lit.
+                        return c::SectionsShown<pack>{packs_of(kept, query), packs_of(kept, {}), query.empty()};
+                      },
+                      std::move(packs))))));
 }
 using page_t = decltype(page(std::declval<const palette&>(), std::declval<emoji_kept&>()));
 

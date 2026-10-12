@@ -914,11 +914,6 @@ inline auto& cell_section_cells(auto& section) {
   return std::get<0>(std::get<1>(section.fParts).fChildren);
 }
 
-// A panel's footer of tabs, one for each of its sections.
-template <class Tab>
-auto tab_strip(skiff::compose::Look look) { return skiff::compose::many(std::move(look), std::vector<Tab>{}); }
-template <class Tab>
-using tab_strip_t = decltype(tab_strip<Tab>(skiff::compose::vbox()));
 
 // A dialog's buttons, at its bottom right: Cancel, and what it does --
 // Send, Save, Create room -- the primary one.

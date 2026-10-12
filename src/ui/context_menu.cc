@@ -201,17 +201,6 @@ inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, 
           c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(emoji && kept.emoji_is_favourite(emoji->url)
               ? "Remove from favorites" : "Add to favorites", 13.0f, colours.text)))));
 }
-// The emoji pictures what a menu's head unrolled shows, for the program to
-// fetch: where it shows any.
-template <class Over>
-  requires requires(Over& over) { over.pictures_shown(); }
-std::vector<std::string> unrolled_pictures(std::optional<Over>& over) {
-  return over ? over->pictures_shown() : std::vector<std::string>{};
-}
-template <class Over>
-std::vector<std::string> unrolled_pictures(std::optional<Over>&) {
-  return {};
-}
 template <class Actions> struct context_menu : skiff::compose::Specced {
   // Child references and handlers require a fixed address.
   context_menu(const context_menu&) = delete;

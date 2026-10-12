@@ -138,7 +138,7 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
 
     // A swipe to the GIFs: what has been saved since, asked for.
     using Answer = ::mux::ui::request::select_emoji_page;
-    using panel_t = emoji_panel<insert_emoji_into<Actions>>;
+    using panel_t = emoji_panel_t<insert_emoji_into<Actions>>;
     using tab_t = decltype(popup_tab(std::declval<const palette&>(), popup_page_t{popup_page::emoji{}}, std::string{}, false, true));
     using tabs_t = decltype(pages_t::tabs(std::declval<const palette&>(), std::declval<const emoji_facts&>(),
                                           std::declval<tab_t>()));
@@ -164,9 +164,9 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
           colours_(&colours), allowed_(facts),
           parts{.tabs = pages_t::tabs(colours, facts,
                     popup_tab(colours, popup_page::emoji{}, "Emoji", facts.page == popup_page_t(popup_page::emoji{}), true)),
-                .panel = panel_t(colours, kept, insert_emoji_into<Actions>{},
-                    {.fillX = true, .grow = scene::axes::kY, .masking = true,
-                     .visible = facts.page == popup_page_t(popup_page::emoji{})})} {
+                .panel = skiff::compose::styled({.fillX = true, .grow = scene::axes::kY, .masking = true,
+                                                 .visible = facts.page == popup_page_t(popup_page::emoji{})},
+                                                emoji_panel(colours, kept, insert_emoji_into<Actions>{}))} {
       pages_t::build(parts.pages, needs, facts);
 
       // The card paints its own floating backdrop. Its full-window layer

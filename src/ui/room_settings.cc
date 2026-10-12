@@ -423,12 +423,12 @@ inline auto space_choice_row(const palette& colours, std::string label, bool all
       c::bound<skiff::model::Field<Member>>(c::styled({.alignSelf = scene::align::kMiddle},
                                                     widgets::ToggleField<bool>(colours.widgets))));
 }
-inline auto room_general_page(const palette& colours, const room_settings_facts& facts) {
+inline auto room_general_page(const palette& colours, const room_settings_facts& facts, bool has_page_header = false) {
   namespace c = skiff::compose;
   using choices = config::chat_choices;
   return c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
                                 .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
-      tab_heading(colours, "General"),
+      c::visible(!has_page_header, tab_heading(colours, spl::visit([](auto tag) { return std::string(preferences_title(state_of<decltype(tag)>{})); }, facts.speaks))),
       c::visible(!proto::room_event_kinds_of(state_before(facts.speaks)).empty(),
           explained(colours, "Room events shown in this room, for you: As above follows the inherited settings.")),
       chat_settings_view(colours, facts.chat),
@@ -765,7 +765,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
     const settings_tab_t to = tab;
     auto& page = this->page();
     spl::visit(spl::overloaded{
-                      [&](settings_tab::general) { page.template emplace<room_general_page_t>(room_general_page(*colours_, facts)); },
+                      [&](settings_tab::general) { page.template emplace<room_general_page_t>(room_general_page(*colours_, facts, context.presentation.page_header)); },
                       [&](settings_tab::notifications) { page.template emplace<notifications_page>(this, facts); },
                       [&](settings_tab::looks) { page.template emplace<looks_page>(this, facts); },
                       // Protocol pages may be made with combinators or an existing node.

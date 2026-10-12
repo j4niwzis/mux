@@ -3416,6 +3416,7 @@ TEST(RoomManagement, MatrixKeepsNativeSettingsAndThemeAlongsideProtocolPages) {
   dialog.show_tab(mux::ui::settings_tab::general{});
   dialog.update(0.0);
   EXPECT_EQ(std::get<1>(dialog.pane_header().fParts).text(), "Preferences");
+  spl::visit(spl::overloaded{[](mux::ui::room_general_page_t& page) { EXPECT_FALSE(std::get<0>(page.fParts).visible()); }, [](auto&) { FAIL(); }}, dialog.page());
   dialog.show_tab(mux::proto::matrix::manage::roles{});
   dialog.update(0.0);
   EXPECT_EQ(std::get<1>(dialog.pane_header().fParts).text(), "Permissions");

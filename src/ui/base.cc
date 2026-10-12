@@ -176,6 +176,7 @@ struct looks_held {
 // the colours (ui_needs).
 struct looks_shown {
   std::map<std::string, config::custom_theme> theme_overrides;
+  bool developer_tools = false;
   // The window's own: its opacity, the background behind it, Frosted's blur.
   window_look_t window;
   // How the bubbles of the chat shown look -- set before its bubbles are

@@ -120,6 +120,7 @@ using account_page_t = typename variant_of_types<typename joined<
 namespace request {
 struct apply_style {};
 struct configure_theme { config::theme_t theme; std::optional<config::custom_theme> custom; };
+struct set_developer_tools { bool enabled; };
 // One of the chosen account's pages asked for.
 struct account_page {
   account_page_t page = ::mux::ui::account_page::connection{};

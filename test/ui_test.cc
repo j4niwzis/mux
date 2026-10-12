@@ -3176,6 +3176,8 @@ namespace {
 struct manage_test_box {
   mux::ui::palette colours;
   const mux::ui::palette* colours_ = &colours;
+  mux::ui::looks_shown looks;
+  const mux::ui::looks_shown* looks_ = &looks;
   mux::ui::room_settings_facts facts;
   mux::proto::matrix::manage_detail::part kept;
   std::size_t refreshed = 0;
@@ -3404,6 +3406,50 @@ TEST(Appearance, ThemeConfigurationValidatesColorsAndPreservesAlpha) {
   EXPECT_FALSE(std::get<1>(invalid).fEvent);
   const auto reset = mux::ui::theme_details_events{}.on(mux::ui::reset_theme_details{}, draft);
   EXPECT_FALSE(reset.fEvent.custom);
+}
+
+TEST(RoomManagement, DeveloperToolsReadTheRememberedPreferenceAndStateSourceIsSelectable) {
+  namespace manage = mux::proto::matrix::manage_detail;
+  manage_test_box box;
+  box.looks.developer_tools = true;
+  EXPECT_FALSE(manage::toggle_developer_tools<manage_test_box>{&box}().enabled);
+  box.looks.developer_tools = false;
+  EXPECT_TRUE(manage::toggle_developer_tools<manage_test_box>{&box}().enabled);
+  const auto source = manage::state_event_source(box.colours, "{\"type\":\"m.room.name\"}");
+  EXPECT_TRUE(source.selectable());
+}
+
+TEST(RoomManagement, StateListKeyTapOpensTheSelectedEventThroughLocalHandlers) {
+  namespace manage = mux::proto::matrix::manage_detail;
+  manage_test_box box;
+  box.kept.expanded_state_type = "org.example.state";
+  box.kept.data.state_events = {{"org.example.state", "key", "full event", "content"}};
+  auto list = skiff::compose::local<manage::developer_draft<manage_test_box>>(manage::developer_events<manage_test_box>{&box},
+      manage::state_event_list(&box), manage::developer_draft<manage_test_box>{&box});
+  scene::Scene<decltype(list)> view{std::move(list)};
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  struct sink { void take(skiff::model::Nothing) {} } requests;
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(view.root(), model);
+  view.layoutIfNeeded(skia::SkRect::MakeWH(600.0f, 500.0f));
+  auto& groups = std::get<1>(std::get<1>(view.root().fParts).fParts).fParts;
+  auto& expanded = std::get<1>(groups.front().fParts);
+  auto& keys = std::get<1>(expanded.fParts).fParts;
+  ASSERT_EQ(keys.size(), 1u);
+  const auto bounds = keys.front().bounds();
+  scene::hostWork().pressed.clear();
+  scene::InputRouter router;
+  const std::array layers{scene::InputRouter::Layer{view.handle(), false}};
+  router.setLayers(layers);
+  router.pointer(scene::PointerEvent{scene::pointer::down{bounds.centerX(), bounds.centerY()}});
+  router.pointer(scene::PointerEvent{scene::pointer::up{bounds.centerX(), bounds.centerY()}});
+  const auto presses = std::exchange(scene::hostWork().pressed, {});
+  ASSERT_EQ(presses.size(), 1u);
+  for (const auto& path : presses) ASSERT_TRUE(skiff::bind::press(view.root(), model, path, &requests));
+  EXPECT_EQ(box.kept.state_page, manage::state_screen::view);
+  EXPECT_EQ(box.kept.state_key, "key");
+  EXPECT_EQ(box.kept.state_source, "full event");
 }
 
 TEST(RoomManagement, AddressFieldHasOneLineAndStaysInsideItsRoundedBackground) {

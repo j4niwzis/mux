@@ -267,3 +267,11 @@ TEST(Config, GraphiteAndThemeOverridesSurviveSerialization) {
   ASSERT_TRUE(read->theme_overrides);
   EXPECT_EQ(read->theme_overrides->at("graphite"), custom);
 }
+
+TEST(Config, DeveloperToolsPreferenceSurvivesSerialization) {
+  mux::config::file saved;
+  saved.developer_tools = true;
+  const auto read = knot::try_read<mux::config::file>(knot::to_json_string(saved));
+  ASSERT_TRUE(read);
+  EXPECT_EQ(read->developer_tools, true);
+}

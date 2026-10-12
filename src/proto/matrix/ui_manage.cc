@@ -18,6 +18,7 @@ import skiff.widgets.dropdown;
 import skiff.widgets.sliderbar;
 import skiff.widgets.textarea;
 import skiff.widgets.button;
+import skiff.widgets.model;
 import mux.core;
 import mux.config;
 import mux.proto.kept;

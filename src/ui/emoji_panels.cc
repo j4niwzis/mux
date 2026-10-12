@@ -91,9 +91,15 @@ struct leave_emoji_search {};
 // favourites, those pasted in -- read as theirs, the rest as it is.
 inline logic::reaction_text typed_reaction(const emoji_kept& kept, const emoji_search& query) {
   std::vector<emote> available = kept.custom_emoji ? kept.chat_emotes.get() : std::vector<emote>{};
-  available.append_range((kept.custom_emoji ? kept.favourite_emoji : std::vector<emote>{}) | std::views::filter([&](const emote& one) {
-                           return std::ranges::none_of(available, [&](const emote& other) { return other.url == one.url; });
-                         }));
+  // The favourites not among them, gathered first: the filter reads what
+  // is there, which must not grow under it.
+  auto favourites = kept.favourite_emoji |
+                    std::views::take(kept.custom_emoji ? kept.favourite_emoji.size() : std::size_t{0}) |
+                    std::views::filter([&](const emote& one) {
+                      return std::ranges::none_of(available, [&](const emote& other) { return other.url == one.url; });
+                    }) |
+                    std::ranges::to<std::vector>();
+  available.append_range(std::move(favourites));
   // Rich clipboard atoms keep the original source even where an emoji of
   // this room has the same name.
   const auto pictures = kept.custom_emoji ? query.atoms | std::views::filter(&scene::ClipboardAtom::picture) | std::ranges::to<std::vector>()
@@ -174,7 +180,9 @@ inline std::vector<emoji_group> emoji_groups_of(const emoji_kept& kept, const em
     if (label.ends_with(':')) label.remove_suffix(1);
     const std::string wanted = logic::folded(label);
     auto available = chat;
-    available.append_range((kept.custom_emoji ? kept.favourite_emoji : std::vector<emote>{}) | std::views::filter([&](const emote& one) {
+    available.append_range(kept.favourite_emoji |
+                           std::views::take(kept.custom_emoji ? kept.favourite_emoji.size() : std::size_t{0}) |
+                           std::views::filter([&](const emote& one) {
                              return std::ranges::none_of(chat, [&](const emote& other) { return other.url == one.url; });
                            }));
     const auto custom = available | std::views::filter([&](const emote& one) {

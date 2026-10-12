@@ -44,6 +44,14 @@ struct media_pages {
 struct message_menu {
   static constexpr std::string_view name = "a message's menu";
 };
+// A message's trailers: what goes after its text, at the foot of its bubble,
+// that its time sits beside (mux.ui:message):
+//   extend(c, f, type_tag<Actions>, trailer_facts) -> std::optional<its node>:
+//   none where it has nothing to show of the message; the node says
+//   trailing_width(), how far its last line goes, for the time beside it
+struct message_trailers {
+  static constexpr std::string_view name = "a message's trailers";
+};
 // The program's parts (mux.app.program): extend(c, f, services&) -> a part,
 // offered the requests as the program's own are.
 struct program_parts {
@@ -107,6 +115,16 @@ using node_t = typename node_of<Made>::type;
 template <class Node>
 Node& put(std::optional<Node>& slot, Node&& made) {
   return slot.emplace(std::move(made));
+}
+// Or nothing, where it has nothing to show: the slot left empty.
+template <class Made>
+struct node_of<std::optional<Made>> {
+  using type = Made;
+};
+template <class Node>
+void put(std::optional<Node>& slot, std::optional<Node>&& made) {
+  if (made)
+    slot.emplace(std::move(*made));
 }
 template <class Node, class... Args>
 Node& put(std::optional<Node>& slot, in_place<Node, Args...>&& made) {

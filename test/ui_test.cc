@@ -2223,7 +2223,7 @@ TEST(Composer, ShortcodeSuggestionInsertsCustomEmojiWithItsSource) {
 TEST(Reactions, MixedCustomEmojiKeepTheOriginalReactionKeyWhenClicked) {
   mux::ui::palette colours;
   mux::ui::looks_shown looks;
-  auto chip = mux::ui::reaction_chip(colours, looks, "$message", "a reaction :party:", 2, false,
+  auto chip = mux::plugins::reactions::reaction_chip(colours, looks, "$message", "a reaction :party:", 2, false,
       {{.shortcode = "party", .url = "mxc://example/party"}});
   EXPECT_EQ(chip.onPress().id, "$message");
   EXPECT_EQ(chip.onPress().key, "a reaction :party:");

@@ -21,6 +21,7 @@ import mux.core;
 import mux.config;
 import mux.logic.links;
 import mux.protocols;
+import mux.plugins.types;
 import :base;
 import :icons;
 import :avatars;
@@ -115,6 +116,16 @@ constexpr auto message_views_for(const State& state, type_tag<Actions> tag) {
 // A message as the chat shows it. A template on the program's Actions, made
 // where every protocol's UI module is seen: its sticker part is the basic
 // picture or one of a protocol's own sticker nodes (sticker_views).
+// What a message's trailers are made from (contract::message_trailers):
+// the message, its chat, and what it is drawn in.
+struct trailer_facts {
+  const palette& colours;
+  const looks_shown& looks;
+  const message& said;
+  const conversation& in;
+  std::string message_id;
+};
+
 template <class Actions> struct message_bubble : skiff::compose::Stacked {
   // ---- the protocols' own sticker nodes -------------------------------------
   template <class List>
@@ -190,6 +201,28 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
   [[nodiscard]] static skia::SkColor with_alpha(skia::SkColor colour, float alpha) {
     return (colour & 0x00FFFFFFu) | (static_cast<skia::SkColor>(std::lround(alpha * 255.0f)) << 24);
   }
+  // What plugins put after the text, at the bubble's foot
+  // (contract::message_trailers) -- the reactions -- in their order, each in
+  // a slot of its own: empty where it has nothing to show of the message.
+  template <class List>
+  struct plugin_trailers;
+  template <class... Features>
+  struct plugin_trailers<plugin_list<Features...>> {
+    template <class Feature>
+    static auto made(const trailer_facts& facts) {
+      static_assert(requires { extend(contract::message_trailers{}, type_tag<Feature>{}, type_tag<Actions>{}, facts); },
+                    composition::broken<contract::message_trailers, Feature>());
+      return extend(contract::message_trailers{}, type_tag<Feature>{}, type_tag<Actions>{}, facts);
+    }
+    using nodes_t =
+        std::tuple<std::optional<composition::node_t<decltype(made<Features>(std::declval<const trailer_facts&>()))>>...>;
+    static void build(nodes_t& slots, const trailer_facts& facts) {
+      [&]<std::size_t... At>(std::index_sequence<At...>) {
+        (composition::put(std::get<At>(slots), made<Features>(facts)), ...);
+      }(std::index_sequence_for<Features...>{});
+    }
+  };
+  using trailers_t = plugin_trailers<composition::providers<contract::message_trailers, enabled_plugins>>;
   // The bubble: as wide as what it says, up to its largest.
   struct body_column : skiff::compose::Stacked {
     bool outgoing = false;
@@ -232,7 +265,8 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       // Code blocks and link cards in text order, each with the words after it.
       std::vector<message_piece> blocks;
       std::optional<page_preview> preview;
-      std::optional<reaction_row> reactions;
+      // What plugins put after the text: the reactions.
+      typename trailers_t::nodes_t trailers;
       // A thread's root: its summary -- how many answers, the latest -- as
       // Element shows it under the message; pressed, the thread.
       std::optional<nodes::Text> thread;
@@ -246,6 +280,19 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       nodes::Text inline_time;
     } parts;
     skia::SkColor plate = 0;
+    // The last trailer shown, where there is one: what the time goes beside,
+    // and how far its last line goes.
+    struct trailer_end {
+      skia::SkRect bounds;
+      float width = 0.0f;
+    };
+    [[nodiscard]] std::optional<trailer_end> last_trailer() const {
+      std::optional<trailer_end> found;
+      std::apply([&](const auto&... slot) {
+        ((slot && slot->visible() ? void(found = trailer_end{slot->bounds(), slot->trailing_width()}) : void()), ...);
+      }, parts.trailers);
+      return found;
+    }
     // A protocol's sticker placed, where it made one.
     bool place_sticker(std::nullopt_t) { return false; }
     void place_view(std::nullopt_t) {}
@@ -310,15 +357,16 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       this->nodes::Stack::layoutChildren();
       // The column can wrap again in its final box. Position its overlay
       // here, after that layout, rather than keeping a pre-layout offset.
+      const auto trailer = this->last_trailer();
       if (parts.inline_time.visible()) {
-        const auto last = parts.reactions ? parts.reactions->bounds() : parts.text.bounds();
+        const auto last = trailer ? trailer->bounds : parts.text.bounds();
         if (!last.isEmpty()) {
           parts.inline_time.apply({.y = last.fBottom - fState.contentBox().fBottom + kTimeLower});
           scene::layout(parts.inline_time, fState.contentBox());
         }
       }
       if (time_placed && parts.text.visible() && parts.blocks.empty() && !parts.preview && !beside) {
-        const auto last = parts.reactions ? parts.reactions->bounds() : parts.text.bounds();
+        const auto last = trailer ? trailer->bounds : parts.text.bounds();
         if (last != placed_beside) {
           time_placed = false;
           this->markDamaged();
@@ -378,7 +426,8 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, trailers, thread, protocol_lines, their_view, time, inline_time] = parts;
+      const auto trailer = this->last_trailer();
       // A sticker's time is over it, and nowhere else: placed beside its
       // reactions too, it was shown twice.
       if (picture && picture->sticker) {
@@ -401,7 +450,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       const bool ends_quoted = !words.empty() && std::ranges::any_of(text.styles(), [&](const auto& one) {
         return one.quote && one.first < words.size() && words.size() <= one.last;
       });
-      if (text.visible() && (words.empty() || ends_quoted) && !reactions) {
+      if (text.visible() && (words.empty() || ends_quoted) && !trailer) {
         time_placed = true;
         if (words.empty())
           text.setVisible(false);
@@ -414,26 +463,25 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
         }
         return;
       }
-      if (!blocks.empty() || preview || (!text.visible() && !reactions)) {
+      if (!blocks.empty() || preview || (!text.visible() && !trailer)) {
         time_placed = true;  // under it, as it is
         return;
       }
       skia::SkFont* font = skiff::paint::defaultFont();
       if (font == nullptr)
         return;
-      if (!reactions && text.bounds().isEmpty()) {
+      if (!trailer && text.bounds().isEmpty()) {
         this->guess_time(*font);
         return;
       }
-      // What the time goes beside: the reactions where there are some, as
-      // Telegram puts it on their line, else the text's last line.
-      const skia::SkRect last = reactions ? reactions->bounds() : text.bounds();
+      // What the time goes beside: the last trailer where there is one -- the
+      // reactions, as Telegram puts it on their line -- else the text's last
+      // line.
+      const skia::SkRect last = trailer ? trailer->bounds : text.bounds();
       if (last.isEmpty())
         return;
       time_placed = true;
-      float last_width = text.lastLineWidth();
-      if (reactions)
-        last_width = reaction_chips(*reactions).empty() ? 0.0f : reaction_chips(*reactions).back().bounds().fRight - last.fLeft;
+      const float last_width = trailer ? trailer->width : text.lastLineWidth();
       // Measured again only where what it goes beside moved or changed: not
       // a font's measuring for every bubble in view, every frame.
       // The widest the text can be here: the bubble's widest, or what the
@@ -482,7 +530,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, trailers, thread, protocol_lines, their_view, time, inline_time] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -549,7 +597,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
                         nodes::Text(when, 11.0f,
                                     mine ? colours.sent_time : colours.dim)))},
           plate(plate_of(colours, looks.bubbles, mine)) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, reactions, thread, protocol_lines, their_view, time, inline_time] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, trailers, thread, protocol_lines, their_view, time, inline_time] = parts;
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
       // Frosted: what is behind blurred under the tint; glass: a light edge.
@@ -1006,20 +1054,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
           body.place_view(make_message_view(now, said, type_tag<Actions>{}));
         },
         protocol_state_of(*shared_, in.id.account));
-    if (!said.reactions.empty()) {
-      body.parts.reactions.emplace(reaction_row_of());
-      for (const auto& [key, who] : said.reactions)
-        if (!who.empty())
-          reaction_chips(*body.parts.reactions).push_back(reaction_chip(*colours_, *looks_, message_id, key, who.size(), who.contains(said.in.account.address), in.emotes, [&] {
-            std::vector<std::pair<std::string, std::string>> people;
-            for (const std::string& one : who)
-              people.emplace_back(one, sender_name(in, one));
-            return people;
-          }(), [&]() -> std::optional<std::string> {
-            const auto found = std::ranges::find_if(said.reaction_events, [&](const auto& event) { return event.key == key && event.shortcode.has_value(); });
-            return found == said.reaction_events.end() ? std::nullopt : found->shortcode;
-          }()));
-    }
+    trailers_t::build(body.parts.trailers, trailer_facts{*colours_, *looks_, said, in, message_id});
   }
 
   // Swiped to the left to answer it: how far, following the pointer, and

@@ -382,6 +382,10 @@ inline auto frame_look_view(const palette& colours, bool see_through) {
 // Android's UI thread has a much smaller stack than desktop threads.
 template <class Actions>
 struct appearance_page_node : skiff::compose::Stacked {
+  // The theme panel's draft is a Local held through a unique_ptr, which
+  // skiff's local pass does not look through: said here, or a click on
+  // "Configure selected theme" is shown only by some later full refresh.
+  using HasLocal = std::true_type;
   using heading = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
   using themes = decltype(appearance_settings_view(std::declval<const palette&>(), config::theme_t{}));
   using details = decltype(theme_details_view(std::declval<const palette&>(), config::theme_t{}, {}));

@@ -9,6 +9,7 @@ export module mux.plugin.calls.matrix;
 
 import std;
 import splice;
+import mux.composition;
 import loom.api;
 import loom.ev;
 import loom.cs.room_send;

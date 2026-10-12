@@ -17,6 +17,7 @@ import skiff.nodes.scroll;
 import skiff.nodes.icon;
 import skiff.nodes.box;
 import splice;
+import mux.composition;
 import mux.core;
 import mux.config;
 import mux.ui;

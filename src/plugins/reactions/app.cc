@@ -6,6 +6,7 @@
 export module mux.plugin.reactions.app;
 
 import std;
+import mux.composition;
 import mux.core;
 import mux.ui;
 import mux.app.services;

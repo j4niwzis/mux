@@ -8,6 +8,7 @@
 export module mux.plugin.stickers.ui;
 
 import std;
+import mux.composition;
 import skia;
 import skiff.scene;
 import skiff.compose;

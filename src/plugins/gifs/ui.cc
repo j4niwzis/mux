@@ -5,6 +5,7 @@
 export module mux.plugin.gifs.ui;
 
 import std;
+import mux.composition;
 import skiff.scene;
 import skiff.compose;
 import skiff.nodes.flow;

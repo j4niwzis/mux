@@ -5,6 +5,7 @@
 export module mux.plugin.gifs.app;
 
 import std;
+import mux.composition;
 import skia;
 import mux.config;
 import mux.platform.files;

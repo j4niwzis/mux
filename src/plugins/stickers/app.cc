@@ -4,6 +4,7 @@
 export module mux.plugin.stickers.app;
 
 import std;
+import mux.composition;
 import mux.ui;
 import mux.app.services;
 import mux.plugin.stickers.types;

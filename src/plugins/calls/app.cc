@@ -8,6 +8,7 @@ export module mux.plugin.calls.app;
 
 import std;
 import splice;
+import mux.composition;
 import mux.core;
 import mux.ui;
 import mux.calls.media;

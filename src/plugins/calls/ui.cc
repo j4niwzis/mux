@@ -9,6 +9,7 @@ export module mux.plugin.calls.ui;
 
 import std;
 import splice;
+import mux.composition;
 import skia;
 import skiff.scene;
 import skiff.compose;

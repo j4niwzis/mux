@@ -173,6 +173,7 @@ struct chat_choices {
 struct look_settings {
   style_settings style;
   theme_t theme = theme::tinted{};
+  bool developer_tools = false;
   accent_t accent = accent::theme_own{};
   renderer_t renderer = renderer::opengl{};
   motion_t motion = motion::full{};
@@ -260,6 +261,7 @@ struct file {
   // "software". Nothing said is dark and OpenGL.
   std::optional<style_settings> style;
   std::optional<theme_said_t> theme;
+  std::optional<bool> developer_tools;
   std::optional<accent_said_t> accent;
   // Every chat's background, as word_of(wallpaper_t) says it; none, the theme's.
   std::optional<std::string> wallpaper;

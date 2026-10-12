@@ -52,7 +52,7 @@ struct part {
   std::string account_type, account_json;
   state_screen state_page = state_screen::overview;
   std::string expanded_state_type, state_type, state_key, state_json, state_source;
-  bool developer_tools = false, expanded_state = false, expanded_account_data = false, account_editor = false;
+  bool expanded_state = false, expanded_account_data = false, account_editor = false;
   std::vector<emote_pack> packs;
   std::string pack_name;
   std::string member_query;
@@ -278,7 +278,7 @@ template <class Box> struct edit_section {
       case editor::profile: kept.profile_editor = open; if (!open) kept.profile.reset(); break;
       case editor::powers: kept.powers_editor = open; break;
       case editor::power: kept.power_form = open; if (open) { kept.editing_power.reset(); kept.tag_power.clear(); kept.tag_name.clear(); kept.tag_color.clear(); kept.tag_icon.clear(); } break;
-      case editor::developer: kept.developer_tools = !kept.developer_tools; break;
+      case editor::developer: break;
       case editor::state_events: kept.expanded_state = !kept.expanded_state; break;
       case editor::account_data: kept.expanded_account_data = !kept.expanded_account_data; break;
       case editor::account_form: kept.account_editor = open; break;
@@ -1120,10 +1120,23 @@ template <class Box> struct expand_state_type {
   std::ranges::for_each(groups, [](auto& group) { std::ranges::sort(group.second, {}, &managed_state_event::key); });
   return groups;
 }
+struct open_state_event { state_screen target; std::string type, key; };
+struct expand_state_event { std::string type; };
+template <class Box> struct toggle_developer_tools {
+  using Answer = ::mux::ui::request::set_developer_tools;
+  Box* box;
+  Answer operator()() const { return {!box->looks_->developer_tools}; }
+};
+inline auto state_event_source(const palette& colours, std::string json) {
+  auto text = nodes::Text(std::move(json), 13.0f, colours.text);
+  text.setMonospace(true);
+  text.setSelectable(true);
+  return text;
+}
 enum class state_row_kind { add, type, key };
 template <class Act> auto state_list_row(const palette& colours, std::string label, std::string detail, Act act, state_row_kind kind = state_row_kind::type, bool expanded = false) {
   namespace c = skiff::compose;
-  return c::onPress(std::move(act), c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f,
+  return c::onClick(std::move(act), c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f,
       .padding = {4.0f, 8.0f, 4.0f, 8.0f}, .cornerRadius = colours.widgets.fCorner,
       .hoverBackground = colours.chosen}),
       c::visible(kind != state_row_kind::key, c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(kind == state_row_kind::add ? icon_t{icon::plus{}} : expanded ? icon_t{icon::down{}} : icon_t{icon::right{}}), colours.dim))),
@@ -1138,17 +1151,17 @@ template <class Box> auto state_event_list(Box* box) {
   const auto groups = grouped_state_events(kept.data);
   return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       setting_tile(colours, "Events", "", nodes::Text(std::format("Total: {}", groups.size()), 12.0f, colours.dim)),
-      cutout(colours, {}, state_list_row(colours, "Add New", "", state_navigation<Box>{box, state_screen::compose, "", ""}, state_row_kind::add),
+      cutout(colours, {}, state_list_row(colours, "Add New", "", open_state_event{state_screen::compose, "", ""}, state_row_kind::add),
           c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
               std::views::transform(groups, [&](const auto& group) {
                 return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                    state_list_row(colours, group.first, std::to_string(group.second.size()), expand_state_type<Box>{box, group.first}, state_row_kind::type, kept.expanded_state_type == group.first),
+                    state_list_row(colours, group.first, std::to_string(group.second.size()), expand_state_event{group.first}, state_row_kind::type, kept.expanded_state_type == group.first),
                     c::visible(kept.expanded_state_type == group.first, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY,
                         .margin = {0.0f, 0.0f, 0.0f, 16.0f}, .padding = {0.0f, 0.0f, 0.0f, 8.0f}, .border = scene::Border{colours.band, 1.0f}}),
-                        state_list_row(colours, "Add New", "", state_navigation<Box>{box, state_screen::compose, group.first, ""}, state_row_kind::add),
+                        state_list_row(colours, "Add New", "", open_state_event{state_screen::compose, group.first, ""}, state_row_kind::add),
                         c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
                             std::views::transform(group.second, [&](const auto& event) {
-                              return state_list_row(colours, event.key.empty() ? "Default" : "\"" + event.key + "\"", "", state_navigation<Box>{box, state_screen::view, event.type, event.key}, state_row_kind::key);
+                              return state_list_row(colours, event.key.empty() ? "Default" : "\"" + event.key + "\"", "", open_state_event{state_screen::view, event.type, event.key}, state_row_kind::key);
                             }))))));
               })))));
 }
@@ -1160,6 +1173,12 @@ template <class Box> struct developer_draft {
 };
 template <class Box> struct developer_events {
   Box* box;
+  auto on(open_state_event event, const developer_draft<Box>&) const {
+    return state_navigation<Box>{box, event.target, std::move(event.type), std::move(event.key)}();
+  }
+  auto on(expand_state_event event, const developer_draft<Box>&) const {
+    return expand_state_type<Box>{box, std::move(event.type)}();
+  }
   auto on(save_state_event, const developer_draft<Box>& draft) const {
     const auto& original = rules_of(box->facts.theirs).needs;
     const auto needed = required(original, permission_t{event_permission{draft.state_type}});
@@ -1194,18 +1213,17 @@ template <class Box> auto developer_page(Box* box, const room_settings_facts& fa
   state_content->setMaxLines(1000);
   state_content->apply({.disabled = kept.pending});
   const auto names = std::ranges::to<std::vector<std::string>>(std::views::transform(kept.data.account_data, &managed_account_data::type));
-  auto source = nodes::Text(kept.state_source, 13.0f, colours.text);
-  source.setMonospace(true);
+  auto source = state_event_source(colours, kept.state_source);
   const bool viewing = kept.state_page == state_screen::view;
   const bool composing = kept.state_page == state_screen::compose;
   return c::local<draft>(developer_events<Box>{box}, c::column(page_look(),
       c::visible(kept.pending || !kept.error.empty(), explained(colours, kept.pending ? "Saving…" : kept.error)),
       c::visible(!kept.account_editor && kept.state_page == state_screen::overview, c::column(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           section(colours, "Options",
-              tile(colours, "Enable Developer Tools", "", switch_control(colours, kept.developer_tools, edit_section<Box>{box, editor::developer})),
-              c::visible(kept.developer_tools, tile(colours, "Room ID", "Copy room ID to clipboard. (\"" + facts.id + "\")",
+              tile(colours, "Enable Developer Tools", "", switch_control(colours, box->looks_->developer_tools, toggle_developer_tools<Box>{box})),
+              c::visible(box->looks_->developer_tools, tile(colours, "Room ID", "Copy room ID to clipboard. (\"" + facts.id + "\")",
                   action(colours, "Copy", sends<::mux::ui::request::copy_text>{{facts.id}})))),
-          c::visible(kept.developer_tools, section(colours, "Data",
+          c::visible(box->looks_->developer_tools, section(colours, "Data",
               tile(colours, "New Message Event", "Create and send a new message event within the room.", action(colours, "Compose", sends<request::open_send_custom>{})),
               card(colours, setting_tile(colours, "Room State", "State events of the room.",
                   action(colours, kept.expanded_state ? "Collapse" : "Expand", edit_section<Box>{box, editor::state_events})),

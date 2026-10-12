@@ -391,6 +391,7 @@ struct kept_settings {
                                     .favourite_stickers = emotes_of(saved.favourite_stickers),
                                     .favourite_emoji = emotes_of(saved.favourite_emoji)};
     looks_read.theme = mux::config::theme_of(saved.theme);
+    looks_read.developer_tools = saved.developer_tools.value_or(false);
     if (saved.wallpaper)
       looks_read.wallpaper = mux::config::wallpaper_of(std::string_view(*saved.wallpaper));
     if (saved.bubbles)
@@ -494,6 +495,7 @@ struct kept_settings {
     if (!this->proxies().empty())
       out.proxies = this->proxies();
     out.theme = mux::config::said_of<mux::config::theme_said_t>(this->appearance().theme);
+    if (this->appearance().developer_tools) out.developer_tools = true;
     if (this->appearance().wallpaper)
       out.wallpaper = mux::config::word_of(*this->appearance().wallpaper);
     if (this->appearance().bubbles)

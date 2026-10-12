@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.config: what is kept, where, and who can read it.
 import std;
+import knot;
 import mux.config;
 import mux.vault;
 import mux.proto.kept;
@@ -250,4 +251,12 @@ TEST(Config, ClientAccountSpaceAndRoomStylesSurviveSaving) {
   EXPECT_EQ(loaded->room_events, settings.room_events);
   ASSERT_EQ(mux::config::accounts_of(*loaded).size(), 1u);
   EXPECT_EQ(mux::config::accounts_of(*loaded).front().shared.style, accounts.front().shared.style);
+}
+
+TEST(Config, DeveloperToolsPreferenceSurvivesSerialization) {
+  mux::config::file saved;
+  saved.developer_tools = true;
+  const auto read = knot::try_read<mux::config::file>(knot::to_json_string(saved));
+  ASSERT_TRUE(read);
+  EXPECT_EQ(read->developer_tools, true);
 }

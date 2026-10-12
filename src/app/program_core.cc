@@ -348,6 +348,7 @@ void app::take_page_input() {
 // parts read it.
 void app::show_looks() {
   const auto& now = this->appearance();
+  shared.looks.developer_tools = now.developer_tools;
   auto& window = shared.looks.window;
   window.home_hides = now.home_hides_spaced;
   window.home_direct = now.home_hides_direct;

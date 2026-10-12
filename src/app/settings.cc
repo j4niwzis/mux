@@ -28,6 +28,13 @@ class settings_part {
       : s_(&shared), k_(&kept), pictures_(&pictures) {}
 
   void apply(const request::apply_style&) { s_->rebuild_due = true; }
+  void apply(const request::set_developer_tools& one) {
+    k_->choose_field<&mux::config::look_settings::developer_tools>(one.enabled);
+    s_->looks.developer_tools = one.enabled;
+    (void)k_->write();
+    s_->refresh_due = true;
+    if (auto* room = s_->root().manage_up()) room->show_again();
+  }
 
   // The limits, as kept: to the caches and the disk.
   void apply_limits() {

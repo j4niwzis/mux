@@ -215,6 +215,9 @@ inline image_cache& whole_pictures() {
 // drawn out first; none drawn lately.
 class animation_cache {
  public:
+  animation_cache() = default;
+  explicit animation_cache(skiff::scene::Waiters& first, skiff::scene::Waiters* second = nullptr)
+      : waiting_{&first, second} {}
   std::size_t budget = 128u << 20;
   void put(std::string key, std::vector<skia::Frame> frames) {
     if (frames.size() < 2)
@@ -241,6 +244,7 @@ class animation_cache {
       bytes_ -= oldest->second.bytes;
       all_.erase(oldest);
     }
+    this->wake_waiters();
   }
   [[nodiscard]] bool has(std::string_view key) const { return all_.contains(key); }
   // The frame of `key`'s animation to show at `ms` of a steady clock.
@@ -276,9 +280,16 @@ class animation_cache {
   void clear() {
     all_.clear();
     bytes_ = 0;
+    this->wake_waiters();
   }
 
  private:
+  // A still image can already have settled when its animation arrives.
+  // Wake its subscribers so they register the moving source's deadlines.
+  void wake_waiters() {
+    std::ranges::for_each(waiting_, [](auto* waiting) { if (waiting) waiting->wake(); });
+  }
+  std::array<skiff::scene::Waiters*, 2> waiting_{};
   struct animation {
     std::vector<skia::Frame> frames;
     int total_ms = 0;
@@ -289,15 +300,15 @@ class animation_cache {
   std::size_t bytes_ = 0;
 };
 inline animation_cache& animations() {
-  static animation_cache all;
+  static animation_cache all{thumbnails().waiting, &whole_pictures().waiting};
   return all;
 }
 inline animation_cache& emoji_animations() {
-  static animation_cache all;
+  static animation_cache all{emoji_images().waiting};
   return all;
 }
 inline animation_cache& sticker_animations() {
-  static animation_cache all;
+  static animation_cache all{sticker_images().waiting};
   return all;
 }
 inline animation_cache& emote_animations(emote_kind kind = emote_kind::emoji) {
@@ -343,6 +354,7 @@ struct from_thumbnails {
 struct from_moving_thumbnail {
   std::string key;
   bool emote = false;
+  skiff::scene::Waiters& waiters() const { return (emote ? sticker_images() : thumbnails()).waiting; }
   [[nodiscard]] bool animated() const { return (emote ? sticker_animations() : animations()).has(key); }
   [[nodiscard]] double wakeAt() const {
     return (emote ? sticker_animations() : animations()).next_frame_at(key, animation_clock());
@@ -365,6 +377,7 @@ struct from_moving_thumbnail {
 // Where it moves, the frame for now; else it whole.
 struct from_moving_whole {
   std::string key;
+  skiff::scene::Waiters& waiters() const { return whole_pictures().waiting; }
   [[nodiscard]] bool animated() const { return animations().has(key); }
   [[nodiscard]] double wakeAt() const { return animations().next_frame_at(key, animation_clock()); }
   picture_ptr operator()() const {

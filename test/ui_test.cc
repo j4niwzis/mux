@@ -2029,6 +2029,52 @@ TEST(Images, AnimatedAttachmentDoesNotRequestContinuousSceneAnimation) {
   frames.clear();
 }
 
+TEST(Images, LateAnimationsWakeSettledImagesWithoutScrolling) {
+  auto still = skia::Raster(skia::SkImageInfo::MakeN32Premul(8, 8));
+  auto moving = skia::Raster(skia::SkImageInfo::MakeN32Premul(8, 8));
+  ASSERT_TRUE(still);
+  ASSERT_TRUE(moving);
+  const std::string key = "late-animation";
+  const auto check = [&](auto source, auto& images, auto& frames) {
+    frames.clear();
+    images.put(key, still->makeImageSnapshot());
+    auto root = skiff::compose::column(skiff::compose::vbox(0.0f, {.fill = true}),
+        skiff::compose::styled({.fill = true}, skiff::nodes::Image<decltype(source)>(source)));
+    scene::Scene<decltype(root)> view(std::move(root));
+    const auto viewport = skia::SkRect::MakeWH(8.0f, 8.0f);
+    view.update(0.0);
+    view.layoutIfNeeded(viewport);
+    (void)view.finishFrame();
+    view.update(16.0);
+    view.layoutIfNeeded(viewport);
+    const auto settled = view.finishFrame();
+    EXPECT_TRUE(settled.fDamage.isEmpty());
+    EXPECT_FALSE(std::isfinite(settled.fWakeAtMs));
+    auto& image = std::get<0>(view.root().fParts);
+    EXPECT_FALSE(image.wantsTick());
+    EXPECT_FALSE(scene::work::ticking().contains(image.fState.id()));
+
+    frames.put(key, {{moving->makeImageSnapshot(), 40}, {still->makeImageSnapshot(), 100}});
+    EXPECT_TRUE(scene::work::pending().contains(image.fState.id()));
+    view.update(32.0);
+    view.layoutIfNeeded(viewport);
+    const auto animated = view.finishFrame();
+    EXPECT_TRUE(scene::work::ticking().contains(image.fState.id()));
+    EXPECT_TRUE(std::isfinite(animated.fWakeAtMs));
+    EXPECT_FALSE(animated.fWantsAnotherFrame);
+
+    frames.clear();
+    view.update(48.0);
+    view.layoutIfNeeded(viewport);
+    EXPECT_FALSE(std::isfinite(view.finishFrame().fWakeAtMs));
+    EXPECT_FALSE(image.wantsTick());
+  };
+  check(mux::ui::from_moving_thumbnail{key}, mux::ui::thumbnails(), mux::ui::animations());
+  check(mux::ui::from_moving_whole{key}, mux::ui::whole_pictures(), mux::ui::animations());
+  check(mux::ui::from_emotes{key}, mux::ui::emoji_images(), mux::ui::emoji_animations());
+  check(mux::ui::from_moving_thumbnail{key, true}, mux::ui::sticker_images(), mux::ui::sticker_animations());
+}
+
 TEST(Images, AvatarSourceChangeInvalidatesCachedImageAndRejectsStaleDownloads) {
   auto surface = skia::Raster(skia::SkImageInfo::MakeN32Premul(8, 8));
   ASSERT_TRUE(surface);

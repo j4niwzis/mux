@@ -72,32 +72,102 @@ inline constexpr std::array kPictureKinds{
     picture_kind{"image/png", "png"},   picture_kind{"image/jpeg", "jpg"}, picture_kind{"image/gif", "gif"},
     picture_kind{"image/webp", "webp"}, picture_kind{"image/bmp", "bmp"},
 };
-// What pastes pictures: each in a file of its own, numbered.
+// A file:// URI's path, its %XX escapes read: what a file manager puts on
+// the clipboard (text/uri-list) as it copies files. Nothing for another
+// scheme.
+[[nodiscard]] inline std::optional<std::string> path_of_uri(std::string_view uri) {
+  constexpr std::string_view scheme = "file://";
+  if (!uri.starts_with(scheme))
+    return std::nullopt;
+  uri.remove_prefix(scheme.size());
+  // file://host/path: the path from its first slash.
+  if (const auto slash = uri.find('/'); slash != std::string_view::npos)
+    uri.remove_prefix(slash);
+  std::string out;
+  for (std::size_t at = 0; at < uri.size(); ++at) {
+    unsigned value = 0;
+    if (uri[at] == '%' && at + 2 < uri.size() &&
+        std::from_chars(uri.data() + at + 1, uri.data() + at + 3, value, 16).ec == std::errc{}) {
+      out.push_back(static_cast<char>(value));
+      at += 2;
+    } else {
+      out.push_back(uri[at]);
+    }
+  }
+  return out;
+}
+
+// What pastes pictures: each in a file of its own, numbered -- or the
+// picture files a file manager copied, where they are.
 class paster {
  public:
-  [[nodiscard]] std::optional<std::string> picture() {
-    for (const picture_kind& kind : kPictureKinds) {
-      if (!sdl::SDL_HasClipboardData(kind.mime))
-        continue;
-      std::size_t size = 0;
-      void* data = sdl::SDL_GetClipboardData(kind.mime, &size);
-      if (!data)
-        continue;
-      std::error_code failed;
-      const std::filesystem::path folder = std::filesystem::temp_directory_path(failed) / "mux-pasted";
-      std::filesystem::create_directories(folder, failed);
-      const std::filesystem::path path = folder / std::format("pasted-{}.{}", ++counter_, kind.extension);
-      std::ofstream out(path, std::ios::binary | std::ios::trunc);
-      out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
-      sdl::SDL_free(data);
-      if (!out)
-        return std::nullopt;
-      return path.string();
+  [[nodiscard]] std::vector<std::string> pictures() {
+    std::size_t count = 0;
+    char** offered = sdl::SDL_GetClipboardMimeTypes(&count);
+    const std::vector<std::string> mimes =
+        offered ? std::views::counted(offered, static_cast<std::ptrdiff_t>(count)) |
+                      std::views::transform([](const char* one) { return std::string(one); }) | std::ranges::to<std::vector>()
+                : std::vector<std::string>{};
+    sdl::SDL_free(offered);
+    // A picture itself, in one of the kinds read here.
+    for (const picture_kind& kind : kPictureKinds)
+      if (std::ranges::contains(mimes, std::string_view(kind.mime)))
+        if (auto made = this->picture_of(kind))
+          return {std::move(*made)};
+    // Files a file manager copied: those that are pictures.
+    if (std::ranges::contains(mimes, std::string_view("text/uri-list"))) {
+      std::vector<std::string> files = this->uris();
+      if (!files.empty())
+        return files;
     }
-    return std::nullopt;
+    if (!mimes.empty() && std::ranges::none_of(mimes, [](const std::string& one) { return one.starts_with("text/"); }))
+      std::println(std::cerr, "[paste] nothing on the clipboard read as a picture; it offers: {}", mimes);
+    return {};
   }
 
  private:
+  std::optional<std::string> picture_of(const picture_kind& kind) {
+    std::size_t size = 0;
+    void* data = sdl::SDL_GetClipboardData(kind.mime, &size);
+    if (!data)
+      return std::nullopt;
+    std::error_code failed;
+    const std::filesystem::path folder = std::filesystem::temp_directory_path(failed) / "mux-pasted";
+    std::filesystem::create_directories(folder, failed);
+    const std::filesystem::path path = folder / std::format("pasted-{}.{}", ++counter_, kind.extension);
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
+    sdl::SDL_free(data);
+    if (!out)
+      return std::nullopt;
+    return path.string();
+  }
+  // The copied files' paths, each a picture by its name's extension.
+  std::vector<std::string> uris() {
+    std::size_t size = 0;
+    void* data = sdl::SDL_GetClipboardData("text/uri-list", &size);
+    if (!data)
+      return {};
+    const std::string list(static_cast<const char*>(data), size);
+    sdl::SDL_free(data);
+    static constexpr std::array kExtensions{".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"};
+    return list | std::views::split('\n') |
+           std::views::transform([](auto line) {
+             std::string_view one(line.begin(), line.end());
+             if (one.ends_with('\r'))
+               one.remove_suffix(1);
+             return one.starts_with('#') ? std::optional<std::string>() : path_of_uri(one);
+           }) |
+           std::views::filter([](const std::optional<std::string>& path) {
+             if (!path)
+               return false;
+             std::string ext = std::filesystem::path(*path).extension().string();
+             std::ranges::transform(ext, ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+             return std::ranges::contains(kExtensions, std::string_view(ext));
+           }) |
+           std::views::transform([](const std::optional<std::string>& path) { return *path; }) | std::ranges::to<std::vector>();
+  }
+
   unsigned counter_ = 0;
 };
 

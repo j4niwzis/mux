@@ -408,10 +408,13 @@ int run(App& app, const options& how, const events::kinds& kinds) {
             const skiff::scene::Modifiers held = detail::modifiers_of(event.key.mod);
             // Ctrl+V with a picture on the clipboard: the picture, as if
             // dropped on the window -- not the text a field would paste.
-            if (event.type == sdl::SDL_EVENT_KEY_DOWN && event.key.key == sdl::kKeyV && (event.key.mod & sdl::kKmodCtrl) != 0 &&
-                !event.key.repeat) {
-              if (std::optional<std::string> picture = paste.picture()) {
-                app.files_given(std::vector<std::string>{std::move(*picture)}, true);
+            // (The V key by where it is too: under a Cyrillic layout its key
+            // code is the layout's letter.)
+            if (event.type == sdl::SDL_EVENT_KEY_DOWN &&
+                (event.key.key == sdl::kKeyV || event.key.scancode == sdl::kScancodeV) &&
+                (event.key.mod & sdl::kKmodCtrl) != 0 && !event.key.repeat) {
+              if (std::vector<std::string> pictures = paste.pictures(); !pictures.empty()) {
+                app.files_given(std::move(pictures), true);
                 break;
               }
             }
@@ -543,6 +546,13 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       // Keys the program's own controls stand for -- a text menu's Paste is
       // Ctrl+V -- given to what has the focus, down and up, before the frame.
       for (const skiff::scene::key::down& press : std::exchange(skiff::scene::hostWork().keys, {})) {
+        // The menu's Paste with a picture on the clipboard: the picture, as
+        // Ctrl+V takes it.
+        if (pastes(press))
+          if (std::vector<std::string> pictures = paste.pictures(); !pictures.empty()) {
+            app.files_given(std::move(pictures), true);
+            continue;
+          }
         if (pastes(press))
           fresh_clipboard();
         router.key(press);

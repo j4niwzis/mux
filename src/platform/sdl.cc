@@ -72,6 +72,7 @@ using ::SDL_GetAudioStreamAvailable;
 using ::SDL_GetAudioStreamData;
 using ::SDL_GetAudioStreamQueued;
 using ::SDL_GetClipboardData;
+using ::SDL_GetClipboardMimeTypes;
 using ::SDL_GetClipboardText;
 using ::SDL_GetCurrentVideoDriver;
 using ::SDL_GetDisplayUsableBounds;
@@ -187,6 +188,9 @@ inline constexpr auto kKeyTab = SDLK_TAB;
 inline constexpr auto kKeyU = SDLK_U;
 inline constexpr auto kKeyUp = SDLK_UP;
 inline constexpr auto kKeyV = SDLK_V;
+// The V key where it is, whatever the layout says it types (Ctrl+V under a
+// Cyrillic layout comes with the layout's own key code).
+inline constexpr auto kScancodeV = SDL_SCANCODE_V;
 inline constexpr auto kKeyW = SDLK_W;
 inline constexpr auto kKeyX = SDLK_X;
 inline constexpr auto kKeyY = SDLK_Y;

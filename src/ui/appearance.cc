@@ -275,26 +275,24 @@ inline auto percent_heading(const palette &colours, std::string_view what) {
           nodes::Text(std::string(what), 12.0f, colours.dim)));
 }
 // How round avatars are, in steps of 5%, set when let go: each change
-// rebuilds the window. Older files have no such setting: unset is round.
+// rebuilds the window. Older files have no such setting: unset is round --
+// shown so by the projection, the slider's choices the setting's own type.
 inline constexpr int kRoundAvatar = 100;
-struct rounding_slider : widgets::ChoiceSliderField<int> {
-  explicit rounding_slider(const palette& colours)
-      : widgets::ChoiceSliderField<int>(colours.widgets,
-            std::views::iota(0, kRoundAvatar / 5 + 1) | std::views::transform([](int step) { return step * 5; }) | std::ranges::to<std::vector>()) {}
-  void read(const std::optional<int>& now) { widgets::ChoiceSliderField<int>::read(now.value_or(kRoundAvatar)); }
-  auto onPress() {
-    const auto step = static_cast<int>(std::lround(std::clamp(this->fraction(), 0.0f, 1.0f) * static_cast<float>(kRoundAvatar / 5)));
-    return skiff::bind::own(skiff::model::setTo(std::optional<int>(step * 5)));
-  }
-};
+inline std::vector<std::optional<int>> rounding_steps() {
+  return std::views::iota(0, kRoundAvatar / 5 + 1) |
+         std::views::transform([](int step) { return std::optional<int>(step * 5); }) | std::ranges::to<std::vector>();
+}
 template <auto Member>
 inline auto rounding_setting(const palette& colours, std::string_view what) {
+  using field = skiff::model::Field<Member>;
   return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      skiff::compose::text_for<skiff::model::Field<Member>>(
+      skiff::compose::text_for<field>(
           [what](const std::optional<int>& percent) { return std::format("{}: {}%", what, percent.value_or(kRoundAvatar)); },
           skiff::compose::styled({.margin = {10.0f, 0.0f, 4.0f, 20.0f}}, nodes::Text(std::string(what), 12.0f, colours.dim))),
-      skiff::compose::bound<skiff::model::Field<Member>>(
-          skiff::compose::styled({.margin = {10.0f, 28.0f, 10.0f, 28.0f}}, rounding_slider(colours))));
+      skiff::compose::projected<field>(
+          [](const std::optional<int>& percent) { return std::optional<int>(percent.value_or(kRoundAvatar)); },
+          skiff::compose::styled({.margin = {10.0f, 28.0f, 10.0f, 28.0f}},
+                                 widgets::ChoiceSliderField<std::optional<int>>(colours.widgets, rounding_steps()))));
 }
 inline auto avatar_rounding_view(const palette& colours) {
   using looks = config::look_settings;

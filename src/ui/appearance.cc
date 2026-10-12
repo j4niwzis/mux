@@ -110,7 +110,7 @@ struct theme_details_draft {
   config::theme_t theme;
   bool open = false;
   theme_colour_draft colours;
-  std::string corner, font, height, avatar, error;
+  std::string corner, font, height, error;
   config::custom_theme saved;
 };
 struct toggle_theme_details {};
@@ -140,7 +140,6 @@ struct theme_details_events {
     reset.corner = now.saved.corner_radius ? std::format("{}", *now.saved.corner_radius) : "";
     reset.font = now.saved.font_size ? std::format("{}", *now.saved.font_size) : "";
     reset.height = now.saved.control_height ? std::format("{}", *now.saved.control_height) : "";
-    reset.avatar = now.saved.avatar_rounding ? std::format("{}", *now.saved.avatar_rounding) : "";
     return skiff::model::over<theme_details_draft>(skiff::model::setTo(std::move(reset)));
   }
   auto on(reset_theme_details, const theme_details_draft& now) const {
@@ -159,7 +158,6 @@ struct theme_details_events {
     read_theme_measurement(now.corner, 0.0, 32.0, "Corner radius", custom.corner_radius, error);
     read_theme_measurement(now.font, 9.0, 24.0, "Control font size", custom.font_size, error);
     read_theme_measurement(now.height, 24.0, 64.0, "Control height", custom.control_height, error);
-    read_theme_measurement(now.avatar, 0.0, 100.0, "Avatar rounding", custom.avatar_rounding, error);
     auto asked = error.empty() ? std::optional(request::configure_theme{now.theme, custom}) : std::nullopt;
     return std::tuple{skiff::model::over<skiff::model::Field<&theme_details_draft::error>>(skiff::model::setTo(std::move(error))),
         skiff::model::Up{std::move(asked)}};
@@ -178,7 +176,6 @@ inline auto theme_details_initial(const config::theme_t& theme,
   initial.corner = custom.corner_radius ? std::format("{}", *custom.corner_radius) : "";
   initial.font = custom.font_size ? std::format("{}", *custom.font_size) : "";
   initial.height = custom.control_height ? std::format("{}", *custom.control_height) : "";
-  initial.avatar = custom.avatar_rounding ? std::format("{}", *custom.avatar_rounding) : "";
   return initial;
 }
 template <std::size_t Index> auto theme_colour_row(const palette& colours, const palette& base) {
@@ -217,8 +214,6 @@ inline auto theme_details_view(const palette& colours, const config::theme_t& th
               model_field<&draft::corner>(colours, "Corner radius (0–32)", "Theme default"),
               model_field<&draft::font>(colours, "Control font size (9–24)", "Theme default"),
               model_field<&draft::height>(colours, "Control height (24–64)", "Theme default"),
-              model_field<&draft::avatar>(colours, "Avatar rounding (0–100%)", "Theme default: 100% (circular)"),
-              wrapped(nodes::Text("0%: square. 100%: circular. Applies to room and member avatars.", 12.0f, colours.dim)),
               c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   c::onClick(save_theme_details{}, c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, widgets::Button<>(colours.widgets, "Save"))),
                   c::onClick(reset_theme_details{}, c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, widgets::Button<>(colours.widgets, "Reset theme"))),
@@ -279,6 +274,36 @@ inline auto percent_heading(const palette &colours, std::string_view what) {
           {.margin = {10.0f, 0.0f, 4.0f, 20.0f}},
           nodes::Text(std::string(what), 12.0f, colours.dim)));
 }
+// How round avatars are, in steps of 5%, set when let go: each change
+// rebuilds the window. Older files have no such setting: unset is round.
+inline constexpr int kRoundAvatar = 100;
+struct rounding_slider : widgets::ChoiceSliderField<int> {
+  explicit rounding_slider(const palette& colours)
+      : widgets::ChoiceSliderField<int>(colours.widgets,
+            std::views::iota(0, kRoundAvatar / 5 + 1) | std::views::transform([](int step) { return step * 5; }) | std::ranges::to<std::vector>()) {}
+  void read(const std::optional<int>& now) { widgets::ChoiceSliderField<int>::read(now.value_or(kRoundAvatar)); }
+  auto onPress() {
+    const auto step = static_cast<int>(std::lround(std::clamp(this->fraction(), 0.0f, 1.0f) * static_cast<float>(kRoundAvatar / 5)));
+    return skiff::bind::own(skiff::model::setTo(std::optional<int>(step * 5)));
+  }
+};
+template <auto Member>
+inline auto rounding_setting(const palette& colours, std::string_view what) {
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::text_for<skiff::model::Field<Member>>(
+          [what](const std::optional<int>& percent) { return std::format("{}: {}%", what, percent.value_or(kRoundAvatar)); },
+          skiff::compose::styled({.margin = {10.0f, 0.0f, 4.0f, 20.0f}}, nodes::Text(std::string(what), 12.0f, colours.dim))),
+      skiff::compose::bound<skiff::model::Field<Member>>(
+          skiff::compose::styled({.margin = {10.0f, 28.0f, 10.0f, 28.0f}}, rounding_slider(colours))));
+}
+inline auto avatar_rounding_view(const palette& colours) {
+  using looks = config::look_settings;
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      spaced_title(colours, "AVATARS"),
+      rounding_setting<&looks::chat_avatar_rounding>(colours, "Chats"),
+      rounding_setting<&looks::person_avatar_rounding>(colours, "People"),
+      spaced_note(colours, "0% is square, 100% is round."));
+}
 // Home without direct messages: only where Home is without what spaces
 // hold, so it reads both, and is flipped only then.
 inline auto home_direct_switch(const palette& colours) {
@@ -305,7 +330,7 @@ inline auto appearance_settings_view(const palette& colours, const config::theme
   return skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       spaced_title(colours, "THEME"), std::move(themes),
-      spaced_title(colours, "ACCENT"), accent_view(theme));
+      spaced_title(colours, "ACCENT"), accent_view(theme), avatar_rounding_view(colours));
 }
 inline auto window_settings_view(const palette& colours) {
   using looks = config::look_settings;

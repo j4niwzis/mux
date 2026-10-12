@@ -450,7 +450,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     rows.clear();
     for (std::size_t i = 0; i < mention_matches.size(); ++i)
       rows.push_back(suggestion_row(*needs_.colours, pick_mention{this, i},
-                        avatar_mark(mention_matches[i].id,
+                        avatar_mark(avatar_of::person{}, mention_matches[i].id,
                                     mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, 28.0f),
                         mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, mention_matches[i].id));
     mention_lit = 0;

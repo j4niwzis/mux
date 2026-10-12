@@ -125,7 +125,7 @@ template <class Actions> struct threads_panel : skiff::compose::Stacked {
           root(said.id),
           parts{.face = skiff::compose::styled(
                     {.alignSelf = scene::align::kStart},
-                    avatar_mark(said.sender, sender_name(chat, said.sender),
+                    avatar_mark(avatar_of::person{}, said.sender, sender_name(chat, said.sender),
                                 36.0f)),
                 .lines = lines_t(colours, sender_name(chat, said.sender),
                                  flat(said.body.plain), meta_of(chat, said))} {}

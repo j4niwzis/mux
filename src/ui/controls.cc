@@ -61,10 +61,11 @@ struct radio_mark : nodes::Icon {
 // A round avatar of a size, in a row.
 struct avatar_mark : widgets::Avatar<from_avatars> {
   std::string key;
-  avatar_mark(std::string id, std::string shown, float size)
+  // Kind is avatar_of::chat or avatar_of::person: which rounding it takes.
+  avatar_mark(auto kind, std::string id, std::string shown, float size)
       : widgets::Avatar<from_avatars>(initials_of(shown), size, picture_of(id), gradient_of(id)), key(std::move(id)) {
     fState.apply({.alignSelf = scene::align::kMiddle});
-    round_avatar(*this, size);
+    round_avatar(*this, size, kind);
   }
   // Another's: a chat's or a person's, by their id and name.
   void show(std::string id, std::string_view shown) {
@@ -78,8 +79,8 @@ struct avatar_mark : widgets::Avatar<from_avatars> {
 template <class Actions>
 struct avatar_button : avatar_mark {
   using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::open_avatar>;
-  avatar_button(std::string id, std::string shown, float size)
-      : avatar_mark(std::move(id), shown, size) {
+  avatar_button(auto kind, std::string id, std::string shown, float size)
+      : avatar_mark(kind, std::move(id), shown, size) {
     fState.setCursor(scene::cursor::hand{});
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -798,7 +799,7 @@ inline auto toast_card(const palette& colours, std::string key, std::string titl
   return skiff::compose::row(
       skiff::compose::hbox(12.0f, {.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar,
           .border = scene::Border{colours.band, 1.0f}}),
-      avatar_mark(key, title, 44.0f), two_lines(colours, title, std::move(text), 14.0f, 4.0f));
+      avatar_mark(avatar_of::chat{}, key, title, 44.0f), two_lines(colours, title, std::move(text), 14.0f, 4.0f));
 }
 using toast_card_t = decltype(toast_card(std::declval<const palette&>(), "", "", ""));
 

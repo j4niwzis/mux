@@ -191,6 +191,9 @@ struct look_settings {
   std::optional<wallpaper_t> wallpaper;
   std::optional<bubble_look> bubbles;
   std::optional<bubble_look> panels;
+  // How round avatars are, in percent: chats' and people's apart. Unset is 100.
+  std::optional<int> chat_avatar_rounding;
+  std::optional<int> person_avatar_rounding;
   friend bool operator==(const look_settings&, const look_settings&) = default;
 };
 

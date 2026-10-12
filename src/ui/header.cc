@@ -270,7 +270,7 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
                         back_button(colours, icon::back{}, {}))),
                 .face = skiff::compose::visible(
                     shown.key.has_value(),
-                    avatar_mark(shown.key.value_or(""), shown.title, 38.0f)),
+                    avatar_mark(avatar_of::chat{}, shown.key.value_or(""), shown.title, 38.0f)),
                 .texts =
                     two_lines(colours, shown.title, shown.status, 15.0f, 3.0f, two_line_style{.show_second = shown.key.has_value()}),
                 .find = skiff::compose::visible(

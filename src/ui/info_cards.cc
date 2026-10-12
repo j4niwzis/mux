@@ -50,7 +50,7 @@ template <class Actions>
 auto person_cover(const palette& colours, const std::string& key, const person_facts& facts) {
   return skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
-      avatar_button<Actions>(key, facts.name, 72.0f),
+      avatar_button<Actions>(avatar_of::person{}, key, facts.name, 72.0f),
       two_lines(colours, facts.name, facts.status, 17.0f, 6.0f, two_line_style{.selectable = true}));
 }
 template <class Actions>
@@ -273,7 +273,7 @@ struct room_card_facts {
 inline auto room_cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line) {
   return skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
-      avatar_mark(key, name, 72.0f),
+      avatar_mark(avatar_of::chat{}, key, name, 72.0f),
       two_lines(colours, name, line, 17.0f, 6.0f, two_line_style{.selectable = true}));
 }
 using room_cover_t = decltype(room_cover(std::declval<const palette&>(), "", "", ""));

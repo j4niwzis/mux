@@ -14,18 +14,33 @@ import :icons;
 
 export namespace mux::ui {
 
-// Avatar curvature belongs to the active theme. The native avatar uses a
-// proportional radius, so small member pictures and large room pictures match.
-inline float& avatar_rounding() {
-  static float percent = 100.0f;
-  return percent;
+// What an avatar shows. Chats and people are rounded apart, each by its own
+// Appearance slider.
+namespace avatar_of {
+struct chat {};
+struct person {};
+}  // namespace avatar_of
+
+// How round avatars are, in percent of a circle: 0 is square, 100 is round.
+struct avatar_roundness {
+  float chats = 100.0f;
+  float people = 100.0f;
+};
+inline avatar_roundness& avatar_rounding() {
+  static avatar_roundness now;
+  return now;
 }
-inline void use_avatar_rounding(float percent) { avatar_rounding() = std::clamp(percent, 0.0f, 100.0f); }
+[[nodiscard]] inline float rounding_of(avatar_of::chat) { return avatar_rounding().chats; }
+[[nodiscard]] inline float rounding_of(avatar_of::person) { return avatar_rounding().people; }
+inline void use_avatar_rounding(float chats, float people) {
+  avatar_rounding() = {.chats = std::clamp(chats, 0.0f, 100.0f), .people = std::clamp(people, 0.0f, 100.0f)};
+}
+// The radius is proportional, so small member pictures and large room pictures match.
 [[nodiscard]] constexpr float avatar_radius(float size, float percent) {
   return size * 0.5f * std::clamp(percent, 0.0f, 100.0f) / 100.0f;
 }
-inline void round_avatar(auto& avatar, float size) {
-  const auto radius = avatar_radius(size, avatar_rounding());
+inline void round_avatar(auto& avatar, float size, auto kind) {
+  const auto radius = avatar_radius(size, rounding_of(kind));
   avatar.apply({.cornerRadius = radius});
   avatar.parts.picture.apply({.cornerRadius = radius});
 }

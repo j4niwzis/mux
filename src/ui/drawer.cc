@@ -46,7 +46,7 @@ template <class Actions> struct drawer_account : skiff::compose::Stacked {
                  const model &now, bool is_current)
       : Stacked(skiff::compose::hbox(14.0f, {})),
         address(config::address_of(saved)), current(is_current),
-        parts{.face = avatar_mark(address, address, 38.0f),
+        parts{.face = avatar_mark(avatar_of::person{}, address, address, 38.0f),
               .texts = account_lines(*n.colours, saved, now),
               .tick = skiff::compose::visible(
                   current, icon_mark(*n.colours, icon::check{}))} {

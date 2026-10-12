@@ -172,7 +172,7 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
             c::visible(shown.of_person, icon_button<back_to_group>(colours, icon::back{}, {panel})),
             c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::colorSetARGB(0, 0, 0, 0))),
             icon_button<sends<request::toggle_info>>(colours, icon::close{}, {})),
-        avatar_button<Actions>(shown.key, shown.name, 96.0f),
+        avatar_button<Actions>(avatar_of::chat{}, shown.key, shown.name, 96.0f),
         centred(shown.name, 17.0f, colours.text, true),
         centred(shown.status, 13.0f, colours.dim, false),
         c::visible(!shown.of_person, info_tiles(colours, shown.muted, shown.leavable)),

@@ -93,7 +93,7 @@ template <class Actions> struct picture_viewer : skiff::compose::Stacked {
                      .height = 56.0f,
                      .padding = {0.0f, 12.0f, 0.0f, 16.0f}})),
           parts{
-              .face = avatar_mark(sender, name, 36.0f),
+              .face = avatar_mark(avatar_of::person{}, sender, name, 36.0f),
               .texts = two_lines(colours, name, when, 14.0f, 2.0f, two_line_style{
                   .first_ink = skia::colorSetARGB(255, 255, 255, 255), .second_ink = skia::colorSetARGB(255, 200, 200, 200)}),
               .smaller = icon_button<zoom_by>(colours, icon::minus{},

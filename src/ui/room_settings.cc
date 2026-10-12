@@ -577,7 +577,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
     namespace c = skiff::compose;
     auto protocol = spl::visit([&](auto tag) { return protocol_rows(box, tabs_of_t<decltype(tag)>{}); }, box->facts.speaks);
     return c::column(c::vbox(0.0f, {.fillY = true, .width = box->presentation.navigation_width, .padding = {0.0f, 8.0f, 32.0f, 8.0f}, .background = box->colours_->sidebar}),
-        c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), avatar_mark(box->facts.id, box->facts.name, 24.0f),
+        c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), avatar_mark(avatar_of::chat{}, box->facts.id, box->facts.name, 24.0f),
             c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(box->facts.name, 18.0f, box->colours_->text, true))),
             c::visible(false, icon_button<sends<::mux::ui::request::close_manage>>(*box->colours_, icon::close{}, {}))),
         c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(protocol)),

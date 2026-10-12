@@ -46,7 +46,7 @@ template <class Actions>
 auto directory_room_row(const palette& colours, const directory_room& one, const std::string& server, std::optional<account_id> by = std::nullopt) {
   namespace c = skiff::compose;
   return c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}}),
-      avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
+      avatar_mark(avatar_of::chat{}, one.id, one.name.empty() ? one.alias : one.name, 40.0f),
       c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
                               .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
           c::styled({.fillX = true}, elided(nodes::Text(

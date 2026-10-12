@@ -265,7 +265,7 @@ template <class Actions> struct marks_box : skiff::compose::Stacked {
                                           .padding = {2.0f, 6.0f, 2.0f, 3.0f},
                                           .cornerRadius = 12.0f,
                                           .background = colours.sidebar})),
-          parts{.face = avatar_mark(who, name, 20.0f),
+          parts{.face = avatar_mark(avatar_of::person{}, who, name, 20.0f),
                 .key = skiff::compose::styled(
                     {.alignSelf = scene::align::kMiddle},
                     nodes::Text(proto::is_media(key) ? std::string(":emoji:")

@@ -98,7 +98,7 @@ template <class Actions> struct forward_box : skiff::compose::Stacked {
                                         .hoverBackground = colours.chosen})),
           id(one.id),
           parts{
-              .face = avatar_mark(one.id.id, one.name, 36.0f),
+              .face = avatar_mark(avatar_of::chat{}, one.id.id, one.name, 36.0f),
               .name = skiff::compose::styled(
                   {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                   elided(nodes::Text(one.name, 15.0f, colours.text)))} {
@@ -156,7 +156,7 @@ inline auto person_pick_row(const palette& colours, const found_person& one, Eve
   return skiff::compose::onClick(std::move(event), skiff::compose::row(
       skiff::compose::hbox(12.0f, {.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
           .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
-      avatar_mark(one.id, name, 36.0f),
+      avatar_mark(avatar_of::person{}, one.id, name, 36.0f),
       two_lines(colours, name, one.id, 14.0f, 2.0f)), name);
 }
 inline auto found_person_row(const palette& colours, const found_person& one) {

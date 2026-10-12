@@ -166,7 +166,7 @@ inline auto call_buttons(const palette& colours, float size, const call_view& vi
 }
 inline auto call_avatar(const call_view& view, float size) {
   auto avatar = widgets::Avatar<from_avatars>(initials_of(view.who), size, picture_of(view.in.id), gradient_of(view.in.id));
-  round_avatar(avatar, size);
+  round_avatar(avatar, size, avatar_of::chat{});
   return skiff::compose::styled({.alignSelf = scene::align::kMiddle}, std::move(avatar));
 }
 inline auto call_status(const palette& colours, const call_view& view, float size) {

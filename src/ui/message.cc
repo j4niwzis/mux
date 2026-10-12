@@ -666,7 +666,7 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
                   {.place = scene::anchor::kBottomLeft,
                    .x = -(kAvatar + 8.0f),
                    .y = -1.0f},
-                  avatar_mark(said.sender, sender_name(in, said.sender),
+                  avatar_mark(avatar_of::person{}, said.sender, sender_name(in, said.sender),
                               kAvatar)),
               .body = body_column(*n.colours, *n.looks, said.outgoing,
                                   said.body.plain,

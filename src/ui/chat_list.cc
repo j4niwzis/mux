@@ -236,7 +236,7 @@ template <class Actions> struct conversation_row : skiff::compose::Stacked {
       : Stacked(skiff::compose::hbox(12.0f, {})), id(one.id), chosen(is_chosen),
         muted(is_muted), shown(view_of(*n.shared, one, is_chosen, is_muted,
                                        draft, events, strip)),
-        parts{.face = avatar_mark(one.id.id, display_name(one), 46.0f),
+        parts{.face = avatar_mark(avatar_of::chat{}, one.id.id, display_name(one), 46.0f),
               .lines =
                   lines_column(*n.colours, display_name(one),
                                one.unread_here(events), is_chosen, is_muted)} {

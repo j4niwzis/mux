@@ -798,7 +798,7 @@ struct readers_row : skiff::compose::Stacked {
 
     parts.faces.reserve(std::min(users.size(), kMost));
     for (std::size_t i = 0; i < users.size() && i < kMost; ++i)
-      parts.faces.emplace_back(users[i], sender_name(in, users[i]), kFace);
+      parts.faces.emplace_back(avatar_of::person{}, users[i], sender_name(in, users[i]), kFace);
   }
 };
 

@@ -76,7 +76,7 @@ template <class Actions> struct seen_row : skiff::compose::Stacked {
                                         .height = 44.0f,
                                         .padding = {6.0f, 17.0f, 6.0f, 13.0f},
                                         .hoverBackground = colours.chosen})),
-          id(one.id), parts{.face = avatar_mark(one.id, one.name, 30.0f),
+          id(one.id), parts{.face = avatar_mark(avatar_of::person{}, one.id, one.name, 30.0f),
                             .lines = lines_t(colours, one)} {
       // the name at 13 + 30 + 14 = 57
       // 6 over and under: the name at 13 and the time at 12 are 31.25 high,
@@ -155,7 +155,7 @@ template <class Actions> struct seen_row : skiff::compose::Stacked {
     // The faces out of the flow, in the room at the right: the first the
     // rightmost, 17 in from the edge, each next 14 to its left.
     for (std::size_t i = 0; i < shown; ++i) {
-      faces.emplace_back(readers[i].id, readers[i].name, kFace);
+      faces.emplace_back(avatar_of::person{}, readers[i].id, readers[i].name, kFace);
       faces.back().apply({.place = scene::anchor::kCentreRight,
                           .x = faces_width + 8.0f - static_cast<float>(i) * (kFace - kOverlap),
                           .border = scene::Border{colours.sidebar, 2.0f}});

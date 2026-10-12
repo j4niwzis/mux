@@ -64,6 +64,7 @@ struct avatar_mark : widgets::Avatar<from_avatars> {
   avatar_mark(std::string id, std::string shown, float size)
       : widgets::Avatar<from_avatars>(initials_of(shown), size, picture_of(id), gradient_of(id)), key(std::move(id)) {
     fState.apply({.alignSelf = scene::align::kMiddle});
+    round_avatar(*this, size);
   }
   // Another's: a chat's or a person's, by their id and name.
   void show(std::string id, std::string_view shown) {

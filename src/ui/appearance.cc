@@ -105,7 +105,7 @@ struct theme_details_draft {
   config::theme_t theme;
   bool open = false;
   skiff::model::Keyed<std::size_t, theme_colour_draft> colours;
-  std::string corner, font, height, error;
+  std::string corner, font, height, avatar, error;
   config::custom_theme saved;
 };
 struct toggle_theme_details {};
@@ -135,6 +135,7 @@ struct theme_details_events {
     reset.corner = now.saved.corner_radius ? std::format("{}", *now.saved.corner_radius) : "";
     reset.font = now.saved.font_size ? std::format("{}", *now.saved.font_size) : "";
     reset.height = now.saved.control_height ? std::format("{}", *now.saved.control_height) : "";
+    reset.avatar = now.saved.avatar_rounding ? std::format("{}", *now.saved.avatar_rounding) : "";
     return skiff::model::over<theme_details_draft>(skiff::model::setTo(std::move(reset)));
   }
   auto on(reset_theme_details, const theme_details_draft& now) const {
@@ -152,6 +153,7 @@ struct theme_details_events {
     read_theme_measurement(now.corner, 0.0, 32.0, "Corner radius", custom.corner_radius, error);
     read_theme_measurement(now.font, 9.0, 24.0, "Control font size", custom.font_size, error);
     read_theme_measurement(now.height, 24.0, 64.0, "Control height", custom.control_height, error);
+    read_theme_measurement(now.avatar, 0.0, 100.0, "Avatar rounding", custom.avatar_rounding, error);
     auto asked = error.empty() ? std::optional(request::configure_theme{now.theme, custom}) : std::nullopt;
     return std::tuple{skiff::model::over<skiff::model::Field<&theme_details_draft::error>>(skiff::model::setTo(std::move(error))),
         skiff::model::Up{std::move(asked)}};
@@ -172,6 +174,7 @@ inline auto theme_details_initial(const config::theme_t& theme,
   initial.corner = custom.corner_radius ? std::format("{}", *custom.corner_radius) : "";
   initial.font = custom.font_size ? std::format("{}", *custom.font_size) : "";
   initial.height = custom.control_height ? std::format("{}", *custom.control_height) : "";
+  initial.avatar = custom.avatar_rounding ? std::format("{}", *custom.avatar_rounding) : "";
   return initial;
 }
 inline auto theme_details_view(const palette& colours, const config::theme_t& theme,
@@ -199,6 +202,8 @@ inline auto theme_details_view(const palette& colours, const config::theme_t& th
               model_field<&draft::corner>(colours, "Corner radius (0–32)", "Theme default"),
               model_field<&draft::font>(colours, "Control font size (9–24)", "Theme default"),
               model_field<&draft::height>(colours, "Control height (24–64)", "Theme default"),
+              model_field<&draft::avatar>(colours, "Avatar rounding (0–100%)", "Theme default: 100% (circular)"),
+              wrapped(nodes::Text("0%: square. 100%: circular. Applies to room and member avatars.", 12.0f, colours.dim)),
               c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   c::onClick(save_theme_details{}, c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, widgets::Button<>(colours.widgets, "Save"))),
                   c::onClick(reset_theme_details{}, c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, widgets::Button<>(colours.widgets, "Reset theme"))),

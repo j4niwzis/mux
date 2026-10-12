@@ -43,6 +43,7 @@ void app::rebuild_in_theme() {
       else shared.notice("Theme", "The custom theme could not be read. Use a JSON palette file.");
     } else shared.notice("Theme", "The custom theme file could not be opened.");
   }
+  mux::ui::use_avatar_rounding(colours.avatar_rounding);
   if (!mux::platform::fonts::select_fonts(style.font, style.monospace))
     shared.notice("Fonts", "The selected font could not be loaded. Enter an installed family or a font file path.");
   accounts_screen.forget_login();

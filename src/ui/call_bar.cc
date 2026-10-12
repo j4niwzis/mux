@@ -165,8 +165,9 @@ inline auto call_buttons(const palette& colours, float size, const call_view& vi
       call_button(colours, size, colours.tile, colours.chosen, colours.text, icon::close{}, request::dismiss_call{}, ended, "Dismiss")));
 }
 inline auto call_avatar(const call_view& view, float size) {
-  return skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-      widgets::Avatar<from_avatars>(initials_of(view.who), size, picture_of(view.in.id), gradient_of(view.in.id)));
+  auto avatar = widgets::Avatar<from_avatars>(initials_of(view.who), size, picture_of(view.in.id), gradient_of(view.in.id));
+  round_avatar(avatar, size);
+  return skiff::compose::styled({.alignSelf = scene::align::kMiddle}, std::move(avatar));
 }
 inline auto call_status(const palette& colours, const call_view& view, float size) {
   return skiff::compose::text_of<call_shown>(call_words{}, nodes::Text(said_of(view), size, colours.dim));

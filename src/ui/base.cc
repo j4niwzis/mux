@@ -61,6 +61,7 @@ struct palette {
   // skiff-widgets' colours for the theme, with its accent: handed to each
   // control made.
   skiff::widgets::Theme widgets{};
+  float avatar_rounding = 100.0f;
   // A menu's plate: the side's colour, all but opaque -- never taken for a
   // panel's fill, so a see-through panel look leaves menus readable over it.
   [[nodiscard]] skia::SkColor popup() const { return (sidebar & 0x00FFFFFFu) | (0xFEu << 24); }

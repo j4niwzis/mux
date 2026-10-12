@@ -260,6 +260,7 @@ TEST(Config, GraphiteAndThemeOverridesSurviveSerialization) {
   custom.background = 0xff112233u;
   custom.chat_top = 0xff445566u;
   custom.corner_radius = 12.0;
+  custom.avatar_rounding = 25.0;
   saved.theme_overrides = std::map<std::string, mux::config::custom_theme>{{"graphite", custom}};
   const auto read = knot::try_read<mux::config::file>(knot::to_json_string(saved));
   ASSERT_TRUE(read);

@@ -14,6 +14,22 @@ import :icons;
 
 export namespace mux::ui {
 
+// Avatar curvature belongs to the active theme. The native avatar uses a
+// proportional radius, so small member pictures and large room pictures match.
+inline float& avatar_rounding() {
+  static float percent = 100.0f;
+  return percent;
+}
+inline void use_avatar_rounding(float percent) { avatar_rounding() = std::clamp(percent, 0.0f, 100.0f); }
+[[nodiscard]] constexpr float avatar_radius(float size, float percent) {
+  return size * 0.5f * std::clamp(percent, 0.0f, 100.0f) / 100.0f;
+}
+inline void round_avatar(auto& avatar, float size) {
+  const auto radius = avatar_radius(size, avatar_rounding());
+  avatar.apply({.cornerRadius = radius});
+  avatar.parts.picture.apply({.cornerRadius = radius});
+}
+
 // An avatar's colour, the same every time for the same id.
 [[nodiscard]] inline skia::SkColor avatar_colour(std::string_view id) {
   static constexpr std::array<skia::SkColor, 7> palette{

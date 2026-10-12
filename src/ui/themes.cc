@@ -635,6 +635,7 @@ inline void apply_theme(palette& out, const config::custom_theme& custom) {
   out.widgets.fTextFaint = out.dim;
   out.widgets.fAccent = out.accent;
   out.widgets.fOnAccent = out.on_accent;
+  if (custom.avatar_rounding) out.avatar_rounding = static_cast<float>(std::clamp(*custom.avatar_rounding, 0.0, 100.0));
   if (custom.corner_radius) out.widgets.fCorner = static_cast<float>(std::clamp(*custom.corner_radius, 0.0, 32.0));
   if (custom.font_size) out.widgets.fFontSize = static_cast<float>(std::clamp(*custom.font_size, 9.0, 24.0));
   if (custom.control_height) out.widgets.fRowHeight = static_cast<float>(std::clamp(*custom.control_height, 24.0, 64.0));

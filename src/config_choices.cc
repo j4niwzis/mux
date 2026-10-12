@@ -66,7 +66,7 @@ struct custom_theme {
   std::optional<std::uint32_t> chat_top;
   std::optional<std::uint32_t> pattern;
   std::optional<std::uint32_t> on_accent;
-  std::optional<double> corner_radius, font_size, control_height;
+  std::optional<double> corner_radius, font_size, control_height, avatar_rounding;
   friend bool operator==(const custom_theme&, const custom_theme&) = default;
 };
 consteval auto json_schema(knot::type<custom_theme>) { return knot::schema<custom_theme>(); }

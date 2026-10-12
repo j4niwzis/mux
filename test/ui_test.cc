@@ -3377,6 +3377,32 @@ TEST(Appearance, GraphiteHasItsOwnPaletteAndAllAccentChoices) {
     EXPECT_NE(mux::ui::colour_of(accent, theme), 0u);
 }
 
+TEST(Appearance, AvatarRoundingIsProportionalAndAppliesToTheSharedComponent) {
+  EXPECT_FLOAT_EQ(mux::ui::avatar_radius(40.0f, 0.0f), 0.0f);
+  EXPECT_FLOAT_EQ(mux::ui::avatar_radius(40.0f, 25.0f), 5.0f);
+  EXPECT_FLOAT_EQ(mux::ui::avatar_radius(96.0f, 25.0f), 12.0f);
+  EXPECT_FLOAT_EQ(mux::ui::avatar_radius(40.0f, 100.0f), 20.0f);
+  const auto before = mux::ui::avatar_rounding();
+  mux::ui::use_avatar_rounding(25.0f);
+  mux::ui::avatar_mark avatar("!room:example.org", "Garden", 40.0f);
+  EXPECT_FLOAT_EQ(avatar.fState.fCornerRadius, 5.0f);
+  EXPECT_FLOAT_EQ(avatar.parts.picture.fState.fCornerRadius, 5.0f);
+  avatar.show("!other:example.org", "Other");
+  EXPECT_FLOAT_EQ(avatar.fState.fCornerRadius, 5.0f);
+  mux::ui::use_avatar_rounding(before);
+  auto draft = mux::ui::theme_details_initial(mux::config::theme::day{}, {});
+  draft.avatar = "25";
+  const auto saved = mux::ui::theme_details_events{}.on(mux::ui::save_theme_details{}, draft);
+  ASSERT_TRUE(std::get<1>(saved).fEvent);
+  EXPECT_EQ(std::get<1>(saved).fEvent->custom->avatar_rounding, 25.0);
+  mux::ui::palette palette;
+  mux::ui::apply_theme(palette, *std::get<1>(saved).fEvent->custom);
+  EXPECT_FLOAT_EQ(palette.avatar_rounding, 25.0f);
+  draft.avatar = "101";
+  const auto invalid = mux::ui::theme_details_events{}.on(mux::ui::save_theme_details{}, draft);
+  EXPECT_FALSE(std::get<1>(invalid).fEvent);
+}
+
 TEST(Appearance, ThemeConfigurationValidatesColorsAndPreservesAlpha) {
   EXPECT_EQ(mux::ui::theme_colour_of("#123456"), 0xff123456u);
   EXPECT_EQ(mux::ui::theme_colour_of("80123456"), 0x80123456u);

@@ -70,16 +70,7 @@ template <class... Features>
 std::array<popup_page_t, 1 + sizeof...(Features)> all_pages(plugin_list<Features...>) {
   return {popup_page::emoji{}, typename decltype(page_type(contract::media_pages{}, type_tag<Features>{}))::type{}...};
 }
-// The emote pictures a page shows, for the program to fetch: where it says.
-template <class Page>
-  requires requires(Page& page) { page.emote_pictures_shown(); }
-std::vector<emote_picture> pictures_of(std::optional<Page>& page) {
-  return page ? page->emote_pictures_shown() : std::vector<emote_picture>{};
-}
-template <class Page>
-std::vector<emote_picture> pictures_of(std::optional<Page>&) {
-  return {};
-}
+
 inline auto popup_tab(const palette& colours, popup_page_t page, std::string name, bool selected, bool available) {
   namespace c = skiff::compose;
   return c::visible(available, c::onClick(request::select_emoji_page{std::move(page)},

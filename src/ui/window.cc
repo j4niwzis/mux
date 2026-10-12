@@ -991,8 +991,9 @@ template <class Actions> struct window : skiff::compose::Specced {
     if (up) {
       const auto emoji = up->parts.card.parts.panel.pictures_shown();
       shown.append_range(pictures(emoji, emote_kind::emoji));
-      // And those of the plugins' pages that show pictures: the stickers'.
-      std::apply([&](auto&... page) { (shown.append_range(pictures_of(page)), ...); }, up->parts.card.parts.pages);
+      // And those the plugins' pages show, in view: the stickers'.
+      const skia::SkRect view = up->parts.card.bounds();
+      std::apply([&](auto&... page) { ((page ? emote_pictures_in(*page, view, shown) : void()), ...); }, up->parts.card.parts.pages);
     }
     if (auto* menu = layer().menu.shown())
       std::apply([&](auto&... over) { (shown.append_range(pictures(unrolled_pictures(over), emote_kind::emoji)), ...); },

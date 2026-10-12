@@ -33,8 +33,8 @@ namespace contract {
 //   tab_name(page), shown_where(page, facts): of its page; opened(page),
 //   what it asks for as it is chosen, where it asks something
 //   extend(c, f, needs, shown) -> its node, or in_place<node, args...> where
-//   it may not move, in the window; emote_pictures_shown(), where it shows
-//   pictures the program fetches
+//   it may not move, in the window; the emote pictures in it, in view, are
+//   fetched by the program (emote_pictures_in)
 struct media_pages {
   static constexpr std::string_view name = "the media panel's pages";
 };

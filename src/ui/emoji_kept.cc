@@ -142,4 +142,43 @@ inline bool follow_preview(std::optional<emote_preview_t>& shown, std::optional<
   return true;
 }
 
+// What a panel's page shows of what is kept with the emoji: the preview of
+// what the pointer rests on, over the page -- said by its cells, through
+// what is kept (previewed_now) -- made anew as that changes.
+template <class N> struct previewing : skiff::compose::Stacked {
+  const palette* colours_ = nullptr;
+  const emoji_kept* kept_ = nullptr;
+  std::optional<previewed> of;
+  struct parts_t {
+    N page;
+    std::optional<emote_preview_t> preview;
+  } parts;
+  previewing(const palette& colours, const emoji_kept& kept, N page)
+      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})), colours_(&colours), kept_(&kept), parts{.page = std::move(page)} {
+    parts.page.apply({.fill = true});
+  }
+  [[nodiscard]] bool settling() const { return kept_->previewed_now != of; }
+  void update(double) {
+    if (follow_preview(parts.preview, of, *colours_, *kept_))
+      this->invalidateLayout();
+  }
+};
+template <class N> previewing<N> with_preview(const palette& colours, const emoji_kept& kept, N page) {
+  return previewing<N>(colours, kept, std::move(page));
+}
+
+// The emote pictures a subtree shows within a rect of the window -- what is
+// scrolled out of it left -- for the program to fetch. Any page's: it says
+// nothing of them itself.
+inline void emote_pictures_in(nodes::Image<from_emotes>& image, const skia::SkRect& view, std::vector<emote_picture>& out) {
+  const auto shift = skiff::scene::work::drawnOffset(image.fState.fId);
+  if (image.fState.visible() && image.bounds().makeOffset(shift.x, shift.y).intersects(view))
+    out.push_back({image.source().key, image.source().kind});
+}
+template <class N> void emote_pictures_in(N& node, const skia::SkRect& view, std::vector<emote_picture>& out) {
+  if (!skiff::scene::stateOf(node).visible())
+    return;
+  skiff::scene::eachChild(node, [&](auto& child) { emote_pictures_in(child, view, out); });
+}
+
 }  // namespace mux::ui

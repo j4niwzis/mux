@@ -47,10 +47,20 @@ struct message_menu {
 // A message's trailers: what goes after its text, at the foot of its bubble,
 // that its time sits beside (mux.ui:message):
 //   extend(c, f, type_tag<Actions>, trailer_facts) -> std::optional<its node>:
-//   none where it has nothing to show of the message; the node says
-//   trailing_width(), how far its last line goes, for the time beside it
+//   none where it has nothing to show of the message; and
+//   trailing_width(c, f, node), how far its last line goes, for the time
+//   beside it
 struct message_trailers {
   static constexpr std::string_view name = "a message's trailers";
+};
+// The window's dialogs (mux.ui:window): what a plugin's dialog shows -- its
+// facts, a part of what is shown -- and its box:
+//   facts_type(c, f) -> type_tag<its facts>, in the plugin's types
+//   extend(c, f, type_tag<Actions>) -> type_tag<its box>, a dialog's content
+//   made from ui_needs and the facts (make_content, content_look)
+// Closed by request::close_shown<its facts>, which its part takes.
+struct window_dialogs {
+  static constexpr std::string_view name = "the window's dialogs";
 };
 // The program's parts (mux.app.program): extend(c, f, services&) -> a part,
 // offered the requests as the program's own are.
@@ -130,6 +140,17 @@ template <class Node, class... Args>
 Node& put(std::optional<Node>& slot, in_place<Node, Args...>&& made) {
   return std::apply([&](auto&&... arg) -> Node& { return slot.emplace(std::forward<decltype(arg)>(arg)...); }, std::move(made.args));
 }
+
+// Parts of a list of types, as an aggregate: what skiff's model looks into
+// for a part by its type -- a std::tuple it does not. Each its head, the
+// rest its tail; none, an empty one.
+template <class... Parts>
+struct aggregate_list {};
+template <class Head, class... Rest>
+struct aggregate_list<Head, Rest...> {
+  Head head;
+  aggregate_list<Rest...> tail;
+};
 
 // What the build says where a plugin says it provides a contract and what it
 // gives does not compile: a static_assert's message, made while compiling.

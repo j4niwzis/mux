@@ -578,7 +578,6 @@ struct keep_whole {
 };
 struct menu_pin {};
 // A message's reactions as the events they are, in a window of their own.
-struct menu_reactions {};
 // Link previews, at a level: on, off, or (at an account's or a chat's) as
 // the level over it says.
 // A passphrase given, for what it was asked: the one now, a new one twice.
@@ -646,9 +645,11 @@ struct close_manage {};
 struct room_act {
   mux::room_action_t action;
 };
-struct close_reactions {};
-struct back_reactions {};
 struct close_edit_history {};
+// A plugin's dialog closed (contract::window_dialogs): by its facts, the part
+// of what is shown it is; taken by its plugin's part.
+template <class Facts>
+struct close_shown {};
 struct select_emoji_page { popup_page_t page; };
 struct send_gif {
   std::string path;

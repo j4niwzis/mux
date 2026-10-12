@@ -2423,8 +2423,8 @@ TEST(Reactions, PanelRowsTargetTheReactionAndOfferNestedMenus) {
       .body = {"👍", std::nullopt}, .replies_to = "$original", .reaction = true, .reaction_key = "👍"}});
   known.apply(mux::change::reaction_changed{room, "$reaction", "❤️", alice.address, true, "$nested"});
   const auto* chat = known.find(room);
-  mux::ui::reaction_entry entry{"$reaction", "@bob:example.org", "Bob", "👍", {}, false, "$original"};
-  auto row = mux::ui::reaction_event_row(ui.needs(program), *chat, entry, true, true, &known);
+  mux::plugins::reactions::entry entry{"$reaction", "@bob:example.org", "Bob", "👍", {}, false, "$original"};
+  auto row = mux::plugins::reactions::reaction_event_row(ui.needs(program), *chat, entry, true, true, &known);
   scene::PointerReply reply;
   const auto answer = row.onPointer(scene::phase::bubble{}, scene::pointer::down{.button = 3}, reply);
   ASSERT_TRUE(answer.has_value());
@@ -2436,7 +2436,8 @@ TEST(Reactions, PanelRowsTargetTheReactionAndOfferNestedMenus) {
   EXPECT_EQ(facts.reaction->to, "$original");
   mux::ui::context_menu<stub> menu(ui.needs(program), facts);
   EXPECT_TRUE(menu.parts.menu.parts.quick.visible());
-  EXPECT_TRUE(menu.parts.menu.parts.reactions.visible());
+  // The reactions plugin's row, the first of the plugins' rows.
+  EXPECT_TRUE(std::get<0>(menu.parts.menu.parts.added).visible());
 }
 TEST(History, ReactionsTargetEachEditAndNeverGuessMissingEditIds) {
   mux::message message{.id = "$original", .body = {"third", std::nullopt}, .edited = true};

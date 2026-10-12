@@ -221,6 +221,23 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
         (composition::put(std::get<At>(slots), made<Features>(facts)), ...);
       }(std::index_sequence_for<Features...>{});
     }
+    // The last shown, where there is one: what the time goes beside, and how
+    // far its last line goes, as its plugin says (trailing_width).
+    struct end {
+      skia::SkRect bounds;
+      float width = 0.0f;
+    };
+    static std::optional<end> last(const nodes_t& slots) {
+      std::optional<end> found;
+      [&]<std::size_t... At>(std::index_sequence<At...>) {
+        ((std::get<At>(slots) && std::get<At>(slots)->visible()
+              ? void(found = end{std::get<At>(slots)->bounds(),
+                                 trailing_width(contract::message_trailers{}, type_tag<Features>{}, *std::get<At>(slots))})
+              : void()),
+         ...);
+      }(std::index_sequence_for<Features...>{});
+      return found;
+    }
   };
   using trailers_t = plugin_trailers<composition::providers<contract::message_trailers, enabled_plugins>>;
   // The bubble: as wide as what it says, up to its largest.
@@ -280,19 +297,8 @@ template <class Actions> struct message_bubble : skiff::compose::Stacked {
       nodes::Text inline_time;
     } parts;
     skia::SkColor plate = 0;
-    // The last trailer shown, where there is one: what the time goes beside,
-    // and how far its last line goes.
-    struct trailer_end {
-      skia::SkRect bounds;
-      float width = 0.0f;
-    };
-    [[nodiscard]] std::optional<trailer_end> last_trailer() const {
-      std::optional<trailer_end> found;
-      std::apply([&](const auto&... slot) {
-        ((slot && slot->visible() ? void(found = trailer_end{slot->bounds(), slot->trailing_width()}) : void()), ...);
-      }, parts.trailers);
-      return found;
-    }
+    // The last trailer shown, where there is one: what the time goes beside.
+    [[nodiscard]] auto last_trailer() const { return trailers_t::last(parts.trailers); }
     // A protocol's sticker placed, where it made one.
     bool place_sticker(std::nullopt_t) { return false; }
     void place_view(std::nullopt_t) {}

@@ -17,6 +17,7 @@ import mux.config;
 import mux.kept_root;
 import skiff.model;
 import skiff.bind;
+import mux.plugins.types;
 import :base;
 import :controls;
 import :themes;
@@ -121,6 +122,17 @@ struct chat_shown {
 struct drawer_shown {
   bool out = false;
 };
+// The dialogs plugins give the window (contract::window_dialogs), in their
+// order: each its facts' part of what is shown -- in an aggregate, which the
+// model looks into for a part by its type -- and its close.
+using dialog_plugins = composition::providers<contract::window_dialogs, enabled_plugins>;
+template <class Feature>
+using dialog_facts_t = typename decltype(facts_type(contract::window_dialogs{}, type_tag<Feature>{}))::type;
+template <class... Features>
+consteval auto dialogs_shown_of(plugin_list<Features...>) {
+  return type_tag<composition::aggregate_list<skiff::model::Tracked<std::optional<dialog_facts_t<Features>>>...>>{};
+}
+using dialogs_shown_t = typename decltype(dialogs_shown_of(dialog_plugins{}))::type;
 struct shown_root {
   skiff::model::Tracked<drawer_shown> drawer;
   skiff::model::Tracked<chat_shown> chat;
@@ -131,7 +143,8 @@ struct shown_root {
   skiff::model::Tracked<std::optional<leave_space_facts>> leaving;
   skiff::model::Tracked<std::optional<link_facts>> linking;
   skiff::model::Tracked<std::optional<notice_facts>> notice;
-  skiff::model::Tracked<std::optional<reactions_facts>> reactions;
+  // Each plugin's dialog's: who reacted to a message, for one.
+  dialogs_shown_t dialogs;
   skiff::model::Tracked<std::optional<history_facts>> history;
   skiff::model::Tracked<std::optional<forward_facts>> forwarding;
   skiff::model::Tracked<std::optional<wallpaper_facts>> wallpaper;
@@ -391,10 +404,16 @@ template <class Actions> struct window : skiff::compose::Specced {
               0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
           parts{.shown = tool_t(which, std::forward<Args>(args)...)} {}
   };
+  // What the layers' keys ask for: a dialog closed, the plugins' each by its
+  // facts.
+  template <class... Features>
+  static consteval auto answers_of(plugin_list<Features...>) {
+    return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer,
+                                 ::mux::ui::request::close_shown<dialog_facts_t<Features>>...>>{};
+  }
   struct layers : skiff::compose::Specced {
     // What its handlers ask for, returned.
-    using Answer = std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_reactions, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer>;
-    using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
+    using Answer = typename decltype(answers_of(dialog_plugins{}))::type;    using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
                                        shown_frame<widgets::SlideOver<with_drawer, panel_type>, accounts_panel<Actions>, ui_needs<Actions>>>;
     // A dialog of Content, bound to its Facts' part of what is shown.
     template <class Content, class Facts>
@@ -403,6 +422,48 @@ template <class Actions> struct window : skiff::compose::Specced {
     static shown_in<Content, Facts> shown_made(const ui_needs<Actions>& n) {
       return shown_in<Content, Facts>(std::in_place, &n);
     }
+    // The plugins' dialogs, each its box -- from its extend(), found where
+    // the window is instantiated (mux.plugins.ui) -- in a slot of its own,
+    // made there.
+    template <class List>
+    struct plugin_dialogs;
+    template <class... Features>
+    struct plugin_dialogs<plugin_list<Features...>> {
+      template <class Feature>
+      static auto box_of() {
+        static_assert(requires { extend(contract::window_dialogs{}, type_tag<Feature>{}, type_tag<Actions>{}); },
+                      composition::broken<contract::window_dialogs, Feature>());
+        return extend(contract::window_dialogs{}, type_tag<Feature>{}, type_tag<Actions>{});
+      }
+      template <class Feature>
+      using box_t = typename decltype(box_of<Feature>())::type;
+      using nodes_t = std::tuple<std::optional<shown_in<box_t<Features>, dialog_facts_t<Features>>>...>;
+      static void build(nodes_t& slots, const ui_needs<Actions>& n) {
+        std::apply([&](auto&... slot) { (slot.emplace(std::in_place, &n), ...); }, slots);
+      }
+      // Escape: the first of them shown, closed.
+      static std::optional<Answer> close(nodes_t& slots) {
+        std::optional<Answer> asked;
+        [&]<std::size_t... At>(std::index_sequence<At...>) {
+          (void)((std::get<At>(slots) && std::get<At>(slots)->shown()
+                      ? (asked = ::mux::ui::request::close_shown<dialog_facts_t<Features>>{}, true)
+                      : false) ||
+                 ...);
+        }(std::index_sequence_for<Features...>{});
+        return asked;
+      }
+      static bool settling(nodes_t& slots) {
+        return std::apply([](auto&... slot) { return ((slot && slot->settling()) || ...); }, slots);
+      }
+      static void drop_closed(nodes_t& slots) {
+        std::apply([](auto&... slot) { ((slot ? slot->dropClosed() : void()), ...); }, slots);
+      }
+      template <class Draw>
+      static void draw(nodes_t& slots, Draw drawn) {
+        std::apply([&](auto&... slot) { ((slot ? drawn(*slot) : void()), ...); }, slots);
+      }
+    };
+    using dialogs_t = plugin_dialogs<dialog_plugins>;
     struct parts_t {
       nodes::Box<> backdrop;
       // The chat's background behind all of the window, where it is so:
@@ -417,8 +478,8 @@ template <class Actions> struct window : skiff::compose::Specced {
       shown_in<person_card<Actions>, person_shown> person;
       // A room not joined, from a link: its card, as a person's.
       shown_in<room_card<Actions>, room_card_facts> room;
-      // A message's reactions as events.
-      shown_in<reactions_box<Actions>, reactions_facts> reactions;
+      // The plugins' dialogs: a message's reactions as events, for one.
+      typename dialogs_t::nodes_t dialogs;
       // A message's earlier versions, as AyuGram's edit history.
       shown_in<edit_history_box<Actions>, history_facts> history;
       // A link put on what is selected in the message field: Ctrl+K's.
@@ -561,8 +622,8 @@ template <class Actions> struct window : skiff::compose::Specced {
         return closed(::mux::ui::request::close_link{});
       if (parts.history.shown())
         return closed(::mux::ui::request::close_edit_history{});
-      if (parts.reactions.shown())
-        return closed(::mux::ui::request::close_reactions{});
+      if (auto asked = dialogs_t::close(parts.dialogs))
+        return closed(std::move(asked));
       if (parts.room.shown())
         return closed(::mux::ui::request::close_room_card{});
       if (parts.person.shown())
@@ -593,15 +654,15 @@ template <class Actions> struct window : skiff::compose::Specced {
     skia::SkRect frozen_at = skia::SkRect::MakeEmpty();  // where it is on the device
 
     [[nodiscard]] bool dialog_fading() {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
-      return settings.settling() || notice.settling() || person.settling() || room.settling() || reactions.settling() ||
+      auto& [backdrop, behind, frame, settings, notice, person, room, dialogs, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
+      return settings.settling() || notice.settling() || person.settling() || room.settling() || dialogs_t::settling(dialogs) ||
              history.settling() || linking.settling() || leaving.settling() ||
              marks.settling() || manage.settling() || forwarding.settling() || new_chat.settling() ||
              new_room.settling() || packs.settling() || wallpaper.settling() || explore.settling() ||
              tools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
     }
     void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, dialogs, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
       skia::SkMatrix inverse;
       if (!this->dialog_fading() || !canvas->getTotalMatrix().invert(&inverse)) {
         frozen = nullptr;
@@ -631,7 +692,9 @@ template <class Actions> struct window : skiff::compose::Specced {
       }
       canvas->drawImageRect(frozen, inverse.mapRect(frozen_at), skia::SkSamplingOptions(skia::SkFilterMode::kNearest));
       const auto over = [&](auto&... each) { (scene::draw(each, painting, canvas, alpha), ...); };
-      over(settings, notice, person, room, reactions, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
+      over(settings, notice, person, room);
+      dialogs_t::draw(dialogs, [&](auto& one) { scene::draw(one, painting, canvas, alpha); });
+      over(history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
            tools, sending, passphrase, verifying);
       // A layer up: an optional's node, or a shown layer with what it holds.
       const auto draw_up = spl::overloaded{[&](auto& one)
@@ -658,8 +721,6 @@ template <class Actions> struct window : skiff::compose::Specced {
                 .notice = shown_made<notice_box_t, notice_facts>(n),
                 .person = shown_made<person_card<Actions>, person_shown>(n),
                 .room = shown_made<room_card<Actions>, room_card_facts>(n),
-                .reactions =
-                    shown_made<reactions_box<Actions>, reactions_facts>(n),
                 .history =
                     shown_made<edit_history_box<Actions>, history_facts>(n),
                 .linking = shown_made<link_box_t, link_facts>(n),
@@ -698,8 +759,11 @@ template <class Actions> struct window : skiff::compose::Specced {
       // see-through as the panels are.
       frame.setSheetColour(n.colours->sidebar);
       frame.base().setSheetColour(n.colours->sidebar);
+      // The plugins' dialogs, made in their slots.
+      dialogs_t::build(parts.dialogs, n);
       // Each dialog as what it shows declares it.
       (look_as_its_content(over, *n.colours), ...);
+      std::apply([&](auto&... slot) { (look_as_its_content(*slot, *n.colours), ...); }, parts.dialogs);
       // The files to send: as wide as 440 at most, as high as they are.
       parts.sending.setWidthFittingContent(440.0f);
     }
@@ -817,7 +881,7 @@ template <class Actions> struct window : skiff::compose::Specced {
     layer().notice.dropClosed();
     layer().person.dropClosed();
     layer().room.dropClosed();
-    layer().reactions.dropClosed();
+    dialogs_t::drop_closed(layer().dialogs);
     layer().history.dropClosed();
     layer().linking.dropClosed();
     layer().leaving.dropClosed();

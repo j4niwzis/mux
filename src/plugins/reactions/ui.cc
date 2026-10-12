@@ -2,7 +2,8 @@
 // mux.plugin.reactions.ui -- A message's reactions, at the foot of its
 // bubble, as Telegram's: a chip for each -- its emoji or picture, how many,
 // or the faces of up to three who chose it -- tinted where one's own is
-// among them; pressed, one reacts with it too.
+// among them; pressed, one reacts with it too. And who reacted, listed as
+// the events they are, from the message's menu.
 export module mux.plugin.reactions.ui;
 
 import std;
@@ -11,6 +12,8 @@ import skiff.scene;
 import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.text;
+import skiff.nodes.scroll;
+import splice;
 import mux.core;
 import mux.config;
 import mux.ui;
@@ -72,24 +75,21 @@ inline auto reaction_row_of() {
 inline auto& reaction_chips(reaction_row& row) { return std::get<0>(row.fChildren); }
 inline const auto& reaction_chips(const reaction_row& row) { return std::get<0>(row.fChildren); }
 
-// The strip, as a trailer: how far its last line goes is its last chip's
-// right edge, for the message's time beside it.
-struct strip : reaction_row {
-  explicit strip(reaction_row row) : reaction_row(std::move(row)) {}
-  [[nodiscard]] float trailing_width() const {
-    const auto& chips = reaction_chips(*this);
-    return chips.empty() ? 0.0f : chips.back().bounds().fRight - this->bounds().fLeft;
-  }
-};
+// How far the strip's last line goes, for the message's time beside it: its
+// last chip's right edge.
+inline float trailing_width(contract::message_trailers, type_tag<feature>, const reaction_row& row) {
+  const auto& chips = reaction_chips(row);
+  return chips.empty() ? 0.0f : chips.back().bounds().fRight - row.bounds().fLeft;
+}
 
 // Its trailer, at a message's foot (mux.ui:message): none where no one has
 // reacted.
 template <class Actions>
-std::optional<strip> extend(contract::message_trailers, type_tag<feature>, type_tag<Actions>, const trailer_facts& facts) {
+std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>, type_tag<Actions>, const trailer_facts& facts) {
   const message& said = facts.said;
   if (std::ranges::none_of(said.reactions, [](const auto& one) { return !one.second.empty(); }))
     return std::nullopt;
-  strip made(reaction_row_of());
+  auto made = reaction_row_of();
   std::ranges::for_each(said.reactions | std::views::filter([](const auto& one) { return !one.second.empty(); }), [&](const auto& one) {
     const auto& [key, who] = one;
     const auto shortcode = std::ranges::find_if(said.reaction_events, [&](const auto& event) {
@@ -102,6 +102,95 @@ std::optional<strip> extend(contract::message_trailers, type_tag<feature>, type_
         shortcode == said.reaction_events.end() ? std::nullopt : shortcode->shortcode));
   });
   return made;
+}
+
+// A message's reactions as events, as Matrix has them: a box in the middle,
+// a row for each -- the person's avatar and name over what they reacted
+// with and when. A press on one answers it: the reaction is an event, and a
+// message can reply to it.
+// Panel rows use the actual reaction event as their menu target. Inherit its
+// nested reactions when known; the parent event is only the reply reference.
+[[nodiscard]] inline message reaction_message_of(const conversation& in, const entry& one) {
+  message out;
+  if (const message* held = held_message(in, one.event)) out = *held;
+  out.in = in.id;
+  out.id = one.event;
+  out.sender = one.who;
+  out.at = one.at;
+  out.body = reaction_body_of(one.key, in.emotes, one.shortcode);
+  out.outgoing = one.mine;
+  out.service = false;
+  out.reaction = true;
+  out.reaction_key = one.key;
+  out.replies_to = one.to.empty() ? std::nullopt : std::optional(one.to);
+  return out;
+}
+using reaction_row_answer = std::variant<menu_facts, request::open_url,
+    std::tuple<std::optional<request::reply_to>, request::close_shown<shown>>>;
+
+template <class Actions>
+auto reaction_event_row(const ui_needs<Actions>& n, const conversation& in, const entry& one,
+                        bool first, bool last, const model* known) {
+  namespace c = skiff::compose;
+  auto bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n),
+                                        in, reaction_message_of(in, one), first, last, known);
+  auto row = c::onClick(std::tuple{one.event.empty() ? std::optional<request::reply_to>{}
+        : std::optional(request::reply_to{one.event, std::format("{} reacted {}", one.name, one.key)}), request::close_shown<shown>{}},
+      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
+          .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .hoverBackground = n.colours->chosen}), std::move(bubble)), "Reply to reaction");
+  return c::onPointer<reaction_row_answer>([in_id = in.id, known](auto& row, const scene::pointer::down& press,
+                                                                scene::PointerReply& reply) -> std::optional<reaction_row_answer> {
+    if (press.button != 3) return std::nullopt;
+    const auto& bubble = std::get<0>(row.fParts);
+    const auto* chat = known ? known->find(in_id) : nullptr;
+    auto facts = facts_of_bubble(bubble, chat, press.x, press.y);
+    // Legacy cached reactions without an event ID cannot be targeted.
+    if (facts.id.empty()) { facts.can.react = false; facts.deletable = false; }
+    reply.handle();
+    return reaction_row_answer{std::move(facts)};
+  }, std::move(row));
+}
+template <class Actions>
+auto panel(const ui_needs<Actions>& n, const shown& facts) {
+  namespace c = skiff::compose;
+  const auto& chat = chat_or_none(facts.now, facts.in);
+  const auto& entries = facts.entries;
+  auto rows = std::ranges::to<std::vector>(std::views::transform(std::views::iota(std::size_t{0}, entries.size()),
+      [&](std::size_t i) { return reaction_event_row(n, chat, entries[i],
+          i == 0 || entries[i - 1].who != entries[i].who,
+          i + 1 == entries.size() || entries[i + 1].who != entries[i].who, facts.now); }));
+  return c::column(list_dialog(420.0f),
+      page_header<sends<back>, sends<request::close_shown<shown>>>(*n.colours, "Reactions", {}, {}, facts.back, true),
+      dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
+}
+template <class Actions>
+using box = decltype(panel(std::declval<const ui_needs<Actions>&>(), std::declval<const shown&>()));
+template <class Actions>
+auto make_content(std::type_identity<box<Actions>>, const ui_needs<Actions>& n, const shown& facts) {
+  return panel(n, facts);
+}
+template <class Content>
+inline dialog_look content_look(std::type_identity<Content>, std::type_identity<shown>) {
+  return {.sheet = sheet::chat{}, .size = dialog_size::fixed{392.0f, 420.0f}};
+}
+
+
+// Its dialog, among the window's (mux.ui:window).
+template <class Actions>
+constexpr type_tag<box<Actions>> extend(contract::window_dialogs, type_tag<feature>, type_tag<Actions>) { return {}; }
+
+// Reactions, in a message's menu: how many, and who, listed.
+template <class Actions>
+auto extend(contract::message_menu, type_tag<feature>, type_tag<Actions>, const palette& colours, const emoji_kept&,
+            const menu_facts& facts) {
+  using row = row_item<sends<show>>;
+  return skiff::compose::visible(
+      !facts.id.empty() && (facts.can.react || facts.reaction_count > 0),
+      row(colours,
+          facts.reaction_count == 0   ? std::string("Reactions")
+          : facts.reaction_count == 1 ? std::string("1 reaction")
+                                      : std::format("{} reactions", facts.reaction_count),
+          sends<show>{show{facts.id}}, icon::people{}, std::nullopt, menu_row_look));
 }
 
 }  // namespace mux::plugins::reactions

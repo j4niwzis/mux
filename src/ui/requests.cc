@@ -10,18 +10,32 @@ import skiff.scene;
 import mux.core;
 import mux.config;
 import mux.protocols;
+import mux.plugins.types;
 import skiff.bind;
 import skiff.model;
 
 export namespace mux::ui {
 
-// The picker page is part of what is shown, so data refreshes retain it.
+// The picker page is part of what is shown, so data refreshes retain it:
+// its emoji, its stickers, and each page a plugin gives the media panel
+// (contract::media_pages), in the plugins' order.
 namespace popup_page {
 struct emoji { friend bool operator==(emoji, emoji) = default; };
 struct stickers { friend bool operator==(stickers, stickers) = default; };
-struct gifs { friend bool operator==(gifs, gifs) = default; };
 }
-using popup_page_t = spl::variant<popup_page::emoji, popup_page::stickers, popup_page::gifs>;
+template <class... Features>
+consteval auto popup_pages_of(plugin_list<Features...>) {
+  return type_tag<spl::variant<popup_page::emoji, popup_page::stickers,
+      typename decltype(page_type(contract::media_pages{}, type_tag<Features>{}))::type...>>{};
+}
+using media_page_plugins = composition::providers<contract::media_pages, enabled_plugins>;
+using popup_page_t = typename decltype(popup_pages_of(media_page_plugins{}))::type;
+// What is shown on each plugin's page, beside the others' (emoji_facts).
+template <class... Features>
+consteval auto pages_shown_of(plugin_list<Features...>) {
+  return type_tag<std::tuple<typename decltype(shown_type(contract::media_pages{}, type_tag<Features>{}))::type...>>{};
+}
+using pages_shown_t = typename decltype(pages_shown_of(media_page_plugins{}))::type;
 
 // Lists of types, put together: the client's and every protocol's -- the
 // Manage tabs and pages, the account pages.
@@ -625,7 +639,6 @@ struct room_act {
 struct close_reactions {};
 struct back_reactions {};
 struct close_edit_history {};
-struct show_gifs {};
 struct select_emoji_page { popup_page_t page; };
 struct send_gif {
   std::string path;

@@ -99,7 +99,7 @@ struct services {
   void open_emoji(float right, float bottom) const {
     const auto chosen = root().main().chosen;
     const auto ops = chosen ? mux::ui::ops_of(ui, chosen->account) : mux::proto::account_ops{};
-    mux::ui::show(*showing, std::optional(mux::ui::emoji_facts{right, bottom, {}, mux::ui::popup_page::emoji{},
+    mux::ui::show(*showing, std::optional(mux::ui::emoji_facts{right, bottom, mux::ui::popup_page::emoji{},
         ops.send_sticker, chosen && mux::ui::may_send_files(ui, chosen->account)}));
   }
   void close_emoji() const {

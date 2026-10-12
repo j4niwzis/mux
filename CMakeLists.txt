@@ -178,9 +178,11 @@ mux_find_package(vodozemac REQUIRED)
 # built.
 # The protocols turned on, each from its own folder (cmake/protocols.cmake).
 include(cmake/protocols.cmake)
+# The plugins turned on, each from its own folder (cmake/plugins.cmake).
+include(cmake/plugins.cmake)
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
-  FILES ${mux_protocol_core} ${mux_enabled_core}
+  FILES ${mux_protocol_core} ${mux_enabled_core} ${mux_plugin_types} ${mux_plugins_types}
         src/calls/types.cc src/core_ids.cc src/proto/changes.cc src/proto/proto.cc src/proto/protocols.cc
         src/core.cc src/net.cc src/http.cc src/preview.cc src/media.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc src/logic/notifications.cc
@@ -239,7 +241,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin 6d54370cd7d92ea4058c350d097131d00672792b)
+set(mux_skiff_pin e2ae2a92211b044306aff9a027b81ca8f1589792)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
@@ -279,7 +281,7 @@ add_library(mux_config)
 # settings read them, and everything above reads the settings.
 target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
   FILES ${mux_protocol_config} ${mux_enabled_config}
-        src/proto/identity.cc src/proto/tags.cc src/proto/kept.cc src/proto/state.cc src/config_choices.cc src/config_settings.cc src/config_looks.cc src/config_limits.cc src/config_accounts.cc src/config.cc)
+        src/proto/identity.cc src/composition.cc src/proto/tags.cc src/proto/kept.cc src/proto/state.cc src/config_choices.cc src/config_settings.cc src/config_looks.cc src/config_limits.cc src/config_accounts.cc src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})
 target_link_libraries(mux_config PUBLIC knot splice mux_vault skiff::model)
@@ -421,7 +423,7 @@ if(MUX_UI)
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_art_dir})
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_pattern})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
-    FILES ${mux_protocol_ui} ${mux_enabled_ui} ${mux_platform_sources} ${mux_calls_sources} src/ui.cc
+    FILES ${mux_protocol_ui} ${mux_enabled_ui} ${mux_plugin_ui} ${mux_plugins_ui} ${mux_platform_sources} ${mux_calls_sources} src/ui.cc
           src/kept_root.cc src/ui/base.cc src/ui/requests.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations_show.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/about.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/call_bar.cc src/ui/window.cc
           src/proto/ui.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
@@ -478,7 +480,7 @@ if(MUX_UI)
   # the accounts and instantiate little -- a target of their own.
   add_library(mux_app OBJECT)
   target_sources(mux_app PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
-    FILES ${mux_protocol_app} ${mux_enabled_demo} ${mux_enabled_app}
+    FILES ${mux_protocol_app} ${mux_enabled_demo} ${mux_enabled_app} ${mux_plugin_app} ${mux_plugins_app}
           src/app/sink.cc ${mux_generated}/proto/accounts.cc src/proto/demo.cc src/app/network.cc src/app/workers.cc src/app/demo.cc
           src/app/store.cc src/app/requests.cc src/app/words.cc src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc
           src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc

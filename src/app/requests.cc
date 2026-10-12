@@ -11,6 +11,9 @@ import mux.ui;
 import mux.ui.proto;
 import mux.protocols;
 import mux.app.network;
+// Where the window is instantiated -- every unit that imports this -- the
+// plugins' nodes are found (their extend() overloads, by ADL).
+export import mux.plugins.ui;
 
 export namespace mux::app {
 

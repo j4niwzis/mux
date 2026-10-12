@@ -20,15 +20,20 @@ export namespace mux::app {
 struct emoji_part {
   services* s_;
   request::writing_t into_ = request::writing::chat{};
+  // A page chosen: shown, and what it asks for as it opens, asked -- a
+  // plugin's page says (opened); the client's own ask nothing.
   template <class Asked>
   void apply(const request::select_emoji_page& one, const Asked& asked) {
-    bool gifs = false;
+    bool chosen = false;
     mux::ui::change_shown<std::optional<mux::ui::emoji_facts>>(*s_->showing, [&](auto& now) {
       if (!now || !mux::ui::page_available(*now, one.page)) return;
       now->page = one.page;
-      gifs = one.page == mux::ui::popup_page_t(mux::ui::popup_page::gifs{});
+      chosen = true;
     });
-    if (gifs) asked(request::show_gifs{});
+    if (chosen)
+      spl::visit(spl::overloaded{[](mux::ui::popup_page::emoji) {}, [](mux::ui::popup_page::stickers) {},
+                                 [&](const auto& theirs) { asked(opened(theirs)); }},
+                 one.page);
   }
 
 };

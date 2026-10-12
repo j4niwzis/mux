@@ -31,6 +31,7 @@ import mux.app.workers;
 import mux.app.demo;
 import mux.app.store;
 import mux.app.requests;
+import mux.plugins.app;
 import mux.app.words;
 import mux.app.services;
 import mux.app.kept;
@@ -118,6 +119,14 @@ struct app : kept_settings {
   accounts_part accounts_screen{shared, *this};
   local_data_part local_data{shared, *this};
   calls_part calls{shared};
+  // Each plugin's part that says it has one (contract::program_parts), after
+  // the program's own, in the plugins' order.
+  template <class... Features>
+  static auto plugin_parts_of(plugin_list<Features...>, services& shared) {
+    return std::tuple{extend(contract::program_parts{}, type_tag<Features>{}, shared)...};
+  }
+  decltype(plugin_parts_of(composition::providers<contract::program_parts, enabled_plugins>{}, std::declval<services&>())) plugin_parts =
+      plugin_parts_of(composition::providers<contract::program_parts, enabled_plugins>{}, shared);
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -219,8 +228,10 @@ struct app : kept_settings {
   // The program's parts, in the order a request is offered to them; what
   // none of them takes, the program's own.
   auto parts() {
-    return std::tie(search, pictures, reading, outbox, settings, menu, notices, marks, paging, verification, proxying,
-                    packs, rooms, room_card, preferences, manage, looks, threads, emoji, accounts_screen, local_data, calls);
+    return std::tuple_cat(
+        std::tie(search, pictures, reading, outbox, settings, menu, notices, marks, paging, verification, proxying,
+                 packs, rooms, room_card, preferences, manage, looks, threads, emoji, accounts_screen, local_data, calls),
+        std::apply([](auto&... theirs) { return std::tie(theirs...); }, plugin_parts));
   }
   template <class Request>
   void route(const Request& one) {

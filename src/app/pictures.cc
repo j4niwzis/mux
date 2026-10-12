@@ -552,43 +552,8 @@ class pictures_part {
     std::ofstream(gifs() / mux::config::file_name_of(source), std::ios::binary) << bytes;
     s_->notice("GIFs", "Saved to your GIFs.");
   }
-  // The saved GIFs, newest first, to the input's GIF tab; each decoded on a
-  // worker into the frames it plays, where it is not already.
-  void apply(const request::show_gifs&) {
-    const auto chosen = s_->root().main().chosen;
-    if (!chosen || !mux::ui::may_send_files(s_->ui, chosen->account)) return;
-    std::error_code failed;
-    std::vector<std::pair<std::filesystem::file_time_type, std::string>> found;
-    for (const auto& entry : std::filesystem::directory_iterator(gifs(), failed))
-      if (entry.is_regular_file(failed))
-        found.emplace_back(entry.last_write_time(failed), entry.path().string());
-    std::ranges::sort(found, std::greater{});
-    std::vector<std::string> paths;
-    auto* scene = s_->scene;
-    for (const auto& [when, path] : found) {
-      paths.push_back(path);
-      const std::string key = "gif:" + path;
-      if (mux::ui::animations().has(key) || mux::ui::whole_pictures().has(key) || !gifs_decoding_.insert(key).second)
-        continue;
-      s_->work->run([path, key, scene]() -> workers::done_t {
-        std::string bytes = mux::platform::files::read(path).value_or(std::string());
-        auto frames = skia::decodeFrames(bytes.data(), bytes.size());
-        return [frames = std::move(frames), key, scene]() mutable {
-          if (frames.size() > 1)
-            mux::ui::animations().put(key, std::move(frames));
-          else if (!frames.empty())
-            mux::ui::whole_pictures().put(key, std::move(frames.front().image));
-          scene->state().markDamaged();
-        };
-      });
-    }
-    mux::ui::change_shown<std::optional<mux::ui::emoji_facts>>(*s_->showing, [&](auto& now) {
-      if (now)
-        now->gifs = paths;
-    });
-  }
   // Where the saved GIFs are kept: with the program's state, not its cache,
-  // which is pruned.
+  // which is pruned. Read by the GIFs plugin, for its page.
   static std::filesystem::path gifs() { return mux::config::state_path("gifs"); }
 
   // A picture or a file saved where the user says: the system's dialog
@@ -881,7 +846,6 @@ class pictures_part {
   // meanwhile.
   std::set<std::string, std::less<>> decoding_;
   // The saved GIFs being decoded, not to be decoded twice.
-  std::set<std::string> gifs_decoding_;
   // The quotes asked for: asked again where one has not come in a while --
   // a fetch that failed, or one dropped since.
   retries quotes_;

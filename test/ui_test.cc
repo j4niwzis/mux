@@ -14,6 +14,7 @@ import skiff.widgets.motion;
 import mux.core;
 import mux.config;
 import mux.kept_root;
+import mux.plugins.ui;
 import mux.ui;
 import mux.protocols;
 import mux.logic.room_events;
@@ -1072,7 +1073,7 @@ namespace {
 struct gif_tab_requests {
   bool asked = false;
   void take(const mux::ui::request::select_emoji_page& event) {
-    asked = event.page == mux::ui::popup_page_t(mux::ui::popup_page::gifs{});
+    asked = event.page == mux::ui::popup_page_t(mux::plugins::gifs::page{});
   }
   template <class Event> void take(const Event&) { ADD_FAILURE() << "Unexpected request from the GIF tab"; }
 };
@@ -1086,7 +1087,7 @@ TEST(Emoji, GifTabReceivesPointerPressesOnDesktopAndPhone) {
     ui_state ui;
     scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
     ui.show(window.root().layer().emoji,
-            std::optional{mux::ui::emoji_facts{width - 30.0f, 650.0f, {}, mux::ui::popup_page::emoji{}, true, true}});
+            std::optional{mux::ui::emoji_facts{width - 30.0f, 650.0f, mux::ui::popup_page::emoji{}, true, true}});
     for (int i = 0; i < 4; ++i) {
       window.update(1000.0 + 16.0 * i);
       window.layoutIfNeeded(skia::SkRect::MakeWH(width, 720.0f));
@@ -1109,13 +1110,13 @@ TEST(Emoji, GifTabReceivesPointerPressesOnDesktopAndPhone) {
     EXPECT_TRUE(requests.asked);
     // The application keeps selection in the facts. Loading GIFs rebuilds
     // the mounted popup; its selected page must survive that second read.
-    mux::ui::emoji_facts facts{width - 30.0f, 650.0f, {}, mux::ui::popup_page::gifs{}, true, true};
+    mux::ui::emoji_facts facts{width - 30.0f, 650.0f, mux::plugins::gifs::page{}, true, true};
     ui.show(window.root().layer().emoji, std::optional(facts));
-    facts.gifs = {"saved.gif"};
+    std::get<mux::plugins::gifs::shown>(facts.pages).paths = {"saved.gif"};
     ui.show(window.root().layer().emoji, std::optional(facts));
     auto& refreshed = window.root().layer().emoji.shown()->parts.card;
     EXPECT_EQ(refreshed.page_at, 2);
-    EXPECT_TRUE(refreshed.parts.gifs.visible());
+    EXPECT_TRUE(std::get<0>(refreshed.parts.pages).visible());
     EXPECT_FALSE(refreshed.parts.panel.visible());
   }
   skiff::paint::defaultFont() = nullptr;
@@ -2518,7 +2519,7 @@ TEST(Emoji, UnsupportedTabsAreUnavailableAndHidden) {
   const mux::ui::emoji_facts facts{};
   EXPECT_TRUE(mux::ui::page_available(facts, mux::ui::popup_page::emoji{}));
   EXPECT_FALSE(mux::ui::page_available(facts, mux::ui::popup_page::stickers{}));
-  EXPECT_FALSE(mux::ui::page_available(facts, mux::ui::popup_page::gifs{}));
+  EXPECT_FALSE(mux::ui::page_available(facts, mux::plugins::gifs::page{}));
   mux::ui::emoji_popup<stub> popup(ui.needs(program), facts);
   const auto& tabs = popup.parts.card.parts.tabs.fParts;
   EXPECT_TRUE(std::get<0>(tabs).visible());

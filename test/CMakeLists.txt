@@ -45,9 +45,10 @@ foreach(one IN LISTS mux_protocols)
   endif()
 endforeach()
 
-# The rest try every protocol side by side: built where all are turned on.
-if(NOT mux_all_protocols)
-  message(STATUS "Tests: only the protocols' own, as not every protocol is turned on")
+# The rest try every protocol side by side, and the plugins with them:
+# built where all are turned on.
+if(NOT mux_all_protocols OR NOT mux_all_plugins)
+  message(STATUS "Tests: only the protocols' own, as not every protocol and plugin is turned on")
   return()
 endif()
 foreach(one IN ITEMS core net media logic)

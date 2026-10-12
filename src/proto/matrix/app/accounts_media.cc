@@ -18,6 +18,7 @@ import mux.proto.matrix.client;
 namespace mux::proto::matrix::client {
 template void account<mux::app::post_change>::fetch_media(std::string source, media_use_t use, int size, bool crop);
 template std::expected<std::string, failure> account<mux::app::post_change>::upload_content(const std::string& bytes, std::string_view name, std::string_view mime);
+template void account<mux::app::post_change>::upload_room_avatar(std::string room, std::string bytes, std::string name, std::string mime);
 template void account<mux::app::post_change>::upload_pack_picture(pack_picture picture, std::string bytes);
 template void account<mux::app::post_change>::send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype, bool image, int width, int height, std::string caption, std::optional<std::string> reply_to, std::optional<mux::thread_place> thread, std::optional<mux::video_look> video);
 }  // namespace mux::proto::matrix::client

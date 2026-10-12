@@ -23,6 +23,7 @@ import mux.protocols;
 import mux.config;
 import mux.kept_root;
 import skiff.model;
+import mux.plugins.types;
 import :base;
 import :controls;
 import :themes;
@@ -33,7 +34,6 @@ import :header;
 import :info;
 import :composer;
 import :timeline;
-import :call_bar;
 
 export import :conversations_side;
 
@@ -717,6 +717,22 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
               0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
           parts{.shown = composer_view_t(std::move(made))} {}
   };
+  // What plugins put in the chat's column under its head
+  // (contract::chat_column), in their order.
+  template <class List>
+  struct column_parts;
+  template <class... Features>
+  struct column_parts<plugin_list<Features...>> {
+    template <class Feature>
+    static auto made_of(const ui_needs<Actions>& n) {
+      static_assert(requires { extend(contract::chat_column{}, type_tag<Feature>{}, type_tag<Actions>{}, n); },
+                    composition::broken<contract::chat_column, Feature>());
+      return extend(contract::chat_column{}, type_tag<Feature>{}, type_tag<Actions>{}, n);
+    }
+    using nodes_t = std::tuple<decltype(made_of<Features>(std::declval<const ui_needs<Actions>&>()))...>;
+    static nodes_t made(const ui_needs<Actions>& n) { return nodes_t{made_of<Features>(n)...}; }
+  };
+  using column_parts_t = column_parts<composition::providers<contract::chat_column, enabled_plugins>>;
   struct chat_column : skiff::compose::Stacked {
     // Child references and handlers require a fixed address.
     chat_column(const chat_column&) = delete;
@@ -777,8 +793,9 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
       selection_bar_t<Actions> selection;
       // The pinned message, under the head, where the chat has any.
       pinned_t pinned;
-      // A call in this chat, as Element's call view: under the head.
-      call_panel_t<Actions> call;
+      // What plugins put under the head (contract::chat_column): a call in
+      // this chat, as Element's call view.
+      typename column_parts_t::nodes_t plugins;
       // Its protocol's own node under the head (make_head_view).
       std::optional<head_view_holder> their_head;
       timeline_area<Actions> area;
@@ -809,9 +826,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
               .connection = connection_bar(*n.colours),
               .search = search_bar<Actions>(n),
               .selection = selection_bar(n),
-              .call = call_layer(
-                  n, call_panel_of{}, call_ui::panel{},
-                  {.fillX = true, .autoSize = scene::axes::kY}),
+              .plugins = column_parts_t::made(n),
               .area = timeline_area<Actions>(n),
               .mentions =
                   skiff::compose::visible(false, mention_list(*n.colours)),

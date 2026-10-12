@@ -46,15 +46,14 @@ void app::woken() {
   // once, after.
   model->chats().beginBatch();
   for (const auto& one : changes) {
+    // What the plugins' parts take of it: a call's signalling.
+    this->plugins_take(one);
     // What the program itself does with a change, besides the model: a
     // session kept, a picture shown.
     spl::visit(spl::overloaded{[&](const mux::change::avatar_loaded& picture) {
                                  pictures.take(picture, true);
                                  mux::ui::download_progress().erase(picture.source);
                                },
-                               // A call's: the calls part's.
-                               [&](const mux::change::call_signalled& said) { calls.take(said); },
-                               [&](const mux::change::call_servers& given) { calls.take(given); },
                                // A room the user made: shown, once the model has it.
                                [&](const mux::change::room_created& made) { made_room_ = made.id; },
                                // A directory searched: its rooms, in Explore.
@@ -542,7 +541,7 @@ void app::before_frame() {
     skiff::scene::forgetStyles();
     shared.rebuild_due = true;
   }
-  calls.tick();
+  this->plugins_tick();
   keep_selection(menu);
   // A selectable text or a field pressed with the right button -- a long
   // press, on a phone: its menu, the last asked for.

@@ -485,18 +485,6 @@ struct delete_pack {
 };
 struct pick_pack_images {};
 struct close_new_room {};
-// A call: made to a chat; the one ringing here taken or turned down; hung
-// up; the microphone muted or not.
-struct dismiss_call {};
-struct start_call {
-  mux::conversation_id in;
-};
-// A call to the chat open, from its header.
-struct call_chosen {};
-struct accept_call {};
-struct decline_call {};
-struct hang_up {};
-struct mute_call {};
 // A text menu's item for a field: the key the field takes for it, given to
 // the field with the focus -- Ctrl+V a paste.
 struct text_key {

@@ -20,8 +20,9 @@ list(TRANSFORM mux_plugin_folders REPLACE "/CMakeLists.txt$" "")
 #   ORDER     its place among the plugins (where they come in turn: tabs,
 #             parts), then by name
 #   REQUIRES  the plugins it needs, turned on too
+#   LIBRARIES what it links -- a call's WebRTC -- linked with the window
 function(mux_plugin name)
-  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER" "TYPES;UI;APP;REQUIRES")
+  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER" "TYPES;UI;APP;REQUIRES;LIBRARIES")
   if(NOT DEFINED one_ORDER)
     message(FATAL_ERROR "src/plugins/${name}/CMakeLists.txt: mux_plugin(${name}) needs its ORDER.")
   endif()
@@ -34,6 +35,7 @@ function(mux_plugin name)
     endif()
   endforeach()
   set_property(GLOBAL PROPERTY MUX_PLUGIN_REQUIRES_${name} ${one_REQUIRES})
+  set_property(GLOBAL APPEND PROPERTY MUX_PLUGIN_LIBRARIES ${one_LIBRARIES})
   set_property(GLOBAL APPEND PROPERTY MUX_PLUGINS_RANKED "${one_ORDER}:${name}")
 endfunction()
 
@@ -68,6 +70,7 @@ if(mux_plugins_on EQUAL mux_plugins_found)
 else()
   set(mux_all_plugins OFF)
 endif()
+get_property(mux_plugin_libraries GLOBAL PROPERTY MUX_PLUGIN_LIBRARIES)
 foreach(layer IN ITEMS TYPES UI APP)
   string(TOLOWER "${layer}" lower)
   get_property(mux_plugin_${lower} GLOBAL PROPERTY MUX_PLUGIN_${layer})

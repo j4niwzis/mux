@@ -72,8 +72,31 @@ struct window_dialogs {
 struct message_menu_top {
   static constexpr std::string_view name = "a message's menu's top";
 };
+// The window's layers, over everything, not dialogs: a call's card and its
+// whole-window view (mux.ui:window):
+//   facts_type(c, f) -> type_tag<what is shown of it>, in its types
+//   extend(c, f, type_tag<Actions>, needs) -> its node, made from what is
+//   shown (bound or derived from those facts)
+struct window_layers {
+  static constexpr std::string_view name = "the window's layers";
+};
+// The chat's column, under its head: a call's view in its chat
+// (mux.ui:conversations_screen): extend(c, f, type_tag<Actions>, needs) ->
+// its node, there whatever chat is shown.
+struct chat_column {
+  static constexpr std::string_view name = "the chat column";
+};
+// The chat's head, its buttons after Search (mux.ui:header):
+//   header_shown(c, f, type_tag<Actions>, shared, chat) -> whether its button
+//   is for this chat
+//   extend(c, f, type_tag<Actions>, palette) -> its button
+struct chat_header {
+  static constexpr std::string_view name = "the chat's head";
+};
 // The program's parts (mux.app.program): extend(c, f, services&) -> a part,
 // offered the requests as the program's own are.
+// A part may also take the model's changes (take(change), as they come)
+// and do what it does between events (tick()), where it says so.
 struct program_parts {
   static constexpr std::string_view name = "the program's parts";
 };

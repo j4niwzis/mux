@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:call_bar -- A call, as Element shows one: in the chat it is in, a
+// mux.plugin.calls.ui -- A call, as Element shows one: in the chat it is in, a
 // view of its own under the head -- the other's picture, their name, where
 // the call is, and round buttons: the microphone, and hanging up; anywhere
 // else, and while it rings here, a card at the top of the window, as
 // Element's call toast -- Decline and Accept while it rings. A call ended
 // stays a moment, saying why.
-export module mux.ui:call_bar;
+export module mux.plugin.calls.ui;
 
 import std;
 import splice;
@@ -20,46 +20,12 @@ import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.widgets.avatar;
 import mux.core;
-import :base;
-import :icons;
-import :themes;
-import :avatars;
+import mux.ui;
+import mux.plugin.calls.types;
 
-export namespace mux::ui {
-
-// Where a call is, as it is shown.
-namespace call_phase {
-struct ringing_in {
-  friend bool operator==(ringing_in, ringing_in) = default;
-};
-struct ringing_out {
-  friend bool operator==(ringing_out, ringing_out) = default;
-};
-struct connecting {
-  friend bool operator==(connecting, connecting) = default;
-};
-struct connected {
-  std::int64_t seconds = 0; // how long it has gone on
-  friend bool operator==(const connected&, const connected&) = default;
-};
-struct ended {
-  std::string why;
-  friend bool operator==(const ended&, const ended&) = default;
-};
-} // namespace call_phase
-using call_phase_t =
-    spl::variant<call_phase::ringing_in, call_phase::ringing_out, call_phase::connecting, call_phase::connected, call_phase::ended>;
-struct call_view {
-  conversation_id in;
-  std::string who;
-  call_phase_t phase;
-  bool muted = false;
-  bool encrypted = false; // its signalling end-to-end encrypted: the room is
-  bool available = true;  // calls in this build
-  bool in_view = false;   // its chat is the one shown
-  bool whole = false;     // a phone's window: the call over all of it
-  friend bool operator==(const call_view&, const call_view&) = default;
-};
+export namespace mux::plugins::calls {
+// What a call's views are made of: the window's own.
+using namespace ::mux::ui;
 
 [[nodiscard]] inline bool rings_here(const call_view& view) {
   return spl::visit(spl::overloaded{[](call_phase::ringing_in) { return true; },
@@ -92,9 +58,6 @@ struct call_view {
   return view.encrypted ? where : where + " · not end-to-end encrypted";
 }
 
-struct call_shown {
-  std::optional<call_view> now;
-};
 // Only the timer moves every second. Its text is bound separately, keeping
 // the buttons and their keyboard focus while the call's structure is same.
 [[nodiscard]] inline std::optional<call_view>
@@ -157,12 +120,12 @@ inline auto call_buttons(const palette& colours, float size, const call_view& vi
       skiff::compose::hbox(size / 2.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
       call_button(colours, size, colours.tile, colours.chosen, colours.text,
                   view.muted ? icon_t{icon::microphone_off{}} : icon_t{icon::microphone{}},
-                  request::mute_call{}, !ringing && !ended, view.muted ? "Unmute" : "Mute"),
-      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, request::decline_call{}, ringing, "Decline"),
-      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, request::hang_up{}, !ringing && !ended, "Hang up"),
-      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, request::accept_call{}, ringing && view.available, "Accept"),
-      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, request::start_call{view.in}, ended && view.available, "Call back"),
-      call_button(colours, size, colours.tile, colours.chosen, colours.text, icon::close{}, request::dismiss_call{}, ended, "Dismiss")));
+                  mute_call{}, !ringing && !ended, view.muted ? "Unmute" : "Mute"),
+      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, decline_call{}, ringing, "Decline"),
+      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, hang_up{}, !ringing && !ended, "Hang up"),
+      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, accept_call{}, ringing && view.available, "Accept"),
+      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, start_call{view.in}, ended && view.available, "Call back"),
+      call_button(colours, size, colours.tile, colours.chosen, colours.text, icon::close{}, dismiss_call{}, ended, "Dismiss")));
 }
 inline auto call_avatar(const call_view& view, float size) {
   auto avatar = widgets::Avatar<from_avatars>(initials_of(view.who), size, picture_of(view.in.id), gradient_of(view.in.id));
@@ -228,8 +191,31 @@ template <class Actions, class Which, class View>
         return std::tuple{call_content(view, *colours, facts)};
       }, spec, floats));
 }
-template <class Actions>
-using call_panel_t = decltype(call_layer(std::declval<const ui_needs<Actions>&>(),
-    call_panel_of{}, call_ui::panel{}, scene::Spec{}));
 
-} // namespace mux::ui
+// Its layers, over the window: the card, where the call rings or is in
+// another chat; the whole window, on a phone.
+template <class Actions>
+auto extend(contract::window_layers, type_tag<feature>, type_tag<Actions>, const ui_needs<Actions>& needs) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
+      call_layer(needs, call_card_of{}, call_ui::card{}, {.fill = true}, true),
+      call_layer(needs, call_screen_of{}, call_ui::screen{}, {.fill = true}, true));
+}
+// Its view in its chat, under the head.
+template <class Actions>
+auto extend(contract::chat_column, type_tag<feature>, type_tag<Actions>, const ui_needs<Actions>& needs) {
+  return call_layer(needs, call_panel_of{}, call_ui::panel{}, {.fillX = true, .autoSize = scene::axes::kY});
+}
+// Its button in the chat's head: where the chat is two and its protocol calls.
+template <class Actions>
+bool header_shown(contract::chat_header, type_tag<feature>, type_tag<Actions>, const ui_shared& shared, const conversation& one) {
+  const auto count = std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count);
+  return ops_of(shared, one.id.account).calls && count <= 2;
+}
+template <class Actions>
+auto extend(contract::chat_header, type_tag<feature>, type_tag<Actions>, const palette& colours) {
+  return skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                icon_button<sends<call_chosen>>(colours, icon::phone{}, {}));
+}
+
+} // namespace mux::plugins::calls

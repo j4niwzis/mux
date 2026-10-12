@@ -31,7 +31,6 @@ import :accounts;
 import :drawer;
 import :settings;
 import :context_menu;
-import :call_bar;
 import :sending;
 import :viewer;
 import :emoji_kept;
@@ -133,10 +132,21 @@ consteval auto dialogs_shown_of(plugin_list<Features...>) {
   return type_tag<composition::aggregate_list<skiff::model::Tracked<std::optional<dialog_facts_t<Features>>>...>>{};
 }
 using dialogs_shown_t = typename decltype(dialogs_shown_of(dialog_plugins{}))::type;
+// And the layers they put over the window (contract::window_layers): what is
+// shown of each -- a call -- held the same way.
+using layer_plugins = composition::providers<contract::window_layers, enabled_plugins>;
+template <class Feature>
+using layer_facts_t = typename decltype(facts_type(contract::window_layers{}, type_tag<Feature>{}))::type;
+template <class... Features>
+consteval auto layers_shown_of(plugin_list<Features...>) {
+  return type_tag<composition::aggregate_list<skiff::model::Tracked<layer_facts_t<Features>>...>>{};
+}
+using layers_shown_t = typename decltype(layers_shown_of(layer_plugins{}))::type;
 struct shown_root {
   skiff::model::Tracked<drawer_shown> drawer;
   skiff::model::Tracked<chat_shown> chat;
-  skiff::model::Tracked<call_shown> call;
+  // Each plugin's layer's: a call, for one.
+  layers_shown_t layers;
   skiff::model::Tracked<selection_shown> selection;
   skiff::model::Tracked<search_found> found;
   skiff::model::Tracked<std::optional<marks_facts>> marks;
@@ -464,6 +474,21 @@ template <class Actions> struct window : skiff::compose::Specced {
       }
     };
     using dialogs_t = plugin_dialogs<dialog_plugins>;
+    // The plugins' layers, each its node from its extend().
+    template <class List>
+    struct plugin_layers;
+    template <class... Features>
+    struct plugin_layers<plugin_list<Features...>> {
+      template <class Feature>
+      static auto made_of(const ui_needs<Actions>& n) {
+        static_assert(requires { extend(contract::window_layers{}, type_tag<Feature>{}, type_tag<Actions>{}, n); },
+                      composition::broken<contract::window_layers, Feature>());
+        return extend(contract::window_layers{}, type_tag<Feature>{}, type_tag<Actions>{}, n);
+      }
+      using nodes_t = std::tuple<decltype(made_of<Features>(std::declval<const ui_needs<Actions>&>()))...>;
+      static nodes_t made(const ui_needs<Actions>& n) { return nodes_t{made_of<Features>(n)...}; }
+    };
+    using plugin_layers_t = plugin_layers<layer_plugins>;
     struct parts_t {
       nodes::Box<> backdrop;
       // The chat's background behind all of the window, where it is so:
@@ -514,14 +539,9 @@ template <class Actions> struct window : skiff::compose::Specced {
       skiff::bind::Bound<std::optional<viewer_facts>, shown_layer<picture_viewer<Actions>, viewer_facts, ui_needs<Actions>>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
       std::optional<text_menu> text_menu_up;
-      // A call, while there is one: over everything.
-      decltype(call_layer(
-          std::declval<const ui_needs<Actions> &>(), call_card_of{}, call_ui::card{},
-          scene::Spec{}, true)) call_up;
-      // A call on a phone: the whole window, as Element's phone apps.
-      decltype(call_layer(
-          std::declval<const ui_needs<Actions> &>(), call_screen_of{}, call_ui::screen{},
-          scene::Spec{}, true)) call_whole;
+      // The plugins' layers, over everything: a call's card, and on a phone
+      // the whole window, as Element's phone apps.
+      typename plugin_layers_t::nodes_t over_all;
     } parts;
     // Where the pointer was last pressed, in the window: where a menu asked
     // by that press is put. A press off the text menu closes it, at once --
@@ -654,7 +674,7 @@ template <class Actions> struct window : skiff::compose::Specced {
     skia::SkRect frozen_at = skia::SkRect::MakeEmpty();  // where it is on the device
 
     [[nodiscard]] bool dialog_fading() {
-      auto& [backdrop, behind, frame, settings, notice, person, room, dialogs, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, dialogs, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, over_all] = parts;
       return settings.settling() || notice.settling() || person.settling() || room.settling() || dialogs_t::settling(dialogs) ||
              history.settling() || linking.settling() || leaving.settling() ||
              marks.settling() || manage.settling() || forwarding.settling() || new_chat.settling() ||
@@ -662,7 +682,7 @@ template <class Actions> struct window : skiff::compose::Specced {
              tools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
     }
     void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, dialogs, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, dialogs, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, over_all] = parts;
       skia::SkMatrix inverse;
       if (!this->dialog_fading() || !canvas->getTotalMatrix().invert(&inverse)) {
         frozen = nullptr;
@@ -708,7 +728,8 @@ template <class Actions> struct window : skiff::compose::Specced {
                                                scene::draw(*one, painting, canvas, alpha);
                                            }};
       const auto over_if = [&](auto&... each) { (draw_up(each), ...); };
-      over_if(emoji, menu, viewer, text_menu_up, call_up, call_whole);
+      over_if(emoji, menu, viewer, text_menu_up);
+      std::apply([&](auto&... layer) { (scene::draw(layer, painting, canvas, alpha), ...); }, over_all);
     }
 
     layers(const ui_needs<Actions> &n)
@@ -747,10 +768,7 @@ template <class Actions> struct window : skiff::compose::Specced {
                 .emoji = layer_for<emoji_popup<Actions>, emoji_facts>(n),
                 .menu = layer_for<context_menu<Actions>, menu_facts>(n),
                 .viewer = layer_for<picture_viewer<Actions>, viewer_facts>(n),
-                .call_up = call_layer(n, call_card_of{}, call_ui::card{},
-                                                         {.fill = true}, true),
-                .call_whole = call_layer(
-                    n, call_screen_of{}, call_ui::screen{}, {.fill = true}, true)} {
+                .over_all = plugin_layers_t::made(n)} {
       auto& [backdrop, behind, frame, ...over] = parts;
       backdrop.apply({.fill = true});
       behind.apply({.fill = true});

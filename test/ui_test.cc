@@ -1442,39 +1442,40 @@ TEST(Settings, OpeningAndChangingPagesStartsAtTheTop) {
 }  // namespace
 
 TEST(Calls, PlacementFollowsTheModel) {
-  mux::ui::call_shown shown{mux::ui::call_view{}};
-  shown.now->phase = mux::ui::call_phase::ringing_in{};
+  namespace calls = mux::plugins::calls;
+  calls::call_shown shown{calls::call_view{}};
+  shown.now->phase = calls::call_phase::ringing_in{};
   shown.now->in_view = true;
-  EXPECT_TRUE(mux::ui::call_card_of{}(shown).has_value());
-  EXPECT_FALSE(mux::ui::call_panel_of{}(shown).has_value());
-  shown.now->phase = mux::ui::call_phase::connected{61};
-  EXPECT_FALSE(mux::ui::call_card_of{}(shown).has_value());
-  EXPECT_TRUE(mux::ui::call_panel_of{}(shown).has_value());
+  EXPECT_TRUE(calls::call_card_of{}(shown).has_value());
+  EXPECT_FALSE(calls::call_panel_of{}(shown).has_value());
+  shown.now->phase = calls::call_phase::connected{61};
+  EXPECT_FALSE(calls::call_card_of{}(shown).has_value());
+  EXPECT_TRUE(calls::call_panel_of{}(shown).has_value());
   shown.now->whole = true;
-  EXPECT_FALSE(mux::ui::call_card_of{}(shown).has_value());
-  EXPECT_FALSE(mux::ui::call_panel_of{}(shown).has_value());
-  EXPECT_TRUE(mux::ui::call_screen_of{}(shown).has_value());
+  EXPECT_FALSE(calls::call_card_of{}(shown).has_value());
+  EXPECT_FALSE(calls::call_panel_of{}(shown).has_value());
+  EXPECT_TRUE(calls::call_screen_of{}(shown).has_value());
   shown.now.reset();
-  EXPECT_FALSE(mux::ui::call_screen_of{}(shown).has_value());
+  EXPECT_FALSE(calls::call_screen_of{}(shown).has_value());
 }
 
 TEST(Calls, TimerUpdatesTextWithoutRebuildingControls) {
+  namespace calls = mux::plugins::calls;
   stub program;
   ui_state ui;
-  mux::ui::shown_root root;
-  root.call.fValue.now = mux::ui::call_view{};
-  root.call.fValue.now->phase = mux::ui::call_phase::connected{61};
-  root.call.fValue.now->encrypted = true;
-  auto shown = mux::ui::call_layer(
-      ui.needs(program), mux::ui::call_card_of{}, mux::ui::call_ui::card{}, {.fill = true});
-  mux::ui::shown_model model(std::move(root));
+  calls::call_shown started{calls::call_view{}};
+  started.now->phase = calls::call_phase::connected{61};
+  started.now->encrypted = true;
+  auto shown = calls::call_layer(ui.needs(program), calls::call_card_of{}, calls::call_ui::card{}, {.fill = true});
+  mux::ui::shown_model model(mux::ui::shown_root{});
+  mux::ui::show(model, started);
   skiff::bind::Binding<mux::ui::shown_model> binding;
   binding.refresh(shown, model);
   ASSERT_NE(shown.shown(), nullptr);
   const auto id = shown.shown()->fState.id();
   EXPECT_EQ(std::get<1>(std::get<1>(shown.shown()->fParts).fParts).text(), "1:01");
-  auto next = *model.look<mux::ui::call_shown>();
-  next.now->phase = mux::ui::call_phase::connected{62};
+  auto next = *model.look<calls::call_shown>();
+  next.now->phase = calls::call_phase::connected{62};
   mux::ui::show(model, std::move(next));
   binding.refresh(shown, model);
   ASSERT_NE(shown.shown(), nullptr);

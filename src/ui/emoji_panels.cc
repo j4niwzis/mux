@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:emoji_panels -- The sticker grid and the emoji panel.
+// mux.ui:emoji_panels -- The emoji panel, and what pickers share.
 export module mux.ui:emoji_panels;
 
 import std;

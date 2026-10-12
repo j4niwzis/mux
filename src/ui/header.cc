@@ -16,6 +16,7 @@ import skiff.widgets.textbox;
 import skiff.compose;
 import mux.core;
 import mux.config;
+import mux.plugins.types;
 import :base;
 import :icons;
 import :controls;
@@ -186,6 +187,35 @@ struct verification_box : verification_box_of<Actions> {
 // What a chat says of itself, over its messages: its avatar, name and who
 // is in it or how they are, a line under it, and the button that opens its
 // info beside it.
+// The buttons plugins put in a chat's head (contract::chat_header), after
+// Search, in their order: each shown for a chat as its plugin says.
+template <class List>
+struct header_buttons;
+template <class... Features>
+struct header_buttons<plugin_list<Features...>> {
+  using shown_t = std::array<bool, sizeof...(Features)>;
+  // Asked where the window is instantiated, which sees the plugins' ui.
+  template <class Actions>
+  static shown_t shown_for(const ui_shared& shared, const conversation& one) {
+    return {header_shown(contract::chat_header{}, type_tag<Features>{}, type_tag<Actions>{}, shared, one)...};
+  }
+  template <class Actions, class Feature>
+  static auto button_of(const palette& colours) {
+    static_assert(requires { extend(contract::chat_header{}, type_tag<Feature>{}, type_tag<Actions>{}, colours); },
+                  composition::broken<contract::chat_header, Feature>());
+    return extend(contract::chat_header{}, type_tag<Feature>{}, type_tag<Actions>{}, colours);
+  }
+  template <class Actions>
+  using nodes_t = std::tuple<decltype(button_of<Actions, Features>(std::declval<const palette&>()))...>;
+  template <class Actions>
+  static nodes_t<Actions> made(const palette& colours, bool chat, const shown_t& shown) {
+    return [&]<std::size_t... At>(std::index_sequence<At...>) {
+      return nodes_t<Actions>{skiff::compose::visible(chat && shown[At], button_of<Actions, Features>(colours))...};
+    }(std::index_sequence_for<Features...>{});
+  }
+};
+using chat_header_buttons = header_buttons<composition::providers<contract::chat_header, enabled_plugins>>;
+
 template <class Actions> struct chat_header : skiff::compose::Stacked {
   // What the head shows: the chat's key and name, and how it is -- or no
   // chat. The head is made from it, nothing set in it afterwards.
@@ -195,8 +225,9 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
     std::string status;
     // A back arrow before it, to the chats: shown one thing at a time.
     bool back = false;
-    // A call can be made in it: its protocol calls, and it is two.
-    bool callable = false;
+    // Which of the plugins' buttons are for it: a call, where its protocol
+    // calls and it is two.
+    typename chat_header_buttons::shown_t buttons{};
     friend bool operator==(const view&, const view&) = default;
   };
   [[nodiscard]] static view view_of(const ui_shared& shared, const conversation* one, const model& now) {
@@ -231,7 +262,7 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
     return {.key = one->id.id,
             .title = display_name(*one),
             .status = std::move(about),
-            .callable = ops_of(shared, one->id.account).calls && count <= 2};
+            .buttons = chat_header_buttons::template shown_for<Actions>(shared, *one)};
   }
 
   // The chat's avatar, its name over how it is, and the button to its info.
@@ -241,7 +272,6 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
     using find_button = icon_button<sends<::mux::ui::request::open_search>>;
     using info_button = icon_button<sends<::mux::ui::request::toggle_info>>;
     using threads_button = icon_button<sends<::mux::ui::request::toggle_threads>>;
-    using call_button = icon_button<sends<::mux::ui::request::call_chosen>>;
     using back_button = icon_button<sends<::mux::ui::request::close_chat>>;
     // Shown one thing at a time, a tap on the chat's name or avatar opens
     // its info, as on Telegram's phones.
@@ -251,8 +281,8 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
       avatar_mark face;
       two_lines_t texts;
       find_button find;
-      // A call to the other, where the chat is two and its protocol calls.
-      call_button call;
+      // The plugins' buttons: a call to the other, for one.
+      typename chat_header_buttons::template nodes_t<Actions> buttons;
       // The room's threads, as Element's header has them.
       threads_button threads;
       info_button info;
@@ -278,11 +308,7 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
                     skiff::compose::styled(
                         {.alignSelf = scene::align::kMiddle},
                         find_button(colours, icon::search{}, {}))),
-                .call = skiff::compose::visible(
-                    shown.key.has_value() && shown.callable,
-                    skiff::compose::styled(
-                        {.alignSelf = scene::align::kMiddle},
-                        call_button(colours, icon::phone{}, {}))),
+                .buttons = chat_header_buttons::template made<Actions>(colours, shown.key.has_value(), shown.buttons),
                 .threads = skiff::compose::visible(
                     shown.key.has_value(),
                     skiff::compose::styled(

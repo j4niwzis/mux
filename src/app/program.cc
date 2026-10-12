@@ -57,7 +57,6 @@ import mux.app.threads;
 import mux.app.emoji;
 import mux.app.accounts;
 import mux.app.local_data;
-import mux.app.calls;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -118,7 +117,6 @@ struct app : kept_settings {
   emoji_part emoji{&shared};
   accounts_part accounts_screen{shared, *this};
   local_data_part local_data{shared, *this};
-  calls_part calls{shared};
   // Each plugin's part that says it has one (contract::program_parts), after
   // the program's own, in the plugins' order.
   template <class... Features>
@@ -127,6 +125,28 @@ struct app : kept_settings {
   }
   decltype(plugin_parts_of(composition::providers<contract::program_parts, enabled_plugins>{}, std::declval<services&>())) plugin_parts =
       plugin_parts_of(composition::providers<contract::program_parts, enabled_plugins>{}, shared);
+  // A change the accounts made, to each plugin's part that takes it -- a
+  // call's signalling, the calls part's -- and their time between events.
+  template <class Part, class Change>
+    requires requires(Part& part, const Change& one) { part.take(one); }
+  static void take_change(Part& part, const Change& one) {
+    part.take(one);
+  }
+  template <class Part, class Change>
+  static void take_change(Part&, const Change&) {}
+  template <class Part>
+    requires requires(Part& part) { part.tick(); }
+  static void tick_part(Part& part) {
+    part.tick();
+  }
+  template <class Part>
+  static void tick_part(Part&) {}
+  void plugins_take(const mux::change_t& one) {
+    spl::visit([&](const auto& each) { std::apply([&](auto&... part) { (take_change(part, each), ...); }, plugin_parts); }, one);
+  }
+  void plugins_tick() {
+    std::apply([](auto&... part) { (tick_part(part), ...); }, plugin_parts);
+  }
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -230,7 +250,7 @@ struct app : kept_settings {
   auto parts() {
     return std::tuple_cat(
         std::tie(search, pictures, reading, outbox, settings, menu, notices, marks, paging, verification, proxying,
-                 packs, rooms, room_card, preferences, manage, looks, threads, emoji, accounts_screen, local_data, calls),
+                 packs, rooms, room_card, preferences, manage, looks, threads, emoji, accounts_screen, local_data),
         std::apply([](auto&... theirs) { return std::tie(theirs...); }, plugin_parts));
   }
   template <class Request>

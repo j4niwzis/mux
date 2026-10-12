@@ -5,6 +5,7 @@ export module mux.app.requests;
 import std;
 import splice;
 import skiff.scene;
+import skiff.bind;
 import mux.core;
 import mux.config;
 import mux.ui;

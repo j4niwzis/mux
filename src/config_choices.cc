@@ -34,8 +34,13 @@ struct night {
   static constexpr bool light = false;
   friend bool operator==(night, night) = default;
 };
+struct graphite {
+  static constexpr std::string_view json_value = "graphite";
+  static constexpr bool light = false;
+  friend bool operator==(graphite, graphite) = default;
+};
 }  // namespace theme
-using theme_t = spl::variant<theme::classic, theme::day, theme::tinted, theme::night>;
+using theme_t = spl::variant<theme::classic, theme::day, theme::tinted, theme::night, theme::graphite>;
 // Empty fields inherit the nearest room, space, account or client value.
 struct style_settings {
   std::optional<theme_t> theme;
@@ -61,6 +66,8 @@ struct custom_theme {
   std::optional<std::uint32_t> chat_top;
   std::optional<std::uint32_t> pattern;
   std::optional<std::uint32_t> on_accent;
+  std::optional<double> corner_radius, font_size, control_height;
+  friend bool operator==(const custom_theme&, const custom_theme&) = default;
 };
 consteval auto json_schema(knot::type<custom_theme>) { return knot::schema<custom_theme>(); }
 [[nodiscard]] inline style_settings filled_from(style_settings below, const style_settings& above) {
@@ -169,7 +176,7 @@ struct cyan {  // an accent called so before: Blue
   friend bool operator==(cyan, cyan) = default;
 };
 }  // namespace said
-using theme_said_t = spl::variant<theme::classic, theme::day, theme::tinted, theme::night, said::light, said::dark, std::string>;
+using theme_said_t = spl::variant<theme::classic, theme::day, theme::tinted, theme::night, theme::graphite, said::light, said::dark, std::string>;
 using accent_said_t = spl::variant<accent::theme_own, accent::blue, accent::green, accent::pink, accent::orange, accent::purple,
                                    accent::red, accent::grey, accent::gold, said::cyan, std::string>;
 using motion_said_t = spl::variant<motion::full, motion::reduced, motion::none, std::string>;
@@ -270,6 +277,7 @@ using notify_flag_t = spl::variant<notify_flag::desktop, notify_flag::sound>;
 [[nodiscard]] constexpr std::string_view word_of(theme::day) { return "day"; }
 [[nodiscard]] constexpr std::string_view word_of(theme::tinted) { return "tinted"; }
 [[nodiscard]] constexpr std::string_view word_of(theme::night) { return "night"; }
+[[nodiscard]] constexpr std::string_view word_of(theme::graphite) { return "graphite"; }
 [[nodiscard]] constexpr std::string_view word_of(accent::theme_own) { return "theme"; }
 [[nodiscard]] constexpr std::string_view word_of(accent::blue) { return "blue"; }
 [[nodiscard]] constexpr std::string_view word_of(accent::green) { return "green"; }

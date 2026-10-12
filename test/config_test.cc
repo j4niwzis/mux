@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.config: what is kept, where, and who can read it.
 import std;
+import knot;
 import mux.config;
 import mux.vault;
 import mux.proto.kept;
@@ -250,4 +251,19 @@ TEST(Config, ClientAccountSpaceAndRoomStylesSurviveSaving) {
   EXPECT_EQ(loaded->room_events, settings.room_events);
   ASSERT_EQ(mux::config::accounts_of(*loaded).size(), 1u);
   EXPECT_EQ(mux::config::accounts_of(*loaded).front().shared.style, accounts.front().shared.style);
+}
+
+TEST(Config, GraphiteAndThemeOverridesSurviveSerialization) {
+  mux::config::file saved;
+  saved.theme = mux::config::theme::graphite{};
+  mux::config::custom_theme custom;
+  custom.background = 0xff112233u;
+  custom.chat_top = 0xff445566u;
+  custom.corner_radius = 12.0;
+  saved.theme_overrides = std::map<std::string, mux::config::custom_theme>{{"graphite", custom}};
+  const auto read = knot::try_read<mux::config::file>(knot::to_json_string(saved));
+  ASSERT_TRUE(read);
+  EXPECT_EQ(mux::config::theme_of(read->theme), mux::config::theme_t{mux::config::theme::graphite{}});
+  ASSERT_TRUE(read->theme_overrides);
+  EXPECT_EQ(read->theme_overrides->at("graphite"), custom);
 }

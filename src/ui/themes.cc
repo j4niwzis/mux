@@ -554,15 +554,39 @@ inline widgets::Theme widget_theme_of(config::theme::night) {
   widget.fOnAccent = skia::colorSetARGB(255, 255, 255, 255);
   return widget;
 }
+// Cinny's dark surfaces and primary colors, with mux's native geometry.
+inline palette palette_of(config::theme::graphite) {
+  auto out = palette_of(config::theme::night{});
+  out.background = 0xff262626u; out.sidebar = 0xff1a1a1au;
+  out.tile = 0xff333333u; out.chosen = 0xff404040u;
+  out.text = 0xfff2f2f2u; out.dim = 0xffb6b6b6u;
+  out.accent = 0xffbdb6ecu; out.on_accent = 0xff2c2843u;
+  out.error = 0xffe69d9du; out.band = 0xff595959u;
+  out.selected = 0xff413c65u; out.selected_text = 0xffe3e1f7u;
+  out.section = out.tile; out.bubble = out.tile; out.out_bubble = out.selected;
+  out.sent_time = out.dim; out.chat = out.background; out.chat_top = out.background;
+  out.pattern = 0u;
+  return out;
+}
+inline widgets::Theme widget_theme_of(config::theme::graphite) {
+  auto widget = widget_theme_of(config::theme::night{});
+  const auto colours = palette_of(config::theme::graphite{});
+  widget.fSurface = colours.tile; widget.fSurfaceHover = colours.chosen; widget.fSurfaceActive = 0xff4d4d4du;
+  widget.fText = colours.text; widget.fLabel = colours.text;
+  widget.fTextDim = colours.dim; widget.fTextFaint = colours.dim;
+  widget.fAccent = colours.accent; widget.fOnAccent = colours.on_accent;
+  return widget;
+}
 // An accent's colour in a theme: Telegram's circles, a shade of their own
 // in each (window_themes_embedded.cpp); the theme's own where none is chosen.
 [[nodiscard]] inline skia::SkColor colour_of(const config::accent_t& one, const config::theme_t& in) {
   const std::size_t theme = in.index();
-  static constexpr std::array<std::array<skia::SkColor, 9>, 4> shades{{
+  static constexpr std::array<std::array<skia::SkColor, 9>, 5> shades{{
       {skia::colorSetARGB(255, 64, 167, 227), skia::colorSetARGB(255, 69, 188, 231), skia::colorSetARGB(255, 82, 180, 64), skia::colorSetARGB(255, 212, 108, 153), skia::colorSetARGB(255, 223, 138, 73), skia::colorSetARGB(255, 153, 120, 200), skia::colorSetARGB(255, 197, 82, 69), skia::colorSetARGB(255, 104, 123, 152), skia::colorSetARGB(255, 222, 169, 34)},  // classic
       {skia::colorSetARGB(255, 64, 167, 227), skia::colorSetARGB(255, 69, 188, 231), skia::colorSetARGB(255, 82, 180, 64), skia::colorSetARGB(255, 212, 108, 153), skia::colorSetARGB(255, 223, 138, 73), skia::colorSetARGB(255, 153, 120, 200), skia::colorSetARGB(255, 197, 82, 69), skia::colorSetARGB(255, 104, 123, 152), skia::colorSetARGB(255, 222, 169, 34)},  // day
       {skia::colorSetARGB(255, 82, 136, 193), skia::colorSetARGB(255, 88, 191, 232), skia::colorSetARGB(255, 70, 111, 66), skia::colorSetARGB(255, 170, 96, 132), skia::colorSetARGB(255, 164, 109, 60), skia::colorSetARGB(255, 145, 123, 189), skia::colorSetARGB(255, 171, 81, 73), skia::colorSetARGB(255, 105, 123, 151), skia::colorSetARGB(255, 155, 131, 75)},  // tinted
       {skia::colorSetARGB(255, 63, 193, 176), skia::colorSetARGB(255, 96, 168, 231), skia::colorSetARGB(255, 78, 156, 87), skia::colorSetARGB(255, 202, 120, 150), skia::colorSetARGB(255, 204, 146, 92), skia::colorSetARGB(255, 165, 142, 210), skia::colorSetARGB(255, 210, 117, 112), skia::colorSetARGB(255, 123, 135, 153), skia::colorSetARGB(255, 203, 172, 103)},  // night
+      {0xffbdb6ecu, 0xff60a8e7u, 0xff85e0bau, 0xffca7896u, 0xffe3ba91u, 0xffa58ed2u, 0xffe69d9du, 0xffb6b6b6u, 0xffcbac67u},  // graphite
   }};
   return shades[theme][one.index()];
 }
@@ -611,6 +635,9 @@ inline void apply_theme(palette& out, const config::custom_theme& custom) {
   out.widgets.fTextFaint = out.dim;
   out.widgets.fAccent = out.accent;
   out.widgets.fOnAccent = out.on_accent;
+  if (custom.corner_radius) out.widgets.fCorner = static_cast<float>(std::clamp(*custom.corner_radius, 0.0, 32.0));
+  if (custom.font_size) out.widgets.fFontSize = static_cast<float>(std::clamp(*custom.font_size, 9.0, 24.0));
+  if (custom.control_height) out.widgets.fRowHeight = static_cast<float>(std::clamp(*custom.control_height, 24.0, 64.0));
 }
 // skiff's scroll bars, as the theme has them.
 inline void use_scroll_bars(const config::theme_t& chosen) {

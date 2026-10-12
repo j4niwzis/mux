@@ -28,6 +28,15 @@ class settings_part {
       : s_(&shared), k_(&kept), pictures_(&pictures) {}
 
   void apply(const request::apply_style&) { s_->rebuild_due = true; }
+  void apply(const request::configure_theme& one) {
+    auto overrides = k_->appearance().theme_overrides;
+    const auto key = std::string(mux::config::word_of(one.theme));
+    if (one.custom) overrides.insert_or_assign(key, *one.custom); else overrides.erase(key);
+    k_->choose_field<&mux::config::look_settings::theme_overrides>(std::move(overrides));
+    (void)k_->write();
+    s_->looks.theme_overrides = k_->appearance().theme_overrides;
+    s_->rebuild_due = true;
+  }
 
   // The limits, as kept: to the caches and the disk.
   void apply_limits() {

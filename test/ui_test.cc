@@ -3363,6 +3363,49 @@ TEST(RoomManagement, StateSaveKeepsFailedDraftAndReturnsToTheAcknowledgedEvent) 
   EXPECT_EQ(box.kept.data.state_events.front().key, "key");
 }
 
+TEST(Appearance, GraphiteHasItsOwnPaletteAndAllAccentChoices) {
+  const mux::config::theme_t theme = mux::config::theme::graphite{};
+  const auto palette = mux::ui::palette_of(theme, mux::config::accent::theme_own{}, 100);
+  EXPECT_EQ(palette.background, 0xff262626u);
+  EXPECT_EQ(palette.accent, 0xffbdb6ecu);
+  EXPECT_EQ(palette.on_accent, 0xff2c2843u);
+  EXPECT_EQ(palette.pattern, 0u);
+  EXPECT_EQ(mux::config::word_of(theme), "graphite");
+  for (const auto& accent : mux::ui::accent_circles<mux::ui::pick<mux::config::accent_t>>::accents_of(true))
+    EXPECT_NE(mux::ui::colour_of(accent, theme), 0u);
+}
+
+TEST(Appearance, ThemeConfigurationValidatesColorsAndPreservesAlpha) {
+  EXPECT_EQ(mux::ui::theme_colour_of("#123456"), 0xff123456u);
+  EXPECT_EQ(mux::ui::theme_colour_of("80123456"), 0x80123456u);
+  EXPECT_FALSE(mux::ui::theme_colour_of("#12"));
+  EXPECT_FALSE(mux::ui::theme_colour_of("#GGGGGG"));
+  EXPECT_EQ(mux::ui::theme_colour_word(0x80123456u), "#80123456");
+  mux::config::custom_theme custom;
+  custom.background = 0xff112233u;
+  custom.corner_radius = 14.0;
+  const mux::config::theme_t selected = mux::config::theme::day{};
+  auto draft = mux::ui::theme_details_initial(selected, {{"day", custom}});
+  EXPECT_EQ(draft.colours.at(0).value, "#112233");
+  EXPECT_EQ(draft.corner, "14");
+  const auto saved = mux::ui::theme_details_events{}.on(mux::ui::save_theme_details{}, draft);
+  const auto& asked = std::get<1>(saved).fEvent;
+  ASSERT_TRUE(asked);
+  ASSERT_TRUE(asked->custom);
+  EXPECT_EQ(asked->theme, selected);
+  EXPECT_EQ(asked->custom->background, custom.background);
+  EXPECT_EQ(asked->custom->corner_radius, custom.corner_radius);
+  auto colours = mux::ui::palette_of(selected, mux::config::accent::theme_own{}, 100);
+  mux::ui::apply_theme(colours, *asked->custom);
+  EXPECT_EQ(colours.background, *custom.background);
+  EXPECT_EQ(colours.widgets.fCorner, 14.0f);
+  draft.font = "100";
+  const auto invalid = mux::ui::theme_details_events{}.on(mux::ui::save_theme_details{}, draft);
+  EXPECT_FALSE(std::get<1>(invalid).fEvent);
+  const auto reset = mux::ui::theme_details_events{}.on(mux::ui::reset_theme_details{}, draft);
+  EXPECT_FALSE(reset.fEvent.custom);
+}
+
 TEST(RoomManagement, AddressFieldHasOneLineAndStaysInsideItsRoundedBackground) {
   namespace manage = mux::proto::matrix::manage_detail;
   mux::ui::palette colours;

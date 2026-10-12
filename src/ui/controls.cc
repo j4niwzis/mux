@@ -632,8 +632,8 @@ inline auto event_kinds_field(const palette& colours, choice_level_t level,
 struct pick_style_theme {
   using Answer = skiff::bind::Own<skiff::model::SetTo<std::optional<config::theme_t>>>;
   Answer operator()(std::size_t index) const {
-    const std::array<std::optional<config::theme_t>, 5> values{std::nullopt, config::theme::classic{},
-        config::theme::day{}, config::theme::tinted{}, config::theme::night{}};
+    const std::array<std::optional<config::theme_t>, 6> values{std::nullopt, config::theme::classic{},
+        config::theme::day{}, config::theme::tinted{}, config::theme::night{}, config::theme::graphite{}};
     return skiff::bind::own(skiff::model::setTo(values.at(index)));
   }
 };
@@ -650,7 +650,7 @@ inline auto style_controls(const palette& colours, bool choose_base = true) {
   using style = config::style_settings;
   auto theme = c::projected<skiff::model::Field<&style::theme>>([](const std::optional<config::theme_t>& now) {
     return now ? now->index() + 1 : 0;
-  }, make_choice_menu(colours, "Theme", {"As above", "Classic", "Day", "Tinted", "Night"}, 0, pick_style_theme{}));
+  }, make_choice_menu(colours, "Theme", {"As above", "Classic", "Day", "Tinted", "Night", "Graphite"}, 0, pick_style_theme{}));
   return c::scoped<style>(c::handlers(), c::column(
       c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}}),
       nodes::Text("FONTS AND THEME", 13.0f, colours.dim, true), c::visible(choose_base, std::move(theme)),

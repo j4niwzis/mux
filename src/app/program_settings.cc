@@ -33,6 +33,9 @@ void app::rebuild_in_theme() {
   const auto theme = style.theme.value_or(this->appearance().theme);
   mux::ui::use_scroll_bars(theme);
   colours = mux::ui::palette_of(theme, this->appearance().accent, shared.looks.window.opacity);
+  shared.looks.theme_overrides = this->appearance().theme_overrides;
+  const auto customized = this->appearance().theme_overrides.find(std::string(mux::config::word_of(theme)));
+  if (customized != this->appearance().theme_overrides.end()) mux::ui::apply_theme(colours, customized->second);
   if (!style.theme_file.empty()) {
     const auto text = spl::bytes::file_text(style.theme_file);
     if (text) {

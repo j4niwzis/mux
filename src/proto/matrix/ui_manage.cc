@@ -167,7 +167,7 @@ inline skiff::compose::Look page_look() {
   return skiff::compose::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY,
       .padding = {16.0f, 16.0f, 100.0f, 16.0f}});
 }
-inline auto section_title(const palette& colours, std::string title) {
+inline auto settings_section_heading(const palette& colours, std::string title) {
   return nodes::Text(std::move(title), 12.0f, colours.text);
 }
 template <class... Children> auto card(const palette& colours, Children... children) {
@@ -176,7 +176,7 @@ template <class... Children> auto card(const palette& colours, Children... child
 }
 template <class... Children> auto section(const palette& colours, std::string title, Children... children) {
   return skiff::compose::column(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      section_title(colours, std::move(title)), std::move(children)...);
+      settings_section_heading(colours, std::move(title)), std::move(children)...);
 }
 template <class Control> auto setting_tile(const palette& colours, std::string title, std::string description, Control control) {
   namespace c = skiff::compose;
@@ -453,14 +453,14 @@ template <class Box> auto general_page(Box* box, const room_settings_facts& fact
           c::visible(kept.profile_editor, c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               c::row(c::hbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   c::column(c::vbox(4.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX}),
-                      section_title(colours, "Avatar"),
+                      settings_section_heading(colours, "Avatar"),
                       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                           action(colours, "Upload", sends<::mux::ui::request::pick_room_avatar>{{facts.chat}}, editable(box, power_need::change_avatar{})),
                           action(colours, "Remove", sends<remove_avatar>{}, editable(box, power_need::change_avatar{})))),
                   settings_room_avatar(colours, facts, 96.0f, facts.encrypted ? icon_t{icon::lock{}} : icon_t{icon::room{}})),
               c::shown_for<skiff::model::Field<&draft::avatar>>([](const auto& avatar) { return avatar.has_value(); }, explained(colours, "Avatar change pending. Save to apply.")),
               c::styled({.disabled = !editable(box, power_need::rename{})}, model_field<&draft::name>(colours, "Name", "")),
-              c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), section_title(colours, "Topic"), topic_input),
+              c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), settings_section_heading(colours, "Topic"), topic_input),
               c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   action(colours, "Save", sends<save_profile>{}, editable(box, power_need::rename{}) || editable(box, power_need::retopic{}) || editable(box, power_need::change_avatar{}), action_style::success),
                   action(colours, "Cancel", edit_section<Box>{box, editor::profile, false})))))),
@@ -477,8 +477,8 @@ template <class Box> auto general_page(Box* box, const room_settings_facts& fact
           tile(colours, "Publish to Directory", facts.space ? "List the space in the public directory to make it discoverable by others." : "List the room in the public directory to make it discoverable by others.",
               switch_control(colours, kept.data.directory.value_or(false), typename acts::directory{box}, editable(box, power_need::change_address{}) && kept.data.directory.has_value()))),
       section(colours, "Addresses",
-          card(colours, section_title(colours, "Published Addresses"), rows(published, false)),
-          card(colours, section_title(colours, "Local Addresses"), rows(kept.data.local_aliases, true),
+          card(colours, settings_section_heading(colours, "Published Addresses"), rows(published, false)),
+          card(colours, settings_section_heading(colours, "Local Addresses"), rows(kept.data.local_aliases, true),
               c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&draft::address>(colours, "", "New address")),
                   action(colours, "Save", sends<create_address>{}, !kept.pending)))),
@@ -912,7 +912,7 @@ template <class Box> auto developer_page(Box* box, const room_settings_facts& fa
               card(colours, setting_tile(colours, "Room State", "State events of the room.",
                   action(colours, kept.expanded_state ? "Collapse" : "Expand", edit_section<Box>{box, editor::state_events})),
                   c::visible(kept.expanded_state, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                      section_title(colours, std::format("Events — Total: {}", kept.data.state_events.size())),
+                      settings_section_heading(colours, std::format("Events — Total: {}", kept.data.state_events.size())),
                       action(colours, "Add New", sends<request::open_send_custom>{}),
                       c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
                           std::views::transform(kept.data.state_events, [&](const auto& event) {
@@ -925,7 +925,7 @@ template <class Box> auto developer_page(Box* box, const room_settings_facts& fa
                       compact_choice(colours, "", names, names.size(), select_account_data{})))))))),
       c::visible(kept.account_editor, section(colours, "Account Data",
           model_field<&draft::type>(colours, "Type", ""),
-          c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), section_title(colours, "Content"), content),
+          c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), settings_section_heading(colours, "Content"), content),
           c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               action(colours, "Save", sends<save_account_data>{}, !kept.pending),
               action(colours, "Cancel", edit_section<Box>{box, editor::account_form, false}))))), draft{box, kept.account_type, kept.account_json, std::move(content)});

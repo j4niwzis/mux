@@ -3363,6 +3363,22 @@ TEST(RoomManagement, StateSaveKeepsFailedDraftAndReturnsToTheAcknowledgedEvent) 
   EXPECT_EQ(box.kept.data.state_events.front().key, "key");
 }
 
+TEST(RoomManagement, AddressFieldHasOneLineAndStaysInsideItsRoundedBackground) {
+  namespace manage = mux::proto::matrix::manage_detail;
+  mux::ui::palette colours;
+  using draft = manage::general_draft<manage_test_box>;
+  auto input = manage::local_address_input<draft>(colours, ":example.org", false);
+  scene::layout(input, skia::SkRect::MakeWH(400.0f, 44.0f));
+  const auto bounds = input.bounds();
+  const auto field = std::get<1>(input.fParts).bounds();
+  EXPECT_GE(field.top(), bounds.top());
+  EXPECT_LE(field.bottom(), bounds.bottom());
+  EXPECT_TRUE(input.fState.fMasking);
+  EXPECT_GE(input.fState.fCornerRadius, 10.0f);
+  EXPECT_EQ(std::get<0>(input.fParts).text(), "#");
+  EXPECT_EQ(std::get<2>(input.fParts).text(), ":example.org");
+}
+
 TEST(RoomManagement, MembersAreMountedImmediatelyAndUseTheRoomListWhileLoading) {
   namespace manage = mux::proto::matrix::manage_detail;
   manage_test_box box;

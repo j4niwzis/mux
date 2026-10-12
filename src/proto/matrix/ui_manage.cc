@@ -528,6 +528,20 @@ inline auto related_room(const palette& colours, std::string label, const std::o
   return skiff::compose::visible(room.has_value(), action(colours, std::move(label),
       sends<::mux::ui::request::open_url>{{"https://matrix.to/#/" + room.value_or("")}}));
 }
+template <class Draft> auto local_address_input(const palette& colours, std::string server, bool pending) {
+  namespace c = skiff::compose;
+  auto theme = colours.widgets;
+  theme.fCorner = std::max(10.0f, theme.fCorner);
+  theme.fSurface = colours.chosen;
+  return c::row(c::hbox(4.0f, {.height = 44.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX,
+      .padding = {0.0f, 8.0f, 0.0f, 8.0f}, .cornerRadius = theme.fCorner, .background = colours.chosen, .masking = true}),
+      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("#", 12.0f, colours.dim)),
+      c::bound<skiff::model::Field<&Draft::address>>(c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone,
+          .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .disabled = pending},
+          widgets::TextField<std::string>(theme, "New address"))),
+      c::styled({.shrink = scene::axes::kX, .maxWidth = 160.0f, .alignSelf = scene::align::kMiddle},
+          elided(nodes::Text(std::move(server), 12.0f, colours.dim))));
+}
 template <class Box> auto general_page(Box* box, const room_settings_facts& facts) {
   namespace c = skiff::compose; using acts = general_actions<Box>; using draft = general_draft<Box>;
   const auto& colours = *box->colours_; const auto& kept = box->template part<state>();
@@ -597,12 +611,7 @@ template <class Box> auto general_page(Box* box, const room_settings_facts& fact
                           action(colours, "Delete", selection{box, selection::kind::remove}, !kept.pending))),
                       c::visible(kept.data.local_aliases.empty(), nodes::Text(kept.loading ? "Loading…" : "No Addresses", 14.0f, colours.text)), std::move(local_rows)),
                   c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                      c::row(c::hbox(4.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX,
-                          .padding = {4.0f, 8.0f, 4.0f, 8.0f}, .cornerRadius = colours.widgets.fCorner, .background = colours.chosen}),
-                          c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("#", 12.0f, colours.dim)),
-                          c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .disabled = kept.pending},
-                              model_field<&draft::address>(colours, "", "New address")),
-                          c::styled({.shrink = scene::axes::kX, .maxWidth = 160.0f, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(server, 12.0f, colours.dim)))),
+                      local_address_input<draft>(colours, server, kept.pending),
                       action(colours, "Save", sends<create_address>{}, !kept.pending, action_style::success)))))),
       space_children(box, facts),
       section(colours, "Advanced Options",

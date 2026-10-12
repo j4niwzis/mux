@@ -269,6 +269,55 @@ struct app : kept_settings {
         parts());
   }
 
+#ifdef SKIFF_ERASED_WALKS
+  // Outside a release build, what the window's presses ask for reaches the
+  // program through skiff's runtime walks (skiff.bind:runtime), which take a
+  // request by its type from this table: every type the program takes --
+  // its parts' apply()s, with a taker or without, their part_apply()s, its
+  // own apply()s, each protocol's requests -- found while compiling
+  // (skiff::bind::takes), each to route() as a release build takes it.
+  template <class R>
+  static void routed(void* self, const void* one) {
+    static_cast<app*>(self)->route(*static_cast<const R*>(one));
+  }
+  template <class... R>
+  void served_each(std::vector<skiff::bind::rt::Served>& out, skiff::model::Types<R...>) {
+    (out.push_back({skiff::model::rt::keyOf<R>(), this, &routed<R>}), ...);
+  }
+  template <class... R>
+  void served_each(std::vector<skiff::bind::rt::Served>& out, mux::proto::request_list<R...>) {
+    served_each(out, skiff::model::Types<R...>{});
+  }
+  template <class Part>
+  struct part_apply_tag {};
+  template <class Part>
+  static constexpr bool probe_part_apply() {
+    return requires(Part& part) { part_apply(part, skiff::bind::takes::loophole::Probe<part_apply_tag<Part>>{}); };
+  }
+  template <class Part>
+  using part_applied = typename skiff::bind::takes::loophole::Read<part_apply_tag<Part>, probe_part_apply<Part>()>::type;
+  template <class Part>
+  void served_by_part(std::vector<skiff::bind::rt::Served>& out, Part&) {
+    served_each(out, skiff::bind::takes::Applied<Part>{});
+    served_each(out, skiff::bind::takes::AppliedWith<Part, taker>{});
+    served_each(out, part_applied<Part>{});
+  }
+  template <class... Tags>
+  void served_protocols(std::vector<skiff::bind::rt::Served>& out, mux::protocol_list<Tags...>) {
+    (served_each(out, decltype(mux::proto::protocol_requests_of(std::declval<const mux::state_of<Tags>&>())){}), ...);
+  }
+
+ public:
+  // What skiff's runtime walks hand a request to (rt::servedBy).
+  std::vector<skiff::bind::rt::Served> servedTable() {
+    std::vector<skiff::bind::rt::Served> out;
+    std::apply([&](auto&... part) { (served_by_part(out, part), ...); }, parts());
+    served_each(out, skiff::bind::takes::Applied<app>{});
+    served_protocols(out, mux::protocols{});
+    return out;
+  }
+#endif
+
   using adding = mux::ui::add_account_pane<actions>;
   using accounts = mux::ui::accounts_panel<actions>;
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.plugin.reactions.ui -- A message's reactions, at the foot of its
+// mux.plugin.reactions.ui -- Reacting from a message's menu: its quick
+// reactions, and every emoji unrolled under them. A message's reactions, at the foot of its
 // bubble, as Telegram's: a chip for each -- its emoji or picture, how many,
 // or the faces of up to three who chose it -- tinted where one's own is
 // among them; pressed, one reacts with it too. And who reacted, listed as
@@ -13,6 +14,8 @@ import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.nodes.scroll;
+import skiff.nodes.icon;
+import skiff.nodes.box;
 import splice;
 import mux.core;
 import mux.config;
@@ -191,6 +194,63 @@ auto extend(contract::message_menu, type_tag<feature>, type_tag<Actions>, const 
           : facts.reaction_count == 1 ? std::string("1 reaction")
                                       : std::format("{} reactions", facts.reaction_count),
           sends<show>{show{facts.id}}, icon::people{}, std::nullopt, menu_row_look));
+}
+
+
+// The quick reactions at the top of a message's menu, as Telegram's, and the
+// arrow that unrolls every emoji under them.
+inline auto quick_reaction(const palette& colours, std::string key) {
+  namespace c = skiff::compose;
+  const auto request = ::mux::ui::request::menu_react{key};
+  return c::onClick(request, c::column(c::justified(
+      c::vbox(0.0f, {.width = 36.0f, .height = 32.0f, .cornerRadius = 16.0f,
+          .hoverBackground = colours.chosen}), nodes::justify::middle{}),
+      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(key), 22.0f, colours.text))));
+}
+template <class Expand>
+auto quick_reactions(const palette& colours, Expand expand) {
+  namespace c = skiff::compose;
+  const std::array<std::string_view, 6> keys{"👍", "❤️", "😂", "😮", "😢", "🙏"};
+  auto each = std::ranges::to<std::vector>(std::views::transform(keys, [&](auto key) {
+    return quick_reaction(colours, std::string(key));
+  }));
+  return c::row(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}}),
+      c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(each)),
+      c::onPress(std::move(expand), c::styled({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f,
+          .hoverBackground = colours.chosen}, nodes::Icon(shape_of(icon::down{}), colours.text)), "All emoji"));
+}
+
+// What the menu's emoji do: react with it.
+template <class Actions>
+struct react_with {
+  using Answer = ::mux::ui::request::menu_react;
+  // What is typed in its search, a reaction too: Matrix takes any text.
+  [[nodiscard]] static constexpr bool takes_text() { return true; }
+  Answer operator()(const std::string& text, const std::string& key) const {
+    return ::mux::ui::request::menu_react{key, key == text ? std::nullopt : std::optional(text)};
+  }
+};
+
+// Its head, over a message's menu (mux.ui:context_menu): where the account
+// reacts, the quick reactions and the band under them.
+template <class Actions, class Unroll>
+auto extend(contract::message_menu_top, type_tag<feature>, type_tag<Actions>, const palette& colours, const menu_facts& facts,
+            Unroll unroll) {
+  namespace c = skiff::compose;
+  return c::visible(facts.can.react,
+      c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), quick_reactions(colours, std::move(unroll)),
+          c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band))));
+}
+// What it unrolls: every emoji, a press reacting with it -- built where it
+// is kept, as it points at its own parts.
+template <class Actions>
+auto unrolled(contract::message_menu_top, type_tag<feature>, type_tag<Actions>, const palette& colours, emoji_kept& kept) {
+  return composition::in_place<emoji_panel<react_with<Actions>>, const palette&, emoji_kept&, react_with<Actions>>{{colours, kept, {}}};
+}
+// Unrolled: its arrow put away.
+template <class Head>
+void unrolled_head(contract::message_menu_top, type_tag<feature>, Head& head) {
+  std::get<1>(std::get<0>(head.fParts).fParts).setVisible(false);
 }
 
 }  // namespace mux::plugins::reactions

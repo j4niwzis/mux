@@ -62,6 +62,16 @@ struct message_trailers {
 struct window_dialogs {
   static constexpr std::string_view name = "the window's dialogs";
 };
+// A message's menu's top, over its rows (mux.ui:context_menu):
+//   extend(c, f, type_tag<Actions>, palette, menu_facts, unroll) -> its head:
+//   shown, or not, as the facts say; pressing `unroll` unrolls its own
+//   over the items
+//   unrolled(c, f, type_tag<Actions>, palette, emoji_kept) -> that, made then
+//   (a node, or in_place where it may not move)
+//   unrolled_head(c, f, head&): the head, told it has unrolled
+struct message_menu_top {
+  static constexpr std::string_view name = "a message's menu's top";
+};
 // The program's parts (mux.app.program): extend(c, f, services&) -> a part,
 // offered the requests as the program's own are.
 struct program_parts {

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.plugin.reactions.types -- What the reactions plugin names, and what it
-// says it provides: a message's trailer, its strip of reactions; the
-// Reactions row of its menu, and the dialog that lists them as events; and
+// says it provides: a message's trailer, its strip of reactions; the quick
+// reactions over its menu, every emoji unrolled under them; the Reactions
+// row of its menu, and the dialog that lists them as events; and
 // a part of the program. Light: mux.ui sees it.
 export module mux.plugin.reactions.types;
 
@@ -44,6 +45,7 @@ struct back {};
 
 consteval bool provides(contract::message_trailers, type_tag<feature>) { return true; }
 consteval bool provides(contract::message_menu, type_tag<feature>) { return true; }
+consteval bool provides(contract::message_menu_top, type_tag<feature>) { return true; }
 consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
 constexpr type_tag<shown> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }

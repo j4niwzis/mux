@@ -194,33 +194,23 @@ template <class Actions> struct seen_row : skiff::compose::Stacked {
   }
 };
 
-inline auto quick_reaction(const palette& colours, std::string key) {
-  namespace c = skiff::compose;
-  const auto request = ::mux::ui::request::menu_react{key};
-  return c::onClick(request, c::column(c::justified(
-      c::vbox(0.0f, {.width = 36.0f, .height = 32.0f, .cornerRadius = 16.0f,
-          .hoverBackground = colours.chosen}), nodes::justify::middle{}),
-      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(key), 22.0f, colours.text))));
-}
-template <class Expand>
-auto quick_reactions(const palette& colours, Expand expand) {
-  namespace c = skiff::compose;
-  const std::array<std::string_view, 6> keys{"👍", "❤️", "😂", "😮", "😢", "🙏"};
-  auto each = std::ranges::to<std::vector>(std::views::transform(keys, [&](auto key) {
-    return quick_reaction(colours, std::string(key));
-  }));
-  return c::row(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}}),
-      c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(each)),
-      c::onPress(std::move(expand), c::styled({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f,
-          .hoverBackground = colours.chosen}, nodes::Icon(shape_of(icon::down{}), colours.text)), "All emoji"));
-}
-
 inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, const std::optional<emote>& emoji) {
   namespace c = skiff::compose;
   return c::visible(emoji.has_value(), c::onClick(request::favourite_emoji{emoji.value_or(emote{})},
       c::row(c::hbox(0.0f, {.fillX = true, .height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = colours.chosen}),
           c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(emoji && kept.emoji_is_favourite(emoji->url)
               ? "Remove from favorites" : "Add to favorites", 13.0f, colours.text)))));
+}
+// The emoji pictures what a menu's head unrolled shows, for the program to
+// fetch: where it shows any.
+template <class Over>
+  requires requires(Over& over) { over.pictures_shown(); }
+std::vector<std::string> unrolled_pictures(std::optional<Over>& over) {
+  return over ? over->pictures_shown() : std::vector<std::string>{};
+}
+template <class Over>
+std::vector<std::string> unrolled_pictures(std::optional<Over>&) {
+  return {};
 }
 template <class Actions> struct context_menu : skiff::compose::Specced {
   // Child references and handlers require a fixed address.
@@ -233,11 +223,57 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
   using Answer = ::mux::ui::request::close_menu;
   struct card : skiff::compose::Stacked {
     using Answer = ::mux::ui::request::close_menu;
-    struct expand_emoji {
-      card* of;
-      scene::Taken operator()() const { of->expand(); return {}; }
+    // What plugins put at its top (contract::message_menu_top) -- the quick
+    // reactions -- each its head, and what it unrolls over the items as it
+    // asks: in their order, what is unrolled in a slot of its own.
+    template <class List>
+    struct plugin_tops;
+    template <class... Features>
+    struct plugin_tops<plugin_list<Features...>> {
+      // A head's ask to unroll its own over the items.
+      template <std::size_t At>
+      struct unroll {
+        card* of;
+        scene::Taken operator()() const {
+          of->template unroll_top<At>();
+          return {};
+        }
+      };
+      template <std::size_t At>
+      static auto head_of(const palette& colours, const menu_facts& facts, card* of) {
+        using feature = Features...[At];
+        static_assert(requires { extend(contract::message_menu_top{}, type_tag<feature>{}, type_tag<Actions>{}, colours, facts, unroll<At>{of}); },
+                      composition::broken<contract::message_menu_top, feature>());
+        return extend(contract::message_menu_top{}, type_tag<feature>{}, type_tag<Actions>{}, colours, facts, unroll<At>{of});
+      }
+      template <class Feature>
+      static auto over_of(const palette& colours, emoji_kept& kept) {
+        return unrolled(contract::message_menu_top{}, type_tag<Feature>{}, type_tag<Actions>{}, colours, kept);
+      }
+      template <class Indices>
+      struct heads_of;
+      template <std::size_t... At>
+      struct heads_of<std::index_sequence<At...>> {
+        using type = std::tuple<decltype(head_of<At>(std::declval<const palette&>(), std::declval<const menu_facts&>(), nullptr))...>;
+      };
+      using heads_t = typename heads_of<std::index_sequence_for<Features...>>::type;
+      using overs_t = std::tuple<std::optional<composition::node_t<decltype(over_of<Features>(
+          std::declval<const palette&>(), std::declval<emoji_kept&>()))>>...>;
+      static heads_t heads(const palette& colours, const menu_facts& facts, card* of) {
+        return [&]<std::size_t... At>(std::index_sequence<At...>) {
+          return heads_t{head_of<At>(colours, facts, of)...};
+        }(std::index_sequence_for<Features...>{});
+      }
+      // The head's own unrolled: made in its slot; the head told.
+      template <std::size_t At>
+      static auto& open(heads_t& heads, overs_t& overs, const palette& colours, emoji_kept& kept) {
+        using feature = Features...[At];
+        auto& made = composition::put(std::get<At>(overs), over_of<feature>(colours, kept));
+        unrolled_head(contract::message_menu_top{}, type_tag<feature>{}, std::get<At>(heads));
+        return made;
+      }
     };
-    using quick_row = decltype(quick_reactions(std::declval<const palette&>(), expand_emoji{nullptr}));
+    using tops_t = plugin_tops<composition::providers<contract::message_menu_top, enabled_plugins>>;
     // The colours it is made in, for the emoji it unrolls; and the emoji
     // kept, the program's.
     const palette* colours_ = nullptr;
@@ -283,8 +319,8 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
     // Message Link, Save As, Forward, Delete; and who has seen it -- how
     // many, and their names under it -- at the foot.
     struct parts_t {
-      quick_row quick;
-      nodes::Box<> quick_band;
+      // The plugins' heads: the quick reactions, and the band under them.
+      typename tops_t::heads_t tops;
       reply_row reply;
       // Reply in thread, as Element's menu has it: a Matrix room's.
       thread_row thread_reply;
@@ -307,40 +343,41 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
       delete_row remove;
       nodes::Box<> seen_band;
       seen_row<Actions> seen;
-      // Every emoji, once asked for: over the items, out of their flow, and
-      // after them, so drawn on top of them and pressed first.
-      std::optional<emoji_panel<react_with<Actions>>> emoji;
+      // What a head unrolls -- every emoji, for the quick reactions -- once
+      // asked for: over the items, out of their flow, and after them, so
+      // drawn on top of them and pressed first.
+      typename tops_t::overs_t overs;
     } parts;
-    void expand() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave_emoji, copy_image, save, added, forward, source, history, select,
-             remove, seen_band, seen, emoji] = parts;
-      if (emoji)
+    bool unrolled = false;
+    // As Telegram's: what a head unrolls takes the room the items had under
+    // it, and unrolls down over them from the top; they stay under it until
+    // it is down, and the menu keeps its size -- grown only where the items
+    // left too little room for a list.
+    template <std::size_t At>
+    void unroll_top() {
+      if (std::exchange(unrolled, true))
         return;
-      // As Telegram's: the list takes the room the items had under the
-      // quick reactions, and unrolls down over them from the top; they stay
-      // under it until it is down, and the menu keeps its size -- grown only
-      // where the items left too little room for a list.
       const skia::SkRect box = fState.contentBox();
-      const float under = box.fBottom - quick_band.bounds().fBottom;
+      const float top = std::get<At>(parts.tops).bounds().fBottom;
+      const float under = box.fBottom - top;
       rolled = std::max(under, kEmojiLeast);
       fState.apply({.minHeight = this->bounds().height() + (rolled - under)});
-      emoji.emplace(*colours_, *kept_, react_with<Actions>{});
-      emoji->apply({.place = scene::anchor::kTopLeft,
-                     .y = quick_band.bounds().fBottom - box.fTop,
-                     .fillX = true,
-                     .height = 0.0f,
-                     .background = colours_->sidebar,
-                     .masking = true});
+      tops_t::template open<At>(parts.tops, parts.overs, *colours_, *kept_)
+          .apply({.place = scene::anchor::kTopLeft,
+                  .y = top - box.fTop,
+                  .fillX = true,
+                  .height = 0.0f,
+                  .background = colours_->sidebar,
+                  .masking = true});
       unroll.jump(0.0f);
       unroll.setTarget(rolled);
-      std::get<1>(quick.fParts).setVisible(false);
       this->invalidateLayout();
     }
     // The items, once the list is down over them: gone, the menu keeping
     // its size by its least height.
     void hide_items() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave_emoji, copy_image, save, added, forward, source, history, select, remove,
-             seen_band, seen, emoji] = parts;
+      auto& [tops, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave_emoji, copy_image, save, added, forward, source, history, select, remove,
+             seen_band, seen, overs] = parts;
       for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_url, &fave_emoji, &copy_image, &save,
                                                                    &forward, &source,
                                                                    &remove, &seen_band, &seen})
@@ -353,8 +390,8 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
     skiff::paint::Tween unroll{0.0f, 220.0f};
     [[nodiscard]] bool settling() const { return unroll.moving(); }
     void update(double now_ms) {
-      if (unroll.step(now_ms) && parts.emoji) {
-        parts.emoji->apply({.height = unroll.value()});
+      if (unroll.step(now_ms) && unrolled) {
+        std::apply([&](auto&... over) { ((over ? over->apply({.height = unroll.value()}) : void()), ...); }, parts.overs);
         if (!unroll.moving())
           this->hide_items();
         this->invalidateLayout();
@@ -390,14 +427,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
                   placement),
           colours_(&colours), kept_(&kept),
           parts{
-              .quick = skiff::compose::visible(
-                  facts.can.react, quick_reactions(colours, expand_emoji{this})),
-              .quick_band = skiff::compose::visible(
-                  facts.can.react,
-                  skiff::compose::styled({.fillX = true,
-                                          .height = 1.0f,
-                                          .margin = {0.0f, 0.0f, 4.0f, 0.0f}},
-                                         nodes::Box<>(colours.band))),
+              .tops = tops_t::heads(colours, facts, this),
               .reply = reply_row(colours, "Reply", {}, icon::back{},
                                  std::nullopt, menu_row_look),
               .thread_reply = skiff::compose::visible(
@@ -466,8 +496,8 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
                                          nodes::Box<>(colours.band)),
               .seen = seen_row<Actions>(colours, facts.seen)} {
       fState.setFloats(true);  // over the chat: frosted live, where asked
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave_emoji, copy_image, save, added, forward, source, history, select,
-             remove, seen_band, seen, emoji] = parts;
+      auto& [tops, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave_emoji, copy_image, save, added, forward, source, history, select,
+             remove, seen_band, seen, overs] = parts;
       // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
       // 13px normalFont's line -- 33 high -- the icon 15 in, the text 54 in.
       // One's own text, or one's own picture's caption, as Element edits it.

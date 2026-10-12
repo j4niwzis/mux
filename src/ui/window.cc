@@ -994,10 +994,9 @@ template <class Actions> struct window : skiff::compose::Specced {
       // And those of the plugins' pages that show pictures: the stickers'.
       std::apply([&](auto&... page) { (shown.append_range(pictures_of(page)), ...); }, up->parts.card.parts.pages);
     }
-    if (auto* menu = layer().menu.shown(); menu && menu->parts.menu.parts.emoji) {
-      const auto emoji = menu->parts.menu.parts.emoji->pictures_shown();
-      shown.append_range(pictures(emoji, emote_kind::emoji));
-    }
+    if (auto* menu = layer().menu.shown())
+      std::apply([&](auto&... over) { (shown.append_range(pictures(unrolled_pictures(over), emote_kind::emoji)), ...); },
+                 menu->parts.menu.parts.overs);
     auto& screen = main();
     if (screen.chat.parts.emojis.visible())
       for (const auto& emoji : screen.emoji_matches)

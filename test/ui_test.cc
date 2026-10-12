@@ -2435,7 +2435,7 @@ TEST(Reactions, PanelRowsTargetTheReactionAndOfferNestedMenus) {
   ASSERT_TRUE(facts.reaction.has_value());
   EXPECT_EQ(facts.reaction->to, "$original");
   mux::ui::context_menu<stub> menu(ui.needs(program), facts);
-  EXPECT_TRUE(menu.parts.menu.parts.quick.visible());
+  EXPECT_TRUE(std::get<0>(menu.parts.menu.parts.tops).visible());
   // The reactions plugin's row, the first of the plugins' rows.
   EXPECT_TRUE(std::get<0>(menu.parts.menu.parts.added).visible());
 }
@@ -2664,7 +2664,7 @@ TEST(Emoji, SearchSendsTypedAndCopiedCustomEmojiAsMediaKeys) {
   mux::ui::palette colours;
   mux::ui::emoji_kept kept;
   kept.chat_emotes = {{.shortcode = "neocat", .url = "mxc://room/neocat"}};
-  using pick = mux::ui::react_with<stub>;
+  using pick = mux::plugins::reactions::react_with<stub>;
   scene::Scene<mux::ui::emoji_panel<pick>> window{std::in_place, colours, kept, pick{}, scene::Spec{.fill = true}};
   auto& panel = window.root();
   panel.search(":neocat");

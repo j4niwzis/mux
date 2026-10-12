@@ -4,6 +4,7 @@ export module mux.app.network:sink;
 
 import std;
 import mux.core;
+import mux.plugins.types;
 import mux.platform.events;
 
 export namespace mux::app {
@@ -32,6 +33,8 @@ struct account_deleter {
 };
 struct post_change {
   using account_deleter = mux::app::account_deleter;
+  // The plugins it serves: what an account tells them of its events.
+  using plugins = mux::enabled_plugins;
   mailbox_type* box = nullptr;
   std::shared_ptr<std::atomic<bool>> live;
   void operator()(mux::change_t one) const {

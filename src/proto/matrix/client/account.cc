@@ -37,6 +37,11 @@ import mux.http;
 import mux.net;
 export import :names;
 
+export namespace mux::contract {
+// What a plugin hears of a Matrix account's events (mux.plugins.matrix).
+struct matrix_events {};
+}  // namespace mux::contract
+
 export namespace mux::proto::matrix::client {
 
 // Joined ancestors only, in breadth-first order. A removed relation has no
@@ -121,6 +126,31 @@ plaintext_refused::~plaintext_refused() = default;
 [[nodiscard]] bool placed_as_news(const placement_t& where) {
   return spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
 }
+
+// What a plugin hears of the account's events -- matrix_heard(contract::
+// matrix_events, type_tag<its feature>, the content, what is known of it),
+// found by ADL where the account is made -- and whether the event is then
+// a line of its own in the timeline.
+namespace heard {
+struct line {};
+struct quiet {};
+}  // namespace heard
+using heard_t = spl::variant<heard::line, heard::quiet>;
+template <class Plugin, class Content, class Heard>
+concept hears = requires(const Content& content, Heard& what) {
+  { matrix_heard(contract::matrix_events{}, type_tag<Plugin>{}, content, what) } -> std::convertible_to<heard_t>;
+};
+// The plugins an account's sink serves (the program's, mux::app::
+// post_change's); none for any other.
+template <class Sink>
+struct heard_plugins {
+  using type = std::tuple<>;
+};
+template <class Sink>
+  requires requires { typename Sink::plugins; }
+struct heard_plugins<Sink> {
+  using type = typename Sink::plugins;
+};
 
 template <class Sink>
 class account {
@@ -428,12 +458,35 @@ class account {
   void send(std::string room, std::string body, std::optional<std::string> reply_to = std::nullopt,
             std::vector<mention> mentions = {}, std::vector<styled_run> styles = {});
 
-  // A call's signalling sent to its room: an m.call.* event, version 1, from
-  // this session's party -- encrypted where the room is, as a message is.
-  void call(std::string room, std::string call_id, change::call_said_t what);
-  // The servers a call goes through, as the server gives them
-  // (/voip/turnServer): said as change::call_servers.
-  void call_servers();
+  // What a plugin's Matrix side (mux.plugins.matrix) does through the
+  // account: an event of its own sent to a room -- encrypted where the room
+  // is, as a message is; a request made of the server, its answer given to
+  // `then` on the account's fiber; a change told to the program; and this
+  // session's party, as a call names it: its device.
+  template <class Content>
+  void send_event(std::string room, std::string type, Content content) {
+    this->spawn_sending([this, room = std::move(room), type = std::move(type), content = std::move(content)] {
+      if (!api_)
+        return;
+      auto sent = this->send_room_event(
+          loom::cs::send_message{.room_id = room, .event_type = type, .txn_id = this->transaction(), .body = as_body(content)});
+      if (!sent)
+        log(id_, "could not send {} in {}", type, room);
+    });
+  }
+  template <class Request, class Then>
+  void ask_server(Request request, Then then) {
+    this->spawn_guarded([this, request = std::move(request), then = std::move(then)] mutable {
+      if (!api_)
+        return;
+      then(perform(*api_, request));
+    });
+  }
+  template <class Change>
+  void tell_program(Change change) {
+    sink_(std::move(change));
+  }
+  [[nodiscard]] std::string party() const { return how_.device_id.value_or("mux"); }
 
  private:
   void say(connection_t state);
@@ -767,19 +820,19 @@ class account {
   // sync of a login, and the sync kept on disk told again at a start. Its
   // events are shown, but mark no mention or reaction as unseen and ring
   // no call -- a login showed every old mention as new.
-  std::map<std::string, bool> legacy_calls_;
   std::optional<loom::cs::sync::set_presence_t> chosen_presence_;
   bool telling_history_ = false;
-  // Events told now are news to a call, though they go into the window:
+  // Events told now are news, though they go into the window -- to a
+  // plugin that hears them (a call's signals):
   // a live sync's gap caught up (the sliding sync brings only a room's
   // newest event, and Element sends an invite and its candidates, an answer
   // and its candidates, back to back), or news decrypted once its key came.
-  bool calls_live_ = false;
-  struct calls_live_while {
+  bool late_news_ = false;
+  struct late_news_while {
     bool& live;
     bool was;
-    explicit calls_live_while(bool& flag, bool now) : live(flag), was(flag) { live = was || now; }
-    ~calls_live_while() { live = was; }
+    explicit late_news_while(bool& flag, bool now) : live(flag), was(flag) { live = was || now; }
+    ~late_news_while() { live = was; }
   };
   // Whether an event placed so is news: come at the end, not from history.
   // (Whether an event so placed is news is placed_as_news(), a plain
@@ -802,11 +855,50 @@ class account {
                room_event_t kind = room_event::other{}, std::optional<std::string> html = std::nullopt);
   void done(const conversation_id& in, const loom::ev::timeline_event& one, event_type_t type,
             std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
-  // A call's signalling come, to the program -- as it happens only: what
-  // history pages back is the timeline's, a call long over.
-  void call_signal(const conversation_id& in, const loom::ev::timeline_event& one,
-                   std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string call,
-                   std::string party, change::call_said_t said);
+  // An event a plugin hears, as it is told it: where it is, when, and
+  // whether it is news -- come at the end, or caught up or decrypted late
+  // (late_news_) -- or the history a first sync tells.
+  struct heard_here {
+    account* self;
+    const conversation_id& in;
+    const loom::ev::timeline_event& event;
+    std::chrono::sys_time<std::chrono::milliseconds> at;
+    placement_t where;
+    [[nodiscard]] bool news() const { return placed_as_news(where) || self->late_news_; }
+    [[nodiscard]] bool history() const { return self->telling_history_; }
+    [[nodiscard]] bool mine() const { return event.sender == self->id_.address; }
+    [[nodiscard]] std::string party() const { return self->party(); }
+    template <class Change>
+    void tell(Change change) const {
+      self->sink_(std::move(change));
+    }
+  };
+  using sink_plugins_tag = type_tag<typename heard_plugins<Sink>::type>;
+  template <class Content, template <class...> class List, class... Plugins>
+  static constexpr bool heard_by(type_tag<List<Plugins...>>) {
+    return (hears<Plugins, Content, heard_here> || ...);
+  }
+  // Whether any plugin hears a content of this type.
+  template <class Content>
+  static constexpr bool plugins_hear() {
+    return heard_by<Content>(sink_plugins_tag{});
+  }
+  template <class Plugin, class Content>
+    requires hears<Plugin, Content, heard_here>
+  static bool told(const Content& content, heard_here& what) {
+    return spl::visit(spl::overloaded{[](heard::line) { return true; }, [](heard::quiet) { return false; }},
+                      heard_t{matrix_heard(contract::matrix_events{}, type_tag<Plugin>{}, content, what)});
+  }
+  template <class Plugin, class Content>
+  static bool told(const Content&, heard_here&) {
+    return false;
+  }
+  // Told to every plugin that hears it: a line in the timeline where any
+  // says so.
+  template <class Content, template <class...> class List, class... Plugins>
+  bool tell_plugins(type_tag<List<Plugins...>>, const Content& content, heard_here what) {
+    return (std::size_t{0} + ... + (told<Plugins>(content, what) ? std::size_t{1} : std::size_t{0})) > 0;
+  }
   [[nodiscard]] std::string name_in(const std::string& room, const std::string& user) const;
 
   // A message's body: its plain text, and its HTML where it says it has

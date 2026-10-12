@@ -6,6 +6,9 @@ import std;
 import mux.vault;
 import splice;
 import mux.core;
+// What the plugins hear of a Matrix account's events: found where the
+// account is made.
+import mux.plugins.matrix;
 import mux.config;
 import mux.net;
 import mux.preview;
@@ -415,26 +418,18 @@ struct network {
             one.account);
     });
   }
-  // A call's signalling, sent by the account of its chat; and the servers
-  // a call of an account goes through, asked of it (change::call_servers).
-  void call(const mux::conversation_id& in, std::string call_id, mux::change::call_said_t what) {
-    loop.post([this, in, call_id = std::move(call_id), what = std::move(what)] {
-      for (auto& one : accounts)
-        spl::visit(
-            [&](auto& account) {
-              if (account->id() == in.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.call(in.id, call_id, what))) { a.call(in.id, call_id, what); }, *account);
-            },
-            one.account);
-    });
-  }
-  void call_servers(const mux::account_id& of) {
-    loop.post([this, of] {
+  // Something asked of the account named, on the network's thread, where
+  // its protocol's account can do it (ask_if_able): a plugin's -- a call's
+  // signal, the servers it goes through -- as the plugin's side of that
+  // protocol says it.
+  template <class Ask>
+  void ask(const mux::account_id& of, Ask ask) {
+    loop.post([this, of, ask = std::move(ask)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == of)
-                ask_if_able([&](auto& a) -> decltype(void(a.call_servers())) { a.call_servers(); }, *account);
+                ask_if_able(ask, *account);
             },
             one.account);
     });

@@ -183,12 +183,13 @@ include(cmake/plugins.cmake)
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
   FILES ${mux_protocol_core} ${mux_enabled_core} ${mux_plugin_types} ${mux_plugins_types}
-        src/calls/types.cc src/core_ids.cc src/proto/changes.cc src/proto/proto.cc src/proto/protocols.cc
+        ${mux_plugin_changes} ${mux_plugins_changes} src/core_ids.cc src/proto/changes.cc src/proto/proto.cc src/proto/protocols.cc
         src/core.cc src/net.cc src/http.cc src/preview.cc src/media.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc src/logic/notifications.cc
         src/logic/link_base.cc src/proto/links.cc
         src/logic/forwarding.cc src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
-        src/logic/blurhash.cc src/logic/emoji.cc src/logic/reactions.cc src/logic/markdown.cc src/logic/room_events.cc)
+        src/logic/blurhash.cc src/logic/emoji.cc src/logic/reactions.cc src/logic/markdown.cc src/logic/room_events.cc
+        ${mux_plugin_matrix} ${mux_plugins_matrix})
 target_compile_features(mux_modules PUBLIC cxx_std_26)
 # The emoji's keywords, as Unicode's CLDR annotates them in English and in
 # Russian -- what the emoji search matches besides the names, as Telegram's

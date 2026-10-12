@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.plugin.calls.app: a call -- one at a time -- made and taken: what its
-// protocol said in it (change::call_signalled) and what its connection says
+// protocol said in it (call_signalled) and what its connection says
 // (mux.calls.media), brought together, and shown in the window's call bar.
 // The calls plugin's part of the program: it owns its state, and reaches the
 // rest through the services it is given.
@@ -15,6 +15,7 @@ import mux.platform.permissions;
 import mux.app.network;
 import mux.app.services;
 import mux.plugin.calls.types;
+import mux.plugin.calls.matrix;
 
 export namespace mux::plugins::calls {
 
@@ -39,6 +40,8 @@ struct active_call {
   call_state_t state;
   std::string their_party;
   mux::calls::session_description offer;
+  // The version it is made in: its invite's, or version 1 for one made here.
+  call_version_t version = call_version::current{};
   std::map<std::string, std::vector<mux::calls::ice_candidate>> early;
   std::vector<mux::calls::ice_candidate> candidates_out;
   std::chrono::steady_clock::time_point ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
@@ -68,7 +71,7 @@ class part {
     // The microphone asked for now, where the system asks the user: the
     // sound opens once it is given (mux.calls.media tries again).
     (void)platform::permissions::microphone();
-    s_->net->call_servers(one.in.account);
+    s_->net->ask(one.in.account, ask_servers{});
     this->show();
   }
   // An ended call put away before its moment is up.
@@ -88,20 +91,19 @@ class part {
       return;
     current_->state = call_state::starting{};
     (void)platform::permissions::microphone();
-    s_->net->call_servers(current_->in.account);
+    s_->net->ask(current_->in.account, ask_servers{});
     this->show();
   }
   void apply(const decline_call&) {
     if (!current_)
       return;
-    s_->net->call(current_->in, current_->id, change::call_said_t{change::call_said::reject{}});
+    this->signal(call_said_t{call_said::reject{}});
     this->end("You declined the call");
   }
   void apply(const hang_up&) {
     if (!current_)
       return;
-    s_->net->call(current_->in, current_->id,
-                  change::call_said_t{change::call_said::hangup{change::call_end_t{change::call_end::hung_up{}}}});
+    this->signal(call_said_t{call_said::hangup{call_end_t{call_end::hung_up{}}}});
     this->end("Call ended");
   }
   void apply(const mute_call&) {
@@ -112,10 +114,10 @@ class part {
   }
 
   // -- what accounts said
-  void take(const change::call_signalled& one) {
-    spl::visit(spl::overloaded{[&](const change::call_said::invite& invite) { this->invited(one, invite); },
-                                     [&](const change::call_said::answer& answer) { this->answered(one, answer); },
-                                     [&](const change::call_said::candidates& them) {
+  void take(const call_signalled& one) {
+    spl::visit(spl::overloaded{[&](const call_said::invite& invite) { this->invited(one, invite); },
+                                     [&](const call_said::answer& answer) { this->answered(one, answer); },
+                                     [&](const call_said::candidates& them) {
                                        if (!this->is_current(one) || one.mine)
                                          return;
                                        if (!current_->their_party.empty() && one.party != current_->their_party) return;
@@ -125,30 +127,30 @@ class part {
                                          current_->early[one.party].insert_range(current_->early[one.party].end(), them.them);
                                      },
                                      // Ended by them: why, as Element says it.
-                                     [&](const change::call_said::hangup& done) {
+                                     [&](const call_said::hangup& done) {
                                        if (!this->is_current(one))
                                          return;
                                        this->end(spl::visit(
                                            spl::overloaded{
-                                               [](change::call_end::hung_up) { return std::string("Call ended"); },
-                                               [](change::call_end::busy) { return std::string("They're busy"); },
-                                               [](change::call_end::timed_out) { return std::string("No answer"); },
-                                               [](change::call_end::failed) { return std::string("Their connection failed"); },
-                                               [](const change::call_end::other& said) { return "Call ended: " + said.said; }},
+                                               [](call_end::hung_up) { return std::string("Call ended"); },
+                                               [](call_end::busy) { return std::string("They're busy"); },
+                                               [](call_end::timed_out) { return std::string("No answer"); },
+                                               [](call_end::failed) { return std::string("Their connection failed"); },
+                                               [](const call_end::other& said) { return "Call ended: " + said.said; }},
                                            done.why));
                                      },
-                                     [&](const change::call_said::reject&) {
+                                     [&](const call_said::reject&) {
                                        if (this->is_current(one))
                                          this->end(one.mine ? "Declined on another device" : "They declined the call");
                                      },
-                                     [&](const change::call_said::select_answer& chosen) {
+                                     [&](const call_said::select_answer& chosen) {
                                        // Answered by another of the user's sessions: not this one's.
                                        if (this->is_current(one) && !current_->outgoing && !own_party_.empty() && chosen.party != own_party_)
                                          this->end("Answered on another device");
                                      }},
                   one.said);
   }
-  void take(const change::call_servers& one) {
+  void take(const call_servers& one) {
     if (!current_ || current_->in.account != one.account || !holds<call_state::starting>())
       return;
     own_party_ = one.party;
@@ -182,19 +184,16 @@ class part {
     if (current_->media)
       std::ranges::for_each(current_->media->take(), [&](const mux::calls::said_t& said) { if (current_) this->connection_said(said); });
     if (current_ && !current_->candidates_out.empty())
-      s_->net->call(current_->in, current_->id,
-                    change::call_said_t{change::call_said::candidates{std::exchange(current_->candidates_out, {})}});
+      this->signal(call_said_t{call_said::candidates{std::exchange(current_->candidates_out, {})}});
     if (current_ && holds<call_state::ringing_in>() && std::chrono::steady_clock::now() > current_->ring_until)
       this->end("Missed call");
     if (current_ && holds<call_state::ringing_out>() && std::chrono::steady_clock::now() > current_->ring_until) {
-      s_->net->call(current_->in, current_->id,
-                    change::call_said_t{change::call_said::hangup{change::call_end_t{change::call_end::timed_out{}}}});
+      this->signal(call_said_t{call_said::hangup{call_end_t{call_end::timed_out{}}}});
       this->end("No answer");
     }
     if (current_ && (holds<call_state::starting>() || holds<call_state::connecting>()) &&
         std::chrono::steady_clock::now() > current_->ring_until) {
-      s_->net->call(current_->in, current_->id,
-          change::call_said_t{change::call_said::hangup{change::call_end::failed{}}});
+      this->signal(call_said_t{call_said::hangup{call_end::failed{}}});
       this->end("Connection timed out");
     }
     // Shown as it is now -- its time going on, the chat shown changed --
@@ -211,16 +210,20 @@ class part {
     return current_ && spl::visit(spl::overloaded{[](const State&) { return true; }, [](const auto&) { return false; }},
                                      current_->state);
   }
-  [[nodiscard]] bool is_current(const change::call_signalled& one) const { return current_ && current_->in == one.in && current_->id == one.call; }
+  // A signal of this call's, sent by its chat's account as its protocol
+  // says it (mux.plugin.calls.matrix's, for Matrix).
+  void signal(call_said_t said) {
+    s_->net->ask(current_->in.account, send_signal{current_->in.id, current_->id, current_->version, std::move(said)});
+  }
+  [[nodiscard]] bool is_current(const call_signalled& one) const { return current_ && current_->in == one.in && current_->id == one.call; }
 
-  void invited(const change::call_signalled& one, const change::call_said::invite& invite) {
+  void invited(const call_signalled& one, const call_said::invite& invite) {
     if (one.mine)
       return;
     // Busy: one call at a time.
     if (current_) {
       if (current_->id != one.call)
-        s_->net->call(one.in, one.call,
-                      change::call_said_t{change::call_said::hangup{change::call_end_t{change::call_end::busy{}}}});
+        s_->net->ask(one.in.account, send_signal{one.in.id, one.call, invite.version, call_said_t{call_said::hangup{call_end_t{call_end::busy{}}}}});
       return;
     }
     // Come too late: its time run out already.
@@ -228,12 +231,12 @@ class part {
       return;
     ended_.reset();
     current_.emplace(active_call{.in = one.in, .id = one.call, .outgoing = false, .state = call_state::ringing_in{},
-                          .their_party = one.party, .offer = invite.offer});
+                          .their_party = one.party, .offer = invite.offer, .version = invite.version});
     current_->ring_until = std::chrono::steady_clock::now() +
                            std::chrono::duration_cast<std::chrono::steady_clock::duration>(invite.lifetime);
     this->show();
   }
-  void answered(const change::call_signalled& one, const change::call_said::answer& answer) {
+  void answered(const call_signalled& one, const call_said::answer& answer) {
     if (!this->is_current(one))
       return;
     // Answered by the user elsewhere, where they were called: not here.
@@ -247,7 +250,7 @@ class part {
     current_->their_party = one.party;
     current_->media->answered(answer.it);
     add_early_candidates();
-    s_->net->call(current_->in, current_->id, change::call_said_t{change::call_said::select_answer{one.party}});
+    this->signal(call_said_t{call_said::select_answer{one.party}});
     current_->state = call_state::connecting{};
     current_->ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
     this->show();
@@ -260,12 +263,10 @@ class part {
   void connection_said(const mux::calls::said_t& said) {
     spl::visit(spl::overloaded{[&](const mux::calls::said::description& ours) {
                                        spl::visit(spl::overloaded{[&](mux::calls::sdp_kind::offer) {
-                                                                          s_->net->call(current_->in, current_->id,
-                                                                                        change::call_said_t{change::call_said::invite{ours.it, std::chrono::milliseconds(60000)}});
+                                                                          this->signal(call_said_t{call_said::invite{ours.it, std::chrono::milliseconds(60000)}});
                                                                         },
                                                                         [&](mux::calls::sdp_kind::answer) {
-                                                                          s_->net->call(current_->in, current_->id,
-                                                                                        change::call_said_t{change::call_said::answer{ours.it}});
+                                                                          this->signal(call_said_t{call_said::answer{ours.it}});
                                                                         }},
                                                      ours.it.kind);
                                      },
@@ -275,8 +276,7 @@ class part {
                                        this->show();
                                      },
                                      [&](mux::calls::said::failed) {
-                                       s_->net->call(current_->in, current_->id,
-                                                     change::call_said_t{change::call_said::hangup{change::call_end_t{change::call_end::failed{}}}});
+                                       this->signal(call_said_t{call_said::hangup{call_end_t{call_end::failed{}}}});
                                        // Where the two are on different networks, the
                                        // account's server has to offer a relay (TURN).
                                        this->end("Connection failed: no route between you, or no relay from your server");

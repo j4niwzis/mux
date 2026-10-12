@@ -15,7 +15,7 @@ export module mux.calls.media;
 import std;
 import splice;
 import mux.platform.audio;
-export import mux.calls.types;
+export import mux.plugin.calls.changes;
 
 export namespace mux::calls {
 

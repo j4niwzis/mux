@@ -13,7 +13,9 @@ if(MUX_CALLS)
   set(libraries LibDataChannel::LibDataChannel)
 endif()
 mux_plugin(calls ORDER 40
+  CHANGES   changes.cc
   TYPES     types.cc
+  MATRIX    matrix.cc
   UI        ${media} ui.cc
   APP       app.cc
   LIBRARIES ${libraries})

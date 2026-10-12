@@ -14,6 +14,8 @@ import mux.config;
 import mux.http;
 import mux.net;
 import mux.proto.matrix.client;
+// What the plugins hear of its events: found where they are read.
+import mux.plugins.matrix;
 
 namespace mux::proto::matrix::client {
 template void account<mux::app::post_change>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where,
@@ -30,7 +32,4 @@ template auto account<mux::app::post_change>::body_of(std::string plain, const s
 // A message read, given to the model: defined in the class, and called from
 // the events read here.
 template void account<mux::app::post_change>::added(message made, placement_t where, bool sealed);
-template void account<mux::app::post_change>::call_signal(const conversation_id& in, const loom::ev::timeline_event& one,
-                                                           std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where,
-                                                           std::string call, std::string party, change::call_said_t said);
 }  // namespace mux::proto::matrix::client

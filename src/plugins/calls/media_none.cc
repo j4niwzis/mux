@@ -5,7 +5,7 @@
 export module mux.calls.media;
 
 import std;
-export import mux.calls.types;
+export import mux.plugin.calls.changes;
 
 export namespace mux::calls {
 

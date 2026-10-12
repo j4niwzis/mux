@@ -123,10 +123,10 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
     }
     // Into the timeline, oldest first, by their time: between what was there
     // and what the sync brought.
-    // A call's signals in the gap are news still: the call part judges
-    // each by its call and an invite by its lifetime.
+    // News still, to a plugin that hears it: a call's signals in the gap,
+    // each judged by its call, an invite by its lifetime.
     {
-      const calls_live_while news{calls_live_, true};
+      const late_news_while news{late_news_, true};
       for (const auto& one : std::views::reverse(gap))
         this->event(in, one, placement::in_window{});
     }

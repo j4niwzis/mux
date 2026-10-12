@@ -32,24 +32,6 @@ import :account;
 // The members defined here are declared in :account, and exported there.
 namespace mux::proto::matrix::client {
 
-namespace call_version { struct legacy {}; struct current {}; }
-using call_version_t = spl::variant<call_version::legacy, call_version::current>;
-inline call_version_t call_version_of(const spl::variant<std::string, std::int64_t>& wire) {
-  return spl::visit(spl::overloaded{
-      [](std::int64_t version) -> call_version_t {
-        return version == 0 ? call_version_t{call_version::legacy{}} : call_version_t{call_version::current{}};
-      },
-      [](const std::string& version) -> call_version_t {
-        static const std::unordered_map<std::string_view, call_version_t> known{
-            {"0", call_version::legacy{}}, {"1", call_version::current{}}};
-        const auto found = known.find(version);
-        return found == known.end() ? call_version_t{call_version::current{}} : found->second;
-      }}, wire);
-}
-inline bool legacy_call_of(const spl::variant<std::string, std::int64_t>& wire) {
-  return spl::visit(spl::overloaded{[](call_version::legacy) { return true; },
-      [](call_version::current) { return false; }}, call_version_of(wire));
-}
 
 
 // MSC4027's textual label is event content, not part of the reaction key.
@@ -309,43 +291,11 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                             }},
                  where);
     }
-  // A call's signalling: to the program's calls, as it happens; and in the
-  // timeline as before, a line of its own.
-  }, [&](const loom::ev::m_call_invite_content_t& content) {
-    legacy_calls_.insert_or_assign(content.call_id, legacy_call_of(content.version));
-    this->call_signal(in, one, at, where, content.call_id, content.party_id.value_or(""),
-                      change::call_said::invite{{calls::sdp_kind::offer{}, content.offer.sdp},
-                                                std::chrono::milliseconds(content.lifetime)});
-    done(in, one, event_type_of(one.type), at, where);
-  }, [&](const loom::ev::m_call_answer_content_t& content) {
-    this->call_signal(in, one, at, where, content.call_id, content.party_id.value_or(""),
-                      change::call_said::answer{{calls::sdp_kind::answer{}, content.answer.sdp}});
-    done(in, one, event_type_of(one.type), at, where);
-  }, [&](const loom::ev::m_call_candidates_content_t& content) {
-    this->call_signal(in, one, at, where, content.call_id, content.party_id.value_or(""),
-                      change::call_said::candidates{std::ranges::to<std::vector>(std::views::transform(content.candidates, [](const auto& each) {
-                                                      return calls::ice_candidate{each.candidate, each.sdp_mid.value_or("")};
-                                                    }))});
-  }, [&](const loom::ev::m_call_hangup_content_t& content) {
-    using reasons = loom::ev::m_call_hangup_content_t::reason_values;
-    const change::call_end_t why = spl::visit(
-        spl::overloaded{[](reasons::user_hangup) -> change::call_end_t { return change::call_end::hung_up{}; },
-                           [](reasons::user_busy) -> change::call_end_t { return change::call_end::busy{}; },
-                           [](reasons::invite_timeout) -> change::call_end_t { return change::call_end::timed_out{}; },
-                           [](reasons::ice_failed) -> change::call_end_t { return change::call_end::failed{}; },
-                           [](reasons::ice_timeout) -> change::call_end_t { return change::call_end::failed{}; },
-                           [](reasons::user_media_failed) -> change::call_end_t { return change::call_end::failed{}; },
-                           [](reasons::unknown_error) -> change::call_end_t { return change::call_end::failed{}; },
-                           [](const std::string& said) -> change::call_end_t { return change::call_end::other{said}; }},
-        content.reason.value_or(reasons::user_hangup{}));
-    this->call_signal(in, one, at, where, content.call_id, content.party_id.value_or(""), change::call_said::hangup{why});
-    done(in, one, event_type_of(one.type), at, where);
-  }, [&](const loom::ev::m_call_reject_content_t& content) {
-    this->call_signal(in, one, at, where, content.call_id, content.party_id.value_or(""), change::call_said::reject{});
-    done(in, one, event_type_of(one.type), at, where);
-  }, [&](const loom::ev::m_call_select_answer_content_t& content) {
-    this->call_signal(in, one, at, where, content.call_id, content.party_id.value_or(""),
-                      change::call_said::select_answer{content.selected_party_id});
+  // A plugin's (mux.plugins.matrix, by the sink's): told to it, and a line
+  // of its own in the timeline where it says so.
+  }, [&](const auto& content) requires(plugins_hear<std::remove_cvref_t<decltype(content)>>()) {
+    if (this->tell_plugins(sink_plugins_tag{}, content, heard_here{this, in, one, at, where}))
+      done(in, one, event_type_of(one.type), at, where);
   }, [&](const auto&) {
     // The rest, by its type: loom's timeline union does not have their
     // content yet.
@@ -460,9 +410,9 @@ void account<Sink>::decrypt_waiting(const std::string& session) {
   const auto waiting = std::move(found->second);
   undecrypted_.erase(found);
   for (const undecrypted_event& one : waiting) {
-    // News when it came: news to a call still, whose invite says, by its
-    // lifetime, whether it is too late.
-    const calls_live_while news{calls_live_, placed_as_news(one.where)};
+    // News when it came: news still, to a plugin that hears it -- a call's
+    // invite says, by its lifetime, whether it is too late.
+    const late_news_while news{late_news_, placed_as_news(one.where)};
     this->event(one.in, one.event,
                 spl::visit(spl::overloaded{[](placement::aside aside) -> placement_t { return aside; },
                                                  [](const auto&) -> placement_t { return placement::in_window{}; }},
@@ -709,24 +659,6 @@ auto account<Sink>::body_of(std::string plain, const std::optional<std::string>&
   if (spl::visit([](auto of) { return of.html_given; }, body_format_of(format)))
     made.html = formatted_body;
   return made;
-}
-
-template <class Sink>
-void account<Sink>::call_signal(const conversation_id& in, const loom::ev::timeline_event& one,
-                                std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string call,
-                                std::string party, change::call_said_t said) {
-  // A still-ringing invite in the first sync is actionable. Older calls
-  // are rejected by their expiry in the call controller.
-  const bool invite = spl::visit(spl::overloaded{[](const change::call_said::invite&) { return true; },
-      [](const auto&) { return false; }}, said);
-  const bool live = (placed_as_news(where) || calls_live_) && (!telling_history_ || invite);
-  if (!live)
-    return;
-  // This session's own, echoed by the sync: nothing to tell.
-  if (one.sender == id_.address && party == how_.device_id.value_or("mux"))
-    return;
-  sink_(change::call_signalled{in, std::move(call), std::move(party), one.sender, one.sender == id_.address, at,
-                               std::move(said)});
 }
 
 }  // namespace mux::proto::matrix::client

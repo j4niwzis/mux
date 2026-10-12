@@ -12,21 +12,33 @@ file(GLOB mux_plugin_folders LIST_DIRECTORIES true RELATIVE "${CMAKE_CURRENT_SOU
 list(TRANSFORM mux_plugin_folders REPLACE "/CMakeLists.txt$" "")
 
 # A plugin's sources, by where they go:
+#   CHANGES   what it tells the program from an account -- its changes,
+#             one change_list, `changes`, in its namespace: under mux.core,
+#             on mux.core.ids alone; the module mux.plugin.<name>.changes
 #   TYPES     what it names -- its feature, pages, requests, what is shown of
 #             it -- and what it says it provides: light, seen by mux.ui;
 #             the module mux.plugin.<name>.types
 #   UI        what it puts in the window: mux.plugin.<name>.ui, on mux.ui
 #   APP       its part of the program: mux.plugin.<name>.app
+#   MATRIX    what it hears of a Matrix account's events, and sends: seen
+#             where the account is made (mux.plugins.matrix); built where
+#             MUX_PROTOCOL_MATRIX is on -- mux.plugin.<name>.matrix
 #   ORDER     its place among the plugins (where they come in turn: tabs,
 #             parts), then by name
 #   REQUIRES  the plugins it needs, turned on too
 #   LIBRARIES what it links -- a call's WebRTC -- linked with the window
 function(mux_plugin name)
-  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER" "TYPES;UI;APP;REQUIRES;LIBRARIES")
+  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER" "CHANGES;TYPES;UI;APP;MATRIX;REQUIRES;LIBRARIES")
   if(NOT DEFINED one_ORDER)
     message(FATAL_ERROR "src/plugins/${name}/CMakeLists.txt: mux_plugin(${name}) needs its ORDER.")
   endif()
-  foreach(layer IN ITEMS TYPES UI APP)
+  if(NOT MUX_PROTOCOL_MATRIX)
+    set(one_MATRIX)
+  endif()
+  if(one_CHANGES)
+    set_property(GLOBAL APPEND PROPERTY MUX_PLUGINS_WITH_CHANGES ${name})
+  endif()
+  foreach(layer IN ITEMS CHANGES TYPES UI APP MATRIX)
     list(TRANSFORM one_${layer} PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
     set_property(GLOBAL APPEND PROPERTY MUX_PLUGIN_${layer} ${one_${layer}})
     if(one_${layer})
@@ -71,7 +83,7 @@ else()
   set(mux_all_plugins OFF)
 endif()
 get_property(mux_plugin_libraries GLOBAL PROPERTY MUX_PLUGIN_LIBRARIES)
-foreach(layer IN ITEMS TYPES UI APP)
+foreach(layer IN ITEMS CHANGES TYPES UI APP MATRIX)
   string(TOLOWER "${layer}" lower)
   get_property(mux_plugin_${lower} GLOBAL PROPERTY MUX_PLUGIN_${layer})
   get_property(mux_plugin_modules_${lower} GLOBAL PROPERTY MUX_PLUGIN_MODULES_${layer})
@@ -97,3 +109,17 @@ mux_plugins_module(mux_plugins_types mux.plugins.types "mux.composition;${mux_pl
   "export namespace mux {\n// The plugins turned on, in their ORDER.\nusing enabled_plugins = plugin_list<${features}>;\n}  // namespace mux\n")
 mux_plugins_module(mux_plugins_ui mux.plugins.ui "mux.plugins.types;${mux_plugin_modules_ui}" "")
 mux_plugins_module(mux_plugins_app mux.plugins.app "mux.plugins.types;${mux_plugin_modules_app}" "")
+# The plugins' changes, in their ORDER: one list, joined into mux::change_t.
+get_property(mux_plugins_with_changes GLOBAL PROPERTY MUX_PLUGINS_WITH_CHANGES)
+set(change_lists)
+foreach(name IN LISTS mux_plugins)
+  if(name IN_LIST mux_plugins_with_changes)
+    list(APPEND change_lists "plugins::${name}::changes")
+  endif()
+endforeach()
+string(REPLACE ";" ", " change_lists "${change_lists}")
+mux_plugins_module(mux_plugins_changes mux.plugins.changes "mux.core.ids;${mux_plugin_modules_changes}"
+  "export namespace mux {\n// Every plugin's own changes, one list: joined into mux::change_t (mux.core).\ntemplate <class... Lists>\nstruct joined_change_lists {\n  using type = change_list<>;\n};\ntemplate <class... A>\nstruct joined_change_lists<change_list<A...>> {\n  using type = change_list<A...>;\n};\ntemplate <class... A, class... B, class... Rest>\nstruct joined_change_lists<change_list<A...>, change_list<B...>, Rest...>\n    : joined_change_lists<change_list<A..., B...>, Rest...> {};\nusing plugin_changes = typename joined_change_lists<${change_lists}>::type;\n}  // namespace mux\n")
+# What the plugins hear of a Matrix account's events: imported where the
+# account is made, so that it finds them (mux.app.network).
+mux_plugins_module(mux_plugins_matrix mux.plugins.matrix "${mux_plugin_modules_matrix}" "")

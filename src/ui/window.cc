@@ -899,7 +899,7 @@ template <class Actions> struct window : skiff::compose::Specced {
     layer().notice.dropClosed();
     layer().person.dropClosed();
     layer().room.dropClosed();
-    dialogs_t::drop_closed(layer().dialogs);
+    layers::dialogs_t::drop_closed(layer().dialogs);
     layer().history.dropClosed();
     layer().linking.dropClosed();
     layer().leaving.dropClosed();

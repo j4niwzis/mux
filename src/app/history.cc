@@ -130,6 +130,11 @@ class history_part {
       if (spl::visit(spl::overloaded{[](mux::placement::aside) { return true; }, [](const auto&) { return false; }},
                      c.where))
         return;
+      // One that comes deleted is the server's copy, with nothing left of
+      // what it said: recorded, it would be read back over the whole one on
+      // disk. What is kept of it is marked and archived instead (program_core).
+      if (c.message.redacted)
+        return;
       const mux::conversation* chat = s_->model->find(c.message.in);
       const bool in_timeline =
           chat && std::ranges::find(chat->timeline, c.message.id, &mux::message::id) != chat->timeline.end();

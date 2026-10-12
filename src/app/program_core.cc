@@ -162,15 +162,25 @@ void app::woken() {
                one);
     // A message deleted: marked where it is kept, and kept whole apart --
     // as it was, before the model takes it out of view.
+    // One that comes again already deleted -- a page back, a window, the
+    // sync kept at every start -- is the server's copy, emptied: the same,
+    // for what is kept of it, unless it is marked so already.
+    const auto deleted = [&](const mux::conversation_id& in, const std::string& id, bool again) {
+      const mux::conversation* chat = model->find(in);
+      const auto found = chat ? std::ranges::find(chat->timeline, id, &mux::message::id)
+                              : std::vector<mux::message>::const_iterator{};
+      if (chat && found != chat->timeline.end()) {
+        if (!(again && found->redacted))
+          store.mark_deleted(in, id, *found);
+      } else {
+        deleted_on_disk[in].push_back(id);
+      }
+    };
     if (!ask.demo)
-      spl::visit(spl::overloaded{[&](const mux::change::message_redacted& c) {
-                                   const mux::conversation* chat = model->find(c.in);
-                                   const auto found = chat ? std::ranges::find(chat->timeline, c.id, &mux::message::id)
-                                                           : std::vector<mux::message>::const_iterator{};
-                                   if (chat && found != chat->timeline.end())
-                                     store.mark_deleted(c.in, c.id, *found);
-                                   else
-                                     deleted_on_disk[c.in].push_back(c.id);
+      spl::visit(spl::overloaded{[&](const mux::change::message_redacted& c) { deleted(c.in, c.id, false); },
+                                 [&](const mux::change::message_added& c) {
+                                   if (c.message.redacted && !c.message.id.empty())
+                                     deleted(c.message.in, c.message.id, true);
                                  },
                                  [](const auto&) {}},
                  one);

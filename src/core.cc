@@ -751,8 +751,18 @@ class model {
     // are kept, and something of it is left to show.
     if (one.message.redacted &&
         (!show_deleted || one.message.outgoing ||
-         (one.message.body.plain.empty() && !one.message.body.html && !one.message.attachment)))
+         (one.message.body.plain.empty() && !one.message.body.html && !one.message.attachment))) {
+      // The server's emptied copy of one held whole: that one marked, as a
+      // deletion told live would -- not replaced by what is left of it.
+      if (show_deleted && !one.message.outgoing)
+        this->in_chat(one.message.in, [&](conversation& where) {
+          if (message* kept = message_in(where, one.message.id); kept && !kept->outgoing) {
+            kept->redacted = true;
+            in_latest(where, one.message.id, [](message& latest) { latest.redacted = true; });
+          }
+        });
       return;
+    }
     this->in_chat(one.message.in, [&](conversation& where) {
       auto merged = one;
       if (const auto quoted = where.quoted.find(one.message.id); quoted != where.quoted.end()) {

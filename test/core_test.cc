@@ -307,6 +307,20 @@ TEST(Model, Messages) {
   EXPECT_EQ(one->members[1].name, "Nurse");
 }
 
+// The server's emptied copy of a message held whole, come again -- a page
+// back, the sync at a start: the whole one marked deleted, all it said kept.
+TEST(Model, AnEmptiedCopyMarksTheWholeMessageDeleted) {
+  model kept;
+  kept.show_deleted = true;
+  const conversation_id in{account_id{protocol::xmpp{}, "romeo@example.net"}, "juliet@example.com"};
+  kept.apply(change::message_added{message{.in = in, .id = "1", .body = {"hi", std::nullopt}}});
+  kept.apply(change::message_added{message{.in = in, .id = "1", .redacted = true}});
+  const conversation* one = kept.find(in);
+  ASSERT_EQ(one->timeline.size(), 1u);
+  EXPECT_TRUE(one->timeline[0].redacted);
+  EXPECT_EQ(one->timeline[0].body.plain, "hi");
+}
+
 // Deleted, where deleted messages are not kept: gone from the chat; and a
 // deleted one read back from the disk is not put back.
 TEST(Model, ADeletedMessageGoesWhereNotKept) {

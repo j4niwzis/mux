@@ -41,7 +41,7 @@ export namespace mux::ui {
 // userpics of 22 at the right, 17 in, each 8 over the next, in a ring of the
 // menu's colour. Hovered, every reader in a submenu beside the menu: a
 // userpic of 30, 13 in, the name 57 in, and under it when they read.
-template <class Actions> struct seen_row : skiff::compose::Stacked {
+struct seen_row : skiff::compose::Stacked {
   static constexpr float kHeight = 33.0f, kFace = 22.0f, kOverlap = 8.0f, kRight = 17.0f;
   static constexpr std::size_t kMostFaces = 3;
   // How far the readers list lies over the menu it opens from.
@@ -201,7 +201,7 @@ inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, 
           c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(emoji && kept.emoji_is_favourite(emoji->url)
               ? "Remove from favorites" : "Add to favorites", 13.0f, colours.text)))));
 }
-template <class Actions> struct context_menu : skiff::compose::Specced {
+struct context_menu : skiff::compose::Specced {
   // Child references and handlers require a fixed address.
   context_menu(const context_menu&) = delete;
   context_menu& operator=(const context_menu&) = delete;
@@ -231,13 +231,13 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
       template <std::size_t At>
       static auto head_of(const palette& colours, const menu_facts& facts, card* of) {
         using feature = Features...[At];
-        static_assert(requires { extend(contract::message_menu_top{}, type_tag<feature>{}, type_tag<Actions>{}, colours, facts, unroll<At>{of}); },
+        static_assert(requires { extend(contract::message_menu_top{}, type_tag<feature>{}, colours, facts, unroll<At>{of}); },
                       composition::broken<contract::message_menu_top, feature>());
-        return extend(contract::message_menu_top{}, type_tag<feature>{}, type_tag<Actions>{}, colours, facts, unroll<At>{of});
+        return extend(contract::message_menu_top{}, type_tag<feature>{}, colours, facts, unroll<At>{of});
       }
       template <class Feature>
       static auto over_of(const palette& colours, emoji_kept& kept) {
-        return unrolled(contract::message_menu_top{}, type_tag<Feature>{}, type_tag<Actions>{}, colours, kept);
+        return unrolled(contract::message_menu_top{}, type_tag<Feature>{}, colours, kept);
       }
       template <class Indices>
       struct heads_of;
@@ -271,7 +271,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
     using thread_row = row_item<sends<::mux::ui::request::menu_thread>>;
     using quote_reply_row = row_item<sends<::mux::ui::request::menu_quote_reply>>;
     using edit_row = row_item<sends<::mux::ui::request::menu_edit>>;
-    using later_row = row_item<not_yet<Actions>>;
+    using later_row = row_item<not_yet>;
     using copy_row = row_item<sends<::mux::ui::request::menu_copy>>;
     using link_row = row_item<sends<::mux::ui::request::menu_copy_link>>;
     using url_row = row_item<sends<::mux::ui::request::menu_copy_url>>;
@@ -286,9 +286,9 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
     struct plugin_rows<plugin_list<Features...>> {
       template <class Feature>
       static auto row_of(const palette& colours, const emoji_kept& kept, const menu_facts& facts) {
-        static_assert(requires { extend(contract::message_menu{}, type_tag<Feature>{}, type_tag<Actions>{}, colours, kept, facts); },
+        static_assert(requires { extend(contract::message_menu{}, type_tag<Feature>{}, colours, kept, facts); },
                       composition::broken<contract::message_menu, Feature>());
-        return extend(contract::message_menu{}, type_tag<Feature>{}, type_tag<Actions>{}, colours, kept, facts);
+        return extend(contract::message_menu{}, type_tag<Feature>{}, colours, kept, facts);
       }
       using nodes_t = std::tuple<decltype(row_of<Features>(std::declval<const palette&>(), std::declval<const emoji_kept&>(),
                                                            std::declval<const menu_facts&>()))...>;
@@ -331,7 +331,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
       select_row select;
       delete_row remove;
       nodes::Box<> seen_band;
-      seen_row<Actions> seen;
+      seen_row seen;
       // What a head unrolls -- every emoji, for the quick reactions -- once
       // asked for: over the items, out of their flow, and after them, so
       // drawn on top of them and pressed first.
@@ -483,7 +483,7 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
                                           .height = 1.0f,
                                           .margin = {4.0f, 0.0f, 4.0f, 0.0f}},
                                          nodes::Box<>(colours.band)),
-              .seen = seen_row<Actions>(colours, facts.seen)} {
+              .seen = seen_row(colours, facts.seen)} {
       fState.setFloats(true);  // over the chat: frosted live, where asked
       auto& [tops, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave_emoji, copy_image, save, added, forward, source, history, select,
              remove, seen_band, seen, overs] = parts;
@@ -505,12 +505,12 @@ template <class Actions> struct context_menu : skiff::compose::Specced {
     card menu;
     // Who has seen it, listed beside the menu: over the whole window, as the
     // menu is.
-    std::optional<typename seen_row<Actions>::submenu_t> seen_list;
+    std::optional<typename seen_row::submenu_t> seen_list;
   } parts;
 
   // Where it was asked for: the pointer.
   float at_x = 0.0f, at_y = 0.0f;
-  context_menu(const ui_needs<Actions> &n, const menu_facts &facts)
+  context_menu(const ui_needs &n, const menu_facts &facts)
       : Specced({.fill = true}),
         parts{.menu = card(*n.colours, *n.emoji, facts,
                            {.x = facts.x, .y = facts.y})},

@@ -249,7 +249,6 @@ struct button_row : skiff::compose::Stacked {
 
 // What every account form ends with: what went wrong or what is happening,
 // and its buttons. Enter in any of the form's fields submits it.
-template <class Actions>
 struct form_end : skiff::compose::Stacked {
   using submit_button = button_for<sends<::mux::ui::request::submit_login>>;
   using close_button = button_for<sends<::mux::ui::request::pop_panel>>;
@@ -286,28 +285,25 @@ struct form_end : skiff::compose::Stacked {
 // panels are made: a template on Actions, made in the program, which imports
 // mux.ui.proto -- and any of them, as the panels hold them, made from the
 // list of protocols.
-template <class Tag, class Actions>
-using form_of_t = typename decltype(form_type(state_of<Tag>{}, type_tag<Actions>{}))::type;
-template <class Actions, class>
+template <class Tag>
+using form_of_t = typename decltype(form_type(state_of<Tag>{}))::type;
+template <class>
 struct form_list;
-template <class Actions, class... Tags>
-struct form_list<Actions, protocol_list<Tags...>> {
-  using type = spl::variant<form_of_t<Tags, Actions>...>;
+template <class... Tags>
+struct form_list<protocol_list<Tags...>> {
+  using type = spl::variant<form_of_t<Tags>...>;
 };
-template <class Actions>
-using account_form = typename form_list<Actions, protocols>::type;
+using account_form = typename form_list<protocols>::type;
 
 // The form of an account's own protocol, filled in from what it keeps.
-template <class Actions>
-[[nodiscard]] account_form<Actions> form_of(const palette& colours, const config::account_t& saved) {
+[[nodiscard]] account_form form_of(const palette& colours, const config::account_t& saved) {
   return spl::visit([&](const auto& kept) {
-    using form = typename decltype(form_type_for(kept, type_tag<Actions>{}))::type;
-    return account_form<Actions>(std::in_place_type<form>, colours, std::optional(kept));
+    using form = typename decltype(form_type_for(kept))::type;
+    return account_form(std::in_place_type<form>, colours, std::optional(kept));
   }, saved.own);
 }
 // A form laid out in the column under `top`.
-template <class Actions>
-void place_form(account_form<Actions>& form, const skia::SkRect& column, float top) {
+void place_form(account_form& form, const skia::SkRect& column, float top) {
   spl::visit(
       [&](auto& one) {
         one.fState.arrange(0.0f, 0.0f);
@@ -318,7 +314,7 @@ void place_form(account_form<Actions>& form, const skia::SkRect& column, float t
 
 // Esc leaves a panel: back to what is under it, or a step back within it
 // first, as Back says.
-template <class Actions, class Back = sends<::mux::ui::request::pop_panel>>
+template <class Back = sends<::mux::ui::request::pop_panel>>
 struct closes_on_escape : skiff::compose::Stacked {
   // Esc: what Back answers.
   using Answer = typename Back::Answer;

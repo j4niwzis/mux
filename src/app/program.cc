@@ -318,8 +318,8 @@ struct app : kept_settings {
   }
 #endif
 
-  using adding = mux::ui::add_account_pane<actions>;
-  using accounts = mux::ui::accounts_panel<actions>;
+  using adding = mux::ui::add_account_pane;
+  using accounts = mux::ui::accounts_panel;
 
   mailbox_type* box = nullptr;
   // What wakes the window: as main made it, for the mailbox.
@@ -337,7 +337,7 @@ struct app : kept_settings {
   mux::ui::palette colours;
   std::optional<mux::config::style_settings> active_style;
   actions ask;
-  window_scene scene_storage{mux::ui::ui_needs<actions>{.sound = &speaker, .colours = &colours, .emoji = &shared.emoji,
+  window_scene scene_storage{mux::ui::ui_needs{.sound = &speaker, .colours = &colours, .emoji = &shared.emoji,
       .looks = &shared.looks, .paint = &shared.paint, .shared = &shared.ui}};
   skiff::scene::Scene<window_type>& scene = scene_storage.get();
 

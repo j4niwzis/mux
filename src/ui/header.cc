@@ -136,13 +136,11 @@ using emoji_cell_t = decltype(emoji_cell(std::declval<const palette&>(), {}, {})
 // asked of you (Accept, Decline), waiting on them (Cancel), the 7 emoji to
 // compare (They match, They don't match), over (OK). What shows is what
 // its step says.
-template <class Actions>
 using verification_box_of =
     skiff::compose::Box<nodes::Text, nodes::Text, nodes::Flow<std::vector<emoji_cell_t>>, button_for<sends<request::verify_accept_now>>,
                         button_for<sends<request::verify_cancel_now>>, button_for<sends<request::verify_match>>,
                         button_for<sends<request::verify_mismatch>>, button_for<sends<request::close_verification>>>;
-template <class Actions>
-struct verification_box : verification_box_of<Actions> {
+struct verification_box : verification_box_of {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}, .dismissable = false}; }
   using accept_button = button_for<sends<request::verify_accept_now>>;
@@ -152,9 +150,9 @@ struct verification_box : verification_box_of<Actions> {
   using close_button = button_for<sends<request::close_verification>>;
   verification_step_t step;
 
-  verification_box(const ui_needs<Actions>& n, const verification_view& view) : verification_box(*n.colours, view) {}
+  verification_box(const ui_needs& n, const verification_view& view) : verification_box(*n.colours, view) {}
   verification_box(const palette& colours, const verification_view& view)
-      : verification_box_of<Actions>(
+      : verification_box_of(
             skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
             notice_line("Verify " + view.user, 17.0f, colours.text, true), notice_line(note_of(view), 14.0f, colours.dim),
             emoji_row(colours, view.step),
@@ -196,28 +194,27 @@ template <class... Features>
 struct header_buttons<plugin_list<Features...>> {
   using shown_t = std::array<bool, sizeof...(Features)>;
   // Asked where the window is instantiated, which sees the plugins' ui.
-  template <class Actions>
   static shown_t shown_for(const ui_shared& shared, const conversation& one) {
-    return {header_shown(contract::chat_header{}, type_tag<Features>{}, type_tag<Actions>{}, shared, one)...};
+    return {header_shown(contract::chat_header{}, type_tag<Features>{}, shared, one)...};
   }
-  template <class Actions, class Feature>
+  template <class Feature>
   static auto button_of(const palette& colours) {
-    static_assert(requires { extend(contract::chat_header{}, type_tag<Feature>{}, type_tag<Actions>{}, colours); },
+    static_assert(requires { extend(contract::chat_header{}, type_tag<Feature>{}, colours); },
                   composition::broken<contract::chat_header, Feature>());
-    return extend(contract::chat_header{}, type_tag<Feature>{}, type_tag<Actions>{}, colours);
+    return extend(contract::chat_header{}, type_tag<Feature>{}, colours);
   }
-  template <class Actions>
-  using nodes_t = std::tuple<decltype(button_of<Actions, Features>(std::declval<const palette&>()))...>;
-  template <class Actions>
-  static nodes_t<Actions> made(const palette& colours, bool chat, const shown_t& shown) {
+  using nodes_t = std::tuple<decltype(button_of<Features>(std::declval<const palette&>()))...>;
+  static nodes_t made(const palette& colours, bool chat, const shown_t& shown) {
     return [&]<std::size_t... At>(std::index_sequence<At...>) {
-      return nodes_t<Actions>{skiff::compose::visible(chat && shown[At], button_of<Actions, Features>(colours))...};
+      return nodes_t{skiff::compose::visible(chat && shown[At], button_of<Features>(colours))...};
     }(std::index_sequence_for<Features...>{});
   }
 };
 using chat_header_buttons = header_buttons<composition::providers<contract::chat_header, enabled_plugins>>;
 
-template <class Actions> struct chat_header : skiff::compose::Stacked {
+// How tall a chat's head is -- and the selection bar in its place.
+inline constexpr float kHeadHeight = 56.0f;
+struct chat_header : skiff::compose::Stacked {
   // What the head shows: the chat's key and name, and how it is -- or no
   // chat. The head is made from it, nothing set in it afterwards.
   struct view {
@@ -263,7 +260,7 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
     return {.key = one->id.id,
             .title = display_name(*one),
             .status = std::move(about),
-            .buttons = chat_header_buttons::template shown_for<Actions>(shared, *one)};
+            .buttons = chat_header_buttons::template shown_for(shared, *one)};
   }
 
   // The chat's avatar, its name over how it is, and the button to its info.
@@ -283,7 +280,7 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
       two_lines_t texts;
       find_button find;
       // The plugins' buttons: a call to the other, for one.
-      typename chat_header_buttons::template nodes_t<Actions> buttons;
+      typename chat_header_buttons::template nodes_t buttons;
       // The room's threads, as Element's header has them.
       threads_button threads;
       info_button info;
@@ -309,7 +306,7 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
                     skiff::compose::styled(
                         {.alignSelf = scene::align::kMiddle},
                         find_button(colours, icon::search{}, {}))),
-                .buttons = chat_header_buttons::template made<Actions>(colours, shown.key.has_value(), shown.buttons),
+                .buttons = chat_header_buttons::template made(colours, shown.key.has_value(), shown.buttons),
                 .threads = skiff::compose::visible(
                     shown.key.has_value(),
                     skiff::compose::styled(
@@ -334,10 +331,10 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
     nodes::Box<> divider;
   } parts;
 
-  static constexpr float kHeight = 56.0f;
+  static constexpr float kHeight = kHeadHeight;
 
   // Declared: the row over a line dividing it from the messages.
-  chat_header(const ui_needs<Actions> &n, const view &shown)
+  chat_header(const ui_needs &n, const view &shown)
       : Stacked(skiff::compose::vbox(
             0.0f, {.fill = true, .background = n.colours->sidebar})),
         parts{.row = head_row(*n.colours, shown),
@@ -349,9 +346,8 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
 // The head as the chats model has it: the chosen chat's, read by the
 // window's binding as the chats move, and made again only where what it
 // shows did.
-template <class Actions>
-struct chat_head : nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>> {
-  ui_needs<Actions> needs;
+struct chat_head : nodes::Memo<typename chat_header::view, chat_header> {
+  ui_needs needs;
   const model* now = nullptr;
   std::optional<conversation_id> chosen;
   bool back = false;
@@ -376,9 +372,9 @@ struct chat_head : nodes::Memo<typename chat_header<Actions>::view, chat_header<
     if (now == nullptr)
       return;
     const conversation* one = chosen ? now->find(*chosen) : nullptr;
-    auto shown = chat_header<Actions>::view_of(*needs.shared, one, *now);
+    auto shown = chat_header::view_of(*needs.shared, one, *now);
     shown.back = back;
-    this->show(shown, [this](const auto& made) { return chat_header<Actions>(needs, made); });
+    this->show(shown, [this](const auto& made) { return chat_header(needs, made); });
   }
 };
 
@@ -434,10 +430,11 @@ struct selection_shown {
 // As tdesktop's top bar: Forward and Delete carry the selection count,
 // Clear stays at the right. Copy remains in the context menu and Ctrl+C.
 // Buttons size from their text instead of relying on Button's zero width.
-template <class Actions>
-auto selection_bar(const ui_needs<Actions>& n) {
+// A plain function, not one over the program's actions: its type worked out
+// once, here, not by whichever unit first completes the chat column -- which
+// then made all of it, and everything it makes, again.
+auto selection_bar(const palette& colours) {
   namespace c = skiff::compose;
-  const palette& colours = *n.colours;
   const scene::Spec action{
       .height = 32.0f, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle,
       .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f,
@@ -458,7 +455,7 @@ auto selection_bar(const ui_needs<Actions>& n) {
   return c::shown_if<selection_shown>(
       [](const selection_shown& now) { return now.count > 0; },
       c::onKey(scene::keys::kEscape, ::mux::ui::request::selection_cancel{},
-          c::row(c::hbox(8.0f, {.fillX = true, .height = chat_header<Actions>::kHeight,
+          c::row(c::hbox(8.0f, {.fillX = true, .height = kHeadHeight,
                                .padding = {0.0f, 12.0f, 1.0f, 12.0f}, .background = colours.sidebar}),
               c::shown_if<selection_shown>([](const selection_shown& now) { return now.forwardable; },
                   selected_action(::mux::ui::request::selection_forward{}, "Forward")),
@@ -474,8 +471,7 @@ auto selection_bar(const ui_needs<Actions>& n) {
                   "Clear message selection"),
               c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)))));
 }
-template <class Actions>
-using selection_bar_t = decltype(selection_bar(std::declval<const ui_needs<Actions>&>()));
+using selection_bar_t = decltype(selection_bar(std::declval<const palette&>()));
 
 // Where the finding is, as what is shown says: the one shown of how many;
 // none asked yet, nothing said.
@@ -495,23 +491,20 @@ struct found_said_t {
 // a field with the magnifier, how many are found and which is shown ("3 of
 // 12"), the arrows to the newer and the older, and ✕. Enter goes to the
 // older one, Shift+Enter to the newer, Esc closes.
-template <class Actions>
 struct search_typed {
   using Answer = std::optional<::mux::ui::request::search_typed>;
   std::optional<::mux::ui::request::search_typed> operator()(std::string_view text) { return ::mux::ui::request::search_typed{std::string(text)}; }
 };
-template <class Actions>
 struct search_step {
   using Answer = ::mux::ui::request::search_step;
   bool older = true;
   ::mux::ui::request::search_step operator()() { return ::mux::ui::request::search_step{older}; }
 };
-template <class Actions>
 struct search_bar : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = std::variant<::mux::ui::request::search_step, ::mux::ui::request::close_search>;
-  using field_t = widgets::TextBox<search_typed<Actions>>;
-  using step_button = icon_button<search_step<Actions>>;
+  using field_t = widgets::TextBox<search_typed>;
+  using step_button = icon_button<search_step>;
   using close_button = icon_button<sends<::mux::ui::request::close_search>>;
   struct parts_t {
     field_t field;
@@ -521,7 +514,7 @@ struct search_bar : skiff::compose::Stacked {
     nodes::Box<> bottom_line;
   } parts;
 
-  explicit search_bar(const ui_needs<Actions>& n) : search_bar(*n.colours) {}
+  explicit search_bar(const ui_needs& n) : search_bar(*n.colours) {}
   [[nodiscard]] static scene::Spec middle() { return {.alignSelf = scene::align::kMiddle}; }
   // The field, with the magnifier in it.
   [[nodiscard]] static field_t searching(field_t field) {
@@ -529,7 +522,7 @@ struct search_bar : skiff::compose::Stacked {
     return field;
   }
   search_bar(const palette& colours)
-      : Stacked(skiff::compose::hbox(4.0f, {.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
+      : Stacked(skiff::compose::hbox(4.0f, {.fillX = true, .height = chat_header::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
                                             .background = colours.sidebar})),
         parts{.field = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                                               searching(field_t(colours.widgets, "Search", {}))),

@@ -62,7 +62,7 @@ struct forward_target {
 struct forward_facts {
   std::vector<forward_target> chats;
 };
-template <class Actions> struct forward_box : skiff::compose::Stacked {
+struct forward_box : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   forward_box(const forward_box&) = delete;
   forward_box& operator=(const forward_box&) = delete;
@@ -119,7 +119,7 @@ template <class Actions> struct forward_box : skiff::compose::Stacked {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
 
-  forward_box(const ui_needs<Actions>& n, const forward_facts& facts) : forward_box(*n.colours, facts.chats) {}
+  forward_box(const ui_needs& n, const forward_facts& facts) : forward_box(*n.colours, facts.chats) {}
   forward_box(const palette &colours, const std::vector<forward_target> &chats)
       : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 520.0f})),
         colours_(&colours), all(chats),
@@ -246,7 +246,7 @@ inline auto start_chat_view(const palette& colours, const new_chat_facts& facts)
       c::visible(!facts.inviting, widgets::SendButton<request::copy_text>(colours.widgets, "Copy link", {facts.own_link}))));
 }
 using start_chat_box_t = decltype(start_chat_view(std::declval<const palette&>(), std::declval<const new_chat_facts&>()));
-template <class Actions> using start_chat_box = start_chat_box_t;
+using start_chat_box = start_chat_box_t;
 inline bool content_persistent(std::type_identity<start_chat_box_t>) { return true; }
 inline bool content_matches(const start_chat_box_t& up, const new_chat_facts& facts) {
   return up.fHandlers.by == facts.by && up.fHandlers.inviting == facts.inviting;
@@ -351,7 +351,7 @@ inline auto create_room_view(const palette& colours, const new_room_facts& facts
                  .encrypted = form.encryption});
 }
 using create_room_box_t = decltype(create_room_view(std::declval<const palette&>(), std::declval<const new_room_facts&>()));
-template <class Actions> using create_room_box = create_room_box_t;
+using create_room_box = create_room_box_t;
 inline dialog_look content_look(std::type_identity<create_room_box_t>) { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
 template <class Needs>
 auto make_content(std::type_identity<create_room_box_t>, const Needs& needs, const new_room_facts& facts) {

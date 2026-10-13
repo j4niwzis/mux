@@ -46,7 +46,7 @@ export namespace mux::ui {
 // room's threads -- each root, who wrote it and what, how many answers and
 // when the latest came -- and one opened: its root, its answers, and a
 // field to answer in it.
-template <class Actions> struct threads_panel : skiff::compose::Stacked {
+struct threads_panel : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   threads_panel(const threads_panel&) = delete;
   threads_panel& operator=(const threads_panel&) = delete;
@@ -169,10 +169,10 @@ template <class Actions> struct threads_panel : skiff::compose::Stacked {
     // The thread open: the chat's own timeline, its root and answers in it
     // -- one renderer for both: runs, readers, quotes, presses,
     // menus, swipes, pictures, all as the chat has them.
-    timeline_area<Actions> answers;
-    composer_bar<Actions, in_thread> line;
+    timeline_area answers;
+    composer_bar<in_thread> line;
   } parts;
-  threads_panel(const ui_needs<Actions> &n)
+  threads_panel(const ui_needs &n)
       : Stacked(skiff::compose::vbox(
             0.0f, {.fillY = true, .background = n.colours->sidebar})),
         colours_(n.colours),
@@ -182,8 +182,8 @@ template <class Actions> struct threads_panel : skiff::compose::Stacked {
               .empty = skiff::compose::styled(
                   {.margin = {16.0f, 16.0f, 0.0f, 16.0f}},
                   nodes::Text("No threads here yet.", 13.0f, n.colours->dim)),
-              .answers = timeline_area<Actions>(n),
-              .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {},
+              .answers = timeline_area(n),
+              .line = composer_bar<in_thread>(n, {this}, {this}, {},
                                                        {}, {this})} {
 
     for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
@@ -276,7 +276,7 @@ template <class Actions> struct threads_panel : skiff::compose::Stacked {
   // pressed. False where it is not one of its.
   bool scroll_to(const std::string& id) {
     auto& bubbles = parts.answers.bubbles();
-    const auto found = std::ranges::find(bubbles, id, &message_bubble<Actions>::message_id);
+    const auto found = std::ranges::find(bubbles, id, &message_bubble::message_id);
     if (found == bubbles.end())
       return false;
     parts.answers.parts.timeline.scrollTo(found->bounds().fTop - 8.0f);

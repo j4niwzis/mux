@@ -46,15 +46,13 @@ struct person_shown {
   std::string key;
   person_facts facts;
 };
-template <class Actions>
 auto person_cover(const palette& colours, const std::string& key, const person_facts& facts) {
   return skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
-      avatar_button<Actions>(avatar_of::person{}, key, facts.name, 72.0f),
+      avatar_button(avatar_of::person{}, key, facts.name, 72.0f),
       two_lines(colours, facts.name, facts.status, 17.0f, 6.0f, two_line_style{.selectable = true}));
 }
-template <class Actions>
-using person_cover_t = decltype(person_cover<Actions>(std::declval<const palette&>(), "", std::declval<const person_facts&>()));
+using person_cover_t = decltype(person_cover(std::declval<const palette&>(), "", std::declval<const person_facts&>()));
 
 inline nodes::Text profile_biography(const palette& colours, const body& biography) {
   auto text = wrapped(nodes::Text(biography.plain, 14.0f, colours.text));
@@ -73,15 +71,15 @@ inline std::string profile_pronouns(const profile_details& profile) {
 }
 // The banner sits behind the name, pronouns and biography. Its background
 // ends at the section divider, leaving the account ID and actions plain.
-template <class Actions> struct profile_cover : skiff::compose::Specced {
+struct profile_cover : skiff::compose::Specced {
   struct details : skiff::compose::Stacked {
     struct parts_t {
-      person_cover_t<Actions> face;
+      person_cover_t face;
       nodes::Text pronouns, biography;
     } parts;
     details(const palette& colours, const std::string& key, const person_facts& facts)
         : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.face = person_cover<Actions>(colours, key, facts),
+          parts{.face = person_cover(colours, key, facts),
               .pronouns = skiff::compose::visible(!facts.profile.pronouns.empty(), skiff::compose::styled(
                   {.fillX = true, .margin = {0.0f, 22.0f, 8.0f, 22.0f}}, wrapped(nodes::Text(profile_pronouns(facts.profile), 13.0f, colours.dim)))),
               .biography = skiff::compose::visible(!facts.profile.biography.plain.empty() || facts.profile.biography.html.has_value(),
@@ -118,7 +116,7 @@ inline float card_part_height(auto& node, const skia::SkRect& parent) {
   return node.bounds().height() + node.fState.fMargin.totalY();
 }
 
-template <class Actions> struct person_card : skiff::compose::Stacked {
+struct person_card : skiff::compose::Stacked {
   // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
   // it shows, a 24th of the window down within 20 and 40.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
@@ -158,7 +156,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
   // Everything below the title scrolls within the height the dialog gives it.
   struct details : skiff::compose::Stacked {
     struct parts_t {
-      profile_cover<Actions> cover;
+      profile_cover cover;
       nodes::Box<> band;
       id_line_t id;
       action_tile_t<message_them> message;
@@ -179,7 +177,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
     details(const palette& colours, const ui_shared& shared,
             const account_id& account, const std::string& key, const person_facts& facts)
         : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.cover = profile_cover<Actions>(colours, key, facts),
+          parts{.cover = profile_cover(colours, key, facts),
                 .band = section_band(colours),
                 .id = id_line(colours, key, proto::person_link(protocol_state_of(shared, account), key).value_or("")),
                 .message =
@@ -246,7 +244,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
     top_bar top;
     nodes::ScrollContainer<details> scroll;
   } parts;
-  person_card(const ui_needs<Actions>& n, const person_shown& shown)
+  person_card(const ui_needs& n, const person_shown& shown)
       : person_card(*n.colours, *n.shared, shown.account, shown.key, shown.facts) {}
   person_card(const palette& colours, const ui_shared& shared,
               const account_id& account, const std::string& key, const person_facts& facts)
@@ -278,7 +276,7 @@ inline auto room_cover(const palette& colours, const std::string& key, const std
 }
 using room_cover_t = decltype(room_cover(std::declval<const palette&>(), "", "", ""));
 
-template <class Actions> struct room_card : skiff::compose::Stacked {
+struct room_card : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
   struct join_it {
@@ -349,7 +347,7 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
     std::optional<action_tile_t<decline_it>> decline;
   } parts;
 
-  room_card(const ui_needs<Actions>& n, const room_card_facts& facts) : room_card(*n.colours, facts.asked, facts.known) {}
+  room_card(const ui_needs& n, const room_card_facts& facts) : room_card(*n.colours, facts.asked, facts.known) {}
   room_card(const palette &colours, const std::string &asked,
             const room_preview &known)
       : Stacked(skiff::compose::vbox(

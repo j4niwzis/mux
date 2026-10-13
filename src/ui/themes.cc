@@ -392,7 +392,6 @@ struct nothing {
 };
 
 // A control whose action is still to come: it says so.
-template <class Actions>
 struct not_yet {
   using Answer = ::mux::ui::request::not_implemented;
   std::string_view what;

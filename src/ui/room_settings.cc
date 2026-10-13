@@ -472,13 +472,12 @@ template <class State> auto manage_avatar_icon_of(const State& state, const room
   using manage_defaults::manage_avatar_icon;
   return manage_avatar_icon(state, facts);
 }
-template <class Actions> struct room_settings;
+struct room_settings;
 
 // Page factories need a complete type while the dialog's child types are
 // deduced. Keep their data and refresh entry point outside the dialog.
-template <class Actions> struct room_settings_context {
-  using actions_type = Actions;
-  room_settings<Actions>* owner;
+struct room_settings_context {
+  room_settings* owner;
   room_manage_style presentation;
   const palette* colours_;
   const looks_shown* looks_;
@@ -503,13 +502,13 @@ template <class Actions> struct room_settings_context {
     return std::get<index_in<proto::id<State>>(protocols{})>(protocol_parts);
   }
   void show_again();
-  room_settings_context(room_settings<Actions>* owner, const palette* colours, const looks_shown* looks,
+  room_settings_context(room_settings* owner, const palette* colours, const looks_shown* looks,
                         const room_settings_facts& shown)
       : owner(owner), presentation(spl::visit([&](auto tag) { return manage_style_of(state_of<decltype(tag)>{}, *colours); }, shown.speaks)),
         colours_(&presentation.colours), looks_(looks), facts(shown) {}
 };
 
-template <class Actions> struct room_settings : skiff::compose::Stacked {
+struct room_settings : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   room_settings(const room_settings&) = delete;
   room_settings& operator=(const room_settings&) = delete;
@@ -518,8 +517,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
 
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{802.0f, 684.0f}}; }
-  using actions_type = Actions;
-  using context_type = room_settings_context<Actions>;
+  using context_type = room_settings_context;
   context_type context;
   // The colours it and its pages are made in: what it was handed.
   const palette*& colours_;
@@ -633,7 +631,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text heading;
       decltype(skiff::compose::scoped<config::chat_choices>(skiff::compose::handlers(), style_controls(std::declval<const palette&>()), std::declval<conversation_id>())) fonts;
-      look_choices<Actions> choices;
+      look_choices choices;
     } parts;
     looks_page(room_settings *box, const room_settings_facts &facts)
         : Stacked(skiff::compose::vbox(
@@ -642,7 +640,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
                      .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
           parts{.heading = tab_heading(*box->colours_, "Appearance"),
                 .fonts = skiff::compose::scoped<config::chat_choices>(skiff::compose::handlers(), style_controls(*box->colours_), facts.chat),
-                .choices = look_choices<Actions>(*box->colours_, *box->looks_,
+                .choices = look_choices(*box->colours_, *box->looks_,
                                                  choice_level::chat{})} {}
   };
 
@@ -708,7 +706,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   bool rebuild_due = false;
   bool to_top = false;  // another tab: shown from its top
 
-  room_settings(const ui_needs<Actions>& n, const room_settings_facts& shown) : room_settings(n.colours, n.looks, shown) {}
+  room_settings(const ui_needs& n, const room_settings_facts& shown) : room_settings(n.colours, n.looks, shown) {}
   room_settings(const palette *colours, const looks_shown *looks,
                 const room_settings_facts &shown)
       : Stacked(skiff::compose::vbox(0.0f, {.fill = true})), context{this, colours, looks, shown}, colours_(context.colours_),
@@ -799,6 +797,6 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
   }
 };
 
-template <class Actions> void room_settings_context<Actions>::show_again() { owner->show_again(); }
+void room_settings_context::show_again() { owner->show_again(); }
 
 }  // namespace mux::ui

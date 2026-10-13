@@ -39,14 +39,14 @@ struct media_pages {
   static constexpr std::string_view name = "the media panel's pages";
 };
 // A message's menu, its rows after Save As (mux.ui:context_menu):
-//   extend(c, f, type_tag<Actions>, palette, emoji_kept, menu_facts) -> its row: shown,
+//   extend(c, f, palette, emoji_kept, menu_facts) -> its row: shown,
 //   or not, as the facts say, and what it sends its plugin's own
 struct message_menu {
   static constexpr std::string_view name = "a message's menu";
 };
 // A message's trailers: what goes after its text, at the foot of its bubble,
 // that its time sits beside (mux.ui:message):
-//   extend(c, f, type_tag<Actions>, trailer_facts) -> std::optional<its node>:
+//   extend(c, f, trailer_facts) -> std::optional<its node>:
 //   none where it has nothing to show of the message; and
 //   trailing_width(c, f, node), how far its last line goes, for the time
 //   beside it
@@ -56,17 +56,17 @@ struct message_trailers {
 // The window's dialogs (mux.ui:window): what a plugin's dialog shows -- its
 // facts, a part of what is shown -- and its box:
 //   facts_type(c, f) -> type_tag<its facts>, in the plugin's types
-//   extend(c, f, type_tag<Actions>) -> type_tag<its box>, a dialog's content
+//   extend(c, f) -> type_tag<its box>, a dialog's content
 //   made from ui_needs and the facts (make_content, content_look)
 // Closed by request::close_shown<its facts>, which its part takes.
 struct window_dialogs {
   static constexpr std::string_view name = "the window's dialogs";
 };
 // A message's menu's top, over its rows (mux.ui:context_menu):
-//   extend(c, f, type_tag<Actions>, palette, menu_facts, unroll) -> its head:
+//   extend(c, f, palette, menu_facts, unroll) -> its head:
 //   shown, or not, as the facts say; pressing `unroll` unrolls its own
 //   over the items
-//   unrolled(c, f, type_tag<Actions>, palette, emoji_kept) -> that, made then
+//   unrolled(c, f, palette, emoji_kept) -> that, made then
 //   (a node, or in_place where it may not move)
 //   unrolled_head(c, f, head&): the head, told it has unrolled
 struct message_menu_top {
@@ -75,21 +75,21 @@ struct message_menu_top {
 // The window's layers, over everything, not dialogs: a call's card and its
 // whole-window view (mux.ui:window):
 //   facts_type(c, f) -> type_tag<what is shown of it>, in its types
-//   extend(c, f, type_tag<Actions>, needs) -> its node, made from what is
+//   extend(c, f, needs) -> its node, made from what is
 //   shown (bound or derived from those facts)
 struct window_layers {
   static constexpr std::string_view name = "the window's layers";
 };
 // The chat's column, under its head: a call's view in its chat
-// (mux.ui:conversations_screen): extend(c, f, type_tag<Actions>, needs) ->
+// (mux.ui:conversations_screen): extend(c, f, needs) ->
 // its node, there whatever chat is shown.
 struct chat_column {
   static constexpr std::string_view name = "the chat column";
 };
 // The chat's head, its buttons after Search (mux.ui:header):
-//   header_shown(c, f, type_tag<Actions>, shared, chat) -> whether its button
+//   header_shown(c, f, shared, chat) -> whether its button
 //   is for this chat
-//   extend(c, f, type_tag<Actions>, palette) -> its button
+//   extend(c, f, palette) -> its button
 struct chat_header {
   static constexpr std::string_view name = "the chat's head";
 };

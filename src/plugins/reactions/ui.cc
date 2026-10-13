@@ -88,8 +88,7 @@ inline float trailing_width(contract::message_trailers, type_tag<feature>, const
 
 // Its trailer, at a message's foot (mux.ui:message): none where no one has
 // reacted.
-template <class Actions>
-std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>, type_tag<Actions>, const trailer_facts& facts) {
+std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>, const trailer_facts& facts) {
   const message& said = facts.said;
   if (std::ranges::none_of(said.reactions, [](const auto& one) { return !one.second.empty(); }))
     return std::nullopt;
@@ -132,11 +131,10 @@ std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>
 using reaction_row_answer = std::variant<menu_facts, request::open_url,
     std::tuple<std::optional<request::reply_to>, request::close_shown<shown>>>;
 
-template <class Actions>
-auto reaction_event_row(const ui_needs<Actions>& n, const conversation& in, const entry& one,
+auto reaction_event_row(const ui_needs& n, const conversation& in, const entry& one,
                         bool first, bool last, const model* known) {
   namespace c = skiff::compose;
-  auto bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n),
+  auto bubble = message_bubble(spl::remapped<typename message_bubble::needs>(n),
                                         in, reaction_message_of(in, one), first, last, known);
   auto row = c::onClick(std::tuple{one.event.empty() ? std::optional<request::reply_to>{}
         : std::optional(request::reply_to{one.event, std::format("{} reacted {}", one.name, one.key)}), request::close_shown<shown>{}},
@@ -154,8 +152,7 @@ auto reaction_event_row(const ui_needs<Actions>& n, const conversation& in, cons
     return reaction_row_answer{std::move(facts)};
   }, std::move(row));
 }
-template <class Actions>
-auto panel(const ui_needs<Actions>& n, const shown& facts) {
+auto panel(const ui_needs& n, const shown& facts) {
   namespace c = skiff::compose;
   const auto& chat = chat_or_none(facts.now, facts.in);
   const auto& entries = facts.entries;
@@ -167,10 +164,8 @@ auto panel(const ui_needs<Actions>& n, const shown& facts) {
       page_header<sends<back>, sends<request::close_shown<shown>>>(*n.colours, "Reactions", {}, {}, facts.back, true),
       dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
 }
-template <class Actions>
-using box = decltype(panel(std::declval<const ui_needs<Actions>&>(), std::declval<const shown&>()));
-template <class Actions>
-auto make_content(std::type_identity<box<Actions>>, const ui_needs<Actions>& n, const shown& facts) {
+using box = decltype(panel(std::declval<const ui_needs&>(), std::declval<const shown&>()));
+auto make_content(std::type_identity<box>, const ui_needs& n, const shown& facts) {
   return panel(n, facts);
 }
 template <class Content>
@@ -180,12 +175,10 @@ inline dialog_look content_look(std::type_identity<Content>, std::type_identity<
 
 
 // Its dialog, among the window's (mux.ui:window).
-template <class Actions>
-constexpr type_tag<box<Actions>> extend(contract::window_dialogs, type_tag<feature>, type_tag<Actions>) { return {}; }
+constexpr type_tag<box> extend(contract::window_dialogs, type_tag<feature>) { return {}; }
 
 // Reactions, in a message's menu: how many, and who, listed.
-template <class Actions>
-auto extend(contract::message_menu, type_tag<feature>, type_tag<Actions>, const palette& colours, const emoji_kept&,
+auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&,
             const menu_facts& facts) {
   using row = row_item<sends<show>>;
   return skiff::compose::visible(
@@ -222,7 +215,6 @@ auto quick_reactions(const palette& colours, Expand expand) {
 }
 
 // What the menu's emoji do: react with it.
-template <class Actions>
 struct react_with {
   using Answer = ::mux::ui::request::menu_react;
   // What is typed in its search, a reaction too: Matrix takes any text.
@@ -234,8 +226,8 @@ struct react_with {
 
 // Its head, over a message's menu (mux.ui:context_menu): where the account
 // reacts, the quick reactions and the band under them.
-template <class Actions, class Unroll>
-auto extend(contract::message_menu_top, type_tag<feature>, type_tag<Actions>, const palette& colours, const menu_facts& facts,
+template <class Unroll>
+auto extend(contract::message_menu_top, type_tag<feature>, const palette& colours, const menu_facts& facts,
             Unroll unroll) {
   namespace c = skiff::compose;
   return c::visible(facts.can.react,
@@ -243,9 +235,8 @@ auto extend(contract::message_menu_top, type_tag<feature>, type_tag<Actions>, co
           c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band))));
 }
 // What it unrolls: every emoji, a press reacting with it.
-template <class Actions>
-auto unrolled(contract::message_menu_top, type_tag<feature>, type_tag<Actions>, const palette& colours, emoji_kept& kept) {
-  return emoji_panel(colours, kept, react_with<Actions>{});
+auto unrolled(contract::message_menu_top, type_tag<feature>, const palette& colours, emoji_kept& kept) {
+  return emoji_panel(colours, kept, react_with{});
 }
 // Unrolled: its arrow put away.
 template <class Head>

@@ -125,12 +125,10 @@ template <class OnDrag> struct drag_edge : skiff::compose::Specced {
 };
 
 // Where an edge was dragged to, asked of the program.
-template <class Actions>
 struct resize_sidebar_to {
   using Answer = std::optional<::mux::ui::request::resize_sidebar>;
   std::optional<::mux::ui::request::resize_sidebar> operator()(float x) { return ::mux::ui::request::resize_sidebar{x}; }
 };
-template <class Actions>
 struct resize_info_to {
   using Answer = std::optional<::mux::ui::request::resize_info>;
   std::optional<::mux::ui::request::resize_info> operator()(float x) { return ::mux::ui::request::resize_info{x}; }
@@ -152,7 +150,6 @@ struct resize_info_to {
 }
 
 // What Enter in the message field does: asks for its text to be sent.
-template <class Actions>
 struct submit_message {
   using Answer = ::mux::ui::request::submit_message;
   Answer operator()(std::string_view text) const { return ::mux::ui::request::submit_message{with_blocks_closed(text)}; }
@@ -668,10 +665,9 @@ struct message_input : skiff::compose::Stacked {
 // Where what is written goes, as a composer is told it: what its ✕, its
 // Enter, its paperclip, its emoji and its arrow do, and what its empty field
 // says. The chat's own; a thread's is its panel's.
-template <class Actions>
 struct in_chat {
   using cancel = sends<::mux::ui::request::cancel_compose>;
-  using submit = submit_message<Actions>;
+  using submit = submit_message;
   using attach = sends<::mux::ui::request::attach_files>;
   using emoji = sends<::mux::ui::request::toggle_emoji>;
   using send = sends<::mux::ui::request::send_typed>;
@@ -734,7 +730,7 @@ inline auto replaced_room_bar(const palette& colours) {
           colours.widgets, "Join New Room", {}))));
 }
 
-template <class Actions, class Where = in_chat<Actions>>
+template <class Where = in_chat>
 struct composer_bar : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   composer_bar(const composer_bar&) = delete;
@@ -804,8 +800,8 @@ struct composer_bar : skiff::compose::Stacked {
 
   // Declared: the divider, the unsent bar, the answer's line where there is
   // one, the row -- or, where the reader may not post, the line saying so.
-  explicit composer_bar(const ui_needs<Actions>& n) : composer_bar(n, {}, {}, {}, {}, {}) {}
-  composer_bar(const ui_needs<Actions>& n, typename Where::cancel cancel, typename Where::submit submit, typename Where::attach attach,
+  explicit composer_bar(const ui_needs& n) : composer_bar(n, {}, {}, {}, {}, {}) {}
+  composer_bar(const ui_needs& n, typename Where::cancel cancel, typename Where::submit submit, typename Where::attach attach,
                typename Where::emoji emoji, typename Where::send send)
       : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .background = n.colours->sidebar})),
         colours_(n.colours),
@@ -969,7 +965,6 @@ struct composer_bar : skiff::compose::Stacked {
 
 // Telegram's @ and heart over "↓": how many mentions of the user, or
 // reactions to theirs, are not yet seen; pressed, the oldest is gone to.
-template <class Actions>
 struct mark_button : skiff::compose::Specced {
   using Answer = std::variant<::mux::ui::request::jump_to_mark, ::mux::ui::request::list_marks>;
   mark_kind_t kind;
@@ -1019,7 +1014,6 @@ struct mark_button : skiff::compose::Specced {
 };
 
 // "↓": back to the newest, with how many came while one read above them.
-template <class Actions>
 struct jump_button : skiff::compose::Specced {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::jump_to_end;
@@ -1050,7 +1044,6 @@ struct jump_button : skiff::compose::Specced {
 
 // Back to the chat a jump came from -- a link or a reply into another chat
 // -- over "↓", as Telegram's: the chat as it was left.
-template <class Actions>
 struct back_button : skiff::compose::Specced {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::return_to_chat;

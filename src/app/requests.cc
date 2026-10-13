@@ -52,7 +52,7 @@ struct actions {
   }
 };
 
-using window_type = mux::ui::window<actions>;
+using window_type = mux::ui::window;
 
 
 }  // namespace mux::app
@@ -63,11 +63,6 @@ using window_type = mux::ui::window<actions>;
 // scene. In a named module, members defined in a class are not implicitly
 // inline, so this keeps them all out of the other units.
 extern template class skiff::scene::Scene<mux::app::window_type>;
-// And the window made again in a new theme: the whole tree constructed --
-// every node's constructor, and outside a release build every stack's parts'
-// tables, which a stack takes as it is made -- made with the scene alone,
-// not again where the theme is changed (program_settings.cc took minutes).
-extern template void mux::ui::window<mux::app::actions>::rebuild();
 // Outside a release build, the window's own table -- and with it the
 // tables of every node below it -- made with the scene alone (scene.cc):
 // every unit that refreshes the window, or delivers a press to it, takes
@@ -88,7 +83,7 @@ export namespace mux::app {
 // (CODE_STYLE.md, like destroy_account). A union suppresses implicit teardown.
 class window_scene {
 public:
-  explicit window_scene(const mux::ui::ui_needs<actions>& needs);
+  explicit window_scene(const mux::ui::ui_needs& needs);
   ~window_scene();
   window_scene(const window_scene&) = delete;
   window_scene& operator=(const window_scene&) = delete;

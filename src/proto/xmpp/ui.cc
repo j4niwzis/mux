@@ -31,7 +31,7 @@ using namespace ::mux::ui;
 
 // What "Advanced" folds out on an XMPP form: the resource, where to connect,
 // and PLAIN without TLS. Its height is what its last layout took.
-template <class Actions> struct xmpp_advanced : skiff::compose::Stacked {
+struct xmpp_advanced : skiff::compose::Stacked {
   using plain_toggle = toggle_for<sends<::mux::ui::request::toggle_plain>>;
   // The switch and what it says, side by side.
   struct plain_row : skiff::compose::Stacked {
@@ -185,7 +185,7 @@ struct asked_part : skiff::compose::Stacked {
 
 // An XMPP account's settings: its JID and password, and "Advanced" folds out
 // the rest. It fills the column it is given.
-template <class Actions> struct xmpp_form : skiff::compose::Stacked {
+struct xmpp_form : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::submit_login;
   // What the add-account pane says of the protocol.
@@ -210,8 +210,8 @@ template <class Actions> struct xmpp_form : skiff::compose::Stacked {
     choice_menu<pick_mode> mode;
     asked_part asked;
     advanced_button_t advanced_button;
-    widgets::Collapsible<xmpp_advanced<Actions>> more;
-    form_end<Actions> end;
+    widgets::Collapsible<xmpp_advanced> more;
+    form_end end;
   } parts;
 
   xmpp_form(const palette &colours,
@@ -234,8 +234,8 @@ template <class Actions> struct xmpp_form : skiff::compose::Stacked {
               .advanced_button = skiff::compose::styled(
                   {.width = 120.0f, .height = 36.0f},
                   advanced_button_t(colours.widgets, "Advanced", {})),
-              .more = widgets::Collapsible<xmpp_advanced<Actions>>(colours),
-              .end = form_end<Actions>(colours, from.has_value())} {
+              .more = widgets::Collapsible<xmpp_advanced>(colours),
+              .end = form_end(colours, from.has_value())} {
     auto& [address, password, mode, asked, advanced_button, more, end] = parts;
     // An account kept and signed in to: one already, nothing to choose.
     auto& folded = more.child().parts;
@@ -324,14 +324,11 @@ export namespace mux::proto::xmpp {
 
 // Its account form, for the panels: by the protocol's tag, and by what an
 // account of it keeps.
-template <class Actions>
-using form = form_detail::xmpp_form<Actions>;
-template <class Actions>
-constexpr type_tag<form<Actions>> form_type(const state&, type_tag<Actions>) {
+using form = form_detail::xmpp_form;
+constexpr type_tag<form> form_type(const state&) {
   return {};
 }
-template <class Actions>
-constexpr type_tag<form<Actions>> form_type_for(const kept&, type_tag<Actions>) {
+constexpr type_tag<form> form_type_for(const kept&) {
   return {};
 }
 
@@ -784,6 +781,5 @@ struct profile_policy {
 };
 constexpr std::string_view page_title(profile) { return "Profile"; }
 inline ui::icon_t page_icon(profile) { return ui::icon::info{}; }
-template <class Actions>
-constexpr type_tag<ui::profile_editor<Actions, profile_policy>> page_type(profile, type_tag<Actions>) { return {}; }
+constexpr type_tag<ui::profile_editor<profile_policy>> page_type(profile) { return {}; }
 }

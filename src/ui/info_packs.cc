@@ -85,7 +85,7 @@ auto pack_row(const palette& colours, const std::optional<std::string>& room,
       pack.name.empty() ? "Open pack" : pack.name);
 }
 
-template <class Actions> struct packs_box : skiff::compose::Stacked {
+struct packs_box : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   packs_box(const packs_box&) = delete;
   packs_box& operator=(const packs_box&) = delete;
@@ -307,7 +307,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
     nodes::ScrollContainer<pictures_t> pictures{pictures_t({.spacingY = 0.0f, .wrap = false}, {})};
     edit_buttons edit_actions;
   } parts;
-  packs_box(const ui_needs<Actions>& n, const packs_facts& facts) : packs_box(*n.colours, *n.shared, facts.room, facts.editable) { initial_key = facts.key; }
+  packs_box(const ui_needs& n, const packs_facts& facts) : packs_box(*n.colours, *n.shared, facts.room, facts.editable) { initial_key = facts.key; }
   packs_box(const palette &colours, ui_shared &shared,
             std::optional<std::string> in, bool editable)
       : Stacked(skiff::compose::vbox(8.0f,

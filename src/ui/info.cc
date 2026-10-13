@@ -76,7 +76,7 @@ template <class Act> using person_actions_t = decltype(person_actions(std::declv
   return level > 0 ? std::format("Level {}", level) : std::string("Member");
 }
 
-template <class Actions> struct info_panel : skiff::compose::Stacked {
+struct info_panel : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   info_panel(const info_panel&) = delete;
   info_panel& operator=(const info_panel&) = delete;
@@ -173,7 +173,7 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
             c::visible(shown.of_person, icon_button<back_to_group>(colours, icon::back{}, {panel})),
             c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::colorSetARGB(0, 0, 0, 0))),
             icon_button<sends<request::toggle_info>>(colours, icon::close{}, {})),
-        avatar_button<Actions>(avatar_of::chat{}, shown.key, shown.name, 96.0f),
+        avatar_button(avatar_of::chat{}, shown.key, shown.name, 96.0f),
         centred(shown.name, 17.0f, colours.text, true),
         centred(shown.status, 13.0f, colours.dim, false),
         c::visible(!shown.of_person, info_tiles(colours, shown.muted, shown.leavable)),

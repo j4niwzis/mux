@@ -205,14 +205,14 @@ auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
 auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) {
   return call_layer(needs, call_panel_of{}, call_ui::panel{}, {.fillX = true, .autoSize = scene::axes::kY});
 }
-// Its button in the chat's head: where the chat is two and its protocol calls.
-bool header_shown(contract::chat_header, type_tag<feature>, const ui_shared& shared, const conversation& one) {
-  const auto count = std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count);
-  return ops_of(shared, one.id.account).calls && count <= 2;
-}
+// Its button in the chat's head: shown where the chat shown can be called,
+// as its part keeps it (call_shown::callable).
 auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
-  return skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                icon_button<sends<call_chosen>>(colours, icon::phone{}, {}));
+  return skiff::compose::shown_if<call_shown>([](const call_shown& now) { return now.callable; },
+      // Hidden until what is shown says otherwise: a head made anew is not
+      // read before what is shown next moves.
+      skiff::compose::visible(false, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                                           icon_button<sends<call_chosen>>(colours, icon::phone{}, {}))));
 }
 
 } // namespace mux::plugins::calls

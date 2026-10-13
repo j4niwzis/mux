@@ -38,11 +38,6 @@ consteval auto popup_pages_of(plugin_list<Features...>) {
   return type_tag<spl::variant<popup_page::emoji,
       typename decltype(page_type(contract::media_pages{}, type_tag<Features>{}))::type...>>{};
 }
-// What a plugin's page asks for as it is chosen: nothing, where it says
-// nothing (opened).
-namespace page_defaults {
-constexpr proto::part::no_request opened(const auto&) { return {}; }
-}  // namespace page_defaults
 using media_page_plugins = composition::providers<contract::media_pages, enabled_plugins>;
 using popup_page_t = typename decltype(popup_pages_of(media_page_plugins{}))::type;
 // What is shown on each plugin's page, beside the others' (emoji_facts).
@@ -141,7 +136,8 @@ struct emoji_popup : skiff::compose::Specced {
       }(std::index_sequence_for<Features...>{});
     }
     template <class Tab>
-    static auto tabs(const palette& colours, const emoji_facts& facts, Tab emoji) {
+    static auto tabs(const palette& colours, const emoji_facts& facts, Tab emoji)
+        -> skiff::compose::Box<Tab, decltype(((void)type_tag<Features>{}, popup_tab(colours, popup_page_t{popup_page::emoji{}}, std::string{}, false, true)))...> {
       return skiff::compose::row(skiff::compose::hbox(4.0f, {.fillX = true, .height = 36.0f, .depth = 1.0f,
                                                               .padding = {4.0f, 8.0f, 4.0f, 8.0f}}),
           std::move(emoji),

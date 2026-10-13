@@ -53,6 +53,8 @@ struct call_view {
 // What is shown of a call: none, or the one.
 struct call_shown {
   std::optional<call_view> now;
+  // Whether the chat shown can be called: its protocol calls, and it is two.
+  bool callable = false;
 };
 
 // Asked of the program: a call made to a chat, to the one chosen; taken,

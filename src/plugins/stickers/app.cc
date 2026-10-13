@@ -13,6 +13,9 @@ export namespace mux::plugins::stickers {
 
 struct part {
   app::services* s_ = nullptr;
+  // Its page chosen in the media panel: nothing more to do, its packs are
+  // what is kept.
+  void apply(const page&) {}
   void apply(const favourite& one) {
     ui::show<ui::menu_facts>(*s_->showing, std::nullopt);
     s_->emoji.flip_favourite(one.sticker);

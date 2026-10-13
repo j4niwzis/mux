@@ -20,8 +20,8 @@ export namespace mux::app {
 struct emoji_part {
   services* s_;
   request::writing_t into_ = request::writing::chat{};
-  // A page chosen: shown, and what it asks for as it opens, asked -- a
-  // plugin's page says (opened); the client's own ask nothing.
+  // A page chosen: shown; a plugin's, asked of its part as itself -- the
+  // part does what opening it takes. The client's own asks nothing.
   template <class Asked>
   void apply(const request::select_emoji_page& one, const Asked& asked) {
     bool chosen = false;
@@ -32,10 +32,8 @@ struct emoji_part {
     });
     if (chosen)
       spl::visit(spl::overloaded{[](mux::ui::popup_page::emoji) {},
-                                 [&](const auto& theirs) {
-                                   using mux::ui::page_defaults::opened;
-                                   asked(opened(theirs));
-                                 }},
+                                 // A plugin's: its page itself asked, applied by its part.
+                                 [&](const auto& theirs) { asked(theirs); }},
                  one.page);
   }
 

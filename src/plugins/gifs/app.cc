@@ -35,6 +35,8 @@ struct part {
 
   // The saved GIFs, newest first, to their page; each decoded on a worker
   // into the frames it plays, where it is not already.
+  // Its page chosen in the media panel: its GIFs shown, read again.
+  void apply(const page&) { this->apply(show{}); }
   void apply(const show&) {
     const auto chosen = s_->root().main().chosen;
     if (!chosen || !ui::may_send_files(s_->ui, chosen->account)) return;

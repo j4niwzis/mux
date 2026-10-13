@@ -36,7 +36,6 @@ constexpr type_tag<shown> shown_type(contract::media_pages, type_tag<feature>) {
 constexpr std::string_view tab_name(page) { return "GIFs"; }
 // Offered where files may be sent in the chat.
 constexpr bool shown_where(page, const auto& facts) { return facts.files; }
-constexpr show opened(page) { return {}; }
 
 consteval bool provides(contract::message_menu, type_tag<feature>) { return true; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }

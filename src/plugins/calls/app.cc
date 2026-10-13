@@ -81,7 +81,7 @@ class part {
       return;
     ended_.reset();
     shown_.reset();
-    ui::show(*s_->showing, call_shown{});
+    ui::show(*s_->showing, call_shown{.now = std::nullopt, .callable = callable_});
   }
   void apply(const call_chosen&) {
     if (const auto& chosen = s_->root().main().chosen)
@@ -171,11 +171,16 @@ class part {
   // Between events: what the connection said, the invite's time run out,
   // candidates sent a batch at a time.
   void tick() {
+    // The chat shown, where it changed: whether it can be called, shown.
+    if (const auto& chosen = s_->root().main().chosen; chosen != callable_for_) {
+      callable_for_ = chosen;
+      this->show_callable();
+    }
     // A call ended stays a moment, saying why; then it goes.
     if (ended_ && std::chrono::steady_clock::now() > ended_->until) {
       ended_.reset();
       shown_.reset();
-      ui::show(*s_->showing, call_shown{});
+      ui::show(*s_->showing, call_shown{.now = std::nullopt, .callable = callable_});
     }
     if (!current_) {
       if (ended_)
@@ -296,7 +301,7 @@ class part {
     if (ended_)
       this->show_view(ended_->view);
     else
-      ui::show(*s_->showing, call_shown{});
+      ui::show(*s_->showing, call_shown{.now = std::nullopt, .callable = callable_});
   }
   [[nodiscard]] call_view view_of(const active_call& now) const {
     const mux::conversation* chat = s_->model->find(now.in);
@@ -330,7 +335,7 @@ class part {
     if (shown_ == view)
       return;
     shown_ = view;
-    ui::show(*s_->showing, call_shown{view});
+    ui::show(*s_->showing, call_shown{.now = view, .callable = callable_});
   }
   [[nodiscard]] static std::string new_call_id() {
     std::random_device entropy;
@@ -345,6 +350,16 @@ class part {
   std::optional<active_call> current_;
   std::optional<ended_call> ended_;
   std::optional<call_view> shown_;
+  // Whether the chat shown can be called -- what its head's button is shown
+  // by -- and for which chat that was worked out.
+  bool callable_ = false;
+  std::optional<conversation_id> callable_for_;
+  void show_callable() {
+    const mux::conversation* one = callable_for_ ? s_->model->find(*callable_for_) : nullptr;
+    const auto count = one ? std::max<std::int64_t>(static_cast<std::int64_t>(one->members.size()), one->member_count) : 0;
+    callable_ = one && ui::ops_of(s_->ui, one->id.account).calls && count <= 2;
+    ui::show(*s_->showing, call_shown{.now = shown_, .callable = callable_});
+  }
   std::string own_party_;
 };
 

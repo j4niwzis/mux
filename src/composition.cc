@@ -87,8 +87,6 @@ struct chat_column {
   static constexpr std::string_view name = "the chat column";
 };
 // The chat's head, its buttons after Search (mux.ui:header):
-//   header_shown(c, f, shared, chat) -> whether its button
-//   is for this chat
 //   extend(c, f, palette) -> its button
 struct chat_header {
   static constexpr std::string_view name = "the chat's head";

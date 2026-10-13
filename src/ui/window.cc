@@ -766,7 +766,10 @@ struct window : skiff::compose::Specced {
                 .menu = layer_for<context_menu, menu_facts>(n),
                 .viewer = layer_for<picture_viewer, viewer_facts>(n),
                 .over_all = plugin_layers_t::made(n)} {
-      auto& [backdrop, behind, frame, ...over] = parts;
+      // (A pack of the parts: bound in a generic lambda, the template a pack
+      // declaration needs.)
+      [&](auto& all) {
+      auto& [backdrop, behind, frame, ...over] = all;
       backdrop.apply({.fill = true});
       behind.apply({.fill = true});
       behind.setVisible(n.looks->window.behind);
@@ -778,6 +781,7 @@ struct window : skiff::compose::Specced {
       dialogs_t::build(parts.dialogs, n);
       // Each dialog as what it shows declares it.
       (look_as_its_content(over, *n.colours), ...);
+      }(parts);
       std::apply([&](auto&... slot) { (look_as_its_content(*slot, *n.colours), ...); }, parts.dialogs);
       // The files to send: as wide as 440 at most, as high as they are.
       parts.sending.setWidthFittingContent(440.0f);

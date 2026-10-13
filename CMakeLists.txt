@@ -436,12 +436,6 @@ if(MUX_UI)
   else()
     add_executable(mux src/main.cc src/main_desktop.cc)
   endif()
-  # Outside a release build, with walks erased: the big subtrees' tables and
-  # walks each in a unit of its own, not all in scene.cc.
-  set(mux_erased $<AND:$<BOOL:${SKIFF_ERASE_WALKS}>,$<NOT:$<CONFIG:Release>>>)
-  if(NOT DEFINED SKIFF_ERASE_WALKS)
-    set(mux_erased $<NOT:$<CONFIG:Release>>)
-  endif()
   # Outside a release build, the accounts each in a unit of its own, beside
   # network.cc, built in parallel; a release build instantiates them where
   # they are used, in network.cc's unit, all of them in the optimiser's sight.
@@ -451,21 +445,6 @@ if(MUX_UI)
   list(TRANSFORM mux_split_sources PREPEND "$<${mux_split}:")
   list(TRANSFORM mux_split_sources APPEND ">")
   target_sources(mux PRIVATE ${mux_split_sources})
-  target_sources(mux PRIVATE
-    $<${mux_erased}:src/app/walks_window.cc>
-    $<${mux_erased}:src/app/walks_chats.cc>
-    $<${mux_erased}:src/app/walks_side.cc>
-    $<${mux_erased}:src/app/walks_column.cc>
-    $<${mux_erased}:src/app/walks_bubbles.cc>
-    $<${mux_erased}:src/app/walks_composer.cc>
-    $<${mux_erased}:src/app/walks_info.cc>
-    $<${mux_erased}:src/app/walks_accounts.cc>
-    $<${mux_erased}:src/app/walks_drawer.cc>
-    $<${mux_erased}:src/app/walks_settings.cc>
-    $<${mux_erased}:src/app/walks_manage.cc>
-    $<${mux_erased}:src/app/walks_boxes.cc>
-    $<${mux_erased}:src/app/walks_popups.cc>
-    $<${mux_erased}:src/app/walks_emoji.cc>)
   # The program's parts and what they share -- its network, its demo, what it
   # keeps on disk, the requests of its window, the names it reads, each part
   # of what it does, the protocols' glue: module units that import the UI and

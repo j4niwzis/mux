@@ -15,9 +15,9 @@ import mux.app.kept;
 import mux.ui;
 import mux.ui.proto;
 
-// The tables of the window's big subtrees -- and so the walks of all in them
-// -- are made in walks_*.cc, outside a release build: requests.cc says so
-// (skiff::scene::kOpsElsewhere), and here they are calls, not instantiated.
+// Outside a release build every node's table is made here, once: the
+// window is constructed here, and a stack takes its parts' tables as it is
+// made (see requests.cc).
 
 namespace {
 // Use the same unqualified lookup and ADL as Scene's routing. A missing
@@ -31,6 +31,7 @@ static_assert(std::same_as<decltype(routing_carry(std::declval<mux::app::window_
 }
 
 template class skiff::scene::Scene<mux::app::window_type>;
+template void mux::ui::window<mux::app::actions>::rebuild();
 
 namespace mux::app {
 window_scene::window_scene(const mux::ui::ui_needs<actions>& needs)

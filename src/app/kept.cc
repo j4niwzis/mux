@@ -421,6 +421,8 @@ struct kept_settings {
     looks_read.top_bar = saved.top_bar.value_or(true);
     looks_read.home_hides_spaced = saved.home_hides_spaced.value_or(false);
     looks_read.home_hides_direct = saved.home_hides_direct.value_or(false);
+    looks_read.chat_avatar_rounding = saved.chat_avatar_rounding;
+    looks_read.person_avatar_rounding = saved.person_avatar_rounding;
     if (saved.space_places)
       looks_read.space_places = std::ranges::to<std::vector>(std::views::transform(*saved.space_places, [](const mux::config::space_place& one) {
                                return mux::config::space_placed{one.account, mux::config::space_item_of(one.item),
@@ -535,6 +537,10 @@ struct kept_settings {
       out.home_hides_spaced = true;
     if (this->appearance().home_hides_direct)
       out.home_hides_direct = true;
+    // The avatars' rounding, where it is set: it was never written, and
+    // came back round at every start.
+    out.chat_avatar_rounding = this->appearance().chat_avatar_rounding;
+    out.person_avatar_rounding = this->appearance().person_avatar_rounding;
     if (!this->appearance().space_places.empty())
       out.space_places = std::ranges::to<std::vector>(std::views::transform(this->appearance().space_places, [](const mux::config::space_placed& one) {
                            return mux::config::space_place{one.account, mux::config::word_of(one.item),

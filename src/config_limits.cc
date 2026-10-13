@@ -275,6 +275,9 @@ struct file {
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
   std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
+  // How round avatars are, in percent: chats' and people's. None, round.
+  std::optional<int> chat_avatar_rounding;
+  std::optional<int> person_avatar_rounding;
   std::optional<renderer_said_t> renderer;
   // Only what changed repainted, into a frame kept between them.
   std::optional<bool> partial_redraw;

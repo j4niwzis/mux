@@ -68,6 +68,14 @@ extern template class skiff::scene::Scene<mux::app::window_type>;
 // tables, which a stack takes as it is made -- made with the scene alone,
 // not again where the theme is changed (program_settings.cc took minutes).
 extern template void mux::ui::window<mux::app::actions>::rebuild();
+// Outside a release build, the window's own table -- and with it the
+// tables of every node below it -- made with the scene alone (scene.cc):
+// every unit that refreshes the window, or delivers a press to it, takes
+// the window through its table, and made the whole tree's tables again.
+#ifdef SKIFF_ERASED_WALKS
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::app::window_type> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::app::window_type>() noexcept;
+#endif
 // Outside a release build every node's table is made where the window is
 // constructed (scene.cc): a stack takes its parts' tables as it is made.
 // They were also made in walks_*.cc, each unit importing all of mux.ui and

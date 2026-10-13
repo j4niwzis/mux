@@ -814,10 +814,21 @@ template <class Actions> struct window : skiff::compose::Specced {
   // binding as the chats -- or the chat chosen -- do: the looks in effect.
   template <class Reactions>
   void refresh(const skiff::model::Model<kept_root, Reactions>& kept) {
-    kept_ = &kept.root();
+    this->refresh_kept(kept.root());
+  }
+  // What is kept read: by its root, whatever the model's reactions.
+  void refresh_kept(const kept_root& root) {
+    kept_ = &root;
     this->read_looks();
   }
   void refresh(const chats_model&) { this->read_looks(); }
+  // What the runtime binding walks call it by (outside a release build):
+  // its refresh is overloaded, which they cannot pick by themselves -- the
+  // window was never read there, and the drawer, the panels' look and the
+  // background behind the window stayed as they were made.
+  skiff::bind::Refreshes<2> fRefreshes = skiff::bind::refreshes(
+      skiff::bind::refreshFrom<window, chats_model>(),
+      skiff::bind::refreshFromRoot<window, kept_root, &window::refresh_kept>());
   // The looks in effect, as what is kept says for the chat chosen: what each
   // level holds of the looks and of room events, for the choices to show
   // what is in effect; the panels' look, the window repainted where it

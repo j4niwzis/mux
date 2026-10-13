@@ -22,6 +22,7 @@ export namespace mux::ui {
 // ---- adding an account ------------------------------------------------------------
 
 // A proxy chosen for an account being added: -1 for none.
+template <class Actions>
 struct choose_new_proxy {
   using Answer = ::mux::ui::request::choose_new_proxy;
   int index = -1;
@@ -30,7 +31,7 @@ struct choose_new_proxy {
 
 // Adding an account, beside the list of them: XMPP or Matrix at the top, and
 // that protocol's form under it.
-struct add_account_pane : skiff::compose::Stacked {
+template <class Actions> struct add_account_pane : skiff::compose::Stacked {
   // A segment a protocol, in a thin frame -- from the list, each named as
   // its protocol names itself.
   struct pick_protocol {
@@ -60,7 +61,7 @@ struct add_account_pane : skiff::compose::Stacked {
     using add_button = segment<sends<::mux::ui::request::manage_proxies>>;
     struct parts_t {
       nodes::Text title;
-      std::vector<segment<choose_new_proxy>> choices;
+      std::vector<segment<choose_new_proxy<Actions>>> choices;
       add_button add;
     } parts;
     proxy_row(const palette &colours)
@@ -77,14 +78,14 @@ struct add_account_pane : skiff::compose::Stacked {
     protocol_switch tabs;
     nodes::Text note;
     proxy_row proxies_row;
-    account_form form;
+    account_form<Actions> form;
   } parts;
   std::vector<std::string> proxy_names;
   std::optional<std::string> proxy;
   // The form coming in when the protocol changes, fading in.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
 
-  add_account_pane(const ui_needs &n,
+  add_account_pane(const ui_needs<Actions> &n,
                    const std::vector<config::proxy_settings> &proxies)
       : Stacked(skiff::compose::vbox(12.0f, {.fill = true})),
         colours_(n.colours),
@@ -93,7 +94,7 @@ struct add_account_pane : skiff::compose::Stacked {
                   {.fillX = true},
                   wrapped(nodes::Text("", 13.0f, n.colours->dim))),
               .proxies_row = proxy_row(*n.colours),
-              .form = account_form(std::in_place_index<0>, *n.colours,
+              .form = account_form<Actions>(std::in_place_index<0>, *n.colours,
                                             std::nullopt)} {
 
     this->set_proxies(proxies);
@@ -103,7 +104,7 @@ struct add_account_pane : skiff::compose::Stacked {
   // A protocol's form, blank, in place of the one up.
   void show(const protocol_t& speaks) {
     spl::visit([this](auto of) {
-      parts.form.template emplace<form_of_t<decltype(of)>>(*colours_, std::nullopt);
+      parts.form.template emplace<form_of_t<decltype(of), Actions>>(*colours_, std::nullopt);
     }, speaks);
     this->begin_swap();
     this->light();
@@ -120,9 +121,9 @@ struct add_account_pane : skiff::compose::Stacked {
     const auto chosen = proxy;
     proxy_names = std::move(names);
     choices.clear();
-    choices.emplace_back(*colours_, "None", choose_new_proxy{-1});
+    choices.emplace_back(*colours_, "None", choose_new_proxy<Actions>{-1});
     for (std::size_t k = 0; k < proxy_names.size(); ++k)
-      choices.emplace_back(*colours_, proxy_names[k], choose_new_proxy{static_cast<int>(k)});
+      choices.emplace_back(*colours_, proxy_names[k], choose_new_proxy<Actions>{static_cast<int>(k)});
     const auto at = chosen ? std::ranges::find(proxy_names, *chosen) : proxy_names.end();
     this->set_proxy(at == proxy_names.end() ? -1 : static_cast<int>(at - proxy_names.begin()));
     this->invalidateLayout();

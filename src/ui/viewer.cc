@@ -38,7 +38,7 @@ struct viewer_facts {
   // The video's file, once it is there: played.
   std::optional<std::filesystem::path> file;
 };
-struct picture_viewer : skiff::compose::Stacked {
+template <class Actions> struct picture_viewer : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   picture_viewer(const picture_viewer&) = delete;
   picture_viewer& operator=(const picture_viewer&) = delete;
@@ -402,13 +402,13 @@ struct picture_viewer : skiff::compose::Stacked {
   }
 
   // Made from what it shows; a video's file played once it is there.
-  picture_viewer(const ui_needs& n, const viewer_facts& facts)
+  picture_viewer(const ui_needs<Actions>& n, const viewer_facts& facts)
       : picture_viewer(n, facts.source, facts.sender, facts.name, facts.when) {
     video = facts.video;
     if (facts.file)
       this->start(*facts.file);
   }
-  picture_viewer(const ui_needs& n, std::string where, std::string sender, std::string name, std::string when)
+  picture_viewer(const ui_needs<Actions>& n, std::string where, std::string sender, std::string name, std::string when)
       : picture_viewer(n.colours, std::move(where), std::move(sender), std::move(name), std::move(when)) {}
   picture_viewer(const palette *colours, std::string where, std::string sender,
                  std::string name, std::string when)

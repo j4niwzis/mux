@@ -29,7 +29,7 @@ using namespace ::mux::ui;
 
 // The developer tools, as Element's: some JSON to read and copy; a room's
 // state, by type, then by key, then the event; an event of any type sent.
-struct devtools_box : skiff::compose::Stacked {
+template <class Actions> struct devtools_box : skiff::compose::Stacked {
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   struct close_it {
@@ -256,7 +256,7 @@ struct devtools_box : skiff::compose::Stacked {
 // A step of interactive auth done in the browser, as Element's: what it is
 // for, its page opened there again where it was closed, and Continue once
 // it is done there -- or Cancel.
-struct uia_box : skiff::compose::Stacked {
+template <class Actions> struct uia_box : skiff::compose::Stacked {
   struct open_again {
     using Answer = ::mux::ui::request::open_url;
     std::string url;
@@ -301,16 +301,20 @@ struct uia_box : skiff::compose::Stacked {
 }  // namespace mux::proto::matrix::tools_detail
 
 export namespace mux::proto::matrix {
-using uia_page = tools_detail::uia_box;
+template <class Actions>
+using uia_page = tools_detail::uia_box<Actions>;
 // For the program, which opens it with what the client says.
-using devtools_page = tools_detail::devtools_box;
+template <class Actions>
+using devtools_page = tools_detail::devtools_box<Actions>;
 }  // namespace mux::proto::matrix
 
 export namespace mux::proto::matrix::tool {
-constexpr type_tag<tools_detail::devtools_box> dialog_type(devtools) {
+template <class Actions>
+constexpr type_tag<tools_detail::devtools_box<Actions>> dialog_type(devtools, type_tag<Actions>) {
   return {};
 }
-constexpr type_tag<tools_detail::uia_box> dialog_type(uia) {
+template <class Actions>
+constexpr type_tag<tools_detail::uia_box<Actions>> dialog_type(uia, type_tag<Actions>) {
   return {};
 }
 }  // namespace mux::proto::matrix::tool

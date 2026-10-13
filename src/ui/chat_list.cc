@@ -50,23 +50,25 @@ export namespace mux::ui {
 
 // A node of a chat's protocol's own in its row of the list, after what was
 // said last (a Telegram channel's views, an IRC channel's modes): listed by
-// row_views(state), made for a chat by make_row_view,
+// row_views(state, type_tag<Actions>), made for a chat by make_row_view,
 // found by ADL; none by default.
 namespace row_view_defaults {
-constexpr proto::sticker_view_list<> row_views(const auto&) {
+template <class Actions>
+constexpr proto::sticker_view_list<> row_views(const auto&, type_tag<Actions>) {
   return {};
 }
-constexpr std::nullopt_t make_row_view(const auto&, const conversation&) {
+template <class Actions>
+constexpr std::nullopt_t make_row_view(const auto&, const conversation&, type_tag<Actions>) {
   return std::nullopt;
 }
 }  // namespace row_view_defaults
-template <class State>
-constexpr auto row_views_for(const State& state tag) {
+template <class State, class Actions>
+constexpr auto row_views_for(const State& state, type_tag<Actions> tag) {
   using row_view_defaults::row_views;
   return row_views(state, tag);
 }
 
-struct conversation_row : skiff::compose::Stacked {
+template <class Actions> struct conversation_row : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::choose;
   template <class List>
@@ -80,7 +82,7 @@ struct conversation_row : skiff::compose::Stacked {
   template <class... Tags>
   struct protocol_row_nodes<protocol_list<Tags...>> {
     using type = typename joined<
-        type_list<>, typename view_nodes<decltype(row_views_for(::mux::state_of<Tags>{}))>::type...>::type;
+        type_list<>, typename view_nodes<decltype(row_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
   };
   using row_view_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_row_nodes<protocols>::type>::type>::type;
@@ -227,7 +229,7 @@ struct conversation_row : skiff::compose::Stacked {
   }
   view shown;
 
-  conversation_row(const ui_needs &n, const conversation &one,
+  conversation_row(const ui_needs<Actions> &n, const conversation &one,
                    bool is_chosen, bool is_muted, std::string draft = {},
                    const room_event_filter &events = {},
                    std::optional<skia::SkColor> strip = std::nullopt)
@@ -247,7 +249,7 @@ struct conversation_row : skiff::compose::Stacked {
     spl::visit(
         [&](const auto& now) {
           using row_view_defaults::make_row_view;
-          this->place_view(make_row_view(now, one));
+          this->place_view(make_row_view(now, one, type_tag<Actions>{}));
         },
         protocol_state_of(*n.shared, one.id.account));
     auto& time = parts.lines.parts.top.parts.time;
@@ -332,17 +334,19 @@ struct conversation_row : skiff::compose::Stacked {
 
 // A chat as the list shows it: its row's view, and what its row is made
 // from besides -- its room events, its strip -- and the row's height.
+template <class Actions>
 struct listed_chat {
   conversation_id id;
-  typename conversation_row::view view;
+  typename conversation_row<Actions>::view view;
   room_event_filter events;
   std::optional<skia::SkColor> strip;
-  float height = conversation_row::kHeight;
+  float height = conversation_row<Actions>::kHeight;
 };
 // What the list shows, read from the model: every chat in it, in order,
 // and the forums' rows, each made up from its topics.
+template <class Actions>
 struct chat_listing {
-  std::vector<listed_chat> chats;
+  std::vector<listed_chat<Actions>> chats;
   std::map<conversation_id, conversation> forums;
   // The chat a row shows: a forum's made-up one, else the model's.
   [[nodiscard]] const conversation* find(const model& now, const conversation_id& id) const {
@@ -353,17 +357,20 @@ struct chat_listing {
 };
 // A row's item, while the list is read: its key and view, the chat it
 // shows, how it is listed, and what rows are made with.
-using chat_item = std::tuple<conversation_id, typename conversation_row::view, const conversation*, const listed_chat*,
-                             const ui_needs*>;
+template <class Actions>
+using chat_item = std::tuple<conversation_id, typename conversation_row<Actions>::view, const conversation*, const listed_chat<Actions>*,
+                             const ui_needs<Actions>*>;
+template <class Actions>
 struct make_chat_row {
-  conversation_row operator()(const chat_item& item) const {
+  conversation_row<Actions> operator()(const chat_item<Actions>& item) const {
     const auto& [id, view, one, listed, needs] = item;
-    return conversation_row(*needs, *one, view.chosen, view.muted, view.draft, listed->events, listed->strip);
+    return conversation_row<Actions>(*needs, *one, view.chosen, view.muted, view.draft, listed->events, listed->strip);
   }
 };
 // The chat list's rows: one for each chat listed where the list is, kept
 // while its chat shows the same.
-struct chat_rows : nodes::MemoRows<conversation_id, typename conversation_row::view, conversation_row, make_chat_row> {
+template <class Actions>
+struct chat_rows : nodes::MemoRows<conversation_id, typename conversation_row<Actions>::view, conversation_row<Actions>, make_chat_row<Actions>> {
   chat_rows() { this->fState.apply({.fillX = true, .autoSize = scene::axes::kY}); }
 };
 

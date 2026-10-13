@@ -129,17 +129,17 @@ void program_told(App& app, const sign_in_page& page) {
 template <class App>
 void program_told(App& app, const uia_in_browser& asked) {
   app.take(mux::ui::request::open_url{asked.url});
-  app.root().template open_dialog<uia_page>(asked.what, asked.url);
+  app.root().template open_dialog<uia_page<typename App::accounts::actions_type>>(asked.what, asked.url);
 }
 // What the developer tools asked, shown.
 template <class App>
 void program_told(App& app, const devtools_text& shown) {
-  app.root().template open_dialog<devtools_page>(shown.title, shown.text);
+  app.root().template open_dialog<devtools_page<typename App::accounts::actions_type>>(shown.title, shown.text);
 }
 // The room's state, for the developer tools.
 template <class App>
 void program_told(App& app, const state_listed& listed) {
-  app.root().template open_dialog<devtools_page>(listed.entries);
+  app.root().template open_dialog<devtools_page<typename App::accounts::actions_type>>(listed.entries);
 }
 // Only the room and account that requested the read may receive it.
 template <class App>
@@ -199,7 +199,7 @@ void on_sessions_page(App& app, const account_id& by, Then then) {
   using accounts = typename App::accounts;
   if (auto* up = app.root().open_panel())
     spl::visit([&](accounts& panel) {
-                    if (auto* page = panel.template shown_page<sessions_page>();
+                    if (auto* page = panel.template shown_page<sessions_page<typename accounts::actions_type>>();
                         page && panel.selected == by.address)
                       then(*page);
                   },
@@ -317,7 +317,7 @@ void program_asked(App& app, const explore_state&) {
 }
 template <class App>
 void program_asked(App& app, const open_send_custom&) {
-  using page = devtools_page;
+  using page = devtools_page<typename App::accounts::actions_type>;
   mux::ui::show<mux::ui::room_settings_facts>(app.showing, std::nullopt);
   app.root().template open_dialog<page>(typename page::send_form_t{});
 }

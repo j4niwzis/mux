@@ -79,32 +79,36 @@ using quote_row_t = decltype(quote_row(std::declval<const palette&>(), skia::SkC
 // A protocol's own sticker nodes, and its making of one for a message:
 // none by default -- the picture.
 namespace sticker_defaults {
-constexpr proto::sticker_view_list<> sticker_views(const auto&) {
+template <class Actions>
+constexpr proto::sticker_view_list<> sticker_views(const auto&, type_tag<Actions>) {
   return {};
 }
-constexpr std::nullopt_t make_sticker(const auto&, const message&) {
+template <class Actions>
+constexpr std::nullopt_t make_sticker(const auto&, const message&, type_tag<Actions>) {
   return std::nullopt;
 }
 }  // namespace sticker_defaults
-template <class State>
-constexpr auto sticker_views_for(const State& state tag) {
+template <class State, class Actions>
+constexpr auto sticker_views_for(const State& state, type_tag<Actions> tag) {
   using sticker_defaults::sticker_views;
   return sticker_views(state, tag);
 }
 // And the nodes a protocol shows of a message of its own, under its text
 // (Telegram's inline buttons, a poll): listed by message_views(state,
-// type_tag), made for a message by make_message_view -- by its
+// type_tag<Actions>), made for a message by make_message_view -- by its
 // part (message::theirs), say. None by default.
 namespace view_defaults {
-constexpr proto::sticker_view_list<> message_views(const auto&) {
+template <class Actions>
+constexpr proto::sticker_view_list<> message_views(const auto&, type_tag<Actions>) {
   return {};
 }
-constexpr std::nullopt_t make_message_view(const auto&, const message&) {
+template <class Actions>
+constexpr std::nullopt_t make_message_view(const auto&, const message&, type_tag<Actions>) {
   return std::nullopt;
 }
 }  // namespace view_defaults
-template <class State>
-constexpr auto message_views_for(const State& state tag) {
+template <class State, class Actions>
+constexpr auto message_views_for(const State& state, type_tag<Actions> tag) {
   using view_defaults::message_views;
   return message_views(state, tag);
 }
@@ -122,7 +126,7 @@ struct trailer_facts {
   std::string message_id;
 };
 
-struct message_bubble : skiff::compose::Stacked {
+template <class Actions> struct message_bubble : skiff::compose::Stacked {
   // ---- the protocols' own sticker nodes -------------------------------------
   template <class List>
   struct sticker_nodes;
@@ -135,7 +139,7 @@ struct message_bubble : skiff::compose::Stacked {
   template <class... Tags>
   struct protocol_sticker_nodes<protocol_list<Tags...>> {
     using type = typename joined<
-        type_list<>, typename sticker_nodes<decltype(sticker_views_for(::mux::state_of<Tags>{}))>::type...>::type;
+        type_list<>, typename sticker_nodes<decltype(sticker_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
   };
   // Never empty: a text, where no protocol draws its own.
   using their_sticker_t = typename variant_of_types<
@@ -145,7 +149,7 @@ struct message_bubble : skiff::compose::Stacked {
   template <class... Tags>
   struct protocol_message_nodes<protocol_list<Tags...>> {
     using type = typename joined<
-        type_list<>, typename sticker_nodes<decltype(message_views_for(::mux::state_of<Tags>{}))>::type...>::type;
+        type_list<>, typename sticker_nodes<decltype(message_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
   };
   using their_view_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_message_nodes<protocols>::type>::type>::type;
@@ -206,9 +210,9 @@ struct message_bubble : skiff::compose::Stacked {
   struct plugin_trailers<plugin_list<Features...>> {
     template <class Feature>
     static auto made(const trailer_facts& facts) {
-      static_assert(requires { extend(contract::message_trailers{}, type_tag<Feature>{}, facts); },
+      static_assert(requires { extend(contract::message_trailers{}, type_tag<Feature>{}, type_tag<Actions>{}, facts); },
                     composition::broken<contract::message_trailers, Feature>());
-      return extend(contract::message_trailers{}, type_tag<Feature>{}, facts);
+      return extend(contract::message_trailers{}, type_tag<Feature>{}, type_tag<Actions>{}, facts);
     }
     using nodes_t =
         std::tuple<std::optional<composition::node_t<decltype(made<Features>(std::declval<const trailer_facts&>()))>>...>;
@@ -836,7 +840,7 @@ struct message_bubble : skiff::compose::Stacked {
     const bool theirs = said.sticker && spl::visit(
                                             [&](const auto& now) {
                                               using sticker_defaults::make_sticker;
-                                              return body.place_sticker(make_sticker(now, said));
+                                              return body.place_sticker(make_sticker(now, said, type_tag<Actions>{}));
                                             },
                                             protocol_state_of(*shared_, in.id.account));
     // What it carries: a picture, sized as tdesktop's; or a file's row.
@@ -1053,7 +1057,7 @@ struct message_bubble : skiff::compose::Stacked {
     spl::visit(
         [&](const auto& now) {
           using view_defaults::make_message_view;
-          body.place_view(make_message_view(now, said));
+          body.place_view(make_message_view(now, said, type_tag<Actions>{}));
         },
         protocol_state_of(*shared_, in.id.account));
     trailers_t::build(body.parts.trailers, trailer_facts{*colours_, *looks_, said, in, message_id});

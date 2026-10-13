@@ -68,13 +68,13 @@ template <class Page> auto& settings_header(Page& page)
   requires requires { page.fParts; }
 { return std::get<0>(page.fParts); }
 
-struct settings_dialog : skiff::compose::Specced {
+template <class Actions> struct settings_dialog : skiff::compose::Specced {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{440.0f, 520.0f}}; }
   // What it was handed, for the pages it makes.
-  ui_needs needs_;
+  ui_needs<Actions> needs_;
   using page_t = spl::variant<settings_home_t, animations_page_t, proxies_page_t, proxy_editor_t,
-                              appearance_page_t, rendering_page_t, storage_page_t, files_page_t,
+                              appearance_page_t<Actions>, rendering_page_t, storage_page_t, files_page_t,
                               notifications_page_t, about_page_t, library_page_t>;
   // The page up: home, or one of its pages.
   // The page up, in a scroll view of the dialog's size: sized to what it
@@ -156,7 +156,7 @@ struct settings_dialog : skiff::compose::Specced {
   }
 
   // Opened on its page: home is where it opens anyway.
-  settings_dialog(const ui_needs& n, const settings_facts& facts) : settings_dialog(n) {
+  settings_dialog(const ui_needs<Actions>& n, const settings_facts& facts) : settings_dialog(n) {
     spl::visit(spl::overloaded{[](settings_page::home) {}, [&](const auto& other) { this->show_page_of(other); }}, facts.page);
   }
   // The page what is shown says, shown -- where it is open already.
@@ -174,7 +174,7 @@ struct settings_dialog : skiff::compose::Specced {
   void show_page_of(const settings_page::storage& page) { this->show_storage(page.limits, page.history, page.sealed); }
   void show_page_of(const settings_page::proxies& page) { this->show_proxies(page.all, page.with_back); }
   void show_page_of(const settings_page::proxy& page) { this->show_proxy(page.from, page.index); }
-  settings_dialog(const ui_needs &n)
+  settings_dialog(const ui_needs<Actions> &n)
       : Specced({.fill = true}), needs_(n),
         parts{.scroll = skiff::compose::styled(
                   {.fill = true}, nodes::ScrollContainer<page_t>(
@@ -232,9 +232,9 @@ struct settings_dialog : skiff::compose::Specced {
                                  [](auto&) -> rendering_page_t* { return nullptr; }},
                       this->page());
   }
-  [[nodiscard]] appearance_page_t* appearance() {
-    return spl::visit(spl::overloaded{[](appearance_page_t& one) { return &one; },
-                                 [](auto&) -> appearance_page_t* { return nullptr; }},
+  [[nodiscard]] appearance_page_t<Actions>* appearance() {
+    return spl::visit(spl::overloaded{[](appearance_page_t<Actions>& one) { return &one; },
+                                 [](auto&) -> appearance_page_t<Actions>* { return nullptr; }},
                       this->page());
   }
   void show_proxies(const std::vector<config::proxy_settings>& all, bool with_back = true) {

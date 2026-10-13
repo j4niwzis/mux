@@ -53,6 +53,7 @@ export namespace mux::ui {
 
 // One account in the list: its address, protocol and state. A click shows
 // its settings beside the list.
+template <class Actions>
 struct account_entry : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::select_account;
@@ -65,7 +66,7 @@ struct account_entry : skiff::compose::Stacked {
 
   // Declared: its address over its protocol and state, on a plate lit
   // while it is the one chosen.
-  account_entry(const ui_needs& n, const config::account_t& saved, const model& now, bool is_selected)
+  account_entry(const ui_needs<Actions>& n, const config::account_t& saved, const model& now, bool is_selected)
       : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {7.0f, 16.0f, 7.0f, 16.0f},
                                             .background = n.colours->sidebar, .selectedBackground = n.colours->chosen, .selected = is_selected})),
         address(config::address_of(saved)),
@@ -93,14 +94,15 @@ struct account_entry : skiff::compose::Stacked {
 };
 
 // The chosen account: on or off, removed, and its own protocol's form.
+template <class Actions>
 struct account_editor : skiff::compose::Stacked {
   // Its address, then on or off and Remove, in a line.
   struct head_row : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text heading;
       nodes::Text enabled_label;
-      widgets::Toggle<flip_account> enabled;
-      widgets::Button<remove_account> remove;
+      widgets::Toggle<flip_account<Actions>> enabled;
+      widgets::Button<remove_account<Actions>> remove;
     } parts;
     head_row(const palette& colours, const config::account_t& saved)
         : Stacked(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY})),
@@ -108,26 +110,26 @@ struct account_editor : skiff::compose::Stacked {
                                                   elided(nodes::Text(config::address_of(saved), 20.0f, colours.text, true))),
                 .enabled_label = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("On", 13.0f, colours.dim)),
                 .enabled = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                                  on_now(widgets::Toggle<flip_account>(colours.widgets, flip_account{config::address_of(saved)}),
+                                                  on_now(widgets::Toggle<flip_account<Actions>>(colours.widgets, flip_account<Actions>{config::address_of(saved)}),
                                                          config::enabled_of(saved))),
                 .remove = skiff::compose::styled({.width = 100.0f, .height = 32.0f},
-                                                 widgets::Button<remove_account>(colours.widgets, "Remove",
-                                                                                          remove_account{config::address_of(saved)}))} {}
+                                                 widgets::Button<remove_account<Actions>>(colours.widgets, "Remove",
+                                                                                          remove_account<Actions>{config::address_of(saved)}))} {}
   };
   // The colours its state is said in as it changes.
   const palette* colours_ = nullptr;
   struct parts_t {
     head_row head;
     nodes::Text state;
-    account_form form;
+    account_form<Actions> form;
   } parts;
 
-  account_editor(const ui_needs& n, const config::account_t& saved)
+  account_editor(const ui_needs<Actions>& n, const config::account_t& saved)
       : Stacked(skiff::compose::vbox(6.0f, {.fill = true})),
         colours_(n.colours),
         parts{.head = head_row(*n.colours, saved),
               .state = skiff::compose::styled({.fillX = true, .margin = {0.0f, 0.0f, 14.0f, 0.0f}}, elided(nodes::Text("", 13.0f, n.colours->dim))),
-              .form = form_of(*n.colours, saved)} {}
+              .form = form_of<Actions>(*n.colours, saved)} {}
 
   // What the model says of it now, kept current without touching the form.
   void show(const config::account_t& saved, const model& now) {
@@ -175,7 +177,7 @@ inline auto account_page_row(const palette& colours, account_page_link link, con
 }
 // Protocol UI overloads arrive after mux.ui is imported; resolve them when
 // the program instantiates the factory, as for the protocol page nodes.
-template <class State>
+template <class Actions, class State>
 inline auto account_pages_view(const palette& colours, const State& state, const account_page_t& selected) {
   namespace c = skiff::compose;
   std::vector<account_page_link> links{
@@ -196,12 +198,13 @@ inline auto account_pages_view(const palette& colours, const State& state, const
   }));
   return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 0.0f, 0.0f}}), std::move(rows));
 }
-using account_pages = decltype(account_pages_view(std::declval<const palette&>(), std::declval<const protocol_state_t&>(),
+template <class Actions>
+using account_pages = decltype(account_pages_view<Actions>(std::declval<const palette&>(), std::declval<const protocol_state_t&>(),
     std::declval<const account_page_t&>()));
 
 // A protocol supplies its presence choices and whether it publishes banners.
 // The editor reads common model data and sends common requests.
-template <class Policy>
+template <class Actions, class Policy>
 struct profile_editor : skiff::compose::Stacked {
   struct choose { void operator()(std::size_t) const {} };
   struct save {
@@ -378,7 +381,7 @@ inline auto account_chats_view(const palette& colours, std::string address) {
       std::move(address));
 }
 
-struct account_privacy : skiff::compose::Stacked {
+template <class Actions> struct account_privacy : skiff::compose::Stacked {
   using receipts_row = switch_row<sends<::mux::ui::request::flip_account_receipts>>;
   using mentions_shared_row = switch_row<sends<::mux::ui::request::flip_account_mentions_shared>>;
   using mentions_sealed_row = switch_row<sends<::mux::ui::request::flip_account_mentions_sealed>>;
@@ -395,7 +398,7 @@ struct account_privacy : skiff::compose::Stacked {
   } parts;
 
   template <class... Rest>
-  account_privacy(const ui_needs& n, Rest&&... rest) : account_privacy(*n.colours, std::forward<Rest>(rest)...) {}
+  account_privacy(const ui_needs<Actions>& n, Rest&&... rest) : account_privacy(*n.colours, std::forward<Rest>(rest)...) {}
   account_privacy(
       const palette &colours, bool receipts_on, std::string address,
       std::optional<bool> events_all = std::nullopt,
@@ -479,6 +482,7 @@ inline auto account_notify_view(const palette& colours, std::string address) {
 // An account's Notifications page: whether what comes through it is told --
 // a message, an invite -- and with sound; each chat of it may choose again
 // in its own settings.
+template <class Actions>
 struct account_notifications : skiff::compose::Stacked {
   using settings_t = decltype(account_notify_view(std::declval<const palette&>(), std::string()));
   struct parts_t {
@@ -486,7 +490,7 @@ struct account_notifications : skiff::compose::Stacked {
     settings_t settings;
     nodes::Text note;
   } parts;
-  account_notifications(const ui_needs& n, std::string address)
+  account_notifications(const ui_needs<Actions>& n, std::string address)
       : Stacked(skiff::compose::vbox(8.0f, {.fill = true})),
         parts{.title = section_title(*n.colours, "NOTIFICATIONS"),
               .settings = account_notify_view(*n.colours, std::move(address)),
@@ -501,7 +505,7 @@ struct account_notifications : skiff::compose::Stacked {
 // who has read up to where, link previews, how far a jump looks back, their
 // looks, and its spaces in the bars. Each as every account's, until chosen
 // here; a chat of it may choose again.
-struct account_chats : skiff::compose::Stacked {
+template <class Actions> struct account_chats : skiff::compose::Stacked {
   // Its colour chosen.
   struct set_colour {
     using Answer = std::optional<::mux::ui::request::set_account_colour>;
@@ -525,10 +529,10 @@ struct account_chats : skiff::compose::Stacked {
     nodes::Text title;
     decltype(account_chats_view(std::declval<const palette&>(), std::string())) settings;
     nodes::Text looks_title;
-    look_choices looks;
+    look_choices<Actions> looks;
     nodes::Text spaces_title;
     choice_menu<pick_home> home;
-    spaces_choices places;
+    spaces_choices<Actions> places;
   } parts;
   account_chats(const palette &colours, const looks_shown &looks,
                 const ui_shared &shared, std::string address,
@@ -546,7 +550,7 @@ struct account_chats : skiff::compose::Stacked {
             .settings = account_chats_view(colours, std::move(address)),
             .looks_title = section_title(colours, "LOOKS"),
             .looks =
-                look_choices(colours, looks, choice_level::account{}),
+                look_choices<Actions>(colours, looks, choice_level::account{}),
             .spaces_title = section_title(colours, "SPACES"),
             .home = make_choice_menu<pick_home>(colours, "Home",
                 {"As above", "Every chat", "Without chats spaces hold",
@@ -556,7 +560,7 @@ struct account_chats : skiff::compose::Stacked {
                 : home_direct.value_or(false) ? 3
                                               : 2,
                 pick_home{}),
-            .places = spaces_choices(colours, shared)} {
+            .places = spaces_choices<Actions>(colours, shared)} {
     for (nodes::Text* each : {&parts.title, &parts.looks_title, &parts.spaces_title})
       each->apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
     this->show_colour(colour, strip_on);
@@ -569,6 +573,7 @@ struct account_chats : skiff::compose::Stacked {
 };
 
 // A proxy profile chosen for the chosen account: -1 for none.
+template <class Actions>
 struct choose_account_proxy {
   using Answer = ::mux::ui::request::choose_account_proxy;
   int index = -1;
@@ -577,11 +582,11 @@ struct choose_account_proxy {
 
 // An account's Proxy page, as Gajim's: which of the program's proxy profiles
 // it connects through, or none; and the way to the profiles themselves.
-struct account_proxy : skiff::compose::Stacked {
+template <class Actions> struct account_proxy : skiff::compose::Stacked {
   using manage_row = row_item<sends<::mux::ui::request::manage_proxies>>;
   struct parts_t {
     nodes::Text title;
-    std::vector<row_item<choose_account_proxy>> choices;
+    std::vector<row_item<choose_account_proxy<Actions>>> choices;
     manage_row manage;
   } parts;
 
@@ -598,12 +603,12 @@ struct account_proxy : skiff::compose::Stacked {
     auto& choices = parts.choices;
 
     // An empty place where the dots are, so the names line up.
-    choices.emplace_back(colours, "No proxy", choose_account_proxy{-1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
+    choices.emplace_back(colours, "No proxy", choose_account_proxy<Actions>{-1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
                          !current.has_value());
     for (std::size_t i = 0; i < all.size(); ++i)
       choices.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(all[i].kind),
                                        all[i].host, all[i].port),
-                           choose_account_proxy{static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)},
+                           choose_account_proxy<Actions>{static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)},
                            current && *current == all[i].name);
   }
   void show(bool) {}
@@ -634,7 +639,8 @@ struct panel_facts {
   panel_detail_t detail = panel_detail::none{};
   std::optional<std::string> note;
 };
-struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back>> {
+template <class Actions>
+struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>> {
   // Child references and handlers require a fixed address.
   accounts_panel(const accounts_panel&) = delete;
   accounts_panel& operator=(const accounts_panel&) = delete;
@@ -649,12 +655,13 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
   // The proxy profiles, for adding an account through one.
   std::vector<config::proxy_settings> proxies;
 
+  using actions_type = Actions;
   // A protocol's account pages, as the nodes its page_type makes of them.
   template <class List>
   struct page_nodes;
   template <class... Pages>
   struct page_nodes<type_list<Pages...>> {
-    using type = type_list<typename decltype(page_type(Pages{}))::type...>;
+    using type = type_list<typename decltype(page_type(Pages{}, type_tag<Actions>{}))::type...>;
   };
   // Its ← goes back from an account's pages to the list, and from the list
   // to the chats.
@@ -665,13 +672,13 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
       using add_row = row_item<sends<::mux::ui::request::open_new_account>>;
       struct parts_t {
         add_row add;
-        account_pages pages;
+        account_pages<Actions> pages;
         nodes::Text message;
-        nodes::ScrollContainer<nodes::Flow<std::vector<account_entry>>> list{
-            nodes::Flow<std::vector<account_entry>>({.spacingY = 0.0f, .wrap = false}, {})};
+        nodes::ScrollContainer<nodes::Flow<std::vector<account_entry<Actions>>>> list{
+            nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
       } parts;
       add_row& add = parts.add;
-      account_pages& pages = parts.pages;
+      account_pages<Actions>& pages = parts.pages;
       nodes::Text& message = parts.message;
       decltype(parts_t::list)& list = parts.list;
       side_column(const palette &colours)
@@ -680,7 +687,7 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
                                             .width = kListWidth,
                                             .background = colours.sidebar})),
             parts{.add = add_row(colours, "Add account", {}, icon::plus{}),
-                  .pages = account_pages_view(colours, protocol_state_t{}, account_page::connection{}),
+                  .pages = account_pages_view<Actions>(colours, protocol_state_t{}, account_page::connection{}),
                   .message = nodes::Text("", 13.0f, colours.error)} {
         pages.setVisible(false);
         pages.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -692,8 +699,8 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
     };
     // The client's pages, then each protocol's own: made by its page_type.
     using detail_t = typename variant_of_types<typename joined<
-        type_list<nodes::Text, account_editor, add_account_pane, account_privacy, account_proxy,
-                  account_chats, account_notifications, account_appearance_t>,
+        type_list<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>, account_proxy<Actions>,
+                  account_chats<Actions>, account_notifications<Actions>, account_appearance_t>,
         typename page_nodes<typename protocol_account_pages<protocols>::type>::type>::type>::type;
     struct detail_column : skiff::compose::Stacked {
       // No account chosen, or the chosen one, or adding one.
@@ -749,7 +756,7 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
   } parts;
   header_t& header = parts.header;
   typename body_row::side_column::add_row& add = parts.body.parts.side.add;
-  account_pages& pages = parts.body.parts.side.pages;
+  account_pages<Actions>& pages = parts.body.parts.side.pages;
   nodes::Text& message = parts.body.parts.side.message;
   decltype(body_row::side_column::parts_t::list)& list = parts.body.parts.side.list;
   typename body_row::detail_t& detail = std::get<0>(parts.body.parts.main.parts.scroll.fChildren);
@@ -807,9 +814,9 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
   }
 
   // What it was handed, for the panes it makes.
-  ui_needs needs_;
-  accounts_panel(const ui_needs& n)
-      : closes_on_escape<sends<::mux::ui::request::accounts_back>>(),
+  ui_needs<Actions> needs_;
+  accounts_panel(const ui_needs<Actions>& n)
+      : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>>(),
         parts{.header = page_header<sends<::mux::ui::request::accounts_back>, sends<::mux::ui::request::accounts_back>>(*n.colours, "Accounts", {}, {}, true, false), .body = body_row(*n.colours)},
         needs_(n) {
     this->fState.apply({.fill = true});
@@ -860,7 +867,7 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
   template <class Asked>
   void show_page(const account_page_t& page, const config::account_t& one, const model& now,
                  const std::vector<config::proxy_settings>& proxies, const config::theme_t& theme, const Asked& asked) {
-    pages = account_pages_view(*needs_.colours, pages_state, page);
+    pages = account_pages_view<Actions>(*needs_.colours, pages_state, page);
     this->show_detail(true);
     spl::visit(
         spl::overloaded{
@@ -893,7 +900,7 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
             [&](account_page::proxy) { detail.template emplace<4>(*needs_.colours, proxies, config::proxy_of(one)); },
             // A protocol's own: its node, made for the program's actions.
             [&]<class Page>(Page) {
-              auto& made = detail.template emplace<typename decltype(page_type(Page{}))::type>(*needs_.colours,
+              auto& made = detail.template emplace<typename decltype(page_type(Page{}, type_tag<Actions>{}))::type>(*needs_.colours,
                                                                                                                        *needs_.shared, one, now);
               opened(made, asked);
             }},
@@ -902,14 +909,14 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
     this->begin_swap();
     this->invalidateLayout();
   }
-  [[nodiscard]] account_privacy* privacy() {
-    return spl::visit(spl::overloaded{[](account_privacy& one) { return &one; },
-                                 [](auto&) -> account_privacy* { return nullptr; }},
+  [[nodiscard]] account_privacy<Actions>* privacy() {
+    return spl::visit(spl::overloaded{[](account_privacy<Actions>& one) { return &one; },
+                                 [](auto&) -> account_privacy<Actions>* { return nullptr; }},
                       detail);
   }
-  [[nodiscard]] account_chats* chats_page() {
-    return spl::visit(spl::overloaded{[](account_chats& one) { return &one; },
-                                            [](auto&) -> account_chats* { return nullptr; }},
+  [[nodiscard]] account_chats<Actions>* chats_page() {
+    return spl::visit(spl::overloaded{[](account_chats<Actions>& one) { return &one; },
+                                            [](auto&) -> account_chats<Actions>* { return nullptr; }},
                          detail);
   }
   // The page shown, where it is one of this type: a protocol's own, as the
@@ -931,9 +938,9 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
   [[nodiscard]] Node* shown_page() {
     return spl::visit(spl::overloaded{[](Node& one) { return &one; }, [](auto&) -> Node* { return nullptr; }}, detail);
   }
-  [[nodiscard]] account_proxy* proxy() {
-    return spl::visit(spl::overloaded{[](account_proxy& one) { return &one; },
-                                 [](auto&) -> account_proxy* { return nullptr; }},
+  [[nodiscard]] account_proxy<Actions>* proxy() {
+    return spl::visit(spl::overloaded{[](account_proxy<Actions>& one) { return &one; },
+                                 [](auto&) -> account_proxy<Actions>* { return nullptr; }},
                       detail);
   }
   [[nodiscard]] bool pages_open() const { return pages.visible(); }
@@ -1006,21 +1013,21 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
     this->invalidateLayout();
   }
 
-  [[nodiscard]] account_editor* editor() {
-    return spl::visit(spl::overloaded{[](account_editor& one) { return &one; },
-                                 [](auto&) -> account_editor* { return nullptr; }},
+  [[nodiscard]] account_editor<Actions>* editor() {
+    return spl::visit(spl::overloaded{[](account_editor<Actions>& one) { return &one; },
+                                 [](auto&) -> account_editor<Actions>* { return nullptr; }},
                       detail);
   }
-  [[nodiscard]] add_account_pane* adding() {
-    return spl::visit(spl::overloaded{[](add_account_pane& one) { return &one; },
-                                 [](auto&) -> add_account_pane* { return nullptr; }},
+  [[nodiscard]] add_account_pane<Actions>* adding() {
+    return spl::visit(spl::overloaded{[](add_account_pane<Actions>& one) { return &one; },
+                                 [](auto&) -> add_account_pane<Actions>* { return nullptr; }},
                       detail);
   }
   // The account form up -- an editor's, or the pane's that adds one.
-  [[nodiscard]] account_form* form() {
-    return spl::visit(spl::overloaded{[](account_editor& one) { return &one.parts.form; },
-                                 [](add_account_pane& one) { return &one.parts.form; },
-                                 [](auto&) -> account_form* { return nullptr; }},
+  [[nodiscard]] account_form<Actions>* form() {
+    return spl::visit(spl::overloaded{[](account_editor<Actions>& one) { return &one.parts.form; },
+                                 [](add_account_pane<Actions>& one) { return &one.parts.form; },
+                                 [](auto&) -> account_form<Actions>* { return nullptr; }},
                       detail);
   }
 

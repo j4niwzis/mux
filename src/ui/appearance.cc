@@ -378,6 +378,7 @@ inline auto frame_look_view(const palette& colours, bool see_through) {
 // Keep the large sections separately owned. Building the whole expression
 // by value also copied its nested controls through several argument packs;
 // Android's UI thread has a much smaller stack than desktop threads.
+template <class Actions>
 struct appearance_page_node : skiff::compose::Stacked {
   using heading = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
   using themes = decltype(appearance_settings_view(std::declval<const palette&>(), config::theme_t{}));
@@ -391,12 +392,12 @@ struct appearance_page_node : skiff::compose::Stacked {
     std::unique_ptr<themes> theme;
     std::unique_ptr<details> custom;
     std::unique_ptr<fonts> style;
-    std::unique_ptr<look_choices> looks;
+    std::unique_ptr<look_choices<Actions>> looks;
     std::unique_ptr<spaces> window;
-    std::unique_ptr<spaces_choices> bars;
+    std::unique_ptr<spaces_choices<Actions>> bars;
     std::unique_ptr<frame> rendering;
   } parts;
-  appearance_page_node(const ui_needs& needs, const config::theme_t& theme)
+  appearance_page_node(const ui_needs<Actions>& needs, const config::theme_t& theme)
       : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
         parts{.header = skiff::compose::styled({.depth = 1.0f, .background = needs.colours->sidebar},
                   page_header<sends<request::settings_home>, sends<request::close_settings>>(*needs.colours, "Appearance", {}, {}, true, true)),
@@ -404,18 +405,20 @@ struct appearance_page_node : skiff::compose::Stacked {
             .custom = std::make_unique<details>(theme_details_view(*needs.colours, theme, needs.looks->theme_overrides)),
             .style = std::make_unique<fonts>(skiff::compose::scoped<config::look_settings>(
                 skiff::compose::handlers(), style_controls(*needs.colours, false))),
-            .looks = std::make_unique<look_choices>(*needs.colours, *needs.looks, choice_level::everywhere{}),
+            .looks = std::make_unique<look_choices<Actions>>(*needs.colours, *needs.looks, choice_level::everywhere{}),
             .window = std::make_unique<spaces>(window_settings_view(*needs.colours)),
-            .bars = std::make_unique<spaces_choices>(*needs.colours, *needs.shared),
+            .bars = std::make_unique<spaces_choices<Actions>>(*needs.colours, *needs.shared),
             .rendering = std::make_unique<frame>(frame_look_view(*needs.colours, needs.looks->window.see_through))} {
     parts.looks->apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
     parts.bars->setVisible(needs.looks->window.spaces);
   }
 };
-auto appearance_page(const ui_needs& needs, const config::theme_t& theme, const config::accent_t&) {
-  return appearance_page_node(needs, theme);
+template <class Actions>
+auto appearance_page(const ui_needs<Actions>& needs, const config::theme_t& theme, const config::accent_t&) {
+  return appearance_page_node<Actions>(needs, theme);
 }
-using appearance_page_t = appearance_page_node;
+template <class Actions>
+using appearance_page_t = appearance_page_node<Actions>;
 
 // Settings' Rendering page: what draws the window, from the next start.
 // The Rendering page's frames: a toggle bound to each of frame_settings'

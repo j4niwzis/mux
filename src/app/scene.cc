@@ -31,6 +31,7 @@ static_assert(std::same_as<decltype(routing_carry(std::declval<mux::app::window_
 }
 
 template class skiff::scene::Scene<mux::app::window_type>;
+template void mux::ui::window<mux::app::actions>::rebuild();
 #ifdef SKIFF_ERASED_WALKS
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::app::window_type>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::app::window_type>();
@@ -38,7 +39,7 @@ template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ap
 #endif
 
 namespace mux::app {
-window_scene::window_scene(const mux::ui::ui_needs& needs)
+window_scene::window_scene(const mux::ui::ui_needs<actions>& needs)
     : fScene(std::in_place, needs) {}
 window_scene::~window_scene() { std::destroy_at(&fScene); }
 }

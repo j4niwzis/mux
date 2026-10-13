@@ -49,12 +49,14 @@ inline auto grid(const ui::palette& colours, const std::vector<std::string>& pat
 }
 
 // Its page, in the media panel (mux.ui:emoji_popup).
-auto extend(contract::media_pages, type_tag<feature>, const ui::ui_needs& needs, const shown& now) {
+template <class Actions>
+auto extend(contract::media_pages, type_tag<feature>, const ui::ui_needs<Actions>& needs, const shown& now) {
   return grid(*needs.colours, now.paths);
 }
 
 // Save GIF, in the menu of a GIF or a moving WebP (mux.ui:context_menu).
-auto extend(contract::message_menu, type_tag<feature>, const ui::palette& colours, const ui::emoji_kept&,
+template <class Actions>
+auto extend(contract::message_menu, type_tag<feature>, type_tag<Actions>, const ui::palette& colours, const ui::emoji_kept&,
             const ui::menu_facts& facts) {
   using row = ui::row_item<ui::sends<save>>;
   return skiff::compose::visible(facts.media.has_value() && facts.moving,

@@ -200,6 +200,7 @@ struct panel_ease_t {
   float from = 1.0f, to = 1.0f;
 };
 // A chat background's dialog, for a level.
+template <class Actions>
 struct open_wallpaper_at {
   using Answer = ::mux::ui::request::open_wallpaper;
   choice_level_t level;
@@ -270,6 +271,7 @@ struct mux_paint;
 // What the window's nodes are handed down, from the root -- the program's
 // own objects, each a pointer of a type of its own: what a node reads, it is
 // given by its parent, and takes what it needs of it with spl::remapped<>.
+template <class Actions>
 struct ui_needs {
   // What plays voice messages: the program's.
   platform::audio::speaker* sound = nullptr;
@@ -444,11 +446,13 @@ using button_for = std::conditional_t<sending<Act>, widgets::internal::Button<Ac
 template <class Act>
 using toggle_for = std::conditional_t<sending<Act>, widgets::internal::Toggle<Act>, widgets::Toggle<Act>>;
 // The requests about one saved account.
+template <class Actions>
 struct flip_account {
   using Answer = ::mux::ui::request::flip_enabled;
   std::string address;
   ::mux::ui::request::flip_enabled operator()() { return ::mux::ui::request::flip_enabled{address}; }
 };
+template <class Actions>
 struct remove_account {
   using Answer = ::mux::ui::request::remove_account;
   std::string address;

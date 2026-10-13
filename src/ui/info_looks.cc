@@ -55,7 +55,7 @@ struct look_level {
   // And the colours the choices are made in.
   const palette* colours = nullptr;
 };
-struct bubbles_picker : skiff::compose::Stacked {
+template <class Actions> struct bubbles_picker : skiff::compose::Stacked {
   // The look at the level, as the UI knows it: every chat's, or the chat's
   // shown.
   [[nodiscard]] static config::bubble_look current(const look_level& level, const config::look_part_t& part) {
@@ -437,7 +437,7 @@ struct bubbles_picker : skiff::compose::Stacked {
 // What a chat looks like, at a level: its background, its bubbles, and the
 // panels round it -- in the dialog (every chat's, an account's) and in a
 // room's Manage (its own).
-struct look_choices : skiff::compose::Stacked {
+template <class Actions> struct look_choices : skiff::compose::Stacked {
   struct pick_wallpaper_at {
     using Answer = std::optional<::mux::ui::request::set_wallpaper>;
     choice_level_t level;
@@ -481,8 +481,8 @@ struct look_choices : skiff::compose::Stacked {
     nodes::Text background_title;
     nodes::Text note;
     choice_menu<pick_wallpaper_at> background;
-    bubbles_picker bubbles;
-    bubbles_picker panels;
+    bubbles_picker<Actions> bubbles;
+    bubbles_picker<Actions> panels;
   } parts;
   [[nodiscard]] static std::string note_of(const looks_shown& looks, const choice_level_t& level) {
     const std::string where = looks.window.behind ? "Behind the whole window" : "Behind the messages";
@@ -509,11 +509,11 @@ struct look_choices : skiff::compose::Stacked {
                       pick_wallpaper_at{level, has_level_above(level)})),
               .bubbles = skiff::compose::styled(
                   {.margin = {10.0f, 0.0f, 0.0f, 0.0f}},
-                  bubbles_picker(look_level{level, &looks, &colours},
+                  bubbles_picker<Actions>(look_level{level, &looks, &colours},
                                           config::look_part::bubbles{})),
               .panels = skiff::compose::styled(
                   {.margin = {10.0f, 0.0f, 0.0f, 0.0f}},
-                  bubbles_picker(look_level{level, &looks, &colours},
+                  bubbles_picker<Actions>(look_level{level, &looks, &colours},
                                           config::look_part::panels{}))} {}
 };
 
@@ -522,7 +522,7 @@ struct look_choices : skiff::compose::Stacked {
 struct wallpaper_facts {
   choice_level_t level;
 };
-struct wallpaper_box : skiff::compose::Stacked {
+template <class Actions> struct wallpaper_box : skiff::compose::Stacked {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{380.0f}}; }
   struct close_it {
@@ -532,9 +532,9 @@ struct wallpaper_box : skiff::compose::Stacked {
   using header_t = page_header_t<no_back, close_it>;
   struct parts_t {
     header_t header;
-    look_choices choices;
+    look_choices<Actions> choices;
   } parts;
-  wallpaper_box(const ui_needs& n, const wallpaper_facts& facts) : wallpaper_box(*n.colours, *n.looks, facts.level) {}
+  wallpaper_box(const ui_needs<Actions>& n, const wallpaper_facts& facts) : wallpaper_box(*n.colours, *n.looks, facts.level) {}
   wallpaper_box(const palette &colours, const looks_shown &looks,
                 choice_level_t level)
       : Stacked(skiff::compose::vbox(8.0f,
@@ -543,7 +543,7 @@ struct wallpaper_box : skiff::compose::Stacked {
                                       .padding = {0.0f, 12.0f, 18.0f, 12.0f}})),
         parts{.header = page_header<no_back, close_it>(colours, "Chat background and looks", {}, {},
                                  false, true),
-              .choices = look_choices(colours, looks, level)} {}
+              .choices = look_choices<Actions>(colours, looks, level)} {}
 };
 
 }  // namespace mux::ui

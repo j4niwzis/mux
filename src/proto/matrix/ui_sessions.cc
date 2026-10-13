@@ -45,7 +45,7 @@ using namespace ::mux::ui;
   return out;
 }
 
-struct account_sessions : skiff::compose::Stacked {
+template <class Actions> struct account_sessions : skiff::compose::Stacked {
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
   struct sign_out_one {
@@ -334,7 +334,7 @@ struct account_sessions : skiff::compose::Stacked {
 // verified sessions only; this session, its ID and its key in fours, to be
 // compared with what another session shows; its room keys exported or
 // imported, as Element does them; cross-signing set up, or restored.
-struct encryption_page : skiff::compose::Stacked {
+template <class Actions> struct encryption_page : skiff::compose::Stacked {
   using only_verified_row = switch_row<sends<::mux::ui::request::flip_only_verified>>;
   using export_row = row_item<sends<request::export_room_keys>>;
   using import_row = row_item<sends<request::import_room_keys>>;
@@ -394,18 +394,21 @@ struct encryption_page : skiff::compose::Stacked {
 
 export namespace mux::proto::matrix {
 // For the program, which tells it what the client says of the sessions.
-using sessions_page = settings_detail::account_sessions;
+template <class Actions>
+using sessions_page = settings_detail::account_sessions<Actions>;
 }  // namespace mux::proto::matrix
 
 export namespace mux::proto::matrix::settings {
 constexpr std::string_view page_title(encryption) { return "Encryption"; }
 inline ui::icon_t page_icon(encryption) { return ui::icon::check{}; }
-constexpr type_tag<settings_detail::encryption_page> page_type(encryption) {
+template <class Actions>
+constexpr type_tag<settings_detail::encryption_page<Actions>> page_type(encryption, type_tag<Actions>) {
   return {};
 }
 constexpr std::string_view page_title(sessions) { return "Sessions"; }
 inline ui::icon_t page_icon(sessions) { return ui::icon::info{}; }
-constexpr type_tag<settings_detail::account_sessions> page_type(sessions) {
+template <class Actions>
+constexpr type_tag<settings_detail::account_sessions<Actions>> page_type(sessions, type_tag<Actions>) {
   return {};
 }
 }  // namespace mux::proto::matrix::settings
@@ -417,5 +420,6 @@ struct profile_policy {
 };
 constexpr std::string_view page_title(profile) { return "Profile"; }
 inline ui::icon_t page_icon(profile) { return ui::icon::info{}; }
-constexpr type_tag<ui::profile_editor<profile_policy>> page_type(profile) { return {}; }
+template <class Actions>
+constexpr type_tag<ui::profile_editor<Actions, profile_policy>> page_type(profile, type_tag<Actions>) { return {}; }
 }

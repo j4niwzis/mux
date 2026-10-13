@@ -358,6 +358,13 @@ auto layer_for(const Needs &needs) {
 // out from the left. All in this one window, switched by the program between
 // events.
 
+// What the layers' keys ask for: a dialog closed, the plugins' each by its
+// facts.
+template <class... Features>
+consteval auto window_answers_of(plugin_list<Features...>) {
+  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer,
+                               ::mux::ui::request::close_shown<dialog_facts_t<Features>>...>>{};
+}
 struct window : skiff::compose::Specced {
   // Child references and handlers require a fixed address.
   window(const window&) = delete;
@@ -411,16 +418,9 @@ struct window : skiff::compose::Specced {
               0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
           parts{.shown = tool_t(which, std::forward<Args>(args)...)} {}
   };
-  // What the layers' keys ask for: a dialog closed, the plugins' each by its
-  // facts.
-  template <class... Features>
-  static consteval auto answers_of(plugin_list<Features...>) {
-    return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer,
-                                 ::mux::ui::request::close_shown<dialog_facts_t<Features>>...>>{};
-  }
   struct layers : skiff::compose::Specced {
     // What its handlers ask for, returned.
-    using Answer = typename decltype(answers_of(dialog_plugins{}))::type;    using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
+    using Answer = typename decltype(window_answers_of(dialog_plugins{}))::type;    using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
                                        shown_frame<widgets::SlideOver<with_drawer, panel_type>, accounts_panel, ui_needs>>;
     // A dialog of Content, bound to its Facts' part of what is shown.
     template <class Content, class Facts>

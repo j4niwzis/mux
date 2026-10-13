@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.bind;
 import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
@@ -281,6 +282,9 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
     this->show_chosen();
   }
   void refresh(const chats_model&) { this->show_chosen(); }
+  // What the runtime binding walks call it by (outside a release build):
+  // its refresh, made where it is made, not where a table of it is.
+  skiff::bind::Refreshes<1> fRefreshes = skiff::bind::refreshes(skiff::bind::refreshFrom<info_panel, chats_model>());
   void show_chosen() {
     if (!this->visible() || now_ == nullptr || !chosen_)
       return;

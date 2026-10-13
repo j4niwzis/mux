@@ -9,6 +9,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.bind;
 import skiff.compose;
 import skiff.model;
 import skiff.nodes.box;
@@ -1515,7 +1516,10 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   }
   template <class Reactions>
   void refresh(const skiff::model::Model<kept_root, Reactions>& kept) {
-    const kept_root& root = kept.root();
+    this->refresh_kept(kept.root());
+  }
+  // What is kept read: by its root, whatever the model's reactions.
+  void refresh_kept(const kept_root& root) {
     kept_ = &root;
     const auto& looks = root.looks.fValue;
     side.theme_now = looks.theme;
@@ -1565,6 +1569,11 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     if (last_model)
       this->show(*last_model);
   }
+  // What the runtime binding walks call it by (outside a release build):
+  // its refresh, made where it is made, not where a table of it is.
+  skiff::bind::Refreshes<2> fRefreshes = skiff::bind::refreshes(
+      skiff::bind::refreshFrom<chat_column, chats_model>(),
+      skiff::bind::refreshFromRoot<chat_column, kept_root, &chat_column::refresh_kept>());
 
   // What the chat's protocol says over the composer (proto::composer_banners):
   // Matrix's warning where the other is not verified, for one. Its banners

@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.bind;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.text;
@@ -366,6 +367,9 @@ struct chat_head : nodes::Memo<typename chat_header<Actions>::view, chat_header<
     this->redo();
   }
   void refresh(const chats_model&) { this->redo(); }
+  // What the runtime binding walks call it by (outside a release build):
+  // its refresh, made where it is made, not where a table of it is.
+  skiff::bind::Refreshes<1> fRefreshes = skiff::bind::refreshes(skiff::bind::refreshFrom<chat_head, chats_model>());
 
  private:
   void redo() {

@@ -75,11 +75,19 @@ inline press_target& press_target_now() {
   static press_target kept;
   return kept;
 }
-// What the window's routing starts with (found by its root's type).
-inline auto startCarry(window_type&) {
-  const press_target& now = press_target_now();
+}  // namespace mux::app
+
+// What the window's routing starts with, found by its root's type: so in
+// the window's own namespace, where that lookup looks -- the window is
+// mux::ui's and names nothing of mux::app's.
+export namespace mux::ui {
+inline auto startCarry(::mux::app::window_type&) {
+  const ::mux::app::press_target& now = ::mux::app::press_target_now();
   return skiff::bind::carryFrom(now.model, now.sink);
 }
+}  // namespace mux::ui
+
+export namespace mux::app {
 
 // What the program does to the window between events.
 // What the program does to the window between events -- on what the

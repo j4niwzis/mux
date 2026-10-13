@@ -12,9 +12,7 @@ import skiff.nodes.flow;
 import skiff.nodes.text;
 import mux.core;
 import mux.config;
-import :base;
-import :icons;
-import :controls;
+import mux.ui.base;
 import :accounts;
 
 export namespace mux::ui {
@@ -24,7 +22,7 @@ export namespace mux::ui {
 // An account in the drawer: a round avatar with its initials, its address,
 // and its protocol and state. A press makes it the current account, whose
 // chats are the ones shown; the current one is lit and ticked.
-template <class Actions> struct drawer_account : skiff::compose::Stacked {
+struct drawer_account : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::switch_account;
   std::string address;
@@ -42,7 +40,7 @@ template <class Actions> struct drawer_account : skiff::compose::Stacked {
                      14.0f, 3.0f, two_line_style{.second_ink = failed ? colours.error : colours.dim, .show_second = true});
   }
   // Declared: the avatar, the address over its state, the tick.
-  drawer_account(const ui_needs<Actions> &n, const config::account_t &saved,
+  drawer_account(const ui_needs &n, const config::account_t &saved,
                  const model &now, bool is_current)
       : Stacked(skiff::compose::hbox(14.0f, {})),
         address(config::address_of(saved)), current(is_current),
@@ -72,17 +70,17 @@ template <class Actions> struct drawer_account : skiff::compose::Stacked {
 // What the drawer holds, as Telegram's does: the accounts with Manage
 // accounts under them, then Settings and Quit, each a full-width line with
 // its icon.
-template <class Actions> struct drawer_panel : skiff::compose::Stacked {
+struct drawer_panel : skiff::compose::Stacked {
   using manage_row = row_item<sends<::mux::ui::request::open_accounts>>;
   using new_chat_row = row_item<sends<::mux::ui::request::open_new_chat>>;
   using new_room_row = row_item<sends<::mux::ui::request::open_new_room>>;
   using settings_row = row_item<sends<::mux::ui::request::open_settings>>;
   using quit_row = row_item<sends<::mux::ui::request::quit>>;
   // What it was handed, for the accounts it lists.
-  ui_needs<Actions> needs_;
+  ui_needs needs_;
   struct parts_t {
     nodes::Text title;
-    std::vector<drawer_account<Actions>> accounts;
+    std::vector<drawer_account> accounts;
     manage_row manage;
     nodes::Box<> rule_1;
     new_chat_row new_chat;
@@ -91,7 +89,7 @@ template <class Actions> struct drawer_panel : skiff::compose::Stacked {
     quit_row quit;
   } parts;
 
-  drawer_panel(const ui_needs<Actions> &n)
+  drawer_panel(const ui_needs &n)
       : Stacked(skiff::compose::vbox(0.0f, {.fill = true})), needs_(n),
         parts{
             .title = skiff::compose::styled(

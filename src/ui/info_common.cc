@@ -24,17 +24,8 @@ import mux.core;
 import mux.config;
 import mux.logic.links;
 import mux.protocols;
-import :base;
-import :icons;
-import :avatars;
-import :controls;
-import :themes;
-import :names;
-import :forms;
-import :composer;
-import :message;
-import :html;
-import :timeline;  // a message's menu, for the reactions list's bubbles
+import mux.ui.base;
+import mux.ui.messages;
 
 export namespace mux::ui {
 
@@ -52,18 +43,6 @@ auto action_tile(const palette& colours, std::string text, icon_t icon, Act what
 template <class Act>
 using action_tile_t = decltype(action_tile(std::declval<const palette&>(), "", icon::none{}, std::declval<Act>()));
 
-inline auto member_row(const palette& colours, const member& one, std::string how) {
-  const std::string name = one.name.empty() ? one.id : one.name;
-  return skiff::compose::recorded(skiff::compose::onClick(request::open_member_info{one.id}, skiff::compose::row(
-      skiff::compose::hbox(12.0f, {.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f},
-          .hoverBackground = colours.chosen}),
-      avatar_mark(avatar_of::person{}, one.id, name, 40.0f), two_lines(colours, name, std::move(how), 14.0f, 4.0f),
-      skiff::compose::visible(one.role.has_value(), skiff::compose::styled(
-          {.alignSelf = scene::align::kStart, .margin = {10.0f, 0.0f, 0.0f, 0.0f}},
-          widgets::Pill(one.role.value_or(""), {.plate = skia::colorSetARGB(255, 62, 52, 96),
-              .text = skia::colorSetARGB(255, 190, 170, 250), .size = 12.0f, .height = 20.0f, .padX = 8.0f})))), name));
-}
-using member_row_t = decltype(member_row(std::declval<const palette&>(), std::declval<const member&>(), ""));
 
 // A round avatar on its own: the chat's, big, over its name.
 struct big_avatar : avatar_mark {

@@ -10,24 +10,16 @@
 // handler is still running.
 export module mux.ui;
 
-export import :base;
-export import :requests;
-export import :icons;
-export import :avatars;
-export import :controls;
-export import :themes;
-export import :names;
-export import :html;
+export import mux.ui.base;
+export import mux.ui.messages;
+
 export import :chat_list;
-export import :message;
 export import :header;
 export import :info;
 export import :room_settings;
-export import :composer;
-export import :timeline;
 export import :conversations;
-export import :forms;
 export import :add_account;
+export import :account_forms;
 export import :accounts;
 export import :drawer;
 export import :proxies;

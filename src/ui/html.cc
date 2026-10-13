@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:html -- A message's HTML read into text and links.
-export module mux.ui:html;
+export module mux.ui.base:html;
 
 import std;
 import splice;

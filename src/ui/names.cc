@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:names -- How chats and people are named and told of: presence, names, times.
-export module mux.ui:names;
+export module mux.ui.base:names;
 
 import std;
 import mux.logic.text;

@@ -26,7 +26,7 @@ import mux.proto.matrix;
 import mux.proto.matrix.requests;
 import mux.proto.matrix.changes;
 import mux.logic.text;
-import mux.ui;
+import mux.ui.base;
 
 export namespace mux::proto::matrix::manage_detail {
 using namespace ::mux::ui;

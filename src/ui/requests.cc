@@ -2,7 +2,7 @@
 // mux.ui:requests -- What the window asks the program for, each a type of
 // its own: sent as events by the window's widgets, taken where they are
 // for. And what the message field's text is for.
-export module mux.ui:requests;
+export module mux.ui.base:requests;
 
 import std;
 import splice;
@@ -16,30 +16,6 @@ import skiff.model;
 
 export namespace mux::ui {
 
-// The picker page is part of what is shown, so data refreshes retain it:
-// its emoji, and each page a plugin gives the media panel
-// (contract::media_pages), in the plugins' order.
-namespace popup_page {
-struct emoji { friend bool operator==(emoji, emoji) = default; };
-}
-template <class... Features>
-consteval auto popup_pages_of(plugin_list<Features...>) {
-  return type_tag<spl::variant<popup_page::emoji,
-      typename decltype(page_type(contract::media_pages{}, type_tag<Features>{}))::type...>>{};
-}
-// What a plugin's page asks for as it is chosen: nothing, where it says
-// nothing (opened).
-namespace page_defaults {
-constexpr proto::part::no_request opened(const auto&) { return {}; }
-}  // namespace page_defaults
-using media_page_plugins = composition::providers<contract::media_pages, enabled_plugins>;
-using popup_page_t = typename decltype(popup_pages_of(media_page_plugins{}))::type;
-// What is shown on each plugin's page, beside the others' (emoji_facts).
-template <class... Features>
-consteval auto pages_shown_of(plugin_list<Features...>) {
-  return type_tag<std::tuple<typename decltype(shown_type(contract::media_pages{}, type_tag<Features>{}))::type...>>{};
-}
-using pages_shown_t = typename decltype(pages_shown_of(media_page_plugins{}))::type;
 
 // Lists of types, put together: the client's and every protocol's -- the
 // Manage tabs and pages, the account pages.
@@ -638,7 +614,6 @@ struct close_edit_history {};
 // of what is shown it is; taken by its plugin's part.
 template <class Facts>
 struct close_shown {};
-struct select_emoji_page { popup_page_t page; };
 struct send_gif {
   std::string path;
 };

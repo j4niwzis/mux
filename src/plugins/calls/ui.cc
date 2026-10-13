@@ -21,7 +21,7 @@ import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.widgets.avatar;
 import mux.core;
-import mux.ui;
+import mux.ui.base;
 import mux.plugin.calls.types;
 
 export namespace mux::plugins::calls {
@@ -183,8 +183,8 @@ inline auto call_content(call_ui::panel, const palette& colours, const call_view
 inline auto call_content(call_ui::card, const palette& colours, const call_view& view) { return call_bar(colours, view); }
 inline auto call_content(call_ui::screen, const palette& colours, const call_view& view) { return call_screen(colours, view); }
 
-template <class Actions, class Which, class View>
-[[nodiscard]] auto call_layer(const ui_needs<Actions>& needs, Which which, View view,
+template <class Which, class View>
+[[nodiscard]] auto call_layer(const ui_needs& needs, Which which, View view,
                               scene::Spec spec, bool floats = false) {
   using Content = decltype(call_content(view, *needs.colours, call_view{}));
   return skiff::compose::derived<call_shown>(which, skiff::compose::mount<Content, call_view>(
@@ -195,26 +195,22 @@ template <class Actions, class Which, class View>
 
 // Its layers, over the window: the card, where the call rings or is in
 // another chat; the whole window, on a phone.
-template <class Actions>
-auto extend(contract::window_layers, type_tag<feature>, type_tag<Actions>, const ui_needs<Actions>& needs) {
+auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
   namespace c = skiff::compose;
   return c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
       call_layer(needs, call_card_of{}, call_ui::card{}, {.fill = true}, true),
       call_layer(needs, call_screen_of{}, call_ui::screen{}, {.fill = true}, true));
 }
 // Its view in its chat, under the head.
-template <class Actions>
-auto extend(contract::chat_column, type_tag<feature>, type_tag<Actions>, const ui_needs<Actions>& needs) {
+auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) {
   return call_layer(needs, call_panel_of{}, call_ui::panel{}, {.fillX = true, .autoSize = scene::axes::kY});
 }
 // Its button in the chat's head: where the chat is two and its protocol calls.
-template <class Actions>
-bool header_shown(contract::chat_header, type_tag<feature>, type_tag<Actions>, const ui_shared& shared, const conversation& one) {
+bool header_shown(contract::chat_header, type_tag<feature>, const ui_shared& shared, const conversation& one) {
   const auto count = std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count);
   return ops_of(shared, one.id.account).calls && count <= 2;
 }
-template <class Actions>
-auto extend(contract::chat_header, type_tag<feature>, type_tag<Actions>, const palette& colours) {
+auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
   return skiff::compose::styled({.alignSelf = scene::align::kMiddle},
                                 icon_button<sends<call_chosen>>(colours, icon::phone{}, {}));
 }

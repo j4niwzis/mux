@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:avatars -- Avatars: their colours, initials, the pictures kept, and drawing them.
-export module mux.ui:avatars;
+export module mux.ui.base:avatars;
 
 import std;
 import skia;

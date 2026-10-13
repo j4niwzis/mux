@@ -18,7 +18,9 @@ list(TRANSFORM mux_plugin_folders REPLACE "/CMakeLists.txt$" "")
 #   TYPES     what it names -- its feature, pages, requests, what is shown of
 #             it -- and what it says it provides: light, seen by mux.ui;
 #             the module mux.plugin.<name>.types
-#   UI        what it puts in the window: mux.plugin.<name>.ui, on mux.ui
+#   UI        what it puts in the window: mux.plugin.<name>.ui, on mux.ui.base
+#   UI_TOP    what it shows of messages: mux.plugin.<name>.ui_top, on
+#             mux.ui.messages
 #   APP       its part of the program: mux.plugin.<name>.app
 #   MATRIX    what it hears of a Matrix account's events, and sends: seen
 #             where the account is made (mux.plugins.matrix); built where
@@ -28,7 +30,7 @@ list(TRANSFORM mux_plugin_folders REPLACE "/CMakeLists.txt$" "")
 #   REQUIRES  the plugins it needs, turned on too
 #   LIBRARIES what it links -- a call's WebRTC -- linked with the window
 function(mux_plugin name)
-  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER" "CHANGES;TYPES;UI;APP;MATRIX;REQUIRES;LIBRARIES")
+  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER" "CHANGES;TYPES;UI;UI_TOP;APP;MATRIX;REQUIRES;LIBRARIES")
   if(NOT DEFINED one_ORDER)
     message(FATAL_ERROR "src/plugins/${name}/CMakeLists.txt: mux_plugin(${name}) needs its ORDER.")
   endif()
@@ -38,7 +40,7 @@ function(mux_plugin name)
   if(one_CHANGES)
     set_property(GLOBAL APPEND PROPERTY MUX_PLUGINS_WITH_CHANGES ${name})
   endif()
-  foreach(layer IN ITEMS CHANGES TYPES UI APP MATRIX)
+  foreach(layer IN ITEMS CHANGES TYPES UI UI_TOP APP MATRIX)
     list(TRANSFORM one_${layer} PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
     set_property(GLOBAL APPEND PROPERTY MUX_PLUGIN_${layer} ${one_${layer}})
     if(one_${layer})
@@ -83,7 +85,7 @@ else()
   set(mux_all_plugins OFF)
 endif()
 get_property(mux_plugin_libraries GLOBAL PROPERTY MUX_PLUGIN_LIBRARIES)
-foreach(layer IN ITEMS CHANGES TYPES UI APP MATRIX)
+foreach(layer IN ITEMS CHANGES TYPES UI UI_TOP APP MATRIX)
   string(TOLOWER "${layer}" lower)
   get_property(mux_plugin_${lower} GLOBAL PROPERTY MUX_PLUGIN_${layer})
   get_property(mux_plugin_modules_${lower} GLOBAL PROPERTY MUX_PLUGIN_MODULES_${layer})
@@ -108,6 +110,9 @@ string(REPLACE ";" ", " features "${features}")
 mux_plugins_module(mux_plugins_types mux.plugins.types "mux.composition;${mux_plugin_modules_types}"
   "export namespace mux {\n// The plugins turned on, in their ORDER.\nusing enabled_plugins = plugin_list<${features}>;\n}  // namespace mux\n")
 mux_plugins_module(mux_plugins_ui mux.plugins.ui "mux.plugins.types;${mux_plugin_modules_ui}" "")
+# What plugins show above the window's messages (a reaction's events, as
+# bubbles): on mux.ui.messages, under the window.
+mux_plugins_module(mux_plugins_ui_top mux.plugins.ui.top "mux.plugins.ui;${mux_plugin_modules_ui_top}" "")
 mux_plugins_module(mux_plugins_app mux.plugins.app "mux.plugins.types;${mux_plugin_modules_app}" "")
 # The plugins' changes, in their ORDER: one list, joined into mux::change_t.
 get_property(mux_plugins_with_changes GLOBAL PROPERTY MUX_PLUGINS_WITH_CHANGES)

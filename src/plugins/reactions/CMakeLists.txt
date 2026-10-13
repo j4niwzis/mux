@@ -4,4 +4,5 @@
 mux_plugin(reactions ORDER 10
   TYPES types.cc
   UI    ui.cc
+  UI_TOP ui_top.cc
   APP   app.cc)

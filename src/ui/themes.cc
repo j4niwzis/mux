@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:themes -- The themes: what each sets.
-export module mux.ui:themes;
+export module mux.ui.base:themes;
 
 import std;
 import splice.bytes;
@@ -392,7 +392,6 @@ struct nothing {
 };
 
 // A control whose action is still to come: it says so.
-template <class Actions>
 struct not_yet {
   using Answer = ::mux::ui::request::not_implemented;
   std::string_view what;

@@ -19,21 +19,43 @@ import mux.core;
 import mux.config;
 import mux.logic.emoji;
 import mux.plugins.types;
-import :base;
-import :icons;
-import :controls;
-import :themes;
-import :avatars;
-import :timeline;
+import mux.ui.base;
+import mux.plugins.ui.top;
+import mux.ui.proto;
+import mux.ui.messages;
 import :conversations;
-import :forms;
-import :names;
-import :emoji_kept;
-import :emoji_panels;
 
 export namespace mux::ui {
+
+// The picker page is part of what is shown, so data refreshes retain it:
+// its emoji, and each page a plugin gives the media panel
+// (contract::media_pages), in the plugins' order.
+namespace popup_page {
+struct emoji { friend bool operator==(emoji, emoji) = default; };
+}
+template <class... Features>
+consteval auto popup_pages_of(plugin_list<Features...>) {
+  return type_tag<spl::variant<popup_page::emoji,
+      typename decltype(page_type(contract::media_pages{}, type_tag<Features>{}))::type...>>{};
+}
+// What a plugin's page asks for as it is chosen: nothing, where it says
+// nothing (opened).
+namespace page_defaults {
+constexpr proto::part::no_request opened(const auto&) { return {}; }
+}  // namespace page_defaults
+using media_page_plugins = composition::providers<contract::media_pages, enabled_plugins>;
+using popup_page_t = typename decltype(popup_pages_of(media_page_plugins{}))::type;
+// What is shown on each plugin's page, beside the others' (emoji_facts).
+template <class... Features>
+consteval auto pages_shown_of(plugin_list<Features...>) {
+  return type_tag<std::tuple<typename decltype(shown_type(contract::media_pages{}, type_tag<Features>{}))::type...>>{};
+}
+using pages_shown_t = typename decltype(pages_shown_of(media_page_plugins{}))::type;
+// A page of the media panel chosen: by its type, one a plugin may give.
+namespace request {
+struct select_emoji_page { popup_page_t page; };
+}  // namespace request
 // What the input's emoji do: go into what is written.
-template <class Actions>
 struct insert_emoji_into {
   using Answer = ::mux::ui::request::insert_emoji;
   [[nodiscard]] static constexpr bool takes_text() { return false; }
@@ -79,7 +101,7 @@ inline auto popup_tab(const palette& colours, popup_page_t page, std::string nam
           c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(name, 13.0f, colours.text, true))), name));
 }
 
-template <class Actions> struct emoji_popup : skiff::compose::Specced {
+struct emoji_popup : skiff::compose::Specced {
   // Child references and handlers require a fixed address.
   emoji_popup(const emoji_popup&) = delete;
   emoji_popup& operator=(const emoji_popup&) = delete;
@@ -99,21 +121,21 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
     template <class Feature>
     using shown_t = typename decltype(shown_type(contract::media_pages{}, type_tag<Feature>{}))::type;
     template <class Feature>
-    static auto made(const ui_needs<Actions>& needs, const emoji_facts& facts) {
+    static auto made(const ui_needs& needs, const emoji_facts& facts) -> decltype(extend(contract::media_pages{}, type_tag<Feature>{}, needs, std::get<shown_t<Feature>>(facts.pages))) {
       static_assert(requires { extend(contract::media_pages{}, type_tag<Feature>{}, needs, std::get<shown_t<Feature>>(facts.pages)); },
                     composition::broken<contract::media_pages, Feature>());
       return extend(contract::media_pages{}, type_tag<Feature>{}, needs, std::get<shown_t<Feature>>(facts.pages));
     }
     using nodes_t = std::tuple<std::optional<composition::node_t<decltype(made<Features>(
-        std::declval<const ui_needs<Actions>&>(), std::declval<const emoji_facts&>()))>>...>;
+        std::declval<const ui_needs&>(), std::declval<const emoji_facts&>()))>>...>;
     // Each built in its slot, shown where it is the page chosen.
     template <class Feature, class Slot>
-    static void place(Slot& slot, const ui_needs<Actions>& needs, const emoji_facts& facts) {
+    static void place(Slot& slot, const ui_needs& needs, const emoji_facts& facts) {
       composition::put(slot, made<Feature>(needs, facts))
           .apply({.fillX = true, .grow = scene::axes::kY, .masking = true,
                   .visible = facts.page == popup_page_t(page_t<Feature>{}) && page_available(facts, page_t<Feature>{})});
     }
-    static void build(nodes_t& slots, const ui_needs<Actions>& needs, const emoji_facts& facts) {
+    static void build(nodes_t& slots, const ui_needs& needs, const emoji_facts& facts) {
       [&]<std::size_t... At>(std::index_sequence<At...>) {
         (place<Features>(std::get<At>(slots), needs, facts), ...);
       }(std::index_sequence_for<Features...>{});
@@ -138,7 +160,7 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
 
     // A swipe to the GIFs: what has been saved since, asked for.
     using Answer = ::mux::ui::request::select_emoji_page;
-    using panel_t = emoji_panel_t<insert_emoji_into<Actions>>;
+    using panel_t = emoji_panel_t<insert_emoji_into>;
     using tab_t = decltype(popup_tab(std::declval<const palette&>(), popup_page_t{popup_page::emoji{}}, std::string{}, false, true));
     using tabs_t = decltype(pages_t::tabs(std::declval<const palette&>(), std::declval<const emoji_facts&>(),
                                           std::declval<tab_t>()));
@@ -150,9 +172,9 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
       panel_t panel;
       typename pages_t::nodes_t pages;
     } parts;
-    card_t(const ui_needs<Actions>& needs, const emoji_facts& facts)
+    card_t(const ui_needs& needs, const emoji_facts& facts)
         : card_t(needs, *needs.colours, *needs.emoji, facts) {}
-    card_t(const ui_needs<Actions>& needs, const palette &colours, emoji_kept &kept, const emoji_facts& facts)
+    card_t(const ui_needs& needs, const palette &colours, emoji_kept &kept, const emoji_facts& facts)
         : Stacked(skiff::compose::vbox(
               0.0f, {.width = 345.0f,
                      .height = 360.0f,
@@ -166,7 +188,7 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
                     popup_tab(colours, popup_page::emoji{}, "Emoji", facts.page == popup_page_t(popup_page::emoji{}), true)),
                 .panel = skiff::compose::styled({.fillX = true, .grow = scene::axes::kY, .masking = true,
                                                  .visible = facts.page == popup_page_t(popup_page::emoji{})},
-                                                emoji_panel(colours, kept, insert_emoji_into<Actions>{}))} {
+                                                emoji_panel(colours, kept, insert_emoji_into{}))} {
       pages_t::build(parts.pages, needs, facts);
 
       // The card paints its own floating backdrop. Its full-window layer
@@ -238,7 +260,7 @@ template <class Actions> struct emoji_popup : skiff::compose::Specced {
   // What the window's parts tell one another: the docked panel's height.
   ui_shared* shared_ = nullptr;
 
-  emoji_popup(const ui_needs<Actions>& n, const emoji_facts& facts)
+  emoji_popup(const ui_needs& n, const emoji_facts& facts)
       : Specced({.fill = true}), parts{.card = card_t(n, facts)},
         right(facts.right), bottom(facts.bottom), shared_(n.shared) {}
   void layoutChildren() {

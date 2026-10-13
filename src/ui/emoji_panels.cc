@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:emoji_panels -- The emoji panel, and what pickers share.
-export module mux.ui:emoji_panels;
+export module mux.ui.base:emoji_panels;
 
 import std;
 import mux.logic.text;
@@ -23,13 +23,11 @@ import mux.logic.emoji;
 import mux.logic.reactions;
 import :base;
 import :icons;
+import :avatars;
 import :controls;
 import :themes;
-import :avatars;
-import :timeline;
-import :conversations;
-import :forms;
 import :names;
+import :forms;
 import :emoji_kept;
 
 export namespace mux::ui {

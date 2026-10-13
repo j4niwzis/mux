@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:emoji_kept -- What the emoji and sticker panels keep: the recent and favourite ones, the chat's own, the page open, and a held emote's preview.
-export module mux.ui:emoji_kept;
+export module mux.ui.base:emoji_kept;
 
 import std;
 import splice;

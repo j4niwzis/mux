@@ -18,23 +18,19 @@ import skiff.widgets.textarea;
 import mux.core;
 import mux.protocols;
 import mux.config;
-import :base;
-import :controls;
-import :themes;
-import :names;
+import mux.ui.base;
+import mux.plugins.ui.top;
+import mux.ui.proto;
 import :chat_list;
-import :message;
+import mux.ui.messages;
 import :header;
 import :info;
-import :composer;
-import :timeline;
 import :conversations_side;
 import :conversations_screen;
 
 export namespace mux::ui {
 
-template <class Actions>
-auto conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) -> std::optional<Answer> {
+auto conversations_screen::onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) -> std::optional<Answer> {
   std::optional<Answer> asked;
   namespace keys = scene::keys;
   if (press.key == keys::kEscape && this->close_space_menu()) {
@@ -135,8 +131,7 @@ auto conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
   return asked;
 }
 
-template <class Actions>
-void conversations_screen<Actions>::show_space_bars(const model& now) {
+void conversations_screen::show_space_bars(const model& now) {
   struct entry {
     config::space_item_t item;
     folder_t shows;
@@ -295,8 +290,7 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
     side.side_bar.setVisible(spaces_on && !side_items.empty());
 }
 
-template <class Actions>
-void conversations_screen<Actions>::onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply) {
+void conversations_screen::onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply) {
   if (side.menu_up() && !side.menu_has(press.x, press.y))
     side.close_menu();
   // The spaces made big: any press off them makes them as they were.
@@ -335,8 +329,7 @@ void conversations_screen<Actions>::onPointer(scene::phase::capture, const scene
   }
 }
 
-template <class Actions>
-auto conversations_screen<Actions>::onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) -> std::optional<Answer> {
+auto conversations_screen::onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) -> std::optional<Answer> {
   std::optional<Answer> asked;
   const std::optional<skia::SkPoint> from = std::exchange(swipe_from, std::nullopt);
   if (!from || !single)
@@ -356,8 +349,7 @@ auto conversations_screen<Actions>::onPointer(scene::phase::capture, const scene
   return asked;
 }
 
-template <class Actions>
-void conversations_screen<Actions>::update(double now_ms) {
+void conversations_screen::update(double now_ms) {
   if (slide_wait > 0 && --slide_wait == 0)
     list_in.setTarget(1.0f);
   if (list_in.step(now_ms))
@@ -419,7 +411,7 @@ void conversations_screen<Actions>::update(double now_ms) {
   // and once it is laid out, brought into view and flashed.
   if (jumping_to && chosen && last_model) {
     auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    auto it = std::ranges::find(entries, *jumping_to, &message_bubble<Actions>::message_id);
+    auto it = std::ranges::find(entries, *jumping_to, &message_bubble::message_id);
     const conversation* one = last_model->find(*chosen);
     // Begun, or more of the chat come: the jump got somewhere.
     if (jump_since_ms < 0.0 || (one && one->timeline.size() != jump_held)) {
@@ -430,10 +422,10 @@ void conversations_screen<Actions>::update(double now_ms) {
     // line is hidden, as the chat's settings say: landed on the nearest
     // shown after it, else before it, as its place.
     if (it != entries.end() && !it->visible()) {
-      auto shown = std::find_if(it, entries.end(), [](const message_bubble<Actions>& row) { return row.visible(); });
+      auto shown = std::find_if(it, entries.end(), [](const message_bubble& row) { return row.visible(); });
       if (shown == entries.end()) {
         const auto back = std::find_if(std::make_reverse_iterator(it), entries.rend(),
-                                       [](const message_bubble<Actions>& row) { return row.visible(); });
+                                       [](const message_bubble& row) { return row.visible(); });
         shown = back == entries.rend() ? entries.end() : std::prev(back.base());
       }
       if (shown != entries.end()) {
@@ -463,7 +455,7 @@ void conversations_screen<Actions>::update(double now_ms) {
         // Made, but not laid out: more than a screen from the view, where
         // the list lays nothing out. The view stepped a screen toward it,
         // until it is laid out and aimed at.
-        const auto laid = std::ranges::find_if(entries, [](const message_bubble<Actions>& row) { return !row.bounds().isEmpty(); });
+        const auto laid = std::ranges::find_if(entries, [](const message_bubble& row) { return !row.bounds().isEmpty(); });
         if (laid != entries.end()) {
           const bool above = it < laid;
           const float page = timeline.bounds().height();
@@ -513,7 +505,7 @@ void conversations_screen<Actions>::update(double now_ms) {
   // once the list is still, where the flash is seen.
   if (aiming) {
     auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    const auto it = std::ranges::find(entries, *aiming, &message_bubble<Actions>::message_id);
+    const auto it = std::ranges::find(entries, *aiming, &message_bubble::message_id);
     if (it == entries.end() || it->bounds().isEmpty() || ++aim_frames > 180) {
       aiming.reset();
       jump_fragment.reset();
@@ -596,9 +588,9 @@ void conversations_screen<Actions>::update(double now_ms) {
       const skia::SkRect view = timeline.bounds();
       const conversation* one = last_model ? last_model->find(*chosen) : nullptr;
       const auto newest = std::ranges::find_if(entries.rbegin(), entries.rend(),
-                                               [](const message_bubble<Actions>& row) { return !row.message_id.empty(); });
+                                               [](const message_bubble& row) { return !row.message_id.empty(); });
       while (!stack.empty()) {
-        const auto it = std::ranges::find(entries, stack.back(), &message_bubble<Actions>::message_id);
+        const auto it = std::ranges::find(entries, stack.back(), &message_bubble::message_id);
         bool passed = false;
         if (it != entries.end() && !it->bounds().isEmpty()) {
           passed = timeline.atEnd(0.5f) || timeline.toView(it->bounds()).fTop < view.centerY();
@@ -668,9 +660,8 @@ void conversations_screen<Actions>::update(double now_ms) {
 // the account shown in the folder chosen -- or the forum open -- with the
 // other accounts' placed here, those searched for, invites first, then by
 // their newest.
-template <class Actions>
-chat_listing<Actions> conversations_screen<Actions>::listing_of(const model& now) const {
-  chat_listing<Actions> out;
+chat_listing conversations_screen::listing_of(const model& now) const {
+  chat_listing out;
   constexpr auto lower = mux::logic::folded;
   const std::string wanted = lower(side.search.field.text());
   const account* in = current ? &now.accounts().at(*current) : nullptr;
@@ -798,12 +789,12 @@ chat_listing<Actions> conversations_screen<Actions>::listing_of(const model& now
   // The chat open -- or, where Alt+Up or Alt+Down went to a forum, that.
   const auto is_chosen = [&](const conversation* one) { return pointed ? *pointed == one->id : chosen && *chosen == one->id; };
   out.chats = chats | std::views::transform([&](const conversation* one) {
-                return listed_chat<Actions>{.id = one->id,
-                                            .view = conversation_row<Actions>::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id),
+                return listed_chat{.id = one->id,
+                                            .view = conversation_row::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id),
                                                                                        draft_of(one->id), events_of(one), strip_for(one)),
                                             .events = events_of(one),
                                             .strip = strip_for(one),
-                                            .height = conversation_row<Actions>::height_of(*one)};
+                                            .height = conversation_row::height_of(*one)};
               }) |
               std::ranges::to<std::vector>();
   return out;
@@ -812,21 +803,20 @@ chat_listing<Actions> conversations_screen<Actions>::listing_of(const model& now
 // The rows for where the list is now: those a screen above the view to two
 // below it made from the listing, the rest stand-ins of their height (the
 // rows' padding above and below).
-template <class Actions>
-void conversations_screen<Actions>::show_rows(const model& now) {
+void conversations_screen::show_rows(const model& now) {
   auto& rows = std::get<0>(list.fChildren);
   const auto key_of = [](const auto& kept) { return kept.fKey; };
   const std::vector<conversation_id> listed_before = rows.fRows | std::views::transform(key_of) | std::ranges::to<std::vector>();
   chats_listed = listing.chats.size();
-  order = listing.chats | std::views::transform(&listed_chat<Actions>::id) | std::ranges::to<std::vector>();
-  const std::vector<float> heights = listing.chats | std::views::transform(&listed_chat<Actions>::height) | std::ranges::to<std::vector>();
+  order = listing.chats | std::views::transform(&listed_chat::id) | std::ranges::to<std::vector>();
+  const std::vector<float> heights = listing.chats | std::views::transform(&listed_chat::height) | std::ranges::to<std::vector>();
   tops.assign(1, 0.0f);
   std::inclusive_scan(heights.begin(), heights.end(), std::back_inserter(tops));
   std::tie(chats_from, chats_made) = this->chats_window();
   rows.apply({.padding = scene::Margin{tops[chats_from], 0.0f, tops.back() - tops[chats_made], 0.0f}});
   const auto items = listing.chats | std::views::drop(chats_from) | std::views::take(chats_made - chats_from) |
-                     std::views::transform([&](const listed_chat<Actions>& one) {
-                       return chat_item<Actions>{one.id, one.view, listing.find(now, one.id), &one, &needs_};
+                     std::views::transform([&](const listed_chat& one) {
+                       return chat_item{one.id, one.view, listing.find(now, one.id), &one, &needs_};
                      });
   if (rows.read(items)) {
     list.invalidateLayout();
@@ -837,8 +827,7 @@ void conversations_screen<Actions>::show_rows(const model& now) {
   }
 }
 
-template <class Actions>
-void conversations_screen<Actions>::show(const model& now, bool with_chat) {
+void conversations_screen::show(const model& now, bool with_chat) {
   const auto previous_account = current;
   last_model = &now;
   this->read_chat_settings(now);
@@ -963,8 +952,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     this->show_conversation(now);
 }
 
-template <class Actions>
-void conversations_screen<Actions>::show_banners(const conversation* one, const model& now) {
+void conversations_screen::show_banners(const conversation* one, const model& now) {
   const auto banners = one ? proto::composer_banners(protocol_state_of(*needs_.shared, one->id.account), *one, now)
                            : std::vector<proto::part::banner>{};
   const std::string said = std::ranges::to<std::string>(std::views::join_with(std::views::transform(banners, &proto::part::banner::text), '\n'));
@@ -989,7 +977,7 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
     spl::visit(
         [&](const auto& now) {
           using head_view_defaults::make_head_view;
-          this->place_head_view(make_head_view(now, *one, type_tag<Actions>{}));
+          this->place_head_view(make_head_view(now, *one));
         },
         protocol_state_of(*needs_.shared, one->id.account));
   // The protocol's own node over the composer, made again for the chat.
@@ -998,7 +986,7 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
     spl::visit(
         [&](const auto& now) {
           using composer_view_defaults::make_composer_view;
-          this->place_composer_view(make_composer_view(now, *one, type_tag<Actions>{}));
+          this->place_composer_view(make_composer_view(now, *one));
         },
         protocol_state_of(*needs_.shared, one->id.account));
   if (!banners.empty())
@@ -1015,8 +1003,7 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
   }
 }
 
-template <class Actions>
-void conversations_screen<Actions>::show_conversation(const model& now) {
+void conversations_screen::show_conversation(const model& now) {
   this->show_connections(now);
   // Whether the reader was at the newest: then the view follows it; and
   // where the view was, for the chat being left.
@@ -1109,7 +1096,7 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
                           arrives, rooms_wanted);
   rooms_waiting.clear();
   rooms_unfound.clear();
-  for (const message_bubble<Actions>& row : entries) {
+  for (const message_bubble& row : entries) {
     rooms_waiting.insert(row.rooms_waiting.begin(), row.rooms_waiting.end());
     rooms_unfound.insert(row.rooms_unknown.begin(), row.rooms_unknown.end());
   }

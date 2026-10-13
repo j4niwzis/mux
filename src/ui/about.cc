@@ -6,9 +6,7 @@ import std;
 import skiff.compose;
 import skiff.nodes.text;
 import mux.platform.video;
-import :base;
-import :icons;
-import :controls;
+import mux.ui.base;
 import :proxies;
 
 export namespace mux::ui {

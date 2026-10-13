@@ -18,16 +18,11 @@ import skiff.widgets.textarea;
 import mux.core;
 import mux.protocols;
 import mux.config;
-import :base;
-import :controls;
-import :themes;
-import :names;
+import mux.ui.base;
 import :chat_list;
-import :message;
+import mux.ui.messages;
 import :header;
 import :info;
-import :composer;
-import :timeline;
 
 export namespace mux::ui {
 
@@ -37,11 +32,10 @@ struct server_search_facts {
   std::optional<account_id> by;
   bool waiting = false;
 };
-template <class Actions>
 auto server_search_arguments(const palette& colours, const server_search_facts& facts) {
   namespace c = skiff::compose;
   auto rooms = std::ranges::to<std::vector>(std::views::transform(std::views::take(facts.rooms, 30), [&](const auto& room) {
-    return directory_room_row<Actions>(colours, room, std::string(), facts.by);
+    return directory_room_row(colours, room, std::string(), facts.by);
   }));
   auto people = std::ranges::to<std::vector>(std::views::transform(std::views::take(facts.people, 30), [&](const auto& person) {
     return found_person_row(colours, person);
@@ -56,14 +50,12 @@ auto server_search_arguments(const palette& colours, const server_search_facts& 
       c::visible(facts.waiting || (facts.rooms.empty() && facts.people.empty()), c::styled(caption,
           wrapped(nodes::Text(facts.waiting ? "Searching the server…" : "No rooms or people found.", 13.0f, colours.dim))))};
 }
-template <class Actions>
 using server_search_content_t = decltype(std::apply([](auto&&... parts) {
   return skiff::compose::Box(std::forward<decltype(parts)>(parts)...);
-}, server_search_arguments<Actions>(std::declval<const palette&>(), std::declval<const server_search_facts&>())));
-template <class Actions>
+}, server_search_arguments(std::declval<const palette&>(), std::declval<const server_search_facts&>())));
 auto server_search_list(const palette& colours) {
-  return skiff::compose::mount<server_search_content_t<Actions>, server_search_facts>(
-      [colours = &colours](const auto& facts) { return server_search_arguments<Actions>(*colours, facts); },
+  return skiff::compose::mount<server_search_content_t, server_search_facts>(
+      [colours = &colours](const auto& facts) { return server_search_arguments(*colours, facts); },
       {.fillX = true, .autoSize = scene::axes::kY});
 }
 
@@ -249,7 +241,7 @@ template <class Pick> struct top_view : skiff::compose::Stacked {
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
-template <class Actions, class Pick>
+template <class Pick>
 struct side_column : skiff::compose::Stacked {
   // Child references and handlers require a fixed address.
   side_column(const side_column&) = delete;
@@ -322,7 +314,7 @@ struct side_column : skiff::compose::Stacked {
         fState.apply({.selected = field.focused()});
     }
   };
-  using list_t = nodes::ScrollContainer<chat_rows<Actions>>;
+  using list_t = nodes::ScrollContainer<chat_rows>;
   // What is right of the side bar: the search, the tabs, the chats.
   // A forum open: its name, and the way back to the chats.
   struct forum_head_t : skiff::compose::Stacked {
@@ -408,7 +400,7 @@ struct side_column : skiff::compose::Stacked {
     }
   };
   using found_list_t = nodes::ScrollContainer<nodes::Flow<std::vector<found_row>>>;
-  using elsewhere_list = decltype(server_search_list<Actions>(std::declval<const palette&>()));
+  using elsewhere_list = decltype(server_search_list(std::declval<const palette&>()));
   using elsewhere_t = nodes::ScrollContainer<elsewhere_list>;
   struct rest_t : skiff::compose::Stacked {
     struct parts_t {
@@ -419,7 +411,7 @@ struct side_column : skiff::compose::Stacked {
       nodes::Flow<std::vector<folder_tab<Pick>>> folders{
           {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
       nodes::Text no_chats;
-      list_t list{chat_rows<Actions>()};
+      list_t list{chat_rows()};
       // While a chat is searched: what was found, in the chats' place.
       nodes::Text found_title;
       found_list_t found{nodes::Flow<std::vector<found_row>>({.spacingY = 0.0f, .wrap = false}, {})};
@@ -441,7 +433,7 @@ struct side_column : skiff::compose::Stacked {
                 .elsewhere = skiff::compose::visible(
                     false, skiff::compose::styled(
                                {.fillX = true, .grow = scene::axes::kY},
-                               elsewhere_t(server_search_list<Actions>(colours))))} {
+                               elsewhere_t(server_search_list(colours))))} {
       parts.found.apply({.fillX = true, .grow = scene::axes::kY});
       std::get<0>(parts.found.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.found.setVisible(false);

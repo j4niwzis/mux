@@ -16,9 +16,7 @@ import skiff.widgets.model;
 import skiff.bind;
 import mux.core;
 import mux.config;
-import :base;
-import :icons;
-import :controls;
+import mux.ui.base;
 import :accounts;
 import :proxies;
 

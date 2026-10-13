@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message_text -- A message's text as shown: its mentions and quotes, its code, its forward line and readers.
-export module mux.ui:message_text;
+export module mux.ui.messages:message_text;
 
 import std;
 import chevron.escape;
@@ -22,13 +22,9 @@ import mux.core;
 import mux.config;
 import mux.logic.links;
 import mux.protocols;
-import :base;
-import :icons;
-import :avatars;
-import :controls;
-import :themes;
-import :names;
-import :html;
+import mux.ui.base;
+import mux.plugins.ui;
+import mux.ui.proto;
 import :message_pieces;
 import :message_media;
 

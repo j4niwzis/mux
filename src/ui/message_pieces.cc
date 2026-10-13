@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message_pieces -- A message's marks, its first link, the fragment a quote marks, and its link's card and page preview.
-export module mux.ui:message_pieces;
+export module mux.ui.messages:message_pieces;
 
 import std;
 import chevron.escape;
@@ -21,13 +21,9 @@ import mux.core;
 import mux.config;
 import mux.logic.links;
 import mux.protocols;
-import :base;
-import :icons;
-import :avatars;
-import :controls;
-import :themes;
-import :names;
-import :html;
+import mux.ui.base;
+import mux.plugins.ui;
+import mux.ui.proto;
 
 export namespace mux::ui {
 

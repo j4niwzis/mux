@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:icons -- The icons, drawn with a pen.
-export module mux.ui:icons;
+export module mux.ui.base:icons;
 
 import std;
 import splice;

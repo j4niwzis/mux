@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message_media -- What a message carries: its picture, album and file, and its reactions.
-export module mux.ui:message_media;
+export module mux.ui.messages:message_media;
 
 import std;
 import chevron.escape;
@@ -21,13 +21,9 @@ import mux.core;
 import mux.config;
 import mux.logic.links;
 import mux.protocols;
-import :base;
-import :icons;
-import :avatars;
-import :controls;
-import :themes;
-import :names;
-import :html;
+import mux.ui.base;
+import mux.plugins.ui;
+import mux.ui.proto;
 import :message_pieces;
 
 export namespace mux::ui {
@@ -352,18 +348,6 @@ struct file_view : skiff::compose::Stacked {
     fState.setCursor(scene::cursor::hand{});
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
-};
-
-// Reactions are local compositions: inline pictures retain their own frame
-// deadlines, and a click sends the original (unmodified) reaction key.
-struct reaction_pictures {
-  static std::optional<scene::PillPicture> pill(std::string_view) { return std::nullopt; }
-  static const skia::Sp<skia::SkImage>* picture(std::string_view target) {
-    if (const auto* moving = emoji_animations().at(target, animation_clock())) return moving;
-    return emoji_images().find(target);
-  }
-  static bool animated(std::string_view target) { return emoji_animations().has(target); }
-  static double wakeAt(std::string_view target) { return emoji_animations().next_frame_at(target, animation_clock()); }
 };
 
 } // namespace mux::ui

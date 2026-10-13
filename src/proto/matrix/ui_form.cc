@@ -21,7 +21,7 @@ import mux.config;
 import mux.proto.kept;
 import mux.proto.matrix;
 import mux.proto.matrix.requests;
-import mux.ui;
+import mux.ui.base;
 
 namespace mux::proto::matrix::form_detail {
 using namespace ::mux::ui;
@@ -29,7 +29,7 @@ using namespace ::mux::ui;
 // A Matrix account's settings: its user ID and password, the homeserver
 // (found through the server's .well-known when left empty) and what this
 // device is called.
-template <class Actions> struct matrix_form : skiff::compose::Stacked {
+struct matrix_form : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = ::mux::ui::request::submit_login;
   // What the add-account pane says of the protocol.
@@ -64,7 +64,7 @@ template <class Actions> struct matrix_form : skiff::compose::Stacked {
     choice_menu<pick_mode> mode;
     field token;
     choice_menu<pick_terms> terms;
-    form_end<Actions> end;
+    form_end end;
   } parts;
 
   matrix_form(const palette &colours,
@@ -92,7 +92,7 @@ template <class Actions> struct matrix_form : skiff::compose::Stacked {
                   false, make_choice_menu<pick_terms>(colours, "The server's terms",
                              {"Not agreed to", "I agree to the server's terms"},
                              0, pick_terms{this})),
-              .end = form_end<Actions>(colours, from.has_value())} {
+              .end = form_end(colours, from.has_value())} {
     auto& [user_id, way, password, homeserver, device_name, mode, token, terms, end] = parts;
     in_browser = from && from->oauth.value_or(false);
     // Editing an account kept: it is one already.
@@ -164,14 +164,11 @@ export namespace mux::proto::matrix {
 
 // Its account form, for the panels: by the protocol's tag, and by what an
 // account of it keeps.
-template <class Actions>
-using form = form_detail::matrix_form<Actions>;
-template <class Actions>
-constexpr type_tag<form<Actions>> form_type(const state&, type_tag<Actions>) {
+using form = form_detail::matrix_form;
+constexpr type_tag<form> form_type(const state&) {
   return {};
 }
-template <class Actions>
-constexpr type_tag<form<Actions>> form_type_for(const kept&, type_tag<Actions>) {
+constexpr type_tag<form> form_type_for(const kept&) {
   return {};
 }
 

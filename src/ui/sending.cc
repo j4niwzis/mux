@@ -15,10 +15,8 @@ import skiff.widgets.button;
 import skiff.widgets.textarea;
 import mux.core;
 import mux.config;
-import :base;
-import :avatars;
-import :controls;
-import :message;
+import mux.ui.base;
+import mux.ui.messages;
 import :context_menu;
 
 export namespace mux::ui {
@@ -36,7 +34,7 @@ struct pending_file {
 struct send_facts {
   std::vector<pending_file> files;
 };
-template <class Actions> struct send_box : skiff::compose::Stacked {
+struct send_box : skiff::compose::Stacked {
   // Sized as it is opened, by the files it is opened with.
   [[nodiscard]] static dialog_look look_of_dialog() { return {}; }
   struct previews_column : skiff::compose::Stacked {
@@ -103,8 +101,8 @@ template <class Actions> struct send_box : skiff::compose::Stacked {
     buttons_row buttons;
   } parts;
 
-  send_box(const ui_needs<Actions>& n, const send_facts& facts) : send_box(*n.colours, facts.files) {}
-  send_box(const ui_needs<Actions>& n, const std::vector<pending_file>& all) : send_box(*n.colours, all) {}
+  send_box(const ui_needs& n, const send_facts& facts) : send_box(*n.colours, facts.files) {}
+  send_box(const ui_needs& n, const std::vector<pending_file>& all) : send_box(*n.colours, all) {}
   send_box(const palette &colours, const std::vector<pending_file> &all)
       : Stacked(skiff::compose::vbox(
             12.0f, {.fillX = true,

@@ -98,8 +98,8 @@ template <class... Dialogs>
 struct dialog_list {};
 // The sticker nodes a protocol draws its own stickers with (a Telegram TGS
 // as a Lottie animation, a WebM as a video), as sticker_views(state,
-// type_tag<Actions>) lists them in its UI module; each made, for a message,
-// by its make_sticker(state, message, type_tag<Actions>). None: the picture.
+// type_tag) lists them in its UI module; each made, for a message,
+// by its make_sticker(state, message). None: the picture.
 template <class... Views>
 struct sticker_view_list {};
 // What a protocol asks a passphrase (or a password) for, of its own: their

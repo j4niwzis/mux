@@ -18,11 +18,7 @@ import skiff.widgets.model;
 import skiff.bind;
 import mux.core;
 import mux.config;
-import :base;
-import :icons;
-import :avatars;
-import :controls;
-import :forms;
+import mux.ui.base;
 import :drawer;
 
 export namespace mux::ui {

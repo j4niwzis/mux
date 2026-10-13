@@ -12,11 +12,7 @@ import skiff.widgets.button;
 import mux.core;
 import mux.logic.text;
 import mux.logic.links;
-import :base;
-import :avatars;
-import :controls;
-import :themes;
-import :forms;
+import mux.ui.base;
 export namespace mux::ui {
 // The room an address typed names: one its protocol joins at once, else the
 // room a link to it names.
@@ -27,7 +23,7 @@ inline std::optional<std::string> room_address_for(const std::optional<account_i
   if (!link) link = mux::logic::link_of(query);
   return link ? mux::logic::linked_room(*link) : std::nullopt;
 }
-template <class Actions> struct directory_join {
+struct directory_join {
   using Answer = std::variant<request::explore_space, request::join_directory_room>;
   std::string room, server;
   bool open = false;
@@ -38,7 +34,6 @@ template <class Actions> struct directory_join {
     return request::join_directory_room{room, server, by};
   }
 };
-template <class Actions>
 auto directory_room_row(const palette& colours, const directory_room& one, const std::string& server, std::optional<account_id> by = std::nullopt) {
   namespace c = skiff::compose;
   return c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}}),
@@ -51,11 +46,10 @@ auto directory_room_row(const palette& colours, const directory_room& one, const
               one.members > 0 ? std::format("{} · {} members", one.alias, one.members) : one.alias, 12.0f, colours.dim))),
           c::visible(!one.topic.empty(), c::styled({.fillX = true}, elided(nodes::Text(one.topic, 13.0f, colours.text))))),
       c::styled({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle},
-          primary(widgets::Button<directory_join<Actions>>(colours.widgets, one.space ? "Open" : "Join",
+          primary(widgets::Button<directory_join>(colours.widgets, one.space ? "Open" : "Join",
               {one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space, one.name, by}))));
 }
-template <class Actions>
-using directory_row = decltype(directory_room_row<Actions>(std::declval<const palette&>(),
+using directory_row = decltype(directory_room_row(std::declval<const palette&>(),
     std::declval<const directory_room&>(), std::declval<const std::string&>()));
 struct explore_listing {
   std::vector<directory_room> rooms;
@@ -86,7 +80,6 @@ struct explore_events {
     return skiff::model::Up{request::search_rooms{draft.server, draft.query}};
   }
 };
-template <class Actions>
 auto explore_view(const palette& colours, const explore_facts& facts) {
   namespace c = skiff::compose;
   const auto wanted = mux::logic::folded(facts.query);
@@ -98,7 +91,7 @@ auto explore_view(const palette& colours, const explore_facts& facts) {
     if (room.avatar && !room.avatar->empty()) listed_avatars().emplace_back(room.id, *room.avatar);
   });
   auto rows = std::ranges::to<std::vector>(std::views::transform(rooms, [&](const auto& room) {
-    return directory_room_row<Actions>(colours, room, facts.listing->server, facts.by);
+    return directory_room_row(colours, room, facts.listing->server, facts.by);
   }));
   const bool more = facts.listing && facts.listing->next && !facts.space;
   const auto status = facts.loading ? std::string("Loading rooms…") :
@@ -127,11 +120,10 @@ auto explore_view(const palette& colours, const explore_facts& facts) {
                facts.listing ? facts.listing->query : facts.query,
                more ? facts.listing->next : std::nullopt})))), explore_draft{facts.query, facts.server});
 }
-template <class Actions>
-using explore_box = decltype(explore_view<Actions>(std::declval<const palette&>(), std::declval<const explore_facts&>()));
-template <class Content, class Actions>
-auto make_content(std::type_identity<Content>, const ui_needs<Actions>& needs, const explore_facts& facts) {
-  return explore_view<Actions>(*needs.colours, facts);
+using explore_box = decltype(explore_view(std::declval<const palette&>(), std::declval<const explore_facts&>()));
+template <class Content>
+auto make_content(std::type_identity<Content>, const ui_needs& needs, const explore_facts& facts) {
+  return explore_view(*needs.colours, facts);
 }
 template <class Content>
 inline dialog_look content_look(std::type_identity<Content>, std::type_identity<explore_facts>) {

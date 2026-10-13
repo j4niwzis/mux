@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:controls -- The small controls: marks, rows, icon buttons, headers, segments, the drawer button.
-export module mux.ui:controls;
+export module mux.ui.base:controls;
 
 import std;
 import splice;
@@ -76,7 +76,6 @@ struct avatar_mark : widgets::Avatar<from_avatars> {
 // An avatar that opens: pressed, its picture in the viewer, where it can be
 // looked at whole and saved -- a person's in their card, a chat's in its
 // info.
-template <class Actions>
 struct avatar_button : avatar_mark {
   using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::open_avatar>;
   avatar_button(auto kind, std::string id, std::string shown, float size)
@@ -404,7 +403,6 @@ inline auto make_choice_menu(const palette& colours, std::string label,
 
 // The items of the space bars -- Home, Direct messages, each space -- each
 // with where it is: the side bar, the top one, both, or hidden.
-template <class Actions>
 struct spaces_choices : skiff::compose::Stacked {
   struct pick_bars {
     using Answer = std::optional<::mux::ui::request::set_space_bars>;

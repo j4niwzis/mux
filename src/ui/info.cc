@@ -24,17 +24,8 @@ import mux.core;
 import mux.config;
 import mux.logic.links;
 import mux.protocols;
-import :base;
-import :icons;
-import :avatars;
-import :controls;
-import :themes;
-import :names;
-import :forms;
-import :composer;
-import :message;
-import :html;
-import :timeline;  // a message's menu, for the reactions list's bubbles
+import mux.ui.base;
+import mux.ui.messages;
 
 export import :info_common;
 export import :info_cards;
@@ -76,7 +67,95 @@ template <class Act> using person_actions_t = decltype(person_actions(std::declv
   return level > 0 ? std::format("Level {}", level) : std::string("Member");
 }
 
-template <class Actions> struct info_panel : skiff::compose::Stacked {
+struct info_panel;
+// What a press does, to the panel -- which stays where it is while its
+// pages are made again.
+struct info_back_to_group {
+  info_panel* panel;
+  void operator()() const;
+};
+struct info_message_them {
+  using Answer = std::optional<::mux::ui::request::message_person>;
+  info_panel* panel;
+  std::optional<::mux::ui::request::message_person> operator()();
+};
+// What the upper part shows: a chat's, or one of its members'.
+struct info_view {
+  std::string key;
+  std::string name;
+  std::string status;
+  bool group = false;
+  bool muted = false;
+  bool of_person = false;
+  // What copying the ID gives: for a Matrix room, a link to it with the
+  // servers to join through; else the ID.
+  std::string copied;
+  // What it is about, and the addresses it publishes: shown as
+  // Telegram shows a group's description and its link.
+  std::string topic;
+  std::vector<std::string> addresses;
+  // Whether its protocol lets it be left: its Leave tile only then.
+  bool leavable = true;
+  friend bool operator==(const info_view&, const info_view&) = default;
+};
+// The upper part, made from its view: ← where a member is shown, ✕; the
+// big avatar, the name, how it is; the chat's tiles or the member's; its ID.
+inline auto info_head_of(const palette& colours, info_panel* panel, const info_view& shown) {
+  namespace c = skiff::compose;
+  const auto centred = [&](std::string text, float size, skia::SkColor colour, bool bold) {
+    auto node = nodes::Text(std::move(text), size, colour, bold);
+    node.setSelectable(true);
+    return c::styled({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}}, elided(std::move(node)));
+  };
+  auto description = wrapped(c::styled({.fillX = true}, nodes::Text(shown.topic, 14.0f, colours.text)));
+  description.setSelectable(true);
+  description.setLinks(link_spans_in(shown.topic), colours.accent);
+  std::vector<id_line_t> addresses;
+  for (const auto& address : shown.addresses)
+    addresses.push_back(id_line(colours, address, "", "Address"));
+  return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}),
+          c::visible(shown.of_person, icon_button<info_back_to_group>(colours, icon::back{}, {panel})),
+          c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::colorSetARGB(0, 0, 0, 0))),
+          icon_button<sends<request::toggle_info>>(colours, icon::close{}, {})),
+      avatar_button(avatar_of::chat{}, shown.key, shown.name, 96.0f),
+      centred(shown.name, 17.0f, colours.text, true),
+      centred(shown.status, 13.0f, colours.dim, false),
+      c::visible(!shown.of_person, info_tiles(colours, shown.muted, shown.leavable)),
+      c::visible(shown.of_person, person_actions(colours, info_message_them{panel})),
+      section_band(colours),
+      c::visible(!shown.topic.empty(), c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
+          .padding = {8.0f, 20.0f, 8.0f, 20.0f}}), std::move(description), nodes::Text("Description", 12.0f, colours.dim))),
+      c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(addresses)),
+      id_line(colours, shown.key, shown.copied));
+}
+struct info_members_heading {
+  std::size_t count = 0;
+  conversation_id room;
+  bool invite = false;
+  friend bool operator==(const info_members_heading&, const info_members_heading&) = default;
+};
+inline auto info_members_head(const palette& colours, const info_members_heading& facts) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(10.0f, {.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}}),
+      icon_view(colours, icon::people{}),
+      c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text(
+          std::format("{} MEMBER{}", facts.count, facts.count == 1 ? "" : "S"), 13.0f, colours.dim, true)),
+      c::visible(facts.invite, icon_button<sends<request::open_room_invite>>(
+          colours, icon::add_person{}, {facts.room})));
+}
+
+struct info_panel : skiff::compose::Stacked {
+  // What a press does, what the upper part shows, and how the upper part and
+  // the members' head are made: out of the class, their types known first.
+  using back_to_group = info_back_to_group;
+  using message_them = info_message_them;
+  using view = info_view;
+  using members_heading = info_members_heading;
+  static auto head_of(info_panel* panel, const view& shown) { return info_head_of(*panel->colours_, panel, shown); }
+  using head = decltype(info_head_of(std::declval<const palette&>(), std::declval<info_panel*>(), std::declval<const info_view&>()));
+  static auto members_head(const palette& colours, const members_heading& facts) { return info_members_head(colours, facts); }
+  using members_head_t = decltype(info_members_head(std::declval<const palette&>(), std::declval<const info_members_heading&>()));
   // Child references and handlers require a fixed address.
   info_panel(const info_panel&) = delete;
   info_panel& operator=(const info_panel&) = delete;
@@ -116,91 +195,8 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
            parts.scroll.atEnd(std::max(300.0f, parts.scroll.bounds().height() * 1.5f));
   }
 
-  // What a press does, to the panel -- which stays where it is while its
-  // pages are made again.
-  struct back_to_group {
-    info_panel* panel;
-    void operator()() const { panel->close_member(); }
-  };
-  struct message_them {
-    using Answer = std::optional<::mux::ui::request::message_person>;
-    info_panel* panel;
-    std::optional<::mux::ui::request::message_person> operator()() {
-      if (panel->person)
-        return ::mux::ui::request::message_person{conversation_id{panel->account, *panel->person}};
-      return std::nullopt;
-    }
-  };
 
-  // What the upper part shows: a chat's, or one of its members'.
-  struct view {
-    std::string key;
-    std::string name;
-    std::string status;
-    bool group = false;
-    bool muted = false;
-    bool of_person = false;
-    // What copying the ID gives: for a Matrix room, a link to it with the
-    // servers to join through; else the ID.
-    std::string copied;
-    // What it is about, and the addresses it publishes: shown as
-    // Telegram shows a group's description and its link.
-    std::string topic;
-    std::vector<std::string> addresses;
-    // Whether its protocol lets it be left: its Leave tile only then.
-    bool leavable = true;
-    friend bool operator==(const view&, const view&) = default;
-  };
 
-  // The upper part, made from its view: ← where a member is shown, ✕; the
-  // big avatar, the name, how it is; the chat's tiles or the member's; its ID.
-  static auto head_of(info_panel* panel, const view& shown) {
-    namespace c = skiff::compose;
-    const auto& colours = *panel->colours_;
-    const auto centred = [&](std::string text, float size, skia::SkColor colour, bool bold) {
-      auto node = nodes::Text(std::move(text), size, colour, bold);
-      node.setSelectable(true);
-      return c::styled({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}}, elided(std::move(node)));
-    };
-    auto description = wrapped(c::styled({.fillX = true}, nodes::Text(shown.topic, 14.0f, colours.text)));
-    description.setSelectable(true);
-    description.setLinks(link_spans_in(shown.topic), colours.accent);
-    std::vector<id_line_t> addresses;
-    for (const auto& address : shown.addresses)
-      addresses.push_back(id_line(colours, address, "", "Address"));
-    return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-        c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}),
-            c::visible(shown.of_person, icon_button<back_to_group>(colours, icon::back{}, {panel})),
-            c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::colorSetARGB(0, 0, 0, 0))),
-            icon_button<sends<request::toggle_info>>(colours, icon::close{}, {})),
-        avatar_button<Actions>(avatar_of::chat{}, shown.key, shown.name, 96.0f),
-        centred(shown.name, 17.0f, colours.text, true),
-        centred(shown.status, 13.0f, colours.dim, false),
-        c::visible(!shown.of_person, info_tiles(colours, shown.muted, shown.leavable)),
-        c::visible(shown.of_person, person_actions(colours, message_them{panel})),
-        section_band(colours),
-        c::visible(!shown.topic.empty(), c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
-            .padding = {8.0f, 20.0f, 8.0f, 20.0f}}), std::move(description), nodes::Text("Description", 12.0f, colours.dim))),
-        c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(addresses)),
-        id_line(colours, shown.key, shown.copied));
-  }
-  using head = decltype(head_of(std::declval<info_panel*>(), std::declval<const view&>()));
-  struct members_heading {
-    std::size_t count = 0;
-    conversation_id room;
-    bool invite = false;
-    friend bool operator==(const members_heading&, const members_heading&) = default;
-  };
-  static auto members_head(const palette& colours, const members_heading& facts) {
-    namespace c = skiff::compose;
-    return c::row(c::hbox(10.0f, {.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}}),
-        icon_view(colours, icon::people{}),
-        c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text(
-            std::format("{} MEMBER{}", facts.count, facts.count == 1 ? "" : "S"), 13.0f, colours.dim, true)),
-        c::visible(facts.invite, icon_button<sends<request::open_room_invite>>(
-            colours, icon::add_person{}, {facts.room})));
-  }
-  using members_head_t = decltype(members_head(std::declval<const palette&>(), std::declval<const members_heading&>()));
   using member_entry = std::pair<member, std::string>;
   using kept_member = nodes::KeptRow<std::string, member_entry, member_row_t>;
   using member_rows = nodes::Flow<std::vector<kept_member>>;
@@ -402,5 +398,11 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
     this->invalidateLayout();
   }
 };
+inline void info_back_to_group::operator()() const { panel->close_member(); }
+inline std::optional<::mux::ui::request::message_person> info_message_them::operator()() {
+  if (panel->person)
+    return ::mux::ui::request::message_person{conversation_id{panel->account, *panel->person}};
+  return std::nullopt;
+}
 
 }  // namespace mux::ui

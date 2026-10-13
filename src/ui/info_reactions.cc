@@ -24,41 +24,14 @@ import mux.core;
 import mux.config;
 import mux.logic.links;
 import mux.protocols;
-import :base;
-import :icons;
-import :avatars;
-import :controls;
-import :themes;
-import :names;
-import :forms;
-import :composer;
-import :message;
-import :html;
-import :timeline;  // a message's menu, for the reactions list's bubbles
+import mux.ui.base;
+import mux.ui.messages;
 import :info_common;
 import :info_cards;
 
 export namespace mux::ui {
 // A list dialog's rows, under its top bar: the box as high as it is, the
 // list scrolling in what is left of it, its rows one under another.
-[[nodiscard]] inline skiff::compose::Look list_dialog(float height) {
-  return skiff::compose::vbox(
-      0.0f,
-      {.fillX = true, .height = height, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
-}
-template <class Rows> [[nodiscard]] auto dialog_list(Rows rows) {
-  return skiff::compose::styled(
-      {.fillX = true, .grow = scene::axes::kY},
-      nodes::ScrollContainer<Rows>(skiff::compose::styled(
-          {.fillX = true, .autoSize = scene::axes::kY}, std::move(rows))));
-}
-
-// A chat as the chats hold it now: none, where it is gone.
-[[nodiscard]] inline const conversation& chat_or_none(const model* now, const conversation_id& in) {
-  static const conversation none{};
-  const conversation* found = now == nullptr ? nullptr : now->find(in);
-  return found == nullptr ? none : *found;
-}
 // A message's edit history, as AyuGram Desktop's: each version of it the
 // chat's own bubble, on the chat's colour, oldest first, each at the time
 // it was written -- the message as it is now last, the list scrolled to it.
@@ -96,8 +69,7 @@ struct history_facts {
       now.latest_edit_event.empty() && now.versions.empty() ? now.id : now.latest_edit_event));
   return versions;
 }
-template <class Actions>
-auto edit_history_row(const ui_needs<Actions>& n, const conversation& in, const message& event, const model* known) {
+auto edit_history_row(const ui_needs& n, const conversation& in, const message& event, const model* known) {
   namespace c = skiff::compose;
   return c::onPointer<menu_facts>([in_id = in.id, known](auto& row, const scene::pointer::down& press,
                                                       scene::PointerReply& reply) -> std::optional<menu_facts> {
@@ -108,10 +80,9 @@ auto edit_history_row(const ui_needs<Actions>& n, const conversation& in, const 
     reply.handle();
     return facts;
   }, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
-      message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, event, true, true, known)));
+      message_bubble(spl::remapped<typename message_bubble::needs>(n), in, event, true, true, known)));
 }
-template <class Actions>
-auto edit_history_panel(const ui_needs<Actions>& n, const history_facts& facts) {
+auto edit_history_panel(const ui_needs& n, const history_facts& facts) {
   namespace c = skiff::compose;
   const auto& chat = chat_or_none(facts.known, facts.in);
   const auto versions = edit_versions_of(facts.said, &chat);
@@ -123,10 +94,8 @@ auto edit_history_panel(const ui_needs<Actions>& n, const history_facts& facts) 
   return c::column(list_dialog(560.0f),
       page_header<no_back, sends<request::close_edit_history>>(*n.colours, "Edit History", {}, {}, false, true), std::move(list));
 }
-template <class Actions>
-using edit_history_box = decltype(edit_history_panel(std::declval<const ui_needs<Actions>&>(), std::declval<const history_facts&>()));
-template <class Actions>
-auto make_content(std::type_identity<edit_history_box<Actions>>, const ui_needs<Actions>& n, const history_facts& facts) {
+using edit_history_box = decltype(edit_history_panel(std::declval<const ui_needs&>(), std::declval<const history_facts&>()));
+auto make_content(std::type_identity<edit_history_box>, const ui_needs& n, const history_facts& facts) {
   return edit_history_panel(n, facts);
 }
 template <class Content>
@@ -155,7 +124,7 @@ struct marks_facts {
 // The mentions of the user or the reactions to theirs not yet seen, as a
 // list of the chat's bubbles: each its message -- a reaction's with who
 // reacted and with what on a badge at its bottom right. Pressed, gone to.
-template <class Actions> struct marks_box : skiff::compose::Stacked {
+struct marks_box : skiff::compose::Stacked {
   // On the chat's colour: its bubbles, as in the chat.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 520.0f}}; }
   using close_act = sends<::mux::ui::request::close_marks>;
@@ -189,10 +158,10 @@ template <class Actions> struct marks_box : skiff::compose::Stacked {
     mark_kind_t kind;
     std::string event;
     struct parts_t {
-      message_bubble<Actions> bubble;
+      message_bubble bubble;
       std::optional<badge> reacted;
     } parts;
-    row(const ui_needs<Actions> &n, mark_kind_t which, const conversation &in,
+    row(const ui_needs &n, mark_kind_t which, const conversation &in,
         const mark_entry &one, const model *now)
         : Stacked(skiff::compose::vbox(0.0f,
                                        {.fillX = true,
@@ -200,8 +169,8 @@ template <class Actions> struct marks_box : skiff::compose::Stacked {
                                         .padding = {4.0f, 12.0f, 8.0f, 12.0f},
                                         .hoverBackground = n.colours->chosen})),
           kind(which), event(one.event),
-          parts{.bubble = message_bubble<Actions>(
-                    spl::remapped<typename message_bubble<Actions>::needs>(n),
+          parts{.bubble = message_bubble(
+                    spl::remapped<typename message_bubble::needs>(n),
                     in, one.said, true, true, now)} {
       fState.setCursor(scene::cursor::hand{});
       if (one.who)
@@ -219,7 +188,7 @@ template <class Actions> struct marks_box : skiff::compose::Stacked {
   } parts;
   // Made from what the list is of; its rows from the chat as the chats
   // hold it now -- none where it is gone.
-  marks_box(const ui_needs<Actions> &n, const marks_facts &facts)
+  marks_box(const ui_needs &n, const marks_facts &facts)
       : Stacked(list_dialog(520.0f)),
         parts{.top = page_header<no_back, close_act>(
                   *n.colours,

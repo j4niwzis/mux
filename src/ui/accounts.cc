@@ -873,3 +873,15 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
 // module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::accounts_panel> = true;  // walks_accounts.cc
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::accounts_panel>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::accounts_panel::body_row> = true;  // walks_accounts.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::accounts_panel::body_row>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::account_editor> = true;  // walks_account_pages.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_editor>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::account_privacy> = true;  // walks_account_pages.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_privacy>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::account_chats> = true;  // walks_account_pages.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_chats>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::account_notifications> = true;  // walks_account_pages.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_notifications>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::account_proxy> = true;  // walks_account_pages.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_proxy>() noexcept;

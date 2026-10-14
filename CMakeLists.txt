@@ -430,6 +430,7 @@ if(MUX_UI)
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_composer.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_info.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_accounts.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_account_pages.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_drawer.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_settings.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_manage.cc>

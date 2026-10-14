@@ -547,3 +547,7 @@ struct wallpaper_box : skiff::compose::Stacked {
 // module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::wallpaper_box> = true;  // walks_boxes.cc
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::wallpaper_box>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::look_choices> = true;  // walks_account_pages.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::look_choices>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::bubbles_picker> = true;  // walks_account_pages.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::bubbles_picker>() noexcept;

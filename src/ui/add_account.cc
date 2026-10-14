@@ -161,3 +161,10 @@ struct add_account_pane : skiff::compose::Stacked {
 };
 
 }  // namespace mux::ui
+
+// Outside a release build each child is walked through its table, and a
+// stack lays itself out through its own: these tables, and the walks of
+// everything under them, are made once, in their walks units -- not in
+// every unit that lays one out or walks it.
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::add_account_pane> = true;  // walks_account_pages.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::add_account_pane>() noexcept;

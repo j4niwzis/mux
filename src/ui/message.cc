@@ -400,7 +400,7 @@ struct message_bubble : skiff::compose::Stacked {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, trailers, thread, protocol_lines, their_view, time, inline_time] = parts;
+      auto [picture, text, blocks, preview, time, inline_time] = std::tie(parts.picture, parts.text, parts.blocks, parts.preview, parts.time, parts.inline_time);
       const auto trailer = this->last_trailer();
       // A sticker's time is over it, and nowhere else: placed beside its
       // reactions too, it was shown twice.
@@ -504,7 +504,7 @@ struct message_bubble : skiff::compose::Stacked {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, trailers, thread, protocol_lines, their_view, time, inline_time] = parts;
+      auto [text, time, inline_time] = std::tie(parts.text, parts.time, parts.inline_time);
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -571,7 +571,7 @@ struct message_bubble : skiff::compose::Stacked {
                         nodes::Text(when, 11.0f,
                                     mine ? colours.sent_time : colours.dim)))},
           plate(plate_of(colours, looks.bubbles, mine)) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, preview, trailers, thread, protocol_lines, their_view, time, inline_time] = parts;
+      auto& text = parts.text;
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
       // Frosted: what is behind blurred under the tint; glass: a light edge.

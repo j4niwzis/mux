@@ -418,6 +418,24 @@ if(MUX_UI)
     FILES ${mux_protocol_ui} ${mux_enabled_ui} ${mux_plugin_ui} ${mux_plugins_ui} ${mux_plugin_ui_top} ${mux_plugins_ui_top} ${mux_platform_sources} src/ui.cc
           src/kept_root.cc src/ui_base.cc src/ui_messages.cc src/ui/base.cc src/ui/requests.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations_show.cc src/ui/conversations.cc src/ui/forms.cc src/ui/pages.cc src/ui/account_forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/about.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc
           src/proto/ui.cc)
+  # The tables of the window's big subtrees, each made in a unit of its own
+  # (kOpsElsewhere, beside each type), outside a release build: erased walks
+  # only. A release build walks statically and uses none of them.
+  target_sources(mux_modules PRIVATE
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_window.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_chats.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_side.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_column.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_bubbles.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_composer.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_info.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_accounts.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_drawer.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_settings.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_manage.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_boxes.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_popups.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_emoji.cc>)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries} ${mux_plugin_libraries})
   if(ANDROID)

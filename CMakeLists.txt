@@ -385,7 +385,7 @@ if(MUX_UI)
 
   # The emoji face the window draws emoji with, as tdesktop has its own:
   # Noto Color Emoji, fetched once at a pinned commit and checked, and put
-  # in the binary by emoji_font.cc's #embed.
+  # in the binary by emoji_font.c's #embed.
   set(mux_emoji_dir ${CMAKE_BINARY_DIR}/fonts)
   set(mux_emoji_font ${mux_emoji_dir}/NotoColorEmoji-Regular.ttf)
   if(NOT EXISTS ${mux_emoji_font})
@@ -395,9 +395,9 @@ if(MUX_UI)
       EXPECTED_HASH SHA256=4d82a18d8d95f60ba883ce242bbadbf84a576e987745dd7ba38d71c67cff2d73
       TLS_VERIFY ON)
   endif()
-  target_sources(mux_modules PRIVATE src/emoji_font.cc)
-  set_property(SOURCE src/emoji_font.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_emoji_dir})
-  set_property(SOURCE src/emoji_font.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_emoji_font})
+  target_sources(mux_modules PRIVATE src/emoji_font.c)
+  set_property(SOURCE src/emoji_font.c APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_emoji_dir})
+  set_property(SOURCE src/emoji_font.c APPEND PROPERTY OBJECT_DEPENDS ${mux_emoji_font})
   # Telegram's chat pattern, as tdesktop lays it over a theme's gradient:
   # its art/background.tgv (GPL-3.0, combined under AGPL-3.0's section 13),
   # fetched once at a pinned commit and checked, and put in the binary by

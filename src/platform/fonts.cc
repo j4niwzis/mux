@@ -11,9 +11,9 @@ import skiff.paint;
 // Noto Color Emoji (SIL Open Font License, fonts/OFL-NotoColorEmoji.txt),
 // fetched at a pinned commit by the build, so they are the same on every
 // machine and never boxes. Its 25 MB are in a translation unit of their
-// own (emoji_font.cc), not in this module's interface, which every
-// importer reads.
-extern "C++" {
+// own (emoji_font.c: C, which embeds them cheaply), not in this module's
+// interface, which every importer reads.
+extern "C" {
 extern const unsigned char mux_noto_color_emoji[];
 extern const decltype(sizeof 0) mux_noto_color_emoji_size;
 }

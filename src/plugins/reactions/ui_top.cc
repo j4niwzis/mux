@@ -48,7 +48,7 @@ using namespace ::mux::ui;
 using reaction_row_answer = std::variant<menu_facts, request::open_url,
     std::tuple<std::optional<request::reply_to>, request::close_shown<shown>>>;
 
-auto reaction_event_row(const ui_needs& n, const conversation& in, const entry& one,
+inline auto reaction_event_row(const ui_needs& n, const conversation& in, const entry& one,
                         bool first, bool last, const model* known) {
   namespace c = skiff::compose;
   auto bubble = message_bubble(spl::remapped<typename message_bubble::needs>(n),
@@ -69,7 +69,7 @@ auto reaction_event_row(const ui_needs& n, const conversation& in, const entry& 
     return reaction_row_answer{std::move(facts)};
   }, std::move(row));
 }
-auto panel(const ui_needs& n, const shown& facts) {
+inline auto panel(const ui_needs& n, const shown& facts) {
   namespace c = skiff::compose;
   const auto& chat = chat_or_none(facts.now, facts.in);
   const auto& entries = facts.entries;
@@ -82,7 +82,7 @@ auto panel(const ui_needs& n, const shown& facts) {
       dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
 }
 using box = decltype(panel(std::declval<const ui_needs&>(), std::declval<const shown&>()));
-auto make_content(std::type_identity<box>, const ui_needs& n, const shown& facts) {
+inline auto make_content(std::type_identity<box>, const ui_needs& n, const shown& facts) {
   return panel(n, facts);
 }
 template <class Content>

@@ -108,7 +108,7 @@ std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>
 }
 
 // Reactions, in a message's menu: how many, and who, listed.
-auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&,
+inline auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&,
             const menu_facts& facts) {
   using row = row_item<sends<show>>;
   return skiff::compose::visible(
@@ -165,7 +165,7 @@ auto extend(contract::message_menu_top, type_tag<feature>, const palette& colour
           c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band))));
 }
 // What it unrolls: every emoji, a press reacting with it.
-auto unrolled(contract::message_menu_top, type_tag<feature>, const palette& colours, emoji_kept& kept) {
+inline auto unrolled(contract::message_menu_top, type_tag<feature>, const palette& colours, emoji_kept& kept) {
   return emoji_panel(colours, kept, react_with{});
 }
 // Unrolled: its arrow put away.

@@ -195,19 +195,19 @@ template <class Which, class View>
 
 // Its layers, over the window: the card, where the call rings or is in
 // another chat; the whole window, on a phone.
-auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
+inline auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
   namespace c = skiff::compose;
   return c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
       call_layer(needs, call_card_of{}, call_ui::card{}, {.fill = true}, true),
       call_layer(needs, call_screen_of{}, call_ui::screen{}, {.fill = true}, true));
 }
 // Its view in its chat, under the head.
-auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) {
+inline auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) {
   return call_layer(needs, call_panel_of{}, call_ui::panel{}, {.fillX = true, .autoSize = scene::axes::kY});
 }
 // Its button in the chat's head: shown where the chat shown can be called,
 // as its part keeps it (call_shown::callable).
-auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
+inline auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
   return skiff::compose::shown_if<call_shown>([](const call_shown& now) { return now.callable; },
       // Hidden until what is shown says otherwise: a head made anew is not
       // read before what is shown next moves.

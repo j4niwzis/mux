@@ -155,12 +155,12 @@ inline auto page(const palette& colours, emoji_kept& kept) {
 using page_t = decltype(page(std::declval<const palette&>(), std::declval<emoji_kept&>()));
 
 // Its page, in the media panel (mux.ui:emoji_popup).
-auto extend(contract::media_pages, type_tag<feature>, const ui_needs& needs, const shown&) {
+inline auto extend(contract::media_pages, type_tag<feature>, const ui_needs& needs, const shown&) {
   return page(*needs.colours, *needs.emoji);
 }
 
 // A sticker's menu: made a favourite, or no longer one.
-auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept& kept,
+inline auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept& kept,
             const menu_facts& facts) {
   using row = row_item<sends<favourite>>;
   return skiff::compose::visible(

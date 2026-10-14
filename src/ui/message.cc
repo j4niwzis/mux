@@ -105,6 +105,28 @@ constexpr auto message_views_for(const State& state) {
   return message_views(state);
 }
 
+// The sender's name over their run, in their colour, and after it their
+// role in the room, dim, as Telegram shows "admin": the name cut where it
+// passes `widest`, the role's room kept.
+inline auto sender_line(const palette& colours, std::string who, skia::SkColor colour, std::string role, float widest) {
+  auto name = elided(nodes::Text(std::move(who), 13.0f, colour, true));
+  name.setMaxWidth(widest);
+  const bool has_role = !role.empty();
+  return skiff::compose::row(skiff::compose::hbox(10.0f, {.autoSize = scene::axes::kBoth}), std::move(name),
+                             skiff::compose::visible(has_role, skiff::compose::styled({.alignSelf = scene::align::kEnd},
+                                                                                      nodes::Text(std::move(role), 12.0f, colours.dim))));
+}
+// tdesktop's bar over the first unread: its words in the middle of a band
+// the width of the chat, over the row.
+inline constexpr float kUnreadBarHeight = 26.0f;
+inline auto unread_bar(const palette& colours) {
+  return skiff::compose::column(
+      skiff::compose::justified(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .y = -(kUnreadBarHeight + 4.0f), .fillX = true,
+                                                            .height = kUnreadBarHeight, .background = colours.sidebar}),
+                                nodes::justify::middle{}),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Unread messages", 13.0f, colours.dim, true)));
+}
+
 // A message as the chat shows it. A template on the program's Actions, made
 // where every protocol's UI module is seen: its sticker part is the basic
 // picture or one of a protocol's own sticker nodes (sticker_views).
@@ -218,29 +240,7 @@ struct message_bubble : skiff::compose::Stacked {
   // The bubble: as wide as what it says, up to its largest.
   struct body_column : skiff::compose::Stacked {
     bool outgoing = false;
-    // The sender's name over their run, in their colour, and after it their
-    // role in the room, dim, as Telegram shows "admin".
-    struct name_row : skiff::compose::Stacked {
-      struct parts_t {
-        nodes::Text name;
-        nodes::Text role;
-      } parts;
-      name_row(const palette &colours, std::string who, skia::SkColor colour,
-               std::string role)
-          : Stacked(
-                skiff::compose::hbox(10.0f, {.autoSize = scene::axes::kBoth})),
-            parts{.name =
-                      elided(nodes::Text(std::move(who), 13.0f, colour, true)),
-                  .role = skiff::compose::styled(
-                      {.alignSelf = scene::align::kEnd},
-                      nodes::Text(std::move(role), 12.0f, colours.dim))} {
-
-        // Sized as the name alone was: cut where it passes the bubble's
-        // widest, the role's room kept.
-        parts.name.setMaxWidth(kMaxWidth - 60.0f);
-        parts.role.setVisible(!parts.role.text().empty());
-      }
-    };
+    using name_row = decltype(sender_line(std::declval<const palette&>(), std::string{}, skia::SkColor{}, std::string{}, 0.0f));
     struct parts_t {
       // Frosted: what is behind, blurred, under all of it.
       std::optional<frost_pane> frost;
@@ -597,26 +597,7 @@ struct message_bubble : skiff::compose::Stacked {
     }
   };
 
-  // tdesktop's bar over the first unread: its words in the middle of a band
-  // the width of the chat.
-  struct unread_bar_t : skiff::compose::Stacked {
-    static constexpr float kHeight = 26.0f;
-    struct parts_t {
-      nodes::Text label;
-    } parts;
-    explicit unread_bar_t(const palette &colours)
-        : Stacked(skiff::compose::justified(
-              skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft,
-                                          .y = -(kHeight + 4.0f),
-                                          .fillX = true,
-                                          .height = kHeight,
-                                          .background = colours.sidebar}),
-              nodes::justify::middle{})),
-          parts{.label = skiff::compose::styled(
-                    {.alignSelf = scene::align::kMiddle},
-                    nodes::Text("Unread messages", 13.0f, colours.dim, true))} {
-    }
-  };
+  using unread_bar_t = decltype(unread_bar(std::declval<const palette&>()));
   // The colours it is made in: handed down, kept for what it makes later.
   const palette* colours_ = nullptr;
   // The looks shown: the program's.
@@ -658,13 +639,13 @@ struct message_bubble : skiff::compose::Stacked {
   // tdesktop's "Unread messages" bar, across the whole row, over it.
   void mark_unread_start() {
     unread_start = true;
-    parts.unread_bar.emplace(*colours_);
+    parts.unread_bar.emplace(unread_bar(*colours_));
     // Across the whole list, not the row's content box: held out past the
     // row's own padding (a group's room for the avatar) and the list's sides,
     // which a relative width is measured inside of.
     parts.unread_bar->apply({.margin = {0.0f, -(fState.fPadding.fRight + kListSide), 0.0f,
                                         -(fState.fPadding.fLeft + kListSide)}});
-    fState.apply({.padding = {fState.fPadding.fTop + unread_bar_t::kHeight + 6.0f, fState.fPadding.fRight,
+    fState.apply({.padding = {fState.fPadding.fTop + kUnreadBarHeight + 6.0f, fState.fPadding.fRight,
                               fState.fPadding.fBottom, fState.fPadding.fLeft}});
     this->invalidateLayout();
   }
@@ -749,8 +730,9 @@ struct message_bubble : skiff::compose::Stacked {
       face.fState.setAlpha(static_cast<float>(element_opacity_of(looks_->bubbles, &config::element_opacity::avatars)) / 100.0f);
     if (((group && !outgoing) || as_lines) && first_of_run && !said.service) {
       // Their role, as the chat's protocol says it (Matrix: its power levels).
-      body.parts.name.emplace(*colours_, sender_name(in, said.sender), avatar_colour(said.sender),
-                              proto::sender_role(protocol_state_of(*shared_, in.id.account), in, said.sender));
+      body.parts.name.emplace(sender_line(*colours_, sender_name(in, said.sender), avatar_colour(said.sender),
+                                          proto::sender_role(protocol_state_of(*shared_, in.id.account), in, said.sender),
+                                          kMaxWidth - 60.0f));
     }
     // Forwarded: "Forwarded from" its sender, at its top, as Telegram's.
     // The sender a person's pill, as a mention is, and pressed, opens them.

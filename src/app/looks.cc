@@ -88,7 +88,10 @@ class looks_part {
     (void)k_->write();
     s_->refresh_due = true;
     // Appearance up: its choice marked again.
-    if (auto* up = s_->root().settings_up(); up && up->appearance())
+    if (const auto* shown = s_->showing->look<std::optional<mux::ui::settings_facts>>();
+        shown && *shown && spl::visit(spl::overloaded{[](const mux::ui::settings_page::appearance&) { return true; },
+                                                      [](const auto&) { return false; }},
+                                      (*shown)->page))
       s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
     if (auto* managing = s_->root().manage_up())
       managing->show_tab(managing->tab);
@@ -139,7 +142,10 @@ class looks_part {
     (void)k_->write();
     mux::ui::show<mux::ui::wallpaper_facts>(*s_->showing, std::nullopt);
     s_->refresh_due = true;
-    if (auto* up = s_->root().settings_up(); up && up->appearance())
+    if (const auto* shown = s_->showing->look<std::optional<mux::ui::settings_facts>>();
+        shown && *shown && spl::visit(spl::overloaded{[](const mux::ui::settings_page::appearance&) { return true; },
+                                                      [](const auto&) { return false; }},
+                                      (*shown)->page))
       s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
     if (auto* managing = s_->root().manage_up())
       managing->show_tab(managing->tab);

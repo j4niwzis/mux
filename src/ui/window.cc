@@ -241,6 +241,16 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
         }
       }
     }
+    // Content that reads its facts (a page view): told them as they change,
+    // made once.
+    if constexpr (requires(Content& up) { up.read(facts); }) {
+      if (auto* up = this->shown()) {
+        up->read(facts);
+        return;
+      }
+      this->open(make_content(std::type_identity<Content>{}, *needs, facts)).read(facts);
+      return;
+    }
     (void)this->open(make_content(std::type_identity<Content>{}, *needs, facts));
   }
   void show_with(const Facts& facts) { (void)this->open(*needs, facts); }
@@ -494,7 +504,7 @@ struct window : skiff::compose::Specced {
       wallpaper_t behind;
       // The pages slide over the drawer too: Manage accounts comes in over it.
       frame_t frame;
-      shown_in<settings_dialog, settings_facts> settings;
+      shown_in<settings_view_t, settings_facts> settings;
       shown_in<notice_box_t, notice_facts> notice;
       // A person's info, in the middle, as tdesktop's profile layer.
       shown_in<person_card, person_shown> person;
@@ -649,7 +659,7 @@ struct window : skiff::compose::Specced {
         return closed(::mux::ui::request::close_notice{});
       // Settings: a page back to where its ← goes; home, closed.
       if (auto* box = parts.settings.shown()) {
-        if (box->step_back())
+        if (box->stepBack())
           return closed();
         return closed(::mux::ui::request::close_settings{});
       }
@@ -735,7 +745,7 @@ struct window : skiff::compose::Specced {
                 .frame = frame_t(std::in_place, &n,
                                  std::in_place, n),
                 .settings =
-                    shown_made<settings_dialog, settings_facts>(n),
+                    shown_made<settings_view_t, settings_facts>(n),
                 .notice = shown_made<notice_box_t, notice_facts>(n),
                 .person = shown_made<person_card, person_shown>(n),
                 .room = shown_made<room_card, room_card_facts>(n),
@@ -928,7 +938,7 @@ struct window : skiff::compose::Specced {
   }
 
   [[nodiscard]] send_box* send_box_up() { return layer().sending.shown(); }
-  [[nodiscard]] settings_dialog* settings_up() { return layer().settings.shown(); }
+  [[nodiscard]] settings_view_t* settings_up() { return layer().settings.shown(); }
   // A selectable text's menu, where the pointer was pressed, kept in the
   // window; and gone.
   void show_text_menu(std::string text, std::optional<std::string> link = std::nullopt) {

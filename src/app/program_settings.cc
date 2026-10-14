@@ -73,7 +73,7 @@ void app::rebuild_in_theme() {
   after.info_width = info_width;
   this->refresh();
   if (auto* up = root().settings_up())
-    up->keep_offset(settings_at);
+    up->keepOffset(settings_at);
 }
 
 }  // namespace mux::app

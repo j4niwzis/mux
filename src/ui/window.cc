@@ -648,6 +648,13 @@ struct window : skiff::compose::Specced {
       // the whole window, as Element's phone apps.
       typename plugin_layers_t::nodes_t over_all;
     } parts;
+    // Its parts over the chats -- the dialogs and the layers -- in the order
+    // they are drawn, bottom to top: given to `with`. (Defined before what
+    // calls it in this class: its return type is deduced.)
+    template <class With> decltype(auto) over_chats(With&& with) {
+      auto& [backdrop, behind, frame, ...over] = parts;
+      return std::forward<With>(with)(over...);
+    }
     // Where the pointer was last pressed, in the window: where a menu asked
     // by that press is put. A press off the text menu closes it, at once --
     // nothing of it is pressed.
@@ -726,12 +733,6 @@ struct window : skiff::compose::Specced {
     skia::Sp<skia::SkImage> frozen;
     skia::SkRect frozen_at = skia::SkRect::MakeEmpty();  // where it is on the device
 
-    // Its parts over the chats -- the dialogs and the layers -- in the order
-    // they are drawn, bottom to top: given to `with`.
-    template <class With> decltype(auto) over_chats(With&& with) {
-      auto& [backdrop, behind, frame, ...over] = parts;
-      return std::forward<With>(with)(over...);
-    }
     [[nodiscard]] bool dialog_fading() {
       return over_chats([](auto&... over) { return (settling_of(over) || ...); });
     }

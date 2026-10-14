@@ -375,6 +375,38 @@ consteval auto window_answers_of(plugin_list<Features...>) {
   return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...>>{};
 }
+// What Esc on a dialog or a layer asks for, by its facts' type: a plugin's
+// its close_shown; the window's own each its request. A dialog of the
+// window's own with none here asks for close_shown of its facts, which no
+// handler answers: the build says so (it is not in the answers).
+template <class Facts> ::mux::ui::request::close_shown<Facts> closing_of(std::type_identity<Facts>) { return {}; }
+inline ::mux::ui::request::close_send_box closing_of(std::type_identity<send_facts>) { return {}; }
+inline ::mux::ui::request::close_explore closing_of(std::type_identity<explore_facts>) { return {}; }
+inline ::mux::ui::request::close_wallpaper closing_of(std::type_identity<wallpaper_facts>) { return {}; }
+inline ::mux::ui::request::close_packs closing_of(std::type_identity<packs_facts>) { return {}; }
+inline ::mux::ui::request::close_new_room closing_of(std::type_identity<new_room_facts>) { return {}; }
+inline ::mux::ui::request::close_new_chat closing_of(std::type_identity<new_chat_facts>) { return {}; }
+inline ::mux::ui::request::close_forward closing_of(std::type_identity<forward_facts>) { return {}; }
+inline ::mux::ui::request::close_manage closing_of(std::type_identity<room_settings_facts>) { return {}; }
+inline ::mux::ui::request::close_marks closing_of(std::type_identity<marks_facts>) { return {}; }
+inline ::mux::ui::request::close_leave_space closing_of(std::type_identity<leave_space_facts>) { return {}; }
+inline ::mux::ui::request::close_link closing_of(std::type_identity<link_facts>) { return {}; }
+inline ::mux::ui::request::close_edit_history closing_of(std::type_identity<history_facts>) { return {}; }
+inline ::mux::ui::request::close_room_card closing_of(std::type_identity<room_card_facts>) { return {}; }
+inline ::mux::ui::request::close_person_info closing_of(std::type_identity<person_shown>) { return {}; }
+inline ::mux::ui::request::close_notice closing_of(std::type_identity<notice_facts>) { return {}; }
+inline ::mux::ui::request::close_settings closing_of(std::type_identity<settings_facts>) { return {}; }
+inline ::mux::ui::request::close_emoji closing_of(std::type_identity<emoji_facts>) { return {}; }
+inline ::mux::ui::request::close_menu closing_of(std::type_identity<menu_facts>) { return {}; }
+inline ::mux::ui::request::close_picture closing_of(std::type_identity<viewer_facts>) { return {}; }
+// A box over the window (widgets::Dialog, whatever it shows): drawn while it
+// fades out too, and its content dropped once it is shut.
+template <class Content, class Dismiss> std::true_type dialog_kind(const widgets::Dialog<Content, Dismiss>*);
+std::false_type dialog_kind(const void*);
+template <class Part> concept a_dialog = decltype(dialog_kind(static_cast<Part*>(nullptr)))::value;
+// A layer that is there only while it holds something: a message's menu.
+template <class Part> concept up_while_shown = !a_dialog<Part> && requires(Part& part) { part.shown(); };
+
 struct window : skiff::compose::Specced {
   // Child references and handlers require a fixed address.
   window(const window&) = delete;
@@ -439,6 +471,100 @@ struct window : skiff::compose::Specced {
     static shown_in<Content, Facts> shown_made(const ui_needs& n) {
       return shown_in<Content, Facts>(std::in_place, &n);
     }
+    // What its parts do, each by its type, folded over them in the order
+    // they are drawn (over_chats): no list of them to keep, nor to forget a
+    // new dialog in.
+    //
+    // Esc on one: taken -- with what it asks for, where it asks for
+    // something -- or not, and the one under it is asked.
+    struct escaped {
+      std::optional<Answer> asked;
+    };
+    template <class Part> static std::optional<escaped> escape(Part&) { return std::nullopt; }
+    template <class... Each> static std::optional<escaped> escape(std::tuple<Each...>& all) {
+      return std::apply([](auto&... one) { return topmost_first(one...); }, all);
+    }
+    template <class Held> static std::optional<escaped> escape(std::optional<Held>& held) {
+      return held ? escape(*held) : std::nullopt;
+    }
+    // A dialog up: closed, as its facts ask.
+    template <class Content, class Facts> static std::optional<escaped> escape(shown_in<Content, Facts>& dialog) {
+      return dialog.shown() ? std::optional<escaped>(escaped{closing_of(std::type_identity<Facts>{})}) : std::nullopt;
+    }
+    // Settings: a page back to where its ← goes; home, closed.
+    static std::optional<escaped> escape(shown_in<settings_view_t, settings_facts>& dialog) {
+      auto* box = dialog.shown();
+      if (box == nullptr)
+        return std::nullopt;
+      return box->stepBack() ? escaped{} : escaped{closing_of(std::type_identity<settings_facts>{})};
+    }
+    // A verification: OK where it is over, Decline or Cancel where it waits.
+    // Not while the emoji are compared: an answer is asked there.
+    static std::optional<escaped> escape(shown_in<verification_box, verification_view>& dialog) {
+      auto* box = dialog.shown();
+      if (box != nullptr && step_over(box->step))
+        return escaped{::mux::ui::request::close_verification{}};
+      if (box != nullptr && step_waits(box->step))
+        return escaped{::mux::ui::request::verify_cancel_now{}};
+      return std::nullopt;
+    }
+    // A passphrase is answered, never let go of.
+    static std::optional<escaped> escape(shown_in<passphrase_box_t, passphrase_facts>&) { return std::nullopt; }
+    // A protocol's own dialog.
+    static std::optional<escaped> escape(widgets::Dialog<tool_holder>& dialog) {
+      return dialog.shown() ? std::optional<escaped>(escaped{::mux::ui::request::close_dialog{}}) : std::nullopt;
+    }
+    // A layer up -- the emoji, a message's menu, a picture: closed, as its
+    // facts ask.
+    template <class Content, class Facts>
+    static std::optional<escaped> escape(skiff::bind::Bound<std::optional<Facts>, shown_layer<Content, Facts, ui_needs>>& layer) {
+      return layer.shown() ? std::optional<escaped>(escaped{closing_of(std::type_identity<Facts>{})}) : std::nullopt;
+    }
+    // The one drawn last -- on top -- asked first.
+    template <class... Part> static std::optional<escaped> topmost_first(Part&... part) {
+      std::optional<escaped> found;
+      auto all = std::tie(part...);
+      [&]<std::size_t... At>(std::index_sequence<At...>) {
+        (void)((found = escape(std::get<sizeof...(Part) - 1 - At>(all))) || ...);
+      }(std::index_sequence_for<Part...>{});
+      return found;
+    }
+    // Whether it fades in or out.
+    template <class Part> static bool settling_of(Part&) { return false; }
+    template <a_dialog Part> static bool settling_of(Part& dialog) { return dialog.settling(); }
+    template <class... Each> static bool settling_of(std::tuple<Each...>& all) {
+      return std::apply([](auto&... one) { return (settling_of(one) || ...); }, all);
+    }
+    template <class Held> static bool settling_of(std::optional<Held>& held) { return held && settling_of(*held); }
+    // What it shows dropped, where it has shut.
+    template <class Part> static void drop_of(Part&) {}
+    template <a_dialog Part> static void drop_of(Part& dialog) { dialog.dropClosed(); }
+    template <class... Each> static void drop_of(std::tuple<Each...>& all) {
+      std::apply([](auto&... one) { (drop_of(one), ...); }, all);
+    }
+    template <class Held> static void drop_of(std::optional<Held>& held) {
+      if (held)
+        drop_of(*held);
+    }
+    // Drawn over what is under it, frozen: a dialog as it is, up or fading
+    // out; a layer where it holds something; anything else as it is.
+    template <class Part> static void draw_over(Part& part, skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
+      scene::draw(part, painting, canvas, alpha);
+    }
+    template <up_while_shown Part>
+    static void draw_over(Part& part, skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
+      if (part.shown())
+        scene::draw(part, painting, canvas, alpha);
+    }
+    template <class... Each>
+    static void draw_over(std::tuple<Each...>& all, skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
+      std::apply([&](auto&... one) { (draw_over(one, painting, canvas, alpha), ...); }, all);
+    }
+    template <class Held>
+    static void draw_over(std::optional<Held>& held, skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
+      if (held)
+        draw_over(*held, painting, canvas, alpha);
+    }
     // The plugins' dialogs, each its box -- from its extend(), found where
     // the window is instantiated (mux.plugins.ui) -- in a slot of its own,
     // made there.
@@ -457,27 +583,6 @@ struct window : skiff::compose::Specced {
       using nodes_t = std::tuple<std::optional<shown_in<box_t<Features>, dialog_facts_t<Features>>>...>;
       static void build(nodes_t& slots, const ui_needs& n) {
         std::apply([&](auto&... slot) { (slot.emplace(std::in_place, &n), ...); }, slots);
-      }
-      // Escape: the first of them shown, closed.
-      static std::optional<Answer> close(nodes_t& slots) {
-        std::optional<Answer> asked;
-        [&]<std::size_t... At>(std::index_sequence<At...>) {
-          (void)((std::get<At>(slots) && std::get<At>(slots)->shown()
-                      ? (asked = ::mux::ui::request::close_shown<dialog_facts_t<Features>>{}, true)
-                      : false) ||
-                 ...);
-        }(std::index_sequence_for<Features...>{});
-        return asked;
-      }
-      static bool settling(nodes_t& slots) {
-        return std::apply([](auto&... slot) { return ((slot && slot->settling()) || ...); }, slots);
-      }
-      static void drop_closed(nodes_t& slots) {
-        std::apply([](auto&... slot) { ((slot ? slot->dropClosed() : void()), ...); }, slots);
-      }
-      template <class Draw>
-      static void draw(nodes_t& slots, Draw drawn) {
-        std::apply([&](auto&... slot) { ((slot ? drawn(*slot) : void()), ...); }, slots);
       }
     };
     using dialogs_t = plugin_dialogs<dialog_plugins>;
@@ -608,61 +713,9 @@ struct window : skiff::compose::Specced {
         this->markDamaged();
         return closed();
       }
-      if (parts.menu.shown())
-        return closed(::mux::ui::request::close_menu{});
-      if (parts.emoji.shown())
-        return closed(::mux::ui::request::close_emoji{});
-      if (parts.viewer.shown())
-        return closed(::mux::ui::request::close_picture{});
-      // A verification: OK where it is over, Decline or Cancel where it
-      // waits. Not while the emoji are compared: an answer is asked there.
-      if (auto* box = parts.verifying.shown()) {
-        if (step_over(box->step))
-          return closed(::mux::ui::request::close_verification{});
-        if (step_waits(box->step))
-          return closed(::mux::ui::request::verify_cancel_now{});
-      }
-      // The dialogs, the one drawn last -- on top -- first.
-      if (parts.sending.shown())
-        return closed(::mux::ui::request::close_send_box{});
-      if (parts.tools.shown())
-        return closed(::mux::ui::request::close_dialog{});
-      if (parts.explore.shown())
-        return closed(::mux::ui::request::close_explore{});
-      if (parts.wallpaper.shown())
-        return closed(::mux::ui::request::close_wallpaper{});
-      if (parts.packs.shown())
-        return closed(::mux::ui::request::close_packs{});
-      if (parts.new_room.shown())
-        return closed(::mux::ui::request::close_new_room{});
-      if (parts.new_chat.shown())
-        return closed(::mux::ui::request::close_new_chat{});
-      if (parts.forwarding.shown())
-        return closed(::mux::ui::request::close_forward{});
-      if (parts.manage.shown())
-        return closed(::mux::ui::request::close_manage{});
-      if (parts.marks.shown())
-        return closed(::mux::ui::request::close_marks{});
-      if (parts.leaving.shown())
-        return closed(::mux::ui::request::close_leave_space{});
-      if (parts.linking.shown())
-        return closed(::mux::ui::request::close_link{});
-      if (parts.history.shown())
-        return closed(::mux::ui::request::close_edit_history{});
-      if (auto asked = dialogs_t::close(parts.dialogs))
-        return closed(std::move(asked));
-      if (parts.room.shown())
-        return closed(::mux::ui::request::close_room_card{});
-      if (parts.person.shown())
-        return closed(::mux::ui::request::close_person_info{});
-      if (parts.notice.shown())
-        return closed(::mux::ui::request::close_notice{});
-      // Settings: a page back to where its ← goes; home, closed.
-      if (auto* box = parts.settings.shown()) {
-        if (box->stepBack())
-          return closed();
-        return closed(::mux::ui::request::close_settings{});
-      }
+      // The rest, the one drawn last -- on top -- first.
+      if (auto taken = over_chats([](auto&... over) { return topmost_first(over...); }))
+        return closed(std::move(taken->asked));
       // The drawer, under every dialog.
       if (parts.frame.base().isOpen())
         return closed(::mux::ui::request::close_drawer{});
@@ -680,16 +733,17 @@ struct window : skiff::compose::Specced {
     skia::Sp<skia::SkImage> frozen;
     skia::SkRect frozen_at = skia::SkRect::MakeEmpty();  // where it is on the device
 
+    // Its parts over the chats -- the dialogs and the layers -- in the order
+    // they are drawn, bottom to top: given to `with`.
+    template <class With> decltype(auto) over_chats(With&& with) {
+      auto& [backdrop, behind, frame, ...over] = parts;
+      return std::forward<With>(with)(over...);
+    }
     [[nodiscard]] bool dialog_fading() {
-      auto& [backdrop, behind, frame, settings, notice, person, room, dialogs, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, over_all] = parts;
-      return settings.settling() || notice.settling() || person.settling() || room.settling() || dialogs_t::settling(dialogs) ||
-             history.settling() || linking.settling() || leaving.settling() ||
-             marks.settling() || manage.settling() || forwarding.settling() || new_chat.settling() ||
-             new_room.settling() || packs.settling() || wallpaper.settling() || explore.settling() ||
-             tools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
+      return over_chats([](auto&... over) { return (settling_of(over) || ...); });
     }
     void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, dialogs, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, over_all] = parts;
+      auto [backdrop, behind, frame] = std::tie(parts.backdrop, parts.behind, parts.frame);
       skia::SkMatrix inverse;
       if (!this->dialog_fading() || !canvas->getTotalMatrix().invert(&inverse)) {
         frozen = nullptr;
@@ -718,25 +772,7 @@ struct window : skiff::compose::Specced {
         return;
       }
       canvas->drawImageRect(frozen, inverse.mapRect(frozen_at), skia::SkSamplingOptions(skia::SkFilterMode::kNearest));
-      const auto over = [&](auto&... each) { (scene::draw(each, painting, canvas, alpha), ...); };
-      over(settings, notice, person, room);
-      dialogs_t::draw(dialogs, [&](auto& one) { scene::draw(one, painting, canvas, alpha); });
-      over(history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
-           tools, sending, passphrase, verifying);
-      // A layer up: an optional's node, or a shown layer with what it holds.
-      const auto draw_up = spl::overloaded{[&](auto& one)
-                                             requires requires { one.shown(); }
-                                           {
-                                             if (one.shown())
-                                               scene::draw(one, painting, canvas, alpha);
-                                           },
-                                           [&](auto& one) {
-                                             if (one)
-                                               scene::draw(*one, painting, canvas, alpha);
-                                           }};
-      const auto over_if = [&](auto&... each) { (draw_up(each), ...); };
-      over_if(emoji, menu, viewer, text_menu_up);
-      std::apply([&](auto&... layer) { (scene::draw(layer, painting, canvas, alpha), ...); }, over_all);
+      over_chats([&](auto&... over) { (draw_over(over, painting, canvas, alpha), ...); });
     }
 
     layers(const ui_needs &n)
@@ -917,24 +953,7 @@ struct window : skiff::compose::Specced {
     if (auto formatting = std::exchange(text_formatting_due, std::nullopt); formatting && text_menu_field && layer().text_menu_up)
       this->put_text_menu(field_menu_items(*text_menu_field, *formatting));
     layer().frame.dropClosed();
-    layer().settings.dropClosed();
-    layer().notice.dropClosed();
-    layer().person.dropClosed();
-    layer().room.dropClosed();
-    layers::dialogs_t::drop_closed(layer().dialogs);
-    layer().history.dropClosed();
-    layer().linking.dropClosed();
-    layer().leaving.dropClosed();
-    layer().marks.dropClosed();
-    layer().manage.dropClosed();
-    layer().forwarding.dropClosed();
-    layer().new_chat.dropClosed();
-    layer().new_room.dropClosed();
-    layer().packs.dropClosed();
-    layer().wallpaper.dropClosed();
-    layer().explore.dropClosed();
-    layer().tools.dropClosed();
-    layer().sending.dropClosed();
+    parts.now->over_chats([](auto&... over) { (layers::drop_of(over), ...); });
   }
 
   [[nodiscard]] send_box* send_box_up() { return layer().sending.shown(); }

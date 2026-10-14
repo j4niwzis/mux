@@ -75,6 +75,26 @@ auto suggestion_row(const palette& colours, Pick pick, Face face, std::string fi
                      .hoverBackground = colours.chosen, .selectedBackground = colours.chosen}),
       std::move(face), two_lines(colours, std::move(first), std::move(second), 14.0f, 1.0f)), std::move(label));
 }
+// No account at all: what to do about it.
+inline auto no_accounts_yet(const palette& colours) {
+  using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
+  return skiff::compose::column(
+      skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {120.0f, 48.0f, 0.0f, 48.0f}}),
+      nodes::Text("No accounts yet", 22.0f, colours.text, true),
+      skiff::compose::styled({.fillX = true},
+                             wrapped(nodes::Text("Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, colours.dim))),
+      skiff::compose::styled({.width = 140.0f, .height = 36.0f}, primary(add_button(colours.widgets, "Add account", {}))));
+}
+// No chat chosen: the wallpaper, and in its middle a small pill saying what
+// to do, as tdesktop's (its service message look).
+inline auto select_a_chat() {
+  return skiff::compose::column(
+      skiff::compose::justified(skiff::compose::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), nodes::justify::middle{}),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                             widgets::Pill("Select a chat to start messaging",
+                                           {.plate = skia::colorSetARGB(0x66, 0, 0, 0), .size = 13.0f, .height = 26.0f, .padX = 12.0f})));
+}
+
 struct conversations_screen : skiff::compose::Stacked {
   // What its keys and its swipes ask for.
   using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::selection_copy, ::mux::ui::request::selection_delete, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of>;
@@ -694,26 +714,8 @@ struct conversations_screen : skiff::compose::Stacked {
   };
   using head_view_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_head_nodes<protocols>::type>::type>::type;
-  struct head_view_holder : skiff::compose::Stacked {
-    struct parts_t {
-      head_view_t shown;
-    } parts;
-    template <class View>
-    explicit head_view_holder(View made)
-        : Stacked(skiff::compose::vbox(
-              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.shown = head_view_t(std::move(made))} {}
-  };
-  struct composer_view_holder : skiff::compose::Stacked {
-    struct parts_t {
-      composer_view_t shown;
-    } parts;
-    template <class View>
-    explicit composer_view_holder(View made)
-        : Stacked(skiff::compose::vbox(
-              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.shown = composer_view_t(std::move(made))} {}
-  };
+  using head_view_holder = skiff::compose::Holding<head_view_t>;
+  using composer_view_holder = skiff::compose::Holding<composer_view_t>;
   // What plugins put in the chat's column under its head
   // (contract::chat_column), in their order.
   template <class List>
@@ -739,49 +741,8 @@ struct conversations_screen : skiff::compose::Stacked {
 
     using header_t = chat_head;
     using pinned_t = nodes::Memo<pinned_view, pinned_bar<pinned_press>>;
-    struct empty_state : skiff::compose::Stacked {
-      using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
-      struct parts_t {
-        nodes::Text title;
-        nodes::Text note;
-        add_button add;
-      } parts;
-      empty_state(const palette &colours)
-          : Stacked(skiff::compose::vbox(
-                12.0f, {.fillX = true,
-                        .autoSize = scene::axes::kY,
-                        .padding = {120.0f, 48.0f, 0.0f, 48.0f}})),
-            parts{
-                .title =
-                    nodes::Text("No accounts yet", 22.0f, colours.text, true),
-                .note = skiff::compose::styled(
-                    {.fillX = true},
-                    wrapped(nodes::Text("Add an XMPP or a Matrix account, and "
-                                        "its chats will be here.",
-                                        14.0f, colours.dim))),
-                .add = skiff::compose::styled(
-                    {.width = 140.0f, .height = 36.0f},
-                    primary(add_button(colours.widgets, "Add account", {})))} {}
-    };
-    // No chat chosen: the wallpaper, and in its middle a small pill saying
-    // what to do, as tdesktop's (its service message look).
-    struct select_hint : skiff::compose::Stacked {
-      struct pill : widgets::Pill {
-        pill()
-            : widgets::Pill("Select a chat to start messaging",
-                            {.plate = skia::colorSetARGB(0x66, 0, 0, 0), .size = 13.0f, .height = 26.0f, .padX = 12.0f}) {
-          fState.apply({.alignSelf = scene::align::kMiddle});
-        }
-      };
-      struct parts_t {
-        pill shown;
-      } parts;
-      select_hint()
-          : Stacked(skiff::compose::justified(
-                skiff::compose::vbox(0.0f,
-                                     {.fillX = true, .grow = scene::axes::kY}),
-                nodes::justify::middle{})) {}
-    };
+    using empty_state = decltype(no_accounts_yet(std::declval<const palette&>()));
+    using select_hint = decltype(select_a_chat());
     struct parts_t {
       // The head, as a function of the chat shown.
       header_t header;
@@ -830,7 +791,8 @@ struct conversations_screen : skiff::compose::Stacked {
               .emojis = skiff::compose::visible(false, emoji_list(*n.colours)),
               .banner = composer_banner(*n.colours, screen),
               .line = composer_bar<>(n),
-              .empty = empty_state(*n.colours)} {
+              .empty = no_accounts_yet(*n.colours),
+              .hint = select_a_chat()} {
       header.apply({.fillX = true, .height = chat_header::kHeight});
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
       parts.pinned.setVisible(false);

@@ -448,17 +448,10 @@ struct window : skiff::compose::Specced {
       typename joined<type_list<nodes::Text>, typename protocol_dialog_nodes<protocols>::type>::type>::type;
   // The dialog's content, a node: the protocol's dialog in it, as the room
   // settings hold their page.
-  struct tool_holder : skiff::compose::Stacked {
+  struct tool_holder : skiff::compose::Holding<tool_t> {
+    using skiff::compose::Holding<tool_t>::Holding;
     // The dialog it is shown in.
     [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{560.0f, 560.0f}}; }
-    struct parts_t {
-      tool_t shown;
-    } parts;
-    template <class Node, class... Args>
-    explicit tool_holder(std::in_place_type_t<Node> which, Args &&...args)
-        : Stacked(skiff::compose::vbox(
-              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.shown = tool_t(which, std::forward<Args>(args)...)} {}
   };
   struct layers : skiff::compose::Specced {
     // What its handlers ask for, returned.

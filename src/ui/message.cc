@@ -137,16 +137,7 @@ struct message_bubble : skiff::compose::Stacked {
   };
   using their_view_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_message_nodes<protocols>::type>::type>::type;
-  struct view_holder : skiff::compose::Stacked {
-    struct parts_t {
-      their_view_t shown;
-    } parts;
-    template <class View>
-    explicit view_holder(View made)
-        : Stacked(skiff::compose::vbox(
-              0.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.shown = their_view_t(std::move(made))} {}
-  };
+  using view_holder = skiff::compose::Holding<their_view_t>;
   // As a node: the protocol's sticker in it.
   struct sticker_holder : skiff::compose::Stacked {
     struct parts_t {

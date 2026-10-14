@@ -161,15 +161,8 @@ struct message_bubble : skiff::compose::Stacked {
       typename joined<type_list<nodes::Text>, typename protocol_message_nodes<protocols>::type>::type>::type;
   using view_holder = skiff::compose::Holding<their_view_t>;
   // As a node: the protocol's sticker in it.
-  struct sticker_holder : skiff::compose::Stacked {
-    struct parts_t {
-      their_sticker_t shown;
-    } parts;
-    template <class View>
-    explicit sticker_holder(View made)
-        : Stacked(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth})),
-          parts{.shown = their_sticker_t(std::move(made))} {}
-  };
+  // As tall and as wide as it is.
+  using sticker_holder = skiff::compose::Holding<their_sticker_t>;
   // The message as it was shown, and where in its sender's run: while
   // these are the same, the bubble is kept.
   message said;
@@ -286,7 +279,7 @@ struct message_bubble : skiff::compose::Stacked {
     bool place_sticker(std::optional<View> made) {
       if (!made)
         return false;
-      parts.their_sticker.emplace(std::move(*made));
+      parts.their_sticker.emplace(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(*made));
       return true;
     }
     // A sticker's name, forward and quote beside it, as tdesktop's unwrapped

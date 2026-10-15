@@ -291,8 +291,8 @@ struct packs_box : skiff::compose::Stacked {
     nodes::ScrollContainer<packs_t> list{packs_t({.spacingY = 0.0f, .wrap = false}, {})};
     list_buttons list_actions;
     // A pack open.
-    field name;
-    field attribution;
+    legacy::field name;
+    legacy::field attribution;
     use_row use;
     nodes::Text images_heading;
     nodes::ScrollContainer<pictures_t> pictures{pictures_t({.spacingY = 0.0f, .wrap = false}, {})};
@@ -313,8 +313,8 @@ struct packs_box : skiff::compose::Stacked {
                   {.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}},
                   wrapped(nodes::Text("", 13.0f, colours.dim))),
               .list_actions = list_buttons(this),
-              .name = field(colours, "Name", "Pack name"),
-              .attribution = field(colours, "Attribution (optional)",
+              .name = legacy::field(colours, "Name", "Pack name"),
+              .attribution = legacy::field(colours, "Attribution (optional)",
                                    "Where its images are from"),
               .use = use_row(this),
               .images_heading = skiff::compose::styled(

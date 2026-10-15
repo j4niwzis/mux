@@ -394,15 +394,17 @@ struct proxy_rows_key {
 };
 inline auto proxy_rows(const palette& colours, const proxy_rows_key& key) {
   namespace c = skiff::compose;
-  // An empty place where the dots are, so the names line up.
-  auto rows = std::vector{row_item(colours, "No proxy", choose_account_proxy{-1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)}, !key.current)};
-  rows.append_range(std::views::enumerate(key.all) | std::views::transform([&](const auto& at) {
-                      const auto& [index, one] = at;
-                      return row_item(colours, std::format("{} ({} {}:{})", one.name, config::label_of(one.kind), one.host, one.port),
-                                      choose_account_proxy{static_cast<int>(index)}, icon::dot{proxy_colour(one.name)},
-                                      key.current == one.name);
-                    }));
-  return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows));
+  // No proxy first -- an empty place where the dots are, so the names line
+  // up -- then each profile, by its place.
+  const auto row = [&](int at) {
+    if (at < 0)
+      return row_item(colours, "No proxy", choose_account_proxy{-1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)}, !key.current);
+    const config::proxy_settings& one = key.all[static_cast<std::size_t>(at)];
+    return row_item(colours, std::format("{} ({} {}:{})", one.name, config::label_of(one.kind), one.host, one.port),
+                    choose_account_proxy{at}, icon::dot{proxy_colour(one.name)}, key.current == one.name);
+  };
+  return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                 std::views::iota(-1, static_cast<int>(key.all.size())) | std::views::transform(row) | std::ranges::to<std::vector>());
 }
 using proxy_rows_t = decltype(proxy_rows(std::declval<const palette&>(), proxy_rows_key{}));
 inline auto account_proxy_view(const palette& colours) {

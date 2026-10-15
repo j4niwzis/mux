@@ -501,6 +501,7 @@ void app::before_frame() {
   chat_view.show();
   suggestions.show();
   threads.show();
+  pictures.viewer_tick();
   if (model->expire_typing())
     chats_binding.refresh(root(), model->chats());
   store.flush_reads();

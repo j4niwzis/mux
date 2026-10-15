@@ -719,6 +719,11 @@ struct suggestion_close {};
 // what is answered there; the answer let go.
 struct thread_send {};
 struct thread_answer_cancel {};
+// The video in the viewer: paused or played on; and gone to a share of it.
+struct toggle_video {};
+struct video_seek {
+  float share = 0.0f;
+};
 // One of a person's card's buttons of its protocol's own: by where it is
 // among them.
 struct card_action {

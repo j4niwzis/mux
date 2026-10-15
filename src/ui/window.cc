@@ -161,6 +161,9 @@ struct shown_root {
   skiff::model::Tracked<std::optional<passphrase_facts>> passphrase;
   skiff::model::Tracked<std::optional<menu_facts>> menu;
   skiff::model::Tracked<std::optional<viewer_facts>> viewer;
+  // What the viewer has coming, and the video it plays: the program's.
+  skiff::model::Tracked<viewer_load> viewer_coming;
+  skiff::model::Tracked<video_shown> video;
   skiff::model::Tracked<std::optional<emoji_facts>> emoji;
   skiff::model::Tracked<std::optional<panel_facts>> panel;
   // What the speaker plays: the voice messages' buttons and times read it.
@@ -359,6 +362,22 @@ template <class Needs> struct layer_arguments {
     return std::tie(needs, facts);
   }
 };
+// A layer made by a function of what it shows: its node made anew as that
+// changes (Make: the function, as a type).
+template <class Needs, class Make> struct layer_made {
+  Needs needs;
+  template <class Facts> auto operator()(const Facts& facts) const { return std::tuple{Make{}(needs, facts)}; }
+};
+template <class Facts, class Needs, class Make>
+using made_layer = skiff::compose::Mounted<std::invoke_result_t<Make, const Needs&, const Facts&>, Facts, layer_made<Needs, Make>>;
+template <class Facts, class Make, class Needs>
+auto layer_made_by(const Needs& needs) {
+  return skiff::bind::Bound<std::optional<Facts>, made_layer<Facts, Needs, Make>>(std::in_place, layer_made<Needs, Make>{needs},
+                                                                              scene::Spec{.fill = true}, true);
+}
+struct make_viewer {
+  auto operator()(const ui_needs& n, const viewer_facts& facts) const { return picture_viewer(n, facts); }
+};
 template <class Content, class Facts, class Needs>
 using shown_layer =
     skiff::compose::Mounted<Content, Facts, layer_arguments<Needs>>;
@@ -520,6 +539,10 @@ struct window : skiff::compose::Specced {
     static std::optional<escaped> escape(skiff::bind::Bound<std::optional<Facts>, shown_layer<Content, Facts, ui_needs>>& layer) {
       return layer.shown() ? std::optional<escaped>(escaped{closing_of(std::type_identity<Facts>{})}) : std::nullopt;
     }
+    template <class Facts, class Make>
+    static std::optional<escaped> escape(skiff::bind::Bound<std::optional<Facts>, made_layer<Facts, ui_needs, Make>>& layer) {
+      return layer.shown() ? std::optional<escaped>(escaped{closing_of(std::type_identity<Facts>{})}) : std::nullopt;
+    }
     // The one drawn last -- on top -- asked first.
     template <class... Part> static std::optional<escaped> topmost_first(Part&... part) {
       std::optional<escaped> found;
@@ -648,7 +671,7 @@ struct window : skiff::compose::Specced {
       shown_in<verification_box, verification_view> verifying;
       skiff::bind::Bound<std::optional<emoji_facts>, shown_layer<emoji_popup, emoji_facts, ui_needs>> emoji;
       skiff::bind::Bound<std::optional<menu_facts>, shown_layer<context_menu, menu_facts, ui_needs>> menu;
-      skiff::bind::Bound<std::optional<viewer_facts>, shown_layer<picture_viewer, viewer_facts, ui_needs>> viewer;
+      skiff::bind::Bound<std::optional<viewer_facts>, made_layer<viewer_facts, ui_needs, make_viewer>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
       std::optional<text_menu> text_menu_up;
       // The plugins' layers, over everything: a call's card, and on a phone
@@ -811,7 +834,7 @@ struct window : skiff::compose::Specced {
                     shown_made<verification_box, verification_view>(n),
                 .emoji = layer_for<emoji_popup, emoji_facts>(n),
                 .menu = layer_for<context_menu, menu_facts>(n),
-                .viewer = layer_for<picture_viewer, viewer_facts>(n),
+                .viewer = layer_made_by<viewer_facts, make_viewer>(n),
                 .over_all = plugin_layers_t::made(n)} {
       // (A pack of the parts: bound in a generic lambda, the template a pack
       // declaration needs.)

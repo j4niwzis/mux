@@ -763,7 +763,7 @@ export namespace mux::proto::matrix::request {
 // for that account.
 template <class App, class Purpose>
 void with_passphrase(App& app, Purpose purpose) {
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
+  app.shared.with_chosen_account([&](config::account_t& account) {
     app.keys_of = App::id_of(account);
     mux::ui::show(app.showing, std::optional(mux::ui::passphrase_facts{purpose, std::nullopt}));
   });
@@ -795,14 +795,14 @@ void program_asked(App& app, const import_room_keys&) {
 // Element's Secure Backup: made anew, or deleted.
 template <class App>
 void program_asked(App& app, const reset_backup&) {
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
+  app.shared.with_chosen_account([&](config::account_t& account) {
     if (!app.shared.demo())
       ops::reset_backup(*app.net, App::id_of(account));
   });
 }
 template <class App>
 void program_asked(App& app, const delete_backup&) {
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
+  app.shared.with_chosen_account([&](config::account_t& account) {
     if (!app.shared.demo())
       ops::delete_backup(*app.net, App::id_of(account));
   });
@@ -810,7 +810,7 @@ void program_asked(App& app, const delete_backup&) {
 // The sessions: one verified by emoji, some signed out, one renamed, listed.
 template <class App>
 void program_asked(App& app, const verify_session& one) {
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
+  app.shared.with_chosen_account([&](config::account_t& account) {
     app.net->verify_start(App::id_of(account), config::address_of(account), one.device);
   });
 }
@@ -920,7 +920,7 @@ void program_asked(App& app, const verify_them& one) {
 }
 template <class App>
 void program_asked(App& app, const refresh_sessions&) {
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::list_sessions(*app.net, App::id_of(account)); });
+  app.shared.with_chosen_account([&](config::account_t& account) { ops::list_sessions(*app.net, App::id_of(account)); });
 }
 
 // A step of interactive auth done in the browser: the request sent again,
@@ -928,12 +928,12 @@ void program_asked(App& app, const refresh_sessions&) {
 template <class App>
 void program_asked(App& app, const continue_uia&) {
   mux::ui::show<tool::uia_step>(app.showing, std::nullopt);
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::continue_uia(*app.net, App::id_of(account)); });
+  app.shared.with_chosen_account([&](config::account_t& account) { ops::continue_uia(*app.net, App::id_of(account)); });
 }
 template <class App>
 void program_asked(App& app, const cancel_uia&) {
   mux::ui::show<tool::uia_step>(app.showing, std::nullopt);
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::cancel_uia(*app.net, App::id_of(account)); });
+  app.shared.with_chosen_account([&](config::account_t& account) { ops::cancel_uia(*app.net, App::id_of(account)); });
 }
 // Its own dialogs closed: what each shows let go.
 template <class App, class Facts>

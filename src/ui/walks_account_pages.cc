@@ -7,20 +7,8 @@ module mux.ui;
 import std;
 import skiff.scene;
 
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_editor>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::account_editor>();
-}
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_privacy>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::account_privacy>();
-}
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_chats>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::account_chats>();
-}
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_notifications>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::account_notifications>();
-}
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_proxy>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::account_proxy>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::detail_shown_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::detail_shown_t>();
 }
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::add_account_view_t>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::add_account_view_t>();

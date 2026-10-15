@@ -9,16 +9,25 @@ export module mux.proto.xmpp.changes;
 import std;
 import splice;
 import mux.core.ids;
+import mux.proto.xmpp.kept;
 
 export namespace mux::proto::xmpp {
 
 // How a field of the server's form is shown: typed in, typed in unseen, not
 // shown and sent back as it came, or only read.
 namespace field_shown {
-struct typed {};
-struct masked {};
-struct hidden {};
-struct read {};
+struct typed {
+  friend bool operator==(typed, typed) = default;
+};
+struct masked {
+  friend bool operator==(masked, masked) = default;
+};
+struct hidden {
+  friend bool operator==(hidden, hidden) = default;
+};
+struct read {
+  friend bool operator==(read, read) = default;
+};
 }  // namespace field_shown
 using field_shown_t = spl::variant<field_shown::typed, field_shown::masked, field_shown::hidden, field_shown::read>;
 
@@ -35,6 +44,7 @@ struct registration_field {
   std::vector<std::uint8_t> picture;
   std::vector<std::string> links;
   std::vector<std::string> choices;
+  friend bool operator==(const registration_field&, const registration_field&) = default;
 };
 // What the server asks beyond the address and the password: answered in
 // the account's form, and the account connects again with the answers. Or
@@ -44,7 +54,26 @@ struct registration_asked {
   std::string instructions;
   std::vector<registration_field> fields;
   std::optional<std::string> page;
+  friend bool operator==(const registration_asked&, const registration_asked&) = default;
 };
+// What XMPP keeps beside an account form's draft: what the server asked to
+// register, and the answers to it -- typed, or a hidden field's as it came.
+struct registration_form {
+  registration_asked asked;
+  std::vector<registration_answer> answers;
+  friend bool operator==(const registration_form&, const registration_form&) = default;
+};
+// The answers to what the server asked, as it asks: what each field holds
+// first; none for one only read.
+[[nodiscard]] inline std::vector<registration_answer> first_answers(const registration_asked& asked) {
+  return asked.fields | std::views::filter([](const registration_field& one) {
+           return spl::visit(spl::overloaded{[](field_shown::read) { return false; }, [](const auto&) { return true; }}, one.shown);
+         }) |
+         std::views::transform([](const registration_field& one) {
+           return registration_answer{.var = one.var, .value = one.value.empty() ? std::string() : one.value.front()};
+         }) |
+         std::ranges::to<std::vector>();
+}
 // The account made: from now on, signed in to.
 struct registered {
   account_id account;

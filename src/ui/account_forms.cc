@@ -1,48 +1,82 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:account_forms -- Each protocol's account form, as the accounts'
-// panels hold them: what its form_type gives, from the protocols' UI
-// modules, which sit under this one.
+// panels show them: what its account_form_of makes of its draft, from the
+// protocols' UI modules, which sit under this one.
 export module mux.ui:account_forms;
 
 import std;
 import splice;
 import skia;
 import skiff.scene;
+import skiff.compose;
 import mux.core;
 import mux.config;
 import mux.ui.base;
 import mux.ui.proto;
 
 export namespace mux::ui {
-// Each protocol's account form -- its form_type(state), found by ADL where the
-// panels are made: a template on Actions, made in the program, which imports
-// mux.ui.proto -- and any of them, as the panels hold them, made from the
-// list of protocols.
+// Each protocol's account form, made over a draft of its own -- its
+// account_form_of(draft, colours, editing), found by ADL on the draft's type
+// -- and any of them, as the panels show them, made from the list of
+// protocols.
 template <class Tag>
-using form_of_t = typename decltype(form_type(state_of<Tag>{}))::type;
+using form_view_of_t = decltype(account_form_of(std::declval<const draft_of_t<Tag>&>(), std::declval<const palette&>(), false));
 template <class>
-struct form_list;
+struct form_views;
 template <class... Tags>
-struct form_list<protocol_list<Tags...>> {
-  using type = spl::variant<form_of_t<Tags>...>;
+struct form_views<protocol_list<Tags...>> {
+  using type = spl::variant<form_view_of_t<Tags>...>;
 };
-using account_form = typename form_list<protocols>::type;
+using account_form_node = typename form_views<protocols>::type;
 
-// The form of an account's own protocol, filled in from what it keeps.
-[[nodiscard]] account_form form_of(const palette& colours, const config::account_t& saved) {
-  return spl::visit([&](const auto& kept) {
-    using form = typename decltype(form_type_for(kept))::type;
-    return account_form(std::in_place_type<form>, colours, std::optional(kept));
-  }, saved.own);
+// A protocol's draft, blank: a new account's form.
+[[nodiscard]] inline account_draft_t blank_draft(const protocol_t& speaks) {
+  return spl::visit([](auto tag) { return account_draft_t(std::in_place_type<draft_of_t<decltype(tag)>>); }, speaks);
 }
-// A form laid out in the column under `top`.
-void place_form(account_form& form, const skia::SkRect& column, float top) {
-  spl::visit(
-      [&](auto& one) {
-        one.fState.arrange(0.0f, 0.0f);
-        scene::layout(one, skia::SkRect::MakeLTRB(column.fLeft, column.fTop + top, column.fRight, column.fBottom));
-      },
-      form);
+// An account's draft, as it is kept.
+[[nodiscard]] inline account_draft_t draft_of_account(const config::account_t& saved) {
+  return spl::visit([](const auto& kept) { return account_draft_t(draft_of(kept)); }, saved.own);
 }
+// What its protocol says of adding an account of it.
+[[nodiscard]] inline std::string adding_note(const protocol_t& speaks) {
+  return spl::visit([](const auto& draft) { return std::string(form_note(draft)); }, blank_draft(speaks));
+}
+// A form's facts as it opens: a new account's, or one kept, with what its
+// protocol keeps beside the draft, fresh -- made again from the round on.
+template <class List>
+struct first_form_part {
+  using type = proto::no_form_part;
+};
+template <class First, class... Rest>
+struct first_form_part<proto::form_part_list<First, Rest...>> {
+  using type = First;
+};
+template <class Tag>
+using first_form_part_t = typename first_form_part<decltype(proto::form_parts_of(state_of<Tag>{}))>::type;
+[[nodiscard]] inline account_form_facts form_opened(account_draft_t seed, const protocol_t& speaks, bool editing, std::uint32_t round) {
+  account_form_facts facts{.seed = std::move(seed), .editing = editing, .round = round};
+  spl::visit([&](auto tag) { facts.part = form_part_t(std::in_place_type<first_form_part_t<decltype(tag)>>); }, speaks);
+  return facts;
+}
+
+// The form a form's facts make: made again where its round moves -- opened,
+// saved, another account's -- and as it was, typing and all, otherwise.
+struct form_seed {
+  std::uint32_t round = 0;
+  account_draft_t seed;
+  bool editing = false;
+  friend bool operator==(const form_seed& a, const form_seed& b) { return a.round == b.round; }
+};
+[[nodiscard]] inline account_form_node form_made(const palette& colours, const form_seed& now) {
+  return spl::visit([&](const auto& draft) { return account_form_node(account_form_of(draft, colours, now.editing)); }, now.seed);
+}
+inline auto account_form_view(const ui_needs& n) {
+  namespace c = skiff::compose;
+  using facts = std::optional<account_form_facts>;
+  return c::projected<facts>([](const facts& now) { return now ? std::optional(form_seed{now->round, now->seed, now->editing}) : std::nullopt; },
+                             c::mount<account_form_node, form_seed>([at = n.colours](const form_seed& now) { return std::tuple{form_made(*at, now)}; },
+                                                                    {.fillX = true, .autoSize = scene::axes::kY}));
+}
+using account_form_view_t = decltype(account_form_view(std::declval<const ui_needs&>()));
 
 }  // namespace mux::ui

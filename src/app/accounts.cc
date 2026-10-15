@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.app.accounts: the accounts page -- the accounts listed, one's pages,
 // a new one added through its protocol's form and waited for as it logs
-// in, one edited, turned on or off, or removed. A part of the program: it
-// owns the login being waited for and the proxy a new account is to go
-// through, and reaches the settings it is given and the rest through the
-// services.
+// in, one edited, turned on or off, or removed. A part of the program: what
+// the page shows is its to say (panel_facts, the chosen account's page and
+// form facts, the adding pane's), and it owns the login being waited for;
+// it reaches the settings it is given and the rest through the services.
 export module mux.app.accounts;
 
 import std;
@@ -19,11 +19,31 @@ import mux.app.kept;
 import mux.app.services;
 import mux.app.requests;
 
+namespace mux::app::accounts_detail {
+// What a page asks for as it opens -- its sessions, the profile -- where it
+// asks anything: given to `asked`, in its own type.
+template <class Page, class Asked>
+  requires requires(Page page, const mux::account_id& by) { asked_as_it_opens(page, by); }
+void ask_opening(Page page, const mux::account_id& by, const Asked& asked) {
+  asked(asked_as_it_opens(page, by));
+}
+template <class Page, class Asked>
+void ask_opening(Page, const mux::account_id&, const Asked&) {}
+// What a protocol keeps beside the form's draft, put in the draft sent:
+// XMPP's answers to what the server asked. Nothing, for the rest.
+template <class Draft, class Part>
+  requires requires(Draft& draft, const Part& part) { with_form_part(draft, part); }
+void merge_part(Draft& draft, const Part& part) {
+  with_form_part(draft, part);
+}
+template <class Draft, class Part>
+void merge_part(Draft&, const Part&) {}
+}  // namespace mux::app::accounts_detail
+
 export namespace mux::app {
 
 class accounts_part {
  public:
-  using accounts = mux::ui::accounts_panel;
   accounts_part(services& shared, kept_settings& kept) : s_(&shared), k_(&kept) {}
   accounts_part(const accounts_part&) = delete;
   accounts_part& operator=(const accounts_part&) = delete;
@@ -31,133 +51,131 @@ class accounts_part {
   // The login being waited for, let go: the page left.
   void forget_login() { pending_login_.reset(); }
 
-  // The accounts page. From the drawer, it comes in over it, and the drawer
-  // goes once the page is in: not two things moving at once.
-  // What is beside the list said too; shown as the panel is brought up to
-  // date, at the next frame.
+  // The accounts page, with what is beside its list. From the drawer, it
+  // comes in over it, and the drawer goes once the page is in: not two
+  // things moving at once.
   void show_accounts(mux::ui::panel_detail_t detail = mux::ui::panel_detail::none{}) {
     if (s_->showing->look<mux::ui::drawer_shown>()->out)
       s_->drawer_waits = true;
     mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt);
     pending_login_.reset();
-    mux::ui::show(*s_->showing, std::optional(mux::ui::panel_facts{std::move(detail), k_->config_error}));
+    mux::ui::panel_facts facts{.note = k_->config_error, .theme = k_->appearance().theme};
+    facts.narrow = this->narrow();
+    mux::ui::show(*s_->showing, std::optional(std::move(facts)));
+    this->show_detail(std::move(detail));
     s_->refresh_due = true;
   }
   // The accounts, with this one's settings up beside them.
-  void show_account(const std::string& address) { this->show_accounts(mux::ui::panel_detail::account{address, std::nullopt, false}); }
-  // At once, outside any event -- what the network told: the panel made and
-  // brought up to date now, for its form to be filled in.
-  accounts* show_account_now(const std::string& address) {
-    this->show_account(address);
-    s_->read_shown_now();
-    auto* up = mux::ui::open_panel(s_->root());
-    if (!up)
-      return nullptr;
-    accounts* panel = up->visit(spl::overloaded{[](accounts& one) -> accounts* { return &one; }});
-    (void)this->bring_up_to_date(*panel);
-    return panel;
-  }
+  void show_account(const std::string& address) { this->show_accounts(mux::ui::panel_detail::account{address}); }
   // Adding an account: beside the list, on the accounts page.
-  void show_adding() { this->show_accounts(mux::ui::panel_detail::adding{.proxies = this->proxy_names()}); }
-  // The proxy profiles by their names, as the pane lists them.
-  [[nodiscard]] std::vector<std::string> proxy_names() const {
-    return k_->proxies() | std::views::transform(&mux::config::proxy_settings::name) | std::ranges::to<std::vector>();
+  void show_adding() { this->show_accounts(mux::ui::panel_detail::adding{}); }
+  // What a protocol keeps beside an account's form, told by the network --
+  // XMPP's: what its server asks to register -- shown in that account's
+  // form, with what the form says of it.
+  template <class Part>
+  void form_part_told(const std::string& address, Part part, std::string said) {
+    if (this->chosen() != address)
+      this->show_account(address);
+    this->change_form([&](mux::ui::account_form_facts& now) {
+      now.part = mux::ui::form_part_t(std::move(part));
+      now.said = {std::move(said), false};
+    });
   }
-  // What the pane adding an account shows, changed, where it is up.
-  template <class Change>
-  void change_adding(Change change) {
-    auto facts = *s_->showing->look<std::optional<mux::ui::panel_facts>>();
-    if (!facts)
-      return;
-    spl::visit(spl::overloaded{[&](mux::ui::panel_detail::adding& now) { change(now); }, [](auto&) {}}, facts->detail);
-    mux::ui::show(*s_->showing, std::move(facts));
-  }
-  // The page brought up to date with the model and the settings. Whether
-  // the account being added is in now -- the chats to be shown.
-  [[nodiscard]] bool bring_up_to_date(accounts& panel) {
-    panel.proxies = k_->proxies();
-    // The profiles the pane adding one lists, as they are now.
-    if (const auto& facts = *s_->showing->look<std::optional<mux::ui::panel_facts>>())
-      spl::visit(spl::overloaded{[&](const mux::ui::panel_detail::adding& now) {
-                                   if (now.proxies != this->proxy_names())
-                                     this->change_adding([&](mux::ui::panel_detail::adding& it) { it = mux::ui::with_proxies(std::move(it), this->proxy_names()); });
-                                 },
-                                 [](const auto&) {}},
-                 facts->detail);
-    // What is beside the list as what is shown last said, shown.
-    if (auto due = std::exchange(panel.detail_due, std::nullopt))
-      spl::visit(spl::overloaded{[](mux::ui::panel_detail::none) {},
-                                 [&](const mux::ui::panel_detail::account& one) {
-                                   if (const auto* found = k_->settings_of(one.address)) {
-                                     panel.select(*found, *s_->model);
-                                     if (auto* editor = panel.editor(); editor && one.said)
-                                       editor->say(*one.said, one.error);
-                                   }
-                                 },
-                                 [&](const mux::ui::panel_detail::adding& one) {
-                                   if (!panel.adding())
-                                     panel.show_adding();
-                                   if (auto* pane = panel.adding(); pane && one.speaks)
-                                     pane->show(*one.speaks);
-                                 }},
-                 *due);
-    panel.show(k_->accounts().values(), *s_->model);
-    auto* pane = panel.adding();
-    return pane && spl::visit([this](auto& form) { return this->watch_login(form); }, pane->parts.form);
+
+  // The page brought up to date with the model and the settings: the
+  // accounts listed as they are, its width, the proxies the adding pane
+  // lists; and the account being added, waited for. Whether it is in now
+  // -- the chats to be shown.
+  [[nodiscard]] bool bring_up_to_date() {
+    const auto& open = *s_->showing->look<std::optional<mux::ui::panel_facts>>();
+    if (!open)
+      return false;
+    auto rows = mux::ui::account_rows(k_->accounts().values(), *s_->model, this->chosen());
+    const bool narrow = this->narrow();
+    if (rows != open->rows || narrow != open->narrow || open->theme != k_->appearance().theme)
+      this->change_panel([&](mux::ui::panel_facts& now) {
+        now.rows = std::move(rows);
+        now.narrow = narrow;
+        now.theme = k_->appearance().theme;
+      });
+    // Nothing to show beside the list, and no account at all: adding one.
+    if (std::ranges::empty(k_->accounts().values()) && this->detail_is<mux::ui::panel_detail::none>())
+      this->show_detail(mux::ui::panel_detail::adding{});
+    if (const auto& adding = *s_->showing->look<mux::ui::add_account_shown>(); adding.proxies != this->proxy_names())
+      mux::ui::show(*s_->showing, mux::ui::with_proxies(adding, this->proxy_names()));
+    return this->watch_login();
   }
 
   void apply(const request::open_accounts&) { this->show_accounts(); }
-  void apply(const request::open_new_account&) { this->show_adding(); }
+  void apply(const request::open_new_account&) { this->show_detail(mux::ui::panel_detail::adding{}); }
   void apply(const request::show_account& one) { this->show_account(one.address); }
-  // A protocol chosen for the account being added: its form.
+  // A protocol chosen for the account being added: its form, blank.
   void apply(const request::add_account_of& one) {
     pending_login_.reset();
-    this->change_adding([&](mux::ui::panel_detail::adding& now) { now.speaks = one.speaks; });
+    auto adding = *s_->showing->look<mux::ui::add_account_shown>();
+    adding.speaks = one.speaks;
+    mux::ui::show(*s_->showing, std::move(adding));
+    this->open_form(mux::ui::blank_draft(one.speaks), one.speaks, false);
     s_->refresh_due = true;
   }
+  // An account chosen from the list: its pages, its connection beside them
+  // -- narrow, its pages first, not the first of them.
   void apply(const request::select_account& one) {
-    auto* up = mux::ui::open_panel(s_->root());
-    if (!up)
+    if (k_->settings_of(one.address) == nullptr)
       return;
-    spl::visit(
-        [&](accounts& panel) {
-          if (const auto* found = k_->settings_of(one.address)) {
-            pending_login_.reset();
-            panel.select(*found, *s_->model);
-            panel.show(k_->accounts().values(), *s_->model);
-          }
-        },
-        *up);
+    pending_login_.reset();
+    this->show_detail(mux::ui::panel_detail::account{one.address});
+    this->change_panel([](mux::ui::panel_facts& now) { now.detail_up = false; });
   }
-  // A form's own buttons -- XMPP's Advanced, its PLAIN switch -- asked of the
-  // form up, where it has them.
-  void apply(const request::toggle_advanced&) {
-    if (auto* up = this->form_up())
-      spl::visit([](auto& form) {
-        mux::app::ask_if_able([](auto& f) -> decltype(void(f.show_advanced(!f.advanced))) { f.show_advanced(!f.advanced); }, form);
-      }, *up);
-  }
-  void apply(const request::toggle_plain&) {
-    if (auto* up = this->form_up())
-      spl::visit([](auto& form) {
-        mux::app::ask_if_able([](auto& f) -> decltype(void(f.flip_plain())) { f.flip_plain(); }, form);
-      }, *up);
-  }
-  // The form sent: an account edited, or a new one added.
-  void apply(const request::submit_login&) {
-    auto* up = mux::ui::open_panel(s_->root());
-    if (!up)
+  // A page of the chosen account: its facts made afresh; one that wants
+  // something of the server asks for it as it opens.
+  template <class Asked>
+  void apply(const request::account_page& one, const Asked& asked) {
+    const auto address = this->chosen();
+    if (!address)
       return;
-    spl::visit(
-        [this](accounts& panel) {
-          if (auto* editor = panel.editor())
-            spl::visit([this](auto& form) { this->edit(form); }, editor->parts.form);
-          else if (auto* pane = panel.adding()) {
-            new_proxy_ = pane->proxy;
-            spl::visit([this](auto& form) { this->add(form); }, pane->parts.form);
-          }
-        },
-        *up);
+    this->show_detail(mux::ui::panel_detail::account{*address, one.page});
+    const mux::account_id by{mux::ui::protocol_of(*address), *address};
+    spl::visit([&](auto page) { accounts_detail::ask_opening(page, by, asked); }, one.page);
+  }
+  // Back: narrow, from a page to the account's pages; from an account to
+  // the list; from the list to the chats.
+  void apply(const request::accounts_back&) {
+    const auto& open = *s_->showing->look<std::optional<mux::ui::panel_facts>>();
+    if (!open)
+      return;
+    if (open->narrow && open->detail_up)
+      this->change_panel([](mux::ui::panel_facts& now) { now.detail_up = false; });
+    else if (!this->detail_is<mux::ui::panel_detail::none>())
+      this->show_detail(mux::ui::panel_detail::none{});
+    else
+      this->close();
+  }
+  void apply(const request::close_account_pages&) { this->show_detail(mux::ui::panel_detail::none{}); }
+  // The form sent: an account edited, or a new one added -- from its draft,
+  // what its protocol keeps beside it put in, made settings by its
+  // protocol (account_from), or what is wrong with it said.
+  void apply(const request::submit_account& one) {
+    const auto& open = *s_->showing->look<std::optional<mux::ui::account_form_facts>>();
+    if (!open)
+      return;
+    auto draft = one.draft;
+    spl::visit([&](auto& typed, const auto& part) { accounts_detail::merge_part(typed, part); }, draft, open->part);
+    auto made = spl::visit([](const auto& typed) -> std::expected<mux::config::kept_t, std::string> {
+      auto kept = account_from(typed);
+      if (!kept)
+        return std::unexpected(kept.error());
+      return mux::config::kept_t{std::move(*kept)};
+    }, draft);
+    if (!made) {
+      this->say(made.error(), true);
+      return;
+    }
+    mux::config::account_t account{.own = std::move(*made)};
+    if (open->editing)
+      this->edit(std::move(account));
+    else
+      this->add(std::move(account));
   }
   // An account turned on -- started -- or off -- stopped.
   void apply(const request::flip_enabled& one) {
@@ -175,106 +193,159 @@ class accounts_part {
     this->save();
     s_->refresh_due = true;
   }
+  // An account removed: its pages, where they were up, gone with it.
   void apply(const request::remove_account& one) {
     if (!k_->remove_account(one.address))
       return;
     s_->net->remove(one.address);
     this->save();
+    if (this->chosen() == one.address)
+      this->show_detail(mux::ui::panel_detail::none{});
     s_->refresh_due = true;
   }
   // The proxy the account being added is to go through.
   void apply(const request::choose_new_proxy& one) {
-    this->change_adding([&](mux::ui::panel_detail::adding& now) {
-      now = mux::ui::with_proxies(std::move(now), this->proxy_names());
-      if (!one.name || std::ranges::contains(now.proxies, *one.name))
-        now.proxy = one.name;
-    });
-  }
-  void apply(const request::close_account_pages&) {
-    if (auto* up = mux::ui::open_panel(s_->root()))
-      spl::visit([](accounts& panel) { panel.close_pages(); }, *up);
-  }
-  // A page of the chosen account: one that wants something of the server
-  // asks for it as it opens.
-  // What the page asks for as it opens given to `asked`, in its own type.
-  template <class Asked>
-  void apply(const request::account_page& one, const Asked& asked) {
-    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-      panel.show_page(one.page, account, *s_->model, k_->proxies(), k_->appearance().theme, asked);
-    });
+    auto adding = mux::ui::with_proxies(*s_->showing->look<mux::ui::add_account_shown>(), this->proxy_names());
+    if (!one.name || std::ranges::contains(adding.proxies, *one.name))
+      adding.proxy = one.name;
+    mux::ui::show(*s_->showing, std::move(adding));
   }
 
  private:
-  // The panel that is up, if one is, and the form in it, if there is one.
-  [[nodiscard]] mux::ui::account_form* form_up() {
-    auto* up = mux::ui::open_panel(s_->root());
-    if (!up)
-      return nullptr;
-    return spl::visit([](auto& panel) { return panel.form(); }, *up);
+  static constexpr float kNarrow = 600.0f;
+  [[nodiscard]] bool narrow() const { return s_->showing->look<mux::ui::window_shape>()->width < kNarrow; }
+  // The proxy profiles by their names, as the adding pane lists them.
+  [[nodiscard]] std::vector<std::string> proxy_names() const {
+    return k_->proxies() | std::views::transform(&mux::config::proxy_settings::name) | std::ranges::to<std::vector>();
+  }
+  // The account chosen, where one is.
+  [[nodiscard]] std::optional<std::string> chosen() const { return mux::ui::chosen_of(*s_->showing->look<std::optional<mux::ui::panel_facts>>()); }
+  template <class Detail>
+  [[nodiscard]] bool detail_is() const {
+    const auto& open = *s_->showing->look<std::optional<mux::ui::panel_facts>>();
+    return open && spl::visit(spl::overloaded{[](const Detail&) { return true; }, [](const auto&) { return false; }}, open->detail);
+  }
+  template <class Change>
+  void change_panel(Change change) {
+    auto now = *s_->showing->look<std::optional<mux::ui::panel_facts>>();
+    if (!now)
+      return;
+    change(*now);
+    mux::ui::show(*s_->showing, std::move(now));
+  }
+  template <class Change>
+  void change_form(Change change) {
+    auto now = *s_->showing->look<std::optional<mux::ui::account_form_facts>>();
+    if (!now)
+      return;
+    change(*now);
+    mux::ui::show(*s_->showing, std::move(now));
+  }
+  // What the form says: what went wrong, or what is happening.
+  void say(std::string text, bool error) {
+    this->change_form([&](mux::ui::account_form_facts& now) { now.said = {std::move(text), error}; });
+  }
+  // A form of this draft, made afresh.
+  void open_form(mux::ui::account_draft_t draft, const mux::protocol_t& speaks, bool editing) {
+    mux::ui::show(*s_->showing, std::optional(mux::ui::form_opened(std::move(draft), speaks, editing, ++form_round_)));
+  }
+  // What is beside the list, and what it reads: an account's page and its
+  // facts -- its connection, its form, made from what it keeps -- or the
+  // pane adding one and its blank form; narrow, the page up in place of the
+  // list where it is one chosen from the list.
+  void show_detail(mux::ui::panel_detail_t detail) {
+    spl::visit(spl::overloaded{
+                   [&](mux::ui::panel_detail::none) {
+                     mux::ui::show<mux::ui::account_page_facts>(*s_->showing, std::nullopt);
+                     mux::ui::show<mux::ui::account_form_facts>(*s_->showing, std::nullopt);
+                   },
+                   [&](const mux::ui::panel_detail::account& one) {
+                     const auto* found = k_->settings_of(one.address);
+                     if (found == nullptr)
+                       return;
+                     const mux::account_id by{mux::ui::protocol_of(one.address), one.address};
+                     auto facts = mux::ui::account_page_opened(*found, mux::ui::protocol_state_of(s_->ui, by), one.page, *s_->model);
+                     facts.proxies = k_->proxies();
+                     mux::ui::show(*s_->showing, std::optional(std::move(facts)));
+                     spl::visit(spl::overloaded{[&](mux::ui::account_page::connection) {
+                                                  this->open_form(mux::ui::draft_of_account(*found), by.speaks, true);
+                                                },
+                                                [&](const auto&) { mux::ui::show<mux::ui::account_form_facts>(*s_->showing, std::nullopt); }},
+                                one.page);
+                   },
+                   [&](mux::ui::panel_detail::adding) {
+                     mux::ui::show<mux::ui::account_page_facts>(*s_->showing, std::nullopt);
+                     auto adding = mux::ui::with_proxies(*s_->showing->look<mux::ui::add_account_shown>(), this->proxy_names());
+                     mux::ui::show(*s_->showing, adding);
+                     this->open_form(mux::ui::blank_draft(adding.speaks), adding.speaks, false);
+                   }},
+               detail);
+    const bool up = spl::visit(spl::overloaded{[](mux::ui::panel_detail::none) { return false; }, [](const auto&) { return true; }}, detail);
+    this->change_panel([&](mux::ui::panel_facts& now) {
+      now.detail = std::move(detail);
+      now.detail_up = up;
+      now.rows = mux::ui::account_rows(k_->accounts().values(), *s_->model, mux::ui::chosen_of(std::optional(now)));
+    });
+  }
+  // The page gone: back to the chats.
+  void close() {
+    pending_login_.reset();
+    mux::ui::show<mux::ui::panel_facts>(*s_->showing, std::nullopt);
+    mux::ui::show<mux::ui::account_page_facts>(*s_->showing, std::nullopt);
+    mux::ui::show<mux::ui::account_form_facts>(*s_->showing, std::nullopt);
+    s_->refresh_due = true;
   }
   // A new account waiting to log in: online, it is in; failed, it is said.
-  template <class Form>
-  [[nodiscard]] bool watch_login(Form& form) {
+  [[nodiscard]] bool watch_login() {
     if (!pending_login_)
       return false;
     const mux::account* found = s_->model->accounts().find(mux::account_id{mux::ui::protocol_of(*pending_login_), *pending_login_});
     if (found == nullptr)
       return false;
     return spl::visit(spl::overloaded{[&](const mux::connection::online&) {
-                                              pending_login_.reset();
-                                              return true;
-                                            },
-                                            [&](const mux::connection::failed& why) {
-                                              form.say(why.error.empty() ? "The server said no." : why.error, true);
-                                              pending_login_.reset();
-                                              return false;
-                                            },
-                                            [&](const auto&) {
-                                              form.say("Connecting\u2026", false);
-                                              return false;
-                                            }},
-                         found->state);
+                                        pending_login_.reset();
+                                        return true;
+                                      },
+                                      [&](const mux::connection::failed& why) {
+                                        this->say(why.error.empty() ? "The server said no." : why.error, true);
+                                        pending_login_.reset();
+                                        return false;
+                                      },
+                                      [&](const auto&) {
+                                        if (s_->showing->look<std::optional<mux::ui::account_form_facts>>()->value_or(mux::ui::account_form_facts{}).said.text !=
+                                            "Connecting…")
+                                          this->say("Connecting…", false);
+                                        return false;
+                                      }},
+                      found->state);
   }
-  // A new account: saved, and started; the page waits to hear how it went.
-  template <class Form>
-  void add(Form& form) {
-    auto typed = form.account();
-    if (!typed) {
-      form.say(typed.error(), true);
-      return;
-    }
-    mux::config::account_t account{.own = mux::config::kept_t{std::move(*typed)}};
-    mux::config::proxy_in(account) = std::exchange(new_proxy_, std::nullopt);
+  // A new account: saved, and started -- through the proxy chosen for it;
+  // the page waits to hear how it went.
+  void add(mux::config::account_t account) {
+    mux::config::proxy_in(account) = s_->showing->look<mux::ui::add_account_shown>()->proxy;
     const std::string address = mux::config::address_of(account);
     if (!k_->add_account(account)) {
-      form.say("That account is already here.", true);
+      this->say("That account is already here.", true);
       return;
     }
     if (auto failed = k_->write()) {
-      form.say(*failed, true);
+      this->say(*failed, true);
       return;
     }
     s_->net->add(account, k_->proxies());
     pending_login_ = address;
-    form.say("Connecting\u2026", false);
+    this->say("Connecting…", false);
   }
   // An account's settings changed: the old one stops, and the new one, on
   // or off as the old one was, takes its place in the list.
-  template <class Form>
-  void edit(Form& form) {
-    auto typed = form.account();
-    if (!typed) {
-      form.say(typed.error(), true);
-      return;
-    }
-    mux::config::account_t account{.own = mux::config::kept_t{std::move(*typed)}};
+  void edit(mux::config::account_t account) {
     const std::string address = mux::config::address_of(account);
-    const std::string was = form.editing.value_or(address);
+    const std::string was = this->chosen().value_or(address);
     const auto* old = k_->settings_of(was);
     if (old == nullptr)
       return;
     if (address != was && k_->settings_of(address) != nullptr) {
-      form.say("That account is already here.", true);
+      this->say("That account is already here.", true);
       return;
     }
     // What the form does not show is kept: every setting every account has
@@ -283,10 +354,10 @@ class accounts_part {
     // And what its protocol keeps through an edit (a Matrix session: the
     // device it has, not a new one at every Save).
     spl::visit([](auto& now, const auto& before) {
-                    using mux::proto::kept_defaults::carry_over;
-                    carry_over(now, before);
-                  },
-                  account.own, std::as_const(old->own));
+                 using mux::proto::kept_defaults::carry_over;
+                 carry_over(now, before);
+               },
+               account.own, std::as_const(old->own));
     // Nothing changed: saved as it is, and the connection left alone.
     const bool same = account == *old;
     k_->change_account(was, [&](mux::config::account_t& kept) { kept = account; });
@@ -296,22 +367,22 @@ class accounts_part {
       if (mux::config::enabled_of(account))
         s_->net->add(account, k_->proxies());
     }
-    // The form is made again from what was saved: `form` is gone after this.
-    this->show_accounts(mux::ui::panel_detail::account{address, failed ? *failed : std::string("Saved."), failed.has_value()});
+    // Its page made again from what was saved, saying how that went.
+    this->show_detail(mux::ui::panel_detail::account{address});
+    this->say(failed ? *failed : std::string("Saved."), failed.has_value());
   }
-  // Written, and what went wrong said on the accounts page.
+  // Written, and what went wrong said at the page's top.
   void save() {
     if (auto failed = k_->write())
-      if (auto* up = mux::ui::open_panel(s_->root()))
-        spl::visit([&](accounts& panel) { panel.say(*failed); }, *up);
+      this->change_panel([&](mux::ui::panel_facts& now) { now.note = *failed; });
   }
 
   services* s_;
   kept_settings* k_;
-  // The account being added that a login is waiting to hear about, and the
-  // proxy it is to go through.
+  // The account being added that a login is waiting to hear about.
   std::optional<std::string> pending_login_;
-  std::optional<std::string> new_proxy_;
+  // Each form made afresh, counted: what remakes it.
+  std::uint32_t form_round_ = 0;
 };
 
 }  // namespace mux::app

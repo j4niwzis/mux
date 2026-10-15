@@ -45,7 +45,7 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::flip_only_verified&) {
-    s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    s_->with_chosen_account([&](mux::config::account_t& account) {
       auto* kept = mux::config::only_verified_in(account);
       if (kept == nullptr)
         return;
@@ -63,54 +63,46 @@ class preferences_part {
   }
   // Its read mentions shared with its other sessions, or sealed there: the
   // one switched, kept, shown on its page, told to it running.
-  void flip_mentions(mux::config::account_t& account, std::optional<bool>& kept, accounts& panel) {
+  void flip_mentions(mux::config::account_t& account, std::optional<bool>& kept) {
     kept = !kept.value_or(false);
     const auto now = mux::config::mentions_choice_of(account);
     if (!now)
       return;
-    if (auto* page = panel.privacy())
-      page->show_mentions(*now);
     s_->net->set_mentions_sharing(kept_settings::id_of(account), now->shared, now->sealed);
     (void)k_->write();
   }
   void apply(const request::flip_account_mentions_shared&) {
-    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    s_->with_chosen_account([&](mux::config::account_t& account) {
       if (std::optional<bool>* kept = mux::config::mentions_shared_in(account))
-        this->flip_mentions(account, *kept, panel);
+        this->flip_mentions(account, *kept);
     });
   }
   void apply(const request::flip_account_mentions_sealed&) {
-    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    s_->with_chosen_account([&](mux::config::account_t& account) {
       if (std::optional<bool>* kept = mux::config::mentions_sealed_in(account))
-        this->flip_mentions(account, *kept, panel);
+        this->flip_mentions(account, *kept);
     });
   }
   void apply(const request::flip_account_receipts&) {
-    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    s_->with_chosen_account([&](mux::config::account_t& account) {
       auto& kept = mux::config::read_receipts_in(account);
       kept = !kept.value_or(true);
-      if (auto* page = panel.privacy())
-        page->show(*kept);
       (void)k_->write();
     });
   }
   // An account's colour chosen, and its strip on its chats in other lists:
   // kept, and the lists shown again.
   void apply(const request::set_account_colour& one) {
-    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    s_->with_chosen_account([&](mux::config::account_t& account) {
       mux::config::colour_in(account) = mux::config::said_of<mux::config::accent_said_t>(one.colour);
-      if (auto* page = panel.chats_page())
-        page->show_colour(mux::config::colour_of(account), mux::config::strip_of(account));
       (void)k_->write();
     });
     s_->refresh_due = true;
   }
   void apply(const request::flip_account_strip&) {
-    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    s_->with_chosen_account([&](mux::config::account_t& account) {
       auto& kept = mux::config::strip_in(account);
       kept = !kept.value_or(true);
-      if (auto* page = panel.chats_page())
-        page->show_colour(mux::config::colour_of(account), *kept);
       (void)k_->write();
     });
     s_->refresh_due = true;
@@ -186,7 +178,7 @@ class preferences_part {
                                        s_->looks.window.home_hides = k_->appearance().home_hides_spaced;
                                      },
                                      [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       s_->with_chosen_account([&](mux::config::account_t& account) {
                                          mux::config::home_hides_in(account) = one.on;
                                        });
                                      },
@@ -203,7 +195,7 @@ class preferences_part {
                                        s_->looks.window.home_direct = k_->appearance().home_hides_direct;
                                      },
                                      [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       s_->with_chosen_account([&](mux::config::account_t& account) {
                                          mux::config::home_direct_in(account) = one.on;
                                        });
                                      },
@@ -233,7 +225,7 @@ class preferences_part {
   // Room events, for the chosen account's chats: shown or not from now on,
   // whatever every account's is.
   void apply(const request::flip_account_room_events&) {
-    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    s_->with_chosen_account([&](mux::config::account_t& account) {
       auto& kept = mux::config::room_events_in(account);
       kept = !kept.value_or(k_->history().show_room_events);
 
@@ -254,7 +246,7 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::choose_account_proxy& one) {
-    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    s_->with_chosen_account([&](mux::config::account_t& account) {
       auto& kept = mux::config::proxy_in(account);
       if (one.index < 0 || static_cast<std::size_t>(one.index) >= k_->proxies().size())
         kept.reset();
@@ -262,7 +254,6 @@ class preferences_part {
         kept = k_->proxies()[static_cast<std::size_t>(one.index)].name;
       (void)k_->write();
       proxying_->reconnect(account);
-      panel.show_page(mux::ui::account_page::proxy{}, account, *s_->model, k_->proxies(), k_->appearance().theme);
     });
   }
 

@@ -194,31 +194,45 @@ auto make_content(std::type_identity<passphrase_box_t>, const Needs& needs, cons
 
 // ---- the account forms ---------------------------------------------------------
 
-// What an account form says at its end: what went wrong, or what is
-// happening.
-struct form_said {
-  std::string text;
-  bool error = false;
-  friend bool operator==(const form_said&, const form_said&) = default;
-};
-// What every account form ends with: what it says, as `said` makes it of
-// the part Want, and its buttons -- Log in (Save, where an account is being
-// edited) and, editing, Close. Enter in any of the form's fields submits it.
-template <class Want, class Said>
-auto form_end(const palette& colours, bool editing, Said said) {
+// A part of a model chosen among a few values, its words over the tabs:
+// pressed, the part set to the one picked.
+template <auto Member, class T>
+auto choice_field(const palette& colours, std::string label, std::vector<std::pair<std::string, T>> choices) {
   namespace c = skiff::compose;
-  using submit_button = button_for<sends<request::submit_login>>;
+  return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                   nodes::Text(std::move(label), 13.0f, colours.dim),
+                   c::bound<skiff::model::Field<Member>>(c::styled({.fillX = true}, widgets::ChoiceTabs<T>(std::move(choices)))));
+}
+// An account form's end: what it says, as the program says it, and Log in
+// (Save, editing an account) sending its draft -- and, editing, Close.
+template <class Draft>
+auto account_form_end(const palette& colours, bool editing) {
+  namespace c = skiff::compose;
+  using facts = std::optional<account_form_facts>;
   using close_button = button_for<sends<request::pop_panel>>;
   return c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::applied<Want>(std::move(said),
-                       [at = &colours](nodes::Text& message, const form_said& now) {
-                         message.setText(now.text);
-                         message.setColour(now.error ? at->error : at->dim);
-                       },
-                       c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.error)))),
+      c::applied<facts>([](const facts& now) { return now ? now->said : form_said{}; },
+                        [at = &colours](nodes::Text& message, const form_said& now) {
+                          message.setText(now.text);
+                          message.setColour(now.error ? at->error : at->dim);
+                        },
+                        c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.error)))),
       c::row(c::hbox(10.0f, {.autoSize = scene::axes::kBoth}),
-             c::styled({.width = 120.0f, .height = 36.0f}, primary(submit_button(colours.widgets, editing ? "Save" : "Log in", {}))),
+             c::asking_for<Draft>([](const Draft& now) { return request::submit_account{account_draft_t{now}}; },
+                                  c::styled({.width = 120.0f, .height = 36.0f},
+                                            primary(widgets::Button<scene::NoAction>(colours.widgets, editing ? "Save" : "Log in", {})))),
              c::visible(editing, c::styled({.width = 120.0f, .height = 36.0f}, close_button(colours.widgets, "Close", {})))));
+}
+// Enter in any of a form's fields: its draft sent, as Log in sends it.
+template <class Draft>
+struct enter_submits {
+  [[nodiscard]] std::optional<request::submit_account> operator()(const Draft& now, const scene::key::down& press) const {
+    return press.key == scene::keys::kEnter ? std::optional(request::submit_account{account_draft_t{now}}) : std::nullopt;
+  }
+};
+template <class Draft, class N>
+auto submitted_by_enter(N node) {
+  return skiff::compose::keys_for<Draft, scene::phase::bubble>([](const Draft& now) { return now; }, enter_submits<Draft>{}, std::move(node));
 }
 
 // Text typed into an optional: nothing when the field is empty.
@@ -236,135 +250,5 @@ auto closes_on_escape(N node) {
   return skiff::compose::onKey(scene::keys::kEscape, Back{}(), std::move(node));
 }
 
-// ---- the old ones -------------------------------------------------------------
-// As they were, for the nodes not rewritten yet; gone with the last of them.
-namespace legacy {
-// A locally edited checkbox, using the widget library's toggle input and
-// checkbox presentation. Its value is collected with the rest of the form.
-struct check_press { void operator()() const {} };
-struct check_box : widgets::internal::Toggle<check_press, widgets::internal::CheckboxLook> {
-  using Base = widgets::internal::Toggle<check_press, widgets::internal::CheckboxLook>;
-  std::string label, hint;
-  check_box(const palette& colours, bool checked, std::string name = {}, std::string description = {})
-      : Base(colours.widgets, {}), label(std::move(name)), hint(std::move(description)) { setOnNow(checked); }
-  bool onClick(float x, float y) {
-    if (!bounds().contains(x, y)) return false;
-    setOnNow(!on());
-    return Base::onClick(x, y);
-  }
-  scene::Semantics semantics() const {
-    auto out = Base::semantics();
-    out.fLabel = label; out.fHint = hint;
-    return out;
-  }
-};
-
-
-// ---- a form row: a caption and a field -----------------------------------
-
-struct field : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text caption;
-    widgets::TextArea<> box;
-  } parts;
-
-  // The colours its border turns as it has the focus.
-  const palette* colours_ = nullptr;
-  // Declared: the caption over the field, which sits on a plate.
-  field(const palette& colours, std::string label, std::string placeholder, std::string text = {})
-      : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        parts{.caption = nodes::Text(std::move(label), 13.0f, colours.dim),
-              .box = skiff::compose::styled({.fillX = true, .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .background = colours.tile,
-                                             .border = scene::Border{colours.band, 1.0f}},
-                                            one_line(widgets::TextArea<>(colours.widgets, std::move(placeholder)), std::move(text)))},
-        colours_(&colours) {}
-  // One line, holding what it starts with.
-  [[nodiscard]] static widgets::TextArea<> one_line(widgets::TextArea<> box, std::string text) {
-    box.setSingleLine(true);
-    box.setText(std::move(text));
-    return box;
-  }
-  // Its typing hidden, as a passphrase's.
-  [[nodiscard]] field masked() && {
-    parts.box.setMasked(true);
-    return std::move(*this);
-  }
-  // Its border in the accent while it has the focus.
-  bool lit = false;
-  void update(double) {
-    auto& box = parts.box;
-    if (box.focused() == lit)
-      return;
-    lit = box.focused();
-    box.apply({.border = scene::Border{lit ? colours_->accent : colours_->band, 1.0f}});
-  }
-  // What is typed in it.
-  [[nodiscard]] const std::string& text() const { return parts.box.text(); }
-  // Several lines, as a topic's: Enter starts a new one, up to `lines`
-  // shown before it scrolls.
-  void multi_line(int lines) {
-    parts.box.setSingleLine(false);
-    parts.box.setMaxLines(lines);
-    parts.box.apply({.padding = {6.0f, 10.0f, 6.0f, 10.0f}});
-  }
-};
-
-
-// Buttons side by side, as a form ends.
-template <class... Buttons>
-struct button_row : skiff::compose::Stacked {
-  struct parts_t {
-    std::tuple<Buttons...> buttons;
-  } parts;
-  explicit button_row(Buttons... all)
-      : Stacked(skiff::compose::hbox(10.0f, {.autoSize = scene::axes::kBoth})), parts{.buttons = std::tuple<Buttons...>(std::move(all)...)} {}
-};
-
-// What every account form ends with: what went wrong or what is happening,
-// and its buttons. Enter in any of the form's fields submits it.
-struct form_end : skiff::compose::Stacked {
-  using submit_button = button_for<sends<::mux::ui::request::submit_login>>;
-  using close_button = button_for<sends<::mux::ui::request::pop_panel>>;
-  // The colours it is made in, for what it says later.
-  const palette* colours_ = nullptr;
-  struct parts_t {
-    nodes::Text message;
-    button_row<submit_button, close_button> buttons;
-  } parts;
-
-  form_end(const palette& colours, bool editing)
-      : Stacked(skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        colours_(&colours),
-        parts{.message = skiff::compose::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.error))),
-              .buttons = button_row<submit_button, close_button>(
-                  skiff::compose::styled({.width = 120.0f, .height = 36.0f}, primary(submit_button(colours.widgets, editing ? "Save" : "Log in", {}))),
-                  skiff::compose::visible(editing, skiff::compose::styled({.width = 120.0f, .height = 36.0f},
-                                                                          close_button(colours.widgets, "Close", {}))))} {}
-
-  void say(std::string text, bool error) {
-    parts.message.setText(std::move(text));
-    parts.message.setColour(error ? colours_->error : colours_->dim);
-  }
-};
-
-
-// Esc leaves a panel: back to what is under it, or a step back within it
-// first, as Back says.
-template <class Back = sends<::mux::ui::request::pop_panel>>
-struct closes_on_escape : skiff::compose::Stacked {
-  // Esc: what Back answers.
-  using Answer = typename Back::Answer;
-  explicit closes_on_escape() : Stacked(skiff::compose::vbox(0.0f, {})) {}
-
-  using Node::onKey;
-  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
-    if (press.key != scene::keys::kEscape)
-      return std::nullopt;
-    reply.handle();
-    return Back{}();
-  }
-};
-
-}  // namespace legacy
 
 }  // namespace mux::ui

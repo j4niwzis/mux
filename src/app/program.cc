@@ -334,7 +334,6 @@ struct app : kept_settings {
   }
 #endif
 
-  using adding = mux::ui::add_account_pane;
   using accounts = mux::ui::accounts_panel;
 
   mailbox_type* box = nullptr;
@@ -547,7 +546,6 @@ struct app : kept_settings {
   void apply(const request::resize_info& one);
   // ← on the accounts page: from an account's pages to the list, from the
   // list to the chats.
-  void apply(const request::accounts_back&);
   void apply(const request::open_replacement&);
   // A limit halved or doubled, within its bounds: kept, and in force at once.
   // What is kept on disk, gone: the stored messages and the pictures, and

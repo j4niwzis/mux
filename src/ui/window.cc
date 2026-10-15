@@ -259,6 +259,10 @@ struct shown_root {
   skiff::model::Tracked<std::optional<room_settings_facts>> manage;
   // The chosen account's page, as the program shows it: what its pages read.
   skiff::model::Tracked<std::optional<account_page_facts>> account_page;
+  // An account's form, as the program says: what it is made from, and says.
+  skiff::model::Tracked<std::optional<account_form_facts>> account_form;
+  // The pane adding an account: its protocol, the proxies, the one chosen.
+  skiff::model::Tracked<add_account_shown> adding;
   skiff::model::Tracked<std::optional<send_facts>> sending;
   skiff::model::Tracked<std::optional<verification_view>> verifying;
   skiff::model::Tracked<std::optional<passphrase_facts>> passphrase;
@@ -430,8 +434,8 @@ struct shown_drawer : widgets::Drawer<Base, Content, widgets::dismiss::pressed> 
 };
 
 // The pages over the chats -- the accounts panel -- up while what is shown
-// holds its facts, and gone where they are not; what is beside its list
-// left due for the program to show as it brings the panel up to date.
+// holds its facts, and gone where they are not: slid in, made as the panel's
+// function makes it; what it shows it reads from the facts itself.
 template <class Frame, class Panel, class Needs>
 struct shown_frame : Frame {
   const Needs* needs = nullptr;
@@ -443,14 +447,8 @@ struct shown_frame : Frame {
         this->close();
       return;
     }
-    Panel* panel = this->shown() ? this->shown()->visit(spl::overloaded{[](Panel& one) -> Panel* { return &one; }, [](auto&) -> Panel* { return nullptr; }})
-                                 : nullptr;
-    if (panel == nullptr) {
-      panel = &spl::get<Panel>(this->open(std::in_place_type<Panel>, *needs));
-      if (now->note)
-        panel->say(*now->note);
-    }
-    panel->detail_due = now->detail;
+    if (!this->shown())
+      this->open(std::in_place_type<Panel>, accounts_view(*needs));
   }
 };
 

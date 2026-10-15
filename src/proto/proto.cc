@@ -91,6 +91,14 @@ struct account_page_list {};
 template <class... Parts>
 struct account_part_list {};
 struct no_account_part {};
+// What a protocol keeps while an account's form is up, beside the draft the
+// form holds -- XMPP's: what the server asked to register, and the answers
+// as form_parts(state) lists its types: the form holds one, or none.
+template <class... Parts>
+struct form_part_list {};
+struct no_form_part {
+  friend bool operator==(const no_form_part&, const no_form_part&) = default;
+};
 // What a protocol's own UI asks of the program, beside what every
 // protocol's does: its request types, as requests_of(state) lists them --
 // the program's requests made of them all, each done by its overload of
@@ -222,6 +230,8 @@ inline std::string unheard_presence(const auto&) { return {}; }
 constexpr account_page_list<> account_pages(const auto&) { return {}; }
 // Nothing kept of an account while its pages are open.
 constexpr account_part_list<> account_parts(const auto&) { return {}; }
+// Nothing kept beside an account form's draft.
+constexpr form_part_list<> form_parts(const auto&) { return {}; }
 // No requests of its own.
 constexpr request_list<> requests_of(const auto&) { return {}; }
 // No dialogs of its own.
@@ -607,6 +617,12 @@ template <class State>
 constexpr auto account_parts_of(const State& state) {
   using defaults::account_parts;
   return account_parts(state);
+}
+// And what it keeps beside an account form's draft.
+template <class State>
+constexpr auto form_parts_of(const State& state) {
+  using defaults::form_parts;
+  return form_parts(state);
 }
 
 inline constexpr struct direct_contact_t {

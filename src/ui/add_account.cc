@@ -72,18 +72,14 @@ inline auto proxy_row(const palette& colours, const proxy_choice& now) {
 }
 using proxy_row_t = decltype(proxy_row(std::declval<const palette&>(), proxy_choice{}));
 
-// What its protocol says of adding one: under the switch.
-[[nodiscard]] inline std::string adding_note(const protocol_t& speaks) {
-  return spl::visit([](auto tag) { return std::string(form_of_t<decltype(tag)>::note); }, speaks);
-}
-
 // The protocol's form, in a box of its own -- the form is one of the
-// protocols' (a variant), the box what comes in as it is made.
-inline auto adding_form(const ui_needs& n, const protocol_t& speaks) {
+// protocols' (a variant), the box what comes in, made again as the
+// protocol changes; the form itself as the program's facts say.
+inline auto adding_form(const ui_needs& n) {
   namespace c = skiff::compose;
-  return c::appearing(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), account_form_view(n, speaks)), 0.0f);
+  return c::appearing(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), account_form_view(n)), 0.0f);
 }
-using adding_form_t = decltype(adding_form(std::declval<const ui_needs&>(), protocol_t{}));
+using adding_form_t = decltype(adding_form(std::declval<const ui_needs&>()));
 
 // Adding an account, beside the list of them: the switch, what its protocol
 // says, the proxy row, and that protocol's form under them -- made anew
@@ -103,7 +99,7 @@ inline auto add_account_view(const ui_needs& n) {
               [at = &colours](const proxy_choice& now) { return std::tuple{proxy_row(*at, now)}; },
               {.fillX = true, .autoSize = scene::axes::kY})),
       c::projected<add_account_shown>([](const add_account_shown& now) { return now.speaks; },
-          c::mount<adding_form_t, protocol_t>([at = &n](const protocol_t& speaks) { return std::tuple{adding_form(*at, speaks)}; },
+          c::mount<adding_form_t, protocol_t>([at = &n](const protocol_t&) { return std::tuple{adding_form(*at)}; },
                                               {.fillX = true, .grow = scene::axes::kY})));
 }
 using add_account_view_t = decltype(add_account_view(std::declval<const ui_needs&>()));

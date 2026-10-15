@@ -127,6 +127,60 @@ struct protocol_account_parts<protocol_list<Tags...>> {
                                typename account_part_types<decltype(proto::account_parts_of(::mux::state_of<Tags>{}))>::type...>::type;
 };
 using account_part_t = typename variant_of_types<typename protocol_account_parts<protocols>::type>::type;
+
+// An account form's draft: what its fields hold as typed, each protocol's
+// own (draft_of(kept), account_from(draft) in its kept module) -- the form
+// keeps it as it is typed; the program turns it into settings.
+template <class Tag>
+using draft_of_t = decltype(draft_of(std::declval<const config::kept_of<Tag>&>()));
+template <class>
+struct protocol_drafts;
+template <class... Tags>
+struct protocol_drafts<protocol_list<Tags...>> {
+  using type = spl::variant<draft_of_t<Tags>...>;
+};
+using account_draft_t = typename protocol_drafts<protocols>::type;
+// What a protocol keeps beside the draft, as its form_parts(state) lists.
+template <class List>
+struct form_part_types;
+template <class... Parts>
+struct form_part_types<proto::form_part_list<Parts...>> {
+  using type = type_list<Parts...>;
+};
+template <class>
+struct protocol_form_parts;
+template <class... Tags>
+struct protocol_form_parts<protocol_list<Tags...>> {
+  using type = typename joined<type_list<proto::no_form_part>,
+                               typename form_part_types<decltype(proto::form_parts_of(::mux::state_of<Tags>{}))>::type...>::type;
+};
+using form_part_t = typename variant_of_types<typename protocol_form_parts<protocols>::type>::type;
+// What an account form ends with saying: what went wrong, or what is
+// happening.
+struct form_said {
+  std::string text;
+  bool error = false;
+  friend bool operator==(const form_said&, const form_said&) = default;
+};
+// An account form, as the program shows it: the draft it is made from --
+// an account's own, or a protocol's blank one -- made again where the round
+// moves; whether it edits an account kept; what it says; and what its
+// protocol keeps beside it.
+struct account_form_facts {
+  account_draft_t seed;
+  bool editing = false;
+  std::uint32_t round = 0;
+  form_said said;
+  form_part_t part;
+  // Changed whole, as one part.
+  using ModelOpaque = void;
+};
+namespace request {
+// The form sent: its draft as typed, for the program to make settings of.
+struct submit_account {
+  account_draft_t draft;
+};
+}  // namespace request
 namespace request {
 struct apply_style {};
 struct configure_theme { config::theme_t theme; std::optional<config::custom_theme> custom; };
@@ -171,9 +225,6 @@ struct save_profile { account_id by; profile_edit edit; };
 struct save_presence { account_id by; mux::presence now; };
 struct pick_profile_banner { account_id by; };
 struct remove_profile_banner { account_id by; };
-struct toggle_advanced {};
-struct toggle_plain {};
-struct submit_login {};
 struct flip_enabled {
   std::string address;
 };

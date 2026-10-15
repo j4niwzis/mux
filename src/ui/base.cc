@@ -400,9 +400,6 @@ void look_as_its_content(const Node&, const palette&) {}
 //   void open_new_account()
 //   void add_account_of(protocol_t)  -- a protocol's form, when adding
 //   void select_account(std::string address)
-//   void toggle_advanced()
-//   void toggle_plain()
-//   void submit_login()
 //   void flip_enabled(std::string address)
 //   void remove_account(std::string address)
 //   void open_drawer()

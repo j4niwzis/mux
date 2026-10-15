@@ -26,121 +26,124 @@ import :info;
 
 export namespace mux::ui {
 
-// ---- the accounts -------------------------------------------------------------------
+// ---- what the panel shows, as the program says ----------------------------------------
 
-// What the model says of a saved account, in a few words, and whether that
-// is a failure.
-[[nodiscard]] inline std::pair<std::string, bool> state_of(const config::account_t& one, const model& now) {
-  const std::string& address = config::address_of(one);
-  if (!config::enabled_of(one))
-    return {"off", false};
-  const account* found = now.accounts().find(account_id{protocol_of(address), address});
-  if (found == nullptr)
-    return {"offline", false};
+// One saved account in the list: its address, its protocol and how it is --
+// failed, said in the error's colour -- and whether it is the one chosen.
+struct account_row {
+  std::string address;
+  std::string line;
   bool failed = false;
-  std::string said = spl::visit(spl::overloaded{[](const connection::offline&) { return std::string("offline"); },
-                                           [](const connection::connecting&) { return std::string("connecting…"); },
-                                           [](const connection::online&) { return std::string("online"); },
-                                           [&failed](const connection::failed& why) {
-                                             failed = true;
-                                             return "failed: " + why.error;
-                                           }},
-                                found->state);
-  return {std::move(said), failed};
+  bool chosen = false;
+  friend bool operator==(const account_row&, const account_row&) = default;
+};
+// The saved accounts as the list shows them, the one chosen marked.
+template <std::ranges::input_range Saved>
+[[nodiscard]] std::vector<account_row> account_rows(const Saved& saved, const model& now, const std::optional<std::string>& chosen) {
+  return saved | std::views::transform([&](const config::account_t& one) {
+           const auto [how, failed] = state_of(one, now);
+           const std::string& address = config::address_of(one);
+           return account_row{address, std::format("{} · {}", config::protocol_name(one), how), failed, chosen == address};
+         }) |
+         std::ranges::to<std::vector>();
+}
+// What the accounts panel shows beside its list: nothing chosen, an
+// account's page, or an account being added (its pane reads
+// add_account_shown).
+namespace panel_detail {
+struct none {
+  friend bool operator==(none, none) = default;
+};
+struct account {
+  std::string address;
+  account_page_t page = account_page::connection{};
+};
+struct adding {
+  friend bool operator==(adding, adding) = default;
+};
+}  // namespace panel_detail
+using panel_detail_t = spl::variant<panel_detail::none, panel_detail::account, panel_detail::adding>;
+// The accounts panel open, as the program says: what is beside its list;
+// the accounts; a word said at its top, where there is one; and, narrow --
+// a phone's -- whether the page is up in place of the list.
+struct panel_facts {
+  panel_detail_t detail = panel_detail::none{};
+  std::optional<std::string> note;
+  std::vector<account_row> rows;
+  bool narrow = false;
+  bool detail_up = false;
+  // The theme its colours are shown in.
+  config::theme_t theme;
+  // Changed whole, as one part.
+  using ModelOpaque = void;
+};
+using panel_read = std::optional<panel_facts>;
+using page_read = std::optional<account_page_facts>;
+// The account chosen, where one is.
+[[nodiscard]] inline std::optional<std::string> chosen_of(const panel_read& now) {
+  if (!now)
+    return std::nullopt;
+  return spl::visit(spl::overloaded{[](const panel_detail::account& one) { return std::optional(one.address); },
+                                    [](const auto&) { return std::optional<std::string>(); }},
+                    now->detail);
+}
+[[nodiscard]] inline bool adding_now(const panel_read& now) {
+  return now && spl::visit(spl::overloaded{[](panel_detail::adding) { return true; }, [](const auto&) { return false; }}, now->detail);
 }
 
-// One account in the list: its address, protocol and state. A click shows
-// its settings beside the list.
-struct account_entry : skiff::compose::Stacked {
-  // What its handlers ask for, returned.
-  using Answer = ::mux::ui::request::select_account;
-  std::string address;
-  bool selected = false;
-  struct parts_t {
-    nodes::Text name;
-    nodes::Text state;
-  } parts;
+// Which page is beside the list, as a number: another where the page is
+// made anew -- for what binds the pages to the settings to bind them again.
+[[nodiscard]] inline std::uint64_t detail_identity(const panel_read& now) {
+  if (!now)
+    return 0;
+  return spl::visit(spl::overloaded{[](const panel_detail::account& one) {
+                                      return std::hash<std::string>{}(one.address) ^ (static_cast<std::uint64_t>(one.page.index()) << 48);
+                                    },
+                                    [&](const auto&) { return static_cast<std::uint64_t>(now->detail.index()) << 56; }},
+                    now->detail);
+}
 
-  // Declared: its address over its protocol and state, on a plate lit
-  // while it is the one chosen.
-  account_entry(const ui_needs& n, const config::account_t& saved, const model& now, bool is_selected)
-      : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {7.0f, 16.0f, 7.0f, 16.0f},
-                                            .background = n.colours->sidebar, .selectedBackground = n.colours->chosen, .selected = is_selected})),
-        address(config::address_of(saved)),
-        selected(is_selected),
-        parts{.name = skiff::compose::styled({.fillX = true}, elided(nodes::Text(address, 15.0f, n.colours->text, true))),
-              .state = skiff::compose::styled({.fillX = true}, elided(state_line(*n.colours, saved, now)))} {}
-  // Its protocol and how it is: in the error colour where it failed.
-  [[nodiscard]] static nodes::Text state_line(const palette& colours, const config::account_t& saved, const model& now) {
-    const auto [how, failed] = state_of(saved, now);
-    return nodes::Text(std::format("{} · {}", config::protocol_name(saved), how), 13.0f, failed ? colours.error : colours.dim);
-  }
+// ---- the list down the side ---------------------------------------------------------
 
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  std::optional<Answer> onClick(float, float) {
-    return ::mux::ui::request::select_account{address};
-  }
-  [[nodiscard]] scene::Semantics semantics() const {
-    scene::Semantics out;
-    out.fRole = scene::semantic_role::list_item{};
-    out.fLabel = address;
-    out.fSelected = selected;
-    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
-    return out;
-  }
-};
+// One account in the list: its address over its protocol and state, on a
+// plate lit while it is the one chosen; pressed, its pages.
+inline auto account_row_view(const palette& colours, const account_row& one) {
+  namespace c = skiff::compose;
+  return c::said(scene::SemanticRole{scene::semantic_role::list_item{}}, one.chosen,
+      c::onPress(sends<request::select_account>{{one.address}}, c::column(
+          c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {7.0f, 16.0f, 7.0f, 16.0f},
+                         .background = colours.sidebar, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen,
+                         .focusBackground = colours.chosen, .selected = one.chosen}),
+          c::styled({.fillX = true}, elided(nodes::Text(one.address, 15.0f, colours.text, true))),
+          c::styled({.fillX = true}, elided(nodes::Text(one.line, 13.0f, one.failed ? colours.error : colours.dim)))),
+          one.address));
+}
+inline auto account_list(const palette& colours, const std::vector<account_row>& rows) {
+  namespace c = skiff::compose;
+  return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                 rows | std::views::transform([&](const account_row& one) { return account_row_view(colours, one); }) |
+                     std::ranges::to<std::vector>());
+}
+using account_list_t = decltype(account_list(std::declval<const palette&>(), {}));
+// The side with no account chosen: Add account, lit while one is being
+// added, and the accounts under it.
+inline auto accounts_side(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(0.0f, {.fill = true}),
+      c::spec_for<panel_read>([](const panel_read& now) { return scene::Spec{.selected = adding_now(now)}; },
+          c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .selectedBackground = colours.chosen}),
+                    row_item(colours, "Add account", sends<request::open_new_account>{}, icon::plus{}))),
+      c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(c::column(
+          c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::projected<panel_read>([](const panel_read& now) { return now ? std::optional(now->rows) : std::nullopt; },
+              c::mount<account_list_t, std::vector<account_row>>(
+                  [at = &colours](const std::vector<account_row>& rows) { return std::tuple{account_list(*at, rows)}; },
+                  {.fillX = true, .autoSize = scene::axes::kY}))))));
+}
+using accounts_side_t = decltype(accounts_side(std::declval<const palette&>()));
 
-// The chosen account: on or off, removed, and its own protocol's form.
-struct account_editor : skiff::compose::Stacked {
-  // Its address, then on or off and Remove, in a line.
-  struct head_row : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text heading;
-      nodes::Text enabled_label;
-      widgets::Toggle<flip_account> enabled;
-      widgets::Button<remove_account> remove;
-    } parts;
-    head_row(const palette& colours, const config::account_t& saved)
-        : Stacked(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.heading = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                                                  elided(nodes::Text(config::address_of(saved), 20.0f, colours.text, true))),
-                .enabled_label = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("On", 13.0f, colours.dim)),
-                .enabled = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                                  on_now(widgets::Toggle<flip_account>(colours.widgets, flip_account{config::address_of(saved)}),
-                                                         config::enabled_of(saved))),
-                .remove = skiff::compose::styled({.width = 100.0f, .height = 32.0f},
-                                                 widgets::Button<remove_account>(colours.widgets, "Remove",
-                                                                                          remove_account{config::address_of(saved)}))} {}
-  };
-  // The colours its state is said in as it changes.
-  const palette* colours_ = nullptr;
-  struct parts_t {
-    head_row head;
-    nodes::Text state;
-    account_form form;
-  } parts;
+// ---- an account's pages, down the side --------------------------------------------
 
-  account_editor(const ui_needs& n, const config::account_t& saved)
-      : Stacked(skiff::compose::vbox(6.0f, {.fill = true})),
-        colours_(n.colours),
-        parts{.head = head_row(*n.colours, saved),
-              .state = skiff::compose::styled({.fillX = true, .margin = {0.0f, 0.0f, 14.0f, 0.0f}}, elided(nodes::Text("", 13.0f, n.colours->dim))),
-              .form = form_of(*n.colours, saved)} {}
-
-  // What the model says of it now, kept current without touching the form.
-  void show(const config::account_t& saved, const model& now) {
-    const auto [how, failed] = state_of(saved, now);
-    parts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
-    parts.state.setColour(failed ? colours_->error : colours_->dim);
-    parts.head.parts.enabled.setOn(config::enabled_of(saved));
-  }
-
-  void say(std::string text, bool error) {
-    spl::visit([&](auto& one) { one.say(std::move(text), error); }, parts.form);
-  }
-};
-
-// A line with a switch on its right: its text, and the switch.
 struct account_page_link {
   std::string title;
   account_page_t page;
@@ -157,8 +160,9 @@ inline auto account_page_row(const palette& colours, account_page_link link, con
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
           elided(nodes::Text(std::move(link.title), 15.0f, colours.text)))));
 }
-// Protocol UI overloads arrive after mux.ui is imported; resolve them when
-// the program instantiates the factory, as for the protocol page nodes.
+// The client's pages, then its protocol's own, then Proxy: the one up lit.
+// Protocol UI overloads arrive after mux.ui is imported; resolved where the
+// program instantiates it.
 template <class State>
 inline auto account_pages_view(const palette& colours, const State& state, const account_page_t& selected) {
   namespace c = skiff::compose;
@@ -182,9 +186,66 @@ inline auto account_pages_view(const palette& colours, const State& state, const
 }
 using account_pages = decltype(account_pages_view(std::declval<const palette&>(), std::declval<const protocol_state_t&>(),
     std::declval<const account_page_t&>()));
+// Which page is up, of which protocol's state: the links made again where
+// either moves.
+struct pages_key {
+  protocol_state_t state;
+  account_page_t page;
+  friend bool operator==(const pages_key& a, const pages_key& b) {
+    return a.state.index() == b.state.index() && a.page.index() == b.page.index();
+  }
+};
+inline auto pages_side(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::projected<page_read>([](const page_read& now) { return now ? std::optional(pages_key{now->state, now->page}) : std::nullopt; },
+      c::mount<account_pages, pages_key>([at = &colours](const pages_key& now) { return std::tuple{account_pages_view(*at, now.state, now.page)}; },
+                                         {.fillX = true, .autoSize = scene::axes::kY}));
+}
+using pages_side_t = decltype(pages_side(std::declval<const palette&>()));
 
-// A protocol supplies its presence choices and whether it publishes banners.
-// The editor reads common model data and sends common requests.
+// ---- the client's pages of an account -------------------------------------------------
+
+// A switch row of an account's: its words, on as the account kept says, a
+// press asking `Flip`; dimmed and still where `allowed` says not.
+template <class Flip, class On, class Allowed>
+auto account_switch(const palette& colours, std::string text, On on, Allowed allowed) {
+  namespace c = skiff::compose;
+  using toggle_t = toggle_for<Flip>;
+  return c::spec_for<page_read>([allowed](const page_read& now) {
+    const bool may = now && allowed(now->account);
+    return scene::Spec{.alpha = may ? 1.0f : 0.4f, .disabled = !may};
+  }, c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+            c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(text, 15.0f, colours.text))),
+            c::applied<page_read>([on](const page_read& now) { return now && on(now->account); },
+                                  [](toggle_t& toggle, bool now) { toggle.setOn(now); },
+                                  c::named(text, {}, c::styled({.alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, Flip{}))))));
+}
+inline constexpr auto always = [](const config::account_t&) { return true; };
+
+// The connection: its address, on or off and Remove; how it is now; and
+// its protocol's form.
+inline auto account_editor_view(const ui_needs& n, const std::string& address) {
+  namespace c = skiff::compose;
+  const palette& colours = *n.colours;
+  using toggle_t = widgets::Toggle<flip_account>;
+  return c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(address, 20.0f, colours.text, true))),
+             c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("On", 13.0f, colours.dim)),
+             c::applied<page_read>([](const page_read& now) { return now && config::enabled_of(now->account); },
+                                   [](toggle_t& toggle, bool on) { toggle.setOn(on); },
+                                   c::styled({.alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, flip_account{address}))),
+             c::styled({.width = 100.0f, .height = 32.0f}, widgets::Button<remove_account>(colours.widgets, "Remove", remove_account{address}))),
+      c::applied<page_read>([](const page_read& now) { return now ? form_said{now->how, now->failed} : form_said{}; },
+                            [at = &colours](nodes::Text& line, const form_said& now) {
+                              line.setText(now.text);
+                              line.setColour(now.error ? at->error : at->dim);
+                            },
+                            c::styled({.fillX = true, .margin = {0.0f, 0.0f, 14.0f, 0.0f}}, elided(nodes::Text("", 13.0f, colours.dim)))),
+      account_form_view(n));
+}
+
+// Its typing, as every account's until chosen here.
 inline auto account_typing_view(const palette& colours, std::string address) {
   return skiff::compose::scoped<config::account_t>(
       skiff::compose::handlers(),
@@ -192,6 +253,57 @@ inline auto account_typing_view(const palette& colours, std::string address) {
           show_hide_field<typing_setting, std::optional<bool>, skiff::model::Field<&config::account_shared::send_typing>>(colours, choice_level::account{})),
       std::move(address));
 }
+// Privacy: whether it sends read receipts, and tells others one is typing;
+// and, where its protocol can (Matrix's), the mentions read shared with its
+// other sessions -- sealed there, where they are shared.
+inline auto account_privacy_view(const palette& colours, const std::string& address) {
+  namespace c = skiff::compose;
+  const auto mentions = [](const page_read& now) { return now && config::mentions_choice_of(now->account).has_value(); };
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      section_title(colours, "PRIVACY"),
+      account_switch<sends<request::flip_account_receipts>>(colours, "Send read receipts",
+          [](const config::account_t& one) { return config::read_receipts_of(one); }, always),
+      account_typing_view(colours, address),
+      c::styled({.fillX = true}, wrapped(note_text(colours, "Off, the people you talk to through this account are not told when you have "
+                                                            "read their messages, or that you are typing. Theirs are still shown, and "
+                                                            "receipts are still kept here."))),
+      c::shown_for<page_read>(mentions, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          account_switch<sends<request::flip_account_mentions_shared>>(colours, "Sync read mentions between sessions",
+              [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).shared; }, always),
+          account_switch<sends<request::flip_account_mentions_sealed>>(colours, "Encrypt them (with the recovery key)",
+              [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).sealed; },
+              [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).shared; }),
+          c::styled({.fillX = true}, wrapped(note_text(colours, "Which mentions you have read, kept with your account on its server, so "
+                                                                "your other sessions take them as read too. Encrypted, the server cannot "
+                                                                "read them; a session gets the key when it is restored with the recovery key."))))));
+}
+
+// Notifications: whether what comes through it is told -- a message, an
+// invite -- and with sound; each chat of it may choose again.
+inline auto account_notify_view(const palette& colours, std::string address) {
+  using shared = config::account_shared;
+  using skiff::compose::bound;
+  const choice_level_t level = choice_level::account{};
+  return skiff::compose::scoped<config::account_t>(
+      skiff::compose::handlers(),
+      skiff::compose::column(
+          skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          bound<skiff::model::Field<&shared::notify>>(show_hide_field<notify_on_setting, std::optional<bool>, skiff::model::Field<&shared::notify>>(colours, level)),
+          bound<skiff::model::Field<&shared::notify_mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>, skiff::model::Field<&shared::notify_mentions>>(colours, level)),
+          bound<skiff::model::Field<&shared::notify_sound>>(show_hide_field<notify_sound_setting, std::optional<bool>, skiff::model::Field<&shared::notify_sound>>(colours, level))),
+      std::move(address));
+}
+inline auto account_notifications_view(const palette& colours, const std::string& address) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      section_title(colours, "NOTIFICATIONS"),
+      account_notify_view(colours, address),
+      c::styled({.fillX = true, .margin = {10.0f, 0.0f, 0.0f, 0.0f}},
+                wrapped(note_text(colours, "For messages and invites that come through this account; Default is as the Notifications settings "
+                                           "say. A space, and a chat, can choose again in its own settings."))));
+}
+
+// Its chats' own choices, bound to the account's in the model.
 inline auto account_chats_view(const palette& colours, std::string address) {
   using shared = config::account_shared;
   using skiff::compose::bound;
@@ -209,80 +321,53 @@ inline auto account_chats_view(const palette& colours, std::string address) {
           bound<skiff::model::Field<&shared::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&shared::jump_search>>(colours, level))),
       std::move(address));
 }
-
-struct account_privacy : skiff::compose::Stacked {
-  using receipts_row = legacy::switch_row<sends<::mux::ui::request::flip_account_receipts>>;
-  using mentions_shared_row = legacy::switch_row<sends<::mux::ui::request::flip_account_mentions_shared>>;
-  using mentions_sealed_row = legacy::switch_row<sends<::mux::ui::request::flip_account_mentions_sealed>>;
-  struct parts_t {
-    nodes::Text title;
-    receipts_row receipts;
-    decltype(account_typing_view(std::declval<const palette&>(), std::string())) settings;
-    nodes::Text note;
-    // The mentions read, shared with the account's other sessions; sealed
-    // there -- where its protocol can (Matrix's).
-    mentions_shared_row mentions_shared;
-    mentions_sealed_row mentions_sealed;
-    nodes::Text mentions_note;
-  } parts;
-
-  template <class... Rest>
-  account_privacy(const ui_needs& n, Rest&&... rest) : account_privacy(*n.colours, std::forward<Rest>(rest)...) {}
-  account_privacy(
-      const palette &colours, bool receipts_on, std::string address,
-      std::optional<bool> events_all = std::nullopt,
-      const std::optional<config::room_event_kinds> &kinds = std::nullopt,
-      bool notify_on = true, bool notify_sound_on = true,
-      std::optional<bool> faces_on = std::nullopt,
-      std::optional<std::int64_t> jump_most = std::nullopt,
-      std::optional<bool> previews_on = std::nullopt,
-      std::optional<config::mentions_choice> mentions = std::nullopt)
-      : Stacked(skiff::compose::vbox(8.0f, {.fill = true})),
-        parts{.title = section_title(colours, "PRIVACY"),
-              .receipts = receipts_row(colours, "Send read receipts", {}),
-              .settings = account_typing_view(colours, std::move(address)),
-              .note = wrapped(skiff::compose::styled(
-                  {.fillX = true},
-                  note_text(colours, "Off, the people you talk to through this "
-                                     "account are not told when you have read "
-                                     "their messages, or that you are typing. "
-                                     "Theirs are still shown, and receipts are "
-                                     "still kept here."))),
-              .mentions_shared = mentions_shared_row(
-                  colours, "Sync read mentions between sessions", {}),
-              .mentions_sealed = mentions_sealed_row(
-                  colours, "Encrypt them (with the recovery key)", {}),
-              .mentions_note = wrapped(skiff::compose::styled(
-                  {.fillX = true},
-                  note_text(colours, "Which mentions you have read, kept with "
-                                     "your account on its server, so "
-                                     "your other sessions take them as read "
-                                     "too. Encrypted, the server cannot "
-                                     "read them; a session gets the key when "
-                                     "it is restored with the "
-                                     "recovery key.")))} {
-    (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on, (void)notify_on, (void)notify_sound_on;
-
-    parts.receipts.parts.toggle.setOnNow(receipts_on);
-
-    for (scene::Node* one : std::initializer_list<scene::Node*>{&parts.mentions_shared, &parts.mentions_sealed, &parts.mentions_note})
-      one->setVisible(mentions.has_value());
-    if (mentions) {
-      parts.mentions_shared.parts.toggle.setOnNow(mentions->shared);
-      parts.mentions_sealed.parts.toggle.setOnNow(mentions->sealed);
-      this->show_sealable(mentions->shared);
-    }
-  }
-  void show(bool receipts_on) { parts.receipts.parts.toggle.setOn(receipts_on); }
-  void show_mentions(config::mentions_choice now) {
-    parts.mentions_shared.parts.toggle.setOn(now.shared);
-    parts.mentions_sealed.parts.toggle.setOn(now.sealed);
-    this->show_sealable(now.shared);
-  }
-  // Sealing says something only while they are shared.
-  void show_sealable(bool shared) { parts.mentions_sealed.apply({.alpha = shared ? 1.0f : 0.4f, .disabled = !shared}); }
-  void say(std::string, bool) {}
+// Its colour chosen.
+struct set_colour {
+  using Answer = std::optional<request::set_account_colour>;
+  std::optional<request::set_account_colour> operator()(const config::accent_t& one) { return request::set_account_colour{one}; }
 };
+// Home without what its spaces hold -- but direct messages -- or as every
+// account's.
+struct pick_home {
+  using Answer = std::tuple<request::set_home_hides, request::set_home_direct>;
+  Answer operator()(std::size_t index) const {
+    const auto said = [&](bool on) { return index == 0 ? std::nullopt : std::optional<bool>(on); };
+    return {request::set_home_hides{choice_level::account{}, said(index >= 2)}, request::set_home_direct{choice_level::account{}, said(index == 3)}};
+  }
+};
+[[nodiscard]] inline std::size_t home_way(const config::account_t& one) {
+  const auto hides = config::home_hides_of(one);
+  return !hides ? 0 : !*hides ? 1 : config::home_direct_of(one).value_or(false) ? 3 : 2;
+}
+inline auto home_choice(const palette& colours, std::size_t way) {
+  return make_choice_menu(colours, "Home", {"As above", "Every chat", "Without chats spaces hold", "Without those and direct messages"},
+                          way, pick_home{});
+}
+using home_choice_t = decltype(home_choice(std::declval<const palette&>(), 0));
+// Chats: its colour -- the strip on its chats in other lists, unless they
+// chose another -- how its chats are, their looks, and its spaces in the
+// bars. Each as every account's, until chosen here.
+inline auto account_chats_page(const ui_needs& n, const std::string& address, const config::theme_t& theme) {
+  namespace c = skiff::compose;
+  const palette& colours = *n.colours;
+  const auto spaced = [](nodes::Text title) { return c::styled({.margin = {10.0f, 0.0f, 0.0f, 0.0f}}, std::move(title)); };
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      section_title(colours, "COLOUR"),
+      accent_circles_for<page_read>(set_colour{}, theme, false, [](const page_read& now) {
+        return now ? config::colour_of(now->account) : config::accent_t{};
+      }),
+      account_switch<sends<request::flip_account_strip>>(colours, "A strip on its chats in other lists",
+          [](const config::account_t& one) { return config::strip_of(one); }, always),
+      spaced(section_title(colours, "CHATS")),
+      account_chats_view(colours, address),
+      spaced(section_title(colours, "LOOKS")),
+      look_choices(colours, choice_level::account{}),
+      spaced(section_title(colours, "SPACES")),
+      c::projected<page_read>([](const page_read& now) { return now ? std::optional(home_way(now->account)) : std::nullopt; },
+          c::mount<home_choice_t, std::size_t>([at = &colours](std::size_t way) { return std::tuple{home_choice(*at, way)}; },
+                                               {.fillX = true, .autoSize = scene::axes::kY})),
+      spaces_choices(colours, *n.shared));
+}
 
 inline auto account_appearance_view(const palette& colours, std::string address) {
   namespace c = skiff::compose;
@@ -290,596 +375,185 @@ inline auto account_appearance_view(const palette& colours, std::string address)
       c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       section_title(colours, "APPEARANCE"), style_controls(colours)), std::move(address));
 }
-using account_appearance_t = decltype(account_appearance_view(std::declval<const palette&>(), std::string()));
 
-// An account's notification rows, bound to the account's own choices in the model, under a scope
-// at the account.
-inline auto account_notify_view(const palette& colours, std::string address) {
-  using shared = config::account_shared;
-  using skiff::compose::bound;
-  const choice_level_t level = choice_level::account{};
-  return skiff::compose::scoped<config::account_t>(
-      skiff::compose::handlers(),
-      skiff::compose::column(
-          skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          bound<skiff::model::Field<&shared::notify>>(show_hide_field<notify_on_setting, std::optional<bool>, skiff::model::Field<&shared::notify>>(colours, level)),
-          bound<skiff::model::Field<&shared::notify_mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>, skiff::model::Field<&shared::notify_mentions>>(colours, level)),
-          bound<skiff::model::Field<&shared::notify_sound>>(show_hide_field<notify_sound_setting, std::optional<bool>, skiff::model::Field<&shared::notify_sound>>(colours, level))),
-      std::move(address));
+// A proxy profile chosen for the chosen account: none, or one by its place.
+struct choose_account_proxy {
+  using Answer = request::choose_account_proxy;
+  int index = -1;
+  request::choose_account_proxy operator()() const { return {index}; }
+};
+// Proxy, as Gajim's: which of the program's proxy profiles it connects
+// through, or none; and the way to the profiles themselves.
+struct proxy_rows_key {
+  std::vector<config::proxy_settings> all;
+  std::optional<std::string> current;
+  friend bool operator==(const proxy_rows_key&, const proxy_rows_key&) = default;
+};
+inline auto proxy_rows(const palette& colours, const proxy_rows_key& key) {
+  namespace c = skiff::compose;
+  // An empty place where the dots are, so the names line up.
+  auto rows = std::vector{row_item(colours, "No proxy", choose_account_proxy{-1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)}, !key.current)};
+  rows.append_range(std::views::enumerate(key.all) | std::views::transform([&](const auto& at) {
+                      const auto& [index, one] = at;
+                      return row_item(colours, std::format("{} ({} {}:{})", one.name, config::label_of(one.kind), one.host, one.port),
+                                      choose_account_proxy{static_cast<int>(index)}, icon::dot{proxy_colour(one.name)},
+                                      key.current == one.name);
+                    }));
+  return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows));
+}
+using proxy_rows_t = decltype(proxy_rows(std::declval<const palette&>(), proxy_rows_key{}));
+inline auto account_proxy_view(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::styled({.margin = {0.0f, 0.0f, 4.0f, 0.0f}}, section_title(colours, "PROXY")),
+      c::projected<page_read>([](const page_read& now) {
+        return now ? std::optional(proxy_rows_key{now->proxies, config::proxy_of(now->account)}) : std::nullopt;
+      }, c::mount<proxy_rows_t, proxy_rows_key>([at = &colours](const proxy_rows_key& key) { return std::tuple{proxy_rows(*at, key)}; },
+                                                {.fillX = true, .autoSize = scene::axes::kY})),
+      c::styled({.margin = {8.0f, 0.0f, 0.0f, 0.0f}}, row_item(colours, "Manage proxies…", sends<request::manage_proxies>{}, icon::gear{})));
 }
 
-// An account's Notifications page: whether what comes through it is told --
-// a message, an invite -- and with sound; each chat of it may choose again
-// in its own settings.
-struct account_notifications : skiff::compose::Stacked {
-  using settings_t = decltype(account_notify_view(std::declval<const palette&>(), std::string()));
-  struct parts_t {
-    nodes::Text title;
-    settings_t settings;
-    nodes::Text note;
-  } parts;
-  account_notifications(const ui_needs& n, std::string address)
-      : Stacked(skiff::compose::vbox(8.0f, {.fill = true})),
-        parts{.title = section_title(*n.colours, "NOTIFICATIONS"),
-              .settings = account_notify_view(*n.colours, std::move(address)),
-              .note = skiff::compose::styled({.fillX = true, .margin = {10.0f, 0.0f, 0.0f, 0.0f}},
-                                             wrapped(note_text(*n.colours, "For messages and invites that come through this account; Default is as the "
-                                                                           "Notifications settings say. A space, and a chat, can choose again in its own "
-                                                                           "settings.")))} {}
-  void say(std::string, bool) {}
-};
+// ---- what is beside the list ------------------------------------------------------------
 
-// An account's Chats page: how its chats are -- the room events they show,
-// who has read up to where, link previews, how far a jump looks back, their
-// looks, and its spaces in the bars. Each as every account's, until chosen
-// here; a chat of it may choose again.
-struct account_chats : skiff::compose::Stacked {
-  // Its colour chosen.
-  struct set_colour {
-    using Answer = std::optional<::mux::ui::request::set_account_colour>;
-    std::optional<::mux::ui::request::set_account_colour> operator()(const config::accent_t& one) { return ::mux::ui::request::set_account_colour{one}; }
-  };
-  // Home without what its spaces hold -- but direct messages -- or as every
-  // account's.
-  struct pick_home {
-    using Answer = std::tuple<::mux::ui::request::set_home_hides, ::mux::ui::request::set_home_direct>;
-    Answer operator()(std::size_t index) const {
-      const auto said = [&](bool on) { return index == 0 ? std::nullopt : std::optional<bool>(on); };
-      return {::mux::ui::request::set_home_hides{choice_level::account{}, said(index >= 2)}, ::mux::ui::request::set_home_direct{choice_level::account{}, said(index == 3)}};
-    }
-  };
-  struct parts_t {
-    // Its colour, as only this page shows it: the strip of
-    // its chats listed in other accounts' lists, unless they chose another.
-    nodes::Text colour_title;
-    legacy::accent_circles<set_colour> colours;
-    legacy::switch_row<sends<::mux::ui::request::flip_account_strip>> strip;
-    nodes::Text title;
-    decltype(account_chats_view(std::declval<const palette&>(), std::string())) settings;
-    nodes::Text looks_title;
-    look_choices_t looks;
-    nodes::Text spaces_title;
-    choice_menu<pick_home> home;
-    legacy::spaces_choices places;
-  } parts;
-  account_chats(const palette &colours, const looks_shown &,
-                const ui_shared &shared, std::string address,
-                const chat_choice_values &chats, std::optional<bool> home_hides,
-                std::optional<bool> home_direct, const config::accent_t &colour,
-                bool strip_on, const config::theme_t &theme)
-      : Stacked(skiff::compose::vbox(
-            8.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        parts{
-            .colour_title = section_title(colours, "COLOUR"),
-            .colours = legacy::accent_circles<set_colour>({}, theme, false),
-            .strip = legacy::switch_row<sends<::mux::ui::request::flip_account_strip>>(
-                colours, "A strip on its chats in other lists", {}),
-            .title = section_title(colours, "CHATS"),
-            .settings = account_chats_view(colours, std::move(address)),
-            .looks_title = section_title(colours, "LOOKS"),
-            .looks =
-                look_choices(colours, choice_level::account{}),
-            .spaces_title = section_title(colours, "SPACES"),
-            .home = make_choice_menu<pick_home>(colours, "Home",
-                {"As above", "Every chat", "Without chats spaces hold",
-                 "Without those and direct messages"},
-                !home_hides                   ? 0
-                : !*home_hides                ? 1
-                : home_direct.value_or(false) ? 3
-                                              : 2,
-                pick_home{}),
-            .places = legacy::spaces_choices(colours, shared)} {
-    for (nodes::Text* each : {&parts.title, &parts.looks_title, &parts.spaces_title})
-      each->apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
-    this->show_colour(colour, strip_on);
-  }
-  void show_colour(const config::accent_t& colour, bool strip_on) {
-    parts.colours.show_chosen(colour);
-    parts.strip.parts.toggle.setOn(strip_on);
-  }
-  void say(std::string, bool) {}
-};
-
-// A proxy profile chosen for the chosen account: -1 for none.
-struct choose_account_proxy {
-  using Answer = ::mux::ui::request::choose_account_proxy;
-  int index = -1;
-  ::mux::ui::request::choose_account_proxy operator()() { return ::mux::ui::request::choose_account_proxy{index}; }
-};
-
-// An account's Proxy page, as Gajim's: which of the program's proxy profiles
-// it connects through, or none; and the way to the profiles themselves.
-struct account_proxy : skiff::compose::Stacked {
-  using manage_row = legacy::row_item<sends<::mux::ui::request::manage_proxies>>;
-  struct parts_t {
-    nodes::Text title;
-    std::vector<legacy::row_item<choose_account_proxy>> choices;
-    manage_row manage;
-  } parts;
-
-  account_proxy(const palette &colours,
-                const std::vector<config::proxy_settings> &all,
-                const std::optional<std::string> &current)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.title =
-                  skiff::compose::styled({.margin = {0.0f, 0.0f, 4.0f, 0.0f}},
-                                         section_title(colours, "PROXY")),
-              .manage = skiff::compose::styled(
-                  {.margin = {8.0f, 0.0f, 0.0f, 0.0f}},
-                  manage_row(colours, "Manage proxies…", {}, icon::gear{}))} {
-    auto& choices = parts.choices;
-
-    // An empty place where the dots are, so the names line up.
-    choices.emplace_back(colours, "No proxy", choose_account_proxy{-1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
-                         !current.has_value());
-    for (std::size_t i = 0; i < all.size(); ++i)
-      choices.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(all[i].kind),
-                                       all[i].host, all[i].port),
-                           choose_account_proxy{static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)},
-                           current && *current == all[i].name);
-  }
-  void show(bool) {}
-  void say(std::string, bool) {}
-};
-
-// The saved accounts down the side, and the chosen one's settings beside
-// them.
-// What the accounts panel shows beside its list: nothing chosen, an
-// account's pages, or an account being added.
-namespace panel_detail {
-struct none {};
-struct account {
-  std::string address;
-  // What its form says as it is made again -- "Saved.", what went wrong.
-  std::optional<std::string> said;
-  bool error = false;
-};
-// Adding one: the protocol chosen, the proxies, the one chosen.
-using adding = add_account_shown;
-}  // namespace panel_detail
-using panel_detail_t = spl::variant<panel_detail::none, panel_detail::account, panel_detail::adding>;
-// The accounts panel open: what is beside its list, and a word said at its
-// top as it opens, where there is one.
-struct panel_facts {
-  panel_detail_t detail = panel_detail::none{};
-  std::optional<std::string> note;
-};
-struct accounts_panel : legacy::closes_on_escape<sends<::mux::ui::request::accounts_back>> {
-  // Child references and handlers require a fixed address.
-  accounts_panel(const accounts_panel&) = delete;
-  accounts_panel& operator=(const accounts_panel&) = delete;
-  accounts_panel(accounts_panel&&) = delete;
-  accounts_panel& operator=(accounts_panel&&) = delete;
-
-  static constexpr int kTab = 2;
-  static constexpr float kListWidth = 280.0f;
-
-  std::optional<std::string> selected;
-  protocol_state_t pages_state;
-  // The proxy profiles, for adding an account through one.
-  std::vector<config::proxy_settings> proxies;
-
-  // A protocol's account pages, as the nodes its page_type makes of them.
-  template <class List>
-  struct page_nodes;
-  template <class... Pages>
-  struct page_nodes<type_list<Pages...>> {
-    using type = type_list<typename decltype(page_type(Pages{}))::type...>;
-  };
-  // Its ← goes back from an account's pages to the list, and from the list
-  // to the chats.
-  using header_t = page_header_t<sends<::mux::ui::request::accounts_back>, sends<::mux::ui::request::accounts_back>>;
-  // Under the header: the list down the side, and beside it what is chosen.
-  struct body_row : skiff::compose::Stacked {
-    struct side_column : skiff::compose::Stacked {
-      using add_row = legacy::row_item<sends<::mux::ui::request::open_new_account>>;
-      struct parts_t {
-        add_row add;
-        account_pages pages;
-        nodes::Text message;
-        nodes::ScrollContainer<nodes::Flow<std::vector<account_entry>>> list{
-            nodes::Flow<std::vector<account_entry>>({.spacingY = 0.0f, .wrap = false}, {})};
-      } parts;
-      add_row& add = parts.add;
-      account_pages& pages = parts.pages;
-      nodes::Text& message = parts.message;
-      decltype(parts_t::list)& list = parts.list;
-      side_column(const palette &colours)
-          : Stacked(
-                skiff::compose::vbox(0.0f, {.fillY = true,
-                                            .width = kListWidth,
-                                            .background = colours.sidebar})),
-            parts{.add = add_row(colours, "Add account", {}, icon::plus{}),
-                  .pages = account_pages_view(colours, protocol_state_t{}, account_page::connection{}),
-                  .message = nodes::Text("", 13.0f, colours.error)} {
-        pages.setVisible(false);
-        pages.apply({.fillX = true, .autoSize = scene::axes::kY});
-        message.setWrapped(true);
-        message.apply({.fillX = true, .margin = scene::Margin::all(8.0f)});
-        list.apply({.fillX = true, .grow = scene::axes::kY});
-        std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-      }
-    };
-    // The client's pages, then each protocol's own: made by its page_type.
-    using detail_t = typename variant_of_types<typename joined<
-        type_list<nodes::Text, account_editor, add_account_pane, account_privacy, account_proxy,
-                  account_chats, account_notifications, account_appearance_t>,
-        typename page_nodes<typename protocol_account_pages<protocols>::type>::type>::type>::type;
-    struct detail_column : skiff::compose::Stacked {
-      // No account chosen, or the chosen one, or adding one.
-      struct parts_t {
-        // In a scroll view: a page taller than the window scrolls.
-        nodes::ScrollContainer<detail_t> scroll;
-      } parts;
-      explicit detail_column(const palette &colours)
-          : Stacked(skiff::compose::vbox(
-                0.0f, {.fillY = true,
-                       .grow = scene::axes::kX,
-                       .padding = {24.0f, 28.0f, 24.0f, 28.0f}})),
-            parts{.scroll = skiff::compose::styled(
-                      {.fill = true},
-                      nodes::ScrollContainer<detail_t>(
-                          detail_t{std::in_place_index<0>, "Choose an account.",
-                                   15.0f, colours.dim}))} {}
-    };
-    struct parts_t {
-      side_column side;
-      detail_column main;
-    } parts;
-    body_row(const palette &colours)
-        : Stacked(skiff::compose::hbox(
-              0.0f, {.fillX = true, .grow = scene::axes::kY})),
-          parts{.side = side_column(colours), .main = detail_column(colours)} {}
-    // Narrow -- a phone's -- one column at a time, all of the width, side by
-    // side as wide: the accounts (or a chosen one's pages, its settings), or
-    // the page chosen from them; the header's arrow a step back. Nothing of
-    // either column's sizing is changed -- the side as wide as the panel, the
-    // page growing into what the side leaves: flipped from column to row and
-    // back, the sizes clashed, the page had no width, and its buttons took no
-    // press.
-    bool narrow = false;
-    bool detail_up = false;
-    void show_columns() {
-      parts.side.setVisible(!narrow || !detail_up);
-      parts.main.setVisible(!narrow || detail_up);
-      this->invalidateLayout();
-    }
-    void layoutChildren() {
-      if (const bool now = fState.contentBox().width() < 600.0f; now != narrow) {
-        narrow = now;
-        this->show_columns();
-      }
-      parts.side.apply({.width = narrow ? fState.contentBox().width() : kListWidth});
-      this->nodes::Stack::layoutChildren();
-    }
-  };
-  struct parts_t {
-    header_t header;
-    body_row body;
-  } parts;
-  header_t& header = parts.header;
-  typename body_row::side_column::add_row& add = parts.body.parts.side.add;
-  account_pages& pages = parts.body.parts.side.pages;
-  nodes::Text& message = parts.body.parts.side.message;
-  decltype(body_row::side_column::parts_t::list)& list = parts.body.parts.side.list;
-  typename body_row::detail_t& detail = std::get<0>(parts.body.parts.main.parts.scroll.fChildren);
-  // The page shown: across the pane, as tall as what it holds -- scrolled
-  // from its top.
-  void fit_detail() {
-    spl::visit(
-        [](auto& one) {
-          one.fState.apply({.relativeSize = scene::axes::kX});
-          one.fState.apply({.autoSize = scene::axes::kY});
-        },
-        detail);
-    parts.body.parts.main.parts.scroll.scrollToStart();
-  }
-
-  // What is beside the list coming in when another is chosen, fading in.
-  skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
-  void begin_swap() {
-    swap.jump(0.0f);
-    swap.setTarget(1.0f);
-    this->fade();
-  }
-  // The page coming in: faded in, and slid in from the side it comes from.
-  float swap_side = 1.0f;
-  void fade() {
-    const float value = swap.value();
-    const float shift = (1.0f - value) * 28.0f * swap_side;
-    spl::visit(
-        [&](auto& one) {
-          one.fState.setAlpha(value);
-          one.apply({.shiftX = shift});
-        },
-        detail);
-  }
-  // The side column's switch, the accounts' list for an account's pages and
-  // back: the one coming in slid in and faded in, as the page beside it.
-  skiff::paint::Tween side_swap{1.0f, 220.0f, skiff::paint::movement::subtle{}};
-  float side_from = 1.0f;
-  void slide_side() {
-    const float value = side_swap.value();
-    const float shift = (1.0f - value) * 36.0f * side_from;
-    const std::array<scene::Node*, 2> shown = pages.visible() ? std::array<scene::Node*, 2>{&pages, nullptr}
-                                                               : std::array<scene::Node*, 2>{&list, &add};
-    for (scene::Node* each : std::views::filter(shown, [](scene::Node* one) { return one != nullptr; })) {
-      each->fState.setAlpha(value);
-      each->apply({.shiftX = shift});
-    }
-  }
-  [[nodiscard]] bool settling() const { return swap.moving() || side_swap.moving(); }
-  void update(double now_ms) {
-    if (swap.step(now_ms))
-      this->fade();
-    if (side_swap.step(now_ms))
-      this->slide_side();
-  }
-
-  // What it was handed, for the panes it makes.
-  ui_needs needs_;
-  accounts_panel(const ui_needs& n)
-      : legacy::closes_on_escape<sends<::mux::ui::request::accounts_back>>(),
-        parts{.header = page_header<sends<::mux::ui::request::accounts_back>, sends<::mux::ui::request::accounts_back>>(*n.colours, "Accounts", {}, {}, true, false), .body = body_row(*n.colours)},
-        needs_(n) {
-    this->fState.apply({.fill = true});
-  }
-
-  // The saved accounts, with what the model says of each; the chosen one's
-  // form is kept as it is, typing and all.
-  template <std::ranges::input_range Saved>
-  void show(const Saved& saved, const model& now) {
-    auto& entries = std::get<0>(std::get<0>(list.fChildren).fChildren);
-    entries.clear();
-    const config::account_t* chosen = nullptr;
-    for (const config::account_t& one : saved) {
-      const bool is_it = selected && config::address_of(one) == *selected;
-      if (is_it)
-        chosen = &one;
-      entries.emplace_back(needs_, one, now, is_it);
-    }
-    if (chosen) {
-      if (auto* up = this->editor())
-        up->show(*chosen, now);
-    } else if (!this->adding()) {
-      // Nothing to show beside the list: with no account at all, adding one.
-      selected.reset();
-      if (std::ranges::empty(saved))
-        this->show_adding();
-      else
-        detail.template emplace<0>("Choose an account.", 15.0f, needs_.colours->dim);
-    }
-    this->invalidateLayout();
-  }
-
-  // One of the chosen account's pages beside the list, brought up afresh.
-  // A page that asks the program for something as it opens (its sessions,
-  // the server's) says so: what it asks given to `asked`.
-  template <class Page, class Asked>
-    requires requires(Page& p) { p.asked_as_it_opens(); }
-  static void opened(Page& page, Asked& asked) {
-    asked(page.asked_as_it_opens());
-  }
-  template <class Page, class Asked>
-  static void opened(Page&, Asked&) {}
-  void show_page(const account_page_t& page, const config::account_t& one, const model& now,
-                 const std::vector<config::proxy_settings>& proxies = {}, const config::theme_t& theme = config::theme_t{}) {
-    const auto nothing = [](const auto&) {};
-    this->show_page(page, one, now, proxies, theme, nothing);
-  }
-  template <class Asked>
-  void show_page(const account_page_t& page, const config::account_t& one, const model& now,
-                 const std::vector<config::proxy_settings>& proxies, const config::theme_t& theme, const Asked& asked) {
-    pages = account_pages_view(*needs_.colours, pages_state, page);
-    this->show_detail(true);
-    spl::visit(
-        spl::overloaded{
-            [&](account_page::connection) {
-              detail.template emplace<1>(needs_, one);
-              spl::get<1>(detail).show(one, now);
-            },
-            [&](account_page::privacy) {
-              detail.template emplace<3>(needs_, config::read_receipts_of(one), config::address_of(one),
-                                           config::room_events_of(one), config::room_event_kinds_of(one),
-                                           config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true),
-                                           config::show_receipts_of(one), config::jump_search_of(one),
-                                           config::link_previews_of(one), config::mentions_choice_of(one));
-            },
-            [&](account_page::notifications) {
-              detail.template emplace<6>(needs_, config::address_of(one));
-            },
-            [&](account_page::chats) {
-              detail.template emplace<5>(*needs_.colours, *needs_.looks, *needs_.shared, config::address_of(one),
-                                         chat_choice_values{.events_all = config::room_events_of(one),
-                                                            .event_kinds = config::room_event_kinds_of(one),
-                                                            .receipts = config::show_receipts_of(one),
-                                                            .previews = config::link_previews_of(one),
-                                                            .previews_direct = config::previews_direct_of(one),
-                                                            .jump_search = config::jump_search_of(one)},
-                                         config::home_hides_of(one), config::home_direct_of(one), config::colour_of(one),
-                                         config::strip_of(one), theme);
-            },
-            [&](account_page::appearance) { detail.template emplace<account_appearance_t>(account_appearance_view(*needs_.colours, config::address_of(one))); },
-            [&](account_page::proxy) { detail.template emplace<4>(*needs_.colours, proxies, config::proxy_of(one)); },
-            // A protocol's own: its node, made for the program's actions.
-            [&]<class Page>(Page) {
-              auto& made = detail.template emplace<typename decltype(page_type(Page{}))::type>(*needs_.colours,
-                                                                                                                       *needs_.shared, one, now);
-              opened(made, asked);
-            }},
-        page);
-    this->fit_detail();
-    this->begin_swap();
-    this->invalidateLayout();
-  }
-  [[nodiscard]] account_privacy* privacy() {
-    return spl::visit(spl::overloaded{[](account_privacy& one) { return &one; },
-                                 [](auto&) -> account_privacy* { return nullptr; }},
-                      detail);
-  }
-  [[nodiscard]] account_chats* chats_page() {
-    return spl::visit(spl::overloaded{[](account_chats& one) { return &one; },
-                                            [](auto&) -> account_chats* { return nullptr; }},
-                         detail);
-  }
-  // The page shown, where it is one of this type: a protocol's own, as the
-  // program tells it what its protocol's client says.
-  // Something told to the page shown, where it takes it: f(page), where
-  // that is a call.
-  template <class F, class Page>
-    requires std::invocable<F&, Page&>
-  static void tell(F& f, Page& page) {
-    f(page);
-  }
-  template <class F, class Page>
-  static void tell(F&, Page&) {}
-  template <class F>
-  void tell_shown(F f) {
-    spl::visit([&](auto& page) { tell(f, page); }, detail);
-  }
-  template <class Node>
-  [[nodiscard]] Node* shown_page() {
-    return spl::visit(spl::overloaded{[](Node& one) { return &one; }, [](auto&) -> Node* { return nullptr; }}, detail);
-  }
-  [[nodiscard]] account_proxy* proxy() {
-    return spl::visit(spl::overloaded{[](account_proxy& one) { return &one; },
-                                 [](auto&) -> account_proxy* { return nullptr; }},
-                      detail);
-  }
-  [[nodiscard]] bool pages_open() const { return pages.visible(); }
-
-  void select(const config::account_t& one, const model& now) {
-    add.set_lit(false);
-    selected = config::address_of(one);
-    const std::string& address = config::address_of(one);
-    pages_state = protocol_state_of(*needs_.shared, account_id{protocol_of(address), address});
-    this->show_pages(true);
-    this->show_page(account_page::connection{}, one, now);
-    // Narrow: its settings -- its pages -- first, not the first of them.
-    this->show_detail(false);
-  }
-  // Narrow, the page beside the list in its place, or the list back.
-  void show_detail(bool up) {
-    parts.body.detail_up = up;
-    parts.body.show_columns();
-    this->invalidateLayout();
-  }
-  // Narrow, a step back of its own before the list's: none -- the arrow
-  // goes from an account's settings to the list, as it does wide.
-  [[nodiscard]] bool step_back() {
-    if (!parts.body.narrow || !parts.body.detail_up)
+// What the page beside the list is made from: the detail, and the theme
+// its colours are in. Made again where the detail, the account or its page
+// changes; each page reads its account's facts as they move.
+struct detail_key {
+  panel_detail_t detail;
+  config::theme_t theme;
+  friend bool operator==(const detail_key& a, const detail_key& b) {
+    if (a.detail.index() != b.detail.index())
       return false;
-    this->show_detail(false);  // from a page to the account's pages
-    return true;
+    return spl::visit(spl::overloaded{[&](const panel_detail::account& one) {
+                                        const auto& other = spl::get<panel_detail::account>(b.detail);
+                                        return one.address == other.address && one.page.index() == other.page.index();
+                                      },
+                                      [](const auto&) { return true; }},
+                      a.detail);
   }
-
-  // Adding an account, beside the list.
-  // The account list, or the chosen account's pages, down the side.
-  void show_pages(bool shown) {
-    // Into an account: its pages come in from the right, and the page beside
-    // them with them; back: the list comes in from the left.
-    if (shown != pages.visible()) {
-      side_from = shown ? 1.0f : -1.0f;
-      swap_side = side_from;
-      side_swap.jump(0.0f);
-      side_swap.setTarget(1.0f);
-    }
-    pages.setVisible(shown);
-    add.setVisible(!shown);
-    list.setVisible(!shown);
-    this->slide_side();
-    std::get<1>(header.fParts).setText(shown && selected ? *selected : std::string("Accounts"));
-    this->invalidateLayout();
-  }
-  // Back to the list of accounts, nothing chosen.
-  void close_pages() {
-    selected.reset();
-    this->show_detail(false);
-    this->show_pages(false);
-    detail.template emplace<0>("Choose an account.", 15.0f, needs_.colours->dim);
-    this->fit_detail();
-    this->begin_swap();
-  }
-
-  // What is to be beside the list, as what is shown said it last: done by
-  // the program as it brings the panel up to date, with what it has of the
-  // accounts.
-  std::optional<panel_detail_t> detail_due;
-  void show_adding() {
-    this->show_pages(false);
-    selected.reset();
-    add.set_lit(true);
-    this->show_detail(true);
-    detail.template emplace<2>(needs_, proxies);
-    this->fit_detail();
-    this->begin_swap();
-    this->invalidateLayout();
-  }
-
-  [[nodiscard]] account_editor* editor() {
-    return spl::visit(spl::overloaded{[](account_editor& one) { return &one; },
-                                 [](auto&) -> account_editor* { return nullptr; }},
-                      detail);
-  }
-  [[nodiscard]] add_account_pane* adding() {
-    return spl::visit(spl::overloaded{[](add_account_pane& one) { return &one; },
-                                 [](auto&) -> add_account_pane* { return nullptr; }},
-                      detail);
-  }
-  // The account form up -- an editor's, or the pane's that adds one.
-  [[nodiscard]] account_form* form() {
-    return spl::visit(spl::overloaded{[](account_editor& one) { return &one.parts.form; },
-                                 [](add_account_pane& one) { return &one.parts.form; },
-                                 [](auto&) -> account_form* { return nullptr; }},
-                      detail);
-  }
-
-  void say(std::string text) {
-    message.setText(std::move(text));
-    this->invalidateLayout();
-  }
-
 };
+inline auto choose_one(const palette& colours) { return nodes::Text("Choose an account.", 15.0f, colours.dim); }
+// The pages of the client's, and each protocol's own.
+template <class List>
+struct protocol_page_views;
+template <class... Pages>
+struct protocol_page_views<type_list<Pages...>> {
+  using type = type_list<account_page_view_t<Pages>...>;
+};
+using editor_view_t = decltype(account_editor_view(std::declval<const ui_needs&>(), std::string()));
+using privacy_view_t = decltype(account_privacy_view(std::declval<const palette&>(), std::string()));
+using notifications_view_t = decltype(account_notifications_view(std::declval<const palette&>(), std::string()));
+using chats_page_t = decltype(account_chats_page(std::declval<const ui_needs&>(), std::string(), config::theme_t{}));
+using appearance_view_t = decltype(account_appearance_view(std::declval<const palette&>(), std::string()));
+using proxy_view_t = decltype(account_proxy_view(std::declval<const palette&>()));
+using choose_one_t = decltype(choose_one(std::declval<const palette&>()));
+using detail_page_t = typename variant_of_types<typename joined<
+    type_list<choose_one_t, editor_view_t, add_account_view_t, privacy_view_t, notifications_view_t, chats_page_t, appearance_view_t,
+              proxy_view_t>,
+    typename protocol_page_views<typename protocol_account_pages<protocols>::type>::type>::type>::type;
+// An account's page: a protocol's made over the facts it starts from --
+// read again as they move.
+[[nodiscard]] inline detail_page_t page_made(const ui_needs& n, const panel_detail::account& chosen, const config::theme_t& theme) {
+  const palette& colours = *n.colours;
+  const std::string& address = chosen.address;
+  const account_page_facts facts{.by = account_id{protocol_of(address), address}, .page = chosen.page};
+  return spl::visit(spl::overloaded{
+                        [&](account_page::connection) { return detail_page_t(account_editor_view(n, address)); },
+                        [&](account_page::privacy) { return detail_page_t(account_privacy_view(colours, address)); },
+                        [&](account_page::notifications) { return detail_page_t(account_notifications_view(colours, address)); },
+                        [&](account_page::chats) { return detail_page_t(account_chats_page(n, address, theme)); },
+                        [&](account_page::appearance) { return detail_page_t(account_appearance_view(colours, address)); },
+                        [&](account_page::proxy) { return detail_page_t(account_proxy_view(colours)); },
+                        // A protocol's own: as its page_view makes it.
+                        [&]<class Page>(Page page) { return detail_page_t(page_view(page, colours, facts)); }},
+                    chosen.page);
+}
+[[nodiscard]] inline detail_page_t detail_made(const ui_needs& n, const detail_key& key) {
+  return spl::visit(spl::overloaded{[&](panel_detail::none) { return detail_page_t(choose_one(*n.colours)); },
+                                    [&](panel_detail::adding) { return detail_page_t(add_account_view(n)); },
+                                    [&](const panel_detail::account& chosen) { return page_made(n, chosen, key.theme); }},
+                    key.detail);
+}
+// It, coming in as it changes: across the pane, as tall as what it holds.
+inline auto detail_shown(const ui_needs& n, const detail_key& key) {
+  namespace c = skiff::compose;
+  return c::appearing(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), detail_made(n, key)));
+}
+using detail_shown_t = decltype(detail_shown(std::declval<const ui_needs&>(), detail_key{}));
+// The page column: what the facts say is beside the list, in a scroll view
+// -- a page taller than the window scrolls.
+inline auto detail_column(const ui_needs& n) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX, .padding = {24.0f, 28.0f, 24.0f, 28.0f}}),
+      c::styled({.fill = true}, nodes::ScrollContainer(c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::projected<panel_read>([](const panel_read& now) { return now ? std::optional(detail_key{now->detail, now->theme}) : std::nullopt; },
+              c::mount<detail_shown_t, detail_key>(
+                  [at = &n](const detail_key& key) { return std::tuple{detail_shown(*at, key)}; },
+                  {.fillX = true, .autoSize = scene::axes::kY}))))));
+}
+
+// ---- the panel ------------------------------------------------------------------------
+
+inline constexpr float kListWidth = 280.0f;
+// The side: the accounts, or -- an account chosen -- its pages; the one
+// coming in as the other goes. Under it, what went wrong saving.
+struct side_key {
+  bool account = false;
+  friend bool operator==(const side_key&, const side_key&) = default;
+};
+inline auto side_made(const palette& colours, const side_key& key) {
+  namespace c = skiff::compose;
+  using side_t = spl::variant<accounts_side_t, pages_side_t>;
+  return c::appearing(true, c::column(c::vbox(0.0f, {.fill = true}),
+                                      key.account ? side_t(pages_side(colours)) : side_t(accounts_side(colours))), 0.0f);
+}
+using side_made_t = decltype(side_made(std::declval<const palette&>(), side_key{}));
+inline auto side_column(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::spec_for<panel_read>([](const panel_read& now) {
+    const bool narrow = now && now->narrow;
+    return scene::Spec{.fillY = true, .fillX = narrow, .width = narrow ? 0.0f : kListWidth};
+  }, c::column(c::vbox(0.0f, {.fillY = true, .background = colours.sidebar}),
+      c::projected<panel_read>([](const panel_read& now) { return side_key{chosen_of(now).has_value()}; },
+          c::mount<side_made_t, side_key>([at = &colours](const side_key& key) { return std::tuple{side_made(*at, key)}; },
+                                          {.fillX = true, .grow = scene::axes::kY})),
+      c::shown_for<panel_read>([](const panel_read& now) { return now && now->note.has_value(); },
+          c::text_for<panel_read>([](const panel_read& now) { return now ? now->note.value_or("") : std::string(); },
+              c::styled({.fillX = true, .margin = scene::Margin::all(8.0f)}, wrapped(nodes::Text("", 13.0f, colours.error)))))));
+}
+// The header: ← back -- from a page to the list, narrow; from an account to
+// the list; from the list to the chats -- and the account chosen's address,
+// or Accounts.
+inline auto panel_header(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(12.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+      c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::back{}, sends<request::accounts_back>{})),
+      c::text_for<panel_read>([](const panel_read& now) { return chosen_of(now).value_or("Accounts"); },
+          c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text("", 17.0f, colours.text, true)))));
+}
+// The accounts: the header over the list down the side and, beside it, what
+// is chosen. Narrow -- a phone's -- one column at a time, all of the width:
+// the list (or a chosen one's pages), or the page chosen from them. Esc goes
+// back as the arrow does.
+inline auto accounts_view(const ui_needs& n) {
+  namespace c = skiff::compose;
+  const palette& colours = *n.colours;
+  return closes_on_escape<sends<request::accounts_back>>(c::column(c::vbox(0.0f, {.fill = true}),
+      panel_header(colours),
+      c::row(c::hbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
+             c::shown_for<panel_read>([](const panel_read& now) { return !now || !now->narrow || !now->detail_up; }, side_column(colours)),
+             c::shown_for<panel_read>([](const panel_read& now) { return !now || !now->narrow || now->detail_up; },
+                                      c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX}), detail_column(n))))));
+}
+using accounts_panel = decltype(accounts_view(std::declval<const ui_needs&>()));
 
 }  // namespace mux::ui
 
 // Outside a release build each child is walked through its table, and a
-// stack lays itself out through its own (Stack::layoutChildren): so a unit
-// that lays out or walks one of these would make its table, and the walks
-// of everything under it, there -- the chats screen's took this unit past
-// ten minutes. Their tables are made once, each in a walks unit of this
-// module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
+// stack lays itself out through its own: these tables, and the walks of
+// everything under them, are made once, in their walks units -- not in
+// every unit that lays one out or walks it.
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::accounts_panel> = true;  // walks_accounts.cc
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::accounts_panel>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::accounts_panel::body_row> = true;  // walks_accounts.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::accounts_panel::body_row>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::account_editor> = true;  // walks_account_pages.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_editor>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::account_privacy> = true;  // walks_account_pages.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_privacy>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::account_chats> = true;  // walks_account_pages.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_chats>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::account_notifications> = true;  // walks_account_pages.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_notifications>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::account_proxy> = true;  // walks_account_pages.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_proxy>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::detail_shown_t> = true;  // walks_account_pages.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::detail_shown_t>() noexcept;

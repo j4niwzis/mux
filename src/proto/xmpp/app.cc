@@ -27,13 +27,6 @@ void change_room(App& app, const mux::conversation_id& in, Change change) {
   spl::visit(spl::overloaded{[&](muc_room& room) { change(room); }, [](auto&) {}}, now.theirs);
   mux::ui::show(app.showing, std::optional(std::move(now)));
 }
-// What the server asks, in the form that shows it -- XMPP's -- and in no other.
-template <class Form>
-  requires requires(Form& form, const registration_asked& asked) { form.show_registration(asked); }
-void show_in(Form& form, const registration_asked& asked) {
-  form.show_registration(asked);
-}
-void show_in(auto&, const registration_asked&) {}
 }  // namespace mux::proto::xmpp::app_detail
 
 export namespace mux::proto::xmpp {
@@ -51,9 +44,23 @@ void program_told(App& app, const registration_asked& asked) {
                             "is made there, turn Create a new account off in its settings, and mux signs in to it.");
     return;
   }
-  auto* panel = app.accounts_screen.show_account_now(asked.account.address);
-  if (auto* editor = panel ? panel->editor() : nullptr)
-    spl::visit([&](auto& form) { app_detail::show_in(form, asked); }, editor->parts.form);
+  app.accounts_screen.form_part_told(asked.account.address, registration_form{asked, first_answers(asked)},
+                                     "The server asks more to make the account: answer below, then save.");
+}
+// One of the fields it asked, typed into: the answer kept beside the form.
+template <class App>
+void program_asked(App& app, const request::registration_typed& typed) {
+  if (const auto& open = *app.showing.template look<std::optional<mux::ui::account_form_facts>>()) {
+    auto now = *open;
+    spl::visit(spl::overloaded{[&](registration_form& kept) {
+                                 const auto found = std::ranges::find(kept.answers, typed.var, &registration_answer::var);
+                                 if (found != kept.answers.end())
+                                   found->value = typed.value;
+                               },
+                               [](auto&) {}},
+               now.part);
+    mux::ui::show(app.showing, std::optional(std::move(now)));
+  }
 }
 // The account made: kept as one to sign in to from now on.
 template <class App>

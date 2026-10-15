@@ -119,22 +119,6 @@ void app::apply(const request::resize_info& one) {
   chat_list.resize_info(one.x);
 }
 
-void app::apply(const request::accounts_back&) {
-  auto* up = mux::ui::open_panel(root());
-  if (!up)
-    return;
-  spl::visit(
-      [this](accounts& panel) {
-        if (panel.step_back())
-          return;
-        if (panel.pages_open())
-          panel.close_pages();
-        else
-          this->apply(request::pop_panel{});
-      },
-      *up);
-}
-
 // A tombstoned room's way on: the room it was upgraded to, as its
 // protocol's link to it opens -- the chat where it is joined, its card where not.
 void app::apply(const request::open_replacement&) {

@@ -8,6 +8,7 @@ import std;
 import splice;
 import mux.core;
 import mux.proto;
+import mux.proto.xmpp.changes;
 
 export namespace mux::proto::xmpp {
 
@@ -28,7 +29,12 @@ inline std::string directory_server(const state&, std::string_view address) {
 inline std::vector<room_event_t> room_event_kinds(const state&) { return {}; }
 namespace settings { struct profile {}; }
 constexpr account_page_list<settings::profile> account_pages(const state&) { return {}; }
+constexpr form_part_list<registration_form> form_parts(const state&) { return {}; }
 namespace request {
+// One of the fields the server asked to register, typed into.
+struct registration_typed {
+  std::string var, value;
+};
 struct refresh_muc {};
 struct configure_muc { std::vector<muc_field> fields; };
 struct muc_identity { std::string nick; };
@@ -37,7 +43,7 @@ struct muc_privilege { std::string user, affiliation, role; };
 struct destroy_muc { std::string reason; };
 }
 constexpr request_list<request::refresh_muc, request::configure_muc, request::muc_identity,
-    request::muc_privilege, request::destroy_muc, request::rejoin_muc> requests_of(const state&) { return {}; }
+    request::muc_privilege, request::destroy_muc, request::rejoin_muc, request::registration_typed> requests_of(const state&) { return {}; }
 inline const muc_room& muc_of(const conversation& chat) {
   static const muc_room empty;
   const auto* room = chat.theirs.template get_if<muc_room>();

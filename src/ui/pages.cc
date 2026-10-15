@@ -181,6 +181,26 @@ struct room_settings_facts {
 // the Profile page needs of a save: whether one is on its way, what came of
 // it, and a round that moves where its drafts are to be made again (the
 // profile first heard, a save gone through).
+// What the model says of a saved account, in a few words, and whether that
+// is a failure.
+[[nodiscard]] inline std::pair<std::string, bool> state_of(const config::account_t& one, const model& now) {
+  const std::string& address = config::address_of(one);
+  if (!config::enabled_of(one))
+    return {"off", false};
+  const account* found = now.accounts().find(account_id{protocol_of(address), address});
+  if (found == nullptr)
+    return {"offline", false};
+  bool failed = false;
+  std::string said = spl::visit(spl::overloaded{[](const connection::offline&) { return std::string("offline"); },
+                                           [](const connection::connecting&) { return std::string("connecting…"); },
+                                           [](const connection::online&) { return std::string("online"); },
+                                           [&failed](const connection::failed& why) {
+                                             failed = true;
+                                             return "failed: " + why.error;
+                                           }},
+                                found->state);
+  return {std::move(said), failed};
+}
 struct account_page_facts {
   account_id by;
   config::account_t account;
@@ -193,11 +213,19 @@ struct account_page_facts {
   std::uint32_t profile_round = 0;
   bool profile_saving = false;
   std::optional<std::string> profile_said;
+  // How it is, as the model says -- its protocol and state, failed said
+  // apart; and the proxy profiles there are, for its Proxy page.
+  std::string how;
+  bool failed = false;
+  std::vector<config::proxy_settings> proxies;
 };
 // The facts read again from the model: its profile and presence; an answer
 // come in says what came of a save, and one that went through makes the
 // drafts again, as does the profile first heard.
 inline void read_account_model(account_page_facts& facts, const model& now) {
+  const auto [how, failed] = state_of(facts.account, now);
+  facts.how = std::format("{} · {}", config::protocol_name(facts.account), how);
+  facts.failed = failed;
   const account* known = now.accounts().find(facts.by);
   if (known == nullptr)
     return;
@@ -717,23 +745,4 @@ inline auto member_row(const palette& colours, const member& one, std::string ho
               .text = skia::colorSetARGB(255, 190, 170, 250), .size = 12.0f, .height = 20.0f, .padX = 8.0f})))), name));
 }
 using member_row_t = decltype(member_row(std::declval<const palette&>(), std::declval<const member&>(), ""));
-
-namespace legacy {
-template <class Act>
-struct switch_row : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text label;
-    toggle_for<Act> toggle;
-  } parts;
-
-  // Declared: the text taking the room, the switch at the end.
-  switch_row(const palette& colours, std::string text, Act what)
-      : Stacked(skiff::compose::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}})),
-        parts{.label = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(text), 15.0f, colours.text))),
-              .toggle = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(what)))} {}
-};
-
-
-}  // namespace legacy
-
 }  // namespace mux::ui

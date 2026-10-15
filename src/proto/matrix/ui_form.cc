@@ -8,14 +8,11 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 import skiff.compose;
+import skiff.model;
 import skiff.nodes.flow;
 import skiff.nodes.text;
-import skiff.nodes.scroll;
 import skiff.widgets.button;
-import skiff.widgets.motion;
-import skiff.widgets.sliderbar;
-import skiff.widgets.textarea;
-import skiff.widgets.textbox;
+import skiff.widgets.model;
 import mux.core;
 import mux.config;
 import mux.proto.kept;
@@ -23,153 +20,43 @@ import mux.proto.matrix;
 import mux.proto.matrix.requests;
 import mux.ui.base;
 
-namespace mux::proto::matrix::form_detail {
-using namespace ::mux::ui;
-
-// A Matrix account's settings: its user ID and password, the homeserver
-// (found through the server's .well-known when left empty) and what this
-// device is called.
-struct matrix_form : skiff::compose::Stacked {
-  // What its handlers ask for, returned.
-  using Answer = ::mux::ui::request::submit_login;
-  // What the add-account pane says of the protocol.
-  static constexpr std::string_view note = "A user ID like @user:example.org, on a homeserver such as Synapse.";
-  std::optional<std::string> editing;
-  // A new account, to be registered on the server first; and the user's
-  // word that they agree to its terms, where it has some.
-  bool creating = false;
-  bool agrees = false;
-  // Signed in in the browser, on the server's own page (OAuth 2.0), rather
-  // than with a password typed here.
-  bool in_browser = false;
-  struct pick_way {
-    matrix_form* form;
-    void operator()(std::size_t index) const { form->set_in_browser(index == 1); }
-  };
-  struct pick_mode {
-    matrix_form* form;
-    void operator()(std::size_t index) const { form->set_creating(index == 1); }
-  };
-  struct pick_terms {
-    matrix_form* form;
-    void operator()(std::size_t index) const { form->agrees = index == 1; }
-  };
-
-  struct parts_t {
-    legacy::field user_id;
-    choice_menu<pick_way> way;
-    legacy::field password;
-    legacy::field homeserver;
-    legacy::field device_name;
-    choice_menu<pick_mode> mode;
-    legacy::field token;
-    choice_menu<pick_terms> terms;
-    legacy::form_end end;
-  } parts;
-
-  matrix_form(const palette &colours,
-              const std::optional<::mux::proto::matrix::kept> &from)
-      : Stacked(skiff::compose::vbox(
-            12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        parts{.user_id = legacy::field(colours, "User ID", "@user:example.org"),
-              .way = make_choice_menu<pick_way>(colours, "Sign in",
-                  {"With a password", "In the browser, on the server's page"},
-                  from && from->oauth.value_or(false) ? 1 : 0, pick_way{this}),
-              .password = skiff::compose::visible(
-                  !in_browser, legacy::field(colours, "Password", "Password")),
-              .homeserver = legacy::field(colours, "Homeserver",
-                                  "found through the server's .well-known"),
-              .device_name = legacy::field(colours, "Device name", "mux", "mux"),
-              .mode = skiff::compose::visible(
-                  !from.has_value(),
-                  make_choice_menu<pick_mode>(colours, "Account",
-                      {"Sign in to an account", "Create a new account"}, 0,
-                      pick_mode{this})),
-              .token = skiff::compose::visible(
-                  false, legacy::field(colours, "Registration token",
-                               "where the server registers by invitation")),
-              .terms = skiff::compose::visible(
-                  false, make_choice_menu<pick_terms>(colours, "The server's terms",
-                             {"Not agreed to", "I agree to the server's terms"},
-                             0, pick_terms{this})),
-              .end = legacy::form_end(colours, from.has_value())} {
-    auto& [user_id, way, password, homeserver, device_name, mode, token, terms, end] = parts;
-    in_browser = from && from->oauth.value_or(false);
-    // Editing an account kept: it is one already.
-
-    password.parts.box.setMasked(true);
-    if (from) {
-      editing = from->user_id;
-      user_id.parts.box.setText(from->user_id);
-      password.parts.box.setText(from->password);
-      if (from->homeserver)
-        homeserver.parts.box.setText(*from->homeserver);
-      device_name.parts.box.setText(from->device_name);
-    }
-  }
-
-  // A new account or one there is: the registration's fields shown with it
-  // -- not where the server's own page registers it.
-  void set_creating(bool on) {
-    creating = on;
-    parts.token.setVisible(on && !in_browser);
-    parts.terms.setVisible(on && !in_browser);
-    this->invalidateLayout();
-  }
-  // Signed in in the browser: no password here, nor the registration's
-  // fields -- the server's page asks what it needs.
-  void set_in_browser(bool on) {
-    in_browser = on;
-    parts.password.setVisible(!on);
-    this->set_creating(creating);
-  }
-
-  [[nodiscard]] std::expected<::mux::proto::matrix::kept, std::string> account() const {
-    ::mux::proto::matrix::kept out{.user_id = parts.user_id.text(),
-                               .password = parts.password.text(),
-                               .homeserver = typed_or_nothing(parts.homeserver.text()),
-                               .device_name = parts.device_name.text()};
-    if (in_browser) {
-      out.oauth = true;
-      out.password.clear();
-    }
-    if (creating) {
-      out.create = true;
-      out.registration_token = typed_or_nothing(parts.token.text());
-      out.accept_terms = agrees;
-      if (out.password.empty() && !in_browser)
-        return std::unexpected(std::string("A new account needs a password"));
-    }
-    if (auto wrong = check(out))  // the protocol's own check, by ADL
-      return std::unexpected(*wrong);
-    return out;
-  }
-
-  void say(std::string text, bool error) { parts.end.say(std::move(text), error); }
-
-  using Node::onKey;
-  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
-    std::optional<Answer> answer;
-    if (press.key == scene::keys::kEnter) {
-      answer = ::mux::ui::request::submit_login{};
-      reply.handle();
-    }
-    return answer;
-  }
-};
-
-}  // namespace mux::proto::matrix::form_detail
-
 export namespace mux::proto::matrix {
 
-// Its account form, for the panels: by the protocol's tag, and by what an
-// account of it keeps.
-using form = form_detail::matrix_form;
-constexpr type_tag<form> form_type(const state&) {
-  return {};
+// What the add-account pane says of the protocol.
+[[nodiscard]] constexpr std::string_view form_note(const account_draft&) {
+  return "A user ID like @user:example.org, on a homeserver such as Synapse.";
 }
-constexpr type_tag<form> form_type_for(const kept&) {
-  return {};
+
+// A Matrix account's settings, over the draft typed into them (kept by the
+// form, sent whole as it is submitted): its user ID; signed in with a
+// password typed here, or in the browser on the server's own page (OAuth
+// 2.0); the homeserver (found through the server's .well-known when left
+// empty) and what this device is called. A new account -- never one being
+// edited -- is registered on the server first: where the server's page does
+// not do it, with a registration token and the user's word that they agree
+// to the server's terms.
+inline auto account_form_of(const account_draft& seed, const ui::palette& colours, bool editing) {
+  namespace c = skiff::compose;
+  using namespace ::mux::ui;
+  using d = account_draft;
+  const auto registers_here = [](const d& now) { return now.creating && !now.in_browser; };
+  return c::local<d>(
+      submitted_by_enter<d>(c::column(
+          c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          model_field<&d::user_id>(colours, "User ID", "@user:example.org"),
+          choice_field<&d::in_browser, bool>(colours, "Sign in",
+                                             {{"With a password", false}, {"In the browser, on the server's page", true}}),
+          c::shown_for<d>([](const d& now) { return !now.in_browser; }, model_field<&d::password>(colours, "Password", "Password", true)),
+          model_field<&d::homeserver>(colours, "Homeserver", "found through the server's .well-known"),
+          model_field<&d::device_name>(colours, "Device name", "mux"),
+          c::visible(!editing, choice_field<&d::creating, bool>(colours, "Account",
+                                                                {{"Sign in to an account", false}, {"Create a new account", true}})),
+          c::shown_for<d>(registers_here,
+                          model_field<&d::registration_token>(colours, "Registration token", "where the server registers by invitation")),
+          c::shown_for<d>(registers_here, choice_field<&d::agrees, bool>(colours, "The server's terms",
+                                                                         {{"Not agreed to", false}, {"I agree to the server's terms", true}})),
+          account_form_end<d>(colours, editing))),
+      seed);
 }
 
 }  // namespace mux::proto::matrix

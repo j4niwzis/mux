@@ -34,10 +34,9 @@ void app::apply(const request::switch_account& one) {
 
 void app::apply(const request::pop_panel&) {
   accounts_screen.forget_login();
-  mux::ui::back_panel(root());
-  // Gone back past the panel: closed as what is shown says too.
-  if (!mux::ui::open_panel(root()))
-    mux::ui::show<mux::ui::panel_facts>(showing, std::nullopt);
+  mux::ui::show<mux::ui::panel_facts>(showing, std::nullopt);
+  mux::ui::show<mux::ui::account_page_facts>(showing, std::nullopt);
+  mux::ui::show<mux::ui::account_form_facts>(showing, std::nullopt);
   this->refresh();
 }
 

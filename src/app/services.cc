@@ -266,17 +266,13 @@ struct services {
   // The chosen account, and its accounts page, when they are up.
   template <class F>
   void with_chosen_account(F&& f) {
-    auto* up = mux::ui::open_panel(root());
-    if (!up)
+    const auto chosen = mux::ui::chosen_of(*showing->look<std::optional<mux::ui::panel_facts>>());
+    if (!chosen)
       return;
-    spl::visit(
-        [&](mux::ui::accounts_panel& panel) {
-          if (!panel.selected)
-            return;
-          // A copy changed, and put back in the model where it changed.
-          kept->change_account(*panel.selected, [&](mux::config::account_t& account) { f(panel, account); });
-        },
-        *up);
+    // A copy changed, and put back in the model where it changed; its page
+    // shows it as what is shown is read again.
+    kept->change_account(*chosen, [&](mux::config::account_t& account) { f(account); });
+    refresh_due = true;
   }
   // The chat Manage is for -- a space, where its settings are open: what is
   // chosen there goes to it -- else the chat chosen.

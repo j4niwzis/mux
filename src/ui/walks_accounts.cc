@@ -11,6 +11,3 @@ import skiff.scene;
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::accounts_panel>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::accounts_panel>();
 }
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::accounts_panel::body_row>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::accounts_panel::body_row>();
-}

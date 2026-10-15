@@ -32,48 +32,6 @@ import mux.proto.xmpp;
 namespace mux::proto::xmpp::form_detail {
 using namespace ::mux::ui;
 
-// What "Advanced" folds out on an XMPP form: the resource, where to connect,
-// and PLAIN without TLS. Its height is what its last layout took.
-struct xmpp_advanced : skiff::compose::Stacked {
-  using plain_toggle = toggle_for<sends<::mux::ui::request::toggle_plain>>;
-  // The switch and what it says, side by side.
-  struct plain_row : skiff::compose::Stacked {
-    struct parts_t {
-      plain_toggle plain;
-      nodes::Text label;
-    } parts;
-    plain_row(const palette &colours)
-        : Stacked(skiff::compose::hbox(
-              10.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.plain = plain_toggle(colours.widgets, {}),
-                .label = skiff::compose::styled(
-                    {.grow = scene::axes::kX},
-                    wrapped(nodes::Text(
-                        "Allow PLAIN without TLS. Only for a test server on "
-                        "this machine: never over a network.",
-                        13.0f, colours.error)))} {}
-  };
-  struct parts_t {
-    legacy::field resource;
-    legacy::field host;
-    legacy::field port;
-    plain_row row;
-  } parts;
-
-  xmpp_advanced(const palette &colours)
-      : Stacked(
-            skiff::compose::vbox(8.0f, {.fillX = true,
-                                        .autoSize = scene::axes::kY,
-                                        .padding = {0.0f, 0.0f, 12.0f, 0.0f}})),
-        parts{.resource =
-                  legacy::field(colours, "Device name (resource)", "mux", "mux"),
-              .host = legacy::field(colours, "Host", "from the domain's SRV records"),
-              .port = legacy::field(colours, "Port", "5222"),
-              .row = plain_row(colours)} {}
-  [[nodiscard]] plain_toggle& plain() { return parts.row.parts.plain; }
-  [[nodiscard]] const plain_toggle& plain() const { return parts.row.parts.plain; }
-};
-
 // A picture the server sent with its form -- a captcha's -- decoded once,
 // held by the row that shows it; shared, so the row moves freely.
 struct sent_picture {
@@ -103,236 +61,125 @@ struct sent_picture {
                 "\n");
 }
 
-// A field of what the server asks to register: its picture where it has
-// one, what is said of it, and its box -- masked for a secret; none for
-// one only read; nothing at all shown of a hidden one, sent back as it came.
-struct asked_row : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Image<sent_picture> picture;
-    nodes::Text note;
-    legacy::field box;
-  } parts;
+// Text a reader may select and copy.
+[[nodiscard]] inline nodes::Text selectable_text(nodes::Text text) {
+  text.setSelectable(true);
+  return text;
+}
+// What is typed into one of the fields the server asked for: told to the
+// program, each edit, which keeps the answers.
+struct answer_typed {
+  static constexpr bool kEveryEdit = true;
+  using Answer = request::registration_typed;
   std::string var;
-  field_shown_t shown;
-  std::vector<std::string> held;
-
-  asked_row(const palette &colours, const registration_field &one)
-      : Stacked(skiff::compose::vbox(
-            6.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        parts{.picture = skiff::compose::styled(
-                  {.width = 240.0f,
-                   .height = 90.0f,
-                   .cornerRadius = 6.0f,
-                   .background = colours.tile},
-                  skiff::compose::visible(
-                      !one.picture.empty(),
-                      nodes::Image<sent_picture>(picture_of(one),
-                                                 nodes::fit::contain{}))),
-              .note = skiff::compose::styled(
-                  {.fillX = true},
-                  wrapped(nodes::Text(note_of(one), 13.0f, colours.dim))),
-              .box = legacy::field(
-                  colours, one.label + (one.required ? " (required)" : ""),
-                  one.desc,
-                  one.value.empty() ? std::string() : one.value.front())},
-        var(one.var), shown(one.shown), held(one.value) {
-
-    parts.note.setSelectable(true);
-    parts.note.setVisible(!parts.note.text().empty());
-    spl::visit(spl::overloaded{[&](field_shown::typed) {},
-                                     [&](field_shown::masked) { parts.box.parts.box.setMasked(true); },
-                                     [&](field_shown::hidden) { this->setVisible(false); },
-                                     [&](field_shown::read) { parts.box.setVisible(false); }},
-                  shown);
-  }
-  // Its answer: what is typed, or a hidden field's value as it came; none
-  // for one only read.
-  [[nodiscard]] std::optional<registration_answer> answer() const {
-    return spl::visit(
-        spl::overloaded{[](field_shown::read) { return std::optional<registration_answer>(); },
-                           [&](field_shown::hidden) {
-                             return std::optional(registration_answer{.var = var, .value = held.empty() ? std::string() : held.front()});
-                           },
-                           [&](const auto&) { return std::optional(registration_answer{.var = var, .value = parts.box.text()}); }},
-        shown);
-  }
+  Answer operator()(std::string_view text) const { return {var, std::string(text)}; }
 };
+// Its box: what the server said it holds first, masked for a secret.
+[[nodiscard]] inline widgets::internal::TextArea<answer_typed> answer_box(const palette& colours, const registration_field& one) {
+  widgets::internal::TextArea<answer_typed> box(colours.widgets, one.desc, answer_typed{one.var});
+  box.setSingleLine(true);
+  box.setText(one.value.empty() ? std::string() : one.value.front());
+  box.setMasked(spl::visit(spl::overloaded{[](field_shown::masked) { return true; }, [](const auto&) { return false; }}, one.shown));
+  return box;
+}
+// Whether a field has a box: not one only read, nor a hidden one (sent back
+// as it came, nothing of it shown).
+[[nodiscard]] inline bool typed_into(const registration_field& one) {
+  return spl::visit(spl::overloaded{[](field_shown::typed) { return true; }, [](field_shown::masked) { return true; },
+                                    [](const auto&) { return false; }},
+                    one.shown);
+}
+[[nodiscard]] inline bool shown_at_all(const registration_field& one) {
+  return spl::visit(spl::overloaded{[](field_shown::hidden) { return false; }, [](const auto&) { return true; }}, one.shown);
+}
+// A field of what the server asks to register: its picture where it has
+// one, what is said of it, and its box with its label.
+inline auto asked_row(const palette& colours, const registration_field& one) {
+  namespace c = skiff::compose;
+  const std::string said = note_of(one);
+  return c::visible(shown_at_all(one), c::column(
+      c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::visible(!one.picture.empty(), c::styled({.width = 240.0f, .height = 90.0f, .cornerRadius = 6.0f, .background = colours.tile},
+                                                 nodes::Image<sent_picture>(picture_of(one), nodes::fit::contain{}))),
+      c::visible(!said.empty(), c::styled({.fillX = true}, selectable_text(wrapped(nodes::Text(said, 13.0f, colours.dim))))),
+      c::visible(typed_into(one), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          nodes::Text(one.label + (one.required ? " (required)" : ""), 13.0f, colours.dim),
+          c::styled({.fillX = true, .height = 36.0f}, answer_box(colours, one))))));
+}
+using asked_row_t = decltype(asked_row(std::declval<const palette&>(), std::declval<const registration_field&>()));
+// What the server asked, under the form: what it says, and its fields --
+// made again where it asks again.
+inline auto asked_rows(const palette& colours, const registration_asked& asked) {
+  namespace c = skiff::compose;
+  const std::string said = asked.instructions + (asked.page ? "\nOr make the account on the server's page: " + *asked.page : std::string());
+  return c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::visible(!said.empty(), c::styled({.fillX = true}, selectable_text(wrapped(nodes::Text(said, 13.0f, colours.text))))),
+      c::many(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              asked.fields | std::views::transform([&](const registration_field& one) { return asked_row(colours, one); }) |
+                  std::ranges::to<std::vector>()));
+}
+using asked_rows_t = decltype(asked_rows(std::declval<const palette&>(), std::declval<const registration_asked&>()));
+// The registration the program keeps beside the form, where it has one.
+[[nodiscard]] inline std::optional<registration_asked> asked_now(const std::optional<account_form_facts>& now) {
+  if (!now)
+    return std::nullopt;
+  return spl::visit(spl::overloaded{[](const registration_form& kept) { return std::optional(kept.asked); },
+                                    [](const auto&) { return std::optional<registration_asked>(); }},
+                    now->part);
+}
+inline auto asked_part(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::projected<std::optional<account_form_facts>>(asked_now,
+      c::mount<asked_rows_t, registration_asked>([at = &colours](const registration_asked& asked) { return std::tuple{asked_rows(*at, asked)}; },
+                                                 {.fillX = true, .autoSize = scene::axes::kY}));
+}
 
-// What the server asked, under the form: what it says, and its fields.
-struct asked_part : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text instructions;
-    std::vector<asked_row> rows;
-  } parts;
-  explicit asked_part(const palette &colours)
-      : Stacked(skiff::compose::vbox(
-            10.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        parts{.instructions = skiff::compose::styled(
-                  {.fillX = true},
-                  wrapped(nodes::Text("", 13.0f, colours.text)))} {
-
-    parts.instructions.setSelectable(true);
-    this->setVisible(false);
-  }
-  void show(const palette& colours, const registration_asked& asked) {
-    parts.instructions.setText(asked.instructions + (asked.page ? "\nOr make the account on the server's page: " + *asked.page : std::string()));
-    parts.instructions.setVisible(!parts.instructions.text().empty());
-    parts.rows = std::ranges::to<std::vector<asked_row>>(std::views::transform(asked.fields, [&](const registration_field& one) { return asked_row(colours, one); }));
-    this->setVisible(true);
-    this->invalidateLayout();
-  }
-  [[nodiscard]] std::vector<registration_answer> answers() const {
-    return std::ranges::to<std::vector<registration_answer>>(std::views::transform(std::views::filter(std::views::transform(parts.rows, [](const asked_row& row) { return row.answer(); }), [](const auto& one) { return one.has_value(); }), [](const auto& one) { return *one; }));
-  }
-};
-
-// An XMPP account's settings: its JID and password, and "Advanced" folds out
-// the rest. It fills the column it is given.
-struct xmpp_form : skiff::compose::Stacked {
-  // What its handlers ask for, returned.
-  using Answer = ::mux::ui::request::submit_login;
-  // What the add-account pane says of the protocol.
-  static constexpr std::string_view note = "An address like user@example.com, on a server such as Prosody or ejabberd.";
-  // The address the account was saved under, when this is an edit of one.
-  std::optional<std::string> editing;
-  bool advanced = false;
-  // A new account, made on the server first (XEP-0077); the answers to what
-  // it asked, as saved, until it asks again.
-  bool creating = false;
-  std::vector<registration_answer> answered;
-  const palette* colours_ = nullptr;
-  struct pick_mode {
-    xmpp_form* form;
-    void operator()(std::size_t index) const { form->set_creating(index == 1); }
-  };
-
-  using advanced_button_t = button_for<sends<::mux::ui::request::toggle_advanced>>;
-  struct parts_t {
-    legacy::field address;
-    legacy::field password;
-    choice_menu<pick_mode> mode;
-    asked_part asked;
-    advanced_button_t advanced_button;
-    widgets::Collapsible<xmpp_advanced> more;
-    legacy::form_end end;
-  } parts;
-
-  xmpp_form(const palette &colours,
-            const std::optional<::mux::proto::xmpp::kept> &from)
-      : Stacked(skiff::compose::vbox(
-            12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        creating(from && from->create.value_or(false)),
-        answered(
-            from ? from->answers.value_or(std::vector<registration_answer>{})
-                 : std::vector<registration_answer>{}),
-        colours_(&colours),
-        parts{.address = legacy::field(colours, "Address (JID)", "user@example.com"),
-              .password = legacy::field(colours, "Password", "Password"),
-              .mode = skiff::compose::visible(
-                  !from || creating,
-                  make_choice_menu<pick_mode>(colours, "Account",
-                      {"Sign in to an account", "Create a new account"},
-                      creating ? 1 : 0, pick_mode{this})),
-              .asked = asked_part(colours),
-              .advanced_button = skiff::compose::styled(
-                  {.width = 120.0f, .height = 36.0f},
-                  advanced_button_t(colours.widgets, "Advanced", {})),
-              .more = widgets::Collapsible<xmpp_advanced>(colours),
-              .end = legacy::form_end(colours, from.has_value())} {
-    auto& [address, password, mode, asked, advanced_button, more, end] = parts;
-    // An account kept and signed in to: one already, nothing to choose.
-    auto& folded = more.child().parts;
-    password.parts.box.setMasked(true);
-    if (from) {
-      editing = from->address;
-      address.parts.box.setText(from->address);
-      password.parts.box.setText(from->password);
-      folded.resource.parts.box.setText(from->resource);
-      if (from->host)
-        folded.host.parts.box.setText(*from->host);
-      if (from->port)
-        folded.port.parts.box.setText(std::to_string(*from->port));
-      more.child().plain().setOn(from->plain_without_tls);
-      advanced = from->resource != "mux" || from->host || from->port || from->plain_without_tls;
-    }
-    more.setOpenNow(advanced);
-  }
-
-  // Folded out or away: smoothly, where things move.
-  void show_advanced(bool shown) {
-    advanced = shown;
-    parts.more.setOpen(shown);
-  }
-
-  void flip_plain() { parts.more.child().plain().setOn(!parts.more.child().plain().on()); }
-
-  // A new account or one there is: what the server asked shown with it.
-  void set_creating(bool on) {
-    creating = on;
-    parts.asked.setVisible(on && !parts.asked.parts.rows.empty());
-    this->invalidateLayout();
-  }
-  // What the server asks to register, to be answered here and saved.
-  void show_registration(const registration_asked& asked) {
-    creating = true;
-    parts.mode.setVisible(true);
-    parts.asked.show(*colours_, asked);
-    this->say("The server asks more to make the account: answer below, then save.", false);
-    this->invalidateLayout();
-  }
-
-  // The account as typed, or what is wrong with it. What is folded away is
-  // kept as it is: folding is not clearing.
-  [[nodiscard]] std::expected<::mux::proto::xmpp::kept, std::string> account() const {
-    const auto& folded = parts.more.child().parts;
-    ::mux::proto::xmpp::kept out{.address = parts.address.text(),
-                             .password = parts.password.text(),
-                             .resource = folded.resource.text(),
-                             .host = typed_or_nothing(folded.host.text()),
-                             .plain_without_tls = parts.more.child().plain().on()};
-    if (creating) {
-      out.create = true;
-      out.answers = parts.asked.parts.rows.empty() ? answered : parts.asked.answers();
-      if (out.password.empty())
-        return std::unexpected(std::string("A new account needs a password"));
-    }
-    if (const std::string& text = folded.port.text(); !text.empty()) {
-      std::int64_t number = 0;
-      const auto [last, failed] = std::from_chars(text.data(), text.data() + text.size(), number);
-      if (failed != std::errc{} || last != text.data() + text.size())
-        return std::unexpected("A port is a number from 1 to 65535");
-      out.port = number;
-    }
-    if (auto wrong = check(out))  // the protocol's own check, by ADL
-      return std::unexpected(*wrong);
-    return out;
-  }
-
-  void say(std::string text, bool error) { parts.end.say(std::move(text), error); }
-
-  using Node::onKey;
-  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
-    std::optional<Answer> answer;
-    if (press.key == scene::keys::kEnter) {
-      answer = ::mux::ui::request::submit_login{};
-      reply.handle();
-    }
-    return answer;
-  }
-};
+// What "Advanced" folds out: the resource, where to connect, and PLAIN
+// without TLS -- the last said in the error's colour, as it is one.
+inline auto advanced_fields(const palette& colours) {
+  namespace c = skiff::compose;
+  using d = account_draft;
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+                   model_field<&d::resource>(colours, "Device name (resource)", "mux"),
+                   model_field<&d::host>(colours, "Host", "from the domain's SRV records"),
+                   model_field<&d::port>(colours, "Port", "5222"),
+                   check_field<&d::plain_without_tls>(colours, "Allow PLAIN without TLS. Only for a test server on this machine: never over a network."));
+}
 
 }  // namespace mux::proto::xmpp::form_detail
 
 export namespace mux::proto::xmpp {
 
-// Its account form, for the panels: by the protocol's tag, and by what an
-// account of it keeps.
-using form = form_detail::xmpp_form;
-constexpr type_tag<form> form_type(const state&) {
-  return {};
+// What the add-account pane says of the protocol.
+[[nodiscard]] constexpr std::string_view form_note(const account_draft&) {
+  return "An address like user@example.com, on a server such as Prosody or ejabberd.";
 }
-constexpr type_tag<form> form_type_for(const kept&) {
-  return {};
+// An XMPP account's settings, over the draft typed into them: its JID and
+// password; a new account -- made on the server first (XEP-0077), with the
+// answers to what the server asked, as the program keeps them; and
+// "Advanced" folding out the rest, folded out where any of it is not as it
+// comes. Folding is not clearing: what is folded away is kept.
+inline auto account_form_of(const account_draft& seed, const ui::palette& colours, bool editing) {
+  namespace c = skiff::compose;
+  using namespace ::mux::ui;
+  using d = account_draft;
+  return c::local<d>(
+      submitted_by_enter<d>(c::column(
+          c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          model_field<&d::address>(colours, "Address (JID)", "user@example.com"),
+          model_field<&d::password>(colours, "Password", "Password", true),
+          c::visible(!editing || seed.creating, choice_field<&d::creating, bool>(colours, "Account",
+                                                                                 {{"Sign in to an account", false}, {"Create a new account", true}})),
+          c::shown_for<d>([](const d& now) { return now.creating; }, form_detail::asked_part(colours)),
+          check_field<&d::advanced>(colours, "Advanced"),
+          c::projected<d>([](const d& now) { return now.advanced; }, widgets::Collapsible(form_detail::advanced_fields(colours))),
+          account_form_end<d>(colours, editing))),
+      seed);
+}
+// The answers the program keeps of what the server asked, in the draft
+// sent: each asked field's, typed or as it came -- none for one only read.
+inline void with_form_part(account_draft& draft, const registration_form& kept) {
+  draft.answers = kept.answers;
 }
 
 }  // namespace mux::proto::xmpp

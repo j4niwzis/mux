@@ -78,7 +78,7 @@ class looks_part {
                                  k_->set_part(std::move(now));
                                },
                                [&](mux::choice_level::account) {
-                                 s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                 s_->with_chosen_account([&](mux::config::account_t& account) {
                                    mux::config::room_events_in(account) = held.all;
                                    mux::config::room_event_kinds_in(account) = held.kinds;
                                  });
@@ -138,7 +138,7 @@ class looks_part {
                                        known = one.look.value_or(mux::config::bubble_look{});
                                      },
                                      [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       s_->with_chosen_account([&](mux::config::account_t& account) {
                                          auto& kept = spl::visit(
                                              spl::overloaded{[&](mux::config::look_part::bubbles) -> std::optional<std::string>& { return mux::config::bubbles_in(account); },
                                                                 [&](mux::config::look_part::panels) -> std::optional<std::string>& { return mux::config::panels_in(account); }},
@@ -187,7 +187,7 @@ class looks_part {
   void set_at(const mux::choice_level_t& level, std::optional<mux::config::wallpaper_t> chosen) {
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::look_settings::wallpaper>(chosen); },
                                      [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       s_->with_chosen_account([&](mux::config::account_t& account) {
                                          mux::config::wallpaper_in(account) =
                                              chosen ? std::optional<std::string>(mux::config::word_of(*chosen)) : std::nullopt;
                                        });

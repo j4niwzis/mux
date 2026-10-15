@@ -337,9 +337,11 @@ void app::take_page_input() {
     now[0] = spl::visit([](auto& page) { return bound_part_of(page); }, up->page());
   if (auto* managing = mux::ui::manage_up(root()))
     now[1] = managing->fState.fId;
+  // The accounts page: made anew as it opens, and its page beside the list
+  // made anew as what is chosen there changes.
   if (auto* panel = mux::ui::open_panel(root()))
-    now[2] = spl::visit([](auto& accounts) { return spl::visit([](auto& page) { return bound_part_of(page); }, accounts.detail); },
-                        *panel);
+    now[2] = spl::visit([](auto& accounts) { return accounts.fState.fId; }, *panel) ^
+             mux::ui::detail_identity(*showing.look<std::optional<mux::ui::panel_facts>>());
   if (now != bound_pages) {
     bound_pages = now;
     window_binding.invalidate();
@@ -464,6 +466,7 @@ void app::refresh_shown() {
     if (const auto* saved = this->settings_of(now.by.address))
       now.account = *saved;
     now.state = mux::ui::protocol_state_of(shared.ui, now.by);
+    now.proxies = this->proxies();
     mux::ui::read_account_model(now, *model);
     mux::ui::show(showing, std::optional(std::move(now)));
   }
@@ -676,9 +679,8 @@ void app::refresh(std::source_location from) {
   pictures.ask();
   // The accounts page, where it is up: the account being added shown in,
   // and the chats then.
-  if (auto* up = mux::ui::open_panel(root()))
-    if (spl::visit([this](auto& panel) { return accounts_screen.bring_up_to_date(panel); }, *up))
-      this->show_conversations();
+  if (accounts_screen.bring_up_to_date())
+    this->show_conversations();
 }
 
 

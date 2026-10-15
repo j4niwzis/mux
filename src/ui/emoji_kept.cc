@@ -146,18 +146,4 @@ auto with_preview(const palette& colours, N page) {
                     {.place = scene::anchor::kTopLeft, .fill = true}))));
 }
 
-// The emote pictures a subtree shows within a rect of the window -- what is
-// scrolled out of it left -- for the program to fetch. Any page's: it says
-// nothing of them itself.
-inline void emote_pictures_in(nodes::Image<from_emotes>& image, const skia::SkRect& view, std::vector<emote_picture>& out) {
-  const auto shift = skiff::scene::work::drawnOffset(image.fState.fId);
-  if (image.fState.visible() && image.bounds().makeOffset(shift.x, shift.y).intersects(view))
-    out.push_back({image.source().key, image.source().kind});
-}
-template <class N> void emote_pictures_in(N& node, const skia::SkRect& view, std::vector<emote_picture>& out) {
-  if (!skiff::scene::stateOf(node).visible())
-    return;
-  skiff::scene::eachChild(node, [&](auto& child) { emote_pictures_in(child, view, out); });
-}
-
 }  // namespace mux::ui

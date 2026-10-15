@@ -1134,7 +1134,7 @@ inline auto message_row(const bubble_needs& n, const conversation& in, const bub
                        c::swiped(kSwipeToReply, 120.0f, sends<request::reply_to>{{said.id, said.body.plain}}, swipe_shown{&colours},
                                  std::move(mark), std::move(inner)),
                        std::move(unread), std::move(readers)));
-  row.fState.setRecorded(!said.attachment && said.album.empty() && !frosted);
+  skiff::compose::state_of(row).setRecorded(!said.attachment && said.album.empty() && !frosted);
   // Not shown where the chat's settings say so: kept, and out of the flow.
   row.setVisible(!said.service || f.events_shown);
   return c::washed_for<message_marks>(colours.accent, 56.0f, 80.0f,

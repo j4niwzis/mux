@@ -153,17 +153,20 @@ template <class... Tags> struct protocol_row_nodes<protocol_list<Tags...>> {
 using protocol_row_view = typename variant_of_types<
     typename joined<type_list<nodes::Text>, typename protocol_row_nodes<protocols>::type>::type>::type;
 using protocol_row_holder = skiff::compose::Holding<protocol_row_view>;
+[[nodiscard]] inline std::optional<protocol_row_holder> row_holder_of(std::nullopt_t) {
+  return std::nullopt;
+}
+template <class V>
+[[nodiscard]] inline std::optional<protocol_row_holder> row_holder_of(std::optional<V> made) {
+  if (!made) return std::nullopt;
+  return protocol_row_holder(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+                             protocol_row_view(std::move(*made)));
+}
 [[nodiscard]] inline std::optional<protocol_row_holder> protocol_row_of(
     const ui_shared& shared, const conversation& one) {
   return spl::visit([&](const auto& state) -> std::optional<protocol_row_holder> {
     using row_view_defaults::make_row_view;
-    auto made = make_row_view(state, one);
-    if constexpr (!std::same_as<decltype(made), std::nullopt_t>) {
-      if (made)
-        return protocol_row_holder(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
-                                   protocol_row_view(std::move(*made)));
-    }
-    return std::nullopt;
+    return row_holder_of(make_row_view(state, one));
   }, protocol_state_of(shared, one.id.account));
 }
 

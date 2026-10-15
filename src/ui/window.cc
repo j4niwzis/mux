@@ -484,17 +484,19 @@ auto layer_for(const Needs &needs) {
 
 // What the layers' keys ask for: a dialog closed, the plugins' each by its
 // facts.
+// What Esc on a dialog or a layer asks for, by its facts type, unless said
+// otherwise below: close_shown of it.
+template <class Facts> ::mux::ui::request::close_shown<Facts> closing_of(std::type_identity<Facts>) { return {}; }
 template <class... Features, class... Tools>
 consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) {
   return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
-                               ::mux::ui::request::close_shown<Tools>...>>{};
+                               decltype(closing_of(std::type_identity<Tools>{}))...>>{};
 }
 // What Esc on a dialog or a layer asks for, by its facts' type: a plugin's
 // its close_shown; the window's own each its request. A dialog of the
 // window's own with none here asks for close_shown of its facts, which no
 // handler answers: the build says so (it is not in the answers).
-template <class Facts> ::mux::ui::request::close_shown<Facts> closing_of(std::type_identity<Facts>) { return {}; }
 inline ::mux::ui::request::close_send_box closing_of(std::type_identity<send_facts>) { return {}; }
 inline ::mux::ui::request::close_explore closing_of(std::type_identity<explore_facts>) { return {}; }
 inline ::mux::ui::request::close_wallpaper closing_of(std::type_identity<wallpaper_facts>) { return {}; }
@@ -515,6 +517,61 @@ inline ::mux::ui::request::close_emoji closing_of(std::type_identity<emoji_facts
 inline ::mux::ui::request::close_menu closing_of(std::type_identity<menu_facts>) { return {}; }
 inline ::mux::ui::request::close_picture closing_of(std::type_identity<viewer_facts>) { return {}; }
 inline ::mux::ui::request::close_text_menu closing_of(std::type_identity<text_menu_facts>) { return {}; }
+
+// ---- Esc, as what is shown says ------------------------------------------------
+// What Esc closes of a dialog or a layer up, by its facts: as closing_of
+// says; Settings a page back -- home, closed; a verification as its step
+// lets it (OK over, Cancel while it waits; not while the emoji are
+// compared); a passphrase never -- Esc goes on under it.
+using escape_answer = typename decltype(window_answers_of(dialog_plugins{}, tool_facts_list{}))::type;
+template <class Facts> [[nodiscard]] std::optional<escape_answer> escape_of(const Facts&) {
+  return escape_answer{closing_of(std::type_identity<Facts>{})};
+}
+[[nodiscard]] inline std::optional<escape_answer> escape_of(const settings_facts& facts) {
+  return spl::visit(spl::overloaded{[](settings_page::home) { return escape_answer{request::close_settings{}}; },
+                                    [](const settings_page::proxy&) { return escape_answer{request::settings_proxies{}}; },
+                                    [](const settings_page::library&) { return escape_answer{request::settings_about{}}; },
+                                    [](const settings_page::proxies& one) {
+                                      return one.with_back ? escape_answer{request::settings_home{}} : escape_answer{request::close_settings{}};
+                                    },
+                                    [](const auto&) { return escape_answer{request::settings_home{}}; }},
+                    facts.page);
+}
+[[nodiscard]] inline std::optional<escape_answer> escape_of(const verification_view& now) {
+  if (step_over(now.step))
+    return escape_answer{request::close_verification{}};
+  if (step_waits(now.step))
+    return escape_answer{request::verify_cancel_now{}};
+  return std::nullopt;
+}
+[[nodiscard]] inline std::optional<escape_answer> escape_of(const passphrase_facts&) { return std::nullopt; }
+// The dialogs and the layers, in the order they are drawn: Esc asks of the
+// top-most up first.
+template <class Features>
+struct plugin_dialog_facts;
+template <class... Features>
+struct plugin_dialog_facts<plugin_list<Features...>> {
+  using type = type_list<dialog_facts_t<Features>...>;
+};
+using escape_order = typename joined<
+    type_list<settings_facts, notice_facts, person_shown, room_card_facts>, typename plugin_dialog_facts<dialog_plugins>::type,
+    type_list<history_facts, link_facts, leave_space_facts, marks_facts, room_settings_facts, forward_facts, new_chat_facts, new_room_facts,
+              packs_facts, wallpaper_facts, explore_facts>,
+    tool_facts_list, type_list<send_facts, passphrase_facts, verification_view, emoji_facts, menu_facts, viewer_facts, text_menu_facts>>::type;
+template <class Model, class... Facts>
+[[nodiscard]] std::optional<escape_answer> escape_in(const Model& showing, type_list<Facts...>) {
+  std::optional<escape_answer> found;
+  const auto ask = [&]<class F>(std::type_identity<F>) {
+    if (const auto& up = *showing.template look<std::optional<F>>(); up)
+      found = escape_of(*up);
+    return found.has_value();
+  };
+  // The one drawn last -- on top -- first.
+  [&]<std::size_t... At>(std::index_sequence<At...>) {
+    (void)(ask(std::type_identity<std::tuple_element_t<sizeof...(Facts) - 1 - At, std::tuple<Facts...>>>{}) || ...);
+  }(std::index_sequence_for<Facts...>{});
+  return found;
+}
 // A box over the window (widgets::Dialog, whatever it shows): drawn while it
 // fades out too, and its content dropped once it is shut.
 template <class Content, class Dismiss> std::true_type dialog_kind(const widgets::Dialog<Content, Dismiss>*);

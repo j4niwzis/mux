@@ -139,7 +139,7 @@ inline auto proxy_editor(const palette& colours, const std::optional<config::pro
       model_field<&proxy_draft::name>(colours, "Name", "Home, Tor, Work…", false, scene::Margin::horizontal(16.0f)),
       skiff::compose::bound<skiff::model::Field<&proxy_draft::kind>>(skiff::compose::styled(
           {.fillX = true, .height = 30.0f, .margin = scene::Margin::horizontal(16.0f)},
-          widgets::ChoiceTabs<config::proxy_kind_t>({{"SOCKS5", config::proxy_kind::socks5{}}, {"HTTP", config::proxy_kind::http{}}}))),
+          themed_tabs<config::proxy_kind_t>(colours, {{"SOCKS5", config::proxy_kind::socks5{}}, {"HTTP", config::proxy_kind::http{}}}))),
       model_field<&proxy_draft::host>(colours, "Host", "proxy.example.com", false, scene::Margin::horizontal(16.0f)),
       model_field<&proxy_draft::port>(colours, "Port", "1080", false, scene::Margin::horizontal(16.0f)),
       model_field<&proxy_draft::username>(colours, "User name", "none", false, scene::Margin::horizontal(16.0f)),

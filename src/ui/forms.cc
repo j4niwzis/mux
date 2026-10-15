@@ -194,6 +194,13 @@ auto make_content(std::type_identity<passphrase_box_t>, const Needs& needs, cons
 
 // ---- the account forms ---------------------------------------------------------
 
+// Tabs for a few values of a part, in the window's theme.
+template <class T>
+[[nodiscard]] widgets::ChoiceTabs<T> themed_tabs(const palette& colours, std::vector<std::pair<std::string, T>> choices) {
+  widgets::ChoiceTabs<T> tabs(std::move(choices));
+  tabs.setTheme(colours.widgets);
+  return tabs;
+}
 // A part of a model chosen among a few values, its words over the tabs:
 // pressed, the part set to the one picked.
 template <auto Member, class T>
@@ -201,7 +208,7 @@ auto choice_field(const palette& colours, std::string label, std::vector<std::pa
   namespace c = skiff::compose;
   return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                    nodes::Text(std::move(label), 13.0f, colours.dim),
-                   c::bound<skiff::model::Field<Member>>(c::styled({.fillX = true}, widgets::ChoiceTabs<T>(std::move(choices)))));
+                   c::bound<skiff::model::Field<Member>>(c::styled({.fillX = true}, themed_tabs<T>(colours, std::move(choices)))));
 }
 // An account form's end: what it says, as the program says it, and Log in
 // (Save, editing an account) sending its draft -- and, editing, Close.

@@ -174,7 +174,7 @@ using storage_page_t = decltype(storage_page(std::declval<const palette&>()));
 inline auto notification_settings_view(const palette& colours) {
   using every = config::notification_settings;
   auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(
-      skiff::compose::styled({.margin = {4.0f, 20.0f, 4.0f, 20.0f}}, widgets::ChoiceTabs<config::notify_backend_t>(
+      skiff::compose::styled({.margin = {4.0f, 20.0f, 4.0f, 20.0f}}, themed_tabs<config::notify_backend_t>(colours, 
           {{"System", config::notify_backend::native{}}, {"Built in", config::notify_backend::built_in{}}})));
   return skiff::compose::column(
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), spaced_title(colours, "NOTIFICATIONS"),

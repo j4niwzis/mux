@@ -164,6 +164,16 @@ class chat_list_part {
         asked(request::close_chat{});
     }
   }
+  // Out of the forum open, to its row, lit: Alt+Right goes back in.
+  template <class Asked>
+  void apply(const request::leave_forum&, const Asked& asked) {
+    const auto& chat = *s_->showing->look<mux::ui::chat_shown>();
+    const auto& listed = s_->showing->look<mux::ui::list_shown>()->account;
+    if (!chat.forum || !listed)
+      return;
+    this->point(mux::conversation_id{*listed, *chat.forum});
+    asked(request::close_forum{});
+  }
   // A forum gone to by Alt+Up or Alt+Down: lit, not opened.
   void point(std::optional<mux::conversation_id> at) {
     this->change([&](mux::ui::list_shown& list) { list.pointed = std::move(at); });
@@ -648,6 +658,10 @@ class chat_list_part {
       now.side_up = !now.single || !chat.chosen;
       now.side_edge = !now.single;
       now.chat_up = !now.single || (chat.chosen && !beside);
+      now.selecting = s_->showing->look<mux::ui::selection_shown>()->count > 0;
+      now.suggesting = !s_->showing->look<mux::ui::suggestions_shown>()->items.empty();
+      now.pointing = s_->showing->look<mux::ui::list_shown>()->pointed.has_value();
+      now.in_forum = chat.forum.has_value();
     });
   }
   template <class Change>

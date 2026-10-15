@@ -117,6 +117,10 @@ struct screen_shown {
   // The panel docked under the field on a phone's window, as high as it is:
   // the chat standing over it.
   float docked = 0.0f;
+  // The keys caught before the field takes them, and whether each is live:
+  // messages selected (Ctrl+C, Delete), the list over the field (Up, Down,
+  // Enter, Tab, Esc), a forum gone to (Alt+Right) or open (Alt+Left).
+  bool selecting = false, suggesting = false, pointing = false, in_forum = false;
   friend bool operator==(const screen_shown&, const screen_shown&) = default;
 };
 // What a search in the chat found, in the chats' place while it is asked:
@@ -166,6 +170,8 @@ struct list_search {
 struct big_bars {
   bool on = false;
 };
+// Out of the forum open, to its row in the list, lit (Alt+Left).
+struct leave_forum {};
 // A key pressed on the chats screen that nothing under the keys took: what
 // it does is the program's to say, from what it holds.
 struct screen_key {

@@ -87,6 +87,14 @@ struct services {
   bool newest_due = false;
   // A text sent, or asked as a command: the ways back from jumps let go.
   bool returns_due = false;
+  // What is left written in each chat, as the program keeps it; and how
+  // many times that changed, for what lists the chats to see it moved.
+  std::map<conversation_id, std::string> drafts;
+  std::uint64_t drafts_revision = 0;
+  [[nodiscard]] std::string draft_of(const conversation_id& id) const {
+    const auto found = drafts.find(id);
+    return found == drafts.end() ? std::string() : found->second;
+  }
   // An answer being written in the thread open let go: the field's bar over
   // it too.
   void stop_thread_answer() const {

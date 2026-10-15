@@ -22,8 +22,11 @@ class drafts_part {
   // What is in a chat's field, kept as its draft -- blank, none -- and the
   // file written where it changed.
   void keep(const conversation_id& in, const std::string& text) {
-    auto& drafts = s_->root().main().drafts;
-    if (!logic::keep_draft(drafts, in, text) || s_->demo())
+    auto& drafts = s_->drafts;
+    if (!logic::keep_draft(drafts, in, text))
+      return;
+    ++s_->drafts_revision;
+    if (s_->demo())
       return;
     (void)s_->vault->write_file(mux::config::state_path("drafts.json"), logic::drafts_text(drafts));
   }
@@ -32,7 +35,8 @@ class drafts_part {
   void load() {
     const std::string text = s_->vault->read_file(mux::config::state_path("drafts.json")).value_or(std::string());
     for (auto& [in, draft] : logic::drafts_from(text))
-      s_->root().main().drafts.insert_or_assign(in, std::move(draft));
+      s_->drafts.insert_or_assign(in, std::move(draft));
+    ++s_->drafts_revision;
   }
 
  private:

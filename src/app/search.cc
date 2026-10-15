@@ -32,6 +32,7 @@ class search_part {
   void apply(const request::close_search&) {
     searching_.reset();
     s_->root().main().show_search_results({}, std::nullopt);
+    mux::ui::show(*s_->showing, mux::ui::found_shown{});
     mux::ui::show(*s_->showing, mux::ui::search_found{});
   }
   void apply(const request::search_typed& one) {
@@ -78,6 +79,7 @@ class search_part {
     if (searching_ && searching_->in != which) {
       searching_.reset();
       s_->root().main().show_search_results({}, std::nullopt);
+    mux::ui::show(*s_->showing, mux::ui::found_shown{});
       mux::ui::show(*s_->showing, mux::ui::search_found{});
     }
   }
@@ -114,8 +116,9 @@ class search_part {
       rows.push_back({i, one.sender, chat ? ui::sender_name(*chat, one.sender) : one.sender, one.at, std::move(text)});
     }
     const std::size_t count = rows.size();
-    s_->root().main().show_search_results(std::move(rows),
-                                          searching_->query.empty() ? std::nullopt : std::optional<std::size_t>(count));
+    const auto counted = searching_->query.empty() ? std::nullopt : std::optional<std::size_t>(count);
+    mux::ui::show(*s_->showing, mux::ui::found_shown{counted, rows});
+    s_->root().main().show_search_results(std::move(rows), counted);
   }
   // The found at `at` gone to, what was asked marked in it; the count set.
   void show_at() {

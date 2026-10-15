@@ -71,6 +71,8 @@ void app::woken() {
                                  // The own server's, for what the chat list searched.
                                  if (root().main().current == std::optional(listed.by) && listed.server.empty() && !listed.space)
                                    root().main().found_rooms_elsewhere(listed.query, listed.rooms);
+                                 if (listed.server.empty() && !listed.space)
+                                   chat_list.found_rooms(listed.query, listed.rooms);
                                },
                                // Something the server refused: a notice saying why.
                                [&](const mux::change::refused& said) { shared.notice("Not done", said.what); },
@@ -118,6 +120,7 @@ void app::woken() {
                                  });
                                  if (root().main().current == std::optional(found.by))
                                    root().main().found_people_elsewhere(found.query, found.people);
+                                 chat_list.found_people(found.query, found.people);
                                },
                                // A room looked up: its card filled, while it
                                // is up for that room still.
@@ -502,6 +505,7 @@ void app::before_frame() {
     jumps.clear_returns();
   jumps.go_on(taker{this});
   chat_view.show();
+  chat_list.show();
   manage.show();
   suggestions.show();
   threads.show();

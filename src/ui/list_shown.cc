@@ -81,7 +81,35 @@ struct side_shown {
   bool side_on = false, top_on = false;
   std::optional<std::string> forum;
   bool no_chats = false;
+  // An icon being dragged: the side bar shown to drop on, whatever it holds.
+  bool dragging = false;
+  // For a chat's menu: every account saved (its places), and the theme its
+  // strip colours are chosen in.
+  std::vector<account_id> accounts;
+  config::theme_t theme = config::theme::tinted{};
   friend bool operator==(const side_shown&, const side_shown&) = default;
+};
+// The chats screen's frame, as the program keeps it: how wide the side and
+// the info are (their own, until their edges are dragged), whether the
+// window is one pane at a time (a phone's), and then which is up.
+namespace pane {
+struct list {
+  friend bool operator==(list, list) = default;
+};
+struct chat {
+  friend bool operator==(chat, chat) = default;
+};
+struct beside {  // the info or the threads, in the chat's place
+  friend bool operator==(beside, beside) = default;
+};
+}  // namespace pane
+using pane_t = spl::variant<pane::list, pane::chat, pane::beside>;
+struct screen_shown {
+  float side_width = 300.0f;
+  float info_width = 340.0f;
+  bool single = false;
+  pane_t pane = pane::list{};
+  friend bool operator==(const screen_shown&, const screen_shown&) = default;
 };
 // What a search in the chat found, in the chats' place while it is asked:
 // how many, and each.

@@ -303,16 +303,25 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // Redacted before it came here: its content emptied, so not read as its
     // type's. A message is one deleted -- its thread's summary kept, as
     // Element keeps it -- not "sent m.room.message"; a reaction, nothing.
+    // The server's emptied copy is marked so: what keeps deleted messages
+    // keeps the whole one it holds rather than this, in memory and on disk.
+    // An encrypted one too -- not "waiting for this message" over what was
+    // read of it.
     const bool redacted = one.unsigned_ && one.unsigned_->redacted_because;
     const auto deleted = [&] {
       message made{.in = in, .id = one.event_id, .sender = one.sender, .at = at, .body = {},
-                   .outgoing = one.sender == id_.address};
+                   .redacted = true, .outgoing = one.sender == id_.address};
       if (auto summary = summary_of())
         made.threaded = std::move(*summary);
       this->added(std::move(made), where, sealed);
       sink_(change::message_redacted{in, one.event_id});
     };
-    spl::visit(spl::overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
+    spl::visit(spl::overloaded{[&](event_type::encrypted) {
+                            if (redacted)
+                              deleted();
+                            else
+                              encrypted(in, one, at, where);
+                          },
                           [&](event_type::message) {
                             if (redacted)
                               deleted();

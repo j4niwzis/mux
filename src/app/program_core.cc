@@ -569,9 +569,11 @@ void app::before_frame() {
   // press, on a phone: its menu, the last asked for.
   if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !root().context_menu_up())
     spl::visit(spl::overloaded{[&](skiff::scene::text_menu::of_text& text) {
-                                       root().show_text_menu(std::move(text.text), std::move(text.link));
+                                       shared.show_text_menu(mux::ui::text_menu_items(std::move(text.text), std::move(text.link), shared.emoji));
                                      },
-                                     [&](const skiff::scene::text_menu::of_field& field) { root().show_field_menu(field); }},
+                                     [&](const skiff::scene::text_menu::of_field& field) {
+                                       shared.show_text_menu(mux::ui::field_menu_items(field, false), field);
+                                     }},
                   asked.back());
   // What the parts left to do: a chat opened, a link followed; the window
   // made again, brought up to date; the emoji picked lately kept.

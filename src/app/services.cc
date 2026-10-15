@@ -196,6 +196,11 @@ struct services {
       }
     });
   }
+  // A text menu, at the press that asked for it; and let go of.
+  void show_text_menu(std::vector<mux::ui::text_menu_item> items, std::optional<skiff::scene::text_menu::of_field> field = std::nullopt) const {
+    mux::ui::show(*showing, std::optional(mux::ui::text_menu_at(std::move(items), std::move(field), root().last_press(), scene->viewport())));
+  }
+  void close_text_menu() const { mux::ui::show<mux::ui::text_menu_facts>(*showing, std::nullopt); }
   void close_notice() const { mux::ui::show<mux::ui::notice_facts>(*showing, std::nullopt); }
   // A chat that is a window of its history away from its newest: back to
   // its newest, live -- before anything is put at its end. Its newest from

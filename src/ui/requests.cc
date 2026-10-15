@@ -537,6 +537,8 @@ struct text_key {
   bool shift = false;  // with Shift too: Ctrl+Shift+X struck through
   bool control = true;
 };
+// The text menu let go of: pressed off, Esc, or done.
+struct close_text_menu {};
 struct text_formatting {
   bool open = true;
 };

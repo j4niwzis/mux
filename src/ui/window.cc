@@ -98,6 +98,52 @@ inline std::vector<text_menu_item> field_menu_items(const scene::text_menu::of_f
   return items;
 }
 
+// A selectable text's: Copy, what it selected; where the press was on a
+// link, Copy Link -- and on a custom emoji, a way to keep it or let it go.
+inline std::vector<text_menu_item> text_menu_items(std::string text, std::optional<std::string> link, const emoji_kept& kept) {
+  std::vector<text_menu_item> items{{"Copy", "", request::copy_text{std::move(text)}}};
+  if (link) {
+    if (const auto emoji = copied_emoji_at(*link))
+      items.push_back({kept.emoji_is_favourite(emoji->url) ? "Remove from favorites" : "Add to favorites", "", request::favourite_emoji{*emoji}});
+    items.push_back({"Copy Link", "", request::copy_text{std::move(*link)}});
+  }
+  return items;
+}
+// Messages selected: copied, forwarded, deleted, or let go.
+inline std::vector<text_menu_item> selection_menu_items(std::size_t count, bool forwardable, bool deletable) {
+  return {{std::format("Copy {} messages", count), "Ctrl+C", request::selection_copy{}},
+          {"Forward selected", "", request::selection_forward{}, forwardable},
+          {"Delete selected\u2026", "Delete", request::selection_delete{}, deletable},
+          {"Clear selection", "Esc", request::selection_cancel{}, true, true}};
+}
+// A text menu, where the pointer was pressed -- a right press, a long one
+// on a phone. A field's: Cut and Copy where something is selected and it is
+// no password's, Paste, Select All -- each the key the field takes for it,
+// given to it (it keeps the focus: a button takes none).
+// A text menu up, as the program says: its items, where it is -- at the
+// press that asked for it, kept in the window -- and, a field's, the field
+// as it was, for its Formatting page.
+struct text_menu_facts {
+  std::vector<text_menu_item> items;
+  float x = 0.0f, y = 0.0f, width = 260.0f, height = 0.0f;
+  std::optional<scene::text_menu::of_field> field;
+};
+inline text_menu_facts text_menu_at(std::vector<text_menu_item> items, std::optional<scene::text_menu::of_field> field, skia::SkPoint press,
+                                    skia::SkRect window) {
+  const float tall = std::min(text_menu_height(items), window.height());
+  return {.items = std::move(items),
+          .x = std::clamp(press.x() - window.fLeft, 0.0f, std::max(0.0f, window.width() - 260.0f)),
+          .y = std::clamp(press.y() - window.fTop, 0.0f, std::max(0.0f, window.height() - tall)),
+          .width = std::min(260.0f, window.width()),
+          .height = tall,
+          .field = std::move(field)};
+}
+// The menu, where its facts put it.
+inline auto text_menu_layer(const ui_needs& n, const text_menu_facts& facts) {
+  return skiff::compose::styled({.place = scene::anchor::kTopLeft, .x = facts.x, .y = facts.y, .width = facts.width, .height = facts.height},
+                                make_text_menu(*n.colours, facts.items));
+}
+
 // ---- the window -------------------------------------------------------------------
 
 // What the window shows that the program opens and closes, as a model:
@@ -185,6 +231,7 @@ struct shown_root {
   skiff::model::Tracked<std::optional<passphrase_facts>> passphrase;
   skiff::model::Tracked<std::optional<menu_facts>> menu;
   skiff::model::Tracked<std::optional<viewer_facts>> viewer;
+  skiff::model::Tracked<std::optional<text_menu_facts>> text_menu;
   // What the viewer has coming, and the video it plays: the program's.
   skiff::model::Tracked<viewer_load> viewer_coming;
   skiff::model::Tracked<video_shown> video;
@@ -416,6 +463,9 @@ struct make_menu {
 struct make_emoji_popup {
   auto operator()(const ui_needs& n, const emoji_facts& facts) const { return emoji_popup(n, facts); }
 };
+struct make_text_menu_layer {
+  auto operator()(const ui_needs& n, const text_menu_facts& facts) const { return text_menu_layer(n, facts); }
+};
 struct make_viewer {
   auto operator()(const ui_needs& n, const viewer_facts& facts) const { return picture_viewer(n, facts); }
 };
@@ -439,7 +489,7 @@ auto layer_for(const Needs &needs) {
 // facts.
 template <class... Features, class... Tools>
 consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) {
-  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer,
+  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
                                ::mux::ui::request::close_shown<Tools>...>>{};
 }
@@ -467,6 +517,7 @@ inline ::mux::ui::request::close_settings closing_of(std::type_identity<settings
 inline ::mux::ui::request::close_emoji closing_of(std::type_identity<emoji_facts>) { return {}; }
 inline ::mux::ui::request::close_menu closing_of(std::type_identity<menu_facts>) { return {}; }
 inline ::mux::ui::request::close_picture closing_of(std::type_identity<viewer_facts>) { return {}; }
+inline ::mux::ui::request::close_text_menu closing_of(std::type_identity<text_menu_facts>) { return {}; }
 // A box over the window (widgets::Dialog, whatever it shows): drawn while it
 // fades out too, and its content dropped once it is shut.
 template <class Content, class Dismiss> std::true_type dialog_kind(const widgets::Dialog<Content, Dismiss>*);
@@ -489,13 +540,6 @@ struct window : skiff::compose::Specced {
 
   // What the window holds, made anew when the theme changes: what is made
   // takes its colours then. Its layers, bottom to top.
-  // A text menu, where the pointer was pressed -- a right press, a long one
-  // on a phone. A selectable text's: Copy, what it selected; and Copy Link,
-  // where the press was on a link. A field's: Cut and Copy where something
-  // is selected and it is no password's, Paste, Select All -- each the key
-  // the field takes for it, given to it (it keeps the focus: a button takes
-  // none).
-  using text_menu = decltype(make_text_menu(std::declval<const palette&>(), std::vector<text_menu_item>{}));
   struct layers : skiff::compose::Specced {
     // What its handlers ask for, returned.
     using Answer = typename decltype(window_answers_of(dialog_plugins{}, tool_facts_list{}))::type;    using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
@@ -692,7 +736,7 @@ struct window : skiff::compose::Specced {
       skiff::bind::Bound<std::optional<menu_facts>, made_layer<menu_facts, ui_needs, make_menu>> menu;
       skiff::bind::Bound<std::optional<viewer_facts>, made_layer<viewer_facts, ui_needs, make_viewer>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
-      std::optional<text_menu> text_menu_up;
+      skiff::bind::Bound<std::optional<text_menu_facts>, made_layer<text_menu_facts, ui_needs, make_text_menu_layer>> text_menu;
       // The plugins' layers, over everything: a call's card, and on a phone
       // the whole window, as Element's phone apps.
       typename plugin_layers_t::nodes_t over_all;
@@ -712,11 +756,15 @@ struct window : skiff::compose::Specced {
     // a drag to scroll the chat under it -- it closes the popup.
     std::optional<skia::SkPoint> press_off_emoji;
     using Node::onPointer;
+    // A press off the text menu: it closes as the press is let go.
+    bool press_off_text_menu = false;
     std::optional<Answer> onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply&) {
       std::optional<Answer> answer;
       const auto off = std::exchange(press_off_emoji, std::nullopt);
       if (off && parts.emoji.shown() && std::hypot(lift.x - off->fX, lift.y - off->fY) < 8.0f)
         answer = ::mux::ui::request::close_emoji{};
+      if (std::exchange(press_off_text_menu, false))
+        answer = ::mux::ui::request::close_text_menu{};
       return answer;
     }
     void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
@@ -724,11 +772,8 @@ struct window : skiff::compose::Specced {
       press_off_emoji = parts.emoji.shown() && !popup_card(*parts.emoji.shown()).bounds().contains(press.x, press.y)
                             ? std::optional<skia::SkPoint>(skia::SkPoint::Make(press.x, press.y))
                             : std::nullopt;
-      if (parts.text_menu_up && !parts.text_menu_up->bounds().contains(press.x, press.y)) {
-        parts.text_menu_up.reset();
-        this->invalidateLayout();
-        this->markDamaged();
-      }
+      auto* menu = parts.text_menu.shown();
+      press_off_text_menu = menu != nullptr && !menu->bounds().contains(press.x, press.y);
     }
     // Esc closes the emoji popup first, whatever has the keys: the input
     // keeps them while the popup is open, so the press comes down to it
@@ -756,13 +801,7 @@ struct window : skiff::compose::Specced {
         reply.handle();
         return asked;
       };
-      if (parts.text_menu_up) {
-        parts.text_menu_up.reset();
-        this->invalidateLayout();
-        this->markDamaged();
-        return closed();
-      }
-      // The rest, the one drawn last -- on top -- first.
+      // The text menu first, then the rest, the one drawn last -- on top -- first.
       if (auto taken = over_chats([](auto&... over) { return topmost_first(over...); }))
         return closed(std::move(taken->asked));
       // The drawer, under every dialog.
@@ -854,6 +893,7 @@ struct window : skiff::compose::Specced {
                 .emoji = layer_made_by<emoji_facts, make_emoji_popup>(n),
                 .menu = layer_made_by<menu_facts, make_menu>(n),
                 .viewer = layer_made_by<viewer_facts, make_viewer>(n),
+                .text_menu = layer_made_by<text_menu_facts, make_text_menu_layer>(n),
                 .over_all = plugin_layers_t::made(n)} {
       // (A pack of the parts: bound in a generic lambda, the template a pack
       // declaration needs.)
@@ -992,80 +1032,16 @@ struct window : skiff::compose::Specced {
   void close() { layer().frame.close(); }
   // From the program, between events.
   void drop_closed() {
-    if (std::exchange(text_menu_close_due, false))
-      this->close_text_menu_now();
-    if (auto formatting = std::exchange(text_formatting_due, std::nullopt); formatting && text_menu_field && layer().text_menu_up)
-      this->put_text_menu(field_menu_items(*text_menu_field, *formatting));
     layer().frame.dropClosed();
     parts.now->over_chats([](auto&... over) { (layers::drop_of(over), ...); });
   }
 
   [[nodiscard]] settings_view_t* settings_up() { return layer().settings.shown(); }
-  // A selectable text's menu, where the pointer was pressed, kept in the
-  // window; and gone.
-  void show_text_menu(std::string text, std::optional<std::string> link = std::nullopt) {
-    text_menu_origin = parts.now->last_press;
-    text_menu_field.reset();
-    std::vector<text_menu_item> items{{"Copy", "", request::copy_text{std::move(text)}}};
-    if (link) {
-      if (const auto emoji = copied_emoji_at(*link))
-        items.push_back({needs_.emoji->emoji_is_favourite(emoji->url) ? "Remove from favorites" : "Add to favorites", "", request::favourite_emoji{*emoji}});
-      items.push_back({"Copy Link", "", request::copy_text{std::move(*link)}});
-    }
-    this->put_text_menu(items);
-  }
-  void show_selection_menu(std::size_t count, bool forwardable, bool deletable) {
-    text_menu_origin = parts.now->last_press;
-    text_menu_field.reset();
-    this->put_text_menu({
-        {std::format("Copy {} messages", count), "Ctrl+C", request::selection_copy{}},
-        {"Forward selected", "", request::selection_forward{}, forwardable},
-        {"Delete selected…", "Delete", request::selection_delete{}, deletable},
-        {"Clear selection", "Esc", request::selection_cancel{}, true, true}});
-  }
-  // A field's: Paste and the rest, for the field with the focus.
-  void show_field_menu(const scene::text_menu::of_field& field) {
-    text_menu_origin = parts.now->last_press;
-    text_menu_field = field;
-    this->put_text_menu(field_menu_items(field, false));
-  }
-  void text_formatting(bool open) { text_formatting_due = open; }
-  void put_text_menu(const std::vector<text_menu_item>& items) {
-    auto& menu = parts.now->parts.text_menu_up.emplace(make_text_menu(*needs_.colours, items));
-    menu.fState.setFloats(true);
-    text_menu_close_due = false;
-    auto& now = *parts.now;
-    const skia::SkRect box = fState.fBounds;
-    const float tall = std::min(text_menu_height(items), box.height());
-    menu.apply({.place = scene::anchor::kTopLeft,
-                .x = std::clamp(text_menu_origin.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 260.0f)),
-                .y = std::clamp(text_menu_origin.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - tall)), .width = std::min(260.0f, box.width()), .height = tall});
-    now.invalidateLayout();
-    now.markDamaged();
-  }
-  // A call, as the call is now: in its chat, where that is the one shown
-  // and it does not ring here; else the card at the top of the window. And
-  // gone, with the call.
+  // Where the pointer was last pressed: where a text menu asked by that
+  // press goes.
+  [[nodiscard]] skia::SkPoint last_press() const { return parts.now->last_press; }
   // A message's menu up: the right press was its.
   [[nodiscard]] bool context_menu_up() { return layer().menu.shown() != nullptr; }
-  // Closed between events, not now: the program asks it as it does what
-  // was pressed in it, while that press is still being answered.
-  void close_text_menu() {
-    if (parts.now->parts.text_menu_up)
-      text_menu_close_due = true;
-  }
-  void close_text_menu_now() {
-    auto& now = *parts.now;
-    if (now.parts.text_menu_up) {
-      now.parts.text_menu_up.reset();
-      now.invalidateLayout();
-      now.markDamaged();
-    }
-  }
-  bool text_menu_close_due = false;
-  skia::SkPoint text_menu_origin = skia::SkPoint::Make(0.0f, 0.0f);
-  std::optional<scene::text_menu::of_field> text_menu_field;
-  std::optional<bool> text_formatting_due;
   [[nodiscard]] room_settings* manage_up() { return layer().manage.shown(); }
 
   void close_drawer_now() { layer().frame.base().closeNow(); }

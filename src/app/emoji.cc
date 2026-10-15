@@ -70,7 +70,7 @@ void part_apply(emoji_part& self, const request::close_emoji&) { self.s_->close_
 
 void part_apply(emoji_part& self, const request::favourite_emoji& one) {
   self.s_->emoji.flip_emoji_favourite(one.emoji);
-  self.s_->root().close_text_menu();
+  self.s_->close_text_menu();
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
 }
 

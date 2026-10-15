@@ -75,7 +75,7 @@ void app::apply(const request::close_person_info&) {
 
 void app::apply(const request::copy_text& one) {
   skiff::scene::setClipboardText(one.text);
-  root().close_text_menu();
+  shared.close_text_menu();
 }
 // A field's text menu: its item's key given to the field with the focus,
 // with Ctrl -- the field's own paste, cut, copy or select all -- and the
@@ -83,10 +83,19 @@ void app::apply(const request::copy_text& one) {
 void app::apply(const request::text_key& one) {
   skiff::scene::giveKey(
       {one.key, skiff::scene::Modifiers{}.with<skiff::scene::modifier::control>(one.control).with<skiff::scene::modifier::shift>(one.shift)});
-  root().close_text_menu();
+  shared.close_text_menu();
 }
 
-void app::apply(const request::text_formatting& one) { root().text_formatting(one.open); }
+// A field's menu turned to its Formatting page, or back: in its place.
+void app::apply(const request::text_formatting& one) {
+  if (const auto& up = *showing.look<std::optional<mux::ui::text_menu_facts>>(); up && up->field) {
+    auto now = *up;
+    now.items = mux::ui::field_menu_items(*now.field, one.open);
+    now.height = std::min(mux::ui::text_menu_height(now.items), scene.viewport().height());
+    mux::ui::show(showing, std::optional(std::move(now)));
+  }
+}
+void app::apply(const request::close_text_menu&) { shared.close_text_menu(); }
 
 // The developer tools, for the chat being read.
 

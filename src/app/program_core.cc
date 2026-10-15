@@ -69,8 +69,6 @@ void app::woken() {
                                    now->loading = false;
                                  });
                                  // The own server's, for what the chat list searched.
-                                 if (root().main().current == std::optional(listed.by) && listed.server.empty() && !listed.space)
-                                   root().main().found_rooms_elsewhere(listed.query, listed.rooms);
                                  if (listed.server.empty() && !listed.space)
                                    chat_list.found_rooms(listed.query, listed.rooms);
                                },
@@ -118,8 +116,6 @@ void app::woken() {
                                      });
                                    }
                                  });
-                                 if (root().main().current == std::optional(found.by))
-                                   root().main().found_people_elsewhere(found.query, found.people);
                                  chat_list.found_people(found.query, found.people);
                                },
                                // A room looked up: its card filled, while it
@@ -237,13 +233,13 @@ void app::woken() {
                                        added.where);
                                    if (live)
                                      notices.message_came(added.message, mentioning.contains(added.message.id),
-                                                          on_screen && root().main().chosen == added.message.in);
+                                                          on_screen && shared.chosen() == added.message.in);
                                  },
                                  [](const auto&) {}},
                  one);
   }
   // Messages held to a number in all, least recently read out first.
-  model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), root().main().chosen);
+  model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), shared.chosen());
   this->refresh();
   // A room the user made: opened once the model has it.
   if (made_room_ && model->find(*made_room_))
@@ -270,7 +266,7 @@ void app::woken() {
     spl::visit(spl::overloaded{[&](const mux::change::event_missing& gone) {
                                        if (jumps.going_to() == gone.id) {
                                          // An edit: to the message it edits, which is where it shows.
-                                         if (const auto& chosen = root().main().chosen; gone.instead && chosen) {
+                                         if (const auto& chosen = shared.chosen(); gone.instead && chosen) {
                                            jumps.go(*chosen, *gone.instead, std::nullopt, false, taker{this});
                                          } else {
                                            jumps.stop();
@@ -284,13 +280,13 @@ void app::woken() {
   if (linked_)
     if (const mux::conversation* chat = model->find(linked_->first); chat && mux::ui::held_message(*chat, linked_->second)) {
       const auto [in, event] = *std::exchange(linked_, std::nullopt);
-      if (root().main().chosen == in)
+      if (shared.chosen() == in)
         (void)this->open_in_thread(*chat, event);
     }
   // An answer gone to, scrolled to once its thread's panel has it.
   if (thread_target_) {
-    auto& screen = root().main();
-    if (!screen.thread_open() || jumps.aim_in_thread(*thread_target_))
+    auto& screen = root();
+    if (!shared.thread_open() || jumps.aim_in_thread(*thread_target_))
       thread_target_.reset();
   }
 }
@@ -401,7 +397,7 @@ void app::settle_model() {
                                },
                                [&](const limits_changed&) {
                                  settings.apply_limits();
-                                 model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), root().main().chosen);
+                                 model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), shared.chosen());
                                },
                                [&](const push_wanted& wanted) {
                                  if (wanted.on)
@@ -421,8 +417,6 @@ void app::show_chats_now() {
   // The chat chosen, as what is shown has it, read first.
   this->refresh_shown();
   press_target_now() = {&this->state, this};
-  root().main().wants_ = &wants;
-  root().main().last_model = &*model;
   // What is kept read first, where it moved since: the screen reads each
   // chat's settings from it as it is shown.
   window_binding.refresh(root(), this->state);
@@ -444,12 +438,12 @@ void app::take_wants() {
 }
 
 void app::refresh_shown() {
+  root().show_drawer(*model, shared.listed());
   // The looks as their choices show them: what the window last read of
   // what is kept, for the chat chosen.
   looks.read();
   const auto shown = showing.look<mux::ui::chat_shown>();
-  const auto& screen = root().main();
-  if (shown->forum && screen.current && !screen.is_forum({*screen.current, *shown->forum}))
+  if (shown->forum && shared.listed() && !chat_list.is_forum({*shared.listed(), *shown->forum}))
     mux::ui::change_shown<mux::ui::chat_shown>(showing, [](auto& now) { now.forum.reset(); });
   shared.read_shown_now();
   if (std::exchange(shared.menu_focus_due, false))
@@ -497,8 +491,8 @@ double app::wake_in() const { return model->typing_wake_in(); }
 void app::before_frame() {
   // What the parts asked of the chat's list, and a jump on its way gone on
   // with: aimed at once held, fetched or paged back to while it is not.
-  if (auto asked = std::exchange(shared.show_message_due, std::nullopt); asked && root().main().chosen)
-    jumps.go(*root().main().chosen, std::move(asked->id), std::move(asked->fragment), false, taker{this});
+  if (auto asked = std::exchange(shared.show_message_due, std::nullopt); asked && shared.chosen())
+    jumps.go(*shared.chosen(), std::move(asked->id), std::move(asked->fragment), false, taker{this});
   if (std::exchange(shared.newest_due, false))
     jumps.to_newest();
   if (std::exchange(shared.returns_due, false))
@@ -517,6 +511,8 @@ void app::before_frame() {
   if (const auto box = scene.viewport(); *showing.look<mux::ui::window_shape>() != mux::ui::window_shape{box.width(), box.height()})
     mux::ui::show(showing, mux::ui::window_shape{box.width(), box.height()});
   shared.ui.set_docked_panel_height(shared.emoji_open() ? mux::ui::docked_height(*showing.look<mux::ui::window_shape>()) : 0.0f);
+  if (showing.look<mux::ui::screen_shown>()->docked != shared.ui.docked_panel_height)
+    mux::ui::change_shown<mux::ui::screen_shown>(showing, [&](mux::ui::screen_shown& now) { now.docked = shared.ui.docked_panel_height; });
   if (model->expire_typing())
     chats_binding.refresh(root(), model->chats());
   store.flush_reads();
@@ -529,12 +525,12 @@ void app::before_frame() {
   // What has been on screen in the chat shown is read, as far as it goes,
   // as in tdesktop: the chat list's counts go down as it is read, not all
   // at once when it is opened or left.
-  if (const auto& chosen = root().main().chosen; chosen && !root().open_panel() && !root().settings_up())
+  if (const auto& chosen = shared.chosen(); chosen && !root().open_panel() && !root().settings_up())
     if (const auto seen = jumps.last_seen(); seen && reading.mark_seen(*chosen, *seen))
       this->refresh();
   // The mentions and reactions for the user whose messages are on screen,
   // seen -- only those, as tdesktop's.
-  if (const auto& chosen = root().main().chosen)
+  if (const auto& chosen = shared.chosen())
     if (const mux::conversation* chat = model->find(*chosen);
         chat && (!chat->unread_mentions.empty() || !chat->unread_reactions.empty()) && !root().open_panel()) {
       auto shown = jumps.shown_now();
@@ -550,8 +546,8 @@ void app::before_frame() {
   // as in tdesktop.
   // Not under a finger: there the keys' focus is the text input started,
   // and a phone's keyboard up over the chat until it is put away.
-  if (scene.focusedId() == 0 && !shared.by_touch && root().main().chosen && !root().open_panel() && !root().settings_up())
-    scene.focus(mux::ui::composer_field(root().main().line));
+  if (scene.focusedId() == 0 && !shared.by_touch && shared.chosen() && !root().open_panel() && !root().settings_up())
+    scene.focus(mux::ui::composer_field(root().chat_line()));
   // The emoji panel's stickers in view, asked for as they change -- as it
   // opens, as it scrolls, as its tab or its search changes -- and not only
   // when something else refreshed the window.
@@ -559,7 +555,7 @@ void app::before_frame() {
     shared.ui.panel_pictures_shown = std::move(shown);
     shared.ui.pictures_due = true;
   }
-  const auto style = reads().style_of(root().main().current, root().main().chosen);
+  const auto style = reads().style_of(shared.listed(), shared.chosen());
   // Text fields save as they are edited; apply when the editor closes or
   // its Apply button is pressed, so rebuilding cannot interrupt typing.
   if ((!root().settings_up() && !root().manage_up() && !root().open_panel()) &&
@@ -609,8 +605,8 @@ void app::before_frame() {
 }
 
 void app::closing() {
-  if (const auto& chosen = root().main().chosen)
-    drafts.keep(*chosen, mux::ui::composer_plain(root().main().line));
+  if (const auto& chosen = shared.chosen())
+    drafts.keep(*chosen, mux::ui::composer_plain(root().chat_line()));
   store.flush_reads(true);
   net->shutdown();
 }
@@ -684,7 +680,9 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   shared.emoji.favourite_stickers = this->recent().favourite_stickers;
   shared.emoji.favourite_emoji = this->recent().favourite_emoji;
   if (saved.last_account)
-    this->root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
+    mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) {
+      now.current = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
+    });
   // Read the loaded appearance just as a later settings change does.
   // Writing the window's defaults here replaced the saved blur and backdrop.
   this->show_looks();

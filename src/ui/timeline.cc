@@ -353,10 +353,26 @@ inline auto list_corner(const palette& colours) {
 // the loader turning in the middle while a jump is on its way. The list is
 // told by the program and answers it (timeline_list); the wallpaper is put
 // by what shows the chat (show_wallpaper_on, its first part).
+// The chat's background behind its messages, as the program says: the
+// chosen chat's, as its levels say -- not there where the window's
+// background is behind all of it -- at the window's opacity.
+struct chat_backdrop_shown {
+  config::wallpaper_t wallpaper = config::wallpaper::theme{};
+  bool hidden = false;
+  float opacity = 1.0f;
+  friend bool operator==(const chat_backdrop_shown&, const chat_backdrop_shown&) = default;
+};
 inline auto chat_area(const ui_needs& n) {
   namespace c = skiff::compose;
-  wallpaper_t wall;
-  wall.apply({.place = scene::anchor::kTopLeft, .fill = true});
+  wallpaper_t backdrop;
+  backdrop.apply({.place = scene::anchor::kTopLeft, .fill = true});
+  auto wall = c::applied<chat_backdrop_shown>([](const chat_backdrop_shown& now) { return now; },
+      [at = &n](wallpaper_t& node, const chat_backdrop_shown& now) {
+        node.setVisible(!now.hidden);
+        node.setOpacity(now.opacity);
+        show_wallpaper_on(node, now.wallpaper, *at->colours, *at->looks);
+      },
+      std::move(backdrop));
   auto list = c::projected<chat_ways>([](const chat_ways& now) { return now.back_here || now.detached; },
       c::with_way_down(c::vbox(0.0f, {.fill = true}), timeline_list<chat_told, chat_list_tag>(), list_corner(*n.colours),
                        [](auto& corner, bool wanted, std::size_t unseen) {

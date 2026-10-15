@@ -21,7 +21,7 @@ struct part {
 
   void apply(const show& one) {
     ui::show<ui::menu_facts>(*s_->showing, std::nullopt);
-    const auto& chosen = s_->root().main().chosen;
+    const auto& chosen = s_->chosen();
     const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
     if (!chat)
       return;

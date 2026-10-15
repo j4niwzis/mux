@@ -85,6 +85,9 @@ struct side_shown {
   bool side_on = false, top_on = false;
   std::optional<std::string> forum;
   bool no_chats = false;
+  // The chats' list up: not while messages found are in its place, and not
+  // empty while the server's search is shown -- that taking the room.
+  bool chats_on = true;
   // An icon being dragged: the side bar shown to drop on, whatever it holds.
   bool dragging = false;
   // Whose spaces the bars hold: what a space's menu asks with.
@@ -114,6 +117,13 @@ struct screen_shown {
   // What is up, from those: the chats, the chat, its info or its threads
   // beside it (in its place, single), and the edges between them.
   bool side_up = true, chat_up = true, info_up = false, threads_up = false, side_edge = true, beside_edge = false;
+  // The panel docked under the field on a phone's window, as high as it is:
+  // the chat standing over it.
+  float docked = 0.0f;
+  // The keys caught before the field takes them, and whether each is live:
+  // messages selected (Ctrl+C, Delete), the list over the field (Up, Down,
+  // Enter, Tab, Esc), a forum gone to (Alt+Right) or open (Alt+Left).
+  bool selecting = false, suggesting = false, pointing = false, in_forum = false;
   friend bool operator==(const screen_shown&, const screen_shown&) = default;
 };
 // What a search in the chat found, in the chats' place while it is asked:
@@ -162,6 +172,18 @@ struct list_search {
 // The bars made big for a finger, or as they were.
 struct big_bars {
   bool on = false;
+};
+// Out of the forum open, to its row in the list, lit (Alt+Left).
+struct leave_forum {};
+// A page of the messages up or down (PageUp, PageDown).
+struct page_messages {
+  bool up = true;
+};
+// Into the forum gone to by Alt+Up or Alt+Down (Alt+Right).
+struct open_pointed {};
+// A swipe across the chats screen on a phone's window: right, or left.
+struct screen_swipe {
+  bool right = true;
 };
 // A key pressed on the chats screen that nothing under the keys took: what
 // it does is the program's to say, from what it holds.

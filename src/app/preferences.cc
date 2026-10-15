@@ -32,10 +32,10 @@ class preferences_part {
   preferences_part& operator=(const preferences_part&) = delete;
 
   void apply(const request::toggle_mute&) {
-    auto& screen = s_->root().main();
-    if (!screen.chosen)
+    auto& screen = s_->root();
+    if (!s_->chosen())
       return;
-    k_->flip<&mux::app::chat_choices::muted>(*screen.chosen);
+    k_->flip<&mux::app::chat_choices::muted>(*s_->chosen());
     (void)k_->write();
     s_->refresh_due = true;
   }
@@ -113,7 +113,6 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::place_chat& one) {
-    s_->root().main().close_space_menu_soon();
     if (one.to == one.chat.account)
       return;
     // Moved: out of every other list it was moved to, into this one.
@@ -132,7 +131,6 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::unplace_chat& one) {
-    s_->root().main().close_space_menu_soon();
     k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
       std::erase_if(all, [&](const mux::config::chat_placement& each) {
         return each.account == one.chat.account.address && each.conversation == one.chat.id && each.listed_in == one.from.address;
@@ -142,7 +140,6 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::flip_chat_strip& one) {
-    s_->root().main().close_space_menu_soon();
     const auto* own = k_->settings_of(one.chat.account.address);
     k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
       if (auto* kept = placement_in(all, one.chat, one.in))
@@ -151,7 +148,6 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::set_chat_strip_colour& one) {
-    s_->root().main().close_space_menu_soon();
     k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
       if (auto* kept = placement_in(all, one.chat, one.in)) {
         kept->strip_colour = mux::config::said_of<mux::config::accent_said_t>(one.colour);
@@ -217,7 +213,6 @@ class preferences_part {
   }
   // An item's bars, as chosen: the side, the top, both, or none -- hidden.
   void apply(const request::set_space_bars& one) {
-    s_->root().main().close_space_menu_soon();
     auto places = k_->appearance().space_places;
     std::erase_if(places, [&](const mux::config::space_placed& p) { return p.account == one.account && p.item == one.item; });
     if (one.side)

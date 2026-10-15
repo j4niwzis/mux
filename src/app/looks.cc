@@ -62,7 +62,9 @@ class looks_part {
     shown.panels = chosen ? reads.panels_of(*chosen) : looks.panels.value_or(mux::config::bubble_look{});
     if (mux::ui::show_panels(s_->paint, shown.panels, shown.window, *colours_))
       s_->root().panels_changed();
-    this->put(mux::ui::behind_shown{chosen ? reads.wallpaper_of(*chosen) : looks.wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}})});
+    const auto wallpaper = chosen ? reads.wallpaper_of(*chosen) : looks.wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}});
+    this->put(mux::ui::behind_shown{wallpaper});
+    this->put(mux::ui::chat_backdrop_shown{wallpaper, shown.window.behind, static_cast<float>(shown.window.opacity) / 100.0f});
     this->put(std::move(events));
     mux::ui::show_looks(*s_->showing, shown);
   }

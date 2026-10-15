@@ -142,6 +142,15 @@ struct services {
   mux::platform::audio::speaker* speaker = nullptr;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
+  // What is shown, as the program says it: the chat chosen, the account
+  // listed, whether the window is one pane at a time, the thread open.
+  [[nodiscard]] const std::optional<conversation_id>& chosen() const { return showing->look<mux::ui::chat_shown>()->chosen; }
+  [[nodiscard]] const std::optional<account_id>& listed() const { return showing->look<mux::ui::list_shown>()->account; }
+  [[nodiscard]] bool single() const { return showing->look<mux::ui::screen_shown>()->single; }
+  [[nodiscard]] std::optional<std::string> thread_open() const {
+    const auto& now = *showing->look<mux::ui::chat_shown>();
+    return now.threads_open ? now.thread : std::nullopt;
+  }
   // The whole-window binding is instantiated in one implementation unit.
   void read_shown_now() const;
   // A notice shown, or the one up closed: what the window shows, edited.
@@ -154,7 +163,7 @@ struct services {
   // The emoji panel open where it is put, or closed -- the field back where
   // it was; and whether it is open, as what is shown says.
   void open_emoji(float right, float bottom) const {
-    const auto chosen = root().main().chosen;
+    const auto chosen = this->chosen();
     const auto ops = chosen ? mux::ui::ops_of(ui, chosen->account) : mux::proto::account_ops{};
     mux::ui::show(*showing, std::optional(mux::ui::emoji_facts{right, bottom, mux::ui::popup_page::emoji{},
         ops.send_sticker, chosen && mux::ui::may_send_files(ui, chosen->account)}));
@@ -250,13 +259,13 @@ struct services {
   [[nodiscard]] std::optional<mux::conversation_id> managed() const {
     if (const auto& open = *showing->look<std::optional<mux::ui::room_settings_facts>>())
       return open->chat;
-    return root().main().chosen;
+    return this->chosen();
   }
   // Features belong to the selected account. An unsupported feature never
   // borrows another account's protocol or credentials.
   template <class Feature>
   [[nodiscard]] std::optional<mux::account_id> account_offering(Feature wanted) const {
-    const auto current = root().main().current;
+    const auto current = this->listed();
     return current && mux::proto::offers(mux::ui::protocol_state_of(ui, *current), wanted)
         ? current : std::nullopt;
   }

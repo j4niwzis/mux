@@ -47,16 +47,21 @@ class chat_list_part {
                    : now.accounts().empty() ? std::nullopt
                                             : std::optional<mux::account_id>(now.accounts().keyAt(0));
     list.forum = chat.forum;
-    const inputs seen{now.chats().revision(), k_->state.revision(), list, chat.chosen, chat.forum, s_->drafts_revision};
+    const inputs seen{now.chats().revision(), k_->state.revision(), list, chat.chosen, chat.forum, s_->drafts_revision,
+                      s_->showing->look<mux::ui::found_shown>()->count.has_value(), s_->showing->look<mux::ui::elsewhere_shown>()->found.has_value()};
     if (seen_ == seen)
       return;
     seen_ = seen;
     const kept_view kept = this->read_kept(list.account);
     this->keep_folder(now, kept, list);
     this->put(list);
-    this->put(this->side_of(now, kept, list, chat));
     auto listing = std::make_shared<mux::ui::chat_listing>(this->listing_of(now, kept, list, chat));
     order_ = listing->chats | std::views::transform(&mux::ui::listed_chat::id) | std::ranges::to<std::vector>();
+    auto side = this->side_of(now, kept, list, chat);
+    const bool elsewhere = s_->showing->look<mux::ui::elsewhere_shown>()->found.has_value();
+    side.no_chats = !now.accounts().empty() && listing->chats.empty() && !elsewhere;
+    side.chats_on = !s_->showing->look<mux::ui::found_shown>()->count.has_value() && (!listing->chats.empty() || !elsewhere);
+    this->put(std::move(side));
     this->put(mux::ui::listing_shown{++revision_, std::move(listing), list.account, now.accounts().keys() | std::ranges::to<std::vector>(),
                                      k_->state.root().looks.fValue.theme});
     this->search_elsewhere(now, list);
@@ -131,7 +136,7 @@ class chat_list_part {
       asked(request::reply_step{true});
     else if (one.key == keys::kDown && one.control)
       asked(request::reply_step{false});
-    else if (one.key == keys::kUp && !any && mux::ui::composer_text(s_->root().main().line).empty())
+    else if (one.key == keys::kUp && !any && mux::ui::composer_text(s_->root().chat_line()).empty())
       asked(request::edit_last{});
     else if (one.key == keys::kC && one.control && selected)
       asked(request::selection_copy{});
@@ -151,6 +156,8 @@ class chat_list_part {
       asked(request::cancel_compose{});
     else if (stepping)
       this->step(one.key == keys::kUp || one.shift, chat, list, asked);
+    else if ((one.key == keys::kPageUp || one.key == keys::kPageDown) && !any)
+      asked(request::page_messages{one.key == keys::kPageUp});
     else if (one.key == keys::kEnd && one.control)
       asked(request::jump_to_end{});
     else if (one.key == keys::kEscape && !any) {
@@ -163,6 +170,41 @@ class chat_list_part {
       else
         asked(request::close_chat{});
     }
+  }
+  // Out of the forum open, to its row, lit: Alt+Right goes back in.
+  template <class Asked>
+  void apply(const request::leave_forum&, const Asked& asked) {
+    const auto& chat = *s_->showing->look<mux::ui::chat_shown>();
+    const auto& listed = s_->showing->look<mux::ui::list_shown>()->account;
+    if (!chat.forum || !listed)
+      return;
+    this->point(mux::conversation_id{*listed, *chat.forum});
+    asked(request::close_forum{});
+  }
+  // Into the forum gone to (Alt+Right).
+  template <class Asked>
+  void apply(const request::open_pointed&, const Asked& asked) {
+    if (const auto at = s_->showing->look<mux::ui::list_shown>()->pointed) {
+      this->point(std::nullopt);
+      asked(request::choose{*at});
+    }
+  }
+  // A swipe on a phone's window: right, a step back -- from the threads or
+  // the info to the chat, from the chat to the chats -- or, from the chats,
+  // the drawer out.
+  template <class Asked>
+  void apply(const request::screen_swipe& one, const Asked& asked) {
+    const auto& chat = *s_->showing->look<mux::ui::chat_shown>();
+    if (!s_->single() || !one.right)
+      return;
+    if (!chat.chosen)
+      asked(request::open_drawer{});
+    else if (chat.threads_open)
+      asked(request::toggle_threads{});
+    else if (chat.info_open)
+      asked(request::toggle_info{});
+    else
+      asked(request::close_chat{});
   }
   // A forum gone to by Alt+Up or Alt+Down: lit, not opened.
   void point(std::optional<mux::conversation_id> at) {
@@ -198,6 +240,12 @@ class chat_list_part {
       now.info_width = std::clamp(across - x, 260.0f, std::max(260.0f, across - now.side_width - 300.0f));
     });
   }
+  // Whether a chat is shown as a forum: a space the user shows so, or a
+  // forum of its protocol's own.
+  [[nodiscard]] bool is_forum(const mux::conversation_id& id) const {
+    const mux::conversation* one = s_->model->find(id);
+    return one != nullptr && this->shown_as_forum(this->read_kept(s_->listed()), *one);
+  }
   // Every chat listed, in order: what Ctrl+Tab and Alt+Up go through.
   [[nodiscard]] const std::vector<mux::conversation_id>& order() const { return order_; }
 
@@ -210,6 +258,7 @@ class chat_list_part {
     std::optional<mux::conversation_id> chosen;
     std::optional<std::string> forum;
     std::uint64_t drafts = 0;
+    bool found = false, elsewhere = false;
     friend bool operator==(const inputs&, const inputs&) = default;
   };
   // What is kept that the list reads: the chats in other accounts' lists and
@@ -648,6 +697,10 @@ class chat_list_part {
       now.side_up = !now.single || !chat.chosen;
       now.side_edge = !now.single;
       now.chat_up = !now.single || (chat.chosen && !beside);
+      now.selecting = s_->showing->look<mux::ui::selection_shown>()->count > 0;
+      now.suggesting = !s_->showing->look<mux::ui::suggestions_shown>()->items.empty();
+      now.pointing = s_->showing->look<mux::ui::list_shown>()->pointed.has_value();
+      now.in_forum = chat.forum.has_value();
     });
   }
   template <class Change>

@@ -52,7 +52,7 @@ void part_apply(emoji_part& self, const request::toggle_emoji&) {
     return;
   }
   self.into_ = request::writing::chat{};
-  const auto at = mux::ui::input_emoji(mux::ui::composer_input(self.s_->root().main().line)).bounds();
+  const auto at = mux::ui::input_emoji(mux::ui::composer_input(self.s_->root().chat_line())).bounds();
   open_at(self, at.fRight, at.fTop);
 }
 
@@ -62,7 +62,7 @@ void part_apply(emoji_part& self, const request::toggle_thread_emoji&) {
     return;
   }
   self.into_ = request::writing::thread{};
-  const auto at = mux::ui::input_emoji(mux::ui::composer_input(self.s_->root().main().thread_line())).bounds();
+  const auto at = mux::ui::input_emoji(mux::ui::composer_input(self.s_->root().thread_line())).bounds();
   open_at(self, at.fRight, at.fTop);
 }
 
@@ -75,7 +75,7 @@ void part_apply(emoji_part& self, const request::favourite_emoji& one) {
 }
 
 void part_apply(emoji_part& self, const request::insert_emoji& one) {
-  auto& screen = self.s_->root().main();
+  auto& screen = self.s_->root();
   // A custom emoji: its picture in the line, as the message will show it,
   // sent as its shortcode.
   const auto put = [&](auto& field) {
@@ -88,7 +88,7 @@ void part_apply(emoji_part& self, const request::insert_emoji& one) {
     if (!self.s_->by_touch)
       self.s_->scene->focus(field);
   };
-  spl::visit(spl::overloaded{[&](request::writing::chat) { put(mux::ui::composer_field(screen.line)); },
+  spl::visit(spl::overloaded{[&](request::writing::chat) { put(mux::ui::composer_field(screen.chat_line())); },
                                    [&](request::writing::thread) { put(mux::ui::composer_field(screen.thread_line())); }},
                 self.into_);
 }

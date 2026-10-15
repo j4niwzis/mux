@@ -24,11 +24,8 @@ import splice.bytes;
 namespace mux::app {
 
 void app::rebuild_in_theme() {
-  auto& before = root().main();
-  const float side_width = before.side_width;
-  const float info_width = before.info_width;
   const float settings_at = root().settings_up() ? root().settings_up()->offset() : 0.0f;
-  const auto style = reads().style_of(root().main().current, root().main().chosen);
+  const auto style = reads().style_of(shared.listed(), shared.chosen());
   active_style = style;
   const auto theme = style.theme.value_or(this->appearance().theme);
   mux::ui::use_scroll_bars(theme);
@@ -68,9 +65,6 @@ void app::rebuild_in_theme() {
   // The dialogs made again: each reads what is shown afresh.
   showing_binding.invalidate();
   this->refresh_shown();
-  auto& after = root().main();
-  after.side_width = side_width;
-  after.info_width = info_width;
   this->refresh();
   if (auto* up = root().settings_up())
     up->keepOffset(settings_at);

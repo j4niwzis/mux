@@ -356,7 +356,6 @@ void conversations_screen::update(double now_ms) {
     list_in.setTarget(1.0f);
   if (list_in.step(now_ms))
     this->place_list();
-  this->follow_docked();
   if (pane_in.step(now_ms)) {
     this->place_pane();
     this->markDamaged();
@@ -677,36 +676,13 @@ void conversations_screen::show(const model& now, bool with_chat) {
     this->show_conversation(now);
 }
 
-void conversations_screen::show_banners(const conversation* one) {
-  // The protocol's own node under the head, made again for the chat.
-  std::get<chat_part::their_head>(chat.fParts).reset();
-  if (one)
-    spl::visit(
-        [&](const auto& now) {
-          using head_view_defaults::make_head_view;
-          this->place_head_view(make_head_view(now, *one));
-        },
-        protocol_state_of(*needs_.shared, one->id.account));
-  // The protocol's own node over the composer, made again for the chat.
-  std::get<chat_part::their_view>(chat.fParts).reset();
-  if (one)
-    spl::visit(
-        [&](const auto& now) {
-          using composer_view_defaults::make_composer_view;
-          this->place_composer_view(make_composer_view(now, *one));
-        },
-        protocol_state_of(*needs_.shared, one->id.account));
-}
-
 void conversations_screen::show_conversation(const model& now) {
   const conversation* one = chosen ? now.find(*chosen) : nullptr;
   // The protocol's own nodes under the head and over the composer; the
   // head, the pin and the banner are the program's (chat_view).
-  this->show_banners(one);
   this->show_info();
   if (!one)
     return;
-  this->show_wallpaper();
   shown_chat = chosen;
   // The messages themselves: the list's, told by the program (chat_told)
   // and read from the chats model where it keeps them.

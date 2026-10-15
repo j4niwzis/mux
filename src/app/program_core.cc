@@ -517,6 +517,8 @@ void app::before_frame() {
   if (const auto box = scene.viewport(); *showing.look<mux::ui::window_shape>() != mux::ui::window_shape{box.width(), box.height()})
     mux::ui::show(showing, mux::ui::window_shape{box.width(), box.height()});
   shared.ui.set_docked_panel_height(shared.emoji_open() ? mux::ui::docked_height(*showing.look<mux::ui::window_shape>()) : 0.0f);
+  if (showing.look<mux::ui::screen_shown>()->docked != shared.ui.docked_panel_height)
+    mux::ui::change_shown<mux::ui::screen_shown>(showing, [&](mux::ui::screen_shown& now) { now.docked = shared.ui.docked_panel_height; });
   if (model->expire_typing())
     chats_binding.refresh(root(), model->chats());
   store.flush_reads();

@@ -171,6 +171,57 @@ using head_view_t = typename variant_of_types<
 using head_view_holder = skiff::compose::Holding<head_view_t>;
 using composer_view_holder = skiff::compose::Holding<composer_view_t>;
 
+// The chat chosen, as the chats hold it now: what its protocol's own nodes
+// are made from -- made again as the chats move.
+struct chosen_chat_key {
+  conversation_id id;
+  skiff::model::Revision revision = 0;
+  const chats_model* chats = nullptr;
+  const ui_shared* shared = nullptr;
+  friend bool operator==(const chosen_chat_key& a, const chosen_chat_key& b) { return a.id == b.id && a.revision == b.revision; }
+};
+[[nodiscard]] inline const conversation* chat_of(const chosen_chat_key& key) {
+  const account* in = key.chats->root().accounts.find(key.id.account);
+  return in == nullptr ? nullptr : in->conversations.find(key.id.id);
+}
+// A protocol's own node for the chat chosen, where it makes one (Make: its
+// make_head_view or make_composer_view, found by ADL); none by default.
+template <class View, class Holder> [[nodiscard]] std::optional<Holder> held_view(std::optional<View> made) {
+  return made ? std::optional<Holder>(Holder(std::move(*made))) : std::nullopt;
+}
+template <class Holder> [[nodiscard]] std::optional<Holder> held_view(std::nullopt_t) { return std::nullopt; }
+struct make_head_of {
+  template <class State> auto operator()(const State& state, const conversation& one) const {
+    using head_view_defaults::make_head_view;
+    return make_head_view(state, one);
+  }
+};
+struct make_composer_of {
+  template <class State> auto operator()(const State& state, const conversation& one) const {
+    using composer_view_defaults::make_composer_view;
+    return make_composer_view(state, one);
+  }
+};
+template <class Holder, class Make>
+[[nodiscard]] auto protocol_view_made(const chosen_chat_key& key) {
+  namespace c = skiff::compose;
+  std::optional<Holder> held;
+  if (const conversation* one = chat_of(key))
+    held = spl::visit([&](const auto& state) { return held_view<Holder>(Make{}(state, *one)); }, protocol_state_of(*key.shared, key.id.account));
+  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(held));
+}
+template <class Holder, class Make>
+auto protocol_view_for(const ui_needs& n) {
+  namespace c = skiff::compose;
+  using made_t = decltype(protocol_view_made<Holder, Make>(std::declval<const chosen_chat_key&>()));
+  return c::bound<chat_shown>(c::with_model<chats_model, chat_shown>(
+      [shared = n.shared](const chats_model& chats, const chat_shown& now) {
+        return now.chosen ? std::optional(chosen_chat_key{*now.chosen, chats.revision(), &chats, shared}) : std::nullopt;
+      },
+      c::mount<made_t, chosen_chat_key>([](const chosen_chat_key& key) { return std::tuple{protocol_view_made<Holder, Make>(key)}; },
+                                        {.fillX = true, .autoSize = scene::axes::kY})));
+}
+
 // What plugins put in the chat's column under its head
 // (contract::chat_column), in their order.
 template <class List>
@@ -199,7 +250,9 @@ using column_parts_t = column_parts<composition::providers<contract::chat_column
 inline auto chat_column(const ui_needs& n) {
   namespace c = skiff::compose;
   const auto open = [](const chat_shown& now) { return now.chosen.has_value(); };
-  return c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX,
+  // On a phone's window, standing over the panel docked under its field.
+  return c::spec_for<screen_shown>([](const screen_shown& now) { return scene::Spec{.padding = {0.0f, 0.0f, now.docked, 0.0f}}; },
+      c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX,
                                   .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat}),
       chat_header_for(*n.colours),
       connection_bar_for<connection_shown>(*n.colours, &connection_shown::chat),
@@ -207,14 +260,14 @@ inline auto chat_column(const ui_needs& n) {
       selection_bar(n),
       pinned_bar_for(*n.colours),
       column_parts_t::column_of(n),
-      std::optional<head_view_holder>{},
+      protocol_view_for<head_view_holder, make_head_of>(n),
       c::shown_for<chat_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, chat_area(n))),
       suggestions_for(*n.colours),
       composer_banner_for(*n.colours),
-      std::optional<composer_view_holder>{},
+      protocol_view_for<composer_view_holder, make_composer_of>(n),
       c::shown_for<chat_shown>(open, composer_bar<>(n)),
       c::shown_for<chats_shown>([](const chats_shown& now) { return now.none; }, no_accounts_yet(*n.colours)),
-      c::shown_for<chats_shown>([](const chats_shown& now) { return !now.none && !now.chosen; }, select_a_chat()));
+      c::shown_for<chats_shown>([](const chats_shown& now) { return !now.none && !now.chosen; }, select_a_chat())));
 }
 using chat_column_t = decltype(chat_column(std::declval<const ui_needs&>()));
 // Its parts, by where they are in it.
@@ -463,18 +516,6 @@ struct conversations_screen : skiff::compose::Stacked {
   std::optional<conversation_id> swipe_row;
   // The spaces along the top bigger, for a finger: a long press on them.
   bool big_spaces = false;
-  // The panel docked under the field, as high as it is: the chat standing
-  // over it, its field just above it.
-  float docked_applied = 0.0f;
-  void follow_docked() {
-    if (needs_.shared->docked_panel_height == docked_applied)
-      return;
-    docked_applied = needs_.shared->docked_panel_height;
-    // Zero too when the panel goes, or the window grows out of a phone's:
-    // the space under the field given back.
-    chat.apply({.padding = {0.0f, 0.0f, docked_applied, 0.0f}});
-    this->markDamaged();
-  }
   // Single, the one shown -- the chats (0), the chat (1), its info or
   // threads (2) -- and it sliding in as it changes, as a phone's: from the
   // right going in, from the left coming back (the user's, #13662).
@@ -595,15 +636,6 @@ struct conversations_screen : skiff::compose::Stacked {
   [[nodiscard]] auto& messages() { return std::get<1>(std::get<chat_part::area>(chat.fParts).fParts).list().list(); }
   // The chat last shown: its thread let go where another is.
   std::optional<conversation_id> shown_chat;
-  // The chat's wallpaper, as its levels say, behind its messages: not
-  // there where the window's background is behind the whole window, and
-  // else at the window's opacity, as the panels are.
-  void show_wallpaper() {
-    auto& wall = std::get<0>(std::get<chat_part::area>(chat.fParts).fParts);
-    wall.setVisible(!needs_.looks->window.behind);
-    wall.setOpacity(static_cast<float>(needs_.looks->window.opacity) / 100.0f);
-    show_wallpaper_on(wall, wallpaper, *needs_.colours, *needs_.looks);
-  }
   composer_bar_t<>& line = std::get<chat_part::line>(chat.fParts);
 
   // Its child references and handlers point into this screen. Construct it
@@ -784,7 +816,7 @@ struct conversations_screen : skiff::compose::Stacked {
   // Ticked while something moves: the list sliding in, the panels' ease,
   // the docked panel's height. What the list does is its own.
   [[nodiscard]] bool wantsTick() const {
-    return slide_wait > 0 || list_in.moving() || pane_in.moving() || needs_.shared->docked_panel_height != docked_applied ||
+    return slide_wait > 0 || list_in.moving() || pane_in.moving() ||
            needs_.paint->ease.t.moving();
   }
   void update(double now_ms);
@@ -825,8 +857,6 @@ struct conversations_screen : skiff::compose::Stacked {
                   std::views::transform(&conversation::id) | std::ranges::to<std::set>();
     previews_off = all() | std::views::filter([&](const conversation& one) { return !reads.previews_shown(one.id); }) |
                    std::views::transform(&conversation::id) | std::ranges::to<std::set>();
-    // The chosen chat's background, as its levels say.
-    wallpaper = chosen ? reads.wallpaper_of(*chosen) : config::wallpaper_t{config::wallpaper::theme{}};
   }
   template <class Reactions>
   void refresh(const skiff::model::Model<kept_root, Reactions>& kept) {
@@ -892,20 +922,6 @@ struct conversations_screen : skiff::compose::Stacked {
   // What the chat's protocol says over the composer (proto::composer_banners):
   // Matrix's warning where the other is not verified, for one. Its banners
   // share a dismissible bar in the first's tone.
-  void place_head_view(std::nullopt_t) {}
-  template <class View>
-  void place_head_view(std::optional<View> made) {
-    if (made)
-      std::get<chat_part::their_head>(chat.fParts).emplace(std::move(*made));
-  }
-  void place_composer_view(std::nullopt_t) {}
-  template <class View>
-  void place_composer_view(std::optional<View> made) {
-    if (made)
-      std::get<chat_part::their_view>(chat.fParts).emplace(std::move(*made));
-  }
-  // The connection bands are the program's (connection_shown).
-  void show_banners(const conversation* one);
   void show_conversation(const model& now);
 };
 

@@ -285,6 +285,7 @@ struct shown_root {
   skiff::model::Tracked<elsewhere_shown> elsewhere;
   skiff::model::Tracked<listing_shown> listing;
   skiff::model::Tracked<screen_shown> frame;
+  skiff::model::Tracked<chat_backdrop_shown> backdrop;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;

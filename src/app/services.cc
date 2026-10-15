@@ -192,7 +192,6 @@ struct services {
   }
   void close_emoji() const {
     mux::ui::show<mux::ui::emoji_facts>(*showing, std::nullopt);
-    ui.set_docked_panel_height(0.0f);  // the field back at the bottom
   }
   [[nodiscard]] bool emoji_open() const { return showing->root().emoji.fValue.has_value(); }
   // The threads' panel, as what is shown says: opened on a thread, the

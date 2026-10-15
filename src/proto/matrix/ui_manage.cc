@@ -220,14 +220,20 @@ inline auto choice_head(const palette& colours, std::string value) {
       c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.text)),
       c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 12.0f, colours.text))));
 }
+// The compact head: the name chosen, nothing beside it.
+struct compact_choice_head {
+  const palette* colours;
+  auto operator()(std::string value) const { return choice_head(*colours, std::move(value)); }
+};
 template <class Choose>
 auto compact_choice(const palette& colours, std::vector<std::string> names, std::size_t selected, Choose choose) {
   const auto value = selected < names.size() ? names[selected] : std::string();
   const auto width = std::clamp(static_cast<float>(value.size()) * 6.5f + 32.0f, 72.0f, 180.0f);
   auto head = choice_head(colours, value);
   auto rows = names | std::views::transform([&](const auto& name) { return choice_menu_option(colours, name); }) | std::ranges::to<std::vector>();
-  auto menu = widgets::ChoiceMenu<Choose, decltype(head), choice_menu_option_t, show_choice_menu>(
-      std::move(names), selected, std::move(choose), std::move(head), std::move(rows), show_choice_menu{colours.text, colours.accent});
+  auto menu = widgets::ChoiceMenu<Choose, decltype(head), choice_menu_option_t, show_choice_menu<compact_choice_head>>(
+      std::move(names), selected, std::move(choose), std::move(head), std::move(rows),
+      show_choice_menu<compact_choice_head>{&colours, {&colours}});
   menu.apply({.width = width, .relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle});
   return menu;
 }

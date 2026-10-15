@@ -207,14 +207,6 @@ auto page_header(const palette& colours, std::string name, Back back, Close clos
 }
 template <class Back, class Close>
 using page_header_t = decltype(page_header(std::declval<const palette&>(), std::string{}, Back{}, Close{}, false, false));
-// Esc activates the back control through the same press route as a click.
-template <class Header> bool page_step_back(Header& header) {
-  auto& back = std::get<0>(header.fParts);
-  if (!back.visible())
-    return false;
-  (void)back.onClick(0.0f, 0.0f);
-  return true;
-}
 
 // One segment of a segmented control: its text centred, filled with the
 // accent while it is the one chosen (`active`), and said to be a tab.
@@ -303,39 +295,52 @@ inline auto choice_menu_head(const palette& colours, std::string label, std::str
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 14.0f, colours.text))),
       c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.dim)));
 }
-inline auto choice_menu_option(const palette& colours, std::string name) {
+// An option, the one chosen in the accent and bold.
+inline auto choice_menu_option(const palette& colours, std::string name, bool chosen = false) {
   namespace c = skiff::compose;
   return c::row(c::hbox(0.0f, {.fillX = true, .height = 32.0f,
       .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = colours.chosen}),
-      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(name), 14.0f, colours.text)));
+      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(name), 14.0f, chosen ? colours.accent : colours.text, chosen)));
 }
 using choice_menu_head_t = decltype(choice_menu_head(std::declval<const palette&>(), std::string(), std::string()));
 using choice_menu_option_t = decltype(choice_menu_option(std::declval<const palette&>(), std::string()));
-struct show_choice_menu {
-  skia::SkColor text, accent;
-  // Both the labelled head and a compact head keep their value second.
+// What a choice menu shows as its choice moves or it opens: its head made
+// again with the name chosen (MakeHead), its options with the chosen one
+// marked, shown while it is open -- made from the names, nothing in them
+// reached into.
+template <class MakeHead> struct show_choice_menu {
+  const palette* colours;
+  MakeHead head_of;
   template <class Head>
-  void operator()(Head& head, std::vector<choice_menu_option_t>& rows,
-                  const std::vector<std::string>& names, std::size_t current, bool) const {
-    std::get<1>(head.fParts).setText(current < names.size() ? names[current] : std::string());
-    for (std::size_t i = 0; i < rows.size(); ++i) {
-      auto& label = std::get<0>(rows[i].fParts);
-      label.setColour(i == current ? accent : text);
-      label.setBold(i == current);
-    }
+  void operator()(Head& head, std::vector<choice_menu_option_t>& rows, const std::vector<std::string>& names, std::size_t current,
+                  bool open) const {
+    head = head_of(current < names.size() ? names[current] : std::string());
+    rows = names | std::views::enumerate | std::views::transform([&](const auto& each) {
+             const auto& [at, name] = each;
+             auto row = choice_menu_option(*colours, name, static_cast<std::size_t>(at) == current);
+             row.setVisible(open);
+             return row;
+           }) |
+           std::ranges::to<std::vector>();
   }
 };
+// The head with its label beside the name chosen.
+struct labelled_choice_head {
+  const palette* colours;
+  std::string label;
+  auto operator()(std::string value) const { return choice_menu_head(*colours, label, std::move(value)); }
+};
 template <class Choose>
-using choice_menu = widgets::ChoiceMenu<Choose, choice_menu_head_t, choice_menu_option_t, show_choice_menu>;
+using choice_menu = widgets::ChoiceMenu<Choose, choice_menu_head_t, choice_menu_option_t, show_choice_menu<labelled_choice_head>>;
 template <class Choose>
 inline auto make_choice_menu(const palette& colours, std::string label,
                              std::vector<std::string> names, std::size_t current, Choose choose) {
-  auto head = choice_menu_head(colours, std::move(label), current < names.size() ? names[current] : std::string());
+  auto head = choice_menu_head(colours, label, current < names.size() ? names[current] : std::string());
   auto rows = names | std::views::transform([&](const std::string& name) {
     return choice_menu_option(colours, name);
   }) | std::ranges::to<std::vector>();
   return choice_menu<Choose>(std::move(names), current, std::move(choose), std::move(head), std::move(rows),
-      show_choice_menu{colours.text, colours.accent});
+      show_choice_menu<labelled_choice_head>{&colours, {&colours, std::move(label)}});
 }
 
 // The items of the space bars -- Home, Direct messages, each space -- each
@@ -834,9 +839,6 @@ auto cell_section(const palette& colours, std::string name, std::vector<Cell> ce
 template <class Cell>
 using cell_section_t = decltype(cell_section(std::declval<const palette&>(), "", std::vector<Cell>{}));
 
-inline auto& cell_section_cells(auto& section) {
-  return std::get<0>(std::get<1>(section.fParts).fChildren);
-}
 
 
 // A dialog's buttons, at its bottom right: Cancel, and what it does --

@@ -68,28 +68,20 @@ struct settings_scroll {
 struct settings_scrolled_to {
   request::settings_scrolled operator()(float at) const { return {at}; }
 };
-// A page's header is the first child of its expression. Older pages keep
-// named parts until their own conversion reaches them.
-template <class Page> auto& settings_header(Page& page)
-  requires requires { page.parts.header; }
-{ return page.parts.header; }
-template <class Page> auto& settings_header(Page& page)
-  requires requires { page.fParts; }
-{ return std::get<0>(page.fParts); }
 
 // The settings box: its pages, one up at a time in a view that scrolls (a
 // skiff page view), made from what is shown (settings_facts). Home comes back
 // from the left, the pages come in from the right; a page made again where
 // it is up -- a choice on it changed -- is made where it was scrolled to. A
-// page's header stays at the top while the rest scrolls; Esc on a page goes
-// where its ← goes, on home it closes the box.
+// page's header -- its first part -- stays at the top while the rest
+// scrolls, raised over it; home has none. Esc on a page goes where its ←
+// goes, on home it closes the box (escape_of, by the facts).
 using settings_page_node = spl::variant<settings_home_t, animations_page_t, proxies_page_t, proxy_editor_t,
                                         appearance_page_t, rendering_page_t, storage_page_t, files_page_t,
                                         notifications_page_t, about_page_t, library_page_t>;
 inline auto settings_view(const ui_needs& needs) {
   const palette* colours = needs.colours;
-  // The page the facts name, made in place of the one up, its header raised
-  // over what scrolls under it.
+  // The page the facts name, made in place of the one up.
   auto show = [n = needs](settings_page_node& page, const settings_facts& facts) {
     const palette& c = *n.colours;
     spl::visit(spl::overloaded{
@@ -105,30 +97,23 @@ inline auto settings_view(const ui_needs& needs) {
                    [&](settings_page::about) { page.template emplace<9>(about_page(c)); },
                    [&](const settings_page::library& one) { page.template emplace<10>(library_page(c, one.name)); }},
                facts.page);
-    spl::visit(spl::overloaded{[](settings_home_t&) {},
-                               [&](auto& one) { settings_header(one).apply({.depth = 1.0f, .background = c.sidebar}); }},
-               page);
   };
   // The same page asked for again: made again where it is.
   auto same = [](const settings_facts& before, const settings_facts& now) { return before.page.index() == now.page.index(); };
   auto side = [](const settings_facts& facts) {
     return spl::visit(spl::overloaded{[](settings_page::home) { return -1.0f; }, [](const auto&) { return 1.0f; }}, facts.page);
   };
-  auto pin = [](settings_page_node& page) {
-    return spl::visit(spl::overloaded{[](settings_home_t&) -> scene::Node* { return nullptr; },
-                                      [](auto& one) -> scene::Node* { return &settings_header(one); }},
-                      page);
-  };
-  auto back = [](settings_page_node& page) {
-    return spl::visit(spl::overloaded{[](settings_home_t&) { return false; },
-                                      [](auto& one) { return page_step_back(settings_header(one)); }},
-                      page);
+  // Every page but home has a header, raised over what scrolls under it.
+  auto pin = [colours](const settings_facts& facts) {
+    return spl::visit(spl::overloaded{[](settings_page::home) { return std::optional<scene::Spec>(); },
+                                      [colours](const auto&) { return std::optional(scene::Spec{.depth = 1.0f, .background = colours->sidebar}); }},
+                      facts.page);
   };
   // Where it is scrolled, kept by the program: a page made again (another
   // theme) goes back where it rested.
   return skiff::compose::kept_scroll<skiff::model::Field<&settings_scroll::at>>(settings_scrolled_to{},
       skiff::compose::page_view<settings_facts, settings_page_node>(
-          std::move(show), same, side, pin, back, settings_page_node(std::in_place_index<0>, settings_home(*colours)), {.fill = true}));
+          std::move(show), same, side, pin, settings_page_node(std::in_place_index<0>, settings_home(*colours)), {.fill = true}));
 }
 using settings_view_t = decltype(settings_view(std::declval<const ui_needs&>()));
 // The window's dialog of it: made from what is shown, then told it as it changes.

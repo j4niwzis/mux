@@ -90,6 +90,8 @@ struct side_shown {
   bool chats_on = true;
   // An icon being dragged: the side bar shown to drop on, whatever it holds.
   bool dragging = false;
+  // The bars big: the folder bar under the search field, not in the head.
+  bool big = false;
   // Whose spaces the bars hold: what a space's menu asks with.
   std::string account;
   friend bool operator==(const side_shown&, const side_shown&) = default;

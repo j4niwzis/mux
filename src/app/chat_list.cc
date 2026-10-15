@@ -465,6 +465,7 @@ class chat_list_part {
     const auto side_items = bar_of(mux::config::space_bar::side{});
     out.side_bar = icons_of(side_items, 40.0f);
     out.top_bar = icons_of(bar_of(mux::config::space_bar::top{}), list.big_bars ? 50.0f : 30.0f);
+    out.big = list.big_bars;
     out.top_on = kept.spaces_on && kept.top_bar_on;
     out.side_on = kept.spaces_on && !side_items.empty();
     // For the settings to list them.

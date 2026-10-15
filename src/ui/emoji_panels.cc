@@ -252,12 +252,7 @@ auto emoji_cell(const palette& colours, emoji_kept& kept, const Pick& pick, cons
     const skia::SkRect drawn = cell.bounds().makeOffset(shift.x, shift.y);
     return show_tones{{source, {drawn.fLeft - 4.0f, drawn.fTop - kEmojiCell - 12.0f}}};
   }, std::move(picked));
-  return c::resting(kPreviewAfterMs, [at = &kept, shown](bool on) {
-    if (on)
-      at->previewed_now = shown;
-    else if (at->previewed_now == shown)
-      at->previewed_now.reset();
-  }, std::move(toned));
+  return c::resting(kPreviewAfterMs, rests_on{shown}, std::move(toned));
 }
 // A group's tab: its picture, or its mark; lit while its group is at the top.
 inline auto emoji_tab(const palette& colours, const emoji_group& one) {
@@ -334,7 +329,7 @@ auto emoji_panel(const palette& colours, emoji_kept& kept, Pick pick) {
           c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
               c::text_for<query>([at = &kept](const emoji_search& now) { return std::format("React with \u201C{}\u201D", typed_reaction(*at, now).label); },
                                  elided(nodes::Text("", 13.0f, colours.text))))), "React with search text"));
-  return with_preview(colours, kept,
+  return with_preview(colours,
       c::local<emoji_draft>(emoji_events<Pick>{pick, &kept},
           c::column(picker_look(),
               c::styled({.fillX = true, .height = 32.0f, .margin = {0.0f, 7.0f, 0.0f, 0.0f}}, c::bound<query>(std::move(field))),

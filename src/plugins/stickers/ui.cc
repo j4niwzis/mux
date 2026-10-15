@@ -89,13 +89,7 @@ inline auto cell(const palette& colours, emoji_kept& kept, const emote& one) {
   namespace c = skiff::compose;
   auto picture = nodes::Image<from_emotes>({one.url, emote_kind::sticker});
   picture.keepBox();  // the cell's size, whatever the sticker
-  return c::resting(kPreviewAfterMs,
-      [at = &kept, what = previewed{one.url, ":" + one.shortcode + ":", true, emote_kind::sticker}](bool on) {
-        if (on)
-          at->previewed_now = what;
-        else if (at->previewed_now == what)
-          at->previewed_now.reset();
-      },
+  return c::resting(kPreviewAfterMs, rests_on{previewed{one.url, ":" + one.shortcode + ":", true, emote_kind::sticker}},
       c::onClick(request::send_sticker{one},
           c::column(c::vbox(0.0f, {.width = kCell, .height = kCell, .margin = {2.0f, 2.0f, 2.0f, 2.0f},
                                    .padding = {4.0f, 4.0f, 4.0f, 4.0f}, .cornerRadius = 6.0f,
@@ -136,7 +130,7 @@ inline auto page(const palette& colours, emoji_kept& kept) {
       // The footer: the tabs in rows that wrap, 36 high, scrolled to the one lit.
       c::wrapped<pack>(c::vbox(0.0f, {.fillX = true, .height = 36.0f}), c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
       [](std::size_t) { return leave_search{}; });
-  return with_preview(colours, kept,
+  return with_preview(colours,
       c::local<search>(search_events{},
           c::column(picker_look(),
               c::styled({.fillX = true, .height = 32.0f, .margin = {0.0f, 7.0f, 0.0f, 0.0f}},

@@ -51,8 +51,6 @@ struct emoji_kept {
   std::vector<emote> recent_stickers, favourite_stickers;
   // Whether the lists changed since the program last kept them.
   bool emoji_changed = false, stickers_changed = false;
-  // The emoji or sticker the mouse rests on, shown large over its panel.
-  std::optional<previewed> previewed_now;
 
   [[nodiscard]] bool emoji_is_favourite(std::string_view url) const { return std::ranges::contains(favourite_emoji, url, &emote::url); }
   void flip_emoji_favourite(const emote& one) {
@@ -89,29 +87,6 @@ struct emoji_kept {
 
 // How long the mouse rests on one before it is shown large.
 inline constexpr double kPreviewAfterMs = 450.0;
-// A cell's resting: said once the mouse has stayed long enough, let go as
-// it leaves. Kept by each cell.
-struct dwell {
-  std::optional<double> since;
-  bool said = false;
-  // While it counts, frames are wanted.
-  [[nodiscard]] bool counting(bool hovered) const { return hovered && !said; }
-  void step(bool hovered, double now, const previewed& what, emoji_kept& kept) {
-    if (!hovered) {
-      since.reset();
-      if (said && kept.previewed_now == what)
-        kept.previewed_now.reset();
-      said = false;
-      return;
-    }
-    if (!since)
-      since = now;
-    if (!said && now - *since >= kPreviewAfterMs) {
-      said = true;
-      kept.previewed_now = what;
-    }
-  }
-};
 // The preview, over a panel: a dark plate, the picture or glyph large, its
 // name under it.
 [[nodiscard]] inline auto emote_preview(const palette& colours, const previewed& shown) {
@@ -131,40 +106,44 @@ struct dwell {
         nodes::Text(shown.label, 14.0f, colours.text))));
 }
 using emote_preview_t = decltype(emote_preview(std::declval<const palette&>(), std::declval<const previewed&>()));
-// A panel's preview kept to what the cells say: made anew as it changes.
-inline bool follow_preview(std::optional<emote_preview_t>& shown, std::optional<previewed>& of, const palette& colours, const emoji_kept& kept) {
-  if (of == kept.previewed_now)
-    return false;
-  of = kept.previewed_now;
-  shown.reset();
-  if (of)
-    shown.emplace(emote_preview(colours, *of));
-  return true;
-}
-
-// What a panel's page shows of what is kept with the emoji: the preview of
-// what the pointer rests on, over the page -- said by its cells, through
-// what is kept (previewed_now) -- made anew as that changes.
-template <class N> struct previewing : skiff::compose::Stacked {
-  const palette* colours_ = nullptr;
-  const emoji_kept* kept_ = nullptr;
-  std::optional<previewed> of;
-  struct parts_t {
-    N page;
-    std::optional<emote_preview_t> preview;
-  } parts;
-  previewing(const palette& colours, const emoji_kept& kept, N page)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})), colours_(&colours), kept_(&kept), parts{.page = std::move(page)} {
-    parts.page.apply({.fill = true});
-  }
-  [[nodiscard]] bool settling() const { return kept_->previewed_now != of; }
-  void update(double) {
-    if (follow_preview(parts.preview, of, *colours_, *kept_))
-      this->invalidateLayout();
+// What a panel shows large -- the emoji or sticker the pointer rests on,
+// if any: the panel's own state, told by its cells.
+struct preview_shown {
+  std::optional<previewed> now;
+};
+// A cell rested on, or left: what it shows large.
+struct preview_rested {
+  previewed what;
+  bool on = false;
+};
+struct preview_events {
+  auto on(const preview_rested& rested, const preview_shown& shown) const {
+    preview_shown next = shown;
+    if (rested.on)
+      next.now = rested.what;
+    else if (next.now == rested.what)
+      next.now.reset();
+    return skiff::model::over<preview_shown>(skiff::model::setTo(std::move(next)));
   }
 };
-template <class N> previewing<N> with_preview(const palette& colours, const emoji_kept& kept, N page) {
-  return previewing<N>(colours, kept, std::move(page));
+// What a cell's resting tells its panel: what it shows, while the pointer
+// rests on it (c::resting's act).
+struct rests_on {
+  using Answer = preview_rested;
+  previewed what;
+  preview_rested operator()(bool on) const { return {what, on}; }
+};
+// A panel's page with the preview of what the pointer rests on over it, the
+// page's own state: shown as its cells say, made anew as that changes.
+template <class N>
+auto with_preview(const palette& colours, N page) {
+  namespace c = skiff::compose;
+  return c::local<preview_shown>(preview_events{},
+      c::column(c::vbox(0.0f, {.fill = true}),
+                c::styled({.fill = true}, std::move(page)),
+                c::bound<skiff::model::Field<&preview_shown::now>>(c::mount<emote_preview_t, previewed>(
+                    [at = &colours](const previewed& one) { return std::tuple{emote_preview(*at, one)}; },
+                    {.place = scene::anchor::kTopLeft, .fill = true}))));
 }
 
 // The emote pictures a subtree shows within a rect of the window -- what is

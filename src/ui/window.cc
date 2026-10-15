@@ -937,6 +937,11 @@ struct window : skiff::compose::Specced {
   }
 
   [[nodiscard]] chats_screen_t& main() { return layer().frame.base().base(); }
+  // The chat's field, the thread's, and the chat's search field: what the
+  // program writes into, reads and focuses.
+  [[nodiscard]] auto& chat_line() { return chat_line_of(main()); }
+  [[nodiscard]] auto& thread_line() { return thread_line_of(main()); }
+  [[nodiscard]] auto& search_field() { return search_field_of(main()); }
   // What is kept, as the window's binding last read it.
   const kept_root* kept_ = nullptr;
   // Read by the window's binding as what is kept moves, and by the chats

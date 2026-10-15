@@ -179,6 +179,31 @@ class chat_list_part {
     this->point(mux::conversation_id{*listed, *chat.forum});
     asked(request::close_forum{});
   }
+  // Into the forum gone to (Alt+Right).
+  template <class Asked>
+  void apply(const request::open_pointed&, const Asked& asked) {
+    if (const auto at = s_->showing->look<mux::ui::list_shown>()->pointed) {
+      this->point(std::nullopt);
+      asked(request::choose{*at});
+    }
+  }
+  // A swipe on a phone's window: right, a step back -- from the threads or
+  // the info to the chat, from the chat to the chats -- or, from the chats,
+  // the drawer out.
+  template <class Asked>
+  void apply(const request::screen_swipe& one, const Asked& asked) {
+    const auto& chat = *s_->showing->look<mux::ui::chat_shown>();
+    if (!s_->single() || !one.right)
+      return;
+    if (!chat.chosen)
+      asked(request::open_drawer{});
+    else if (chat.threads_open)
+      asked(request::toggle_threads{});
+    else if (chat.info_open)
+      asked(request::toggle_info{});
+    else
+      asked(request::close_chat{});
+  }
   // A forum gone to by Alt+Up or Alt+Down: lit, not opened.
   void point(std::optional<mux::conversation_id> at) {
     this->change([&](mux::ui::list_shown& list) { list.pointed = std::move(at); });

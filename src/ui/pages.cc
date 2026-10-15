@@ -638,13 +638,13 @@ auto profile_page(const palette& colours, const account_page_facts& first) {
       nodes::Text("Profile", 20.0f, colours.text, true),
       c::projected<account_page_read>([](const account_page_read& now) {
         return now ? std::optional(profile_form_seed{now->by, now->profile_round, now->profile}) : std::nullopt;
-      }, c::mount_now<content, profile_form_seed>([&colours](const profile_form_seed& seed) {
-        return std::tuple{profile_fields<Policy>(colours, seed)};
+      }, c::mount_now<content, profile_form_seed>([at = &colours](const profile_form_seed& seed) {
+        return std::tuple{profile_fields<Policy>(*at, seed)};
       }, profile_form_seed{first.by, first.profile_round, first.profile}, {.fillX = true, .autoSize = scene::axes::kY})),
       c::projected<account_page_read>([](const account_page_read& now) {
         return now ? std::optional(presence_form_seed{now->by, now->presence}) : std::nullopt;
-      }, c::mount_now<presence_content, presence_form_seed>([&colours](const presence_form_seed& seed) {
-        return std::tuple{presence_fields<Policy>(colours, seed)};
+      }, c::mount_now<presence_content, presence_form_seed>([at = &colours](const presence_form_seed& seed) {
+        return std::tuple{presence_fields<Policy>(*at, seed)};
       }, presence_form_seed{first.by, first.presence}, {.fillX = true, .autoSize = scene::axes::kY})));
 }
 

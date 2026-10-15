@@ -286,8 +286,11 @@ struct chat_part {
 // are live: Ctrl+C and Delete on the messages selected; Up, Down, Enter,
 // Tab and Esc on the list over the field; Alt+Right into the forum gone to,
 // Alt+Left out of the one open.
+// One answer type for the keys the screen takes at both phases: the node
+// keys_for wraps answers as the outer one does, and the screen_keys under it
+// (on the bubbling phase) answer through it.
 using capture_answer = std::variant<request::selection_copy, request::selection_delete, request::suggestion_step, request::suggestion_pick,
-                                    request::suggestion_close, request::open_pointed, request::leave_forum>;
+                                    request::suggestion_close, request::open_pointed, request::leave_forum, request::screen_key>;
 struct capture_keys {
   std::optional<capture_answer> operator()(const screen_shown& now, const scene::key::down& press) const {
     namespace keys = scene::keys;

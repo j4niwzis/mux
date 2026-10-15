@@ -424,7 +424,7 @@ struct muc_form_events {
   }
   auto on(const jids_removed& one, const muc_form& now) const {
     auto next = now;
-    std::erase_if(next.jids[one.var], &jid_line::picked);
+    std::erase_if(next.jids[one.var], [](const jid_line& line) { return line.picked; });
     return put(std::move(next));
   }
   auto on(const jid_typed& one, const muc_form& now) const {
@@ -756,7 +756,7 @@ inline auto room_page(const palette& colours, const room_basis& basis) {
           tab_heading(colours, "Room"),
           wrapped(nodes::Text("Nickname: " + room.nick + " · " + room.affiliation + " · " + room.role, 13.0f, colours.dim)),
           model_field<&room_form::topic>(colours, "Subject", "Room subject"),
-          c::asking_for<room_form>([](const room_form& form) { return request::room_act{room_action::retopic{form.topic}}; },
+          c::asking_for<room_form>([](const room_form& form) { return ::mux::ui::request::room_act{room_action::retopic{form.topic}}; },
                                    c::styled(button, widgets::Button<scene::NoAction>(colours.widgets, "Change subject", {}))),
           model_field<&room_form::nick>(colours, "Nickname", "Your nickname"),
           c::visible(room.joined, c::asking_for<room_form>([](const room_form& form) { return request::muc_identity{form.nick}; },

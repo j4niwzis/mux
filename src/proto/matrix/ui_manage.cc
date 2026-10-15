@@ -1274,10 +1274,13 @@ template <class Page> requires requires(Page& page) { preserve_draft(page.fModel
 inline void preserve_manage_page(Page& page) { preserve_draft(page.fModel.root()); }
 // Preserve before metadata or editor actions change the kept draft. The page
 // itself is replaced only by the dialog's next update.
-inline void show_again(manage_box* box) {
+inline void manage_preserve(manage_box& box) {
   spl::visit(spl::overloaded{[](std::monostate) {}, [](auto* draft) {
     if (draft) preserve_draft(*draft);
-  }}, box->draft);
+  }}, box.draft);
+}
+inline void show_again(manage_box* box) {
+  manage_preserve(*box);
   box->shown->show_again();
 }
 } // namespace mux::proto::matrix::manage_detail
@@ -1330,8 +1333,6 @@ using manage_out = skiff::model::Types<request::change_room, request::save_room_
     ui::request::open_member_info>;
 using erased_page = skiff::compose::Erased<manage_out>;
 erased_page manage_page_erased(room, manage_detail::manage_box*, const ui::room_settings_facts&);
-bool place_general(manage_detail::manage_box&, erased_page&);
-bool preserve_general(erased_page&);
 template <class Box> auto make_manage_page(room tab, Box* box, const ui::room_settings_facts& facts) {
   if constexpr (skiff::scene::kErasedWalks) return manage_page_erased(tab, &box->template part<state>(), facts);
   else return manage_detail::general_page(&box->template part<state>(), facts);
@@ -1341,8 +1342,6 @@ template <class Box> constexpr auto page_type(room, type_tag<Box>) {
   else return type_tag<decltype(manage_detail::general_page(&std::declval<Box*>()->template part<state>(), std::declval<const ui::room_settings_facts&>()))>{};
 }
 erased_page manage_page_erased(members, manage_detail::manage_box*, const ui::room_settings_facts&);
-bool place_members(manage_detail::manage_box&, erased_page&);
-bool preserve_members(erased_page&);
 template <class Box> auto make_manage_page(members tab, Box* box, const ui::room_settings_facts& facts) {
   if constexpr (skiff::scene::kErasedWalks) return manage_page_erased(tab, &box->template part<state>(), facts);
   else return manage_detail::members_page(&box->template part<state>(), facts);
@@ -1352,8 +1351,6 @@ template <class Box> constexpr auto page_type(members, type_tag<Box>) {
   else return type_tag<decltype(manage_detail::members_page(&std::declval<Box*>()->template part<state>(), std::declval<const ui::room_settings_facts&>()))>{};
 }
 erased_page manage_page_erased(roles, manage_detail::manage_box*, const ui::room_settings_facts&);
-bool place_permissions(manage_detail::manage_box&, erased_page&);
-bool preserve_permissions(erased_page&);
 template <class Box> auto make_manage_page(roles tab, Box* box, const ui::room_settings_facts& facts) {
   if constexpr (skiff::scene::kErasedWalks) return manage_page_erased(tab, &box->template part<state>(), facts);
   else return manage_detail::permissions_page(&box->template part<state>(), facts);
@@ -1363,8 +1360,6 @@ template <class Box> constexpr auto page_type(roles, type_tag<Box>) {
   else return type_tag<decltype(manage_detail::permissions_page(&std::declval<Box*>()->template part<state>(), std::declval<const ui::room_settings_facts&>()))>{};
 }
 erased_page manage_page_erased(packs, manage_detail::manage_box*, const ui::room_settings_facts&);
-bool place_packs(manage_detail::manage_box&, erased_page&);
-bool preserve_packs(erased_page&);
 template <class Box> auto make_manage_page(packs tab, Box* box, const ui::room_settings_facts& facts) {
   if constexpr (skiff::scene::kErasedWalks) return manage_page_erased(tab, &box->template part<state>(), facts);
   else return manage_detail::packs_page(&box->template part<state>(), facts);
@@ -1374,8 +1369,6 @@ template <class Box> constexpr auto page_type(packs, type_tag<Box>) {
   else return type_tag<decltype(manage_detail::packs_page(&std::declval<Box*>()->template part<state>(), std::declval<const ui::room_settings_facts&>()))>{};
 }
 erased_page manage_page_erased(advanced, manage_detail::manage_box*, const ui::room_settings_facts&);
-bool place_developer(manage_detail::manage_box&, erased_page&);
-bool preserve_developer(erased_page&);
 template <class Box> auto make_manage_page(advanced tab, Box* box, const ui::room_settings_facts& facts) {
   if constexpr (skiff::scene::kErasedWalks) return manage_page_erased(tab, &box->template part<state>(), facts);
   else return manage_detail::developer_page(&box->template part<state>(), facts);
@@ -1391,9 +1384,5 @@ inline void manage_page_placed(manage_box& box, auto&) { box.draft = std::monost
 template <class Page>
   requires requires(manage_box& box, Page& page) { box.draft = &page.fModel.root(); }
 inline void manage_page_placed(manage_box& box, Page& page) { box.draft = &page.fModel.root(); }
-void manage_page_placed(manage_box&, manage::erased_page&);
-}
-
-export namespace mux::ui {
-void preserve_manage_input(proto::matrix::manage::erased_page&);
+inline void manage_page_placed(manage_box&, manage::erased_page&) {}
 }

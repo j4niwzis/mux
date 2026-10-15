@@ -330,6 +330,10 @@ struct room_settings : skiff::compose::Stacked {
   // A tab shown from current facts at the next frame.
   void show_tab(const settings_tab_t& to) {
     spl::visit([](auto& page) { preserve_manage_input(page); }, page());
+    std::apply([](auto&... parts) {
+      using manage_defaults::manage_preserve;
+      (manage_preserve(parts), ...);
+    }, context.protocol_parts);
     tab = to;
     rebuild_due = true;
     this->markDamaged();
@@ -386,7 +390,7 @@ struct room_settings : skiff::compose::Stacked {
 
 room_settings_context::room_settings_context(room_settings* dialog, const palette* colours,
                                                const looks_shown* looks, const room_settings_facts& shown)
-    : room_settings_shown{.facts = shown, .looks_ = looks, .owner = dialog}, owner(dialog),
+    : room_settings_shown{.facts = shown, .looks_ = looks, .node = dialog}, owner(dialog),
       presentation(spl::visit([&](auto tag) { return manage_style_of(state_of<decltype(tag)>{}, *colours); }, shown.speaks)) {
   colours_ = &presentation.colours;
   std::apply([&](auto&... parts) {

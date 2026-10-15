@@ -77,46 +77,10 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
 // the person.
 using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::request::open_video, ::mux::ui::request::open_picture, ::mux::ui::request::play_audio, ::mux::ui::request::react, ::mux::ui::request::open_url,
                                   ::mux::ui::request::open_thread, ::mux::ui::request::jump_to_message, ::mux::ui::request::open_member_info>;
-[[nodiscard]] std::optional<bubble_press> press_in_bubble(const message_bubble& one, float x, float y, const conversation* chat) {
+[[nodiscard]] std::optional<bubble_press> press_in_bubble(const legacy::message_bubble& one, float x, float y, const conversation* chat) {
   const struct {
     float x, y;
   } press{x, y};
-  // A picture: seen whole. A file: saved and opened.
-  // A video, shown by its thumbnail: played in the viewer -- or, built
-  // without video, by the system's player, as a file is opened.
-  if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
-      one.said.attachment && one.said.attachment->video && !mux::platform::video::kPlays) {
-    return ::mux::ui::request::open_file{*one.said.attachment->video, one.said.attachment->name};
-  }
-  if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
-      one.said.attachment && one.said.attachment->video) {
-    const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-    return ::mux::ui::request::open_video{one.parts.body.parts.picture->source, *one.said.attachment->video, one.sender,
-                        chat ? sender_name(*chat, one.sender) : one.sender,
-                        std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))};
-  }
-  if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y)) {
-    const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-    return ::mux::ui::request::open_picture{one.parts.body.parts.picture->source, one.sender,
-                          chat ? sender_name(*chat, one.sender) : one.sender,
-                          std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))};
-  }
-  // A picture of an album: seen whole, as one alone is.
-  if (one.parts.body.parts.album)
-    for (const auto& row : one.parts.body.parts.album->parts.rows)
-      for (const picture_view& cell : row.parts.cells)
-        if (cell.bounds().contains(press.x, press.y)) {
-          const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-          return ::mux::ui::request::open_picture{cell.source, one.sender, chat ? sender_name(*chat, one.sender) : one.sender,
-                                std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day},
-                                            clock_of(one.said.at))};
-        }
-  if (one.parts.body.parts.file && one.parts.body.parts.file->bounds().contains(press.x, press.y) && one.said.attachment) {
-    if (one.parts.body.parts.file->sound)
-      return ::mux::ui::request::play_audio{one.parts.body.parts.file->source};
-    else
-      return ::mux::ui::request::open_file{one.parts.body.parts.file->source, one.said.attachment->name};
-  }
   // A card of a link to a room or a message: followed.
   if (const auto url = message_link_at(one.parts.body.parts.blocks, press.x, press.y))
     return ::mux::ui::request::open_url{*url};
@@ -158,7 +122,7 @@ using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::requ
   if (one.parts.body.parts.forwarded && one.said.forwarded &&
       one.parts.body.parts.forwarded->shownBounds().contains(press.x, press.y)) {
     if (proto::person_link(state_before(protocol_of(one.said.forwarded->from)), one.said.forwarded->from) &&
-        one.parts.body.parts.forwarded->parts.who.bounds()
+        std::get<1>(one.parts.body.parts.forwarded->fParts).bounds()
             .makeOffset(one.parts.body.parts.forwarded->fState.fShiftX, one.parts.body.parts.forwarded->fState.fShiftY)
             .contains(press.x, press.y)) {
       return ::mux::ui::request::open_member_info{one.said.forwarded->from};
@@ -177,7 +141,7 @@ using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::requ
 
 // What a message's menu offers, for a right press on it wherever it is
 // shown: the timeline, a thread.
-[[nodiscard]] menu_facts facts_of_bubble(const message_bubble& one, const conversation* chat, float x, float y) {
+[[nodiscard]] menu_facts facts_of_bubble(const legacy::message_bubble& one, const conversation* chat, float x, float y) {
   const struct {
     float x, y;
   } press{x, y};
@@ -255,6 +219,67 @@ struct shown_how {
   std::optional<std::string> unread_from;
 };
 
+// Which of a list's messages are made into bubbles -- a chat's timeline, a
+// thread's root and answers: a stretch of them, at most a few hundred, that
+// slides with the reader -- more made above as the view nears its top, the
+// far ones below let go -- and is kept by the messages at its ends, so that
+// history coming in above does not move it. A whole long thread made at
+// once -- every bubble wrapped, measured and laid out -- was what made one
+// slow to open, and every change in it slow after.
+// Slid a little at a time, well before the reader reaches its edge: sixty
+// bubbles made in one frame was a frame of jank.
+inline constexpr std::size_t kFirstMade = 80, kMostMade = 240, kMadeStep = 16;
+struct made_range {
+  std::optional<std::string> from, to;
+  bool to_end = true;
+  friend bool operator==(const made_range&, const made_range&) = default;
+};
+[[nodiscard]] inline std::pair<std::size_t, std::size_t> made_indices(const made_range& made, const std::vector<message>& all) {
+  const auto index_of = [&](const std::optional<std::string>& id) -> std::optional<std::size_t> {
+    if (!id)
+      return std::nullopt;
+    const auto it = std::ranges::find(all, *id, &message::id);
+    return it == all.end() ? std::nullopt : std::optional<std::size_t>(static_cast<std::size_t>(it - all.begin()));
+  };
+  std::size_t to = all.size();
+  if (!made.to_end)
+    if (const auto at = index_of(made.to))
+      to = *at + 1;
+  std::size_t from = to > kFirstMade ? to - kFirstMade : 0;
+  if (const auto at = index_of(made.from); at && *at <= to)
+    from = *at;
+  if (to - from > kMostMade)
+    from = to - kMostMade;
+  return {from, to};
+}
+// The stretch from `from` to `to`, kept by its ends: whether it is another.
+[[nodiscard]] inline bool set_made(made_range& made, const std::vector<message>& all, std::size_t from, std::size_t to) {
+  to = std::min(to, all.size());
+  from = std::min(from, to);
+  made_range next{from < all.size() ? std::optional<std::string>(all[from].id) : std::nullopt,
+                  to > 0 ? std::optional<std::string>(all[to - 1].id) : std::nullopt, to == all.size()};
+  const made_range was = std::exchange(made, std::move(next));
+  return was != made;
+}
+// Slid as the view nears an edge of what is made, while a screen and a half
+// is still made beyond it: up, where there is more above; down, where it is
+// not at the end. Whether it moved.
+[[nodiscard]] inline bool slide_made(made_range& made, const std::vector<message>& all, float at, float extent, float view) {
+  auto [from, to] = made_indices(made, all);
+  const float ahead = std::max(300.0f, view * 1.5f);
+  if (at <= ahead && from > 0) {
+    from = from > kMadeStep ? from - kMadeStep : 0;
+    to = std::min(to, from + kMostMade);
+    return set_made(made, all, from, to);
+  }
+  if (!made.to_end && at >= extent - ahead) {
+    to = std::min(all.size(), to + kMadeStep);
+    from = to > kMostMade && to - from > kMostMade ? to - kMostMade : from;
+    return set_made(made, all, from, to);
+  }
+  return false;
+}
+
 // Selection owns the gesture before any link, photo, or text child sees
 // it. A tap toggles one message; a drag commits the displayed message range.
 struct message_selection_drag {
@@ -329,8 +354,8 @@ struct timeline_area : skiff::compose::Specced {
   struct parts_t {
     // Behind the messages: the theme's gradient, Telegram's pattern over it.
     wallpaper_t wall;
-    nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
-        nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
+    nodes::ScrollContainer<nodes::Flow<std::vector<legacy::message_bubble>>> timeline{
+        nodes::Flow<std::vector<legacy::message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
     jump_button_t jump;
     back_button_t back;
     mark_button_t mentions;
@@ -366,7 +391,7 @@ struct timeline_area : skiff::compose::Specced {
     std::get<0>(parts.timeline.fChildren).apply(
         {.fillX = true,
          .autoSize = scene::axes::kY,
-         .padding = {8.0f, message_bubble::kListSide, 8.0f, message_bubble::kListSide}});
+         .padding = {8.0f, legacy::message_bubble::kListSide, 8.0f, legacy::message_bubble::kListSide}});
   }
   // The chat's background: the theme's gradient and Telegram's pattern, a
   // plain colour (what is behind showing), or a picture.
@@ -378,7 +403,7 @@ struct timeline_area : skiff::compose::Specced {
     show_wallpaper_on(parts.wall, chosen, *needs_.colours, *needs_.looks);
   }
   // The bubbles in the list, as they are made.
-  [[nodiscard]] std::vector<message_bubble>& bubbles() {
+  [[nodiscard]] std::vector<legacy::message_bubble>& bubbles() {
     return std::get<0>(std::get<0>(parts.timeline.fChildren).fChildren);
   }
   // The bubbles, as a function of the messages from first to last of
@@ -451,9 +476,9 @@ struct timeline_area : skiff::compose::Specced {
     // are kept -- with a selection in them -- and only the new are made.
     if (nodes::reconcile(
             entries, std::views::iota(first_made, last_made),
-            [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
+            [&](std::size_t i) { return all[i].id; }, [](const legacy::message_bubble& row) { return row.message_id; },
             [&](std::size_t i) {
-              message_bubble made(spl::remapped<typename message_bubble::needs>(needs_), one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
+              legacy::message_bubble made(spl::remapped<typename legacy::message_bubble::needs>(needs_), one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
                                   how.previews);
               made.quote_said = quote_body(i);
               if (how.unread_from && all[i].id == *how.unread_from)
@@ -464,7 +489,7 @@ struct timeline_area : skiff::compose::Specced {
                 made.appear();
               return made;
             },
-            [&](const message_bubble& row, std::size_t i) {
+            [&](const legacy::message_bubble& row, std::size_t i) {
               const bool quote_known = !all[i].replies_to || one.quoted.contains(*all[i].replies_to) ||
                                        std::ranges::find(all, *all[i].replies_to, &message::id) != all.end();
               const auto link = first_link_of(all[i]);
@@ -488,11 +513,11 @@ struct timeline_area : skiff::compose::Specced {
   bool swipe_armed = false;
   float swipe_x = 0.0f, swipe_y = 0.0f;
   std::chrono::steady_clock::time_point swipe_pressed{};
-  message_bubble* swiped() {
+  legacy::message_bubble* swiped() {
     if (!swiping)
       return nullptr;
     auto& entries = this->bubbles();
-    const auto it = std::ranges::find(entries, *swiping, &message_bubble::message_id);
+    const auto it = std::ranges::find(entries, *swiping, &legacy::message_bubble::message_id);
     return it == entries.end() ? nullptr : &*it;
   }
   void swipe_down(const scene::pointer::down& press) {
@@ -502,7 +527,7 @@ struct timeline_area : skiff::compose::Specced {
     swipe_pressed = std::chrono::steady_clock::now();
   }
   void swipe_move(const scene::pointer::move& at, scene::PointerReply& reply) {
-    if (message_bubble* one = this->swiped()) {
+    if (legacy::message_bubble* one = this->swiped()) {
       one->swipe.jump(std::clamp(at.x - swipe_x, -120.0f, 0.0f));
       one->markDamaged();
       reply.handle();
@@ -523,7 +548,7 @@ struct timeline_area : skiff::compose::Specced {
     if (dx >= 0.0f || std::abs(dx) < 2.0f * std::abs(dy) ||
         std::chrono::steady_clock::now() - swipe_pressed > std::chrono::milliseconds(250))
       return;
-    for (message_bubble& one : this->bubbles())
+    for (legacy::message_bubble& one : this->bubbles())
       // The rows are laid out as if unscrolled: the press, where they are.
       if (parts.timeline.toView(one.bounds()).contains(swipe_x, swipe_y) && !one.message_id.empty()) {
         swiping = one.message_id;
@@ -536,10 +561,10 @@ struct timeline_area : skiff::compose::Specced {
   }
   std::optional<Answer> swipe_up(scene::PointerReply& reply) {
     swipe_armed = false;
-    message_bubble* one = this->swiped();
+    legacy::message_bubble* one = this->swiped();
     if (!one)
       return std::nullopt;
-    const bool replied = one->swipe.value() <= -message_bubble::kSwipeToReply;
+    const bool replied = one->swipe.value() <= -legacy::message_bubble::kSwipeToReply;
     std::optional<Answer> asked;
     if (replied)
       asked = ::mux::ui::request::reply_to{one->message_id, one->plain};
@@ -552,7 +577,7 @@ struct timeline_area : skiff::compose::Specced {
   }
   void swipe_cancel(scene::PointerReply& reply) {
     swipe_armed = false;
-    if (message_bubble* one = this->swiped()) {
+    if (legacy::message_bubble* one = this->swiped()) {
       one->swipe.setTarget(0.0f);
       scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
       swiping.reset();
@@ -647,7 +672,7 @@ struct timeline_area : skiff::compose::Specced {
     auto preview = selected_ids;
     if (selecting && selecting->moved) {
       auto& rows = this->bubbles();
-      const auto first = std::ranges::find(rows, selecting->first, &message_bubble::message_id);
+      const auto first = std::ranges::find(rows, selecting->first, &legacy::message_bubble::message_id);
       const auto last = selection_row_at(*this, selecting->last_x, selecting->last_y);
       if (first != rows.end() && last != rows.end()) {
         const auto [begin, end] = std::minmax(first, last);
@@ -671,7 +696,7 @@ struct timeline_area : skiff::compose::Specced {
     const auto& bubbles = this->bubbles();
     // Selecting: the message pressed selected, or not.
     if (!selected_ids.empty()) {
-      const auto pressed = std::ranges::find_if(bubbles, [&](const message_bubble& one) {
+      const auto pressed = std::ranges::find_if(bubbles, [&](const legacy::message_bubble& one) {
         return one.bounds().contains(press.x, press.y) && !one.message_id.empty();
       });
       if (pressed == std::ranges::end(bubbles))
@@ -679,7 +704,7 @@ struct timeline_area : skiff::compose::Specced {
       return ::mux::ui::request::toggle_selected{pressed->message_id};
     }
     // Else what the press asks for in the bubble it is in.
-    for (const message_bubble& one : bubbles)
+    for (const legacy::message_bubble& one : bubbles)
       if (auto asked = press_in_bubble(one, press.x, press.y, seen_chat_of()))
         return Answer{*asked};
     return std::nullopt;
@@ -690,7 +715,7 @@ struct timeline_area : skiff::compose::Specced {
     // Whichever message's row the press is in -- its text, its bubble or the
     // room beside it. What Copy takes is what is selected in it, if anything
     // is, and all of it if not.
-    for (const message_bubble& one : this->bubbles())
+    for (const legacy::message_bubble& one : this->bubbles())
       if (parts.timeline.toView(one.bounds()).contains(press.x, press.y)) {
         menu_facts facts = facts_of_bubble(one, seen_chat_of(), press.x, press.y);
         facts.seen = this->seen_by(one.message_id, one.sender);

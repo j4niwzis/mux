@@ -624,6 +624,11 @@ struct send_sticker {
 struct play_audio {
   std::string source;
 };
+// A sound playing: the program asked to look at the speaker again -- where
+// it is, whether it ended -- a few times a second, while one does.
+struct audio_tick {
+  friend bool operator==(audio_tick, audio_tick) = default;
+};
 struct choose_new_proxy {
   int index = -1;
 };

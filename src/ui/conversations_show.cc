@@ -411,7 +411,7 @@ void conversations_screen::update(double now_ms) {
   // and once it is laid out, brought into view and flashed.
   if (jumping_to && chosen && last_model) {
     auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    auto it = std::ranges::find(entries, *jumping_to, &message_bubble::message_id);
+    auto it = std::ranges::find(entries, *jumping_to, &legacy::message_bubble::message_id);
     const conversation* one = last_model->find(*chosen);
     // Begun, or more of the chat come: the jump got somewhere.
     if (jump_since_ms < 0.0 || (one && one->timeline.size() != jump_held)) {
@@ -422,10 +422,10 @@ void conversations_screen::update(double now_ms) {
     // line is hidden, as the chat's settings say: landed on the nearest
     // shown after it, else before it, as its place.
     if (it != entries.end() && !it->visible()) {
-      auto shown = std::find_if(it, entries.end(), [](const message_bubble& row) { return row.visible(); });
+      auto shown = std::find_if(it, entries.end(), [](const legacy::message_bubble& row) { return row.visible(); });
       if (shown == entries.end()) {
         const auto back = std::find_if(std::make_reverse_iterator(it), entries.rend(),
-                                       [](const message_bubble& row) { return row.visible(); });
+                                       [](const legacy::message_bubble& row) { return row.visible(); });
         shown = back == entries.rend() ? entries.end() : std::prev(back.base());
       }
       if (shown != entries.end()) {
@@ -455,7 +455,7 @@ void conversations_screen::update(double now_ms) {
         // Made, but not laid out: more than a screen from the view, where
         // the list lays nothing out. The view stepped a screen toward it,
         // until it is laid out and aimed at.
-        const auto laid = std::ranges::find_if(entries, [](const message_bubble& row) { return !row.bounds().isEmpty(); });
+        const auto laid = std::ranges::find_if(entries, [](const legacy::message_bubble& row) { return !row.bounds().isEmpty(); });
         if (laid != entries.end()) {
           const bool above = it < laid;
           const float page = timeline.bounds().height();
@@ -505,7 +505,7 @@ void conversations_screen::update(double now_ms) {
   // once the list is still, where the flash is seen.
   if (aiming) {
     auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    const auto it = std::ranges::find(entries, *aiming, &message_bubble::message_id);
+    const auto it = std::ranges::find(entries, *aiming, &legacy::message_bubble::message_id);
     if (it == entries.end() || it->bounds().isEmpty() || ++aim_frames > 180) {
       aiming.reset();
       jump_fragment.reset();
@@ -588,9 +588,9 @@ void conversations_screen::update(double now_ms) {
       const skia::SkRect view = timeline.bounds();
       const conversation* one = last_model ? last_model->find(*chosen) : nullptr;
       const auto newest = std::ranges::find_if(entries.rbegin(), entries.rend(),
-                                               [](const message_bubble& row) { return !row.message_id.empty(); });
+                                               [](const legacy::message_bubble& row) { return !row.message_id.empty(); });
       while (!stack.empty()) {
-        const auto it = std::ranges::find(entries, stack.back(), &message_bubble::message_id);
+        const auto it = std::ranges::find(entries, stack.back(), &legacy::message_bubble::message_id);
         bool passed = false;
         if (it != entries.end() && !it->bounds().isEmpty()) {
           passed = timeline.atEnd(0.5f) || timeline.toView(it->bounds()).fTop < view.centerY();
@@ -1082,7 +1082,7 @@ void conversations_screen::show_conversation(const model& now) {
                           arrives, rooms_wanted);
   rooms_waiting.clear();
   rooms_unfound.clear();
-  for (const message_bubble& row : entries) {
+  for (const legacy::message_bubble& row : entries) {
     rooms_waiting.insert(row.rooms_waiting.begin(), row.rooms_waiting.end());
     rooms_unfound.insert(row.rooms_unknown.begin(), row.rooms_unknown.end());
   }

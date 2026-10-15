@@ -163,6 +163,8 @@ struct shown_root {
   skiff::model::Tracked<std::optional<viewer_facts>> viewer;
   skiff::model::Tracked<std::optional<emoji_facts>> emoji;
   skiff::model::Tracked<std::optional<panel_facts>> panel;
+  // What the speaker plays: the voice messages' buttons and times read it.
+  skiff::model::Tracked<audio_shown> listening;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;

@@ -851,7 +851,7 @@ struct conversations_screen : skiff::compose::Stacked {
     }
     this->invalidateLayout();
   }
-  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.area.parts.timeline;
+  nodes::ScrollContainer<nodes::Flow<std::vector<legacy::message_bubble>>>& timeline = chat.area.parts.timeline;
   // The chat whose messages are shown, how many, and how many came while
   // the view was above the newest.
   std::optional<conversation_id> shown_chat;
@@ -1157,49 +1157,16 @@ struct conversations_screen : skiff::compose::Stacked {
 
   bool was_typing = false;
   std::string typed_last;
-  // Which of the chat's messages are made into bubbles: a stretch of them,
-  // at most a few hundred, that slides with the reader -- more made above
-  // and the far ones below let go as they scroll up, the other way down --
-  // and at the end, follows what comes. Known by the ids at its ends, so
-  // history coming in above does not move it. What is made is what the
-  // frames walk: a chat of any length costs a few hundred bubbles.
-  struct made_range {
-    std::optional<std::string> from, to;
-    bool to_end = true;
-    friend bool operator==(const made_range&, const made_range&) = default;
-  };
+  // Which of the chat's messages are made: the timeline's window
+  // (made_range), kept for each chat as it was left.
   made_range made;
   std::map<conversation_id, made_range> made_of;
-  // Slid a little at a time, well before the reader reaches its edge: sixty
-  // bubbles made in one frame -- made, measured, laid out -- was a frame of
-  // 25 ms at every slide, felt as the scroll growing slower further up.
-  static constexpr std::size_t kFirstMade = 80, kMostMade = 240, kMadeStep = 16;
   [[nodiscard]] std::pair<std::size_t, std::size_t> made_indices(const std::vector<message>& all) const {
-    const auto index_of = [&](const std::optional<std::string>& id) -> std::optional<std::size_t> {
-      if (!id)
-        return std::nullopt;
-      const auto it = std::ranges::find(all, *id, &message::id);
-      return it == all.end() ? std::nullopt : std::optional<std::size_t>(static_cast<std::size_t>(it - all.begin()));
-    };
-    std::size_t to = all.size();
-    if (!made.to_end)
-      if (const auto at = index_of(made.to))
-        to = *at + 1;
-    std::size_t from = to > kFirstMade ? to - kFirstMade : 0;
-    if (const auto at = index_of(made.from); at && *at <= to)
-      from = *at;
-    if (to - from > kMostMade)
-      from = to - kMostMade;
-    return {from, to};
+    return mux::ui::made_indices(made, all);
   }
   void set_made(const std::vector<message>& all, std::size_t from, std::size_t to) {
-    to = std::min(to, all.size());
-    from = std::min(from, to);
-    made_range next{from < all.size() ? std::optional<std::string>(all[from].id) : std::nullopt,
-                    to > 0 ? std::optional<std::string>(all[to - 1].id) : std::nullopt, to == all.size()};
-    if (next != made)
+    if (mux::ui::set_made(made, all, from, to))
       needs_.shared->pictures_due = true;
-    made = std::move(next);
   }
   // A message to bring into view, once it is made and laid out -- flashed,
   // unless it is where a chat opened, at what it was read up to.
@@ -1279,7 +1246,7 @@ struct conversations_screen : skiff::compose::Stacked {
     if (jumping_to)
       return out;
     const skia::SkRect view = timeline.bounds();
-    for (const message_bubble& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
+    for (const legacy::message_bubble& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
       // Laid out as if unscrolled: where it is in the view.
       const skia::SkRect box = timeline.toView(row.bounds());
       if (!row.message_id.empty() && !box.isEmpty() && row.visible() && box.fBottom > view.fTop + 8.0f &&
@@ -1370,7 +1337,7 @@ struct conversations_screen : skiff::compose::Stacked {
   [[nodiscard]] std::size_t pin_above(const conversation& one) {
     const skia::SkRect view = timeline.bounds();
     const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    const auto first = std::ranges::find_if(entries, [&](const message_bubble& row) {
+    const auto first = std::ranges::find_if(entries, [&](const legacy::message_bubble& row) {
       const skia::SkRect box = timeline.toView(row.bounds());
       return !row.message_id.empty() && row.visible() && !box.isEmpty() && box.fBottom > view.fTop + 8.0f;
     });

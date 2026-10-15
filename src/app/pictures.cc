@@ -514,6 +514,7 @@ class pictures_part {
     auto& speaker = *s_->speaker;
     if (speaker.holds(one.source)) {
       speaker.toggle();
+      this->show_listening();
       return;
     }
     if (const auto bytes = this->kept_whole(one.source)) {
@@ -526,14 +527,26 @@ class pictures_part {
   void play(const std::string& source, const std::string& bytes) {
     auto kept = std::make_shared<const std::string>(bytes);
     auto* scene = s_->scene;
-    s_->work->run([kept, source, scene, speaker = s_->speaker]() -> workers::done_t {
+    s_->work->run([this, kept, source, scene, speaker = s_->speaker]() -> workers::done_t {
       auto sound = mux::platform::audio::decode(*kept);
-      return [sound = std::move(sound), source, scene, speaker]() {
+      return [this, sound = std::move(sound), source, scene, speaker]() {
         if (sound)
           speaker->play(source, *sound);
+        this->show_listening();
         scene->state().markDamaged();
       };
     });
+  }
+  // A sound playing, looked at again: put away where it has ended.
+  void apply(const request::audio_tick&) { this->show_listening(); }
+  // What the speaker plays, told to the window as it is now -- only where
+  // that changed.
+  void show_listening() {
+    auto& speaker = *s_->speaker;
+    speaker.tick();
+    mux::ui::audio_shown now{speaker.key(), !speaker.key().empty() && !speaker.paused(), speaker.position(), speaker.length()};
+    if (*s_->showing->look<mux::ui::audio_shown>() != now)
+      mux::ui::show(*s_->showing, std::move(now));
   }
 
   // A file shown, its whole kept where it is asked to be: from the disk

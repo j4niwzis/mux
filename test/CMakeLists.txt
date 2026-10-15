@@ -108,6 +108,6 @@ endif()
 
 if(MUX_UI)
   add_executable(mux-profile-fields-test profile_fields_test.cc)
-  target_link_libraries(mux-profile-fields-test PRIVATE mux_modules GTest::gtest_main)
+  target_link_libraries(mux-profile-fields-test PRIVATE mux_modules ${mux_gtest})
   add_test(NAME mux-profile-fields-test COMMAND mux-profile-fields-test)
 endif()

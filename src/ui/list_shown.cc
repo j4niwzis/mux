@@ -83,10 +83,8 @@ struct side_shown {
   bool no_chats = false;
   // An icon being dragged: the side bar shown to drop on, whatever it holds.
   bool dragging = false;
-  // For a chat's menu: every account saved (its places), and the theme its
-  // strip colours are chosen in.
-  std::vector<account_id> accounts;
-  config::theme_t theme = config::theme::tinted{};
+  // Whose spaces the bars hold: what a space's menu asks with.
+  std::string account;
   friend bool operator==(const side_shown&, const side_shown&) = default;
 };
 // The chats screen's frame, as the program keeps it: how wide the side and
@@ -137,6 +135,11 @@ struct elsewhere_shown {
 struct listing_shown {
   std::uint64_t revision = 0;
   std::shared_ptr<const chat_listing> listing = std::make_shared<const chat_listing>();
+  // What a row's menu offers: the account whose list this is, every
+  // account saved (its places), and the theme its strip colours are in.
+  std::optional<account_id> account;
+  std::vector<account_id> accounts;
+  config::theme_t theme = config::theme::tinted{};
   friend bool operator==(const listing_shown& a, const listing_shown& b) { return a.revision == b.revision; }
 };
 

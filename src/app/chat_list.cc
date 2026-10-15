@@ -32,8 +32,10 @@ class chat_list_part {
   chat_list_part(const chat_list_part&) = delete;
   chat_list_part& operator=(const chat_list_part&) = delete;
 
-  // Each frame: the parts worked out again where what they come from moved.
+  // Each frame: the screen's frame, as the window is and what is open; and
+  // the parts worked out again where what they come from moved.
   void show() {
+    this->show_frame();
     const mux::model& now = *s_->model;
     const auto& chat = *s_->showing->look<mux::ui::chat_shown>();
     mux::ui::list_shown list = *s_->showing->look<mux::ui::list_shown>();
@@ -54,7 +56,8 @@ class chat_list_part {
     this->put(this->side_of(now, kept, list, chat));
     auto listing = std::make_shared<mux::ui::chat_listing>(this->listing_of(now, kept, list, chat));
     order_ = listing->chats | std::views::transform(&mux::ui::listed_chat::id) | std::ranges::to<std::vector>();
-    this->put(mux::ui::listing_shown{++revision_, std::move(listing)});
+    this->put(mux::ui::listing_shown{++revision_, std::move(listing), list.account, now.accounts().keys() | std::ranges::to<std::vector>(),
+                                     k_->state.root().looks.fValue.theme});
     this->search_elsewhere(now, list);
   }
 
@@ -110,6 +113,17 @@ class chat_list_part {
     std::ranges::for_each(people_ | std::views::filter([](const mux::found_person& one) { return one.avatar && !one.avatar->empty(); }),
                           [](const mux::found_person& one) { mux::ui::listed_avatars().emplace_back(one.id, *one.avatar); });
     this->show_elsewhere();
+  }
+  // The side's edge dragged to `x`; the info's (or the threads') to `x`:
+  // their widths, within what the window leaves the chat.
+  void resize_side(float x) {
+    this->change_frame([&](mux::ui::screen_shown& now) { now.side_width = std::max(mux::ui::kMinSidebar, x); });
+  }
+  void resize_info(float x) {
+    const float across = s_->showing->look<mux::ui::window_shape>()->width;
+    this->change_frame([&](mux::ui::screen_shown& now) {
+      now.info_width = std::clamp(across - x, 260.0f, std::max(260.0f, across - now.side_width - 300.0f));
+    });
   }
   // Every chat listed, in order: what Ctrl+Tab and Alt+Up go through.
   [[nodiscard]] const std::vector<mux::conversation_id>& order() const { return order_; }
@@ -233,8 +247,7 @@ class chat_list_part {
     this->bars_of(now, kept, list, out);
     out.side_on = out.side_on || dragging_;
     out.dragging = dragging_;
-    out.accounts = now.accounts().keys() | std::ranges::to<std::vector>();
-    out.theme = k_->state.root().looks.fValue.theme;
+    out.account = list.account ? list.account->address : std::string();
     const mux::account* in = list.account ? now.accounts().find(*list.account) : nullptr;
     const mux::conversation* forum = chat.forum && in ? in->conversations.find(*chat.forum) : nullptr;
     if (forum && this->shown_as_forum(kept, *forum))
@@ -526,6 +539,25 @@ class chat_list_part {
     this->put(mux::ui::elsewhere_shown{mux::ui::server_search_facts{std::move(rooms), people_, asked_by_, !rooms_came_ || !people_came_}});
   }
 
+  // A phone's way (the user's, #13548): a window narrow and taller than it
+  // is wide shows one thing at a time -- the chats, a chat, or its info or
+  // threads -- not side by side.
+  void show_frame() {
+    const auto& shape = *s_->showing->look<mux::ui::window_shape>();
+    const auto& chat = *s_->showing->look<mux::ui::chat_shown>();
+    this->change_frame([&](mux::ui::screen_shown& now) {
+      now.single = shape.width < 600.0f && shape.height > shape.width;
+      now.pane = !chat.chosen ? mux::ui::pane_t{mux::ui::pane::list{}}
+                 : chat.info_open || chat.threads_open ? mux::ui::pane_t{mux::ui::pane::beside{}}
+                                                       : mux::ui::pane_t{mux::ui::pane::chat{}};
+    });
+  }
+  template <class Change>
+  void change_frame(Change change) {
+    auto now = *s_->showing->look<mux::ui::screen_shown>();
+    change(now);
+    this->put(std::move(now));
+  }
   template <class Change>
   void change(Change change) {
     auto list = *s_->showing->look<mux::ui::list_shown>();

@@ -130,7 +130,10 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
   return true;
 }
 
-void app::apply(const request::resize_sidebar& one) { root().main().resize_sidebar(one.x); }
+void app::apply(const request::resize_sidebar& one) {
+  root().main().resize_sidebar(one.x);
+  chat_list.resize_side(one.x);
+}
 
 void app::apply(const request::message_person& one) {
   if (model->find(one.who) != nullptr) {

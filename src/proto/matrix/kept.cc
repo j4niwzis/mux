@@ -130,4 +130,31 @@ inline void take_session(kept& one, const auto& given) {
   one.registration_token.reset();
 }
 
+// What the account form has typed. It is sent as data; the program turns
+// it into settings and reports any error without replacing the draft.
+struct account_draft {
+  std::string user_id, password, homeserver, device_name = "mux", registration_token;
+  bool creating = false, agrees = false, in_browser = false;
+  friend bool operator==(const account_draft&, const account_draft&) = default;
+};
+inline account_draft draft_of(const kept& saved) {
+  return {saved.user_id, saved.password, saved.homeserver.value_or(""), saved.device_name,
+      saved.registration_token.value_or(""), saved.create.value_or(false),
+      saved.accept_terms.value_or(false), saved.oauth.value_or(false)};
+}
+[[nodiscard]] inline std::expected<kept, std::string> account_from(const account_draft& draft) {
+  kept out{.user_id = draft.user_id, .password = draft.in_browser ? std::string{} : draft.password,
+      .homeserver = draft.homeserver.empty() ? std::nullopt : std::optional(draft.homeserver),
+      .device_name = draft.device_name};
+  if (draft.in_browser) out.oauth = true;
+  if (draft.creating) {
+    out.create = true;
+    out.registration_token = draft.registration_token.empty() ? std::nullopt : std::optional(draft.registration_token);
+    out.accept_terms = draft.agrees;
+    if (out.password.empty() && !draft.in_browser) return std::unexpected("A new account needs a password");
+  }
+  if (auto wrong = check(out)) return std::unexpected(*wrong);
+  return out;
+}
+
 }  // namespace mux::proto::matrix

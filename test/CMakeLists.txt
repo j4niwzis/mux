@@ -45,6 +45,12 @@ foreach(one IN LISTS mux_protocols)
   endif()
 endforeach()
 
+if(MUX_PROTOCOL_MATRIX AND MUX_PROTOCOL_XMPP)
+  add_executable(mux-account-draft-test account_draft_test.cc)
+  target_link_libraries(mux-account-draft-test PRIVATE mux_config ${mux_gtest})
+  add_test(NAME account-draft COMMAND mux-account-draft-test)
+endif()
+
 if(MUX_UI)
   add_executable(mux-composer-test composer_model_test.cc)
   target_link_libraries(mux-composer-test PRIVATE mux_modules ${mux_gtest})

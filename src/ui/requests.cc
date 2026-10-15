@@ -172,6 +172,8 @@ struct quit {};
 struct open_settings {};
 struct pop_panel {};
 struct toggle_info {};
+// The info's members near the end of those made: the next few.
+struct info_more {};
 struct jump_to_end {};
 // A picture copied to the clipboard: the one a message's menu is up for,
 // or one by its source (the viewer's).

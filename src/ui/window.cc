@@ -210,6 +210,8 @@ struct shown_root {
   skiff::model::Tracked<window_shape> shape;
   // The looks, as their choices show them (app: refresh_shown).
   skiff::model::Tracked<looks_picked> looks;
+  // The chat's info, while it is open (app: chat_view).
+  skiff::model::Tracked<info_shown> info;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;

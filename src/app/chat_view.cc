@@ -47,6 +47,16 @@ class chat_view_part {
     };
     const bool chat_band = chat && (screen.single || shown.current != chat->id.account);
     this->put(mux::ui::connection_shown{notice(shown.current), chat_band ? notice(chat->id.account) : std::string()});
+    // The info, while it is open: nothing of it worked out while it is shut.
+    if (shown.info_open && chat)
+      this->show_info(*chat, screen.muted.contains(chat->id));
+  }
+  // The info's members near the end of those made: the next few.
+  void apply(const request::info_more&) {
+    if (made_ < members_total_) {
+      made_ += kMembersStep;
+      members_seen_.reset();
+    }
   }
 
   // The pinned bar pressed: to the pin it shows, as any jump -- and, the
@@ -117,8 +127,88 @@ class chat_view_part {
     return now;
   }
 
+  // The chat's info: its view, its members' head, and its members -- only
+  // the first made, and more as the list nears their end, as Qt's
+  // fetchMore: a big room has thousands, each with its role, badges and
+  // presence worked out. Those made worked out again only where the chat,
+  // its members, trust, presence or how many are made moved.
+  struct members_seen {
+    mux::conversation_id of;
+    std::uint64_t members = 0, trust = 0, presence = 0;
+    std::size_t made = 0;
+    friend bool operator==(const members_seen&, const members_seen&) = default;
+  };
+  static constexpr std::size_t kMembersStep = 60;
+  void show_info(const mux::conversation& chat, bool muted) {
+    const mux::model& now = *s_->model;
+    const auto& state = mux::ui::protocol_state_of(s_->ui, chat.id.account);
+    const auto count = static_cast<std::size_t>(std::max<std::int64_t>(static_cast<std::int64_t>(chat.members.size()), chat.member_count));
+    const bool group = mux::ui::is_group(chat);
+    mux::ui::info_view head{.key = chat.id.id,
+                            .name = mux::ui::display_name(chat),
+                            .status = group ? std::format("{} member{}", count, count == 1 ? "" : "s")
+                                            : mux::ui::presence_of(s_->ui, now, chat.id.account, mux::ui::contact_of(s_->ui, chat)),
+                            .group = group,
+                            .muted = muted,
+                            .copied = mux::proto::room_link(state, chat).value_or(""),
+                            .topic = chat.topic.value_or(""),
+                            .addresses = std::vector<std::string>(chat.alias ? 1 : 0, chat.alias.value_or("")),
+                            .leavable = mux::proto::can_leave(state, chat)};
+    head.addresses.append_range(chat.other_aliases);
+    if (!info_of_ || *info_of_ != chat.id) {
+      info_of_ = chat.id;
+      made_ = kMembersStep;
+    }
+    const mux::account* owner = now.accounts().find(chat.id.account);
+    const members_seen seen{chat.id, chat.members_revision, now.trust_revision(), owner ? owner->presence_revision : 0,
+                            std::min(made_, chat.members.size())};
+    const bool fresh = members_seen_ != seen;
+    if (fresh) {
+      members_seen_ = seen;
+      members_ = chat.members | std::views::take(seen.made) |
+                 std::views::transform([&](const mux::member& each) { return this->member_of(chat, each); }) | std::ranges::to<std::vector>();
+    }
+    members_total_ = chat.members.size();
+    // The rest is small: looked at each frame, the members put with it
+    // only where something moved -- not copied and compared at every frame.
+    info_top top{std::move(head), {count, chat.id, !chat.invite && mux::proto::chat_rights(state, chat).invite}, seen.made < members_total_};
+    if (!fresh && top_ == top)
+      return;
+    top_ = top;
+    this->put(mux::ui::info_shown{std::move(top.head), std::move(top.heading), members_, top.more});
+  }
+  struct info_top {
+    mux::ui::info_view head;
+    mux::ui::info_members_heading heading;
+    bool more = false;
+    friend bool operator==(const info_top&, const info_top&) = default;
+  };
+  // A member as the list shows them: their role, as the chat's protocol
+  // says it (Matrix: its power levels, as Element marks its admins and
+  // moderators); and what their protocol says of them beside how they are
+  // (Matrix: in an encrypted room, their identity -- Element's shield).
+  [[nodiscard]] mux::ui::info_member member_of(const mux::conversation& chat, const mux::member& each) const {
+    const auto& state = mux::ui::protocol_state_of(s_->ui, chat.id.account);
+    mux::member who = each;
+    if (!who.role)
+      if (std::string role = mux::proto::sender_role(state, chat, each.id); !role.empty())
+        who.role = std::move(role);
+    std::string how = std::ranges::fold_left(
+        mux::proto::person_badges(state, &chat, *s_->model, chat.id.account, each.id),
+        mux::ui::presence_of(s_->ui, *s_->model, chat.id.account, each.id), [](std::string so_far, const mux::proto::part::badge& badge) {
+          return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
+        });
+    return {std::move(who), std::move(how)};
+  }
+
   services* s_;
   std::map<mux::conversation_id, std::string> dismissed_;
+  std::optional<mux::conversation_id> info_of_;
+  std::size_t made_ = kMembersStep;
+  std::size_t members_total_ = 0;
+  std::optional<members_seen> members_seen_;
+  std::vector<mux::ui::info_member> members_;
+  std::optional<info_top> top_;
 };
 
 }  // namespace mux::app

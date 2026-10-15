@@ -260,7 +260,7 @@ struct conversations_screen : skiff::compose::Stacked {
   // How wide the chat list and the chat's info are: their own, whatever the
   // window's size, until their edges are dragged.
   float side_width = 300.0f;
-  float info_width = 340.0f;
+  float info_width = kInfoWidth;
 
   // The folder whose chats are listed.
   folder_t folder = folder::all{};
@@ -562,7 +562,7 @@ struct conversations_screen : skiff::compose::Stacked {
     side_edge edge;
     chat_column_t chat;
     info_edge_t info_edge;
-    info_panel info;
+    info_panel_t info;
     // Threads, in the info's place while they are open.
     threads_panel_t threads;
   } parts;
@@ -571,7 +571,7 @@ struct conversations_screen : skiff::compose::Stacked {
   side_edge& edge = parts.edge;
   chat_column_t& chat = parts.chat;
   info_edge_t& info_edge = parts.info_edge;
-  info_panel& info = parts.info;
+  info_panel_t& info = parts.info;
 
   // The old names, for what is kept in the parts.
   nodes::ScrollContainer<chat_rows>& list = side.list;
@@ -619,7 +619,7 @@ struct conversations_screen : skiff::compose::Stacked {
               .chat = chat_column(n),
               .info_edge =
                   drag_edge(*n.colours, resize_info_to{}, false),
-              .info = info_panel(*n.colours, *n.shared),
+              .info = info_panel(n),
               .threads = threads_panel(n)} {
     needs_.shared->docked_panel_watcher = fState.fId;
     // The edges take a pixel between the columns, their line, and are
@@ -742,9 +742,6 @@ struct conversations_screen : skiff::compose::Stacked {
   void set_info_open(bool on) {
     info_open = on;
     this->show_info();
-    // Not kept up while shut: shown as it is now.
-    if (last_model && chosen)
-      info.choose(*last_model, chosen, muted.contains(*chosen));
   }
 
   // The model as it is now: the current account's chats, newest first, and

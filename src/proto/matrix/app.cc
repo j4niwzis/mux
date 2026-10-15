@@ -451,9 +451,12 @@ struct manage_step {
     std::ranges::replace(pack.key, ' ', '-');
     const auto taken = [&](const std::string& key) { return std::ranges::contains(kept.packs, key, &mux::emote_pack::key); };
     const auto stem = pack.key;
-    pack.key = *std::ranges::find_if(std::views::transform(std::views::iota(std::size_t{0}), [&](std::size_t suffix) {
+    // The keys it may take, the stem first: a view kept by name, so what the
+    // search finds is not left dangling with a temporary.
+    const auto keys = std::views::transform(std::views::iota(std::size_t{0}), [&](std::size_t suffix) {
       return suffix == 0 ? stem : std::format("{}-{}", stem, suffix);
-    }), [&](const std::string& key) { return !taken(key); });
+    });
+    pack.key = *std::ranges::find_if(keys, [&](const std::string& key) { return !taken(key); });
     return manage_ask_t{std::move(pack)};
   }
   // The developer tools' state events: one opened, written, the list.
@@ -677,19 +680,23 @@ void program_told(App& app, const management_saved& one) {
 // Packs: listed, saved, an image uploaded -- in their dialog.
 template <class App>
 void program_told(App& app, const packs_listed& listed) {
-  app_detail::change_manage(app, mux::conversation_id{listed.by, listed.room},
-                            [&](ui::room_settings_facts&, manage_state& kept) { kept.packs = listed.packs; });
+  // A room's packs, in its settings where they are open; an account's own
+  // have no room.
+  if (listed.room)
+    app_detail::change_manage(app, mux::conversation_id{listed.by, *listed.room},
+                              [&](ui::room_settings_facts&, manage_state& kept) { kept.packs = listed.packs; });
   app_detail::change_packs(app, [&](mux::ui::packs_facts& now) { mux::ui::packs_listed(now, listed.packs); });
 }
 template <class App>
 void program_told(App& app, const pack_saved& saved) {
-  app_detail::change_manage(app, mux::conversation_id{saved.by, saved.pack.chat}, [&](ui::room_settings_facts&, manage_state& kept) {
+  if (saved.pack.chat)
+  app_detail::change_manage(app, mux::conversation_id{saved.by, *saved.pack.chat}, [&](ui::room_settings_facts&, manage_state& kept) {
     if (!saved.done) {
       kept.error = "The pack was not saved.";
       return;
     }
     if (saved.removed) {
-      std::erase(kept.packs, saved.pack.key, &mux::emote_pack::key);
+      std::erase_if(kept.packs, [&](const mux::emote_pack& one) { return one.key == saved.pack.key; });
       return;
     }
     if (const auto found = std::ranges::find(kept.packs, saved.pack.key, &mux::emote_pack::key); found != kept.packs.end())

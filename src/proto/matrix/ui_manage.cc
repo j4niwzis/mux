@@ -75,9 +75,9 @@ struct may_now {
   const auto& n = rules.needs;
   std::set<std::int64_t, std::greater<>> values{n.users_default, n.events_default, n.state_default,
       n.invite, n.kick, n.ban, n.redact, n.notify_room};
-  std::ranges::for_each(rules.powers, [&](const auto& entry) { if (entry.second != kCreatorPower) values.insert(entry.second); });
-  std::ranges::for_each(n.events, [&](const auto& entry) { values.insert(entry.second); });
-  std::ranges::for_each(data.tags, [&](const auto& entry) { if (const auto number = integer(entry.first); number && *number != kCreatorPower) values.insert(*number); });
+  for (const auto& entry : rules.powers) { if (entry.second != kCreatorPower) values.insert(entry.second); }
+  for (const auto& entry : n.events) { values.insert(entry.second); }
+  for (const auto& entry : data.tags) { if (const auto number = integer(entry.first); number && *number != kCreatorPower) values.insert(*number); }
   return values | std::ranges::to<std::vector<std::int64_t>>();
 }
 [[nodiscard]] inline std::int64_t required(const power_needs& needs, const permission_t& target) {
@@ -796,15 +796,15 @@ struct permission_group {
 }
 [[nodiscard]] inline std::set<std::string> standard_permission_events() {
   std::set<std::string> names;
-  std::ranges::for_each(permission_groups(), [&](const permission_group& group) {
-    std::ranges::for_each(group.items, [&](const permission_item& item) {
+  for (const permission_group& group : permission_groups()) {
+    for (const permission_item& item : group.items) {
       spl::visit(spl::overloaded{[&](const event_permission& event) { names.insert(event.type); },
                                  [&](const power_need_t& need) {
                                    spl::visit(spl::overloaded{[&]<sends_state Need>(Need) { names.insert(std::string(Need::event)); }, [](auto) {}}, need);
                                  }},
                  item.location);
-    });
-  });
+    }
+  }
   return names;
 }
 // The needs as staged, else as they are.
@@ -895,12 +895,11 @@ inline auto custom_permissions(const palette& colours) {
       rows_of<custom_rows_t, custom_key>([](const facts_t& now) {
         const auto known = standard_permission_events();
         custom_key key;
-        std::ranges::for_each(needs_now(now).events | std::views::keys | std::views::filter([&](const std::string& event) { return !known.contains(event); }),
-                              [&](const std::string& event) {
+        for (const std::string& event : needs_now(now).events | std::views::keys | std::views::filter([&](const std::string& event) { return !known.contains(event); })) {
                                 key.events.push_back(event);
                                 key.removable.push_back(editable(now, power_need::change_permissions{}) &&
                                                         required(rules_now(now).needs, permission_t{event_permission{event}}) <= facts_of(now).mine);
-                              });
+                              }
         return key;
       },
           [at = &colours](const custom_key& key) { return custom_rows(*at, key); }),
@@ -1140,7 +1139,7 @@ struct state_list_key {
 [[nodiscard]] inline state_list_key state_list_of(const facts_t& now) {
   const auto& kept = kept_of(now);
   std::map<std::string, std::vector<std::string>> groups;
-  std::ranges::for_each(kept.data.state_events, [&](const managed_state_event& event) { groups[event.type].push_back(event.key); });
+  for (const managed_state_event& event : kept.data.state_events) { groups[event.type].push_back(event.key); }
   return {groups | std::views::transform([](auto& group) {
             std::ranges::sort(group.second);
             return state_group{group.first, std::move(group.second)};

@@ -442,14 +442,11 @@ int run(App& app, const options& how, const events::kinds& kinds) {
             if (event.type == kinds.wake)
               app.woken();
             else if (event.type == kinds.files) {
-              std::ranges::for_each(app.system_dialogs.take_files(),
-                                    [&](std::vector<std::string>& paths) { app.files_given(std::move(paths), false); });
-              std::ranges::for_each(app.system_dialogs.take_failures(),
-                                    [&](std::string& why) { app.dialog_failed(std::move(why)); });
+              for (std::vector<std::string>& paths : app.system_dialogs.take_files()) { app.files_given(std::move(paths), false); }
+              for (std::string& why : app.system_dialogs.take_failures()) { app.dialog_failed(std::move(why)); }
             }
             else if (event.type == kinds.save)
-              std::ranges::for_each(app.system_dialogs.take_save_paths(),
-                                    [&](std::string& path) { app.save_path_chosen(std::move(path)); });
+              for (std::string& path : app.system_dialogs.take_save_paths()) { app.save_path_chosen(std::move(path)); }
             break;
         }
         app.after_event();

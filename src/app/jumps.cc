@@ -56,7 +56,7 @@ using thread_span = skiff::compose::ListSpan<std::string, mux::ui::thread_list_t
   }
   auto counted = all | std::views::reverse | std::views::filter([](const mux::message& said) { return !said.outgoing && !said.service; }) | std::views::take(one.unread_here());
   std::optional<std::string> found;
-  std::ranges::for_each(counted, [&](const mux::message& said) { found = said.id; });
+  for (const mux::message& said : counted) { found = said.id; }
   return found;
 }
 // Where a chat with unread opens: its first unread held, or else the
@@ -75,8 +75,7 @@ using thread_span = skiff::compose::ListSpan<std::string, mux::ui::thread_list_t
 [[nodiscard]] inline mux::room_event_filter chat_filter_of(const services& shared, const mux::conversation& chat) {
   mux::room_event_filter filter = shared.kept->reads().room_event_filter_of(chat.id);
   if (chat.encrypted)
-    std::ranges::for_each(std::array{mux::room_event_t{mux::room_event::joins{}}, mux::room_event_t{mux::room_event::invites{}}},
-                          [&](const mux::room_event_t& kind) { filter.shown[kind.index()] = true; });
+    for (const mux::room_event_t& kind : std::array{mux::room_event_t{mux::room_event::joins{}}, mux::room_event_t{mux::room_event::invites{}}}) { filter.shown[kind.index()] = true; }
   return filter;
 }
 // Whether the chat shows a message: not a room event it hides.

@@ -59,11 +59,11 @@ inline std::vector<std::string> pack_rooms(const loom::client::state& all, const
       if (all.joined.contains(id) && visited.insert(id).second)
         rooms.push_back(id); // the graph's work queue, not a conversion
     };
-    std::ranges::for_each(all.joined.at(current).state.events, [&](const auto& event) {
+    for (const auto& event : all.joined.at(current).state.events) {
       spl::visit(spl::overloaded{
           [&](const loom::ev::m_space_parent_content_t& parent) { if (!parent.via.empty()) add(event.first.second); },
           [](const auto&) {}}, event.second.content.data());
-    });
+    }
     std::ranges::for_each(all.joined, [&](const auto& candidate) {
       if (!candidate.second.state.is_space())
         return;

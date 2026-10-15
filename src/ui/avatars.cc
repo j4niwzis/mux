@@ -318,7 +318,7 @@ class animation_cache {
   // A still image can already have settled when its animation arrives.
   // Wake its subscribers so they register the moving source's deadlines.
   void wake_waiters() {
-    std::ranges::for_each(waiting_, [](auto* waiting) { if (waiting) waiting->wake(); });
+    for (auto* waiting : waiting_) { if (waiting) waiting->wake(); }
   }
   std::array<skiff::scene::Waiters*, 2> waiting_{};
   struct animation {

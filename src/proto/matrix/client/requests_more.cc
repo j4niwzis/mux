@@ -321,12 +321,12 @@ struct get {
 };
 inline body biography_of(const biography& bio) {
   std::optional<std::string> plain, html;
-  std::ranges::for_each(bio.text, [&](const auto& text) {
+  for (const auto& text : bio.text) {
     spl::visit(spl::overloaded{
         [&](mime::plain) { if (!plain) plain = text.body; },
         [&](mime::html) { if (!html) html = text.body; },
         [](const std::string&) {}}, text.mimetype.value_or(mime::plain{}));
-  });
+  }
   return {plain.value_or(""), std::move(html)};
 }
 inline profile_details details_of(const profile& wire) {

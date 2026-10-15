@@ -63,7 +63,7 @@ inline std::optional<ranked_pronouns> pronouns_of(const auto& property) {
 inline user_profile profile_of(const tern::vcard4::card& card) {
   user_profile out;
   std::optional<std::string> nickname, language;
-  std::ranges::for_each(card.properties, [&](const auto& property) {
+  for (const auto& property : card.properties) {
     spl::visit(spl::overloaded{
         [&](const tern::vcard4::name& p) { if (!out.name) out.name = p.text; },
         [&](const tern::vcard4::nickname& p) { if (!nickname && !p.text.empty()) nickname = p.text.front(); },
@@ -71,7 +71,7 @@ inline user_profile profile_of(const tern::vcard4::card& card) {
         [&](const tern::vcard4::language& p) { if (!language) language = p.tag; },
         [&](const tern::vcard4::photo& p) { if (!out.avatar) out.avatar = p.uri; },
         [](const tern::vcard4::pronouns&) {}, [](const auto&) {}}, property.data());
-  });
+  }
   if (!out.name) out.name = std::move(nickname);
   auto ranked = card.properties | std::views::transform([](const auto& p) { return pronouns_of(p); }) | std::views::filter([](const auto& p) { return p.has_value(); }) | std::views::transform([](const auto& p) { return *p; }) | std::ranges::to<std::vector<ranked_pronouns>>();
   std::ranges::stable_sort(ranked, {}, &ranked_pronouns::preference);
@@ -189,11 +189,11 @@ inline std::string bare(std::string_view jid) { return std::string(jid.substr(0,
 // describe one occupant, with the real account reduced to its bare JID.
 inline muc_person muc_person_of(std::string nick, const auto& items) {
   muc_person person{.nick = std::move(nick), .affiliation = "none", .role = "none"};
-  std::ranges::for_each(items, [&](const auto& item) {
+  for (const auto& item : items) {
     if (item.jid) person.jid = bare(*item.jid);
     if (item.affiliation) person.affiliation = *item.affiliation;
     if (item.role) person.role = *item.role;
-  });
+  }
   return person;
 }
 // A JID's resource: in a room, the occupant's nick.
@@ -430,14 +430,14 @@ class account {
       if (!session_) return;
       publish_presence();
       const auto wire = wire_presence_of(now.state);
-      std::ranges::for_each(rooms_, [&](auto& entry) {
+      for (auto& entry : rooms_) {
         auto& [address, room] = entry;
         if (!wire.available) {
           if (room.settings.joined) session_->send(proto::presence::unavailable{.to = address + "/" + room.nick, .status = now.status});
         } else if (room.settings.joined)
           session_->send(proto::presence::available{.to = address + "/" + room.nick, .show = wire.show, .status = now.status});
         else if (!room.nick.empty()) this->join(address, room.nick);
-      });
+      }
     });
   }
   void publish_presence() {
@@ -802,18 +802,18 @@ class account {
         // Verify existing affiliations before granting membership. In
         // particular, never turn an existing owner/admin into a member.
         bool allowed = false, banned = false, complete = true;
-        std::ranges::for_each(tern::muc::affiliation_lists, [&](auto rank) {
-          if (!complete || !session_) { complete = false; return; }
+        for (auto rank : tern::muc::affiliation_lists) {
+          if (!complete || !session_) { complete = false; continue; }
           const auto list = session_->template try_request<tern::query::muc_affiliations>(
               {.to = room, .query = {.item = {.affiliation = std::string(rank)}}});
-          if (!list) { complete = false; return; }
-          std::ranges::for_each(list->items, [&](const auto& item) {
-            if (!item.jid || bare(*item.jid) != target) return;
+          if (!list) { complete = false; continue; }
+          for (const auto& item : list->items) {
+            if (!item.jid || bare(*item.jid) != target) continue;
             const auto admission = tern::muc::admission_of(item);
             allowed = allowed || admission.allowed;
             banned = banned || admission.banned;
-          });
-        });
+          }
+        }
         if (banned) {
           sink_(change::refused{id_, "That user is banned from the room."}); return;
         }
@@ -1385,7 +1385,7 @@ class account {
     flush_notifications();
     // Restore every room joined here, including rooms whose bookmark could
     // not be saved. Drop occupants from the previous connection.
-    std::ranges::for_each(rooms_, [](auto& entry) { entry.second.occupants.clear(); entry.second.settings.people.clear(); entry.second.settings.joined = false; });
+    for (auto& entry : rooms_) { entry.second.occupants.clear(); entry.second.settings.people.clear(); entry.second.settings.joined = false; }
     // Sending may yield to a leave request: do not retain map iterators or
     // references across it, or join a room removed while another was sent.
     const auto rejoining = rooms_ | std::views::transform([](const auto& entry) {
@@ -1407,7 +1407,7 @@ class account {
         break;
       on(**one);
     }
-    std::ranges::for_each(resources_, [&](const auto& entry) { sink_(change::presence_changed{id_, entry.first, {}}); });
+    for (const auto& entry : resources_) { sink_(change::presence_changed{id_, entry.first, {}}); }
     resources_.clear();
     sink_(change::presence_changed{id_, id_.address, {}});
     session_ = nullptr;
@@ -1502,13 +1502,13 @@ class account {
         spl::visit(spl::overloaded{
             [&](tern::pep_node::bookmarks) {
               if (bare(*got.from) != id_.address) return;
-              std::ranges::for_each(event.items->items, [&](const auto& item) {
+              for (const auto& item : event.items->items) {
                 spl::visit(spl::overloaded{
                     [&](const tern::bookmarks::published& p) { if (p.conference) bookmarked(p.id, *p.conference); },
                     [&](const tern::bookmarks::retracted& p) {
                       bookmarks_.erase(p.id); sink_(change::notifications_changed{id_, p.id, {}, false});
                     }}, item.data());
-              });
+              }
             },
             [&](tern::pep_node::profile) {
               std::ranges::for_each(event.items->items, [&](const auto& item) {

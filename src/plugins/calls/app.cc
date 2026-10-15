@@ -123,7 +123,7 @@ class part {
                                          return;
                                        if (!current_->their_party.empty() && one.party != current_->their_party) return;
                                        if (current_->media && !holds<call_state::ringing_out>() && !holds<call_state::starting>())
-                                         std::ranges::for_each(them.them, [&](const auto& each) { current_->media->add_candidate(each); });
+                                         for (const auto& each : them.them) { current_->media->add_candidate(each); }
                                        else
                                          current_->early[one.party].insert_range(current_->early[one.party].end(), them.them);
                                      },
@@ -188,7 +188,7 @@ class part {
       return;
     }
     if (current_->media)
-      std::ranges::for_each(current_->media->take(), [&](const mux::calls::said_t& said) { if (current_) this->connection_said(said); });
+      for (const mux::calls::said_t& said : current_->media->take()) { if (current_) this->connection_said(said); }
     if (current_ && !current_->candidates_out.empty())
       this->signal(call_said_t{call_said::candidates{std::exchange(current_->candidates_out, {})}});
     if (current_ && holds<call_state::ringing_in>() && std::chrono::steady_clock::now() > current_->ring_until)
@@ -264,7 +264,7 @@ class part {
   void add_early_candidates() {
     auto queued = std::exchange(current_->early, {});
     if (const auto found = queued.find(current_->their_party); found != queued.end())
-      std::ranges::for_each(found->second, [&](const auto& candidate) { current_->media->add_candidate(candidate); });
+      for (const auto& candidate : found->second) { current_->media->add_candidate(candidate); }
   }
   void connection_said(const mux::calls::said_t& said) {
     spl::visit(spl::overloaded{[&](const mux::calls::said::description& ours) {

@@ -962,9 +962,9 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       std::ranges::any_of(*got.account_data->events, [](const auto& event) { return event.type == "m.direct"; });
   const bool all_metadata = account_metadata || account_packs || room_packs;
   if (all_metadata)
-    std::ranges::for_each(state_.joined, [&](const auto& room) {
+    for (const auto& room : state_.joined) {
       conversation(conversation_id{id_, room.first}, room.second);
-    });
+    }
   if (!got.rooms)
     return;
   const auto& rooms = *got.rooms;

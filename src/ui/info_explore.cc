@@ -87,9 +87,9 @@ auto explore_view(const palette& colours, const explore_facts& facts) {
     return !facts.space || wanted.empty() || mux::logic::folded(room.name).contains(wanted) ||
         mux::logic::folded(room.topic).contains(wanted) || mux::logic::folded(room.alias).contains(wanted);
   }) | std::ranges::to<std::vector>() : std::vector<directory_room>{};
-  std::ranges::for_each(rooms, [](const auto& room) {
+  for (const auto& room : rooms) {
     if (room.avatar && !room.avatar->empty()) listed_avatars().emplace_back(room.id, *room.avatar);
-  });
+  }
   auto rows = rooms | std::views::transform([&](const auto& room) {
     return directory_room_row(colours, room, facts.listing->server, facts.by);
   }) | std::ranges::to<std::vector>();

@@ -451,9 +451,9 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
               told("delete address", perform(*api_, loom::cs::delete_room_alias{.room_alias = one.alias}));
             },
             [&](const proto::matrix::room_change::delete_aliases& one) {
-              std::ranges::for_each(one.aliases, [&](const auto& alias) {
+              for (const auto& alias : one.aliases) {
                 if (error.empty()) told("delete address", perform(*api_, loom::cs::delete_room_alias{.room_alias = alias}));
-              });
+              }
             },
             [&](const proto::matrix::room_change::set_directory& one) {
               using body = loom::cs::set_room_visibility_on_directory::body_t;
@@ -477,16 +477,16 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
                 content.notifications->room = one.after.notify_room;
               }
               // Remove only explicitly deleted overrides; keep concurrent server additions.
-              std::ranges::for_each(one.before.events, [&](const auto& item) {
+              for (const auto& item : one.before.events) {
                 if (content.events && !one.after.events.contains(item.first)) content.events->erase(item.first);
-              });
-              std::ranges::for_each(one.after.events, [&](const auto& item) {
+              }
+              for (const auto& item : one.after.events) {
                 const auto was = one.before.events.find(item.first);
                 if (was == one.before.events.end() || was->second != item.second) {
                   if (!content.events) content.events.emplace();
                   content.events->insert_or_assign(item.first, item.second);
                 }
-              });
+              }
               set("m.room.power_levels", content);
             },
             // Listed in the space, keyed by the room: through its own
@@ -955,8 +955,8 @@ void account<Sink>::list_packs(std::optional<std::string> room) {
       if (found.empty())
         found.push_back(emote_pack{});
     } else if (const auto joined = state_.joined.find(*room); joined != state_.joined.end()) {
-      std::ranges::for_each(pack_rooms(state_, joined->second), [&](const std::string& source) {
-        std::ranges::for_each(state_.joined.at(source).state.events, [&](const auto& event) {
+      for (const std::string& source : pack_rooms(state_, joined->second)) {
+        for (const auto& event : state_.joined.at(source).state.events) {
           const auto add = [&](const auto& content) {
             if (!content.images.empty() || content.pack)
               found.push_back(packs::pack_of(content, source, event.first.second));
@@ -965,8 +965,8 @@ void account<Sink>::list_packs(std::optional<std::string> room) {
               [&](const loom::ev::im_ponies_room_emotes_content_t& content) { add(content); },
               [&](const loom::ev::m_room_image_pack_content_t& content) { add(content); },
               [](const auto&) {}}, event.second.content.data());
-        });
-      });
+        }
+      }
     }
     sink_(proto::matrix::packs_listed{id_, room, std::move(found)});
   });
@@ -1025,7 +1025,7 @@ void account<Sink>::adopt_pack(emote_pack pack) {
     snapshot_dirty_ = true;
     state_.account_data.insert_or_assign("im.ponies.emote_rooms", loom::ev::account_data_event{
         .content = loom::ev::other_content{std::move(chosen)}, .type = "im.ponies.emote_rooms"});
-    std::ranges::for_each(state_.joined, [&](const auto& room) { conversation(conversation_id{id_, room.first}, room.second); });
+    for (const auto& room : state_.joined) { conversation(conversation_id{id_, room.first}, room.second); }
     sink_(change::notice{id_, "Pack added", "This pack is now available in all your rooms."});
   });
 }

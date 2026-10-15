@@ -161,10 +161,10 @@ inline auto people_rows(const new_chat_facts& facts) {
   skiff::model::Keyed<std::string, found_person> rows;
   const auto wanted = mux::logic::folded(facts.query);
   if (direct_address(facts, facts.query)) rows.put(facts.query, found_person{.id = facts.query});
-  std::ranges::for_each(facts.people | std::views::filter([&](const auto& person) {
+  for (const auto& person : facts.people | std::views::filter([&](const auto& person) {
     return wanted.empty() || mux::logic::folded(person.name).contains(wanted) || mux::logic::folded(person.id).contains(wanted);
-  }), [&](const auto& person) { if (rows.size() < 60) rows.put(person.id, person); });
-  std::ranges::for_each(facts.found, [&](const auto& person) { if (rows.size() < 60) rows.put(person.id, person); });
+  })) { if (rows.size() < 60) rows.put(person.id, person); }
+  for (const auto& person : facts.found) { if (rows.size() < 60) rows.put(person.id, person); }
   return rows;
 }
 struct find_people_typed {

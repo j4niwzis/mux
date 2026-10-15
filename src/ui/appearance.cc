@@ -129,10 +129,10 @@ struct theme_details_events {
   auto on(cancel_theme_details, const theme_details_draft& now) const {
     auto reset = now;
     reset.open = false; reset.error.clear();
-    std::ranges::for_each(theme_colour_fields, [&](const auto& field) {
+    for (const auto& field : theme_colour_fields) {
       const auto saved = now.saved.*field.saved;
       reset.colours.*field.draft = saved ? theme_colour_word(*saved) : std::string();
-    });
+    }
     reset.corner = now.saved.corner_radius ? std::format("{}", *now.saved.corner_radius) : "";
     reset.font = now.saved.font_size ? std::format("{}", *now.saved.font_size) : "";
     reset.height = now.saved.control_height ? std::format("{}", *now.saved.control_height) : "";
@@ -144,13 +144,13 @@ struct theme_details_events {
   auto on(save_theme_details, const theme_details_draft& now) const {
     config::custom_theme custom;
     std::string error;
-    std::ranges::for_each(theme_colour_fields, [&](const auto& field) {
+    for (const auto& field : theme_colour_fields) {
       const auto& value = now.colours.*field.draft;
-      if (value.empty()) return;
+      if (value.empty()) continue;
       const auto colour = theme_colour_of(value);
       if (colour) custom.*field.saved = colour;
       else if (error.empty()) error = std::string(field.label) + ": use #RRGGBB or #AARRGGBB.";
-    });
+    }
     read_theme_measurement(now.corner, 0.0, 32.0, "Corner radius", custom.corner_radius, error);
     read_theme_measurement(now.font, 9.0, 24.0, "Control font size", custom.font_size, error);
     read_theme_measurement(now.height, 24.0, 64.0, "Control height", custom.control_height, error);
@@ -164,10 +164,10 @@ inline auto theme_details_initial(const config::theme_t& theme,
   theme_details_draft initial{theme};
   const auto found = overrides.find(std::string(config::word_of(theme)));
   const config::custom_theme custom = found == overrides.end() ? config::custom_theme{} : found->second;
-  std::ranges::for_each(theme_colour_fields, [&](const auto& field) {
+  for (const auto& field : theme_colour_fields) {
     const auto own = custom.*field.saved;
     initial.colours.*field.draft = own ? theme_colour_word(*own) : std::string();
-  });
+  }
   initial.saved = custom;
   initial.corner = custom.corner_radius ? std::format("{}", *custom.corner_radius) : "";
   initial.font = custom.font_size ? std::format("{}", *custom.font_size) : "";

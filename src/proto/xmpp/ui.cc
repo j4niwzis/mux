@@ -617,18 +617,18 @@ using room_page_t = decltype(room_page(std::declval<const palette&>(), std::decl
 inline std::vector<std::string> permission_rows(const muc_room& room) {
   struct entry { std::string jid, affiliation; std::map<std::string, std::string> occupants; };
   std::map<std::pair<bool, std::string>, entry> people;
-  std::ranges::for_each(room.people, [&](const auto& person) {
+  for (const auto& person : room.people) {
     const auto key = std::pair{person.jid.empty(), person.jid.empty() ? person.nick : person.jid};
     auto& kept = people[key];
     kept.jid = person.jid;
     kept.affiliation = person.affiliation;
     kept.occupants.insert_or_assign(person.nick, person.role);
-  });
-  std::ranges::for_each(room.affiliations, [&](const auto& person) {
+  }
+  for (const auto& person : room.affiliations) {
     auto& kept = people[{false, person.jid}];
     kept.jid = person.jid;
     kept.affiliation = person.affiliation;
-  });
+  }
   return people | std::views::transform([](const auto& item) {
     const auto& person = item.second;
     auto text = person.jid.empty() ? item.first.second : person.jid;

@@ -140,11 +140,11 @@ inline void assign_permission(power_needs& needs, const permission_t& target, st
 [[nodiscard]] inline std::vector<std::int64_t> power_values(const room_rules& rules, const room_management& data) {
   const auto& n = rules.needs;
   std::set<std::int64_t, std::greater<>> values{n.users_default, n.events_default, n.state_default, n.invite, n.kick, n.ban, n.redact, n.notify_room};
-  std::ranges::for_each(rules.powers, [&](const auto& entry) { if (entry.second != kCreatorPower) values.insert(entry.second); });
-  std::ranges::for_each(n.events, [&](const auto& entry) { values.insert(entry.second); });
-  std::ranges::for_each(data.tags, [&](const auto& entry) {
+  for (const auto& entry : rules.powers) { if (entry.second != kCreatorPower) values.insert(entry.second); }
+  for (const auto& entry : n.events) { values.insert(entry.second); }
+  for (const auto& entry : data.tags) {
     if (const auto number = integer(entry.first); number && *number != kCreatorPower) values.insert(*number);
-  });
+  }
   return values | std::ranges::to<std::vector<std::int64_t>>();
 }
 // The level a kind of state event asks.
@@ -262,12 +262,12 @@ struct manage_step {
     if (!editable(power_need::change_address{}))
       return std::nullopt;
     auto listed = facts.other_aliases;
-    std::ranges::for_each(kept.selected_aliases, [&](const std::string& alias) {
+    for (const std::string& alias : kept.selected_aliases) {
       if (one.what == kind::unpublish)
         std::erase(listed, alias);
       else if (!std::ranges::contains(listed, alias))
         listed.push_back(alias);
-    });
+    }
     return submit(room_change::set_addresses{facts.alias, std::move(listed)});
   }
   asked operator()(const manage_change::access& one) {
@@ -440,7 +440,7 @@ struct manage_step {
     if (!kept.tag_draft && kept.deleted_powers.empty())
       return std::nullopt;
     auto tags = kept.tag_draft.value_or(kept.data.tags);
-    std::ranges::for_each(kept.deleted_powers, [&](std::int64_t value) { tags.erase(std::to_string(value)); });
+    for (std::int64_t value : kept.deleted_powers) { tags.erase(std::to_string(value)); }
     return submit(room_change::set_tags{std::move(tags)});
   }
   // A pack made: keyed by its name, apart from the room's others.

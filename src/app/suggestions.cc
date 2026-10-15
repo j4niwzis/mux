@@ -153,12 +153,12 @@ class suggestions_part {
                           return emoji;
                         }},
         asked.kind);
-    std::ranges::for_each(out | std::views::enumerate, [](auto pair) { std::get<1>(pair).at = static_cast<std::size_t>(std::get<0>(pair)); });
+    for (auto pair : out | std::views::enumerate) { std::get<1>(pair).at = static_cast<std::size_t>(std::get<0>(pair)); }
     return out;
   }
   void put() {
     mux::ui::suggestions_shown now{items_};
-    std::ranges::for_each(now.items, [&](mux::ui::suggestion& one) { one.lit = one.at == lit_; });
+    for (mux::ui::suggestion& one : now.items) { one.lit = one.at == lit_; }
     if (*s_->showing->look<mux::ui::suggestions_shown>() != now)
       mux::ui::show(*s_->showing, std::move(now));
   }

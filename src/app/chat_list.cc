@@ -225,8 +225,7 @@ class chat_list_part {
       return;
     people_ = std::move(people);
     people_came_ = true;
-    std::ranges::for_each(people_ | std::views::filter([](const mux::found_person& one) { return one.avatar && !one.avatar->empty(); }),
-                          [](const mux::found_person& one) { mux::ui::listed_avatars().emplace_back(one.id, *one.avatar); });
+    for (const mux::found_person& one : people_ | std::views::filter([](const mux::found_person& one) { return one.avatar && !one.avatar->empty(); })) { mux::ui::listed_avatars().emplace_back(one.id, *one.avatar); }
     this->show_elsewhere();
   }
   // The side's edge dragged to `x`; the info's (or the threads') to `x`:
@@ -322,8 +321,7 @@ class chat_list_part {
   [[nodiscard]] mux::room_event_filter events_of(const kept_view& kept, const mux::conversation& one) const {
     mux::room_event_filter filter = kept.reads.room_event_filter_of(one.id);
     if (one.encrypted)
-      std::ranges::for_each(std::array{mux::room_event_t{mux::room_event::joins{}}, mux::room_event_t{mux::room_event::invites{}}},
-                            [&](const mux::room_event_t& kind) { filter.shown[kind.index()] = true; });
+      for (const mux::room_event_t& kind : std::array{mux::room_event_t{mux::room_event::joins{}}, mux::room_event_t{mux::room_event::invites{}}}) { filter.shown[kind.index()] = true; }
     return filter;
   }
   // The folders the account has -- its spaces, where there are no bars;
@@ -335,10 +333,9 @@ class chat_list_part {
     if (!listed)
       return out;
     const auto& chats = now.accounts().at(*listed).conversations;
-    std::ranges::for_each(chats.values() | std::views::filter([&](const mux::conversation& one) { return one.space && !kept.spaces_on; }),
-                          [&](const mux::conversation& one) { out.emplace_back(mux::ui::display_name(one), mux::ui::folder::space{one.id.id}); });
+    for (const mux::conversation& one : chats.values() | std::views::filter([&](const mux::conversation& one) { return one.space && !kept.spaces_on; })) { out.emplace_back(mux::ui::display_name(one), mux::ui::folder::space{one.id.id}); }
     const auto groups = chats.values() | std::views::transform(&mux::conversation::groups) | std::views::join | std::ranges::to<std::set<std::string>>();
-    std::ranges::for_each(groups, [&](const std::string& name) { out.emplace_back(name, mux::ui::folder::group{name}); });
+    for (const std::string& name : groups) { out.emplace_back(name, mux::ui::folder::group{name}); }
     return out;
   }
   void keep_folder(const mux::model& now, const kept_view& kept, mux::ui::list_shown& list) const {
@@ -392,15 +389,15 @@ class chat_list_part {
     std::map<std::string, std::string> parent_of;
     std::map<std::string, std::vector<const mux::conversation*>> spaces_in;
     if (chats)
-      std::ranges::for_each(chats->values() | std::views::filter(&mux::conversation::space), [&](const mux::conversation& one) {
-        std::ranges::for_each(one.children, [&](const std::string& child) {
+      for (const mux::conversation& one : chats->values() | std::views::filter(&mux::conversation::space)) {
+        for (const std::string& child : one.children) {
           const auto* found = chats->find(child);
           if (found != nullptr && found->space && !this->shown_as_forum(kept, *found) && child != one.id.id && !parent_of.contains(child)) {
             parent_of.emplace(child, one.id.id);
             spaces_in[one.id.id].push_back(found);
           }
-        });
-      });
+        }
+      }
     // The space chosen, and those holding it: open.
     std::set<std::string> open;
     if (const auto chosen_room = mux::ui::space_of(list.folder))
@@ -411,12 +408,11 @@ class chat_list_part {
         at = up->second;
       }
     if (chats)
-      std::ranges::for_each(chats->values() | std::views::filter([&](const mux::conversation& one) {
+      for (const mux::conversation& one : chats->values() | std::views::filter([&](const mux::conversation& one) {
                               return one.space && !parent_of.contains(one.id.id) && !this->shown_as_forum(kept, one);
-                            }),
-                            [&](const mux::conversation& one) {
+                            })) {
                               all.push_back({mux::config::space_item::space{one.id.id}, mux::ui::folder::space{one.id.id}, one.id.id, mux::ui::display_name(one)});
-                            });
+                            }
     const auto mine = kept.space_places | std::views::filter([&](const mux::config::space_placed& p) { return p.account == address; }) | std::ranges::to<std::vector>();
     const auto in_bar = [&](const entry& one, const mux::config::space_bar_t& bar) {
       if (std::ranges::none_of(mine, [&](const auto& p) { return p.item == one.item; }))
@@ -436,15 +432,15 @@ class chat_list_part {
     // level at a time -- smaller each level down.
     const auto icons_of = [&](const std::vector<const entry*>& items, float size) {
       std::vector<mux::ui::space_icon_shown> icons;
-      std::ranges::for_each(items, [&](const entry* one) {
+      for (const entry* one : items) {
         icons.push_back({one->item, one->shows, one->id, one->name, size, one->shows == list.folder});
         const auto room = mux::ui::space_of(one->shows);
         if (!room || !open.contains(*room))
-          return;
+          continue;
         std::vector<std::pair<const mux::conversation*, int>> todo;
         const auto push_children = [&](const std::string& of, int depth) {
           if (const auto found = spaces_in.find(of); found != spaces_in.end())
-            std::ranges::for_each(found->second | std::views::reverse, [&](const mux::conversation* sub) { todo.emplace_back(sub, depth); });
+            for (const mux::conversation* sub : found->second | std::views::reverse) { todo.emplace_back(sub, depth); }
         };
         push_children(*room, 1);
         std::set<std::string> seen{*room};
@@ -459,7 +455,7 @@ class chat_list_part {
           if (open.contains(sub->id.id))
             push_children(sub->id.id, depth + 1);
         }
-      });
+      }
       return icons;
     };
     const auto side_items = bar_of(mux::config::space_bar::side{});

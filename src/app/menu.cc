@@ -251,15 +251,15 @@ if (!self.selected_chat_ || self.selected_chat_ != self.s_->chosen())
 const conversation* chat = self.s_->model->find(*self.selected_chat_);
 if (!chat)
   return;
-std::ranges::for_each(span.ids, [&](const std::string& id) {
+for (const std::string& id : span.ids) {
   const message* one = mux::ui::held_message(*chat, id);
   if (!one || one->redacted || id.empty())
-    return;
+    continue;
   if (!span.selected)
     self.selected_.erase(id);
   else if (self.selected_.size() < 100)
     self.selected_.insert(id);
-});
+}
 show_selection(self);
 }
 
@@ -305,16 +305,16 @@ void part_apply(menu_part& self, const request::selection_delete_confirm&) {
   const auto now = mux::ui::protocol_state_of(self.s_->ui, chat->id.account);
   if (!proto::available(now))
     return;
-  std::ranges::for_each(pending->second, [&](const std::string& id) {
+  for (const std::string& id : pending->second) {
     const message* one = mux::ui::held_message(*chat, id);
     if (!one || one->redacted || !proto::may_delete(now, *chat, one->outgoing))
-      return;
+      continue;
     if (self.s_->demo())
       self.s_->box->push(change_t{change::message_redacted{chat->id, id}});
     else
       self.s_->net->remove_message(chat->id, id);
     if (self.selected_chat_ == pending->first) self.selected_.erase(id);
-  });
+  }
   if (self.selected_chat_ == pending->first) show_selection(self);
 }
 

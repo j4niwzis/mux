@@ -110,10 +110,10 @@ void app::woken() {
                                    if (now && now->by == std::optional(found.by) && now->query == found.query) {
                                      now->found = found.people;
                                      now->rows = mux::ui::people_rows(*now);
-                                     std::ranges::for_each(found.people, [](const auto& person) {
+                                     for (const auto& person : found.people) {
                                        if (person.avatar && !person.avatar->empty())
                                          mux::ui::listed_avatars().emplace_back(person.id, *person.avatar);
-                                     });
+                                     }
                                    }
                                  });
                                  chat_list.found_people(found.query, found.people);
@@ -195,7 +195,7 @@ void app::woken() {
           mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, who)}));
     }
   };
-  std::ranges::for_each(changes, [&](const auto& changed) {
+  for (const auto& changed : changes) {
     spl::visit(spl::overloaded{
         [&](const mux::change::profile_found& profile) {
           // Fetch only after the model contains the new banner URL.
@@ -207,7 +207,7 @@ void app::woken() {
           if (person_presence_changed) refresh_person(presence.account, presence.contact);
         },
         [](const auto&) {}}, changed);
-  });
+  }
 
   for (auto& [in, ids] : deleted_on_disk)
     work.run([this, in, ids = std::move(ids)]() -> workers::done_t {

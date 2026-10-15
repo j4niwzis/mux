@@ -110,10 +110,10 @@ template <class... Tags>
         const auto shared = knot::try_read<shared_list>(text);
         if (!own || !shared || !legacy_entries(*own) || !legacy_entries(*shared))
           return;
-        std::ranges::for_each(std::views::zip(*legacy_entries(*own), *legacy_entries(*shared)), [&](const auto& both) {
+        for (const auto& both : std::views::zip(*legacy_entries(*own), *legacy_entries(*shared))) {
           const auto& [mine, every] = both;
           out.push_back(saved_account{std::string(protocol_word(mine)), kept_saved_t{mine}, every});
-        });
+        }
       }(),
       ...);
   return out;

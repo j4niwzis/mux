@@ -641,6 +641,12 @@ struct knock_room_card {};
 struct decline_room_card {};
 // The input's emoji button pressed: where it is laid out, the panel opened
 // beside it.
+// The chat's list, as it comes to say it: whether its way down is wanted --
+// the reader away from its end -- and how many came meanwhile.
+struct way_down {
+  bool wanted = false;
+  std::size_t unseen = 0;
+};
 struct toggle_emoji {
   float right = 0.0f;
   float top = 0.0f;

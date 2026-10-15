@@ -289,6 +289,8 @@ struct shown_root {
   skiff::model::Tracked<thread_told> thread_list;
   skiff::model::Tracked<message_marks> messages_marked;
   skiff::model::Tracked<chat_ways> ways;
+  // The way down over the chat's list, as the list said it.
+  skiff::model::Tracked<way_down_shown> way_down;
   // The chat's own bands, as the program says (app: chat_view, suggestions).
   skiff::model::Tracked<chats_shown> chats_now;
   skiff::model::Tracked<chat_head_shown> head;

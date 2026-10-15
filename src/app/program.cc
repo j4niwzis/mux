@@ -461,6 +461,8 @@ struct app : kept_settings {
   void apply(const request::quit&);
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);
+  // The way down, as the chat's list said it: kept, for its corner to read.
+  void apply(const request::way_down& one) { mux::ui::show(showing, mux::ui::way_down_shown{one.wanted, one.unseen}); }
   void apply(const request::return_to_chat&);
   void go_live(const mux::conversation_id& in);
 

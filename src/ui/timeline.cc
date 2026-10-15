@@ -97,6 +97,13 @@ struct thread_told : timeline_told {};
 // What the corner over the chat's list shows besides the way down: a way
 // back to where a jump in this chat came from, one to the chat a jump
 // left, and the loader while a jump is on its way.
+// The way down over the chat's list, as the list said it: whether it is
+// wanted, and how many came meanwhile (the program keeps it).
+struct way_down_shown {
+  bool wanted = false;
+  std::size_t unseen = 0;
+  friend bool operator==(const way_down_shown&, const way_down_shown&) = default;
+};
 struct chat_ways {
   bool back_here = false, back_to_chat = false, loading = false;
   // A window of its history away from the newest: the way down wanted.
@@ -302,7 +309,7 @@ auto timeline_list() {
   list.setCopiesOnScroll(false);
   std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY,
                                       .padding = {8.0f, kListSide, 8.0f, kListSide}});
-  return c::spanned_for<message_marks>(selecting, c::bound<Want>(std::move(list)));
+  return c::spanned_for<message_marks>(selecting, skiff::bind::Bound<Want, decltype(list)>(std::move(list)));
 }
 
 // The loader's cross: the message jumped to no longer looked for.
@@ -335,10 +342,11 @@ inline auto list_corner(const palette& colours) {
                    c::shown_for<chat_ways>([](const chat_ways& now) { return now.back_to_chat; },
                        c::onClick(request::return_to_chat{},
                                   c::column(c::vbox(0.0f, plate), c::styled({.fill = true}, nodes::Icon(shape_of(icon::back{}), colours.text))))),
-                   c::visible(false, c::onClick(request::jump_to_end{},
-                                                c::column(c::vbox(0.0f, plate),
-                                                          c::styled({.fill = true}, nodes::Icon(shape_of(icon::down{}), colours.text)),
-                                                          c::visible(false, count_badge(colours))))));
+                   c::shown_for<way_down_shown>([](const way_down_shown& now) { return now.wanted; },
+                       c::onClick(request::jump_to_end{},
+                                  c::column(c::vbox(0.0f, plate),
+                                            c::styled({.fill = true}, nodes::Icon(shape_of(icon::down{}), colours.text)),
+                                            count_badge_for<way_down_shown>(colours, [](const way_down_shown& now) { return now.unseen; })))));
 }
 // The chat's messages over its wallpaper -- the theme's gradient and
 // Telegram's pattern, a colour, a picture -- with the corner over them, and
@@ -367,14 +375,7 @@ inline auto chat_area(const ui_needs& n) {
       std::move(backdrop));
   auto list = c::projected<chat_ways>([](const chat_ways& now) { return now.back_here || now.detached; },
       c::with_way_down(c::vbox(0.0f, {.fill = true}), timeline_list<chat_told, chat_list_tag>(), list_corner(*n.colours),
-                       [](auto& corner, bool wanted, std::size_t unseen) {
-                         auto& down = std::get<3>(corner.fParts);
-                         down.setVisible(wanted);
-                         // The badge over it: its count, in its one text.
-                         auto& badge = std::get<1>(down.fParts);
-                         std::get<0>(badge.fParts).setText(std::to_string(unseen));
-                         badge.setVisible(unseen > 0);
-                       }));
+                       [](bool wanted, std::size_t unseen) { return request::way_down{wanted, unseen}; }));
   auto loading = c::shown_for<chat_ways>([](const chat_ways& now) { return now.loading; },
       c::styled({.place = scene::anchor::kCentre}, widgets::RadialLoader<stop_jump_act>(44.0f, {})));
   return c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), std::move(wall), std::move(list), std::move(loading));

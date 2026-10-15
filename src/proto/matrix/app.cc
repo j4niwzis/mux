@@ -96,8 +96,11 @@ void send_custom(Net& net, const conversation_id& in, std::string type, std::opt
 namespace mux::proto::matrix::app_detail {
 // What the packs dialog shows, changed as `change` says, where it is up.
 template <class App, class Change>
-void change_packs(App& app, Change change) {
-  if (!app.showing.template look<std::optional<mux::ui::packs_facts>>()->has_value())
+void change_packs(App& app, const account_id& by, const std::optional<std::optional<std::string>>& room, Change change) {
+  // Only the packs this answer is about: the same account's, and -- where
+  // the answer says whose -- the same room's (none: the account's own).
+  const auto& open = *app.showing.template look<std::optional<mux::ui::packs_facts>>();
+  if (!open || open->account != by || (room && *room != open->room))
     return;
   mux::ui::change_shown<std::optional<mux::ui::packs_facts>>(app.showing, [&](std::optional<mux::ui::packs_facts>& now) { change(*now); });
 }
@@ -685,7 +688,7 @@ void program_told(App& app, const packs_listed& listed) {
   if (listed.room)
     app_detail::change_manage(app, mux::conversation_id{listed.by, *listed.room},
                               [&](ui::room_settings_facts&, manage_state& kept) { kept.packs = listed.packs; });
-  app_detail::change_packs(app, [&](mux::ui::packs_facts& now) { mux::ui::packs_listed(now, listed.packs); });
+  app_detail::change_packs(app, listed.by, std::optional(listed.room), [&](mux::ui::packs_facts& now) { mux::ui::packs_listed(now, listed.packs); });
 }
 template <class App>
 void program_told(App& app, const pack_saved& saved) {
@@ -705,11 +708,14 @@ void program_told(App& app, const pack_saved& saved) {
       kept.packs.push_back(saved.pack);
     ++kept.pack_round;
   });
-  app_detail::change_packs(app, [&](mux::ui::packs_facts& now) { mux::ui::pack_saved(now, saved.pack, saved.removed, saved.done); });
+  app_detail::change_packs(app, saved.by, std::optional(saved.pack.chat),
+                           [&](mux::ui::packs_facts& now) { mux::ui::pack_saved(now, saved.pack, saved.removed, saved.done); });
 }
 template <class App>
 void program_told(App& app, const pack_picture_uploaded& uploaded) {
-  app_detail::change_packs(app, [&](mux::ui::packs_facts& now) { mux::ui::pack_picture_uploaded(now, uploaded.picture, uploaded.done); });
+  // A picture uploaded is the account's, for whichever of its packs is open.
+  app_detail::change_packs(app, uploaded.by, std::nullopt,
+                           [&](mux::ui::packs_facts& now) { mux::ui::pack_picture_uploaded(now, uploaded.picture, uploaded.done); });
 }
 // An emoji verification, as it goes: its dialog.
 template <class App>

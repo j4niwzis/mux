@@ -49,7 +49,8 @@ bool took_files(packs_part& self, const std::vector<std::string>& paths, bool dr
 
 void part_apply(packs_part& self, const request::open_packs&) {
   self.account_ = self.s_->account_offering(mux::proto::feature::sticker_packs{});
-  mux::ui::show(*self.s_->showing, std::optional(mux::ui::packs_facts{.room = std::nullopt, .editable = true, .note = "Loading\u2026"}));
+  mux::ui::show(*self.s_->showing,
+                std::optional(mux::ui::packs_facts{.account = self.account_, .room = std::nullopt, .editable = true, .note = "Loading\u2026"}));
   if (self.account_ && !self.s_->demo())
     self.s_->net->list_packs(*self.account_, std::nullopt);
 }
@@ -61,7 +62,7 @@ void part_apply(packs_part& self, const request::open_room_packs& one) {
     return;
   self.account_ = chat->id.account;
   mux::ui::show(*self.s_->showing, std::optional(mux::ui::packs_facts{
-      .room = chat->id.id, .editable = mux::proto::chat_rights(mux::ui::protocol_state_of(self.s_->ui, chat->id.account), *chat).edit_packs,
+      .account = chat->id.account, .room = chat->id.id, .editable = mux::proto::chat_rights(mux::ui::protocol_state_of(self.s_->ui, chat->id.account), *chat).edit_packs,
       .key = one.key, .note = "Loading\u2026"}));
   if (!self.s_->demo())
     self.s_->net->list_packs(*self.account_, chat->id.id);

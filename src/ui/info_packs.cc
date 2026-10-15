@@ -42,6 +42,9 @@ export namespace mux::ui {
 // Emojis & Stickers open: a room's packs, or one's own; and whether they
 // may be changed.
 struct packs_facts {
+  // Whose packs: the account's, and the room's where they are a room's --
+  // what an answer from the server is matched by.
+  std::optional<account_id> account;
   std::optional<std::string> room;
   bool editable = false;
   std::optional<std::string> key{};

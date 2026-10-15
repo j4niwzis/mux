@@ -26,6 +26,7 @@ import mux.ui.messages;
 import :header;
 import :info;
 import :conversations_side;
+import :list_shown;
 import :conversations_screen;
 
 export namespace mux::ui {
@@ -360,15 +361,6 @@ void conversations_screen::update(double now_ms) {
     this->place_pane();
     this->markDamaged();
   }
-  // The info's members near their end, with more: the next few made; or a
-  // member opened past those made, theirs worked out.
-  if (last_model && chosen && info.visible() && (info.wants_show || info.wants_more()))
-    if (const conversation* one = last_model->find(*chosen)) {
-      if (!info.wants_show)
-        info.members_made += info.kMembersStep;
-      info.wants_show = false;
-      info.show(*one, *last_model, muted.contains(one->id));
-    }
   // The restored offset is unclamped until the destination list's first
   // layout; virtualize at that offset rather than the previous list's limit.
   if (restoring_list_at && list.fState.fLayoutValid)
@@ -714,9 +706,6 @@ void conversations_screen::show_conversation(const model& now) {
   this->show_info();
   if (!one)
     return;
-  // Only while it is open: its members were made at every switch of chat,
-  // the panel shut or not. Opened, it is shown then (toggle_info).
-  info.choose(now, chosen, muted.contains(one->id));
   this->show_wallpaper();
   shown_chat = chosen;
   // The messages themselves: the list's, told by the program (chat_told)

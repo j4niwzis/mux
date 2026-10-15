@@ -98,7 +98,66 @@ inline std::vector<text_menu_item> field_menu_items(const scene::text_menu::of_f
   return items;
 }
 
+// A selectable text's: Copy, what it selected; where the press was on a
+// link, Copy Link -- and on a custom emoji, a way to keep it or let it go.
+inline std::vector<text_menu_item> text_menu_items(std::string text, std::optional<std::string> link, const emoji_kept& kept) {
+  std::vector<text_menu_item> items{{"Copy", "", request::copy_text{std::move(text)}}};
+  if (link) {
+    if (const auto emoji = copied_emoji_at(*link))
+      items.push_back({kept.emoji_is_favourite(emoji->url) ? "Remove from favorites" : "Add to favorites", "", request::favourite_emoji{*emoji}});
+    items.push_back({"Copy Link", "", request::copy_text{std::move(*link)}});
+  }
+  return items;
+}
+// Messages selected: copied, forwarded, deleted, or let go.
+inline std::vector<text_menu_item> selection_menu_items(std::size_t count, bool forwardable, bool deletable) {
+  return {{std::format("Copy {} messages", count), "Ctrl+C", request::selection_copy{}},
+          {"Forward selected", "", request::selection_forward{}, forwardable},
+          {"Delete selected\u2026", "Delete", request::selection_delete{}, deletable},
+          {"Clear selection", "Esc", request::selection_cancel{}, true, true}};
+}
+// A text menu, where the pointer was pressed -- a right press, a long one
+// on a phone. A field's: Cut and Copy where something is selected and it is
+// no password's, Paste, Select All -- each the key the field takes for it,
+// given to it (it keeps the focus: a button takes none).
+// A text menu up, as the program says: its items, where it is -- at the
+// press that asked for it, kept in the window -- and, a field's, the field
+// as it was, for its Formatting page.
+struct text_menu_facts {
+  std::vector<text_menu_item> items;
+  float x = 0.0f, y = 0.0f, width = 260.0f, height = 0.0f;
+  std::optional<scene::text_menu::of_field> field;
+};
+inline text_menu_facts text_menu_at(std::vector<text_menu_item> items, std::optional<scene::text_menu::of_field> field, skia::SkPoint press,
+                                    skia::SkRect window) {
+  const float tall = std::min(text_menu_height(items), window.height());
+  return {.items = std::move(items),
+          .x = std::clamp(press.x() - window.fLeft, 0.0f, std::max(0.0f, window.width() - 260.0f)),
+          .y = std::clamp(press.y() - window.fTop, 0.0f, std::max(0.0f, window.height() - tall)),
+          .width = std::min(260.0f, window.width()),
+          .height = tall,
+          .field = std::move(field)};
+}
+// The menu, where its facts put it.
+inline auto text_menu_layer(const ui_needs& n, const text_menu_facts& facts) {
+  return skiff::compose::styled({.place = scene::anchor::kTopLeft, .x = facts.x, .y = facts.y, .width = facts.width, .height = facts.height},
+                                make_text_menu(*n.colours, facts.items));
+}
+
 // ---- the window -------------------------------------------------------------------
+
+// The chat's background behind the whole window, as the program says: the
+// chosen chat's, else every chat's.
+struct behind_shown {
+  config::wallpaper_t wallpaper = config::wallpaper::theme{};
+  friend bool operator==(const behind_shown&, const behind_shown&) = default;
+};
+inline auto behind_of(const ui_needs& n) {
+  return skiff::compose::applied<behind_shown>([](const behind_shown& now) { return now.wallpaper; },
+      [at = &n](wallpaper_t& wall, const config::wallpaper_t& chosen) { show_wallpaper_on(wall, chosen, *at->colours, *at->looks); },
+      wallpaper_t{});
+}
+using behind_t = decltype(behind_of(std::declval<const ui_needs&>()));
 
 // What the window shows that the program opens and closes, as a model:
 // each dialog's facts, while it is open. The program edits it; the
@@ -118,6 +177,28 @@ consteval auto dialogs_shown_of(plugin_list<Features...>) {
   return type_tag<composition::aggregate_list<skiff::model::Tracked<std::optional<dialog_facts_t<Features>>>...>>{};
 }
 using dialogs_shown_t = typename decltype(dialogs_shown_of(dialog_plugins{}))::type;
+// The dialogs protocols have of their own (dialogs(state): a list of what
+// each shows -- Matrix's developer tools, for one): each its facts' part of
+// what is shown, as a plugin's; its content made by its dialog_content,
+// found by the facts' namespace; closed by close_shown of its facts.
+template <class List>
+struct tool_facts_of_list;
+template <class... Ds>
+struct tool_facts_of_list<proto::dialog_list<Ds...>> {
+  using type = type_list<Ds...>;
+};
+template <class>
+struct protocol_tool_facts;
+template <class... Tags>
+struct protocol_tool_facts<protocol_list<Tags...>> {
+  using type = typename joined<type_list<>, typename tool_facts_of_list<decltype(proto::dialogs_of(::mux::state_of<Tags>{}))>::type...>::type;
+};
+using tool_facts_list = typename protocol_tool_facts<protocols>::type;
+template <class... Facts>
+consteval auto tools_shown_of(type_list<Facts...>) {
+  return type_tag<composition::aggregate_list<skiff::model::Tracked<std::optional<Facts>>...>>{};
+}
+using tools_shown_t = typename decltype(tools_shown_of(tool_facts_list{}))::type;
 // And the layers they put over the window (contract::window_layers): what is
 // shown of each -- a call -- held the same way.
 using layer_plugins = composition::providers<contract::window_layers, enabled_plugins>;
@@ -133,6 +214,8 @@ struct shown_root {
   skiff::model::Tracked<chat_shown> chat;
   // What the chat's field writes: an answer, an edit, or a plain message.
   skiff::model::Tracked<chat_compose> composing;
+  // And a thread's field.
+  skiff::model::Tracked<thread_compose> thread_composing;
   // Each plugin's layer's: a call, for one.
   layers_shown_t layers;
   skiff::model::Tracked<selection_shown> selection;
@@ -143,6 +226,8 @@ struct shown_root {
   skiff::model::Tracked<std::optional<notice_facts>> notice;
   // Each plugin's dialog's: who reacted to a message, for one.
   dialogs_shown_t dialogs;
+  // Each protocol's own dialogs'.
+  tools_shown_t tools;
   skiff::model::Tracked<std::optional<history_facts>> history;
   skiff::model::Tracked<std::optional<forward_facts>> forwarding;
   skiff::model::Tracked<std::optional<wallpaper_facts>> wallpaper;
@@ -161,6 +246,7 @@ struct shown_root {
   skiff::model::Tracked<std::optional<passphrase_facts>> passphrase;
   skiff::model::Tracked<std::optional<menu_facts>> menu;
   skiff::model::Tracked<std::optional<viewer_facts>> viewer;
+  skiff::model::Tracked<std::optional<text_menu_facts>> text_menu;
   // What the viewer has coming, and the video it plays: the program's.
   skiff::model::Tracked<viewer_load> viewer_coming;
   skiff::model::Tracked<video_shown> video;
@@ -182,6 +268,15 @@ struct shown_root {
   skiff::model::Tracked<banner_shown> banner;
   skiff::model::Tracked<suggestions_shown> suggested;
   skiff::model::Tracked<threads_shown> threads_list;
+  // The window's shape, from its size: a phone's, or not.
+  skiff::model::Tracked<window_shape> shape;
+  // The looks, as their choices show them (app: refresh_shown).
+  skiff::model::Tracked<looks_picked> looks;
+  skiff::model::Tracked<room_events_picked> room_events;
+  // The background behind the whole window, where it is so.
+  skiff::model::Tracked<behind_shown> behind;
+  // The chat's info, while it is open (app: chat_view).
+  skiff::model::Tracked<info_shown> info;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -197,6 +292,11 @@ void change_shown(shown_model& showing, Change change) {
   Part now = *showing.look<Part>();
   change(now);
   show(showing, std::move(now));
+}
+// The looks as their choices show them, where they moved.
+inline void show_looks(shown_model& showing, const looks_shown& looks) {
+  if (auto now = looks_picked_of(looks); *showing.look<looks_picked>() != now)
+    show(showing, std::move(now));
 }
 // A dialog shown with these facts, or closed: its part of what is shown set.
 template <class Facts>
@@ -375,6 +475,15 @@ auto layer_made_by(const Needs& needs) {
   return skiff::bind::Bound<std::optional<Facts>, made_layer<Facts, Needs, Make>>(std::in_place, layer_made<Needs, Make>{needs},
                                                                               scene::Spec{.fill = true}, true);
 }
+struct make_menu {
+  auto operator()(const ui_needs& n, const menu_facts& facts) const { return context_menu(n, facts); }
+};
+struct make_emoji_popup {
+  auto operator()(const ui_needs& n, const emoji_facts& facts) const { return emoji_popup(n, facts); }
+};
+struct make_text_menu_layer {
+  auto operator()(const ui_needs& n, const text_menu_facts& facts) const { return text_menu_layer(n, facts); }
+};
 struct make_viewer {
   auto operator()(const ui_needs& n, const viewer_facts& facts) const { return picture_viewer(n, facts); }
 };
@@ -396,10 +505,11 @@ auto layer_for(const Needs &needs) {
 
 // What the layers' keys ask for: a dialog closed, the plugins' each by its
 // facts.
-template <class... Features>
-consteval auto window_answers_of(plugin_list<Features...>) {
-  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer,
-                               ::mux::ui::request::close_shown<dialog_facts_t<Features>>...>>{};
+template <class... Features, class... Tools>
+consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) {
+  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
+                               ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
+                               ::mux::ui::request::close_shown<Tools>...>>{};
 }
 // What Esc on a dialog or a layer asks for, by its facts' type: a plugin's
 // its close_shown; the window's own each its request. A dialog of the
@@ -425,6 +535,7 @@ inline ::mux::ui::request::close_settings closing_of(std::type_identity<settings
 inline ::mux::ui::request::close_emoji closing_of(std::type_identity<emoji_facts>) { return {}; }
 inline ::mux::ui::request::close_menu closing_of(std::type_identity<menu_facts>) { return {}; }
 inline ::mux::ui::request::close_picture closing_of(std::type_identity<viewer_facts>) { return {}; }
+inline ::mux::ui::request::close_text_menu closing_of(std::type_identity<text_menu_facts>) { return {}; }
 // A box over the window (widgets::Dialog, whatever it shows): drawn while it
 // fades out too, and its content dropped once it is shut.
 template <class Content, class Dismiss> std::true_type dialog_kind(const widgets::Dialog<Content, Dismiss>*);
@@ -447,41 +558,9 @@ struct window : skiff::compose::Specced {
 
   // What the window holds, made anew when the theme changes: what is made
   // takes its colours then. Its layers, bottom to top.
-  // A text menu, where the pointer was pressed -- a right press, a long one
-  // on a phone. A selectable text's: Copy, what it selected; and Copy Link,
-  // where the press was on a link. A field's: Cut and Copy where something
-  // is selected and it is no password's, Paste, Select All -- each the key
-  // the field takes for it, given to it (it keeps the focus: a button takes
-  // none).
-  using text_menu = decltype(make_text_menu(std::declval<const palette&>(), std::vector<text_menu_item>{}));
-  // The dialogs protocols have of their own (dialogs(state), made by their
-  // dialog_type, found by ADL where the window is made): one of them up at
-  // a time, in one dialog of the window's.
-  template <class List>
-  struct dialog_nodes;
-  template <class... Ds>
-  struct dialog_nodes<proto::dialog_list<Ds...>> {
-    using type = type_list<typename decltype(dialog_type(Ds{}))::type...>;
-  };
-  template <class>
-  struct protocol_dialog_nodes;
-  template <class... Tags>
-  struct protocol_dialog_nodes<protocol_list<Tags...>> {
-    using type = typename joined<type_list<>, typename dialog_nodes<decltype(proto::dialogs_of(::mux::state_of<Tags>{}))>::type...>::type;
-  };
-  // Never empty: a text, where no protocol has a dialog.
-  using tool_t = typename variant_of_types<
-      typename joined<type_list<nodes::Text>, typename protocol_dialog_nodes<protocols>::type>::type>::type;
-  // The dialog's content, a node: the protocol's dialog in it, as the room
-  // settings hold their page.
-  struct tool_holder : skiff::compose::Holding<tool_t> {
-    using skiff::compose::Holding<tool_t>::Holding;
-    // The dialog it is shown in.
-    [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{560.0f, 560.0f}}; }
-  };
   struct layers : skiff::compose::Specced {
     // What its handlers ask for, returned.
-    using Answer = typename decltype(window_answers_of(dialog_plugins{}))::type;    using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
+    using Answer = typename decltype(window_answers_of(dialog_plugins{}, tool_facts_list{}))::type;    using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
                                        shown_frame<widgets::SlideOver<with_drawer, panel_type>, accounts_panel, ui_needs>>;
     // A dialog of Content, bound to its Facts' part of what is shown.
     template <class Content, class Facts>
@@ -529,10 +608,6 @@ struct window : skiff::compose::Specced {
     }
     // A passphrase is answered, never let go of.
     static std::optional<escaped> escape(shown_in<passphrase_box_t, passphrase_facts>&) { return std::nullopt; }
-    // A protocol's own dialog.
-    static std::optional<escaped> escape(widgets::Dialog<tool_holder>& dialog) {
-      return dialog.shown() ? std::optional<escaped>(escaped{::mux::ui::request::close_dialog{}}) : std::nullopt;
-    }
     // A layer up -- the emoji, a message's menu, a picture: closed, as its
     // facts ask.
     template <class Content, class Facts>
@@ -609,6 +684,12 @@ struct window : skiff::compose::Specced {
       }
     };
     using dialogs_t = plugin_dialogs<dialog_plugins>;
+    // The protocols' dialogs, each made by its dialog_content from its facts.
+    template <class Facts>
+    using tool_content_t = decltype(dialog_content(std::declval<const ui_needs&>(), std::declval<const Facts&>()));
+    template <class... Facts>
+    static auto tool_nodes_of(type_list<Facts...>) -> std::tuple<std::optional<shown_in<tool_content_t<Facts>, Facts>>...>;
+    using tool_nodes_t = decltype(tool_nodes_of(tool_facts_list{}));
     // The plugins' layers, each its node from its extend().
     template <class List>
     struct plugin_layers;
@@ -629,15 +710,15 @@ struct window : skiff::compose::Specced {
       // The chat's background behind all of the window, where it is so:
       // drawn at its own opacity -- the desktop through it only where the
       // picture itself lets it be seen.
-      wallpaper_t behind;
+      behind_t behind;
       // The pages slide over the drawer too: Manage accounts comes in over it.
       frame_t frame;
       shown_in<settings_view_t, settings_facts> settings;
       shown_in<notice_box_t, notice_facts> notice;
       // A person's info, in the middle, as tdesktop's profile layer.
-      shown_in<person_card, person_shown> person;
+      shown_in<person_card_t, person_shown> person;
       // A room not joined, from a link: its card, as a person's.
-      shown_in<room_card, room_card_facts> room;
+      shown_in<room_card_t, room_card_facts> room;
       // The plugins' dialogs: a message's reactions as events, for one.
       typename dialogs_t::nodes_t dialogs;
       // A message's earlier versions, as AyuGram's edit history.
@@ -649,31 +730,31 @@ struct window : skiff::compose::Specced {
       // The mentions or the reactions not yet seen, listed.
       shown_in<marks_box, marks_facts> marks;
       // A room's management.
-      shown_in<room_settings, room_settings_facts> manage;
+      shown_in<room_settings_t, room_settings_facts> manage;
       // Where a message is forwarded to.
       shown_in<forward_box, forward_facts> forwarding;
       // Element's Start chat, and its Create a room.
       shown_in<start_chat_box, new_chat_facts> new_chat;
       shown_in<create_room_box, new_room_facts> new_room;
       // Emojis & Stickers: a room's packs, or one's own.
-      shown_in<packs_box, packs_facts> packs;
+      shown_in<packs_box_t, packs_facts> packs;
       // A chat background chosen, at a level.
-      shown_in<wallpaper_box, wallpaper_facts> wallpaper;
+      shown_in<wallpaper_box_t, wallpaper_facts> wallpaper;
       // A server's public rooms, searched.
       shown_in<explore_box, explore_facts> explore;
-      // A protocol's own dialog: Matrix's developer tools, for one.
-      widgets::Dialog<tool_holder> tools;
-      shown_in<send_box, send_facts> sending;
+      // The protocols' own dialogs: Matrix's developer tools, for one.
+      tool_nodes_t tools;
+      shown_in<send_box_t, send_facts> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
       shown_in<passphrase_box_t, passphrase_facts> passphrase;
       // An emoji verification, as it goes.
       shown_in<verification_box, verification_view> verifying;
-      skiff::bind::Bound<std::optional<emoji_facts>, shown_layer<emoji_popup, emoji_facts, ui_needs>> emoji;
-      skiff::bind::Bound<std::optional<menu_facts>, shown_layer<context_menu, menu_facts, ui_needs>> menu;
+      skiff::bind::Bound<std::optional<emoji_facts>, made_layer<emoji_facts, ui_needs, make_emoji_popup>> emoji;
+      skiff::bind::Bound<std::optional<menu_facts>, made_layer<menu_facts, ui_needs, make_menu>> menu;
       skiff::bind::Bound<std::optional<viewer_facts>, made_layer<viewer_facts, ui_needs, make_viewer>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
-      std::optional<text_menu> text_menu_up;
+      skiff::bind::Bound<std::optional<text_menu_facts>, made_layer<text_menu_facts, ui_needs, make_text_menu_layer>> text_menu;
       // The plugins' layers, over everything: a call's card, and on a phone
       // the whole window, as Element's phone apps.
       typename plugin_layers_t::nodes_t over_all;
@@ -693,23 +774,24 @@ struct window : skiff::compose::Specced {
     // a drag to scroll the chat under it -- it closes the popup.
     std::optional<skia::SkPoint> press_off_emoji;
     using Node::onPointer;
+    // A press off the text menu: it closes as the press is let go.
+    bool press_off_text_menu = false;
     std::optional<Answer> onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply&) {
       std::optional<Answer> answer;
       const auto off = std::exchange(press_off_emoji, std::nullopt);
       if (off && parts.emoji.shown() && std::hypot(lift.x - off->fX, lift.y - off->fY) < 8.0f)
         answer = ::mux::ui::request::close_emoji{};
+      if (std::exchange(press_off_text_menu, false))
+        answer = ::mux::ui::request::close_text_menu{};
       return answer;
     }
     void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
       last_press = {press.x, press.y};
-      press_off_emoji = parts.emoji.shown() && !parts.emoji.shown()->parts.card.bounds().contains(press.x, press.y)
+      press_off_emoji = parts.emoji.shown() && !popup_card(*parts.emoji.shown()).bounds().contains(press.x, press.y)
                             ? std::optional<skia::SkPoint>(skia::SkPoint::Make(press.x, press.y))
                             : std::nullopt;
-      if (parts.text_menu_up && !parts.text_menu_up->bounds().contains(press.x, press.y)) {
-        parts.text_menu_up.reset();
-        this->invalidateLayout();
-        this->markDamaged();
-      }
+      auto* menu = parts.text_menu.shown();
+      press_off_text_menu = menu != nullptr && !menu->bounds().contains(press.x, press.y);
     }
     // Esc closes the emoji popup first, whatever has the keys: the input
     // keeps them while the popup is open, so the press comes down to it
@@ -737,13 +819,7 @@ struct window : skiff::compose::Specced {
         reply.handle();
         return asked;
       };
-      if (parts.text_menu_up) {
-        parts.text_menu_up.reset();
-        this->invalidateLayout();
-        this->markDamaged();
-        return closed();
-      }
-      // The rest, the one drawn last -- on top -- first.
+      // The text menu first, then the rest, the one drawn last -- on top -- first.
       if (auto taken = over_chats([](auto&... over) { return topmost_first(over...); }))
         return closed(std::move(taken->asked));
       // The drawer, under every dialog.
@@ -802,13 +878,14 @@ struct window : skiff::compose::Specced {
     layers(const ui_needs &n)
         : Specced({.fill = true}),
           parts{.backdrop = nodes::Box<>(n.colours->background),
+                .behind = behind_of(n),
                 .frame = frame_t(std::in_place, &n,
                                  std::in_place, n),
                 .settings =
                     shown_made<settings_view_t, settings_facts>(n),
                 .notice = shown_made<notice_box_t, notice_facts>(n),
-                .person = shown_made<person_card, person_shown>(n),
-                .room = shown_made<room_card, room_card_facts>(n),
+                .person = shown_made<person_card_t, person_shown>(n),
+                .room = shown_made<room_card_t, room_card_facts>(n),
                 .history =
                     shown_made<edit_history_box, history_facts>(n),
                 .linking = shown_made<link_box_t, link_facts>(n),
@@ -816,25 +893,26 @@ struct window : skiff::compose::Specced {
                     shown_made<leave_space_box_t, leave_space_facts>(n),
                 .marks = shown_made<marks_box, marks_facts>(n),
                 .manage =
-                    shown_made<room_settings, room_settings_facts>(n),
+                    shown_made<room_settings_t, room_settings_facts>(n),
                 .forwarding =
                     shown_made<forward_box, forward_facts>(n),
                 .new_chat =
                     shown_made<start_chat_box, new_chat_facts>(n),
                 .new_room =
                     shown_made<create_room_box, new_room_facts>(n),
-                .packs = shown_made<packs_box, packs_facts>(n),
+                .packs = shown_made<packs_box_t, packs_facts>(n),
                 .wallpaper =
-                    shown_made<wallpaper_box, wallpaper_facts>(n),
+                    shown_made<wallpaper_box_t, wallpaper_facts>(n),
                 .explore = shown_made<explore_box, explore_facts>(n),
-                .sending = shown_made<send_box, send_facts>(n),
+                .sending = shown_made<send_box_t, send_facts>(n),
                 .passphrase =
                     shown_made<passphrase_box_t, passphrase_facts>(n),
                 .verifying =
                     shown_made<verification_box, verification_view>(n),
-                .emoji = layer_for<emoji_popup, emoji_facts>(n),
-                .menu = layer_for<context_menu, menu_facts>(n),
+                .emoji = layer_made_by<emoji_facts, make_emoji_popup>(n),
+                .menu = layer_made_by<menu_facts, make_menu>(n),
                 .viewer = layer_made_by<viewer_facts, make_viewer>(n),
+                .text_menu = layer_made_by<text_menu_facts, make_text_menu_layer>(n),
                 .over_all = plugin_layers_t::made(n)} {
       // (A pack of the parts: bound in a generic lambda, the template a pack
       // declaration needs.)
@@ -849,6 +927,7 @@ struct window : skiff::compose::Specced {
       frame.base().setSheetColour(n.colours->sidebar);
       // The plugins' dialogs, made in their slots.
       dialogs_t::build(parts.dialogs, n);
+      std::apply([&](auto&... slot) { (slot.emplace(std::in_place, &n), ...); }, parts.tools);
       // Each dialog as what it shows declares it.
       (look_as_its_content(over, *n.colours), ...);
       }(parts);
@@ -882,7 +961,7 @@ struct window : skiff::compose::Specced {
   // What is kept, as the window's binding last read it.
   const kept_root* kept_ = nullptr;
   // Read by the window's binding as what is kept moves, and by the chats
-  // binding as the chats -- or the chat chosen -- do: the looks in effect.
+  // binding as the chats do: the drawer.
   template <class Reactions>
   void refresh(const skiff::model::Model<kept_root, Reactions>& kept) {
     this->refresh_kept(kept.root());
@@ -890,9 +969,9 @@ struct window : skiff::compose::Specced {
   // What is kept read: by its root, whatever the model's reactions.
   void refresh_kept(const kept_root& root) {
     kept_ = &root;
-    this->read_looks();
+    this->show_drawer();
   }
-  void refresh(const chats_model&) { this->read_looks(); }
+  void refresh(const chats_model&) { this->show_drawer(); }
   // What the runtime binding walks call it by (outside a release build):
   // its refresh is overloaded, which they cannot pick by themselves -- the
   // window was never read there, and the drawer, the panels' look and the
@@ -900,58 +979,20 @@ struct window : skiff::compose::Specced {
   skiff::bind::Refreshes<2> fRefreshes = skiff::bind::refreshes(
       skiff::bind::refreshFrom<window, chats_model>(),
       skiff::bind::refreshFromRoot<window, kept_root, &window::refresh_kept>());
-  // The looks in effect, as what is kept says for the chat chosen: what each
-  // level holds of the looks and of room events, for the choices to show
-  // what is in effect; the panels' look, the window repainted where it
-  // changes; and the background behind the window -- the chat's, else
-  // every chat's.
-  void read_looks() {
+  // The drawer: the accounts saved, with what the chats say of each.
+  void show_drawer() {
     auto& screen = this->main();
     if (kept_ == nullptr || screen.last_model == nullptr)
       return;
-    const auto& looks = kept_->looks.fValue;
-    const auto& history = kept_->history.fValue;
-    const auto space = space_above_of(screen.last_model->accounts());
-    const chat_settings reads{kept_, &space};
-    const std::optional<conversation_id>& chosen = screen.chosen;
-    looks_shown& shown = *needs_.looks;
-    looks_held account_held, chat_held;
-    room_events_held account_events, chat_events;
-    if (chosen) {
-      chat_held = {reads.own_of<&config::chat_choices::wallpaper>(*chosen), reads.own_of<&config::chat_choices::bubbles>(*chosen),
-                   reads.own_of<&config::chat_choices::panels>(*chosen)};
-      chat_events = {reads.own_of<&config::chat_choices::room_events>(*chosen), reads.own_of<&config::chat_choices::room_event_kinds>(*chosen)};
-      if (const config::account_t* account = reads.settings_of(chosen->account.address)) {
-        if (const auto& word = config::wallpaper_of(*account))
-          account_held.wallpaper = config::wallpaper_of(std::string_view(*word));
-        if (const auto& word = config::bubbles_of(*account))
-          account_held.bubbles = config::bubble_look_of(*word);
-        if (const auto& word = config::panels_of(*account))
-          account_held.panels = config::bubble_look_of(*word);
-        account_events = {config::room_events_of(*account), config::room_event_kinds_of(*account)};
-      }
-    }
-    shown.at(choice_level::everywhere{}) = {looks.wallpaper, looks.bubbles, looks.panels};
-    shown.at(choice_level::account{}) = std::move(account_held);
-    shown.at(choice_level::chat{}) = std::move(chat_held);
-    room_events_at(choice_level::everywhere{}) = {history.show_room_events, history.room_event_kinds};
-    room_events_at(choice_level::account{}) = std::move(account_events);
-    room_events_at(choice_level::chat{}) = std::move(chat_events);
-    shown.panels = chosen ? reads.panels_of(*chosen) : looks.panels.value_or(config::bubble_look{});
-    if (show_panels(*needs_.paint, shown.panels, shown.window, *needs_.colours)) {
-      this->markDamaged();
-      scene::work::mark(screen.fState.fId);  // an ease ticked by the screen
-    }
-    this->show_behind(chosen ? reads.wallpaper_of(*chosen) : looks.wallpaper.value_or(config::wallpaper_t{config::wallpaper::theme{}}));
-    // The drawer: the accounts saved, with what the chats say of each.
     const auto& current = screen.current;
     layer().frame.base().content().show(kept_->accounts.values(), *screen.last_model,
                                         current ? std::string_view(current->address) : std::string_view());
   }
-  // The background behind the whole window, where it is so.
-  void show_behind(const config::wallpaper_t& chosen) {
-    if (needs_.looks->window.behind)
-      show_wallpaper_on(layer().behind, chosen, *needs_.colours, *needs_.looks);
+  // The panels' paint changed (app: looks): repainted, and the screen's ease
+  // ticked.
+  void panels_changed() {
+    this->markDamaged();
+    scene::work::mark(this->main().fState.fId);
   }
   // The panel that is up, not on its way out.
   [[nodiscard]] panel_type* open_panel() { return layer().frame.shown(); }
@@ -972,82 +1013,19 @@ struct window : skiff::compose::Specced {
   void close() { layer().frame.close(); }
   // From the program, between events.
   void drop_closed() {
-    if (std::exchange(text_menu_close_due, false))
-      this->close_text_menu_now();
-    if (auto formatting = std::exchange(text_formatting_due, std::nullopt); formatting && text_menu_field && layer().text_menu_up)
-      this->put_text_menu(field_menu_items(*text_menu_field, *formatting));
     layer().frame.dropClosed();
     parts.now->over_chats([](auto&... over) { (layers::drop_of(over), ...); });
   }
 
-  [[nodiscard]] send_box* send_box_up() { return layer().sending.shown(); }
   [[nodiscard]] settings_view_t* settings_up() { return layer().settings.shown(); }
-  // A selectable text's menu, where the pointer was pressed, kept in the
-  // window; and gone.
-  void show_text_menu(std::string text, std::optional<std::string> link = std::nullopt) {
-    text_menu_origin = parts.now->last_press;
-    text_menu_field.reset();
-    std::vector<text_menu_item> items{{"Copy", "", request::copy_text{std::move(text)}}};
-    if (link) {
-      if (const auto emoji = copied_emoji_at(*link))
-        items.push_back({needs_.emoji->emoji_is_favourite(emoji->url) ? "Remove from favorites" : "Add to favorites", "", request::favourite_emoji{*emoji}});
-      items.push_back({"Copy Link", "", request::copy_text{std::move(*link)}});
-    }
-    this->put_text_menu(items);
-  }
-  void show_selection_menu(std::size_t count, bool forwardable, bool deletable) {
-    text_menu_origin = parts.now->last_press;
-    text_menu_field.reset();
-    this->put_text_menu({
-        {std::format("Copy {} messages", count), "Ctrl+C", request::selection_copy{}},
-        {"Forward selected", "", request::selection_forward{}, forwardable},
-        {"Delete selected…", "Delete", request::selection_delete{}, deletable},
-        {"Clear selection", "Esc", request::selection_cancel{}, true, true}});
-  }
-  // A field's: Paste and the rest, for the field with the focus.
-  void show_field_menu(const scene::text_menu::of_field& field) {
-    text_menu_origin = parts.now->last_press;
-    text_menu_field = field;
-    this->put_text_menu(field_menu_items(field, false));
-  }
-  void text_formatting(bool open) { text_formatting_due = open; }
-  void put_text_menu(const std::vector<text_menu_item>& items) {
-    auto& menu = parts.now->parts.text_menu_up.emplace(make_text_menu(*needs_.colours, items));
-    menu.fState.setFloats(true);
-    text_menu_close_due = false;
-    auto& now = *parts.now;
-    const skia::SkRect box = fState.fBounds;
-    const float tall = std::min(text_menu_height(items), box.height());
-    menu.apply({.place = scene::anchor::kTopLeft,
-                .x = std::clamp(text_menu_origin.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 260.0f)),
-                .y = std::clamp(text_menu_origin.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - tall)), .width = std::min(260.0f, box.width()), .height = tall});
-    now.invalidateLayout();
-    now.markDamaged();
-  }
-  // A call, as the call is now: in its chat, where that is the one shown
-  // and it does not ring here; else the card at the top of the window. And
-  // gone, with the call.
+  // Where the pointer was last pressed: where a text menu asked by that
+  // press goes.
+  [[nodiscard]] skia::SkPoint last_press() const { return parts.now->last_press; }
   // A message's menu up: the right press was its.
   [[nodiscard]] bool context_menu_up() { return layer().menu.shown() != nullptr; }
-  // Closed between events, not now: the program asks it as it does what
-  // was pressed in it, while that press is still being answered.
-  void close_text_menu() {
-    if (parts.now->parts.text_menu_up)
-      text_menu_close_due = true;
-  }
-  void close_text_menu_now() {
-    auto& now = *parts.now;
-    if (now.parts.text_menu_up) {
-      now.parts.text_menu_up.reset();
-      now.invalidateLayout();
-      now.markDamaged();
-    }
-  }
-  bool text_menu_close_due = false;
-  skia::SkPoint text_menu_origin = skia::SkPoint::Make(0.0f, 0.0f);
-  std::optional<scene::text_menu::of_field> text_menu_field;
-  std::optional<bool> text_formatting_due;
-  [[nodiscard]] room_settings* manage_up() { return layer().manage.shown(); }
+  // The room's settings, where they are up: for the bindings to walk them
+  // whole once they come up.
+  [[nodiscard]] room_settings_t* manage_up() { return layer().manage.shown(); }
 
   void close_drawer_now() { layer().frame.base().closeNow(); }
   [[nodiscard]] bool drawer_open() { return layer().frame.base().isOpen(); }
@@ -1070,14 +1048,12 @@ struct window : skiff::compose::Specced {
     std::vector<emote_picture> shown;
     // Those the panel's pages show, in view: the emoji's, every plugin's.
     if (up) {
-      const skia::SkRect view = up->parts.card.bounds();
-      emote_pictures_in(up->parts.card.parts.panel, view, shown);
-      std::apply([&](auto&... page) { ((page ? emote_pictures_in(*page, view, shown) : void()), ...); }, up->parts.card.parts.pages);
+      const skia::SkRect view = popup_card(*up).bounds();
+      emote_pictures_in(popup_card(*up), view, shown);
     }
     // And those of what a message's menu unrolled: every emoji.
     if (auto* menu = layer().menu.shown())
-      std::apply([&](auto&... over) { ((over ? emote_pictures_in(*over, menu->parts.menu.bounds(), shown) : void()), ...); },
-                 menu->parts.menu.parts.overs);
+      emote_pictures_in(card_of(*menu), card_of(*menu).bounds(), shown);
     auto& screen = main();
     // The custom emoji the list over the composer shows.
     for (const suggestion& emoji : listed.items)
@@ -1096,46 +1072,9 @@ struct window : skiff::compose::Specced {
   // The menu's card, where one is up: what takes the keys while it is.
   [[nodiscard]] scene::Node* menu_card() {
     auto* up = layer().menu.shown();
-    return up ? &up->parts.menu : nullptr;
+    return up ? &card_of(*up) : nullptr;
   }
 
-  void show_packs(std::vector<emote_pack> packs) {
-    if (auto* up = layer().packs.shown())
-      up->show_packs(std::move(packs));
-  }
-  // A pack saved: in the list as it is now, the list shown again -- or one's
-  // own left open; one taken away, out of it.
-  void pack_saved(const emote_pack& pack, bool removed, bool done) {
-    auto* up = layer().packs.shown();
-    if (!up)
-      return;
-    if (!done) {
-      up->parts.note.setText(removed ? "The pack was not deleted." : "The pack was not saved.");
-      return;
-    }
-    const auto same = [&](const emote_pack& one) { return one.chat == pack.chat && one.key == pack.key; };
-    std::erase_if(up->packs, same);
-    if (!removed)
-      up->packs.push_back(pack);
-    if (up->room)
-      up->show_list();
-    else
-      up->parts.note.setText("Saved.");
-  }
-  void pack_picture_uploaded(const pack_picture& picture, bool done) {
-    if (auto* up = layer().packs.shown()) {
-      if (done)
-        up->add_picture(picture);
-      else
-        up->parts.note.setText("An image could not be uploaded: " + picture.body);
-    }
-  }
-  // A protocol's own dialog up (Node, one of its dialogs), made from args.
-  template <class Node, class... Args>
-  void open_dialog(Args&&... args) {
-    layer().tools.open(std::in_place_type<Node>, *needs_.colours, std::forward<Args>(args)...);
-  }
-  void close_dialog() { layer().tools.close(); }
 
   // Its layers, each filling the window, as the default layout places them:
   // nothing placed by hand.

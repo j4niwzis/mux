@@ -123,7 +123,7 @@ struct app : kept_settings {
   room_card_part room_card{shared};
   preferences_part preferences{shared, *this, proxying};
   manage_part manage{shared, *this};
-  looks_part looks{shared, *this};
+  looks_part looks{shared, *this, colours};
   threads_part threads{shared};
   jumps_part jumps{shared};
   chat_view_part chat_view{shared};
@@ -527,10 +527,10 @@ struct app : kept_settings {
     if (now && std::exchange(refresh_waiting_, false))
       this->refresh();
   }
-  void apply(const request::close_dialog&);
   void apply(const request::copy_text& one);
   void apply(const request::text_key& one);
   void apply(const request::text_formatting& one);
+  void apply(const request::close_text_menu&);
   void apply(const request::give_passphrase&);
   // The account whose room keys a passphrase was asked for.
   std::optional<mux::account_id> keys_of;

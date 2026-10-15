@@ -93,13 +93,13 @@ struct services {
     if (!showing->look<mux::ui::chat_shown>()->thread_answer)
       return;
     mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) { now.thread_answer.reset(); });
-    mux::ui::show_composer_context(root().main().thread_line(), std::nullopt);
+    mux::ui::show(*showing, mux::ui::thread_compose{});
   }
   // A message of the thread open answered there, as tdesktop's "Reply to
   // <name>" over the field.
   void answer_in_thread(std::string id, mux::ui::compose_context said) const {
     mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) { now.thread_answer = std::move(id); });
-    mux::ui::show_composer_context(root().main().thread_line(), std::move(said));
+    mux::ui::show(*showing, mux::ui::thread_compose{std::move(said)});
   }
   // The stretch of a chat's messages in view and a page around it -- or,
   // while a message is jumped to, a few around that: what is loaded on the
@@ -196,6 +196,11 @@ struct services {
       }
     });
   }
+  // A text menu, at the press that asked for it; and let go of.
+  void show_text_menu(std::vector<mux::ui::text_menu_item> items, std::optional<skiff::scene::text_menu::of_field> field = std::nullopt) const {
+    mux::ui::show(*showing, std::optional(mux::ui::text_menu_at(std::move(items), std::move(field), root().last_press(), scene->viewport())));
+  }
+  void close_text_menu() const { mux::ui::show<mux::ui::text_menu_facts>(*showing, std::nullopt); }
   void close_notice() const { mux::ui::show<mux::ui::notice_facts>(*showing, std::nullopt); }
   // A chat that is a window of its history away from its newest: back to
   // its newest, live -- before anything is put at its end. Its newest from
@@ -232,11 +237,12 @@ struct services {
         },
         *up);
   }
-  // The chat Manage is for: a space, where its settings are open -- what is
+  // The chat Manage is for -- a space, where its settings are open: what is
   // chosen there goes to it -- else the chat chosen.
-  std::optional<mux::conversation_id> manage_target;
   [[nodiscard]] std::optional<mux::conversation_id> managed() const {
-    return manage_target && root().manage_up() ? manage_target : root().main().chosen;
+    if (const auto& open = *showing->look<std::optional<mux::ui::room_settings_facts>>())
+      return open->chat;
+    return root().main().chosen;
   }
   // Features belong to the selected account. An unsupported feature never
   // borrows another account's protocol or credentials.

@@ -63,15 +63,25 @@ struct window_dialogs {
   static constexpr std::string_view name = "the window's dialogs";
 };
 // A message's menu's top, over its rows (mux.ui:context_menu):
-//   extend(c, f, palette, menu_facts, unroll) -> its head:
-//   shown, or not, as the facts say; pressing `unroll` unrolls its own
-//   over the items
+//   extend(c, f, palette, menu_facts) -> its head: shown, or not, as the
+//   facts say; what answers menu_unroll<f> unrolls its own over the items,
+//   and it reads message_menu_state (a Local of the menu's) to know it has
+//   unrolled
 //   unrolled(c, f, palette, emoji_kept) -> that, made then
-//   (a node, or in_place where it may not move)
-//   unrolled_head(c, f, head&): the head, told it has unrolled
 struct message_menu_top {
   static constexpr std::string_view name = "a message's menu's top";
 };
+// What a message's menu has open, its own: which of its tops unrolled
+// (its place among them, from 1; none, 0), and its list of who has seen it
+// -- while its row or the list is pointed at, from the row's box.
+struct message_menu_state {
+  std::size_t unrolled = 0;
+  bool seen_row = false, seen_list = false;
+  float seen_left = 0.0f, seen_top = 0.0f, seen_right = 0.0f, seen_bottom = 0.0f;
+  friend bool operator==(const message_menu_state&, const message_menu_state&) = default;
+};
+// A top asking to unroll its own.
+template <class Feature> struct menu_unroll {};
 // The window's layers, over everything, not dialogs: a call's card and its
 // whole-window view (mux.ui:window):
 //   facts_type(c, f) -> type_tag<what is shown of it>, in its types

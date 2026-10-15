@@ -53,91 +53,68 @@ struct forward_target {
 struct forward_facts {
   std::vector<forward_target> chats;
 };
-struct forward_box : skiff::compose::Stacked {
-  // Child references and handlers require a fixed address.
-  forward_box(const forward_box&) = delete;
-  forward_box& operator=(const forward_box&) = delete;
-  forward_box(forward_box&&) = delete;
-  forward_box& operator=(forward_box&&) = delete;
-
-  // The dialog it is shown in.
-  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{400.0f, 520.0f}}; }
-  // The colours it is made in, for the rows it makes later.
-  const palette* colours_ = nullptr;
-  std::vector<forward_target> all;
-  struct close_it {
-    using Answer = ::mux::ui::request::close_forward;
-    ::mux::ui::request::close_forward operator()() { return ::mux::ui::request::close_forward{}; }
-  };
-  struct typed {
-    forward_box* box;
-    void operator()(std::string_view text) const { box->find(text); }
-  };
-  struct row : skiff::compose::Stacked {
-    // What its handlers ask for, returned.
-    using Answer = ::mux::ui::request::forward_to;
-    conversation_id id;
-    struct parts_t {
-      legacy::avatar_mark face;
-      nodes::Text name;
-    } parts;
-    row(const palette &colours, const forward_target &one)
-        : Stacked(skiff::compose::hbox(12.0f,
-                                       {.fillX = true,
-                                        .height = 50.0f,
-                                        .padding = {0.0f, 20.0f, 0.0f, 20.0f},
-                                        .hoverBackground = colours.chosen})),
-          id(one.id),
-          parts{
-              .face = legacy::avatar_mark(avatar_of::chat{}, one.id.id, one.name, 36.0f),
-              .name = skiff::compose::styled(
-                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                  elided(nodes::Text(one.name, 15.0f, colours.text)))} {
-
-      fState.setCursor(scene::cursor::hand{});
-    }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    std::optional<Answer> onClick(float, float) {
-      return ::mux::ui::request::forward_to{id};
-    }
-  };
-  using rows_t = nodes::Flow<std::vector<row>>;
-  using header_t = page_header_t<no_back, close_it>;
-  struct parts_t {
-    header_t header;
-    widgets::TextBox<typed> field;
-    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
-  } parts;
-
-  forward_box(const ui_needs& n, const forward_facts& facts) : forward_box(*n.colours, facts.chats) {}
-  forward_box(const palette &colours, const std::vector<forward_target> &chats)
-      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 520.0f})),
-        colours_(&colours), all(chats),
-        parts{.header = page_header<no_back, close_it>(colours, "Forward to…", {}, {}, false, true),
-              .field = skiff::compose::styled(
-                  {.fillX = true,
-                   .height = 34.0f,
-                   .margin = {0.0f, 16.0f, 8.0f, 16.0f}},
-                  widgets::TextBox<typed>(colours.widgets, "Search", {this}))} {
-    parts.field.setSearchIcon(true);
-    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
-    std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-    this->find({});
-  }
-  // The chats whose names have what is typed, in any case.
-  void find(std::string_view text) {
-    constexpr auto lower = mux::logic::folded;
-    const std::string wanted = lower(text);
-    auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
-    rows.clear();
-    for (const forward_target& one : all)
-      if (wanted.empty() || lower(one.name).contains(wanted))
-        rows.emplace_back(*colours_, one);
-    parts.list.invalidateLayout();
-    parts.list.scrollTo(0.0f);
-  }
+struct forward_draft {
+  std::string query;
 };
+struct forward_events {};
+inline auto forward_row(const palette& colours, const forward_target& one) {
+  namespace c = skiff::compose;
+  return c::onPress(
+      sends<::mux::ui::request::forward_to>{one.id},
+      c::row(c::hbox(12.0f, {.fillX = true,
+                             .height = 50.0f,
+                             .padding = {0.0f, 20.0f, 0.0f, 20.0f},
+                             .hoverBackground = colours.chosen}),
+             avatar_mark(avatar_of::chat{}, one.id.id, one.name, 36.0f),
+             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                       elided(nodes::Text(one.name, 15.0f, colours.text)))),
+      one.name);
+}
+// The chats whose names have what is typed, in any case.
+inline std::vector<forward_target> matching_forward_targets(const std::vector<forward_target>& all, std::string_view text) {
+  const std::string wanted = mux::logic::folded(text);
+  return std::ranges::to<std::vector>(std::views::filter(all, [&](const forward_target& one) {
+    return wanted.empty() || mux::logic::folded(one.name).contains(wanted);
+  }));
+}
+inline auto forward_view(const palette& colours, const std::vector<forward_target>& chats) {
+  namespace c = skiff::compose;
+  using close_act = sends<::mux::ui::request::close_forward>;
+  using query = skiff::model::Field<&forward_draft::query>;
+  auto field = widgets::TextField<std::string>(colours.widgets, "Search");
+  field.setSearchIcon(true);
+  return c::local<forward_draft>(
+      forward_events{},
+      c::column(
+          c::vbox(0.0f, {.fillX = true, .height = 520.0f}),
+          page_header<no_back, close_act>(colours, "Forward to…", {}, {}, false, true),
+          c::styled({.fillX = true, .height = 34.0f, .margin = {0.0f, 16.0f, 8.0f, 16.0f}},
+                    c::bound<query>(std::move(field))),
+          c::styled({.fillX = true, .grow = scene::axes::kY},
+                    nodes::ScrollContainer(
+                        c::projected<query>(
+                            [all = chats](const std::string& text) {
+                              return matching_forward_targets(all, text);
+                            },
+                            c::listed<forward_target>(
+                                c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                [colours = &colours](const forward_target& one) {
+                                  return forward_row(*colours, one);
+                                })))))),
+      forward_draft{});
+}
+inline auto forward_view(const ui_needs& n, const forward_facts& facts) {
+  return forward_view(*n.colours, facts.chats);
+}
+using forward_box_t = decltype(forward_view(std::declval<const ui_needs&>(), std::declval<const forward_facts&>()));
+using forward_box = forward_box_t;
+inline dialog_look content_look(std::type_identity<forward_box_t>) {
+  return {.size = dialog_size::fixed{400.0f, 520.0f}};
+}
+template <class Needs>
+auto make_content(std::type_identity<forward_box_t>, const Needs& needs, const forward_facts& facts) {
+  return forward_view(needs, facts);
+}
 
 // Someone found: their picture, name and ID; pressed, the chat with them --
 // in Start chat, and in the chat list where nothing joined matches.
@@ -147,7 +124,7 @@ inline auto person_pick_row(const palette& colours, const found_person& one, Eve
   return skiff::compose::onClick(std::move(event), skiff::compose::row(
       skiff::compose::hbox(12.0f, {.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
           .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
-      legacy::avatar_mark(avatar_of::person{}, one.id, name, 36.0f),
+      avatar_mark(avatar_of::person{}, one.id, name, 36.0f),
       two_lines(colours, name, one.id, 14.0f, 2.0f)), name);
 }
 inline auto found_person_row(const palette& colours, const found_person& one) {

@@ -38,55 +38,28 @@ export import :info_explore;
 
 export namespace mux::ui {
 
+// A chat's info, as Telegram's profile: beside the chat, in one column that
+// scrolls -- its big avatar, name and how it is, its tiles (mute, Manage,
+// leave), what it is about and its addresses, its ID; then its members, a
+// part at a time. All of it as the program says (info_shown, the chat
+// view's part); a press asks the program.
+
+// The chat's tiles: mute or unmute it, Manage, and Leave where its
+// protocol lets it be left.
 inline auto info_tiles(const palette& colours, bool muted, bool leavable) {
-  return skiff::compose::row(
-      skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}}),
-      skiff::compose::styled({.grow = scene::axes::kX},
-          action_tile<sends<request::toggle_mute>>(colours, muted ? "Unmute" : "Mute", icon::bell{})),
-      skiff::compose::styled({.grow = scene::axes::kX},
-          action_tile<sends<request::open_manage>>(colours, "Manage", icon::sliders{})),
-      skiff::compose::visible(leavable, skiff::compose::styled({.grow = scene::axes::kX},
-          action_tile<sends<request::leave_chat>>(colours, "Leave", icon::leave{}))));
+  namespace c = skiff::compose;
+  return c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}}),
+      c::styled({.grow = scene::axes::kX}, action_tile<sends<request::toggle_mute>>(colours, muted ? "Unmute" : "Mute", icon::bell{})),
+      c::styled({.grow = scene::axes::kX}, action_tile<sends<request::open_manage>>(colours, "Manage", icon::sliders{})),
+      c::visible(leavable, c::styled({.grow = scene::axes::kX}, action_tile<sends<request::leave_chat>>(colours, "Leave", icon::leave{}))));
 }
-using info_tiles_t = decltype(info_tiles(std::declval<const palette&>(), false, false));
-template <class Act> auto person_actions(const palette& colours, Act action) {
-  return skiff::compose::row(
-      skiff::compose::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}}),
-      skiff::compose::styled({.grow = scene::axes::kX},
-          action_tile<Act>(colours, "Message", icon::send{}, std::move(action))));
-}
-template <class Act> using person_actions_t = decltype(person_actions(std::declval<const palette&>(), std::declval<Act>()));
-
-
-// What the management of a room shows: as it is now.
-[[nodiscard]] inline std::string role_of(std::int64_t level) {
-  if (level >= 100)
-    return "Admin";
-  if (level >= 50)
-    return "Moderator";
-  return level > 0 ? std::format("Level {}", level) : std::string("Member");
-}
-
-struct info_panel;
-// What a press does, to the panel -- which stays where it is while its
-// pages are made again.
-struct info_back_to_group {
-  info_panel* panel;
-  void operator()() const;
-};
-struct info_message_them {
-  using Answer = std::optional<::mux::ui::request::message_person>;
-  info_panel* panel;
-  std::optional<::mux::ui::request::message_person> operator()();
-};
-// What the upper part shows: a chat's, or one of its members'.
+// What the upper part shows.
 struct info_view {
   std::string key;
   std::string name;
   std::string status;
   bool group = false;
   bool muted = false;
-  bool of_person = false;
   // What copying the ID gives: for a Matrix room, a link to it with the
   // servers to join through; else the ID.
   std::string copied;
@@ -98,9 +71,9 @@ struct info_view {
   bool leavable = true;
   friend bool operator==(const info_view&, const info_view&) = default;
 };
-// The upper part, made from its view: ← where a member is shown, ✕; the
-// big avatar, the name, how it is; the chat's tiles or the member's; its ID.
-inline auto info_head_of(const palette& colours, info_panel* panel, const info_view& shown) {
+// The upper part, made from its view: ✕; the big avatar, the name, how it
+// is; the tiles; what it is about, its addresses; its ID.
+inline auto info_head(const palette& colours, const info_view& shown) {
   namespace c = skiff::compose;
   const auto centred = [&](std::string text, float size, skia::SkColor colour, bool bold) {
     auto node = nodes::Text(std::move(text), size, colour, bold);
@@ -110,25 +83,23 @@ inline auto info_head_of(const palette& colours, info_panel* panel, const info_v
   auto description = wrapped(c::styled({.fillX = true}, nodes::Text(shown.topic, 14.0f, colours.text)));
   description.setSelectable(true);
   description.setLinks(link_spans_in(shown.topic), colours.accent);
-  std::vector<id_line_t> addresses;
-  for (const auto& address : shown.addresses)
-    addresses.push_back(id_line(colours, address, "", "Address"));
   return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}),
-          c::visible(shown.of_person, legacy::icon_button<info_back_to_group>(colours, icon::back{}, {panel})),
-          c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::colorSetARGB(0, 0, 0, 0))),
-          legacy::icon_button<sends<request::toggle_info>>(colours, icon::close{}, {})),
-      legacy::avatar_button(avatar_of::chat{}, shown.key, shown.name, 96.0f),
+      c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}), nodes::justify::end{},
+                   icon_button(colours, icon::close{}, sends<request::toggle_info>{})),
+      c::styled({.alignSelf = scene::align::kMiddle}, avatar_button(avatar_of::chat{}, shown.key, shown.name, 96.0f)),
       centred(shown.name, 17.0f, colours.text, true),
       centred(shown.status, 13.0f, colours.dim, false),
-      c::visible(!shown.of_person, info_tiles(colours, shown.muted, shown.leavable)),
-      c::visible(shown.of_person, person_actions(colours, info_message_them{panel})),
+      info_tiles(colours, shown.muted, shown.leavable),
       section_band(colours),
-      c::visible(!shown.topic.empty(), c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
-          .padding = {8.0f, 20.0f, 8.0f, 20.0f}}), std::move(description), nodes::Text("Description", 12.0f, colours.dim))),
-      c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(addresses)),
+      c::visible(!shown.topic.empty(), c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}}),
+                                                 std::move(description), nodes::Text("Description", 12.0f, colours.dim))),
+      c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              shown.addresses | std::views::transform([&](const std::string& address) { return id_line(colours, address, "", "Address"); }) |
+                  std::ranges::to<std::vector>()),
       id_line(colours, shown.key, shown.copied));
 }
+using info_head_t = decltype(info_head(std::declval<const palette&>(), std::declval<const info_view&>()));
+// The members' head: how many, and a way to invite where one may.
 struct info_members_heading {
   std::size_t count = 0;
   conversation_id room;
@@ -137,273 +108,72 @@ struct info_members_heading {
 };
 inline auto info_members_head(const palette& colours, const info_members_heading& facts) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(10.0f, {.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}}),
+  return c::row(c::hbox(10.0f, {.fillX = true, .height = 48.0f, .padding = {6.0f, 10.0f, 6.0f, 16.0f}}),
       icon_view(colours, icon::people{}),
-      c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text(
-          std::format("{} MEMBER{}", facts.count, facts.count == 1 ? "" : "S"), 13.0f, colours.dim, true)),
-      c::visible(facts.invite, legacy::icon_button<sends<request::open_room_invite>>(
-          colours, icon::add_person{}, {facts.room})));
+      c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                nodes::Text(std::format("{} MEMBER{}", facts.count, facts.count == 1 ? "" : "S"), 13.0f, colours.dim, true)),
+      c::visible(facts.invite, icon_button(colours, icon::add_person{}, sends<request::open_room_invite>{{facts.room}})));
 }
-
-struct info_panel : skiff::compose::Stacked {
-  // What a press does, what the upper part shows, and how the upper part and
-  // the members' head are made: out of the class, their types known first.
-  using back_to_group = info_back_to_group;
-  using message_them = info_message_them;
-  using view = info_view;
-  using members_heading = info_members_heading;
-  static auto head_of(info_panel* panel, const view& shown) { return info_head_of(*panel->colours_, panel, shown); }
-  using head = decltype(info_head_of(std::declval<const palette&>(), std::declval<info_panel*>(), std::declval<const info_view&>()));
-  static auto members_head(const palette& colours, const members_heading& facts) { return info_members_head(colours, facts); }
-  using members_head_t = decltype(info_members_head(std::declval<const palette&>(), std::declval<const info_members_heading&>()));
-  // Child references and handlers require a fixed address.
-  info_panel(const info_panel&) = delete;
-  info_panel& operator=(const info_panel&) = delete;
-  info_panel(info_panel&&) = delete;
-  info_panel& operator=(info_panel&&) = delete;
-
-  // The colours it is made in, for what it makes later; and what the
-  // window's parts share: the accounts' protocol states.
-  const palette* colours_ = nullptr;
-  const ui_shared* shared_ = nullptr;
-  account_id account;
-  std::string key;
-  // The member shown on a page of their own, over the group's, if one is:
-  // the panel's own state, which the page is made from.
-  std::optional<std::string> person;
-  // The members as last shown, and how each is.
-  std::vector<std::pair<member, std::string>> shown_members;
-  // Whose members those are, at which revision of them.
-  std::optional<conversation_id> members_of;
-  std::uint64_t members_revision = 0;
-  std::uint64_t trust_seen = 0, presence_seen = 0;
-  // Only the first of them made, and more as the list is scrolled near its
-  // end, as Qt's fetchMore: a big room has thousands, each with its role,
-  // badges and presence worked out, and all of them were made at every
-  // switch to it. How many there are, and how many were made.
-  static constexpr std::size_t kMembersStep = 60;
-  std::size_t members_made = kMembersStep;
-  std::size_t members_built = 0;
-  std::size_t members_total = 0;
-  // The member open on their page, where they are past those made.
-  std::optional<std::pair<member, std::string>> person_entry;
-  // To be shown again at the next frame: a member opened past those made.
-  bool wants_show = false;
-  // Near the end of the members made, with more there: the next few wanted.
-  [[nodiscard]] bool wants_more() {
-    return members.visible() && members_built < members_total &&
-           parts.scroll.atEnd(std::max(300.0f, parts.scroll.bounds().height() * 1.5f));
-  }
-
-
-
-  using member_entry = std::pair<member, std::string>;
-  using kept_member = nodes::KeptRow<std::string, member_entry, member_row_t>;
-  using member_rows = nodes::Flow<std::vector<kept_member>>;
-  // All of it in one column that scrolls, as Telegram's profile: the head
-  // -- however long its description and addresses -- then the members.
-  struct column : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Memo<view, head> upper;
-      nodes::Box<> band_2;
-      // The members' head, as a function of how many there are.
-      nodes::Memo<members_heading, members_head_t> members_header;
-      // The members, reconciled: the rows kept while they show the same.
-      member_rows members{{.spacingY = 0.0f, .wrap = false}, {}};
-    } parts;
-    explicit column(const palette &colours)
-        : Stacked(skiff::compose::vbox(
-              2.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.band_2 = section_band(colours)} {}
-  };
-  struct parts_t {
-    nodes::ScrollContainer<column> scroll;
-    nodes::Box<> edge;  // its left edge
-  } parts;
-  column& content = std::get<0>(parts.scroll.fChildren);
-  nodes::Memo<view, head>& upper = content.parts.upper;
-  nodes::Box<>& band_2 = content.parts.band_2;
-  nodes::Memo<members_heading, members_head_t>& members_header = content.parts.members_header;
-  member_rows& members = content.parts.members;
-  // The group's view, to come back to from a member's page.
-  view group_view;
-
-  static constexpr float kWidth = 340.0f;
-
-  info_panel(const palette &colours, const ui_shared &shared)
-      : Stacked(skiff::compose::vbox(
-            0.0f, {.background = colours.sidebar, .masking = true})),
-        colours_(&colours), shared_(&shared),
-        parts{.scroll = skiff::compose::styled(
-                  {.fillX = true, .grow = scene::axes::kY},
-                  nodes::ScrollContainer<column>(column(colours))),
-              .edge = skiff::compose::styled({.place = scene::anchor::kTopLeft,
-                                              .fillY = true,
-                                              .width = 1.0f},
-                                             nodes::Box<>(colours.band))} {
-
-    upper.apply({.fillX = true, .autoSize = scene::axes::kY});
-    members_header.apply({.fillX = true, .height = 48.0f});
-    members.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.scroll.scrollToStart();
-  }
-
-  // A member as the list shows them: their role, as the chat's protocol
-  // says it (Matrix: its power levels, as Element marks its admins and
-  // moderators); and what their protocol says of them beside how they are
-  // (Matrix: in an encrypted room, their identity -- Element's shield).
-  [[nodiscard]] std::pair<member, std::string> entry_of(const conversation& one, const model& now, const member& each) const {
-    member shown = each;
-    if (!shown.role)
-      if (std::string role = proto::sender_role(protocol_state_of(*shared_, one.id.account), one, each.id); !role.empty())
-        shown.role = std::move(role);
-    std::string how = std::ranges::fold_left(
-        proto::person_badges(protocol_state_of(*shared_, one.id.account), &one, now, one.id.account, each.id),
-        presence_of(*shared_, now, one.id.account, each.id), [](std::string so_far, const proto::part::badge& badge) {
-          return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
-        });
-    return {std::move(shown), std::move(how)};
-  }
-  // The chat it is about, and the model it reads it from: told as the chat
-  // is chosen, then read again by the chats binding as the chats move --
-  // while it is open; shut, nothing of it is made.
-  const model* now_ = nullptr;
-  std::optional<conversation_id> chosen_;
-  bool muted_ = false;
-  void choose(const model& now, std::optional<conversation_id> chosen, bool muted) {
-    now_ = &now;
-    if (chosen_ != chosen) parts.scroll.scrollToStart();
-    chosen_ = std::move(chosen);
-    muted_ = muted;
-    this->show_chosen();
-  }
-  void refresh(const chats_model&) { this->show_chosen(); }
-  // What the runtime binding walks call it by (outside a release build):
-  // its refresh, made where it is made, not where a table of it is.
-  skiff::bind::Refreshes<1> fRefreshes = skiff::bind::refreshes(skiff::bind::refreshFrom<info_panel, chats_model>());
-  void show_chosen() {
-    if (!this->visible() || now_ == nullptr || !chosen_)
-      return;
-    if (const conversation* one = now_->find(*chosen_))
-      this->show(*one, *now_, muted_);
-  }
-  // The chat shown: its view worked out, its members reconciled.
-  void show(const conversation& one, const model& now, bool muted) {
-    if (one.id.id != key || one.id.account != account)
-      person.reset();
-    key = one.id.id;
-    account = one.id.account;
-    const bool group = is_group(one);
-    group_view = {one.id.id,
-                  display_name(one),
-                  group ? std::format("{} member{}", std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count),
-                                      std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count) == 1 ? "" : "s")
-                        : presence_of(*shared_, now, one.id.account, contact_of(*shared_, one)),
-                  group,
-                  muted,
-                  false};
-    if (auto link = proto::room_link(protocol_state_of(*shared_, one.id.account), one))
-      group_view.copied = std::move(*link);
-    group_view.topic = one.topic.value_or("");
-    group_view.leavable = proto::can_leave(protocol_state_of(*shared_, one.id.account), one);
-    if (one.alias)
-      group_view.addresses.push_back(*one.alias);
-    std::ranges::copy(one.other_aliases, std::back_inserter(group_view.addresses));
-    // Its members made again only where they changed -- or another chat's
-    // are shown: a big room has thousands, and every refresh rebuilt them.
-    if (members_of != one.id)
-      members_made = kMembersStep;
-    const std::size_t making = std::min(members_made, one.members.size());
-    const auto* owner = now.accounts().find(one.id.account);
-    const auto presence_revision = owner ? owner->presence_revision : 0;
-    const bool same_members = members_of == one.id && members_revision == one.members_revision &&
-                              trust_seen == now.trust_revision() && presence_seen == presence_revision && members_built == making;
-    members_of = one.id;
-    members_revision = one.members_revision;
-    trust_seen = now.trust_revision();
-    presence_seen = presence_revision;
-    members_total = one.members.size();
-    if (!same_members) {
-      shown_members.clear();
-      shown_members.reserve(making);
-      for (const member& each : std::views::take(one.members, making))
-        shown_members.push_back(this->entry_of(one, now, each));
-      members_built = making;
-    }
-    // The member open, where they are past those made: theirs alone.
-    person_entry.reset();
-    if (person && !std::ranges::contains(shown_members, *person, [](const auto& each) { return each.first.id; }))
-      if (const auto found = std::ranges::find(one.members, *person, &member::id); found != one.members.end())
-        person_entry = this->entry_of(one, now, *found);
-    auto& rows = std::get<0>(members.fChildren);
-    if (!same_members && nodes::reconcile(
-            rows, shown_members, [](const auto& each) { return each.first.id; },
-            [](const kept_member& row) { return row.fKey; },
-            [&](const auto& each) {
-              auto make = [&](const auto& item) {
-                const auto& [person, how] = std::get<1>(item);
-                return member_row(*colours_, person, how);
-              };
-              return kept_member(std::tuple{each.first.id, each}, make);
-            },
-            [](const kept_member& row, const auto& each) { return row.fView == each; }))
-      members.invalidateLayout();
-    members_header.show(members_heading{
-        static_cast<std::size_t>(std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count)), one.id,
-        !one.invite && proto::chat_rights(protocol_state_of(*shared_, one.id.account), one).invite},
-        [this](const auto& facts) { return members_head(*colours_, facts); });
-    this->render();
-  }
-  void open_member(std::string id) {
-    person = std::move(id);
-    // Past those made: theirs worked out at the next frame.
-    wants_show = !std::ranges::contains(shown_members, *person, [](const auto& each) { return each.first.id; });
-    this->render();
-  }
-  void close_member() {
-    person.reset();
-    this->render();
-  }
-  // The upper part as a function of the group's view and the member open.
-  void render() {
-    view shown = group_view;
-    if (person) {
-      // Anyone's page: a member's, with how they are and their role; or,
-      // for someone the chat does not list -- the other side of a direct
-      // chat, a sender from further back -- by their address.
-      shown = {*person, *person, std::string("not a member of this chat"), group_view.group, group_view.muted, true};
-      const auto made = std::ranges::find(shown_members, *person, [](const auto& each) { return each.first.id; });
-      const std::pair<member, std::string>* found =
-          made != shown_members.end() ? &*made : (person_entry && person_entry->first.id == *person ? &*person_entry : nullptr);
-      if (found) {
-        const member& who = found->first;
-        shown = {who.id,
-                 who.name.empty() ? who.id : who.name,
-                 who.role ? std::format("{} · {}", found->second, *who.role) : found->second,
-                 group_view.group,
-                 group_view.muted,
-                 true};
-      } else if (!group_view.group && *person == key) {
-        shown.name = group_view.name;
-        shown.status = group_view.status;
-      }
-    }
-    if (person)
-      shown.copied = proto::person_link(protocol_state_of(*shared_, account), *person).value_or("");
-    upper.show(shown, [this](const view& v) { return head_of(this, v); });
-    const bool list = shown.group && !shown.of_person;
-    band_2.setVisible(list);
-    members_header.setVisible(list);
-    members.setVisible(list);
-    this->invalidateLayout();
+using info_members_head_t = decltype(info_members_head(std::declval<const palette&>(), std::declval<const info_members_heading&>()));
+// A member as the list shows them: who, with their role where the chat's
+// protocol says one; and how they are, with what it says of them.
+struct info_member {
+  member who;
+  std::string how;
+  friend bool operator==(const info_member&, const info_member&) = default;
+};
+// The info, as the program says: the chat's view, its members' head, and
+// the members made so far -- the first, and more as the list nears their
+// end -- and whether there are more.
+struct info_shown {
+  info_view head;
+  info_members_heading heading;
+  std::vector<info_member> members;
+  bool more = false;
+  friend bool operator==(const info_shown&, const info_shown&) = default;
+};
+// A member's row, kept while it shows the same.
+struct info_member_row {
+  const palette* colours = nullptr;
+  auto operator()(const std::tuple<std::string, info_member>& item) const {
+    const info_member& one = std::get<1>(item);
+    return member_row(*colours, one.who, one.how);
   }
 };
-inline void info_back_to_group::operator()() const { panel->close_member(); }
-inline std::optional<::mux::ui::request::message_person> info_message_them::operator()() {
-  if (panel->person)
-    return ::mux::ui::request::message_person{conversation_id{panel->account, *panel->person}};
-  return std::nullopt;
+using info_member_rows_t = nodes::MemoRows<std::string, info_member, member_row_t, info_member_row>;
+
+// The panel: its column, and its left edge. Near the end of the members
+// made, with more, it asks for the next few (request::info_more).
+inline auto info_panel(const ui_needs& n) {
+  namespace c = skiff::compose;
+  const palette& colours = *n.colours;
+  const auto listed = [](const info_shown& now) { return now.head.group; };
+  return c::column(c::vbox(0.0f, {.background = colours.sidebar, .masking = true}),
+      c::styled({.fillX = true, .grow = scene::axes::kY},
+          c::fetching_for<info_shown, conversation_id>([](const info_shown& now) {
+            return c::Fetched<conversation_id>{now.heading.room, now.members.size(), now.more};
+          },
+              sends<request::info_more>{},
+              nodes::ScrollContainer(c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  c::projected<info_shown>([](const info_shown& now) { return std::optional(now.head); },
+                      c::mount<info_head_t, info_view>([at = &colours](const info_view& view) { return std::tuple{info_head(*at, view)}; },
+                                                       {.fillX = true, .autoSize = scene::axes::kY})),
+                  c::shown_for<info_shown>(listed, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                      section_band(colours),
+                      c::projected<info_shown>([](const info_shown& now) { return std::optional(now.heading); },
+                          c::mount<info_members_head_t, info_members_heading>(
+                              [at = &colours](const info_members_heading& facts) { return std::tuple{info_members_head(*at, facts)}; },
+                              {.fillX = true, .height = 48.0f})),
+                      c::projected<info_shown>([](const info_shown& now) {
+                        return now.members | std::views::transform([](const info_member& one) { return std::tuple{one.who.id, one}; }) |
+                               std::ranges::to<std::vector>();
+                      },
+                          c::styled({.fillX = true, .autoSize = scene::axes::kY}, info_member_rows_t(info_member_row{&colours}))))))))),
+      c::styled({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f}, nodes::Box<>(colours.band)));
 }
+using info_panel_t = decltype(info_panel(std::declval<const ui_needs&>()));
+// Its width beside the chat.
+inline constexpr float kInfoWidth = 340.0f;
 
 }  // namespace mux::ui
 
@@ -413,5 +183,5 @@ inline std::optional<::mux::ui::request::message_person> info_message_them::oper
 // of everything under it, there -- the chats screen's took this unit past
 // ten minutes. Their tables are made once, each in a walks unit of this
 // module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::info_panel> = true;  // walks_info.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::info_panel>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::info_panel_t> = true;  // walks_info.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::info_panel_t>() noexcept;

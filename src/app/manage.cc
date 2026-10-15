@@ -33,7 +33,6 @@ class manage_part {
   // The room's management: made from what the model knows of it now.
   void apply(const request::open_manage&) {
     s_->root().main().close_space_menu_soon();  // the chat menu its Settings came from
-    s_->manage_target.reset();
     if (const auto chosen = s_->root().main().chosen)
       this->manage_chat(*chosen);
   }
@@ -43,8 +42,7 @@ class manage_part {
     const auto by = s_->root().main().current;
     if (!by)
       return;
-    s_->manage_target = mux::conversation_id{*by, one.room};
-    this->manage_chat(*s_->manage_target);
+    this->manage_chat(mux::conversation_id{*by, one.room});
   }
   // A space shown as one chat, its rooms as topics -- or as a space. Not one
   // that holds spaces: it is a space.
@@ -85,9 +83,46 @@ class manage_part {
     if (const auto& open = s_->root().main().forum_open)
       this->apply(request::manage_space{*open});
   }
+  // A tab picked: up, and on a narrow window in the tab list's place.
+  void apply(const request::manage_tab& one) {
+    this->change([&](mux::ui::room_settings_facts& now) {
+      now.tab = one.tab;
+      now.navigation = false;
+    });
+  }
+  // ←: an editor open on the tab closed first; else, on a narrow window,
+  // back to the tab list.
+  void apply(const request::manage_back&) {
+    this->change([](mux::ui::room_settings_facts& now) {
+      if (!mux::ui::close_manage_editor(now))
+        now.navigation = now.narrow;
+    });
+  }
+  // ✕ or Esc: an editor open closed first; on a narrow window, the page back
+  // to the tab list; else the settings shut.
   void apply(const request::close_manage&) {
-    s_->manage_target.reset();
+    const auto& open = *s_->showing->look<std::optional<mux::ui::room_settings_facts>>();
+    if (open) {
+      auto now = *open;
+      const bool editor = mux::ui::close_manage_editor(now);
+      if (editor || (now.narrow && !now.navigation)) {
+        now.navigation = !editor || now.navigation;
+        mux::ui::show(*s_->showing, std::optional(std::move(now)));
+        return;
+      }
+    }
     mux::ui::show<mux::ui::room_settings_facts>(*s_->showing, std::nullopt);
+  }
+  // Each frame, where they are up: narrow or not, as the window is.
+  void show() {
+    const auto& open = *s_->showing->look<std::optional<mux::ui::room_settings_facts>>();
+    const bool narrow = s_->showing->look<mux::ui::window_shape>()->width < kNarrow;
+    if (open && open->narrow != narrow)
+      this->change([&](mux::ui::room_settings_facts& now) {
+        // Turned narrow: the tab list first.
+        now.navigation = narrow;
+        now.narrow = narrow;
+      });
   }
   void apply(const request::pick_room_avatar& one) {
     if (s_->demo()) return;
@@ -103,8 +138,10 @@ class manage_part {
     if (!kind || !skia::decodeImage(bytes->data(), bytes->size())) {
       s_->notice("Room Avatar", "Choose an image mux can show."); return true;
     }
-    if (auto* box = s_->root().manage_up(); box && box->facts.chat == room)
-      box->avatar_sending();
+    this->change([&](mux::ui::room_settings_facts& now) {
+      if (now.chat == room)
+        mux::ui::manage_avatar_sending(now);
+    });
     s_->net->on_account_of(room, [room = room.id, bytes = std::move(*bytes), name = mux::platform::files::name(paths.front()),
         mime = std::string(mux::media::mimetype_of(*kind))](auto& account)
         -> decltype(void(account.upload_room_avatar(room, bytes, name, mime))) { account.upload_room_avatar(room, bytes, name, mime); });
@@ -182,7 +219,24 @@ class manage_part {
     }
     // What its protocol fills of them: Matrix's own level and privileged users.
     mux::proto::manage_facts(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat, facts);
+    // The protocol's first tab, and what it keeps while they are open.
+    spl::visit([&](auto tag) {
+      facts.tab = mux::ui::initial_manage_tab(mux::state_of<decltype(tag)>{});
+      facts.manage = mux::ui::manage_part_t(std::in_place_type<mux::ui::first_manage_part_t<decltype(tag)>>);
+    }, facts.speaks);
+    facts.narrow = s_->showing->look<mux::ui::window_shape>()->width < kNarrow;
+    facts.navigation = facts.narrow;
     mux::ui::show(*s_->showing, std::optional(facts));
+  }
+  // Narrower than this, the tabs and the page take the window by turns.
+  static constexpr float kNarrow = 600.0f;
+  template <class Change>
+  void change(Change change) {
+    if (const auto& open = *s_->showing->look<std::optional<mux::ui::room_settings_facts>>()) {
+      auto now = *open;
+      change(now);
+      mux::ui::show(*s_->showing, std::optional(std::move(now)));
+    }
   }
 
   std::optional<mux::conversation_id> picking_avatar_;

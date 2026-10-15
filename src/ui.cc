@@ -14,6 +14,7 @@ export import mux.ui.base;
 export import mux.ui.messages;
 
 export import :chat_list;
+export import :list_shown;
 export import :header;
 export import :info;
 export import :room_settings;

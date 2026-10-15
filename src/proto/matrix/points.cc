@@ -36,12 +36,11 @@ inline std::optional<std::string> message_link(const state&, const conversation&
     return std::nullopt;
   return message_link_to(chat, event);
 }
-// Its own dialog: the developer tools, as Element's.
-namespace tool {
-struct devtools {};
-struct uia {};  // a step of interactive auth, done in the browser
-}  // namespace tool
-constexpr dialog_list<tool::devtools, tool::uia> dialogs(const state&) { return {}; }
+// Its own dialogs, each by what it shows, as the program shows it: the
+// developer tools, as Element's -- some JSON to read and copy, a room's
+// state, an event of any type sent -- and a step of interactive auth done
+// in the browser.
+constexpr dialog_list<tool::devtools_text, tool::devtools_state, tool::send_custom_form, tool::uia_step> dialogs(const state&) { return {}; }
 // Its own account pages: its encryption, and its sessions under
 // cross-signing and the key backup.
 namespace settings {
@@ -208,5 +207,135 @@ inline bool may_delete(const state&, const conversation& chat, bool outgoing) {
   const std::int64_t send = redaction != rules_of(chat).needs.events.end() ? redaction->second : rules_of(chat).needs.events_default;
   return level >= send && (outgoing || level >= rules_of(chat).needs.redact);
 }
+
+// ---- a room's settings (Manage), as Cinny's -------------------------------------
+// Its tabs beside the client's: General, Members, Permissions, Emojis &
+// Stickers, Developer Tools.
+namespace manage {
+struct room {};
+struct members {};
+struct roles {};
+struct packs {};
+struct advanced {};
+}  // namespace manage
+constexpr manage_tab_list<manage::room, manage::members, manage::roles, manage::packs, manage::advanced> manage_tabs(const state&) { return {}; }
+constexpr manage::room manage_initial_tab(const state&) { return {}; }
+// The developer tools' state events: their list, one shown, one edited, a
+// new one written.
+enum class state_screen { overview, view, edit, compose };
+// What a page has open: an editor, or a list unfolded.
+enum class editor { profile, powers, power, state_events, account_data, account_form };
+// What Matrix keeps while the settings are open: what the server said of the
+// room beyond what the chat has (its addresses, its directory listing, its
+// versions, power tags, members, account data and state), what is being
+// written and what failed, what each page has open, the drafts that are the
+// program's to keep (the permissions and tags staged until Apply), and for
+// each draft a page keeps that the program resets, a round: the draft made
+// again where it moves.
+struct manage_state {
+  room_management data;
+  bool loading = true, pending = false;
+  std::string error;
+  bool confirming_encryption = false, confirming_upgrade = false;
+  std::optional<power_needs> permissions;
+  // An avatar uploaded (or "" to remove it), to be saved with the profile.
+  std::optional<std::string> avatar;
+  bool profile_editor = false, powers_editor = false, power_form = false;
+  std::optional<std::int64_t> editing_power;
+  std::optional<std::map<std::string, power_tag>> tag_draft;
+  std::set<std::int64_t> deleted_powers;
+  bool local_addresses_expanded = false;
+  std::set<std::string> selected_aliases;
+  state_screen state_page = state_screen::overview;
+  std::string expanded_state_type, state_type, state_key, state_json, state_source;
+  bool expanded_state = false, expanded_account_data = false, account_editor = false;
+  // The account data chosen to edit, its draft made from it.
+  std::string account_type, account_json;
+  std::vector<emote_pack> packs;
+  std::uint32_t profile_round = 0, address_round = 0, custom_round = 0, pack_round = 0, state_round = 0, account_round = 0;
+};
+constexpr manage_part_list<manage_state> manage_parts(const state&) { return {}; }
+// A permission a page sets: a thing done (power_need), or an event's type --
+// a state event's or a message event's, whose defaults differ though Matrix
+// keeps their overrides together in power_levels.events.
+struct event_permission {
+  std::string type;
+  bool state = true;
+  friend bool operator==(const event_permission&, const event_permission&) = default;
+};
+using permission_t = spl::variant<power_need_t, event_permission>;
+// What a press on the settings' pages asks: the program changes what it
+// keeps (manage_state) and, where it is a write, asks the server.
+namespace manage_change {
+enum class address_kind { main, publish, unpublish, remove };
+enum class selection_kind { publish, unpublish, remove };
+struct edit { editor target; bool open = true; };
+struct encryption { bool cancel = false; };
+struct directory {};
+struct address { std::string alias; address_kind what = address_kind::main; };
+struct expand_addresses {};
+struct select_address { std::string alias; };
+struct selected { selection_kind what = selection_kind::publish; };
+struct access { join_rule_t rule; };
+struct history { history_rule_t rule; };
+struct add_child { std::string room; };
+struct remove_child { std::string room; };
+struct save_profile { std::string name, topic; };
+struct remove_avatar {};
+struct create_address { std::string local; };
+struct upgrade { std::string version, creators; };
+struct cancel_upgrade {};
+struct member_power { std::string user; std::int64_t level = 0; };
+struct permission { permission_t target; std::int64_t level = 0; };
+struct apply_permissions { bool reset = false; };
+struct add_custom_permission { std::string event, level; };
+struct remove_custom_permission { std::string event; };
+struct save_power { std::string power, name, color, icon; };
+struct delete_power { std::string power; };
+struct edit_power { std::int64_t power = 0; };
+struct delete_tag { std::int64_t power = 0; };
+struct apply_tags { bool reset = false; };
+struct create_pack { std::string name; };
+struct state_open { state_screen target = state_screen::overview; std::string type, key; };
+struct state_expand { std::string type; };
+struct save_state { std::string type, key, json; };
+struct save_account_data { std::string type, json; };
+struct choose_account_data { std::size_t index = 0; };
+}  // namespace manage_change
+using manage_change_t = spl::variant<
+    manage_change::edit, manage_change::encryption, manage_change::directory, manage_change::address, manage_change::expand_addresses,
+    manage_change::select_address, manage_change::selected, manage_change::access, manage_change::history, manage_change::add_child,
+    manage_change::remove_child, manage_change::save_profile, manage_change::remove_avatar, manage_change::create_address,
+    manage_change::upgrade, manage_change::cancel_upgrade, manage_change::member_power, manage_change::permission,
+    manage_change::apply_permissions, manage_change::add_custom_permission, manage_change::remove_custom_permission,
+    manage_change::save_power, manage_change::delete_power, manage_change::edit_power, manage_change::delete_tag,
+    manage_change::apply_tags, manage_change::create_pack, manage_change::state_open, manage_change::state_expand,
+    manage_change::save_state, manage_change::save_account_data, manage_change::choose_account_data>;
+namespace request {
+struct manage_room {
+  manage_change_t change;
+};
+}  // namespace request
+namespace manage {
+// Back, or Esc: an editor open on the tab closed first.
+inline bool manage_close_editor(roles, manage_state& kept) {
+  if (!kept.powers_editor)
+    return false;
+  kept.power_form = false;
+  kept.powers_editor = false;
+  return true;
+}
+inline bool manage_close_editor(advanced, manage_state& kept) {
+  if (kept.pending)
+    return true;
+  if (kept.state_page != state_screen::overview) {
+    kept.state_page = state_screen::overview;
+    return true;
+  }
+  return std::exchange(kept.account_editor, false);
+}
+// Whether the tab's page shows an editor, with a way back over it.
+inline bool manage_editor_header(advanced, const manage_state& kept) { return kept.state_page != state_screen::overview; }
+}  // namespace manage
 
 }  // namespace mux::proto::matrix

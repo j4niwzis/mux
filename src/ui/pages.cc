@@ -38,6 +38,79 @@ import :forms;
 
 export namespace mux::ui {
 
+// Which tabs a room's protocol has: a list of their types (manage_tabs,
+// beside its state in its points module) -- after the client's (General,
+// Notifications, Appearance) every room has. Each tab type has its title,
+// its icon and its page by overloads of its own (tab_title, tab_icon,
+// make_manage_page), found by ADL where the dialog is made. And what it
+// keeps while the settings are open (manage_parts). A protocol with none:
+// the defaults, no tabs and nothing kept.
+using proto::manage_tab_list;
+using proto::manage_part_list;
+using proto::no_manage_part;
+namespace manage_defaults {
+constexpr manage_tab_list<> manage_tabs(const auto&) { return {}; }
+constexpr manage_part_list<> manage_parts(const auto&) { return {}; }
+constexpr bool tab_visible(const auto&, const auto&) { return true; }
+}  // namespace manage_defaults
+template <class State>
+constexpr auto manage_tabs_of(const State& state) {
+  using manage_defaults::manage_tabs;
+  return manage_tabs(state);
+}
+template <class State>
+constexpr auto manage_parts_of(const State& state) {
+  using manage_defaults::manage_parts;
+  return manage_parts(state);
+}
+template <class... Tabs, class Tab>
+[[nodiscard]] constexpr bool lists(manage_tab_list<Tabs...>, type_tag<Tab>) {
+  struct all : type_tag<Tabs>... {};
+  return std::derived_from<all, type_tag<Tab>>;
+}
+
+// The client's tabs, every room's.
+namespace settings_tab {
+struct general {};        // the room's events, receipts, previews, typing, Home, leaving
+struct notifications {};
+struct looks {};
+constexpr std::string_view tab_title(general) { return "General"; }
+constexpr std::string_view tab_title(notifications) { return "Notifications"; }
+constexpr std::string_view tab_title(looks) { return "Appearance"; }
+inline icon_t tab_icon(general) { return icon::gear{}; }
+inline icon_t tab_icon(notifications) { return icon::bell{}; }
+inline icon_t tab_icon(looks) { return icon::eye{}; }
+}  // namespace settings_tab
+
+template <class Tabs>
+struct tab_types;
+template <class... Tabs>
+struct tab_types<manage_tab_list<Tabs...>> {
+  using type = type_list<Tabs...>;
+};
+template <class... Lists>
+struct manage_part_union;
+template <class... Ps>
+struct manage_part_union<manage_part_list<Ps...>> {
+  using type = spl::variant<no_manage_part, Ps...>;
+};
+template <class... As, class... Bs, class... Rest>
+struct manage_part_union<manage_part_list<As...>, manage_part_list<Bs...>, Rest...>
+    : manage_part_union<manage_part_list<As..., Bs...>, Rest...> {};
+template <class>
+struct manage_lists;
+template <class... Tags>
+struct manage_lists<protocol_list<Tags...>> {
+  // Every tab a room can have: the client's, then each protocol's.
+  using protocol_tabs = typename joined<type_list<>, typename tab_types<decltype(manage_tabs_of(state_of<Tags>{}))>::type...>::type;
+  using tabs = typename variant_of_types<
+      typename joined<type_list<settings_tab::general, settings_tab::notifications, settings_tab::looks>, protocol_tabs>::type>::type;
+  using parts = typename manage_part_union<manage_part_list<>, decltype(manage_parts_of(state_of<Tags>{}))...>::type;
+};
+// A tab of a room's settings, and what its protocol keeps while they are open.
+using manage_tab_t = typename manage_lists<protocols>::tabs;
+using manage_part_t = typename manage_lists<protocols>::parts;
+
 struct room_settings_facts {
   std::string id;  // the room's ID
   std::string name;
@@ -95,18 +168,22 @@ struct room_settings_facts {
   std::vector<person> privileged;
   // The chat itself, its own choices kept by it in the model.
   conversation_id chat{};
+  // What the dialog shows, as the program says: the tab up; on a narrow
+  // window, whether the tab list is up in place of the page; and what the
+  // room's protocol keeps while it is open.
+  manage_tab_t tab = settings_tab::general{};
+  bool narrow = false, navigation = false;
+  manage_part_t manage;
 };
+namespace request {
+// A tab of the settings picked; and their ← (an editor open closed first,
+// then the page, to the tab list on a narrow window).
+struct manage_tab {
+  manage_tab_t tab;
+};
+struct manage_back {};
+}  // namespace request
 
-// What a protocol's settings pages see of the dialog. A refresh is deferred
-// until the dialog's next update, so a handler never replaces its own page.
-struct room_settings_shown {
-  room_settings_facts facts;
-  const palette* colours_ = nullptr;
-  const looks_shown* looks_ = nullptr;
-  skiff::scene::Node* node = nullptr;
-  bool again = false;
-  void show_again() { again = true; if (node) node->markDamaged(); }
-};
 
 // Element's names for levels: 100 Admin, 50 Moderator, the default Default.
 [[nodiscard]] inline std::string level_name(std::int64_t level, std::int64_t fallback) {
@@ -119,64 +196,6 @@ struct room_settings_shown {
   return std::format("Custom level ({})", level);
 }
 
-// Which tabs a room's protocol has: a list of their types, its own -- the
-// client's (General, Notifications, Appearance) every room has. A protocol's
-// are what manage_tabs(state) lists, found by ADL in its folder (mux.ui.
-// proto.<protocol>); each tab type has its title, its icon and its page by
-// overloads of its own (tab_title, tab_icon, page_type). Asked where the
-// dialog is made -- a template on Actions, made in the program, which
-// imports every protocol's. A protocol with none: the default, no tabs.
-template <class... Tabs>
-struct manage_tab_list {};
-namespace manage_defaults {
-constexpr void manage_attach(auto&, room_settings_shown&) {}
-constexpr void manage_page_placed(auto&, auto&) {}
-constexpr void manage_preserve(auto&) {}
-constexpr manage_tab_list<> manage_tabs(const auto&) { return {}; }
-constexpr bool tab_visible(const auto&, const room_settings_facts&) { return true; }
-// And what a protocol keeps while its pages are made again: none by default.
-struct no_part {};
-constexpr type_tag<no_part> manage_part_type(const auto&) { return {}; }
-// A room avatar being sent: what a part shows of it, where it shows any.
-constexpr void avatar_sending(auto&) {}
-}  // namespace manage_defaults
-// Asked of a state type the caller names: dependent on it, so found where
-// the dialog is made, not here.
-template <class State>
-constexpr auto manage_tabs_of(const State& state) {
-  using manage_defaults::manage_tabs;
-  return manage_tabs(state);
-}
-template <class State>
-constexpr auto manage_part_of(const State& state) {
-  using manage_defaults::manage_part_type;
-  return manage_part_type(state);
-}
-template <class... Tabs, class Tab>
-[[nodiscard]] constexpr bool lists(manage_tab_list<Tabs...>, type_tag<Tab>) {
-  struct all : type_tag<Tabs>... {};
-  return std::derived_from<all, type_tag<Tab>>;
-}
-
-// The client's tabs, every room's.
-namespace settings_tab {
-struct general {};        // the room's events, receipts, previews, typing, Home, leaving
-struct notifications {};
-struct looks {};
-constexpr std::string_view tab_title(general) { return "General"; }
-constexpr std::string_view tab_title(notifications) { return "Notifications"; }
-constexpr std::string_view tab_title(looks) { return "Appearance"; }
-inline icon_t tab_icon(general) { return icon::gear{}; }
-inline icon_t tab_icon(notifications) { return icon::bell{}; }
-inline icon_t tab_icon(looks) { return icon::eye{}; }
-}  // namespace settings_tab
-
-template <class Tabs>
-struct tab_types;
-template <class... Tabs>
-struct tab_types<manage_tab_list<Tabs...>> {
-  using type = type_list<Tabs...>;
-};
 template <class Rule, class Variant>
 [[nodiscard]] bool is_rule(const Variant& now) {
   return spl::visit(spl::overloaded{[](const Rule&) { return true; }, [](const auto&) { return false; }}, now);
@@ -384,9 +403,6 @@ inline auto room_general_page(const palette& colours, const room_settings_facts&
 }
 using room_general_page_t = decltype(room_general_page(std::declval<const palette&>(), std::declval<const room_settings_facts&>()));
 
-inline void preserve_manage_input(auto&) {}
-template <class Page> requires requires(Page& page) { preserve_manage_page(page); }
-void preserve_manage_input(Page& page) { preserve_manage_page(page); }
 
 struct room_manage_style {
   palette colours;
@@ -398,6 +414,47 @@ inline room_manage_style manage_style(const auto&, const palette& colours) { ret
 inline bool manage_close_editor(const auto&, auto&) { return false; }
 inline bool manage_editor_header(const auto&, const auto&) { return false; }
 inline icon_t manage_avatar_icon(const auto&, const room_settings_facts&) { return icon::none{}; }
+}
+// What a protocol keeps while the settings are open: its first part type,
+// else none.
+template <class List>
+struct first_manage_part {
+  using type = no_manage_part;
+};
+template <class First, class... Rest>
+struct first_manage_part<manage_part_list<First, Rest...>> {
+  using type = First;
+};
+template <class Tag>
+using first_manage_part_t = typename first_manage_part<decltype(manage_parts_of(state_of<Tag>{}))>::type;
+namespace manage_defaults {
+constexpr void avatar_sending(auto&) {}
+}  // namespace manage_defaults
+// A room avatar being sent: what the protocol keeps shows it pending.
+inline void manage_avatar_sending(room_settings_facts& facts) {
+  spl::visit([](auto& part) {
+    using manage_defaults::avatar_sending;
+    avatar_sending(part);
+  }, facts.manage);
+}
+// What the tab up closes first, by its protocol: an editor open on it.
+// Whether it did.
+inline bool close_manage_editor(room_settings_facts& facts) {
+  return spl::visit([&](const auto& tab) {
+    return spl::visit([&](auto& part) {
+      using manage_defaults::manage_close_editor;
+      return manage_close_editor(tab, part);
+    }, facts.manage);
+  }, facts.tab);
+}
+// Whether the tab's page shows an editor, with a way back over it.
+[[nodiscard]] inline bool manage_editor_up(const room_settings_facts& facts) {
+  return spl::visit([&](const auto& tab) {
+    return spl::visit([&](const auto& part) {
+      using manage_defaults::manage_editor_header;
+      return manage_editor_header(tab, part);
+    }, facts.manage);
+  }, facts.tab);
 }
 template <class State> auto manage_style_of(const State& state, const palette& colours) {
   using manage_defaults::manage_style;

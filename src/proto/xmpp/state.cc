@@ -12,10 +12,17 @@ export namespace mux::proto::xmpp {
 
 // XEP-0004 field types are interpreted once when the server's form arrives.
 namespace muc_kind {
-struct text_single {}; struct text_private {}; struct text_multi {};
-struct jid_single {}; struct jid_multi {}; struct boolean {};
-struct list_single {}; struct list_multi {}; struct fixed {}; struct hidden {};
-struct unsupported {};
+struct text_single { friend bool operator==(text_single, text_single) = default; };
+struct text_private { friend bool operator==(text_private, text_private) = default; };
+struct text_multi { friend bool operator==(text_multi, text_multi) = default; };
+struct jid_single { friend bool operator==(jid_single, jid_single) = default; };
+struct jid_multi { friend bool operator==(jid_multi, jid_multi) = default; };
+struct boolean { friend bool operator==(boolean, boolean) = default; };
+struct list_single { friend bool operator==(list_single, list_single) = default; };
+struct list_multi { friend bool operator==(list_multi, list_multi) = default; };
+struct fixed { friend bool operator==(fixed, fixed) = default; };
+struct hidden { friend bool operator==(hidden, hidden) = default; };
+struct unsupported { friend bool operator==(unsupported, unsupported) = default; };
 }
 using muc_kind_t = spl::variant<muc_kind::text_single, muc_kind::text_private,
     muc_kind::text_multi, muc_kind::jid_single, muc_kind::jid_multi,
@@ -38,7 +45,9 @@ inline std::optional<bool> muc_boolean_of(std::string_view value) {
   return found == known.end() ? std::nullopt : std::optional(found->second);
 }
 namespace muc_field_use {
-struct general {}; struct password_protection {}; struct password {};
+struct general { friend bool operator==(general, general) = default; };
+struct password_protection { friend bool operator==(password_protection, password_protection) = default; };
+struct password { friend bool operator==(password, password) = default; };
 }
 using muc_field_use_t = spl::variant<muc_field_use::general,
     muc_field_use::password_protection, muc_field_use::password>;
@@ -56,6 +65,7 @@ struct muc_field {
   std::vector<std::pair<std::string, std::string>> options;
   bool required = false;
   muc_field_use_t use;
+  friend bool operator==(const muc_field&, const muc_field&) = default;
 };
 inline bool muc_field_applicable(const muc_field_use_t& use, bool password_protected) {
   return spl::visit(spl::overloaded{
@@ -102,8 +112,14 @@ inline std::optional<std::string> validate_muc_value(const muc_field& field, con
   return {};
 }
 
-struct muc_person { std::string jid, nick, affiliation, role; };
-struct muc_affiliation { std::string jid, affiliation; };
+struct muc_person {
+  std::string jid, nick, affiliation, role;
+  friend bool operator==(const muc_person&, const muc_person&) = default;
+};
+struct muc_affiliation {
+  std::string jid, affiliation;
+  friend bool operator==(const muc_affiliation&, const muc_affiliation&) = default;
+};
 struct muc_room {
   std::string nick, affiliation, role;
   bool joined = false, configuring = false;
@@ -112,6 +128,11 @@ struct muc_room {
   std::vector<muc_field> fields;
   std::vector<muc_person> people;
   std::vector<muc_affiliation> affiliations;
+  // A configuration on its way to the server; and what was wrong with the
+  // last, as it said -- the fields kept as they were sent, to be put right.
+  bool saving = false;
+  std::optional<std::string> failure;
+  friend bool operator==(const muc_room&, const muc_room&) = default;
 };
 
 struct state {

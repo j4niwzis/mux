@@ -337,7 +337,7 @@ void app::take_page_input() {
   if (auto* up = root().settings_up())
     now[0] = spl::visit([](auto& page) { return bound_part_of(page); }, up->page());
   if (auto* managing = root().manage_up())
-    now[1] = spl::visit([](auto& page) { return bound_part_of(page); }, managing->page());
+    now[1] = managing->fState.fId;
   if (auto* panel = root().open_panel())
     now[2] = spl::visit([](auto& accounts) { return spl::visit([](auto& page) { return bound_part_of(page); }, accounts.detail); },
                         *panel);
@@ -441,6 +441,9 @@ void app::take_wants() {
 }
 
 void app::refresh_shown() {
+  // The looks as their choices show them: what the window last read of
+  // what is kept, for the chat chosen.
+  looks.read();
   const auto shown = showing.look<mux::ui::chat_shown>();
   const auto& screen = root().main();
   if (shown->forum && screen.current && !screen.is_forum({*screen.current, *shown->forum}))
@@ -499,9 +502,17 @@ void app::before_frame() {
     jumps.clear_returns();
   jumps.go_on(taker{this});
   chat_view.show();
+  manage.show();
   suggestions.show();
   threads.show();
   pictures.viewer_tick();
+  // And the looks, as the chats binding last read them for the chat chosen.
+  looks.read();
+  // The window's shape, as its size is: and the panel docked under the
+  // field on a phone's, the field standing over it.
+  if (const auto box = scene.viewport(); *showing.look<mux::ui::window_shape>() != mux::ui::window_shape{box.width(), box.height()})
+    mux::ui::show(showing, mux::ui::window_shape{box.width(), box.height()});
+  shared.ui.set_docked_panel_height(shared.emoji_open() ? mux::ui::docked_height(*showing.look<mux::ui::window_shape>()) : 0.0f);
   if (model->expire_typing())
     chats_binding.refresh(root(), model->chats());
   store.flush_reads();
@@ -559,9 +570,11 @@ void app::before_frame() {
   // press, on a phone: its menu, the last asked for.
   if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !root().context_menu_up())
     spl::visit(spl::overloaded{[&](skiff::scene::text_menu::of_text& text) {
-                                       root().show_text_menu(std::move(text.text), std::move(text.link));
+                                       shared.show_text_menu(mux::ui::text_menu_items(std::move(text.text), std::move(text.link), shared.emoji));
                                      },
-                                     [&](const skiff::scene::text_menu::of_field& field) { root().show_field_menu(field); }},
+                                     [&](const skiff::scene::text_menu::of_field& field) {
+                                       shared.show_text_menu(mux::ui::field_menu_items(field, false), field);
+                                     }},
                   asked.back());
   // What the parts left to do: a chat opened, a link followed; the window
   // made again, brought up to date; the emoji picked lately kept.

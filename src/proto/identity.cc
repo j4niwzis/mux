@@ -35,6 +35,15 @@ struct id {
 template <class... Parts>
 struct room_part_list {};
 struct no_room_part {};
+// What a protocol keeps while a room's settings (Manage) are open -- what
+// its pages have open, drafts the program resets, a write pending -- as
+// manage_parts(state) lists its types: the settings hold one, or none. And
+// the tabs it adds to the client's, as manage_tabs(state) lists them.
+template <class... Parts>
+struct manage_part_list {};
+struct no_manage_part {};
+template <class... Tabs>
+struct manage_tab_list {};
 // And of a message, beyond what every message has (Telegram's inline
 // buttons, a poll), as message_parts(state) lists them.
 template <class... Parts>

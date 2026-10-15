@@ -8,8 +8,8 @@ module mux.ui;
 import std;
 import skiff.scene;
 
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::context_menu>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::context_menu>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::context_menu_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::context_menu_t>();
 }
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::picture_viewer_t>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::picture_viewer_t>();

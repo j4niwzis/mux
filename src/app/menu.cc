@@ -72,8 +72,8 @@ void part_apply(menu_part& self, const request::message_menu& one) {
     const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
     if (chat && !chosen.empty()) {
       const auto now = mux::ui::protocol_state_of(self.s_->ui, chat->id.account);
-      self.s_->root().show_selection_menu(chosen.size(), mux::ui::ops_of(self.s_->ui, chat->id.account).forward,
-          std::ranges::any_of(chosen, [&](const message* item) { return proto::may_delete(now, *chat, item->outgoing); }));
+      self.s_->show_text_menu(mux::ui::selection_menu_items(chosen.size(), mux::ui::ops_of(self.s_->ui, chat->id.account).forward,
+          std::ranges::any_of(chosen, [&](const message* item) { return proto::may_delete(now, *chat, item->outgoing); })));
       return;
     }
   }
@@ -264,13 +264,13 @@ show_selection(self);
 }
 
 void part_apply(menu_part& self, const request::selection_cancel&) {
-  self.s_->root().close_text_menu();
+  self.s_->close_text_menu();
   self.selected_.clear();
   show_selection(self);
 }
 
 void part_apply(menu_part& self, const request::selection_copy&) {
-  self.s_->root().close_text_menu();
+  self.s_->close_text_menu();
   const std::string text = std::ranges::to<std::string>(std::views::join_with(std::views::transform(selected_messages(self), [](const message* one) {
     return !one->body.plain.empty() ? one->body.plain : one->attachment ? one->attachment->name : std::string();
   }), std::string("\n\n")));
@@ -280,7 +280,7 @@ void part_apply(menu_part& self, const request::selection_copy&) {
 }
 
 void part_apply(menu_part& self, const request::selection_delete&) {
-  self.s_->root().close_text_menu();
+  self.s_->close_text_menu();
   const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
   auto chosen = selected_messages(self);
   if (!chat || chosen.empty())
@@ -319,7 +319,7 @@ void part_apply(menu_part& self, const request::selection_delete_confirm&) {
 }
 
 void part_apply(menu_part& self, const request::selection_forward&) {
-  self.s_->root().close_text_menu();
+  self.s_->close_text_menu();
   if (!self.selected_chat_ || !mux::ui::ops_of(self.s_->ui, self.selected_chat_->account).forward || selected_messages(self).empty())
     return;
   forward_from(self, *self.selected_chat_, std::ranges::to<std::vector>(std::views::transform(selected_messages(self), [](const message* one) { return one->id; })));

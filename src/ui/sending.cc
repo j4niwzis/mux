@@ -13,6 +13,8 @@ import skiff.nodes.scroll;
 import skiff.nodes.text;
 import skiff.widgets.button;
 import skiff.widgets.textarea;
+import skiff.widgets.model;
+import skiff.model;
 import mux.core;
 import mux.config;
 import mux.ui.base;
@@ -34,95 +36,77 @@ struct pending_file {
 struct send_facts {
   std::vector<pending_file> files;
 };
-struct send_box : skiff::compose::Stacked {
-  // Sized as it is opened, by the files it is opened with.
-  [[nodiscard]] static dialog_look look_of_dialog() { return {}; }
-  struct previews_column : skiff::compose::Stacked {
-    // A picture to be sent, as it will look: rounded, its thumbnail by its
-    // local id.
-    struct picture_preview : nodes::Image<from_thumbnails> {
-      std::string key;
-      picture_preview(std::string k, float width, float height)
-          : nodes::Image<from_thumbnails>({k}), key(std::move(k)) {
-        fState.apply({.width = width, .height = height, .alignSelf = scene::align::kMiddle, .cornerRadius = 10.0f});
-      }
-    };
-    struct parts_t {
-      std::vector<picture_preview> pictures;
-      std::vector<file_row_t> files;
-    } parts;
-    static constexpr float kGap = 8.0f;
-    // A picture's size in the box: its own, scaled down to fit -- lower
-    // where there are several.
-    [[nodiscard]] static std::pair<float, float> size_of(const pending_file& one, std::size_t count) {
-      const skia::Sp<skia::SkImage>* image = thumbnails().find(one.key);
-      const float w = image && *image ? static_cast<float>((*image)->width()) : 380.0f;
-      const float h = image && *image ? static_cast<float>((*image)->height()) : 240.0f;
-      const float scale = std::min({1.0f, 380.0f / w, (count > 1 ? 160.0f : 300.0f) / h});
-      return {w * scale, h * scale};
-    }
-    // As high as what it holds: its pictures' heights and its files' rows,
-    // with the gaps between -- so the box is as high as it needs.
-    [[nodiscard]] static float height_of(const std::vector<pending_file>& all) {
-      float total = all.empty() ? 0.0f : static_cast<float>(all.size() - 1) * kGap;
-      for (const pending_file& one : all)
-        total += one.image ? size_of(one, all.size()).second : kFileIcon;
-      return total;
-    }
-    previews_column(const palette &colours,
-                    const std::vector<pending_file> &all)
-        : Stacked(skiff::compose::vbox(
-              kGap, {.fillX = true, .autoSize = scene::axes::kY})) {
-      for (const pending_file& one : all) {
-        if (one.image) {
-          const auto [w, h] = size_of(one, all.size());
-          parts.pictures.emplace_back(one.key, w, h);
-        } else {
-          parts.files.push_back(file_row(colours, std::string(), one.name, one.size, false));
-        }
-      }
-    }
-  };
-  using buttons_row = legacy::dialog_buttons<sends<::mux::ui::request::close_send_box>, sends<::mux::ui::request::send_files>>;
-  // What a box of these says it sends.
-  [[nodiscard]] static std::string title_of(const std::vector<pending_file>& all) {
-    return all.size() == 1 ? std::string(all.front().image ? "Send a photo" : "Send a file")
-                           : std::format("Send {} {}", all.size(),
-                                         std::ranges::all_of(all, &pending_file::image) ? "photos" : "files");
-  }
-  // How high the previews go before they scroll: tdesktop's
-  // sendMediaPreviewHeightMax is 1280, more than a window; this keeps the
-  // caption and buttons in view on a laptop's.
-  static constexpr float kMostPreviews = 420.0f;
-  struct parts_t {
-    nodes::Text title;
-    nodes::ScrollContainer<previews_column> previews;
-    widgets::TextArea<> caption;
-    buttons_row buttons;
-  } parts;
-
-  send_box(const ui_needs& n, const send_facts& facts) : send_box(*n.colours, facts.files) {}
-  send_box(const ui_needs& n, const std::vector<pending_file>& all) : send_box(*n.colours, all) {}
-  send_box(const palette &colours, const std::vector<pending_file> &all)
-      : Stacked(skiff::compose::vbox(
-            12.0f, {.fillX = true,
-                    .autoSize = scene::axes::kY,
-                    .padding = {18.0f, 20.0f, 16.0f, 20.0f}})),
-        parts{.title = nodes::Text(title_of(all), 17.0f, colours.text, true),
-              .previews = skiff::compose::styled(
-                  {.fillX = true,
-                   .height = std::min(previews_column::height_of(all),
-                                      kMostPreviews)},
-                  nodes::ScrollContainer<previews_column>(
-                      previews_column(colours, all))),
-              .caption = skiff::compose::styled(
-                  {.fillX = true},
-                  widgets::TextArea<>(colours.widgets, "Add a caption…")),
-              .buttons = buttons_row(colours, "Send", {}, {})} {
-    // Sized by what it holds, not by the window: the dialog fits it (up to
-    // most of the window, the previews scrolling past what fits of them).
-  }
+// What is being written for them, the box's own until it sends: a caption,
+// sent with the first.
+struct send_draft {
+  std::string caption;
+  friend bool operator==(const send_draft&, const send_draft&) = default;
 };
+inline constexpr float kSendGap = 8.0f, kMostSendPreviews = 420.0f;
+// A picture's size in the box: its own, scaled down to fit -- lower where
+// there are several.
+[[nodiscard]] inline std::pair<float, float> send_size_of(const pending_file& one, std::size_t count) {
+  const skia::Sp<skia::SkImage>* image = thumbnails().find(one.key);
+  const float w = image && *image ? static_cast<float>((*image)->width()) : 380.0f;
+  const float h = image && *image ? static_cast<float>((*image)->height()) : 240.0f;
+  const float scale = std::min({1.0f, 380.0f / w, (count > 1 ? 160.0f : 300.0f) / h});
+  return {w * scale, h * scale};
+}
+// As high as what it holds: the pictures' heights and the files' rows, with
+// the gaps between -- so the box is as high as it needs.
+[[nodiscard]] inline float send_height_of(const std::vector<pending_file>& all) {
+  return std::ranges::fold_left(all | std::views::transform([&](const pending_file& one) {
+                                  return one.image ? send_size_of(one, all.size()).second : kFileIcon;
+                                }),
+                                all.empty() ? 0.0f : static_cast<float>(all.size() - 1) * kSendGap, std::plus{});
+}
+// What a box of these says it sends.
+[[nodiscard]] inline std::string send_title_of(const std::vector<pending_file>& all) {
+  return all.size() == 1 ? std::string(all.front().image ? "Send a photo" : "Send a file")
+                         : std::format("Send {} {}", all.size(), std::ranges::all_of(all, &pending_file::image) ? "photos" : "files");
+}
+// The box: its title, each picture as it will look (rounded, its thumbnail
+// by its local id) and each file's row -- scrolling past 420, which keeps
+// the caption and buttons in view on a laptop's screen, where tdesktop's
+// sendMediaPreviewHeightMax (1280) is more than a window -- the caption,
+// and Cancel and Send: the caption sent with them as it is then.
+inline auto send_box(const ui_needs& n, const send_facts& facts) {
+  namespace c = skiff::compose;
+  const palette& colours = *n.colours;
+  const auto& all = facts.files;
+  auto pictures = all | std::views::filter(&pending_file::image) | std::views::transform([&](const pending_file& one) {
+                    const auto [w, h] = send_size_of(one, all.size());
+                    return c::styled({.width = w, .height = h, .alignSelf = scene::align::kMiddle, .cornerRadius = 10.0f},
+                                     nodes::Image<from_thumbnails>({one.key}));
+                  }) |
+                  std::ranges::to<std::vector>();
+  auto files = all | std::views::filter(std::not_fn(&pending_file::image)) | std::views::transform([&](const pending_file& one) {
+                 return file_row(colours, std::string(), one.name, one.size, false);
+               }) |
+               std::ranges::to<std::vector>();
+  return c::local<send_draft>(
+      c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {18.0f, 20.0f, 16.0f, 20.0f}}),
+          nodes::Text(send_title_of(all), 17.0f, colours.text, true),
+          c::styled({.fillX = true, .height = std::min(send_height_of(all), kMostSendPreviews)},
+                    nodes::ScrollContainer(c::column(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}),
+                                                     c::many(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}), std::move(pictures)),
+                                                     c::many(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}), std::move(files))))),
+          c::bound<skiff::model::Field<&send_draft::caption>>(
+              c::styled({.fillX = true}, widgets::TextAreaField<std::string>(colours.widgets, "Add a caption\u2026", 3))),
+          c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}), nodes::justify::end{}),
+                 c::styled({.width = 96.0f, .height = 36.0f},
+                           widgets::Button<sends<request::close_send_box>>(colours.widgets, "Cancel", {})),
+                 c::asking_for<send_draft>([](const send_draft& draft) { return request::send_files{draft.caption}; },
+                     c::styled({.width = 96.0f, .height = 36.0f},
+                               primary(widgets::Button<scene::NoAction>(colours.widgets, "Send", {})))))));
+}
+using send_box_t = decltype(send_box(std::declval<const ui_needs&>(), std::declval<const send_facts&>()));
+// Sized as it is opened, by the files it is opened with.
+inline dialog_look content_look(std::type_identity<send_box_t>) { return {}; }
+template <class Needs>
+auto make_content(std::type_identity<send_box_t>, const Needs& needs, const send_facts& facts) {
+  return send_box(needs, facts);
+}
 
 }  // namespace mux::ui
 
@@ -132,5 +116,5 @@ struct send_box : skiff::compose::Stacked {
 // of everything under it, there -- the chats screen's took this unit past
 // ten minutes. Their tables are made once, each in a walks unit of this
 // module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::send_box> = true;  // walks_boxes.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::send_box>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::send_box_t> = true;  // walks_boxes.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::send_box_t>() noexcept;

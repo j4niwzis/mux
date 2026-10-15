@@ -445,8 +445,13 @@ TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
             std::optional{mux::ui::room_card_facts{preview.id, preview}});
     auto* card = window.root().layer().room.shown();
     ASSERT_NE(card, nullptr);
-    auto& scroll = card->parts.scroll;
+    auto& top_bar = std::get<0>(card->fParts);
+    auto& scroll = std::get<1>(card->fParts);
+    auto& join_tile = std::get<2>(card->fParts);
+    auto& decline_tile = std::get<3>(card->fParts);
     auto& details = std::get<0>(scroll.fChildren);
+    auto& about = std::get<2>(details.fParts);
+    auto& id = std::get<3>(details.fParts);
     // Resize the same open card through desktop, portrait and landscape.
     for (const auto size : {skia::SkRect::MakeWH(1000.0f, 720.0f), skia::SkRect::MakeWH(360.0f, 640.0f),
                             skia::SkRect::MakeWH(640.0f, 360.0f)}) {
@@ -456,46 +461,45 @@ TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
       EXPECT_TRUE(viewport.contains(card->bounds()));
       EXPECT_GT(scroll.bounds().height(), 0.0f);
       EXPECT_GT(scroll.extent(), scroll.bounds().height());
-      EXPECT_GE(scroll.bounds().fTop, card->parts.top.bounds().fBottom);
-      EXPECT_LE(scroll.bounds().fBottom, card->parts.join.bounds().fTop);
-      EXPECT_TRUE(card->bounds().contains(card->parts.join.bounds()));
-      if (invite) {
-        ASSERT_TRUE(card->parts.decline);
-        EXPECT_TRUE(card->bounds().contains(card->parts.decline->bounds()));
-      }
+      EXPECT_GE(scroll.bounds().fTop, top_bar.bounds().fBottom);
+      EXPECT_LE(scroll.bounds().fBottom, join_tile.bounds().fTop);
+      EXPECT_TRUE(card->bounds().contains(join_tile.bounds()));
+      EXPECT_EQ(decline_tile.visible(), invite);
+      if (invite)
+        EXPECT_TRUE(card->bounds().contains(decline_tile.bounds()));
 
       scroll.setCurrent(0.0f);
       frame();
-      const auto top = card->parts.top.bounds();
-      const auto join = card->parts.join.bounds();
+      const auto top = top_bar.bounds();
+      const auto join = join_tile.bounds();
       const auto view = scroll.bounds();
       // Start over the selectable description, even in a short window.
-      scroll.setCurrent(details.parts.about.bounds().fTop - view.fTop);
+      scroll.setCurrent(about.bounds().fTop - view.fTop);
       frame();
       const float before = scroll.current();
       router.pointer(scene::PointerEvent{scene::pointer::scroll{view.centerX(), view.fTop + 8.0f, 0.0f, -1.0f}});
       for (int i = 0; i < 120; ++i)
         frame();
       EXPECT_GT(scroll.current(), before) << "the wheel over the description did not scroll";
-      EXPECT_EQ(card->parts.top.bounds(), top);
-      EXPECT_EQ(card->parts.join.bounds(), join);
+      EXPECT_EQ(top_bar.bounds(), top);
+      EXPECT_EQ(join_tile.bounds(), join);
 
       scroll.scrollToEnd(false);
       frame();
       EXPECT_NEAR(scroll.current(), scroll.extent(), 1.0f);
-      EXPECT_LE(details.parts.id.bounds().fBottom - scroll.current(), view.fBottom + 1.0f);
-      EXPECT_GE(details.parts.id.bounds().fTop - scroll.current(), view.fTop - 1.0f);
+      EXPECT_LE(id.bounds().fBottom - scroll.current(), view.fBottom + 1.0f);
+      EXPECT_GE(id.bounds().fTop - scroll.current(), view.fTop - 1.0f);
       const int joined = program.rooms_joined;
-      click(card->parts.join);
+      click(join_tile);
       EXPECT_EQ(program.rooms_joined, joined + 1);
       if (invite) {
         const int declined = program.invites_declined;
-        click(*card->parts.decline);
+        click(decline_tile);
         EXPECT_EQ(program.invites_declined, declined + 1);
       }
     }
     const int closed = program.room_cards_closed;
-    click(std::get<2>(card->parts.top.fParts));
+    click(std::get<2>(top_bar.fParts));
     EXPECT_EQ(program.room_cards_closed, closed + 1);
   }
 
@@ -509,8 +513,8 @@ TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
   auto* card = window.root().layer().room.shown();
   ASSERT_NE(card, nullptr);
   EXPECT_LT(card->bounds().height(), 500.0f);
-  EXPECT_FLOAT_EQ(card->parts.scroll.extent(), 0.0f);
-  EXPECT_FLOAT_EQ(card->parts.scroll.current(), 0.0f);
+  EXPECT_FLOAT_EQ(std::get<1>(card->fParts).extent(), 0.0f);
+  EXPECT_FLOAT_EQ(std::get<1>(card->fParts).current(), 0.0f);
 }
 
 TEST(UserInfo, LongProfilesScrollWithTheBannerBeforeTheId) {
@@ -533,8 +537,13 @@ TEST(UserInfo, LongProfilesScrollWithTheBannerBeforeTheId) {
   ui.show(window.root().layer().person, std::optional{mux::ui::person_shown{account, "@user:example.com", facts}});
   auto* card = window.root().layer().person.shown();
   ASSERT_NE(card, nullptr);
-  auto& scroll = card->parts.scroll;
+  auto& top_bar = std::get<0>(card->fParts);
+  auto& scroll = std::get<1>(card->fParts);
   auto& details = std::get<0>(scroll.fChildren);
+  auto& cover = std::get<0>(details.fParts);
+  auto& banner = std::get<0>(cover.fParts);
+  auto& band = std::get<1>(details.fParts);
+  auto& id = std::get<2>(details.fParts);
   double now = 1000.0;
   for (const auto viewport : {skia::SkRect::MakeWH(1000.0f, 720.0f), skia::SkRect::MakeWH(360.0f, 640.0f),
                               skia::SkRect::MakeWH(640.0f, 360.0f)}) {
@@ -545,18 +554,18 @@ TEST(UserInfo, LongProfilesScrollWithTheBannerBeforeTheId) {
     EXPECT_TRUE(viewport.contains(card->bounds()));
     EXPECT_GT(scroll.bounds().height(), 0.0f);
     EXPECT_GT(scroll.extent(), scroll.bounds().height());
-    EXPECT_GE(scroll.bounds().fTop, card->parts.top.bounds().fBottom);
-    const auto title = card->parts.top.bounds();
-    EXPECT_EQ(details.parts.cover.parts.banner.bounds(), details.parts.cover.bounds());
-    EXPECT_FLOAT_EQ(details.parts.cover.parts.banner.fState.alpha(), 1.0f);
-    EXPECT_LE(details.parts.cover.bounds().fBottom, details.parts.band.bounds().fTop);
-    EXPECT_LE(details.parts.band.bounds().fBottom, details.parts.id.bounds().fTop);
+    EXPECT_GE(scroll.bounds().fTop, top_bar.bounds().fBottom);
+    const auto title = top_bar.bounds();
+    EXPECT_EQ(banner.bounds(), cover.bounds());
+    EXPECT_FLOAT_EQ(banner.fState.alpha(), 1.0f);
+    EXPECT_LE(cover.bounds().fBottom, band.bounds().fTop);
+    EXPECT_LE(band.bounds().fBottom, id.bounds().fTop);
     scroll.scrollToEnd(false);
     window.layoutIfNeeded(viewport);
     EXPECT_NEAR(scroll.current(), scroll.extent(), 1.0f);
-    EXPECT_EQ(card->parts.top.bounds(), title);
-    EXPECT_LE(details.parts.id.bounds().fBottom - scroll.current(), scroll.bounds().fBottom + 1.0f);
-    EXPECT_GE(details.parts.id.bounds().fTop - scroll.current(), scroll.bounds().fTop - 1.0f);
+    EXPECT_EQ(top_bar.bounds(), title);
+    EXPECT_LE(id.bounds().fBottom - scroll.current(), scroll.bounds().fBottom + 1.0f);
+    EXPECT_GE(id.bounds().fTop - scroll.current(), scroll.bounds().fTop - 1.0f);
   }
 }
 
@@ -1571,7 +1580,7 @@ TEST(Controls, PersonSearchRowSendsItsIdAndNamesItsAction) {
   EXPECT_EQ(std::get<0>(std::get<1>(row.fParts).fParts).text(), "Alice");
 }
 
-TEST(Controls, CopyIdRequestShowsConfirmationWithoutBindingRefresh) {
+TEST(Controls, CopyIdRequestUpdatesOnlyItsLocalFeedback) {
   struct sink {
     std::vector<std::string> copied;
     void take(const mux::ui::request::copy_text& request) { copied.push_back(request.text); }
@@ -1582,11 +1591,12 @@ TEST(Controls, CopyIdRequestShowsConfirmationWithoutBindingRefresh) {
   auto row = mux::ui::id_line(colours, "#room:example.com", "https://matrix.to/#/#room:example.com");
   skiff::bind::Binding<model_t> binding;
   binding.refresh(row, model);
-  auto& label = row.parts.feedback;
+  auto& label = std::get<1>(row.fParts);
   const auto id = label.fState.id();
   EXPECT_EQ(label.text(), "ID");
   ASSERT_TRUE(skiff::bind::press(row, model, scene::Path{}, &requests));
-  // The confirmation is set immediately; no binding refresh is needed.
+  // Refresh after press, matching app::after_event(), so LocalPass projects the Local feedback.
+  binding.refresh(row, model);
   ASSERT_EQ(requests.copied.size(), 1u);
   EXPECT_EQ(requests.copied.front(), "https://matrix.to/#/#room:example.com");
   EXPECT_EQ(label.text(), "ID · link copied, with its servers");
@@ -1624,7 +1634,7 @@ TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
     scene::InputRouter router;
     const std::array layers{scene::InputRouter::Layer{view.handle(), false}};
     router.setLayers(layers);
-    auto& text = view.root().parts.value;
+    auto& text = std::get<0>(view.root().fParts);
     const auto box = text.bounds();
     ASSERT_GT(box.width(), 0.0f);
     ASSERT_GT(box.height(), 0.0f);
@@ -1634,11 +1644,11 @@ TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
     const auto presses = std::exchange(scene::hostWork().pressed, {});
     ASSERT_EQ(presses.size(), 1u);
     for (const auto& path : presses) ASSERT_TRUE(skiff::bind::press(view.root(), model, path, &requests));
-    // A settled scene must show the wrapped confirmation in its next
-    // frame, without a binding refresh or a changed viewport.
+    // Refresh after press, matching app::after_event(), before the next frame lays out the wrapped confirmation.
+    binding.refresh(view.root(), model);
     view.update(32.0);
     EXPECT_TRUE(view.layoutIfNeeded(viewport));
-    const auto& feedback = view.root().parts.feedback;
+    const auto& feedback = std::get<1>(view.root().fParts);
     EXPECT_EQ(feedback.text(), link.empty() ? "ID · copied" : "ID · link copied, with its servers");
     EXPECT_GT(feedback.bounds().width(), 0.0f);
     EXPECT_GT(feedback.bounds().height(), 0.0f);
@@ -2835,9 +2845,11 @@ TEST(Controls, MemoizedRoomIdKeepsCopyFeedbackWithoutAnOuterModelChange) {
   view.update(16.0);
   view.layoutIfNeeded(viewport);
   EXPECT_TRUE(view.finishFrame().fDamage.isEmpty());
-  auto& label = header.content()->parts.feedback;
+  auto& label = std::get<1>(header.content()->fParts);
   const auto id = label.fState.id();
   ASSERT_TRUE(skiff::bind::press(header, model, scene::Path{0}, &requests));
+  // Refresh after press, matching app::after_event(), so LocalPass enters Memo and projects the Local feedback.
+  binding.refresh(header, model);
   ASSERT_EQ(requests.copied.size(), 1u);
   EXPECT_EQ(label.text(), "ID · link copied, with its servers");
   EXPECT_EQ(label.fState.id(), id);
@@ -3175,10 +3187,11 @@ TEST(Info, MatrixProfileIdCopiesItsLinkAndImmediatelyConfirmsIt) {
   ui.shared.protocol_states[alice] = mux::proto::matrix::state{.online = true};
   mux::ui::person_facts facts;
   facts.name = "Bob";
-  mux::ui::person_card<stub>::details details(ui.colours, ui.shared, alice, bob, facts);
-  const auto copied = details.parts.id.onPress();
+  auto details = mux::ui::person_card_details(ui.colours, ui.shared, alice, bob, facts);
+  auto& id = std::get<2>(details.fParts);
+  const auto copied = id.onPress();
   EXPECT_EQ(copied.text, "https://matrix.to/#/@bob:example.org");
-  EXPECT_EQ(details.parts.id.parts.feedback.text(), "ID · link copied, with its servers");
+  EXPECT_EQ(id.parts.feedback.text(), "ID · link copied, with its servers");
 }
 
 namespace {

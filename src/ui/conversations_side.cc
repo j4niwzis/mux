@@ -23,15 +23,10 @@ import :chat_list;
 import mux.ui.messages;
 import :header;
 import :info;
+import :list_shown;
 
 export namespace mux::ui {
 
-struct server_search_facts {
-  std::vector<directory_room> rooms;
-  std::vector<found_person> people;
-  std::optional<account_id> by;
-  bool waiting = false;
-};
 auto server_search_arguments(const palette& colours, const server_search_facts& facts) {
   namespace c = skiff::compose;
   auto rooms = std::ranges::to<std::vector>(std::views::transform(std::views::take(facts.rooms, 30), [&](const auto& room) {
@@ -57,33 +52,6 @@ auto server_search_list(const palette& colours) {
   return skiff::compose::mount<server_search_content_t, server_search_facts>(
       [colours = &colours](const auto& facts) { return server_search_arguments(*colours, facts); },
       {.fillX = true, .autoSize = scene::axes::kY});
-}
-
-// What the chat list shows: all the chats, those of a Matrix space, or
-// those of an XMPP roster group.
-namespace folder {
-struct all {
-  friend bool operator==(all, all) = default;
-};
-struct space {
-  std::string room;
-  friend bool operator==(const space&, const space&) = default;
-};
-struct group {
-  std::string name;
-  friend bool operator==(const group&, const group&) = default;
-};
-// The direct chats: one person each.
-struct direct {
-  friend bool operator==(direct, direct) = default;
-};
-}  // namespace folder
-using folder_t = spl::variant<folder::all, folder::space, folder::group, folder::direct>;
-// The space a folder is, where it is one.
-[[nodiscard]] inline std::optional<std::string> space_of(const folder_t& one) {
-  return spl::visit(spl::overloaded{[](const folder::space& s) { return std::optional<std::string>(s.room); },
-                                          [](const auto&) { return std::optional<std::string>(); }},
-                       one);
 }
 
 // An item of a space bar: Home, Direct messages, or a space -- round, its

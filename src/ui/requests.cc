@@ -115,6 +115,8 @@ namespace request {
 struct apply_style {};
 struct configure_theme { config::theme_t theme; std::optional<config::custom_theme> custom; };
 struct set_developer_tools { bool enabled; };
+// And turned the other way.
+struct flip_developer_tools {};
 // One of the chosen account's pages asked for.
 struct account_page {
   account_page_t page = ::mux::ui::account_page::connection{};
@@ -172,6 +174,8 @@ struct quit {};
 struct open_settings {};
 struct pop_panel {};
 struct toggle_info {};
+// The info's members near the end of those made: the next few.
+struct info_more {};
 struct jump_to_end {};
 // A picture copied to the clipboard: the one a message's menu is up for,
 // or one by its source (the viewer's).
@@ -238,7 +242,10 @@ struct message_person {
 struct attach_files {};
 struct settings_files {};
 struct close_send_box {};
-struct send_files {};
+// The files in the send box sent, with the caption written there.
+struct send_files {
+  std::string caption;
+};
 struct open_picture {
   std::string source;
   std::string sender, name, when;
@@ -440,6 +447,38 @@ struct set_wallpaper {
   mux::choice_level_t level;
   mux::config::wallpaper_pick_t pick;
 };
+// A look changed by its choices -- a kind picked, a slider let go, an
+// element given back to the bubbles' -- at a level: the program works the
+// look out of what it holds (bubbles_asked) and sets it.
+namespace bubbles_change {
+// A kind; none: as the level over it.
+struct kind {
+  std::optional<mux::config::bubbles_t> to;
+};
+// How opaque, and Frosted's blur: where along their sliders.
+struct opacity {
+  float at = 0.0f;
+};
+struct blur {
+  float at = 0.0f;
+};
+// An element's opacity or blur, apart from the bubbles' (where along its
+// slider), or given back to them (none). The bubbles' only.
+template <class Which>
+struct element {
+  Which which;
+  std::optional<float> at;
+};
+}  // namespace bubbles_change
+using element_opacity_t = std::optional<int> mux::config::element_opacity::*;
+using element_blur_t = std::optional<double> mux::config::element_blur::*;
+using bubbles_change_t = spl::variant<bubbles_change::kind, bubbles_change::opacity, bubbles_change::blur,
+                                      bubbles_change::element<element_opacity_t>, bubbles_change::element<element_blur_t>>;
+struct change_bubbles {
+  mux::choice_level_t level;
+  mux::config::look_part_t part = mux::config::look_part::bubbles{};
+  bubbles_change_t change;
+};
 struct toggle_threads {};
 struct open_thread {
   std::string root;
@@ -466,6 +505,32 @@ struct delete_pack {
   mux::emote_pack pack;
 };
 struct pick_pack_images {};
+// The packs dialog: a pack opened (a new one, where none is said), the
+// list again; the one open named, attributed, its use flipped; one of its
+// images renamed, its use flipped, taken out; it saved, or deleted.
+struct pack_open {
+  std::optional<std::size_t> at;
+};
+struct pack_back {};
+struct pack_named {
+  std::string text;
+  bool attribution = false;
+};
+struct pack_use {
+  bool emoji = true;
+};
+struct pack_picture_renamed {
+  std::string url, shortcode;
+};
+struct pack_picture_use {
+  std::string url;
+  bool emoji = true;
+};
+struct pack_picture_removed {
+  std::string url;
+};
+struct pack_save {};
+struct pack_delete {};
 struct close_new_room {};
 // A text menu's item for a field: the key the field takes for it, given to
 // the field with the focus -- Ctrl+V a paste.
@@ -474,6 +539,14 @@ struct text_key {
   bool shift = false;  // with Shift too: Ctrl+Shift+X struck through
   bool control = true;
 };
+// Which room events show at a level, set to a way: as above, all, messages
+// only, or custom -- from what was in effect.
+struct set_events_way {
+  mux::choice_level_t level;
+  std::size_t way = 0;
+};
+// The text menu let go of: pressed off, Esc, or done.
+struct close_text_menu {};
 struct text_formatting {
   bool open = true;
 };
@@ -603,7 +676,6 @@ struct selection_span {
   bool selected = true;
 };
 struct selection_cancel {};
-struct close_dialog {};
 struct menu_forward {};
 struct close_forward {};
 struct forward_to {

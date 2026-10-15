@@ -83,9 +83,9 @@ auto limit_stepper(const palette& colours, std::string what, std::string_view un
       skiff::compose::text_for<config::cache_limits>(limit_words<Which>{unit},
           skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 14.0f, colours.accent, true))),
       skiff::compose::bound<config::cache_limits>(skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-          legacy::icon_button<limit_press<Which>>(colours, icon::minus{}, {false}))),
+          icon_button(colours, icon::minus{}, limit_press<Which>{false}))),
       skiff::compose::bound<config::cache_limits>(skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-          legacy::icon_button<limit_press<Which>>(colours, icon::plus{}, {true}))));
+          icon_button(colours, icon::plus{}, limit_press<Which>{true}))));
 }
 
 // Settings' Storage page: whether what mux keeps on disk is sealed; how

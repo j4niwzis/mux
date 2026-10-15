@@ -601,7 +601,7 @@ void app::before_frame() {
   keep_selection(menu);
   // A selectable text or a field pressed with the right button -- a long
   // press, on a phone: its menu, the last asked for.
-  if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !mux::ui::context_menu_up(root()))
+  if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !showing.look<std::optional<mux::ui::menu_facts>>()->has_value())
     spl::visit(spl::overloaded{[&](skiff::scene::text_menu::of_text& text) {
                                        shared.show_text_menu(mux::ui::text_menu_items(std::move(text.text), std::move(text.link), shared.emoji));
                                      },

@@ -36,7 +36,7 @@ class accounts_part {
   // What is beside the list said too; shown as the panel is brought up to
   // date, at the next frame.
   void show_accounts(mux::ui::panel_detail_t detail = mux::ui::panel_detail::none{}) {
-    if (mux::ui::drawer_open(s_->root()))
+    if (s_->showing->look<mux::ui::drawer_shown>()->out)
       s_->drawer_waits = true;
     mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt);
     pending_login_.reset();

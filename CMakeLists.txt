@@ -142,7 +142,7 @@ mux_find_package(splice 0.4.3 REQUIRED)
 # for more of it finds it already built without that, and stops.
 cme_declare_port(NAME alef PROVIDES alef
   GITHUB_REPOSITORY j4niwzis/alef
-  GIT_TAG 62275e1d4e0865a70891883d84dc58c78bb436e4
+  GIT_TAG 231e934f78a6757a4fa7bacf17d518a193cfe74d
   # Alef's pipe overloads remain reachable across Clang/libstdc++ imports.
   VERSION 0.1.1
   LICENSE AGPL-3.0-only

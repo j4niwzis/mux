@@ -217,15 +217,15 @@ class pictures_part {
     };
     auto& screen = s_->root().main();
     // The images of the pack being edited, by the account of the chat in view.
-    if (screen.current) {
+    if (s_->listed()) {
       if (const auto& packs = *s_->showing->look<std::optional<mux::ui::packs_facts>>())
         for (const auto& picture : mux::ui::pack_pictures_of(*packs))
-          this->want_emote(*screen.current, picture.source, true, picture.kind);
+          this->want_emote(*s_->listed(), picture.source, true, picture.kind);
       for (const auto& picture : s_->ui.panel_pictures_shown)
-        this->want_emote(*screen.current, picture.source, true, picture.kind);
+        this->want_emote(*s_->listed(), picture.source, true, picture.kind);
       // Those a dialog lists -- Explore's rooms, people found -- by their keys.
       for (const auto& [key, url] : mux::ui::listed_avatars())
-        want(*screen.current, url, key);
+        want(*s_->listed(), url, key);
     }
     for (const auto& [id, account] : s_->model->accounts())
       for (const auto& [user, profile] : account.profiles) {
@@ -235,7 +235,7 @@ class pictures_part {
     for (const auto& [id, account] : s_->model->accounts())
       for (const auto& [key, one] : account.conversations) {
         want(id, one.avatar, one.id.id);
-        if (screen.chosen == one.id) {
+        if (s_->chosen() == one.id) {
           // The people of the bubbles made -- not every member: a big room
           // has thousands, and asking for all of them at each refresh read
           // them from the disk, pushed out what is on screen, and read them
@@ -248,7 +248,7 @@ class pictures_part {
           // are kept apart from the timeline -- their people were never
           // asked for, and showed no picture there.
           std::vector<const message*> in_thread;
-          if (const auto open = screen.thread_open()) {
+          if (const auto open = s_->thread_open()) {
             if (const message* root = mux::ui::held_message(one, *open))
               in_thread.push_back(root);
             if (const auto found = one.threads.find(*open); found != one.threads.end())
@@ -380,7 +380,7 @@ class pictures_part {
           // The thread open beside the chat: its answers' pictures, senders
           // and emoji, as the timeline's -- they were never asked for, and
           // its pictures never came.
-          if (const auto thread = screen.thread_open())
+          if (const auto thread = s_->thread_open())
             if (const auto found = one.threads.find(*thread); found != one.threads.end())
               for (const message& said : found->second) {
                 pictures_of(said);
@@ -413,7 +413,7 @@ class pictures_part {
   // picture when it comes -- from the disk, or from the account.
   void apply(const request::open_picture& one) {
     mux::ui::show(*s_->showing, std::optional(mux::ui::viewer_facts{one.source, one.sender, one.name, one.when, {}, std::nullopt}));
-    const auto& chosen = s_->root().main().chosen;
+    const auto& chosen = s_->chosen();
     if (chosen)
       this->want_whole(chosen->account, one.source);
   }
@@ -431,7 +431,7 @@ class pictures_part {
       this->play_video_file(video, where);
       return;
     }
-    if (const auto& chosen = s_->root().main().chosen; chosen && videos_fetching_.insert(video).second)
+    if (const auto& chosen = s_->chosen(); chosen && videos_fetching_.insert(video).second)
       s_->net->fetch_media(chosen->account, video, media_use::to_watch{}, 0);
   }
   // A video's file come: played, where the viewer is still up for it.
@@ -494,7 +494,7 @@ class pictures_part {
   // The viewer's cross: the whole picture's download stopped, the thumbnail
   // left; pressed again (an arrow then), asked for again.
   void apply(const request::press_loader& one) {
-    const auto& chosen = s_->root().main().chosen;
+    const auto& chosen = s_->chosen();
     if (!chosen)
       return;
     // A video's: its download stopped, or asked again.
@@ -527,7 +527,7 @@ class pictures_part {
       this->copy_bytes(*bytes);
       return;
     }
-    if (const auto& chosen = s_->root().main().chosen)
+    if (const auto& chosen = s_->chosen())
       s_->net->fetch_media(chosen->account, source, media_use::to_copy{}, 0);
   }
   // Its pixels written anew as PNG: nothing of its file goes with them.
@@ -540,7 +540,7 @@ class pictures_part {
   }
   // A file in a message, pressed: fetched, saved to Downloads, and opened.
   void apply(const request::open_file& one) {
-    if (const auto& chosen = s_->root().main().chosen)
+    if (const auto& chosen = s_->chosen())
       s_->net->fetch_media(chosen->account, one.source, media_use::to_open{one.name}, 0);
   }
 
@@ -558,7 +558,7 @@ class pictures_part {
       this->play(one.source, *bytes);
       return;
     }
-    if (const auto& chosen = s_->root().main().chosen)
+    if (const auto& chosen = s_->chosen())
       s_->net->fetch_media(chosen->account, one.source, media_use::to_play{}, 0);
   }
   void play(const std::string& source, const std::string& bytes) {
@@ -624,14 +624,14 @@ class pictures_part {
       return;
     }
     save_path_ = std::move(path);
-    if (const auto& chosen = s_->root().main().chosen)
+    if (const auto& chosen = s_->chosen())
       s_->net->fetch_media(chosen->account, source, media_use::to_save{name}, 0);
   }
   // An avatar pressed: its picture in the viewer. A chat's by the chat's id;
   // a person's by theirs, as the chat being read knows them -- a member, or
   // the other side of a direct chat, whose avatar is the chat's.
   void apply(const request::open_avatar& one) {
-    const auto& chosen = s_->root().main().chosen;
+    const auto& chosen = s_->chosen();
     const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
     if (!chat)
       return;

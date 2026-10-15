@@ -33,9 +33,9 @@ class preferences_part {
 
   void apply(const request::toggle_mute&) {
     auto& screen = s_->root().main();
-    if (!screen.chosen)
+    if (!s_->chosen())
       return;
-    k_->flip<&mux::app::chat_choices::muted>(*screen.chosen);
+    k_->flip<&mux::app::chat_choices::muted>(*s_->chosen());
     (void)k_->write();
     s_->refresh_due = true;
   }

@@ -22,10 +22,10 @@ class search_part {
 
   void apply(const request::open_search&) {
     auto& screen = s_->root().main();
-    if (!screen.chosen)
+    if (!s_->chosen())
       return;
-    if (!searching_ || searching_->in != *screen.chosen)
-      searching_ = state{*screen.chosen, {}, {}, std::nullopt};
+    if (!searching_ || searching_->in != *s_->chosen())
+      searching_ = state{*s_->chosen(), {}, {}, std::nullopt};
     mux::ui::show(*s_->showing, mux::ui::search_found{.open = true});
     s_->scene->focus(screen.search_field());
   }

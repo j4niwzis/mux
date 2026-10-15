@@ -224,7 +224,7 @@ class marks_part {
 
  private:
   [[nodiscard]] const mux::conversation* chosen() const {
-    const auto& chosen = s_->root().main().chosen;
+    const auto& chosen = s_->chosen();
     return chosen ? s_->model->find(*chosen) : nullptr;
   }
   [[nodiscard]] static const std::vector<mux::unread_mark>& marks_of(const mux::conversation& chat, mux::mark_kind_t kind) {

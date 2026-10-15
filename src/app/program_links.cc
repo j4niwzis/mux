@@ -44,7 +44,7 @@ void app::go_to_message(const mux::conversation_id& in, std::string id, std::opt
   auto& screen = root().main();
   // Where it goes from, to come back to: this chat, where it goes to
   // another; else the place in this one.
-  const bool here = screen.chosen && *screen.chosen == in;
+  const bool here = shared.chosen() && *shared.chosen() == in;
   if (!here) {
     jumps.note_chat_return();
     this->open_chat(in, std::nullopt);
@@ -66,7 +66,7 @@ void app::follow(const mux::logic::link_t& where) {
   auto& screen = root().main();
   // A link in the chat belongs to its account, even when another account
   // is selected in the sidebar. Without a chat, use that selection.
-  const auto by = screen.chosen ? std::optional(screen.chosen->account) : screen.current;
+  const auto by = shared.chosen() ? std::optional(shared.chosen()->account) : shared.listed();
   spl::visit(spl::overloaded{[&](const mux::logic::link_step::open_chat& step) {
                                if (step.event)
                                  this->go_to_linked(step.chat, *step.event);
@@ -95,7 +95,7 @@ void app::go_to_linked(const mux::conversation_id& in, const std::string& event)
   const mux::conversation* chat = model->find(in);
   if (chat && mux::ui::held_message(*chat, event)) {
     auto& screen = root().main();
-    if (!(screen.chosen && *screen.chosen == in)) {
+    if (!(shared.chosen() && *shared.chosen() == in)) {
       jumps.note_chat_return();
       this->open_chat(in, std::nullopt);
     }
@@ -118,7 +118,7 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
     return false;
   auto& screen = root().main();
   jumps.stop();
-  if (screen.thread_open() != thread) {
+  if (shared.thread_open() != thread) {
     shared.open_thread(*thread);
     if (!shared.demo())
       net->load_thread(chat.id, *thread);
@@ -151,15 +151,15 @@ void app::apply(const request::message_person& one) {
 void app::apply(const request::jump_to_message& one) {
   // An answer in a thread, or the root of the thread open: there, in the
   // thread's panel -- its quote pressed in the thread went nowhere.
-  if (const auto& chosen = root().main().chosen)
+  if (const auto& chosen = shared.chosen())
     if (const mux::conversation* chat = model->find(*chosen))
       if (const mux::message* said = mux::ui::held_message(*chat, one.id)) {
         auto& screen = root().main();
         const std::optional<std::string> thread = said->thread ? said->thread
-                                                  : screen.thread_open() == said->id ? std::optional<std::string>(said->id)
+                                                  : shared.thread_open() == said->id ? std::optional<std::string>(said->id)
                                                                                       : std::nullopt;
         if (thread) {
-          if (screen.thread_open() != thread) {
+          if (shared.thread_open() != thread) {
             shared.open_thread(*thread);
             if (!shared.demo())
               net->load_thread(chat->id, *thread);
@@ -169,7 +169,7 @@ void app::apply(const request::jump_to_message& one) {
             return;
         }
       }
-  if (const auto& chosen = root().main().chosen)
+  if (const auto& chosen = shared.chosen())
     this->go_to_message(*chosen, one.id, one.fragment, one.from);
 }
 

@@ -33,7 +33,7 @@ class chat_view_part {
     const auto& screen = s_->root().main();
     const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
     auto head = mux::ui::chat_head_of(s_->ui, chat, *s_->model);
-    head.back = screen.single;
+    head.back = s_->single();
     head.hidden = s_->showing->look<mux::ui::search_found>()->open || s_->showing->look<mux::ui::selection_shown>()->count > 0;
     this->put(std::move(head));
     this->put(mux::ui::chats_shown{.none = s_->model->accounts().empty(), .chosen = chat != nullptr});
@@ -45,7 +45,7 @@ class chat_view_part {
       const mux::account* one = of ? s_->model->accounts().find(*of) : nullptr;
       return one ? mux::ui::connection_notice(one->state) : std::string();
     };
-    const bool chat_band = chat && (screen.single || shown.current != chat->id.account);
+    const bool chat_band = chat && (s_->single() || shown.current != chat->id.account);
     this->put(mux::ui::connection_shown{notice(shown.current), chat_band ? notice(chat->id.account) : std::string()});
     // The info, while it is open: nothing of it worked out while it is shut.
     if (shown.info_open && chat)

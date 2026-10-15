@@ -66,7 +66,7 @@ void show_selection(menu_part& self);
 
 void part_apply(menu_part& self, const request::message_menu& one) {
   self.target_ = one;
-  if (self.selected_chat_ == self.s_->root().main().chosen && self.selected_.contains(one.id)) {
+  if (self.selected_chat_ == self.s_->chosen() && self.selected_.contains(one.id)) {
     skiff::scene::textMenusAsked().clear();
     const auto chosen = selected_messages(self);
     const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
@@ -77,7 +77,7 @@ void part_apply(menu_part& self, const request::message_menu& one) {
       return;
     }
   }
-  const auto& chosen = self.s_->root().main().chosen;
+  const auto& chosen = self.s_->chosen();
   const conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
   // History and reaction rows may refer to events retained only as typed
   // metadata. Hold the displayed event before acting on its own ID.
@@ -122,7 +122,7 @@ void part_apply(menu_part& self, const request::menu_reply&) {
   std::string title = "Reply";
   const message* said = nullptr;
   std::string line;
-  if (const auto& chosen = self.s_->root().main().chosen)
+  if (const auto& chosen = self.s_->chosen())
     if (const conversation* chat = self.s_->model->find(*chosen))
       if (const message* it = mux::ui::held_message(*chat, self.target_.id)) {
         said = &*it;
@@ -134,7 +134,7 @@ void part_apply(menu_part& self, const request::menu_reply&) {
   // A thread's root or answer, its thread open: answered there.
   if (said) {
     const std::string root = said->thread ? *said->thread : said->id;
-    if (self.s_->root().main().thread_open() == root) {
+    if (self.s_->thread_open() == root) {
       self.s_->answer_in_thread(self.target_.id, mux::ui::compose_context{mux::ui::icon::reply{}, title,
                                                                           line.empty() ? logic::reply_line(said, self.target_.text) : line});
       return;
@@ -173,11 +173,11 @@ void part_apply(menu_part& self, const request::menu_copy_image&) {
 void part_apply(menu_part& self, const request::menu_thread&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
   auto& screen = self.s_->root().main();
-  if (!screen.chosen)
+  if (!s_->chosen())
     return;
   self.s_->open_thread(self.target_.id);
   if (!self.s_->demo())
-    self.s_->net->load_thread(*screen.chosen, self.target_.id);
+    self.s_->net->load_thread(*s_->chosen(), self.target_.id);
   self.s_->refresh_due = true;
 }
 
@@ -189,7 +189,7 @@ void part_apply(menu_part& self, const request::menu_save&) {
 
 void part_apply(menu_part& self, const request::menu_pin&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  const auto& chosen = self.s_->root().main().chosen;
+  const auto& chosen = self.s_->chosen();
   if (!chosen || self.s_->demo())
     return;
   self.s_->net->pin(*chosen, self.target_.id, !self.target_.pinned);
@@ -199,7 +199,7 @@ void part_apply(menu_part& self, const request::close_edit_history&) { mux::ui::
 
 void part_apply(menu_part& self, const request::menu_forward&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  const auto& chosen = self.s_->root().main().chosen;
+  const auto& chosen = self.s_->chosen();
   if (!chosen)
     return;
   forward_from(self, *chosen, {self.target_.id});
@@ -220,13 +220,13 @@ void part_apply(menu_part& self, const request::close_forward&) { mux::ui::show<
 
 void part_apply(menu_part& self, const request::menu_view_source&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  if (const auto& chosen = self.s_->root().main().chosen; chosen && !self.s_->demo())
+  if (const auto& chosen = self.s_->chosen(); chosen && !self.s_->demo())
     self.s_->net->view_source(*chosen, self.target_.id);
 }
 
 void part_apply(menu_part& self, const request::menu_select&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  const auto chat = self.s_->root().main().chosen;
+  const auto chat = self.s_->chosen();
   if (self.selected_chat_ != chat)
     self.selected_.clear();
   self.selected_chat_ = chat;
@@ -234,7 +234,7 @@ void part_apply(menu_part& self, const request::menu_select&) {
 }
 
 void part_apply(menu_part& self, const request::toggle_selected& one) {
-  if (!self.selected_chat_ || self.selected_chat_ != self.s_->root().main().chosen)
+  if (!self.selected_chat_ || self.selected_chat_ != self.s_->chosen())
     return;
   const conversation* chat = self.s_->model->find(*self.selected_chat_);
   const message* item = chat ? mux::ui::held_message(*chat, one.id) : nullptr;
@@ -246,7 +246,7 @@ void part_apply(menu_part& self, const request::toggle_selected& one) {
 }
 
 void part_apply(menu_part& self, const request::selection_span& span) {
-if (!self.selected_chat_ || self.selected_chat_ != self.s_->root().main().chosen)
+if (!self.selected_chat_ || self.selected_chat_ != self.s_->chosen())
   return;
 const conversation* chat = self.s_->model->find(*self.selected_chat_);
 if (!chat)
@@ -330,7 +330,7 @@ void part_apply(menu_part& self, const request::selection_forward&) {
 void keep_selection(menu_part& self) {
   if (self.selected_.empty())
     return;
-  if (self.s_->root().main().chosen != self.selected_chat_) {
+  if (self.s_->chosen() != self.selected_chat_) {
     self.selected_.clear();
     show_selection(self);
     return;
@@ -348,7 +348,7 @@ void keep_selection(menu_part& self) {
 
 void part_apply(menu_part& self, const request::menu_edit_history&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  const auto& chosen = self.s_->root().main().chosen;
+  const auto& chosen = self.s_->chosen();
   const mux::conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
   if (!chat)
     return;
@@ -383,7 +383,7 @@ void part_apply(menu_part& self, const request::forward_to& one) {
 
 void part_apply(menu_part& self, const request::menu_delete&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  const auto& chosen = self.s_->root().main().chosen;
+  const auto& chosen = self.s_->chosen();
   if (!chosen)
     return;
   if (self.s_->demo())
@@ -398,7 +398,7 @@ void part_apply(menu_part& self, const request::menu_react& one) {
 }
 
 void part_apply(menu_part& self, const request::react& one) {
-  const auto& chosen = self.s_->root().main().chosen;
+  const auto& chosen = self.s_->chosen();
   const conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
   if (!chat)
     return;

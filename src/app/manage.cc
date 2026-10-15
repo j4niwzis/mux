@@ -33,13 +33,13 @@ class manage_part {
   // The room's management: made from what the model knows of it now.
   void apply(const request::open_manage&) {
     s_->root().main().close_space_menu_soon();  // the chat menu its Settings came from
-    if (const auto chosen = s_->root().main().chosen)
+    if (const auto chosen = s_->chosen())
       this->manage_chat(*chosen);
   }
   // A space's settings: Manage, for it.
   void apply(const request::manage_space& one) {
     s_->root().main().close_space_menu_soon();
-    const auto by = s_->root().main().current;
+    const auto by = s_->listed();
     if (!by)
       return;
     this->manage_chat(mux::conversation_id{*by, one.room});
@@ -47,7 +47,7 @@ class manage_part {
   // A space shown as one chat, its rooms as topics -- or as a space. Not one
   // that holds spaces: it is a space.
   void apply(const request::flip_forum& one) {
-    const auto by = s_->root().main().current;
+    const auto by = s_->listed();
     if (!by)
       return;
     const mux::conversation_id id{*by, one.room};
@@ -65,7 +65,7 @@ class manage_part {
   }
   // A space's rooms in Home, or not: its own choice.
   void apply(const request::flip_home_hide& one) {
-    const auto by = s_->root().main().current;
+    const auto by = s_->listed();
     if (!by)
       return;
     const mux::conversation_id id{*by, one.room};

@@ -84,7 +84,7 @@ class part {
     ui::show(*s_->showing, call_shown{.now = std::nullopt, .callable = callable_});
   }
   void apply(const call_chosen&) {
-    if (const auto& chosen = s_->root().main().chosen)
+    if (const auto& chosen = s_->chosen())
       this->apply(start_call{*chosen});
   }
   void apply(const accept_call&) {
@@ -172,7 +172,7 @@ class part {
   // candidates sent a batch at a time.
   void tick() {
     // The chat shown, where it changed: whether it can be called, shown.
-    if (const auto& chosen = s_->root().main().chosen; chosen != callable_for_) {
+    if (const auto& chosen = s_->chosen(); chosen != callable_for_) {
       callable_for_ = chosen;
       this->show_callable();
     }
@@ -330,8 +330,8 @@ class part {
   }
   // Pushed to the window only where it changed: its seconds, the chat shown.
   void show_view(call_view view) {
-    view.in_view = s_->root().main().chosen == view.in;
-    view.whole = s_->root().main().single;
+    view.in_view = s_->chosen() == view.in;
+    view.whole = s_->single();
     if (shown_ == view)
       return;
     shown_ = view;

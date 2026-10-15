@@ -53,7 +53,7 @@ class outbox_part {
     this->compose(compose::edit{std::move(id), std::move(before)}, mux::ui::compose_context{mux::ui::icon::pencil{}, "Edit message", std::move(line)});
     mux::ui::set_composer_text(s_->root().main().line, text);
     // Its formatting back, where its HTML has only runs.
-    if (const auto& chosen = s_->root().main().chosen; chosen && !text.empty())
+    if (const auto& chosen = s_->chosen(); chosen && !text.empty())
       if (const message* said = this->message_of(*chosen, edited); said && said->body.html)
         if (auto runs = mux::ui::editable_runs(*said->body.html))
           mux::ui::set_formatted(s_->root().main().line, std::move(runs->first), runs->second);
@@ -94,7 +94,7 @@ class outbox_part {
   void apply(const request::close_link&) { mux::ui::show<mux::ui::link_facts>(*s_->showing, std::nullopt); }
   // Up in an empty input: the last message sent here edited.
   void apply(const request::edit_last&) {
-    const auto& chosen = s_->root().main().chosen;
+    const auto& chosen = s_->chosen();
     const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
     if (!chat)
       return;
@@ -108,7 +108,7 @@ class outbox_part {
   // one answered is scrolled to and flashed, as tdesktop does.
   void apply(const request::reply_step& one) {
     auto& screen = s_->root().main();
-    const conversation* chat = screen.chosen ? s_->model->find(*screen.chosen) : nullptr;
+    const conversation* chat = s_->chosen() ? s_->model->find(*s_->chosen()) : nullptr;
     if (!chat)
       return;
     // Editing: Ctrl+Up and Down step through the user's own messages, the
@@ -173,7 +173,7 @@ class outbox_part {
   // each anew at the end and the one not sent let go; or let go.
   [[nodiscard]] std::vector<mux::message> unsent_here() const {
     std::vector<mux::message> out;
-    const auto& chosen = s_->root().main().chosen;
+    const auto& chosen = s_->chosen();
     if (const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr)
       for (const mux::message& one : chat->timeline)
         if (one.outgoing &&
@@ -219,7 +219,7 @@ class outbox_part {
   // Files: chosen with the paperclip, or dropped; the send box closed, or
   // what is in it sent -- the caption with the first.
   void apply(const request::attach_files&) {
-    if (!s_->root().main().chosen || !mux::ui::may_send_files(s_->ui, s_->root().main().chosen->account))
+    if (!s_->chosen() || !mux::ui::may_send_files(s_->ui, s_->chosen()->account))
       return;
     if (to_send_.empty())
       files_thread_.reset();
@@ -227,10 +227,10 @@ class outbox_part {
   }
   // The thread panel's paperclip: what is chosen goes into the thread open.
   void apply(const request::attach_in_thread&) {
-    if (!s_->root().main().chosen || !mux::ui::may_send_files(s_->ui, s_->root().main().chosen->account))
+    if (!s_->chosen() || !mux::ui::may_send_files(s_->ui, s_->chosen()->account))
       return;
     if (to_send_.empty())
-      files_thread_ = s_->root().main().thread_open();
+      files_thread_ = s_->thread_open();
     s_->system_dialogs->choose_files();
   }
   void apply(const request::close_send_box&) {
@@ -239,7 +239,7 @@ class outbox_part {
     mux::ui::show<mux::ui::send_facts>(*s_->showing, std::nullopt);
   }
   void apply(const request::send_files& one) {
-    const auto& chosen = s_->root().main().chosen;
+    const auto& chosen = s_->chosen();
     if (!chosen || to_send_.empty())
       return;
     std::string caption = one.caption;
@@ -253,7 +253,7 @@ class outbox_part {
         if (const auto found = chat->threads.find(*files_thread_); found != chat->threads.end() && !found->second.empty())
           latest = found->second.back().id;
       thread = mux::thread_place{*files_thread_, std::move(latest)};
-      if (screen.thread_open() == files_thread_)
+      if (s_->thread_open() == files_thread_)
         reply_to = s_->showing->look<mux::ui::chat_shown>()->thread_answer;
     } else {
       // Sent while answering: the first of them the answer, as Element sends.
@@ -266,7 +266,7 @@ class outbox_part {
                          one.as.picture.has_value(), one.width, one.height, std::exchange(caption, std::string()),
                          std::exchange(reply_to, std::nullopt), thread, std::move(one.video));
     if (thread) {
-      if (screen.thread_open() == files_thread_)
+      if (s_->thread_open() == files_thread_)
         s_->stop_thread_answer();
     } else if (spl::visit(spl::overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }},
                              this->composing())) {
@@ -280,7 +280,7 @@ class outbox_part {
   // dropped is, without the send box: its thumbnail shown under its local id
   // while it goes.
   void apply(const request::send_gif& one) {
-    const auto& chosen = s_->root().main().chosen;
+    const auto& chosen = s_->chosen();
     if (!chosen || s_->demo() || !mux::ui::may_send_files(s_->ui, chosen->account))
       return;
     auto bytes_read = spl::bytes::file_text(one.path);
@@ -320,11 +320,11 @@ class outbox_part {
   // A sticker sent into the chat. Keep the docked phone picker available
   // for the next sticker, just as when inserting emoji.
   void apply(const request::send_sticker& one) {
-    const auto& chosen = s_->root().main().chosen;
+    const auto& chosen = s_->chosen();
     if (!chosen || s_->demo() || !mux::ui::ops_of(s_->ui, chosen->account).send_sticker)
       return;
     s_->emoji.remember_sticker(one.sticker);
-    if (!s_->root().main().single)
+    if (!s_->single())
       s_->close_emoji();
     s_->go_live(*chosen);
     s_->newest_due = true;
@@ -339,17 +339,17 @@ class outbox_part {
   // picture's thumbnail shown under its local id while it goes. Then the
   // send box, with what was waiting in it before.
   void files_given(std::vector<std::string> paths, bool dropped) {
-    if (!s_->root().main().chosen)
+    if (!s_->chosen())
       return;
     // Dropped or pasted where files are not sent: said, not lost silently.
-    if (!mux::ui::may_send_files(s_->ui, s_->root().main().chosen->account)) {
+    if (!mux::ui::may_send_files(s_->ui, s_->chosen()->account)) {
       s_->notice("Files", "Files cannot be sent in this chat.");
       return;
     }
     // Dropped while the thread's field has the keys: into the thread, as
     // its paperclip sends.
     if (dropped && to_send_.empty())
-      files_thread_ = s_->root().main().writing_in_thread() ? s_->root().main().thread_open() : std::nullopt;
+      files_thread_ = s_->root().main().writing_in_thread() ? s_->thread_open() : std::nullopt;
     for (const std::string& path : paths) {
       auto bytes_read = mux::platform::files::read(path);
       if (!bytes_read)
@@ -418,9 +418,9 @@ class outbox_part {
     // sendTextWithTags clears its reply returns -- whatever comes of it.
     s_->returns_due = true;
     auto& screen = s_->root().main();
-    if (!screen.chosen || !logic::sendable(text))
+    if (!s_->chosen() || !logic::sendable(text))
       return;
-    const conversation_id to = *screen.chosen;
+    const conversation_id to = *s_->chosen();
     // A command of its protocol's own: asked, not sent.
     if (this->asked_as_command(to, text, asked)) {
       mux::ui::set_composer_text(screen.line, {});

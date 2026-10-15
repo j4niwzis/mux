@@ -38,7 +38,7 @@ struct part {
   // Its page chosen in the media panel: its GIFs shown, read again.
   void apply(const page&) { this->apply(show{}); }
   void apply(const show&) {
-    const auto chosen = s_->root().main().chosen;
+    const auto chosen = s_->chosen();
     if (!chosen || !ui::may_send_files(s_->ui, chosen->account)) return;
     std::error_code failed;
     auto kept = std::filesystem::directory_iterator(saved(), failed) |

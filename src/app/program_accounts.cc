@@ -127,7 +127,7 @@ void app::apply(const request::accounts_back&) {
 // A tombstoned room's way on: the room it was upgraded to, as its
 // protocol's link to it opens -- the chat where it is joined, its card where not.
 void app::apply(const request::open_replacement&) {
-  const auto& chosen = root().main().chosen;
+  const auto& chosen = shared.chosen();
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
   if (const auto successor = chat ? mux::proto::successor_of(mux::ui::protocol_state_of(shared.ui, chosen->account), *chat) : std::nullopt)
     if (auto link = mux::proto::share_link(mux::ui::protocol_state_of(shared.ui, chosen->account), *successor))

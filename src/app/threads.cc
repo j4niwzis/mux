@@ -29,21 +29,21 @@ class threads_part {
   // falling back, for clients without threads, to its latest event.
   void apply(const request::toggle_threads&) {
     auto& screen = s_->root().main();
-    if (s_->toggle_threads() && screen.chosen && !s_->demo())
-      s_->net->list_threads(*screen.chosen);
+    if (s_->toggle_threads() && s_->chosen() && !s_->demo())
+      s_->net->list_threads(*s_->chosen());
     s_->refresh_due = true;
   }
   void apply(const request::open_thread& one) {
     auto& screen = s_->root().main();
-    if (!screen.chosen)
+    if (!s_->chosen())
       return;
     s_->open_thread(one.root);
     if (!s_->demo()) {
-      s_->net->load_thread(*screen.chosen, one.root);
-      if (const mux::conversation* chat = s_->model->find(*screen.chosen);
+      s_->net->load_thread(*s_->chosen(), one.root);
+      if (const mux::conversation* chat = s_->model->find(*s_->chosen());
           chat && !chat->quoted.contains(one.root) &&
           std::ranges::find(chat->timeline, one.root, &mux::message::id) == chat->timeline.end())
-        s_->net->fetch_quoted(*screen.chosen, one.root);
+        s_->net->fetch_quoted(*s_->chosen(), one.root);
     }
     s_->refresh_due = true;
   }

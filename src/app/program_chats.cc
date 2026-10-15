@@ -48,10 +48,10 @@ void app::apply(const request::choose& one) {
   // the chat opened's own put back in the field.
   auto& screen = root().main();
   search.chat_chosen(one.which);
-  if (screen.chosen && *screen.chosen != one.which) {
-    drafts.keep(*screen.chosen, mux::ui::composer_plain(screen.line));
+  if (shared.chosen() && *shared.chosen() != one.which) {
+    drafts.keep(*shared.chosen(), mux::ui::composer_plain(screen.line));
     mux::ui::set_composer_text(screen.line, shared.draft_of(one.which));
-  } else if (!screen.chosen) {
+  } else if (!shared.chosen()) {
     mux::ui::set_composer_text(screen.line, shared.draft_of(one.which));
   }
   model->touch(one.which);
@@ -61,7 +61,7 @@ void app::apply(const request::choose& one) {
       chat && !ask.demo && chat->member_count > static_cast<std::int64_t>(chat->members.size()) &&
       members_fetched.insert(one.which).second)
     net->fetch_members(one.which);
-  const bool another = screen.chosen != one.which;
+  const bool another = shared.chosen() != one.which;
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.chosen = one.which; });
   // Shown anew: opened at its first unread, quietly, where it has unread;
   // the ways back from jumps in the one left gone.
@@ -72,9 +72,9 @@ void app::apply(const request::choose& one) {
 
 void app::apply(const request::close_chat&) {
   auto& screen = root().main();
-  if (!screen.chosen)
+  if (!shared.chosen())
     return;
-  drafts.keep(*screen.chosen, mux::ui::composer_plain(screen.line));
+  drafts.keep(*shared.chosen(), mux::ui::composer_plain(screen.line));
   mux::ui::set_composer_text(screen.line, {});
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) {
     now.chosen.reset();
@@ -85,7 +85,7 @@ void app::apply(const request::close_chat&) {
 }
 
 void app::apply(const request::leave_chat&) {
-  const auto& chosen = root().main().chosen;
+  const auto& chosen = shared.chosen();
   if (!chosen)
     return;
   const mux::conversation* one = model->find(*chosen);
@@ -139,7 +139,7 @@ void app::apply(const request::banner_pressed& one) {
 // The chat's head pressed, off its buttons: its info, where the chat is
 // shown one thing at a time -- as Telegram's phones.
 void app::apply(const request::head_pressed&) {
-  if (root().main().single && root().main().chosen)
+  if (shared.single() && shared.chosen())
     this->apply(request::toggle_info{});
 }
 void app::apply(const request::card_action& one) {
@@ -154,7 +154,7 @@ void app::apply(const request::toggle_info&) {
   // An encrypted room's members, what is known of each one's identity asked
   // for, for their rows -- up to two hundred: the account answers from what
   // it holds, and no more than a page of rows is looked at.
-  if (const auto& chosen = root().main().chosen; chosen && !shared.demo())
+  if (const auto& chosen = shared.chosen(); chosen && !shared.demo())
     if (const mux::conversation* chat = model->find(*chosen); chat && chat->encrypted)
       for (const mux::member& each : std::views::take(chat->members, 200))
         net->ask_trust(chosen->account, each.id);
@@ -168,8 +168,8 @@ void app::apply(const request::jump_to_end&) {
   // before the jump among them -- then back where a jump in it came from,
   // where there is one: found there, not fetched as a window of its own,
   // which had only what the server put around it.
-  if (screen.chosen)
-    this->go_live(*screen.chosen);
+  if (shared.chosen())
+    this->go_live(*shared.chosen());
   jumps.to_end(taker{this});
 }
 

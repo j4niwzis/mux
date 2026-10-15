@@ -502,6 +502,11 @@ void app::before_frame() {
   suggestions.show();
   threads.show();
   pictures.viewer_tick();
+  // The window's shape, as its size is: and the panel docked under the
+  // field on a phone's, the field standing over it.
+  if (const auto box = scene.viewport(); *showing.look<mux::ui::window_shape>() != mux::ui::window_shape{box.width(), box.height()})
+    mux::ui::show(showing, mux::ui::window_shape{box.width(), box.height()});
+  shared.ui.set_docked_panel_height(shared.emoji_open() ? mux::ui::docked_height(*showing.look<mux::ui::window_shape>()) : 0.0f);
   if (model->expire_typing())
     chats_binding.refresh(root(), model->chats());
   store.flush_reads();

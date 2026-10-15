@@ -182,6 +182,8 @@ struct shown_root {
   skiff::model::Tracked<banner_shown> banner;
   skiff::model::Tracked<suggestions_shown> suggested;
   skiff::model::Tracked<threads_shown> threads_list;
+  // The window's shape, from its size: a phone's, or not.
+  skiff::model::Tracked<window_shape> shape;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -377,6 +379,9 @@ auto layer_made_by(const Needs& needs) {
 }
 struct make_menu {
   auto operator()(const ui_needs& n, const menu_facts& facts) const { return context_menu(n, facts); }
+};
+struct make_emoji_popup {
+  auto operator()(const ui_needs& n, const emoji_facts& facts) const { return emoji_popup(n, facts); }
 };
 struct make_viewer {
   auto operator()(const ui_needs& n, const viewer_facts& facts) const { return picture_viewer(n, facts); }
@@ -672,7 +677,7 @@ struct window : skiff::compose::Specced {
       shown_in<passphrase_box_t, passphrase_facts> passphrase;
       // An emoji verification, as it goes.
       shown_in<verification_box, verification_view> verifying;
-      skiff::bind::Bound<std::optional<emoji_facts>, shown_layer<emoji_popup, emoji_facts, ui_needs>> emoji;
+      skiff::bind::Bound<std::optional<emoji_facts>, made_layer<emoji_facts, ui_needs, make_emoji_popup>> emoji;
       skiff::bind::Bound<std::optional<menu_facts>, made_layer<menu_facts, ui_needs, make_menu>> menu;
       skiff::bind::Bound<std::optional<viewer_facts>, made_layer<viewer_facts, ui_needs, make_viewer>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
@@ -705,7 +710,7 @@ struct window : skiff::compose::Specced {
     }
     void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
       last_press = {press.x, press.y};
-      press_off_emoji = parts.emoji.shown() && !parts.emoji.shown()->parts.card.bounds().contains(press.x, press.y)
+      press_off_emoji = parts.emoji.shown() && !popup_card(*parts.emoji.shown()).bounds().contains(press.x, press.y)
                             ? std::optional<skia::SkPoint>(skia::SkPoint::Make(press.x, press.y))
                             : std::nullopt;
       if (parts.text_menu_up && !parts.text_menu_up->bounds().contains(press.x, press.y)) {
@@ -835,7 +840,7 @@ struct window : skiff::compose::Specced {
                     shown_made<passphrase_box_t, passphrase_facts>(n),
                 .verifying =
                     shown_made<verification_box, verification_view>(n),
-                .emoji = layer_for<emoji_popup, emoji_facts>(n),
+                .emoji = layer_made_by<emoji_facts, make_emoji_popup>(n),
                 .menu = layer_made_by<menu_facts, make_menu>(n),
                 .viewer = layer_made_by<viewer_facts, make_viewer>(n),
                 .over_all = plugin_layers_t::made(n)} {
@@ -1072,9 +1077,8 @@ struct window : skiff::compose::Specced {
     std::vector<emote_picture> shown;
     // Those the panel's pages show, in view: the emoji's, every plugin's.
     if (up) {
-      const skia::SkRect view = up->parts.card.bounds();
-      emote_pictures_in(up->parts.card.parts.panel, view, shown);
-      std::apply([&](auto&... page) { ((page ? emote_pictures_in(*page, view, shown) : void()), ...); }, up->parts.card.parts.pages);
+      const skia::SkRect view = popup_card(*up).bounds();
+      emote_pictures_in(popup_card(*up), view, shown);
     }
     // And those of what a message's menu unrolled: every emoji.
     if (auto* menu = layer().menu.shown())

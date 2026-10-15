@@ -56,6 +56,7 @@ import mux.app.looks;
 import mux.app.threads;
 import mux.app.jumps;
 import mux.app.chat_view;
+import mux.app.suggestions;
 import mux.app.emoji;
 import mux.app.accounts;
 import mux.app.local_data;
@@ -126,6 +127,7 @@ struct app : kept_settings {
   threads_part threads{shared};
   jumps_part jumps{shared};
   chat_view_part chat_view{shared};
+  suggestions_part suggestions{shared};
   emoji_part emoji{&shared};
   accounts_part accounts_screen{shared, *this};
   local_data_part local_data{shared, *this};
@@ -267,7 +269,7 @@ struct app : kept_settings {
   auto parts() {
     return std::tuple_cat(
         std::tie(search, pictures, reading, outbox, settings, menu, notices, marks, paging, verification, proxying,
-                 packs, rooms, room_card, preferences, manage, looks, threads, jumps, chat_view, emoji, accounts_screen, local_data),
+                 packs, rooms, room_card, preferences, manage, looks, threads, jumps, chat_view, suggestions, emoji, accounts_screen, local_data),
         std::apply([](auto&... theirs) { return std::tie(theirs...); }, plugin_parts));
   }
   template <class Request>

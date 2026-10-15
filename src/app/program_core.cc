@@ -497,6 +497,7 @@ void app::before_frame() {
     jumps.to_newest();
   jumps.go_on(taker{this});
   chat_view.show();
+  suggestions.show();
   if (model->expire_typing())
     chats_binding.refresh(root(), model->chats());
   store.flush_reads();

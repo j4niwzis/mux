@@ -75,6 +75,48 @@ auto suggestion_row(const palette& colours, Pick pick, Face face, std::string fi
                      .hoverBackground = colours.chosen, .selectedBackground = colours.chosen}),
       std::move(face), two_lines(colours, std::move(first), std::move(second), 14.0f, 1.0f)), std::move(label));
 }
+// One of the list over the composer, as the program has it: a member (their
+// avatar, their name, their id) or an emoji (its picture or character, its
+// name, its code), where it is in the list, and whether it is lit.
+struct suggestion {
+  std::size_t at = 0;
+  bool person = false;
+  std::string id;       // whose avatar, a member's
+  std::string glyph;    // the emoji's character
+  std::string picture;  // a custom emoji's picture
+  std::string title, sub;
+  bool lit = false;
+  friend bool operator==(const suggestion&, const suggestion&) = default;
+};
+struct suggestions_shown {
+  std::vector<suggestion> items;
+  friend bool operator==(const suggestions_shown&, const suggestions_shown&) = default;
+};
+using suggestion_face = spl::variant<nodes::Text, nodes::Image<from_emotes>, avatar_mark_t<avatar_of::person>>;
+[[nodiscard]] inline suggestion_face face_of(const palette& colours, const suggestion& one) {
+  if (one.person)
+    return suggestion_face(std::in_place_index<2>, avatar_mark(avatar_of::person{}, one.id, one.title, 28.0f));
+  if (one.picture.empty())
+    return suggestion_face(std::in_place_index<0>, nodes::Text(one.glyph, 22.0f, colours.text));
+  suggestion_face face(std::in_place_index<1>, from_emotes{one.picture});
+  spl::get<1>(face).apply({.width = 28.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle});
+  return face;
+}
+// Over the field: the members matching what follows an @ at the end of
+// what is written, or the emoji matching what follows a ':' -- six at
+// most, the lit one marked; pressed, picked. As the program says.
+inline auto suggestions_for(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::shown_for<suggestions_shown>([](const suggestions_shown& now) { return !now.items.empty(); },
+      c::projected<suggestions_shown>([](const suggestions_shown& now) { return now.items; },
+          c::listed<suggestion>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .background = colours.sidebar}),
+              [&colours](const suggestion& one) {
+                auto row = suggestion_row(colours, sends<request::suggestion_pick>{{one.at}}, face_of(colours, one), one.title, one.sub);
+                row.apply({.selected = one.lit});
+                return row;
+              })));
+}
+using suggestions_t = decltype(suggestions_for(std::declval<const palette&>()));
 // No account at all: what to do about it.
 inline auto no_accounts_yet(const palette& colours) {
   using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
@@ -97,7 +139,7 @@ inline auto select_a_chat() {
 
 struct conversations_screen : skiff::compose::Stacked {
   // What its keys and its swipes ask for.
-  using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::selection_copy, ::mux::ui::request::selection_delete, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of>;
+  using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::selection_copy, ::mux::ui::request::selection_delete, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of, ::mux::ui::request::suggestion_step, ::mux::ui::request::suggestion_pick, ::mux::ui::request::suggestion_close>;
   // What it was handed, for the rows it makes.
   ui_needs needs_;
   std::optional<conversation_id> chosen;
@@ -126,52 +168,6 @@ struct conversations_screen : skiff::compose::Stacked {
   std::set<conversation_id> receipts_in;
   // The chats that show no link previews.
   std::set<conversation_id> previews_off;
-  // The @ list: the chat's members matching what follows an @ at the end of
-  // what is written, as Telegram's; who was picked from it, to be sent as
-  // mentions with the message.
-  std::vector<member> mention_matches;
-  std::size_t mention_lit = 0;
-  std::string mention_query;
-  struct pick_mention {
-    conversations_screen* screen;
-    std::size_t index;
-    skiff::model::Nothing operator()() const { screen->choose_mention(index); return {}; }
-  };
-  // The emoji list: the emoji whose names or keywords (CLDR's, English and
-  // Russian) have what follows a ':' at the end of what is written -- one at
-  // its start or after a space, two letters at least -- as tdesktop's
-  // suggestions; the one picked put in their place.
-  struct emoji_choice { std::string text, name, picture; };
-  std::vector<emoji_choice> emoji_matches;
-  std::size_t emoji_lit = 0;
-  std::string emoji_query;
-  std::optional<conversation_id> emoji_room;
-  struct pick_emoji {
-    conversations_screen* screen;
-    std::size_t index;
-    skiff::model::Nothing operator()() const { screen->choose_emoji(index); return {}; }
-  };
-  // A row of a list over the field -- the @ list's, the emoji list's: what
-  // it shows at its start, its text beside it; lit while Up and Down are
-  // on it, pressed to pick.
-
-  using emoji_face = spl::variant<nodes::Text, nodes::Image<from_emotes>>;
-  using mention_row = decltype(suggestion_row(std::declval<const palette&>(), std::declval<pick_mention>(),
-      std::declval<legacy::avatar_mark>(), std::string{}, std::string{}));
-  using emoji_row = decltype(suggestion_row(std::declval<const palette&>(), std::declval<pick_emoji>(),
-      std::declval<emoji_face>(), std::string{}, std::string{}));
-  template <class Row> struct suggestion_list : skiff::compose::Stacked {
-    struct parts_t {
-      std::vector<Row> rows;
-    } parts;
-    explicit suggestion_list(const palette &colours)
-        : Stacked(skiff::compose::vbox(0.0f, {.fillX = true,
-                                              .autoSize = scene::axes::kY,
-                                              .background = colours.sidebar})) {
-    }
-  };
-  using mention_list = suggestion_list<mention_row>;
-  using emoji_list = suggestion_list<emoji_row>;
   // The account to list once the model has it: the one shown last, kept.
   // Taken the first time it is there; dropped when an account is chosen.
   std::optional<account_id> wanted;
@@ -408,175 +404,21 @@ struct conversations_screen : skiff::compose::Stacked {
     conversations_screen* screen;
     void operator()(const folder_t& which) const { screen->choose_folder(which); }
   };
-  // The @ list, as what is written now asks: what follows the last @ at
-  // its end -- one at its start or after a space, with no space after it --
-  // matched against the chat's members, by name or ID, as Telegram does.
-  void find_mentions() {
-    const std::string& text = composer_text(chat.line);
-    std::optional<std::string> query;
-    if (const auto at = text.rfind('@'); at != std::string::npos && (at == 0 || text[at - 1] == ' ' || text[at - 1] == '\n')) {
-      const std::string_view after = std::string_view(text).substr(at + 1);
-      if (after.find_first_of(" \n") == std::string_view::npos)
-        query = std::string(after);
-    }
-    const conversation* in = chosen && last_model ? last_model->find(*chosen) : nullptr;
-    if (!query || in == nullptr || !is_group(*in)) {
-      if (chat.parts.mentions.visible()) {
-        chat.parts.mentions.setVisible(false);
-        mention_matches.clear();
-        fState.relayoutQuietly();
-      }
-      mention_query.clear();
-      return;
-    }
-    if (*query == mention_query && chat.parts.mentions.visible())
-      return;
-    mention_query = *query;
-    constexpr auto lower = mux::logic::folded;
-    const std::string wanted = lower(*query);
-    mention_matches.clear();
-    for (const member& one : in->members) {
-      if (chosen && one.id == chosen->account.address)
-        continue;
-      if (lower(one.name).find(wanted) != std::string::npos || lower(one.id).find(wanted) != std::string::npos)
-        mention_matches.push_back(one);
-      if (mention_matches.size() == 6)
-        break;
-    }
-    auto& rows = chat.parts.mentions.parts.rows;
-    rows.clear();
-    for (std::size_t i = 0; i < mention_matches.size(); ++i)
-      rows.push_back(suggestion_row(*needs_.colours, pick_mention{this, i},
-                        legacy::avatar_mark(avatar_of::person{}, mention_matches[i].id,
-                                    mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, 28.0f),
-                        mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, mention_matches[i].id));
-    mention_lit = 0;
-    if (!rows.empty())
-      rows.front().fState.apply({.selected = true});
-    chat.parts.mentions.setVisible(!rows.empty());
-    fState.relayoutQuietly();
-  }
-  // One picked: the @ and what follows it made their name, and they kept
-  // to be mentioned when it is sent.
-  void choose_mention(std::size_t index) {
-    if (index >= mention_matches.size())
-      return;
-    const member one = mention_matches[index];
-    const std::string& text = composer_text(chat.line);
-    const auto at = text.rfind('@');
-    if (at == std::string::npos)
-      return;
-    put_mention(chat.line, at, one.name.empty() ? one.id : one.name, one.id);
-    mention_query.clear();
-    mention_matches.clear();
-    chat.parts.mentions.parts.rows.clear();
-    chat.parts.mentions.setVisible(false);
-    fState.relayoutQuietly();
-  }
-  // The emoji list, as what is written now asks.
-  void find_emoji() {
-    const std::string& text = composer_text(chat.line);
-    std::optional<std::string> query;
-    if (const auto colon = text.rfind(':');
-        colon != std::string::npos && (colon == 0 || text[colon - 1] == ' ' || text[colon - 1] == '\n')) {
-      const std::string_view after = std::string_view(text).substr(colon + 1);
-      if (after.size() >= 2 && after.find_first_of(" \n:") == std::string_view::npos)
-        query = std::string(after);
-    }
-    auto& list = chat.parts.emojis;
-    if (!query) {
-      if (list.visible()) {
-        list.setVisible(false);
-        emoji_matches.clear();
-        fState.relayoutQuietly();
-      }
-      emoji_query.clear();
-      return;
-    }
-    // The same as before: as it was -- closed, where Esc closed it.
-    if (*query == emoji_query && emoji_room == chosen)
-      return;
-    emoji_query = *query;
-    emoji_room = chosen;
-    emoji_matches.clear();
-    const auto* room = chosen && last_model ? last_model->find(*chosen) : nullptr;
-    const auto wanted = mux::logic::folded(*query);
-    if (room && proto::offers(protocol_state_of(*needs_.shared, room->id.account), proto::feature::sticker_packs{}))
-      for (const auto& emoji : room->emotes) {
-        if (!mux::logic::folded(emoji.shortcode).contains(wanted) && !mux::logic::folded(emoji.body).contains(wanted)) continue;
-        const auto label = ":" + emoji.shortcode + ":";
-        if (std::ranges::any_of(emoji_matches, [&](const auto& old) { return old.picture == emoji.url && old.text == label; })) continue;
-        emoji_matches.push_back({label, emoji.shortcode, emoji.url});
-        if (emoji_matches.size() == 6) break;
-      }
-    for (const auto* emoji : mux::logic::emoji_found(*query, 6 - emoji_matches.size()))
-      emoji_matches.push_back({std::string(emoji->text), std::string(emoji->name), {}});
-    auto& rows = list.parts.rows;
-    rows.clear();
-    for (std::size_t i = 0; i < emoji_matches.size(); ++i) {
-      const auto& emoji = emoji_matches[i];
-      emoji_face face(std::in_place_index<0>, nodes::Text(emoji.text, 22.0f, needs_.colours->text));
-      if (!emoji.picture.empty()) {
-        face.template emplace<1>(from_emotes{emoji.picture});
-        auto& picture = spl::get<1>(face);
-        picture.apply({.width = 28.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle});
-      }
-      rows.push_back(suggestion_row(*needs_.colours, pick_emoji{this, i}, std::move(face), emoji.name, emoji.picture.empty() ? "" : emoji.text));
-    }
-    emoji_lit = 0;
-    if (!rows.empty())
-      rows.front().fState.apply({.selected = true});
-    list.setVisible(!rows.empty());
-    fState.relayoutQuietly();
-  }
-  // One picked: the ':' and what follows it made that emoji.
-  void choose_emoji(std::size_t index) {
-    if (index >= emoji_matches.size())
-      return;
-    const auto emoji = emoji_matches[index];
-    const auto colon = composer_text(chat.line).rfind(':');
-    if (colon == std::string::npos)
-      return;
-    if (emoji.picture.empty()) put_over_end(chat.line, colon, emoji.text);
-    else {
-      composer_field(chat.line).select(colon, composer_text(chat.line).size());
-      composer_field(chat.line).insertAtom("\u2003", emoji.picture, emoji.text, true);
-    }
-    emoji_query.clear();
-    emoji_matches.clear();
-    chat.parts.emojis.parts.rows.clear();
-    chat.parts.emojis.setVisible(false);
-    fState.relayoutQuietly();
-  }
-  // Up and Down through a list over the field, Enter or Tab picks, Esc
-  // closes it: true where the key was the list's.
-  template <class List, class Choose>
-  bool list_keys(List& list, std::size_t& lit, Choose choose, const scene::key::down& press) {
+  // Up and Down through the list over the field, Enter or Tab picks, Esc
+  // closes it -- the program's (suggestions_shown): what the key asks, where
+  // the list is up. Modified arrows are the screen's reply and chat keys.
+  [[nodiscard]] std::optional<Answer> suggestion_keys(const scene::key::down& press) const {
     namespace keys = scene::keys;
-    auto& rows = list.parts.rows;
-    // Modified arrows belong to the screen's reply/chat shortcuts, even
-    // while mention or emoji suggestions are visible.
-    if (!list.visible() || rows.empty() ||
-        press.modifiers.template has<scene::modifier::control>() ||
+    if (!chat.parts.suggestions.visible() || press.modifiers.template has<scene::modifier::control>() ||
         press.modifiers.template has<scene::modifier::alt>())
-      return false;
-    if (press.key == keys::kUp || press.key == keys::kDown) {
-      rows[lit].fState.apply({.selected = false});
-      const std::size_t n = rows.size();
-      lit = press.key == keys::kUp ? (lit + n - 1) % n : (lit + 1) % n;
-      rows[lit].fState.apply({.selected = true});
-      return true;
-    }
-    if (press.key == keys::kEnter || press.key == keys::kTab) {
-      choose(lit);
-      return true;
-    }
-    if (press.key == keys::kEscape) {
-      list.setVisible(false);
-      fState.relayoutQuietly();
-      return true;
-    }
-    return false;
+      return std::nullopt;
+    if (press.key == keys::kUp || press.key == keys::kDown)
+      return request::suggestion_step{press.key == keys::kDown};
+    if (press.key == keys::kEnter || press.key == keys::kTab)
+      return request::suggestion_pick{};
+    if (press.key == keys::kEscape)
+      return request::suggestion_close{};
+    return std::nullopt;
   }
   // The keys, while the list is up: Up and Down through it, Enter picks,
   // Esc closes it -- before the input reads Enter as sending.
@@ -608,10 +450,10 @@ struct conversations_screen : skiff::compose::Stacked {
       reply.handle();
       return std::nullopt;
     }
-    if (this->list_keys(chat.parts.mentions, mention_lit, [this](std::size_t i) { this->choose_mention(i); }, press) ||
-        this->list_keys(chat.parts.emojis, emoji_lit, [this](std::size_t i) { this->choose_emoji(i); }, press))
+    auto asked = this->suggestion_keys(press);
+    if (asked)
       reply.handle();
-    return std::nullopt;
+    return asked;
   }
   void choose_folder(const folder_t& which) {
     if (which != folder)
@@ -699,8 +541,7 @@ struct conversations_screen : skiff::compose::Stacked {
       // Its protocol's own node under the head (make_head_view).
       std::optional<head_view_holder> their_head;
       chat_area_t area;
-      mention_list mentions;
-      emoji_list emojis;
+      suggestions_t suggestions;
       // Over the composer: what the chat's protocol says there -- Matrix's
       // warning that the other is not verified, or was reset.
       composer_banner_t banner;
@@ -729,9 +570,7 @@ struct conversations_screen : skiff::compose::Stacked {
               .pinned = pinned_bar_for(*n.colours),
               .plugins = column_parts_t::made(n),
               .area = chat_area(n),
-              .mentions =
-                  skiff::compose::visible(false, mention_list(*n.colours)),
-              .emojis = skiff::compose::visible(false, emoji_list(*n.colours)),
+              .suggestions = suggestions_for(*n.colours),
               .banner = composer_banner_for(*n.colours),
               .line = composer_bar<>(n),
               .empty = no_accounts_yet(*n.colours),

@@ -382,8 +382,6 @@ void conversations_screen::update(double now_ms) {
     needs_.paint->panel.opacity = ease.from + (ease.to - ease.from) * ease.t.value();
     this->markDamaged();
   }
-  this->find_mentions();
-  this->find_emoji();
   // What is in the composer: typing while there is text in it.
   if (const bool has_text = !composer_text(line).empty(); has_text != was_typing || (has_text && composer_text(line) != typed_last)) {
     was_typing = has_text;

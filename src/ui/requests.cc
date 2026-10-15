@@ -705,6 +705,16 @@ struct banner_pressed {
 // chat shown.
 struct banner_button {};
 struct banner_close {};
+// The list over the composer -- the @ list, the : list: the next or the
+// one before lit, one picked (the lit one, where none is said), or the
+// list closed until something else is asked.
+struct suggestion_step {
+  bool down = true;
+};
+struct suggestion_pick {
+  std::optional<std::size_t> at;
+};
+struct suggestion_close {};
 // One of a person's card's buttons of its protocol's own: by where it is
 // among them.
 struct card_action {

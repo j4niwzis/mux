@@ -87,8 +87,8 @@ inline auto profile_cover(const palette& colours, const std::string& key, const 
   banner.keepBox();
   return c::column(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::visible(has_banner, c::styled({.fill = true, .place = scene::anchor::kTopLeft}, std::move(banner))),
-      c::visible(has_banner, c::styled({.fill = true, .place = scene::anchor::kTopLeft}, nodes::Box<>(skia::colorSetARGB(96, 0, 0, 0)))),
+      c::visible(has_banner, c::styled({.place = scene::anchor::kTopLeft, .fill = true}, std::move(banner))),
+      c::visible(has_banner, c::styled({.place = scene::anchor::kTopLeft, .fill = true}, nodes::Box<>(skia::colorSetARGB(96, 0, 0, 0)))),
       profile_cover_details(profile_text_colours(colours, has_banner), key, facts));
 }
 using profile_cover_t = decltype(profile_cover(std::declval<const palette&>(), "", std::declval<const person_facts&>()));

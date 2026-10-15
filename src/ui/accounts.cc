@@ -520,7 +520,7 @@ inline auto side_column(const palette& colours) {
   namespace c = skiff::compose;
   return c::spec_for<panel_read>([](const panel_read& now) {
     const bool narrow = now && now->narrow;
-    return scene::Spec{.fillY = true, .fillX = narrow, .width = narrow ? 0.0f : kListWidth};
+    return scene::Spec{.fillX = narrow, .fillY = true, .width = narrow ? 0.0f : kListWidth};
   }, c::column(c::vbox(0.0f, {.fillY = true, .background = colours.sidebar}),
       c::projected<panel_read>([](const panel_read& now) { return side_key{chosen_of(now).has_value(), now ? now->toward : 1.0f}; },
           c::mount<side_made_t, side_key>([at = &colours](const side_key& key) { return std::tuple{side_made(*at, key)}; },

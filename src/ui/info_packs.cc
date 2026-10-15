@@ -246,7 +246,7 @@ inline auto pack_editor(const palette& colours, const pack_opened& opened) {
       c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}, .disabled = !opened.editable}),
              c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Use as emoji", 13.0f, colours.text)),
              use_switch(colours, sends<request::pack_use>{{true}}, [](const packs_facts& now) { return now.draft && now.draft->emoji; }),
-             c::styled({.margin = {0.0f, 0.0f, 0.0f, 14.0f}, .alignSelf = scene::align::kMiddle}, nodes::Text("Use as stickers", 13.0f, colours.text)),
+             c::styled({.alignSelf = scene::align::kMiddle, .margin = {0.0f, 0.0f, 0.0f, 14.0f}}, nodes::Text("Use as stickers", 13.0f, colours.text)),
              use_switch(colours, sends<request::pack_use>{{false}}, [](const packs_facts& now) { return now.draft && now.draft->sticker; })),
       c::styled({.margin = {6.0f, 10.0f, 0.0f, 10.0f}}, nodes::Text("Images", 13.0f, colours.dim, true)),
       c::styled({.fillX = true, .grow = scene::axes::kY, .disabled = !opened.editable},

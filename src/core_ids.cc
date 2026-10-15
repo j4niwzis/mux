@@ -143,6 +143,43 @@ struct user_profile {
   friend bool operator==(const user_profile&, const user_profile&) = default;
 };
 
+// Editable profile fields, sent without a stale copy of server metadata.
+struct profile_edit {
+  std::string name, language = "en", pronouns, biography;
+  friend bool operator==(const profile_edit&, const profile_edit&) = default;
+};
+[[nodiscard]] inline std::vector<std::string> profile_lines(std::string_view text) {
+  return text | std::views::split('\n') |
+      std::views::filter([](const auto& line) { return !std::ranges::empty(line); }) |
+      std::views::transform([](const auto& line) { return std::ranges::to<std::string>(line); }) |
+      std::ranges::to<std::vector>();
+}
+[[nodiscard]] inline profile_edit profile_edit_of(const user_profile& profile) {
+  profile_edit out{.name = profile.name.value_or(""), .biography = profile.details.biography.plain};
+  if (!profile.details.pronouns.empty()) out.language = profile.details.pronouns.front().language;
+  out.pronouns = profile.details.pronouns | std::views::filter([&](const auto& one) { return one.language == out.language; }) |
+      std::views::transform(&mux::pronouns::summary) | std::views::join_with(std::string_view("\n")) | std::ranges::to<std::string>();
+  return out;
+}
+[[nodiscard]] inline user_profile with_profile_edit(user_profile current, const profile_edit& edit) {
+  current.name = edit.name;
+  const auto same_language = [&](const auto& one) { return one.language == edit.language; };
+  const auto before = current.details.pronouns | std::views::filter(same_language) |
+      std::views::transform(&mux::pronouns::summary) | std::ranges::to<std::vector>();
+  const auto after = profile_lines(edit.pronouns);
+  if (before != after) {
+    const auto first = std::ranges::find_if(current.details.pronouns, same_language);
+    const auto position = first - current.details.pronouns.begin();
+    std::erase_if(current.details.pronouns, same_language);
+    auto replacements = after | std::views::transform([&](const auto& summary) {
+      return mux::pronouns{edit.language, summary};
+    }) | std::ranges::to<std::vector>();
+    current.details.pronouns.insert(current.details.pronouns.begin() + position, replacements.begin(), replacements.end());
+  }
+  if (edit.biography != current.details.biography.plain) current.details.biography = {edit.biography, {}};
+  return current;
+}
+
 namespace delivery {
 struct sending {
   friend bool operator==(const sending&, const sending&) = default;

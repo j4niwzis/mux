@@ -31,7 +31,19 @@ void app::apply(const request::refresh_profile& one) {
   net->fetch_profile(one.by, one.by.address);
   net->fetch_presence(one.by, one.by.address);
 }
-void app::apply(const request::save_profile& one) { net->set_profile(one.by, one.profile); }
+void app::apply(const request::save_profile& one) {
+  const auto* account = model->accounts().find(one.by);
+  if (!account) return;
+  const auto found = account->profiles.find(one.by.address);
+  if (found == account->profiles.end()) return;
+  auto page = *showing.look<std::optional<mux::ui::account_page_facts>>();
+  if (page && page->by == one.by) {
+    page->profile_saving = true;
+    page->profile_said = "Saving…";
+    mux::ui::show(showing, std::move(page));
+  }
+  net->set_profile(one.by, with_profile_edit(found->second, one.edit));
+}
 void app::apply(const request::save_presence& one) { net->set_presence(one.by, one.now); }
 void app::apply(const request::pick_profile_banner& one) {
   picking_profile_banner_ = one.by;

@@ -11,6 +11,8 @@ import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.image;
 import skiff.widgets.loader;
+import skiff.widgets.sliderbar;
+import skiff.model;
 import mux.platform.video;
 import mux.core;
 import mux.config;
@@ -35,398 +37,157 @@ struct viewer_facts {
   // The video's file, once it is there: played.
   std::optional<std::filesystem::path> file;
 };
-struct picture_viewer : skiff::compose::Stacked {
-  // Child references and handlers require a fixed address.
-  picture_viewer(const picture_viewer&) = delete;
-  picture_viewer& operator=(const picture_viewer&) = delete;
-  picture_viewer(picture_viewer&&) = delete;
-  picture_viewer& operator=(picture_viewer&&) = delete;
-
-  // The colours its menu is made in.
-  const palette* colours_ = nullptr;
-  std::string source;
-  // A video's: its file's source, and it playing once its file is here --
-  // its picture shown in place of the thumbnail, a bar under it.
-  std::optional<std::string> video;
-  std::unique_ptr<mux::platform::video::player> playing;
-  void start(const std::filesystem::path& file) {
-    playing = mux::platform::video::player::open(file);
-    parts.bar.setVisible(playing != nullptr);
-    this->invalidateLayout();
+// The viewer's menu let go.
+struct viewer_menu_closed {};
+// The viewer's menu, where a right press on the picture opened it: the
+// picture copied, or saved. Over all of the viewer, a press anywhere else
+// closing it and doing nothing more.
+inline auto viewer_menu(const palette& colours, const std::string& source, float x, float y) {
+  namespace c = skiff::compose;
+  const auto item = [&](auto asked, std::string label) {
+    return c::onClick(std::tuple{asked, viewer_menu_closed{}},
+        c::column(c::vbox(0.0f, {.fillX = true, .height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = colours.chosen}),
+                  c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(label, 13.0f, colours.text))),
+        label);
+  };
+  return c::onClick(viewer_menu_closed{},
+      c::column(c::vbox(0.0f, {.fill = true}),
+          c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .x = x, .y = y, .width = 200.0f, .autoSize = scene::axes::kY,
+                                   .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = colours.sidebar,
+                                   .border = scene::Border{colours.band, 1.0f}, .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
+                    item(request::copy_picture{source}, "Copy Image"), item(request::save_picture{source}, "Save As\u2026"))));
+}
+// The viewer's own state, as its parts change it: how far zoomed and moved,
+// and its menu, where a right press on the picture opened it.
+struct viewer_tag {};
+struct viewer_view {
+  float zoom = 1.0f, x = 0.0f, y = 0.0f;
+  std::optional<std::pair<float, float>> menu;
+  friend bool operator==(const viewer_view&, const viewer_view&) = default;
+};
+struct viewer_events {
+  auto on(const skiff::compose::ZoomBy<viewer_tag>& by, const viewer_view& now) const {
+    viewer_view next = now;
+    next.zoom = std::clamp(now.zoom * by.factor, 1.0f, 8.0f);
+    if (next.zoom == 1.0f)
+      next.x = next.y = 0.0f;
+    return skiff::model::over<viewer_view>(skiff::model::setTo(std::move(next)));
   }
-  // The viewer's own buttons act on it; the rest on the program.
-  struct zoom_by {
-    picture_viewer* viewer;
-    float factor;
-    void operator()() const { viewer->zoom_to(viewer->zoom * factor); }
-  };
-  struct save_it {
-    using Answer = ::mux::ui::request::save_picture;
-    std::string source;
-    ::mux::ui::request::save_picture operator()() { return ::mux::ui::request::save_picture{source}; }
-  };
-  // The loader pressed: the download stopped, or started again.
-  struct press_loader {
-    using Answer = ::mux::ui::request::press_loader;
-    picture_viewer* viewer;
-    ::mux::ui::request::press_loader operator()() const { return ::mux::ui::request::press_loader{viewer->video.value_or(viewer->source)}; }
-  };
-  struct top_bar : skiff::compose::Stacked {
-    using close_button = legacy::icon_button<sends<::mux::ui::request::close_picture>>;
-    struct parts_t {
-      legacy::avatar_mark face;
-      two_lines_t texts;
-      nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
-      legacy::icon_button<zoom_by> smaller;
-      legacy::icon_button<zoom_by> larger;
-      legacy::icon_button<save_it> save;
-      close_button close;
-    } parts;
-    top_bar(const palette &colours, picture_viewer *viewer,
-            const std::string &source, const std::string &sender,
-            const std::string &name, const std::string &when)
-        : Stacked(skiff::compose::hbox(
-              8.0f, {.fillX = true,
-                     .height = 56.0f,
-                     .padding = {0.0f, 12.0f, 0.0f, 16.0f}})),
-          parts{
-              .face = legacy::avatar_mark(avatar_of::person{}, sender, name, 36.0f),
-              .texts = two_lines(colours, name, when, 14.0f, 2.0f, two_line_style{
-                  .first_ink = skia::colorSetARGB(255, 255, 255, 255), .second_ink = skia::colorSetARGB(255, 200, 200, 200)}),
-              .smaller = legacy::icon_button<zoom_by>(colours, icon::minus{},
-                                              {viewer, 1.0f / 1.25f}),
-              .larger =
-                  legacy::icon_button<zoom_by>(colours, icon::plus{}, {viewer, 1.25f}),
-              .save = legacy::icon_button<save_it>(colours, icon::download{}, {source}),
-              .close = close_button(colours, icon::close{}, {})} {
-      parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
-      // White on the dark of the viewer.
-      for (auto* white : {&parts.smaller, &parts.larger})
-        white->set_colour(skia::colorSetARGB(255, 255, 255, 255));
-      parts.close.set_colour(skia::colorSetARGB(255, 255, 255, 255));
-      parts.save.set_colour(skia::colorSetARGB(255, 255, 255, 255));
-      for (scene::Node* middle : std::initializer_list<scene::Node*>{&parts.smaller, &parts.larger, &parts.save, &parts.close})
-        middle->apply({.alignSelf = scene::align::kMiddle});
-    }
-  };
-  // Where the picture is drawn: fitted, zoomed, moved.
-  struct stage : skiff::compose::Specced {
-    // A press off the picture: closed.
-    using Answer = ::mux::ui::request::close_picture;
-    picture_viewer* viewer;
-    // The picture: the whole one where it has come, its thumbnail until then.
-    struct parts_t {
-      // The picture shown: whole where it has come, else its thumbnail.
-      struct shown_picture {
-        picture_viewer* viewer;
-        const skia::Sp<skia::SkImage>* operator()() const {
-          if (viewer->playing && viewer->playing->picture())
-            return &viewer->playing->picture();
-          const skia::Sp<skia::SkImage>* one = whole_pictures().find(viewer->source);
-          return one && *one ? one : thumbnails().find(viewer->source);
-        }
-      };
-      nodes::Image<shown_picture> picture;
-      widgets::RadialLoader<press_loader> loader;  // while the whole picture is coming
-    } parts;
-    explicit stage(picture_viewer *v)
-        : Specced({.fillX = true, .grow = scene::axes::kY, .masking = true}),
-          viewer(v),
-          parts{.picture = nodes::Image<typename parts_t::shown_picture>({v}),
-                .loader = skiff::compose::styled(
-                    {.place = scene::anchor::kCentre},
-                    widgets::RadialLoader<press_loader>(44.0f, {v}))} {}
-    // A video playing: frames while it plays.
-    [[nodiscard]] bool settling() const { return viewer->playing && !viewer->playing->paused(); }
-    void update(double now) {
-      if (viewer->playing) {
-        const bool first = !viewer->playing->picture();
-        if (viewer->playing->advance(now)) {
-          parts.picture.markDamaged();
-          if (first)
-            this->invalidateLayout();  // its own size, not the thumbnail's
-        }
-        viewer->parts.bar.show(*viewer->playing);
-      }
-      // What is coming: the whole picture, or the video's file.
-      const std::string& loading = viewer->video.value_or(viewer->source);
-      const bool coming = viewer->video ? !viewer->playing : !whole_pictures().has(viewer->source);
-      if (coming != parts.loader.visible())
-        parts.loader.setVisible(coming);
-      if (coming) {
-        parts.loader.setProgress(progress_of(loading));
-        parts.loader.setStopped(stopped_downloads().contains(loading));
-      }
-    }
-    // Where the picture goes: fitted, zoomed, moved -- laid out there, not
-    // drawn there by hand.
-    void layoutChildren() {
-      const skia::SkRect at = this->where();
-      const skia::SkRect& box = fState.fBounds;
-      parts.picture.apply({.x = at.fLeft - box.fLeft, .y = at.fTop - box.fTop, .width = at.width(), .height = at.height()});
-      scene::layoutChildrenInContentBox(*this);
-    }
-    [[nodiscard]] const skia::Sp<skia::SkImage>* image() const {
-      if (viewer->playing && viewer->playing->picture())
-        return &viewer->playing->picture();
-      const skia::Sp<skia::SkImage>* one = whole_pictures().find(viewer->source);
-      if (!one || !*one)
-        one = thumbnails().find(viewer->source);
-      return one && *one ? one : nullptr;
-    }
-    [[nodiscard]] skia::SkRect where() const {
-      const skia::Sp<skia::SkImage>* one = this->image();
-      const skia::SkRect& box = fState.fBounds;
-      if (!one)
-        return skia::SkRect::MakeEmpty();
-      const float w = static_cast<float>((*one)->width()), h = static_cast<float>((*one)->height());
-      const float fit = std::min({1.0f, (box.width() - 48.0f) / w, (box.height() - 48.0f) / h});
-      const float scale = fit * viewer->zoom;
-      return skia::SkRect::MakeXYWH(box.centerX() - w * scale * 0.5f + viewer->pan_x,
-                                    box.centerY() - h * scale * 0.5f + viewer->pan_y, w * scale, h * scale);
-    }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool onScroll(float ticks) {
-      viewer->zoom_to(viewer->zoom * std::pow(1.25f, ticks));
-      return true;
-    }
-    bool dragging = false;
-    float last_x = 0.0f, last_y = 0.0f;
-    using Node::onPointer;
-    std::optional<::mux::ui::request::close_picture> onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
-      // Its menu up: a press anywhere else closes it, and does nothing more.
-      if (viewer->parts.menu) {
-        viewer->close_menu_later();
-        reply.handle();
-        return std::nullopt;
-      }
-      // The other button on the picture: its menu, there.
-      if (press.button == 3) {
-        if (this->where().contains(press.x, press.y)) {
-          const skia::SkRect& whole = viewer->fState.fBounds;
-          viewer->parts.menu.emplace(viewer, press.x - whole.fLeft, press.y - whole.fTop);
-          viewer->invalidateLayout();
-        }
-        reply.handle();
-        return std::nullopt;
-      }
-      // Off the picture: closed. On it, and larger than the room: dragged.
-      if (!this->where().contains(press.x, press.y)) {
-        reply.handle();
-        return ::mux::ui::request::close_picture{};
-      }
-      // On a video playing: paused, or played on.
-      if (viewer->playing) {
-        viewer->playing->toggle();
-        this->markDamaged();
-        reply.handle();
-        return std::nullopt;
-      }
-      dragging = true;
-      last_x = press.x;
-      last_y = press.y;
-      reply.capturePointer();
-      reply.handle();
-      return std::nullopt;
-    }
-
-    void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
-      if (!dragging || viewer->zoom <= 1.0f)
-        return;
-      viewer->pan_x += at.x - last_x;
-      viewer->pan_y += at.y - last_y;
-      last_x = at.x;
-      last_y = at.y;
-      this->invalidateLayout();
-      reply.handle();
-    }
-    void onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) {
-      if (dragging) {
-        dragging = false;
-        reply.releasePointer();
-      }
-    }
-  };
-  // Under a video: how far it has played, a bar pressed to go elsewhere in
-  // it, and its time, as tdesktop's player.
-  struct video_bar : skiff::compose::Stacked {
-    picture_viewer* viewer;
-    struct track_t : skiff::compose::Stacked {
-      struct parts_t {
-        nodes::Box<> played{skia::colorSetARGB(255, 255, 255, 255)};
-      } parts;
-      track_t()
-          : Stacked(skiff::compose::hbox(
-                0.0f,
-                {.height = 4.0f,
-                 .grow = scene::axes::kX,
-                 .alignSelf = scene::align::kMiddle,
-                 .cornerRadius = 2.0f,
-                 .background = skia::colorSetARGB(0x60, 255, 255, 255)})) {
-        parts.played.apply({.fillY = true, .width = 0.0f, .cornerRadius = 2.0f});
-      }
-    };
-    struct parts_t {
-      track_t track;
-      nodes::Text time{"", 13.0f, skia::colorSetARGB(255, 255, 255, 255)};
-    } parts;
-    explicit video_bar(picture_viewer *v)
-        : Stacked(skiff::compose::hbox(
-              12.0f, {.fillX = true,
-                      .height = 44.0f,
-                      .padding = {0.0f, 20.0f, 0.0f, 20.0f}})),
-          viewer(v) {
-      parts.time.apply({.alignSelf = scene::align::kMiddle});
-      this->setVisible(false);
-    }
-    [[nodiscard]] static std::string clock_of(double seconds) {
-      const auto whole = static_cast<std::int64_t>(seconds);
-      return std::format("{}:{:02}", whole / 60, whole % 60);
-    }
-    void show(const mux::platform::video::player& one) {
-      const double length = one.length();
-      const float share = length > 0.0 ? static_cast<float>(one.position() / length) : 0.0f;
-      const float width = std::floor(parts.track.bounds().width() * share);
-      if (std::abs(width - parts.track.parts.played.fState.fWidth) >= 1.0f) {
-        parts.track.parts.played.apply({.width = width});
-        parts.track.invalidateLayout();
-      }
-      if (std::string now = clock_of(one.position()) + " / " + clock_of(length); now != parts.time.text())
-        parts.time.setText(std::move(now));
-    }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    // A press on the bar: there in the video.
-    using Node::onPointer;
-    void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
-      const skia::SkRect track = parts.track.bounds();
-      if (!viewer->playing || track.width() <= 0.0f)
-        return;
-      const double share = std::clamp((press.x - track.fLeft) / track.width(), 0.0f, 1.0f);
-      viewer->playing->seek(share * viewer->playing->length());
-      reply.handle();
-    }
-  };
-  // Its own menu, as a right press on the picture opens it there: the
-  // picture copied, or saved. A press anywhere else closes it.
-  struct copy_it {
-    using Answer = ::mux::ui::request::copy_picture;
-    picture_viewer* viewer;
-    ::mux::ui::request::copy_picture operator()() const { return ::mux::ui::request::copy_picture{viewer->source}; }
-  };
-  struct save_this {
-    using Answer = ::mux::ui::request::save_picture;
-    picture_viewer* viewer;
-    ::mux::ui::request::save_picture operator()() const { return ::mux::ui::request::save_picture{viewer->source}; }
-  };
-  template <class Do> struct menu_row : skiff::compose::Stacked {
-    picture_viewer* viewer;
-    Do act;
-    struct parts_t {
-      nodes::Text label;
-    } parts;
-    menu_row(picture_viewer *v, std::string label)
-        : Stacked(skiff::compose::vbox(
-              0.0f, {.fillX = true,
-                     .height = 33.0f,
-                     .padding = {0.0f, 17.0f, 0.0f, 17.0f},
-                     .hoverBackground = v->colours_->chosen})),
-          viewer(v), act{v},
-          parts{.label = skiff::compose::styled(
-                    {.alignSelf = scene::align::kMiddle},
-                    nodes::Text(std::move(label), 13.0f, v->colours_->text))} {}
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      act_on(fState, act);
-      viewer->close_menu_later();
-      return true;
-    }
-    auto onPress()
-      requires skiff::scene::Answering<Do>
-    {
-      return act();
-    }
-  };
-  struct picture_menu : skiff::compose::Stacked {
-    struct parts_t {
-      menu_row<copy_it> copy;
-      menu_row<save_this> save;
-    } parts;
-    picture_menu(picture_viewer *v, float x, float y)
-        : Stacked(skiff::compose::vbox(
-              0.0f, {.place = scene::anchor::kTopLeft,
-                     .x = x,
-                     .y = y,
-                     .width = 200.0f,
-                     .autoSize = scene::axes::kY,
-                     .padding = {6.0f, 0.0f, 6.0f, 0.0f},
-                     .cornerRadius = 10.0f,
-                     .background = v->colours_->sidebar,
-                     .border = scene::Border{v->colours_->band, 1.0f},
-                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0),
-                                             3.0f}})),
-          parts{.copy = menu_row<copy_it>(v, "Copy Image"),
-                .save = menu_row<save_this>(v, "Save As…")} {}
-    [[nodiscard]] bool acceptsInput() const { return true; }
-  };
-  struct parts_t {
-    top_bar top;
-    stage view;
-    video_bar bar;
-    std::optional<picture_menu> menu;
-  } parts;
-  // The menu let go at the next frame -- not from inside one of its rows.
-  bool menu_done = false;
-  void close_menu_later() {
-    menu_done = true;
-    scene::work::mark(fState.fId);
+  auto on(const skiff::compose::PanBy<viewer_tag>& by, const viewer_view& now) const {
+    viewer_view next = now;
+    next.x += by.dx;
+    next.y += by.dy;
+    return skiff::model::over<viewer_view>(skiff::model::setTo(std::move(next)));
   }
-  [[nodiscard]] bool wantsTick() const { return menu_done; }
-  void update(double) {
-    if (!menu_done)
-      return;
-    menu_done = false;
-    parts.menu.reset();
-    this->invalidateLayout();
+  auto on(const skiff::compose::MenuAt<viewer_tag>& at, const viewer_view& now) const {
+    viewer_view next = now;
+    next.menu = std::pair{at.x, at.y};
+    return skiff::model::over<viewer_view>(skiff::model::setTo(std::move(next)));
   }
-  float zoom = 1.0f;
-  float pan_x = 0.0f, pan_y = 0.0f;
-  void zoom_to(float wanted) {
-    zoom = std::clamp(wanted, 1.0f, 8.0f);
-    if (zoom == 1.0f)
-      pan_x = pan_y = 0.0f;
-    parts.view.invalidateLayout();
-  }
-
-  // Made from what it shows; a video's file played once it is there.
-  picture_viewer(const ui_needs& n, const viewer_facts& facts)
-      : picture_viewer(n, facts.source, facts.sender, facts.name, facts.when) {
-    video = facts.video;
-    if (facts.file)
-      this->start(*facts.file);
-  }
-  picture_viewer(const ui_needs& n, std::string where, std::string sender, std::string name, std::string when)
-      : picture_viewer(n.colours, std::move(where), std::move(sender), std::move(name), std::move(when)) {}
-  picture_viewer(const palette *colours, std::string where, std::string sender,
-                 std::string name, std::string when)
-      : Stacked(skiff::compose::vbox(
-            0.0f,
-            {.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)})),
-        colours_(colours), source(std::move(where)),
-        parts{.top = top_bar(*colours, this, source, sender, name, when),
-              .view = stage(this),
-              .bar = video_bar(this)} {}
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  // Space: a video paused, or played on.
-  using Node::onKey;
-  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
-    if (playing && press.key == scene::keys::kSpace) {
-      playing->toggle();
-      parts.view.markDamaged();
-      reply.handle();
-    }
+  auto on(const viewer_menu_closed&, const viewer_view& now) const {
+    viewer_view next = now;
+    next.menu.reset();
+    return skiff::model::over<viewer_view>(skiff::model::setTo(std::move(next)));
   }
 };
+// What is coming, as the program has it: the whole picture, or a video's
+// file -- how far, and whether its download was stopped.
+struct viewer_load {
+  bool coming = false;
+  std::optional<float> progress;
+  bool stopped = false;
+  friend bool operator==(const viewer_load&, const viewer_load&) = default;
+};
+// A video playing in the viewer, as the program plays it: its frame (a
+// number, newer as one comes), where it is, how long.
+struct video_shown {
+  std::string source;
+  bool playing = false;
+  double at = 0.0, length = 0.0;
+  std::uint64_t frame = 0;
+  friend bool operator==(const video_shown&, const video_shown&) = default;
+};
+// The frames of the video playing, by its source: the program's.
+[[nodiscard]] inline std::map<std::string, skia::Sp<skia::SkImage>, std::less<>>& video_frames() {
+  static std::map<std::string, skia::Sp<skia::SkImage>, std::less<>> frames;
+  return frames;
+}
+// The picture shown: a video's frame where it plays, else the whole
+// picture where it has come, else its thumbnail.
+struct viewer_picture {
+  std::string source, video;
+  const skia::Sp<skia::SkImage>* operator()() const {
+    if (const auto frame = video_frames().find(video); !video.empty() && frame != video_frames().end() && frame->second)
+      return &frame->second;
+    const skia::Sp<skia::SkImage>* one = whole_pictures().find(source);
+    return one && *one ? one : thumbnails().find(source);
+  }
+};
+[[nodiscard]] inline std::string clock_of_seconds(double seconds) {
+  const auto whole = static_cast<std::int64_t>(seconds);
+  return std::format("{}:{:02}", whole / 60, whole % 60);
+}
+// Seeking: where along its bar a video was pressed.
+struct seek_to {
+  using Answer = request::video_seek;
+  request::video_seek operator()(float share) const { return {share}; }
+};
+// A picture or a video seen whole, as tdesktop's media viewer -- over this
+// window, dark behind; at the top who sent it and when, and zoom out and
+// in, save, close; the picture fitted in the rest, zoomed by the wheel or
+// the buttons, dragged about when larger than the room; a press on the dark
+// around it closes it, one on a video pauses or plays it, a right press on
+// it its menu. Under a video, how far it has played (pressed, there) and
+// its time. Its zoom, place and menu its own; the rest the program's.
+inline auto picture_viewer(const ui_needs& n, const viewer_facts& facts) {
+  namespace c = skiff::compose;
+  const palette& colours = *n.colours;
+  const skia::SkColor white = skia::colorSetARGB(255, 255, 255, 255);
+  const scene::Spec middle{.alignSelf = scene::align::kMiddle};
+  auto loader = c::shown_for<viewer_load>([](const viewer_load& now) { return now.coming; },
+      c::applied<viewer_load>([](const viewer_load& now) { return now; },
+          [](widgets::RadialLoader<sends<request::press_loader>>& turning, const viewer_load& now) {
+            turning.setProgress(now.progress);
+            turning.setStopped(now.stopped);
+          },
+          c::styled({.place = scene::anchor::kCentre},
+                    widgets::RadialLoader<sends<request::press_loader>>(44.0f, {{facts.video.empty() ? facts.source : facts.video}}))));
+  auto menu = c::bound<skiff::model::Field<&viewer_view::menu>>(c::mount<decltype(viewer_menu(colours, facts.source, 0.0f, 0.0f)), std::pair<float, float>>(
+      [at = &colours, source = facts.source](const std::pair<float, float>& where) {
+        return std::tuple{viewer_menu(*at, source, where.first, where.second)};
+      },
+      {.place = scene::anchor::kTopLeft, .fill = true}));
+  return c::local<viewer_view>(viewer_events{},
+      c::onKeys([](const scene::key::down& press) {
+                  return press.key == scene::keys::kSpace ? std::optional(request::toggle_video{}) : std::nullopt;
+                },
+          c::column(c::vbox(0.0f, {.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)}),
+              c::row(c::hbox(8.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}}),
+                     avatar_mark(avatar_of::person{}, facts.sender, facts.name, 36.0f),
+                     two_lines(colours, facts.name, facts.when, 14.0f, 2.0f,
+                               two_line_style{.first_ink = white, .second_ink = skia::colorSetARGB(255, 200, 200, 200)}),
+                     c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::SkColor{0})),
+                     c::styled(middle, icon_button(colours, icon::minus{}, sends<skiff::compose::ZoomBy<viewer_tag>>{{1.0f / 1.25f}}, white)),
+                     c::styled(middle, icon_button(colours, icon::plus{}, sends<skiff::compose::ZoomBy<viewer_tag>>{{1.25f}}, white)),
+                     c::styled(middle, icon_button(colours, icon::download{}, sends<request::save_picture>{{facts.source}}, white)),
+                     c::styled(middle, icon_button(colours, icon::close{}, sends<request::close_picture>{}, white))),
+              c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
+                  c::zoomable_for<viewer_view, viewer_tag>([](const viewer_view& now) { return skiff::compose::ZoomView{now.zoom, now.x, now.y}; },
+                      48.0f, request::close_picture{}, request::toggle_video{},
+                      c::applied<video_shown>([](const video_shown& now) { return now.frame; },
+                          [](nodes::Image<viewer_picture>& picture, std::uint64_t) { picture.markDamaged(); },
+                          nodes::Image<viewer_picture>({facts.source, facts.video})),
+                      {.fill = true, .masking = true}),
+                  std::move(loader), std::move(menu)),
+              c::shown_for<video_shown>([](const video_shown& now) { return now.length > 0.0; },
+                  c::row(c::hbox(12.0f, {.fillX = true, .height = 44.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+                         c::applied<video_shown>([](const video_shown& now) { return now.length > 0.0 ? static_cast<float>(now.at / now.length) : 0.0f; },
+                             [](widgets::SliderBar<seek_to>& bar, float share) { bar.setFraction(share); },
+                             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, widgets::SliderBar<seek_to>(colours.widgets, seek_to{}))),
+                         c::text_for<video_shown>([](const video_shown& now) { return clock_of_seconds(now.at) + " / " + clock_of_seconds(now.length); },
+                             c::styled(middle, nodes::Text("", 13.0f, white))))))));
+}
+using picture_viewer_t = decltype(picture_viewer(std::declval<const ui_needs&>(), std::declval<const viewer_facts&>()));
 
 }  // namespace mux::ui
 
@@ -436,5 +197,5 @@ struct picture_viewer : skiff::compose::Stacked {
 // of everything under it, there -- the chats screen's took this unit past
 // ten minutes. Their tables are made once, each in a walks unit of this
 // module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::picture_viewer> = true;  // walks_popups.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::picture_viewer>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::picture_viewer_t> = true;  // walks_popups.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::picture_viewer_t>() noexcept;

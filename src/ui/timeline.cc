@@ -362,6 +362,7 @@ inline auto chat_area(const ui_needs& n) {
                        [](auto& corner, bool wanted, std::size_t unseen) {
                          auto& down = std::get<3>(corner.fParts);
                          down.setVisible(wanted);
+                         // The badge over it: its count, in its one text.
                          auto& badge = std::get<1>(down.fParts);
                          std::get<0>(badge.fParts).setText(std::to_string(unseen));
                          badge.setVisible(unseen > 0);

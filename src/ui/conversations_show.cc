@@ -71,9 +71,9 @@ auto conversations_screen::onKey(scene::phase::bubble, const scene::key::down& p
     asked = ::mux::ui::request::reply_step{false};
   } else if (press.key == keys::kUp && !any && composer_text(line).empty()) {
     asked = ::mux::ui::request::edit_last{};
-  } else if (press.key == keys::kC && control && chat.parts.selection.visible()) {
+  } else if (press.key == keys::kC && control && std::get<chat_part::selection>(chat.fParts).visible()) {
     asked = ::mux::ui::request::selection_copy{};
-  } else if (press.key == keys::kDelete && !any && chat.parts.selection.visible()) {
+  } else if (press.key == keys::kDelete && !any && std::get<chat_part::selection>(chat.fParts).visible()) {
     asked = ::mux::ui::request::selection_delete{};
   } else if (press.key == keys::kC && control) {
     // Text nodes publish an owned copy of their selection as it changes.
@@ -83,13 +83,13 @@ auto conversations_screen::onKey(scene::phase::bubble, const scene::key::down& p
     if (selected.empty())
       return asked;
     skiff::scene::setClipboardText(selected);
-  } else if (press.key == keys::kEscape && !any && chat.parts.selection.visible()) {
+  } else if (press.key == keys::kEscape && !any && std::get<chat_part::selection>(chat.fParts).visible()) {
     // Messages selected, the focus elsewhere than their bar: let go first.
     asked = ::mux::ui::request::selection_cancel{};
-  } else if (press.key == keys::kEscape && !any && search.visible()) {
+  } else if (press.key == keys::kEscape && !any && std::get<chat_part::search>(chat.fParts).visible()) {
     asked = ::mux::ui::request::close_search{};
-  } else if (press.key == keys::kEscape && !any && parts.threads.answering) {
-    parts.threads.stop_answering();
+  } else if (press.key == keys::kEscape && !any && thread_answering) {
+    asked = ::mux::ui::request::thread_answer_cancel{};
   } else if (press.key == keys::kEscape && !any && composer_answering(line)) {
     asked = ::mux::ui::request::cancel_compose{};
   } else if ((press.key == keys::kTab && control) ||
@@ -382,23 +382,6 @@ void conversations_screen::update(double now_ms) {
     needs_.paint->panel.opacity = ease.from + (ease.to - ease.from) * ease.t.value();
     this->markDamaged();
   }
-  // The pin the bar shows, as the view moves: the one above it. Worked out
-  // again only where the view, the messages or the pins moved: it looks
-  // each pin up in the whole timeline.
-  if (chosen && last_model)
-    if (const conversation* one = last_model->find(*chosen); one && !one->pinned.empty()) {
-      const pin_inputs now{*chosen, this->messages().current(), one->timeline.size(), one->pinned.size(),
-                           one->timeline.empty() ? std::string() : one->timeline.front().id};
-      if (now != pin_worked_out) {
-        pin_worked_out = now;
-        if (const std::size_t want = this->pin_above(*one); want != std::min(pinned_step, one->pinned.size() - 1)) {
-          pinned_step = want;
-          this->show_pinned(one);
-        }
-      }
-    }
-  this->find_mentions();
-  this->find_emoji();
   // What is in the composer: typing while there is text in it.
   if (const bool has_text = !composer_text(line).empty(); has_text != was_typing || (has_text && composer_text(line) != typed_last)) {
     was_typing = has_text;
@@ -594,7 +577,7 @@ void conversations_screen::show(const model& now, bool with_chat) {
   if (chosen) {
     const bool files = may_send_files(*needs_.shared, chosen->account);
     input_attach(composer_input(line)).setVisible(files);
-    input_attach(composer_input(parts.threads.parts.line)).setVisible(files);
+    input_attach(composer_input(thread_line())).setVisible(files);
   }
   if (wanted && now.accounts().contains(*wanted)) {
     current = std::exchange(wanted, std::nullopt);
@@ -606,7 +589,6 @@ void conversations_screen::show(const model& now, bool with_chat) {
     rooms_elsewhere.clear();
     people_elsewhere.clear();
   }
-  this->show_connections(now);
   // What the chat list's menus offer: the account shown, and the accounts
   // there are to move a chat to.
   side.current_account = current;
@@ -669,13 +651,7 @@ void conversations_screen::show(const model& now, bool with_chat) {
   listing = this->listing_of(now);
   this->show_rows(now);
   const bool none = now.accounts().empty();
-  // The messages' area, not only its list: hidden, it no longer takes the
-  // column's height and pushes what is said instead to the bottom.
-  // A chat open: its head, messages and composer. None chosen: the hint.
-  const bool open = !none && chosen.has_value();
-  for (scene::Node* shown : std::initializer_list<scene::Node*>{&header, &chat.area, &line})
-    shown->setVisible(open);
-  chat.hint.setVisible(!none && !chosen.has_value());
+  // The chat's column shows what the program says (chats_shown).
   // A search of two letters or more also asks the selected account's server --
   // the server is asked for rooms and people that do, once for each
   // thing typed.
@@ -700,7 +676,6 @@ void conversations_screen::show(const model& now, bool with_chat) {
   side.elsewhere.setVisible(elsewhere);
   side.list.setVisible(!listing.chats.empty() || !elsewhere);
   no_chats.setVisible(!none && listing.chats.empty() && !elsewhere);
-  chat.empty.setVisible(none);
   this->show_info();
   // Laid out again, repainting only what moves: what changed repaints
   // itself. Invalidated, the whole window was painted at every change in
@@ -710,27 +685,9 @@ void conversations_screen::show(const model& now, bool with_chat) {
     this->show_conversation(now);
 }
 
-void conversations_screen::show_banners(const conversation* one, const model& now) {
-  const auto banners = one ? proto::composer_banners(protocol_state_of(*needs_.shared, one->id.account), *one, now)
-                           : std::vector<proto::part::banner>{};
-  const std::string said = std::ranges::to<std::string>(std::views::join_with(std::views::transform(banners, &proto::part::banner::text), '\n'));
-  // The first's button, where it has one.
-  const std::string label = banners.empty() ? std::string() : banners.front().button;
-  auto& bar = chat.parts.banner;
-  auto& button = bar.parts.verify;
-  if (label.empty() == button.has_value()) {
-    if (label.empty())
-      button.reset();
-    else {
-      button.emplace(needs_.colours->widgets, label, banner_press{this});
-      button->apply({.width = 112.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle});
-    }
-    bar.invalidateLayout();
-    chat.invalidateLayout();
-  } else if (button)
-    button->setLabel(label);
+void conversations_screen::show_banners(const conversation* one) {
   // The protocol's own node under the head, made again for the chat.
-  chat.parts.their_head.reset();
+  std::get<chat_part::their_head>(chat.fParts).reset();
   if (one)
     spl::visit(
         [&](const auto& now) {
@@ -739,7 +696,7 @@ void conversations_screen::show_banners(const conversation* one, const model& no
         },
         protocol_state_of(*needs_.shared, one->id.account));
   // The protocol's own node over the composer, made again for the chat.
-  chat.parts.their_view.reset();
+  std::get<chat_part::their_view>(chat.fParts).reset();
   if (one)
     spl::visit(
         [&](const auto& now) {
@@ -747,30 +704,13 @@ void conversations_screen::show_banners(const conversation* one, const model& no
           this->place_composer_view(make_composer_view(now, *one));
         },
         protocol_state_of(*needs_.shared, one->id.account));
-  if (!banners.empty())
-    bar.apply({.background = (tone_colour(*needs_.colours, banners.front().tone) & 0x00FFFFFFu) | (0x22u << 24)});
-  if (bar.parts.text.text() != said)
-    bar.parts.text.setText(said);
-  if (one && said.empty())
-    dismissed_banners.erase(one->id);
-  const auto dismissed = one ? dismissed_banners.find(one->id) : dismissed_banners.end();
-  const bool visible = !said.empty() && (dismissed == dismissed_banners.end() || dismissed->second != said);
-  if (bar.visible() != visible) {
-    bar.setVisible(visible);
-    chat.invalidateLayout();
-  }
 }
 
 void conversations_screen::show_conversation(const model& now) {
-  this->show_connections(now);
   const conversation* one = chosen ? now.find(*chosen) : nullptr;
-  header.choose(now, chosen, single);
-  this->show_banners(one, now);
-  if (pinned_of != chosen) {
-    pinned_of = chosen;
-    pinned_step = std::numeric_limits<std::size_t>::max();
-  }
-  this->show_pinned(one);
+  // The protocol's own nodes under the head and over the composer; the
+  // head, the pin and the banner are the program's (chat_view).
+  this->show_banners(one);
   this->show_info();
   if (!one)
     return;
@@ -778,10 +718,6 @@ void conversations_screen::show_conversation(const model& now) {
   // the panel shut or not. Opened, it is shown then (toggle_info).
   info.choose(now, chosen, muted.contains(one->id));
   this->show_wallpaper();
-  // Another chat shown: its thread let go.
-  if (shown_chat != chosen)
-    parts.threads.open.reset();
-  parts.threads.choose(now, chosen);
   shown_chat = chosen;
   // The messages themselves: the list's, told by the program (chat_told)
   // and read from the chats model where it keeps them.

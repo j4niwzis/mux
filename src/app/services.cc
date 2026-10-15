@@ -85,6 +85,22 @@ struct services {
   };
   std::optional<message_asked> show_message_due;
   bool newest_due = false;
+  // A text sent, or asked as a command: the ways back from jumps let go.
+  bool returns_due = false;
+  // An answer being written in the thread open let go: the field's bar over
+  // it too.
+  void stop_thread_answer() const {
+    if (!showing->look<mux::ui::chat_shown>()->thread_answer)
+      return;
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) { now.thread_answer.reset(); });
+    mux::ui::show_composer_context(root().main().thread_line(), std::nullopt);
+  }
+  // A message of the thread open answered there, as tdesktop's "Reply to
+  // <name>" over the field.
+  void answer_in_thread(std::string id, mux::ui::compose_context said) const {
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) { now.thread_answer = std::move(id); });
+    mux::ui::show_composer_context(root().main().thread_line(), std::move(said));
+  }
   // The stretch of a chat's messages in view and a page around it -- or,
   // while a message is jumped to, a few around that: what is loaded on the
   // way is not looked at.

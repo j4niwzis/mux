@@ -405,6 +405,12 @@ class jumps_part {
     this->show_ways();
   }
   void apply(const request::stop_jump&) { this->stop(); }
+  // A text sent: the ways back let go.
+  void clear_returns() {
+    if (const auto in = this->chosen())
+      returns_.erase(*in);
+    this->show_ways();
+  }
   // To the newest, the ways back let go: what was sent is there.
   void to_newest() {
     going_.reset();

@@ -16,6 +16,7 @@ import mux.protocols;
 import mux.config;
 import mux.media;
 import mux.platform.audio;
+import mux.platform.video;
 import mux.platform.clipboard;
 import mux.platform.dialogs;
 import mux.platform.system;
@@ -440,6 +441,51 @@ class pictures_part {
     now->file = file;
     mux::ui::show(*s_->showing, std::move(now));
   }
+  // Each frame, while the viewer is up: what it has coming -- the whole
+  // picture, or the video's file, how far -- and the video played once its
+  // file is here, its frame put where the viewer draws it from.
+  void viewer_tick() {
+    const auto& facts = s_->showing->root().viewer.fValue;
+    if (!facts) {
+      if (player_) {
+        mux::ui::video_frames().erase(played_);
+        player_.reset();
+        played_.clear();
+      }
+      this->put(mux::ui::viewer_load{});
+      this->put(mux::ui::video_shown{});
+      return;
+    }
+    if (!facts->video.empty() && facts->file && played_ != facts->video) {
+      player_ = mux::platform::video::player::open(*facts->file);
+      played_ = facts->video;
+    }
+    if (player_) {
+      const double now = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+      if (player_->advance(now) && player_->picture()) {
+        mux::ui::video_frames().insert_or_assign(played_, player_->picture());
+        ++frame_;
+      }
+      this->put(mux::ui::video_shown{played_, !player_->paused(), player_->position(), player_->length(), frame_});
+    }
+    const std::string& loading = facts->video.empty() ? facts->source : facts->video;
+    const bool coming = facts->video.empty() ? !mux::ui::whole_pictures().has(facts->source) : !player_;
+    this->put(mux::ui::viewer_load{coming, coming ? mux::ui::progress_of(loading) : std::nullopt, mux::ui::stopped_downloads().contains(loading)});
+  }
+  // The video in the viewer paused or played on; gone to a share of it.
+  void apply(const request::toggle_video&) {
+    if (player_)
+      player_->toggle();
+  }
+  void apply(const request::video_seek& one) {
+    if (player_)
+      player_->seek(one.share * player_->length());
+  }
+  template <class Part>
+  void put(Part now) {
+    if (*s_->showing->look<Part>() != now)
+      mux::ui::show(*s_->showing, std::move(now));
+  }
   // Where a video is kept once fetched: a file of its own, named by it.
   [[nodiscard]] static std::filesystem::path video_file(std::string_view source) {
     return mux::config::cache_path("videos") / mux::config::file_name_of(source);
@@ -858,6 +904,10 @@ class pictures_part {
   std::set<std::string> links_asked_;
   // Videos opened, and those being fetched.
   std::set<std::string> videos_, videos_fetching_;
+  // The video playing in the viewer, by its source; its frames counted.
+  std::unique_ptr<mux::platform::video::player> player_;
+  std::string played_;
+  std::uint64_t frame_ = 0;
 
 public:
   // Rooms asked of for a message's pill: what their server says goes to the

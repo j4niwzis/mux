@@ -249,7 +249,7 @@ struct message_bubble : skiff::compose::Stacked {
       nodes::BasicText<message_pictures> text;
       // Code blocks and link cards in text order, each with the words after it.
       std::vector<message_piece> blocks;
-      std::optional<page_preview> preview;
+      std::optional<page_preview_t> preview;
       // What plugins put after the text: the reactions.
       typename trailers_t::nodes_t trailers;
       // A thread's root: its summary -- how many answers, the latest -- as
@@ -921,7 +921,7 @@ struct message_bubble : skiff::compose::Stacked {
     previews_shown = show_preview;
     if (const auto link = first_link_of(said); link && now && show_preview)
       if (const auto found = now->previews.find(*link); found != now->previews.end()) {
-        body.parts.preview.emplace(*colours_, found->second, *link);
+        body.parts.preview.emplace(page_preview(*colours_, found->second, *link));
         preview_known = true;
       }
     if (said.replies_to) {

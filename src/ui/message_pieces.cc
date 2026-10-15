@@ -46,7 +46,7 @@ inline auto link_card(const palette& colours, std::string where, std::string ava
   return c::onClick(request::open_url{std::move(where)},
       c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth, .margin = {4.0f, 0.0f, 2.0f, 0.0f}}),
           c::styled({.width = 3.0f, .height = 36.0f, .cornerRadius = 1.5f}, nodes::Box<>(colours.accent)),
-          c::styled({.alignSelf = scene::align::kMiddle}, legacy::avatar_mark(avatar_of::chat{}, std::move(avatar_id), std::move(avatar_name), 32.0f)),
+          c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(avatar_of::chat{}, std::move(avatar_id), std::move(avatar_name), 32.0f)),
           c::column(c::vbox(1.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
               line(std::move(title), colours.accent, true), line(std::move(said), colours.dim, false))),
       "Open linked room or message");
@@ -148,62 +148,27 @@ using link_card_t = decltype(link_card(std::declval<const palette&>(), "", "", "
 // A link's preview, as Telegram's: under the text, a stripe in the accent,
 // the site's name in it, the page's title and a few lines about it, and its
 // picture on the right.
-struct page_preview : skiff::compose::Stacked {
-  struct column : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text site;
-      nodes::Text title;
-      nodes::Text about;
-    } parts;
-    column(const palette &colours, const link_preview &shown)
-        : Stacked(skiff::compose::vbox(
-              1.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX})),
-          parts{.site = skiff::compose::visible(
-                    !shown.site.empty(),
-                    nodes::Text(shown.site, 13.0f, colours.accent, true)),
-                .title = skiff::compose::visible(
-                    !shown.title.empty(),
-                    nodes::Text(shown.title, 13.0f, colours.text, true)),
-                .about = wrapped(skiff::compose::visible(
-                    !shown.description.empty(),
-                    nodes::Text(preview_line(shown.description), 13.0f,
-                                colours.text)))} {
-
-      for (nodes::Text* each : {&parts.site, &parts.title})
-        each->setElided(true);
-      for (nodes::Text* each : {&parts.site, &parts.title, &parts.about})
-        each->apply({.fillX = true});
-    }
-  };
-  struct parts_t {
-    nodes::Box<> stripe;
-    column texts;
-    std::optional<nodes::Image<from_avatars>> picture;
-  } parts;
-  // The link it is the preview of: pressed, it is followed.
-  std::string url;
-  page_preview(const palette &colours, const link_preview &shown,
-               std::string where)
-      : Stacked(skiff::compose::hbox(
-            8.0f, {.fillX = true,
-                   .autoSize = scene::axes::kY,
-                   .margin = {6.0f, 0.0f, 2.0f, 0.0f},
-                   .padding = {4.0f, 6.0f, 4.0f, 0.0f},
-                   .cornerRadius = 4.0f,
-                   .background = (colours.accent & 0x00FFFFFFu) | (0x18u << 24),
-                   .hoverBackground =
-                       (colours.accent & 0x00FFFFFFu) | (0x34u << 24)})),
-        parts{.stripe = skiff::compose::styled(
-                  {.fillY = true, .width = 3.0f, .cornerRadius = 1.5f},
-                  nodes::Box<>(colours.accent)),
-              .texts = column(colours, shown)},
-        url(std::move(where)) {
-    // Lit under the pointer, as a link is: it is one.
-    if (shown.image) {
-      parts.picture.emplace(from_avatars{*shown.image});
-      parts.picture->apply({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f});
-    }
-  }
-};
+// Pressed -- it is a link -- the link is followed; lit under the pointer,
+// as a link is. Its link: the press's request's (fEvent.url).
+inline auto page_preview(const palette& colours, const link_preview& shown, std::string where) {
+  namespace c = skiff::compose;
+  std::optional<nodes::Image<from_avatars>> picture;
+  if (shown.image)
+    picture.emplace(c::styled({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f}, nodes::Image<from_avatars>(from_avatars{*shown.image})));
+  return c::onClick(request::open_url{std::move(where)},
+      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {6.0f, 0.0f, 2.0f, 0.0f},
+                            .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f,
+                            .background = (colours.accent & 0x00FFFFFFu) | (0x18u << 24),
+                            .hoverBackground = (colours.accent & 0x00FFFFFFu) | (0x34u << 24)}),
+             c::styled({.fillY = true, .width = 3.0f, .cornerRadius = 1.5f}, nodes::Box<>(colours.accent)),
+             c::column(c::vbox(1.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX}),
+                       c::visible(!shown.site.empty(), c::styled({.fillX = true}, elided(nodes::Text(shown.site, 13.0f, colours.accent, true)))),
+                       c::visible(!shown.title.empty(), c::styled({.fillX = true}, elided(nodes::Text(shown.title, 13.0f, colours.text, true)))),
+                       c::visible(!shown.description.empty(),
+                                  c::styled({.fillX = true}, wrapped(nodes::Text(preview_line(shown.description), 13.0f, colours.text))))),
+             std::move(picture)),
+      "Open link");
+}
+using page_preview_t = decltype(page_preview(std::declval<const palette&>(), std::declval<const link_preview&>(), std::string()));
 
 }  // namespace mux::ui

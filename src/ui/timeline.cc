@@ -120,10 +120,6 @@ using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::requ
   // A card of a link to a room or a message: followed.
   if (const auto url = message_link_at(one.parts.body.parts.blocks, press.x, press.y))
     return ::mux::ui::request::open_url{*url};
-  // A link's preview: the link, followed.
-  if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(press.x, press.y)) {
-    return ::mux::ui::request::open_url{preview->url};
-  }
   // A thread's summary under its root: the thread, beside the chat.
   if (const auto& thread = one.parts.body.parts.thread; thread && thread->bounds().contains(press.x, press.y)) {
     return ::mux::ui::request::open_thread{one.message_id};
@@ -231,7 +227,7 @@ using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::requ
     facts.pressed_link = std::move(*pressed);
   else if (const auto& preview = one.parts.body.parts.preview;
            preview && preview->fState.fBounds.contains(press.x, press.y))
-    facts.pressed_link = preview->url;
+    facts.pressed_link = preview->fEvent.url;
   facts.emoji = copied_emoji_at(facts.pressed_link);
   // A sticker: what sending it again takes.
   if (one.said.sticker && one.said.attachment)

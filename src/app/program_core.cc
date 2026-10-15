@@ -437,6 +437,13 @@ void app::take_wants() {
         wanted);
 }
 
+// Whether the accounts page is up, and whether it or the settings are, over
+// the chats: as what is shown says, not the window's tree.
+bool app::accounts_up() { return showing.look<std::optional<mux::ui::panel_facts>>()->has_value(); }
+bool app::page_over_chats() {
+  return this->accounts_up() || showing.look<std::optional<mux::ui::settings_facts>>()->has_value();
+}
+
 void app::refresh_shown() {
   // The drawer's accounts: the saved ones, with what the chats say of each,
   // the one listed marked.
@@ -550,14 +557,14 @@ void app::before_frame() {
   // What has been on screen in the chat shown is read, as far as it goes,
   // as in tdesktop: the chat list's counts go down as it is read, not all
   // at once when it is opened or left.
-  if (const auto& chosen = shared.chosen(); chosen && !mux::ui::open_panel(root()) && !mux::ui::settings_up(root()))
+  if (const auto& chosen = shared.chosen(); chosen && !this->page_over_chats())
     if (const auto seen = jumps.last_seen(); seen && reading.mark_seen(*chosen, *seen))
       this->refresh();
   // The mentions and reactions for the user whose messages are on screen,
   // seen -- only those, as tdesktop's.
   if (const auto& chosen = shared.chosen())
     if (const mux::conversation* chat = model->find(*chosen);
-        chat && (!chat->unread_mentions.empty() || !chat->unread_reactions.empty()) && !mux::ui::open_panel(root())) {
+        chat && (!chat->unread_mentions.empty() || !chat->unread_reactions.empty()) && !this->accounts_up()) {
       auto shown = jumps.shown_now();
       const auto marked = [&](const mux::unread_mark& mark) { return std::ranges::contains(shown, mark.target); };
       if (std::ranges::any_of(chat->unread_mentions, marked) || std::ranges::any_of(chat->unread_reactions, marked)) {
@@ -571,7 +578,7 @@ void app::before_frame() {
   // as in tdesktop.
   // Not under a finger: there the keys' focus is the text input started,
   // and a phone's keyboard up over the chat until it is put away.
-  if (scene.focusedId() == 0 && !shared.by_touch && shared.chosen() && !mux::ui::open_panel(root()) && !mux::ui::settings_up(root()))
+  if (scene.focusedId() == 0 && !shared.by_touch && shared.chosen() && !this->page_over_chats())
     scene.focus(mux::ui::composer_field(mux::ui::chat_line_of(root())));
   // The emoji panel's stickers in view, asked for as they change -- as it
   // opens, as it scrolls, as its tab or its search changes -- and not only
@@ -583,7 +590,7 @@ void app::before_frame() {
   const auto style = reads().style_of(shared.listed(), shared.chosen());
   // Text fields save as they are edited; apply when the editor closes or
   // its Apply button is pressed, so rebuilding cannot interrupt typing.
-  if ((!mux::ui::settings_up(root()) && !mux::ui::manage_up(root()) && !mux::ui::open_panel(root())) &&
+  if (!this->page_over_chats() && !showing.look<std::optional<mux::ui::room_settings_facts>>()->has_value() &&
       (!active_style || *active_style != style)) {
     active_style = style;
     skiff::scene::forgetStyles();

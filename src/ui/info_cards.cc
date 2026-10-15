@@ -102,19 +102,25 @@ inline float card_part_height(auto& node, const skia::SkRect& parent) {
 }
 // Keep a short card compact; for a long one, size the scroll viewport to the
 // room the dialog gives the card rather than the content's unbounded height.
+// What a card holds beside its head and its details: the person's card
+// nothing; the room's its join button, and its decline where it is shown.
+template <class Top, class Scroll>
+float card_rest_height(std::tuple<Top, Scroll>&, const skia::SkRect&) {
+  return 0.0f;
+}
+template <class Top, class Scroll, class Join, class Decline>
+float card_rest_height(std::tuple<Top, Scroll, Join, Decline>& parts, const skia::SkRect& parent) {
+  auto& decline = std::get<3>(parts);
+  return card_part_height(std::get<2>(parts), parent) + (decline.visible() ? card_part_height(decline, parent) : 0.0f);
+}
 struct card_fit {
   struct State {};
   template <class N> static void prepare(N& card, State&) {
     const skia::SkRect& parent = card.fState.fLastConstraint;
     auto& scroll = std::get<1>(card.fParts);
     const float details = card_part_height(std::get<0>(scroll.fChildren), parent);
-    float others = card.fState.fPadding.totalY() + card_part_height(std::get<0>(card.fParts), parent);
-    if constexpr (std::tuple_size_v<decltype(card.fParts)> > 2) {
-      others += card_part_height(std::get<2>(card.fParts), parent);
-      auto& decline = std::get<3>(card.fParts);
-      if (decline.visible())
-        others += card_part_height(decline, parent);
-    }
+    const float others = card.fState.fPadding.totalY() + card_part_height(std::get<0>(card.fParts), parent) +
+                         card_rest_height(card.fParts, parent);
     const float room = std::max(0.0f, parent.height() - others);
     scroll.fState.fHeight = parent.height() > 0.0f ? std::min(details, room) : details;
   }

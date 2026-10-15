@@ -440,7 +440,8 @@ struct dialog_made {
 // The drawer, out while what is shown says so; pushed back -- the scrim
 // pressed, a swipe, Esc -- that part set so.
 struct drawer_pushed {
-  static auto answer() { return skiff::bind::own(skiff::model::setTo(drawer_shown{false})); }
+  // Bound to drawer_shown::out: that part set false.
+  static auto answer() { return skiff::bind::own(skiff::model::setTo(false)); }
 };
 
 // The pages over the chats -- the accounts panel -- up while what is shown

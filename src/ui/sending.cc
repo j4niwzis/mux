@@ -98,7 +98,7 @@ inline auto send_box(const ui_needs& n, const send_facts& facts) {
                            widgets::Button<sends<request::close_send_box>>(colours.widgets, "Cancel", {})),
                  c::asking_for<send_draft>([](const send_draft& draft) { return request::send_files{draft.caption}; },
                      c::styled({.width = 96.0f, .height = 36.0f},
-                               primary(widgets::Button<scene::NoAction>(colours.widgets, "Send", {}))))));
+                               primary(widgets::Button<scene::NoAction>(colours.widgets, "Send", {})))))));
 }
 using send_box_t = decltype(send_box(std::declval<const ui_needs&>(), std::declval<const send_facts&>()));
 // Sized as it is opened, by the files it is opened with.

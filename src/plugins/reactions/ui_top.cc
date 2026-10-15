@@ -51,7 +51,7 @@ using reaction_row_answer = std::variant<menu_facts, request::open_url,
 inline auto reaction_event_row(const ui_needs& n, const conversation& in, const entry& one,
                         bool first, bool last, const model* known) {
   namespace c = skiff::compose;
-  auto bubble = message_bubble(spl::remapped<typename message_bubble::needs>(n),
+  auto bubble = legacy::message_bubble(spl::remapped<typename legacy::message_bubble::needs>(n),
                                         in, reaction_message_of(in, one), first, last, known);
   auto row = c::onClick(std::tuple{one.event.empty() ? std::optional<request::reply_to>{}
         : std::optional(request::reply_to{one.event, std::format("{} reacted {}", one.name, one.key)}), request::close_shown<shown>{}},

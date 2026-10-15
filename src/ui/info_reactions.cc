@@ -80,7 +80,7 @@ auto edit_history_row(const ui_needs& n, const conversation& in, const message& 
     reply.handle();
     return facts;
   }, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
-      message_bubble(spl::remapped<typename message_bubble::needs>(n), in, event, true, true, known)));
+      legacy::message_bubble(spl::remapped<typename legacy::message_bubble::needs>(n), in, event, true, true, known)));
 }
 auto edit_history_panel(const ui_needs& n, const history_facts& facts) {
   namespace c = skiff::compose;
@@ -158,7 +158,7 @@ struct marks_box : skiff::compose::Stacked {
     mark_kind_t kind;
     std::string event;
     struct parts_t {
-      message_bubble bubble;
+      legacy::message_bubble bubble;
       std::optional<badge> reacted;
     } parts;
     row(const ui_needs &n, mark_kind_t which, const conversation &in,
@@ -169,8 +169,8 @@ struct marks_box : skiff::compose::Stacked {
                                         .padding = {4.0f, 12.0f, 8.0f, 12.0f},
                                         .hoverBackground = n.colours->chosen})),
           kind(which), event(one.event),
-          parts{.bubble = message_bubble(
-                    spl::remapped<typename message_bubble::needs>(n),
+          parts{.bubble = legacy::message_bubble(
+                    spl::remapped<typename legacy::message_bubble::needs>(n),
                     in, one.said, true, true, now)} {
       fState.setCursor(scene::cursor::hand{});
       if (one.who)

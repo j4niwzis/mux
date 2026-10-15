@@ -8,6 +8,6 @@ module mux.ui.messages;
 import std;
 import skiff.scene;
 
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::message_bubble>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::message_bubble>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::legacy::message_bubble>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::legacy::message_bubble>();
 }

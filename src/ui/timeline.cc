@@ -77,7 +77,7 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
 // the person.
 using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::request::open_video, ::mux::ui::request::open_picture, ::mux::ui::request::play_audio, ::mux::ui::request::react, ::mux::ui::request::open_url,
                                   ::mux::ui::request::open_thread, ::mux::ui::request::jump_to_message, ::mux::ui::request::open_member_info>;
-[[nodiscard]] std::optional<bubble_press> press_in_bubble(const message_bubble& one, float x, float y, const conversation* chat) {
+[[nodiscard]] std::optional<bubble_press> press_in_bubble(const legacy::message_bubble& one, float x, float y, const conversation* chat) {
   const struct {
     float x, y;
   } press{x, y};
@@ -141,7 +141,7 @@ using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::requ
 
 // What a message's menu offers, for a right press on it wherever it is
 // shown: the timeline, a thread.
-[[nodiscard]] menu_facts facts_of_bubble(const message_bubble& one, const conversation* chat, float x, float y) {
+[[nodiscard]] menu_facts facts_of_bubble(const legacy::message_bubble& one, const conversation* chat, float x, float y) {
   const struct {
     float x, y;
   } press{x, y};
@@ -354,8 +354,8 @@ struct timeline_area : skiff::compose::Specced {
   struct parts_t {
     // Behind the messages: the theme's gradient, Telegram's pattern over it.
     wallpaper_t wall;
-    nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
-        nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
+    nodes::ScrollContainer<nodes::Flow<std::vector<legacy::message_bubble>>> timeline{
+        nodes::Flow<std::vector<legacy::message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
     jump_button_t jump;
     back_button_t back;
     mark_button_t mentions;
@@ -391,7 +391,7 @@ struct timeline_area : skiff::compose::Specced {
     std::get<0>(parts.timeline.fChildren).apply(
         {.fillX = true,
          .autoSize = scene::axes::kY,
-         .padding = {8.0f, message_bubble::kListSide, 8.0f, message_bubble::kListSide}});
+         .padding = {8.0f, legacy::message_bubble::kListSide, 8.0f, legacy::message_bubble::kListSide}});
   }
   // The chat's background: the theme's gradient and Telegram's pattern, a
   // plain colour (what is behind showing), or a picture.
@@ -403,7 +403,7 @@ struct timeline_area : skiff::compose::Specced {
     show_wallpaper_on(parts.wall, chosen, *needs_.colours, *needs_.looks);
   }
   // The bubbles in the list, as they are made.
-  [[nodiscard]] std::vector<message_bubble>& bubbles() {
+  [[nodiscard]] std::vector<legacy::message_bubble>& bubbles() {
     return std::get<0>(std::get<0>(parts.timeline.fChildren).fChildren);
   }
   // The bubbles, as a function of the messages from first to last of
@@ -476,9 +476,9 @@ struct timeline_area : skiff::compose::Specced {
     // are kept -- with a selection in them -- and only the new are made.
     if (nodes::reconcile(
             entries, std::views::iota(first_made, last_made),
-            [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
+            [&](std::size_t i) { return all[i].id; }, [](const legacy::message_bubble& row) { return row.message_id; },
             [&](std::size_t i) {
-              message_bubble made(spl::remapped<typename message_bubble::needs>(needs_), one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
+              legacy::message_bubble made(spl::remapped<typename legacy::message_bubble::needs>(needs_), one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
                                   how.previews);
               made.quote_said = quote_body(i);
               if (how.unread_from && all[i].id == *how.unread_from)
@@ -489,7 +489,7 @@ struct timeline_area : skiff::compose::Specced {
                 made.appear();
               return made;
             },
-            [&](const message_bubble& row, std::size_t i) {
+            [&](const legacy::message_bubble& row, std::size_t i) {
               const bool quote_known = !all[i].replies_to || one.quoted.contains(*all[i].replies_to) ||
                                        std::ranges::find(all, *all[i].replies_to, &message::id) != all.end();
               const auto link = first_link_of(all[i]);
@@ -513,11 +513,11 @@ struct timeline_area : skiff::compose::Specced {
   bool swipe_armed = false;
   float swipe_x = 0.0f, swipe_y = 0.0f;
   std::chrono::steady_clock::time_point swipe_pressed{};
-  message_bubble* swiped() {
+  legacy::message_bubble* swiped() {
     if (!swiping)
       return nullptr;
     auto& entries = this->bubbles();
-    const auto it = std::ranges::find(entries, *swiping, &message_bubble::message_id);
+    const auto it = std::ranges::find(entries, *swiping, &legacy::message_bubble::message_id);
     return it == entries.end() ? nullptr : &*it;
   }
   void swipe_down(const scene::pointer::down& press) {
@@ -527,7 +527,7 @@ struct timeline_area : skiff::compose::Specced {
     swipe_pressed = std::chrono::steady_clock::now();
   }
   void swipe_move(const scene::pointer::move& at, scene::PointerReply& reply) {
-    if (message_bubble* one = this->swiped()) {
+    if (legacy::message_bubble* one = this->swiped()) {
       one->swipe.jump(std::clamp(at.x - swipe_x, -120.0f, 0.0f));
       one->markDamaged();
       reply.handle();
@@ -548,7 +548,7 @@ struct timeline_area : skiff::compose::Specced {
     if (dx >= 0.0f || std::abs(dx) < 2.0f * std::abs(dy) ||
         std::chrono::steady_clock::now() - swipe_pressed > std::chrono::milliseconds(250))
       return;
-    for (message_bubble& one : this->bubbles())
+    for (legacy::message_bubble& one : this->bubbles())
       // The rows are laid out as if unscrolled: the press, where they are.
       if (parts.timeline.toView(one.bounds()).contains(swipe_x, swipe_y) && !one.message_id.empty()) {
         swiping = one.message_id;
@@ -561,10 +561,10 @@ struct timeline_area : skiff::compose::Specced {
   }
   std::optional<Answer> swipe_up(scene::PointerReply& reply) {
     swipe_armed = false;
-    message_bubble* one = this->swiped();
+    legacy::message_bubble* one = this->swiped();
     if (!one)
       return std::nullopt;
-    const bool replied = one->swipe.value() <= -message_bubble::kSwipeToReply;
+    const bool replied = one->swipe.value() <= -legacy::message_bubble::kSwipeToReply;
     std::optional<Answer> asked;
     if (replied)
       asked = ::mux::ui::request::reply_to{one->message_id, one->plain};
@@ -577,7 +577,7 @@ struct timeline_area : skiff::compose::Specced {
   }
   void swipe_cancel(scene::PointerReply& reply) {
     swipe_armed = false;
-    if (message_bubble* one = this->swiped()) {
+    if (legacy::message_bubble* one = this->swiped()) {
       one->swipe.setTarget(0.0f);
       scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
       swiping.reset();
@@ -672,7 +672,7 @@ struct timeline_area : skiff::compose::Specced {
     auto preview = selected_ids;
     if (selecting && selecting->moved) {
       auto& rows = this->bubbles();
-      const auto first = std::ranges::find(rows, selecting->first, &message_bubble::message_id);
+      const auto first = std::ranges::find(rows, selecting->first, &legacy::message_bubble::message_id);
       const auto last = selection_row_at(*this, selecting->last_x, selecting->last_y);
       if (first != rows.end() && last != rows.end()) {
         const auto [begin, end] = std::minmax(first, last);
@@ -696,7 +696,7 @@ struct timeline_area : skiff::compose::Specced {
     const auto& bubbles = this->bubbles();
     // Selecting: the message pressed selected, or not.
     if (!selected_ids.empty()) {
-      const auto pressed = std::ranges::find_if(bubbles, [&](const message_bubble& one) {
+      const auto pressed = std::ranges::find_if(bubbles, [&](const legacy::message_bubble& one) {
         return one.bounds().contains(press.x, press.y) && !one.message_id.empty();
       });
       if (pressed == std::ranges::end(bubbles))
@@ -704,7 +704,7 @@ struct timeline_area : skiff::compose::Specced {
       return ::mux::ui::request::toggle_selected{pressed->message_id};
     }
     // Else what the press asks for in the bubble it is in.
-    for (const message_bubble& one : bubbles)
+    for (const legacy::message_bubble& one : bubbles)
       if (auto asked = press_in_bubble(one, press.x, press.y, seen_chat_of()))
         return Answer{*asked};
     return std::nullopt;
@@ -715,7 +715,7 @@ struct timeline_area : skiff::compose::Specced {
     // Whichever message's row the press is in -- its text, its bubble or the
     // room beside it. What Copy takes is what is selected in it, if anything
     // is, and all of it if not.
-    for (const message_bubble& one : this->bubbles())
+    for (const legacy::message_bubble& one : this->bubbles())
       if (parts.timeline.toView(one.bounds()).contains(press.x, press.y)) {
         menu_facts facts = facts_of_bubble(one, seen_chat_of(), press.x, press.y);
         facts.seen = this->seen_by(one.message_id, one.sender);

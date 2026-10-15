@@ -851,7 +851,7 @@ struct conversations_screen : skiff::compose::Stacked {
     }
     this->invalidateLayout();
   }
-  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.area.parts.timeline;
+  nodes::ScrollContainer<nodes::Flow<std::vector<legacy::message_bubble>>>& timeline = chat.area.parts.timeline;
   // The chat whose messages are shown, how many, and how many came while
   // the view was above the newest.
   std::optional<conversation_id> shown_chat;
@@ -1246,7 +1246,7 @@ struct conversations_screen : skiff::compose::Stacked {
     if (jumping_to)
       return out;
     const skia::SkRect view = timeline.bounds();
-    for (const message_bubble& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
+    for (const legacy::message_bubble& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
       // Laid out as if unscrolled: where it is in the view.
       const skia::SkRect box = timeline.toView(row.bounds());
       if (!row.message_id.empty() && !box.isEmpty() && row.visible() && box.fBottom > view.fTop + 8.0f &&
@@ -1337,7 +1337,7 @@ struct conversations_screen : skiff::compose::Stacked {
   [[nodiscard]] std::size_t pin_above(const conversation& one) {
     const skia::SkRect view = timeline.bounds();
     const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    const auto first = std::ranges::find_if(entries, [&](const message_bubble& row) {
+    const auto first = std::ranges::find_if(entries, [&](const legacy::message_bubble& row) {
       const skia::SkRect box = timeline.toView(row.bounds());
       return !row.message_id.empty() && row.visible() && !box.isEmpty() && box.fBottom > view.fTop + 8.0f;
     });

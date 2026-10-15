@@ -300,7 +300,7 @@ struct threads_panel : skiff::compose::Stacked {
   void update(double) {
     if (aiming) {
       auto& bubbles = parts.answers.bubbles();
-      const auto found = std::ranges::find(bubbles, *aiming, &message_bubble::message_id);
+      const auto found = std::ranges::find(bubbles, *aiming, &legacy::message_bubble::message_id);
       auto& view = parts.answers.parts.timeline;
       if (found == bubbles.end()) {
         aiming.reset();  // gone meanwhile
@@ -311,7 +311,7 @@ struct threads_panel : skiff::compose::Stacked {
         // Made, but not laid out: more than a screen from the view, where
         // the list lays nothing out. The view stepped a screen toward it,
         // as the chat steps, until it is laid out and aimed at.
-        const auto laid = std::ranges::find_if(bubbles, [](const message_bubble& row) { return !row.bounds().isEmpty(); });
+        const auto laid = std::ranges::find_if(bubbles, [](const legacy::message_bubble& row) { return !row.bounds().isEmpty(); });
         if (laid == bubbles.end()) {
           aiming.reset();
         } else {
@@ -337,7 +337,7 @@ struct threads_panel : skiff::compose::Stacked {
   // and aimed at once it is laid out (update).
   bool scroll_to(const std::string& id) {
     auto& bubbles = parts.answers.bubbles();
-    const auto found = std::ranges::find(bubbles, id, &message_bubble::message_id);
+    const auto found = std::ranges::find(bubbles, id, &legacy::message_bubble::message_id);
     if (found != bubbles.end() && !found->bounds().isEmpty()) {
       this->aim_at(*found);
       return true;
@@ -356,7 +356,7 @@ struct threads_panel : skiff::compose::Stacked {
     return true;
   }
   // A bubble brought into view and flashed.
-  void aim_at(message_bubble& bubble) {
+  void aim_at(legacy::message_bubble& bubble) {
     parts.answers.parts.timeline.scrollTo(bubble.bounds().fTop - 8.0f);
     bubble.flash.jump(1.0f);
     bubble.flash.setTarget(0.0f);

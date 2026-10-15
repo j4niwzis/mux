@@ -691,7 +691,14 @@ using message_piece = spl::variant<code_piece_t, link_piece_t, disclosure_piece_
 // the sender -- a person's pill, its avatar drawn by the message's pictures,
 // as a mention's -- each a node of its own: the pill pressed opens them,
 // the words the original.
-inline auto forward_line(const palette& colours, std::string who, std::vector<nodes::Text::Link> links, skia::SkColor colour) {
+// Its sender's pill pressed: their page, where their protocol links to them.
+struct open_person {
+  using Answer = std::optional<request::open_member_info>;
+  std::optional<std::string> id;
+  Answer operator()() const { return id ? Answer(request::open_member_info{*id}) : std::nullopt; }
+};
+inline auto forward_line(const palette& colours, std::string who, std::vector<nodes::Text::Link> links, skia::SkColor colour,
+                         std::optional<std::string> person = std::nullopt) {
   namespace c = skiff::compose;
   // Wrapped, as a message text is: one on a single line draws its words
   // plain, its links and pills not at all -- no plate, no picture. Its pill's
@@ -702,7 +709,7 @@ inline auto forward_line(const palette& colours, std::string who, std::vector<no
   name.setLinks(std::move(links), colours.accent);
   return c::row(c::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
                 c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Forwarded from", 13.0f, colour, true)),
-                c::styled({.alignSelf = scene::align::kMiddle}, std::move(name)));
+                c::onPress(open_person{std::move(person)}, c::styled({.alignSelf = scene::align::kMiddle}, std::move(name)), "Open the sender"));
 }
 using forward_line_t = decltype(forward_line(std::declval<const palette&>(), std::string(), {}, skia::SkColor{}));
 

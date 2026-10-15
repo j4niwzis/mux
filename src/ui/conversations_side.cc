@@ -411,7 +411,7 @@ struct side_column : skiff::compose::Stacked {
       nodes::Flow<std::vector<folder_tab<Pick>>> folders{
           {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
       nodes::Text no_chats;
-      list_t list{chat_rows()};
+      list_t list{make_chat_rows()};
       // While a chat is searched: what was found, in the chats' place.
       nodes::Text found_title;
       found_list_t found{nodes::Flow<std::vector<found_row>>({.spacingY = 0.0f, .wrap = false}, {})};

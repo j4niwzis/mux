@@ -59,12 +59,12 @@ inline auto seen_row(const palette& colours, const std::vector<seen_reader>& rea
   const float faces_width = shown ? kSeenFace + static_cast<float>(shown - 1) * (kSeenFace - kSeenOverlap) : 0.0f;
   // The faces out of the flow, in the room at the right: the first the
   // rightmost, 17 in from the edge, each next 14 to its left.
-  auto faces = std::ranges::to<std::vector>(std::views::transform(std::views::iota(std::size_t{0}, shown), [&](std::size_t i) {
+  auto faces = std::views::iota(std::size_t{0}, shown) | std::views::transform([&](std::size_t i) {
                  return c::styled({.place = scene::anchor::kCentreRight,
                                    .x = faces_width + 8.0f - static_cast<float>(i) * (kSeenFace - kSeenOverlap),
                                    .border = scene::Border{colours.sidebar, 2.0f}},
                                   avatar_mark(avatar_of::person{}, readers[i].id, readers[i].name, kSeenFace));
-               }));
+               }) | std::ranges::to<std::vector>();
   const std::string said = readers.empty() ? std::string("Nobody Viewed")
                            : readers.size() == 1 ? readers.front().name
                                                  : std::to_string(readers.size()) + " Seen";
@@ -97,7 +97,7 @@ inline auto seen_list(const palette& colours, const std::vector<seen_reader>& re
                                .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .masking = true}),
                 c::styled({.fill = true},
                           nodes::ScrollContainer(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                              std::ranges::to<std::vector>(std::views::transform(readers, [&](const seen_reader& one) { return reader_row(colours, one); })))))));
+                              readers | std::views::transform([&](const seen_reader& one) { return reader_row(colours, one); }) | std::ranges::to<std::vector>())))));
 }
 
 inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, const std::optional<emote>& emoji) {

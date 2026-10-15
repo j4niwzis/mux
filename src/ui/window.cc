@@ -47,7 +47,7 @@ struct text_menu_item {
   bool separate = false;
 };
 inline float text_menu_height(const std::vector<text_menu_item>& items) {
-  return 12.0f + std::ranges::fold_left(std::views::transform(items, [](const auto& item) {
+  return 12.0f + std::ranges::fold_left(items | std::views::transform([](const auto& item) {
     return item.separate ? 39.0f : 33.0f;
   }), 0.0f, std::plus{});
 }
@@ -65,7 +65,7 @@ inline auto text_menu_row(const palette& colours, const text_menu_item& item) {
 }
 inline auto make_text_menu(const palette& colours, const std::vector<text_menu_item>& items) {
   auto rows = skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      std::ranges::to<std::vector>(std::views::transform(items, [&](const auto& item) { return text_menu_row(colours, item); })));
+      items | std::views::transform([&](const auto& item) { return text_menu_row(colours, item); }) | std::ranges::to<std::vector>());
   return skiff::compose::styled(
       {.width = 260.0f, .height = text_menu_height(items), .padding = {6.0f, 0.0f, 6.0f, 0.0f},
        .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
@@ -834,10 +834,10 @@ inline void panels_changed(window& root) {
     emote_pictures_in(popup_card(*up), popup_card(*up).bounds(), shown);
   if (auto* menu = layer_of<layer::menu>(root).shown())
     emote_pictures_in(card_of(*menu), card_of(*menu).bounds(), shown);
-  shown.append_range(std::views::transform(std::views::filter(listed.items, [](const suggestion& one) { return !one.picture.empty(); }), [](const suggestion& one) { return emote_picture{one.picture, emote_kind::emoji}; }));
+  shown.append_range(listed.items | std::views::filter([](const suggestion& one) { return !one.picture.empty(); }) | std::views::transform([](const suggestion& one) { return emote_picture{one.picture, emote_kind::emoji}; }));
   // Those put in what is being written: the drafts' pictures.
   const auto inserted = [&](const composer_doc& draft) {
-    shown.append_range(std::views::transform(std::views::filter(draft.atoms, &widgets::TextAtom::picture), [](const widgets::TextAtom& atom) { return emote_picture{atom.target, emote_kind::emoji}; }));
+    shown.append_range(draft.atoms | std::views::filter(&widgets::TextAtom::picture) | std::views::transform([](const widgets::TextAtom& atom) { return emote_picture{atom.target, emote_kind::emoji}; }));
   };
   inserted(chat.now);
   inserted(thread.now);

@@ -122,19 +122,19 @@ inline auto album_view(const palette& colours, const std::vector<attachment>& it
   for (const std::size_t count : album_rows(items.size())) {
     const float w = (kAlbumWidth - kAlbumGap * static_cast<float>(count - 1)) / static_cast<float>(count);
     rows.push_back(c::many(c::hbox(kAlbumGap, {.autoSize = scene::axes::kBoth}),
-        std::ranges::to<std::vector>(std::views::transform(std::views::iota(at, at + count), [&](std::size_t i) {
+        std::views::iota(at, at + count) | std::views::transform([&](std::size_t i) {
           const attachment& item = items[i];
           const float ratio = item.width > 0 && item.height > 0 ? static_cast<float>(item.height) / static_cast<float>(item.width) : 0.75f;
           const float h = count == 1 ? std::clamp(w * ratio, 120.0f, 300.0f) : std::clamp(w * 0.8f, 100.0f, 220.0f);
           sizes.emplace_back(w, h);
           return picture_view(colours, item.source, item.width, item.height,
                               {.cell = std::pair{std::floor(w), std::floor(h)}}, std::move(opens[i]));
-        }))));
+        }) | std::ranges::to<std::vector>()));
     at += count;
   }
   return c::shrunk(kAlbumWidth, kAlbumGap,
       [sizes](auto& album, float share) {
-        auto cells = std::views::join(std::views::transform(album.fParts, [](row_t& row) -> std::vector<picture_view_t>& { return row.fParts; }));
+        auto cells = album.fParts | std::views::transform([](row_t& row) -> std::vector<picture_view_t>& { return row.fParts; }) | std::views::join;
         for (auto&& [cell, size] : std::views::zip(cells, sizes)) {
           cell.fFit.cell = std::pair{std::floor(size.first * share), std::floor(size.second * share)};
           cell.invalidateLayout();

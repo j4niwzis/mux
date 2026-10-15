@@ -386,10 +386,10 @@ struct kept_settings {
     // arrive after the first frame, and the first one there is not the one.
     // The emoji picked lately, the stickers sent lately, and the favourites.
     const auto emotes_of = [](const std::optional<std::vector<mux::config::sticker_kept>>& kept) {
-      return std::ranges::to<std::vector>(std::views::transform(kept.value_or(std::vector<mux::config::sticker_kept>{}), [](const mux::config::sticker_kept& one) {
+      return kept.value_or(std::vector<mux::config::sticker_kept>{}) | std::views::transform([](const mux::config::sticker_kept& one) {
                return mux::emote{.shortcode = one.shortcode, .url = one.url, .body = one.body, .w = one.w, .h = one.h, .size = one.size,
                                  .mimetype = one.mimetype};
-             }));
+             }) | std::ranges::to<std::vector>();
     };
     const recently_used recent_read{.last_account = saved.last_account,
                                     .emoji = saved.recent_emoji.value_or(std::vector<std::string>{}),
@@ -424,10 +424,10 @@ struct kept_settings {
     looks_read.chat_avatar_rounding = saved.chat_avatar_rounding;
     looks_read.person_avatar_rounding = saved.person_avatar_rounding;
     if (saved.space_places)
-      looks_read.space_places = std::ranges::to<std::vector>(std::views::transform(*saved.space_places, [](const mux::config::space_place& one) {
+      looks_read.space_places = (*saved.space_places) | std::views::transform([](const mux::config::space_place& one) {
                                return mux::config::space_placed{one.account, mux::config::space_item_of(one.item),
                                                                 mux::config::space_bar_of(one.bar)};
-                             }));
+                             }) | std::ranges::to<std::vector>();
     looks_read.interface_scale = saved.interface_scale.value_or(100);
     const auto limits_read = saved.cache.value_or(mux::config::cache_limits{});
     const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
@@ -467,7 +467,7 @@ struct kept_settings {
       chats[chat_of(one.account, one.conversation)].muted = true;
     std::erase_if(chats, [](const auto& one) { return one.second == chat_choices{}; });
     kept_root root;
-    root.accounts.putAll(std::views::transform(accounts_read, [](const mux::config::account_t& one) {
+    root.accounts.putAll(accounts_read | std::views::transform([](const mux::config::account_t& one) {
                            return std::pair{mux::config::address_of(one), one};
                          }));
     root.chats.putAll(chats);
@@ -484,16 +484,16 @@ struct kept_settings {
   }
   [[nodiscard]] mux::config::file file() const {
     // Copied: the file is made of a contiguous list of them.
-    const auto listed = std::ranges::to<std::vector>(this->accounts().values());
+    const auto listed = this->accounts().values() | std::ranges::to<std::vector>();
     auto out = mux::config::file_of(listed, foreign_accounts);
     out.motion = mux::config::said_of<mux::config::motion_said_t>(this->appearance().motion);
     out.last_account = this->recent().last_account;
     if (!this->recent().emoji.empty())
       out.recent_emoji = this->recent().emoji;
     const auto kept_of = [](const std::vector<mux::emote>& all) {
-      return std::ranges::to<std::vector>(std::views::transform(all, [](const mux::emote& one) {
+      return all | std::views::transform([](const mux::emote& one) {
                return mux::config::sticker_kept{one.shortcode, one.url, one.body, one.w, one.h, one.size, one.mimetype};
-             }));
+             }) | std::ranges::to<std::vector>();
     };
     if (!this->recent().stickers.empty())
       out.recent_stickers = kept_of(this->recent().stickers);
@@ -542,10 +542,10 @@ struct kept_settings {
     out.chat_avatar_rounding = this->appearance().chat_avatar_rounding;
     out.person_avatar_rounding = this->appearance().person_avatar_rounding;
     if (!this->appearance().space_places.empty())
-      out.space_places = std::ranges::to<std::vector>(std::views::transform(this->appearance().space_places, [](const mux::config::space_placed& one) {
+      out.space_places = this->appearance().space_places | std::views::transform([](const mux::config::space_placed& one) {
                            return mux::config::space_place{one.account, mux::config::word_of(one.item),
                                                            std::string(mux::config::word_of(one.bar))};
-                         }));
+                         }) | std::ranges::to<std::vector>();
     if (this->frames().show_fps)
       out.show_fps = true;
     if (this->appearance().interface_scale != 100)

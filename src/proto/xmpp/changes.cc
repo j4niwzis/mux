@@ -66,11 +66,11 @@ struct registration_form {
 // The answers to what the server asked, as it asks: what each field holds
 // first; none for one only read.
 [[nodiscard]] inline std::vector<registration_answer> first_answers(const registration_asked& asked) {
-  return std::ranges::to<std::vector>(std::views::transform(std::views::filter(asked.fields, [](const registration_field& one) {
+  return asked.fields | std::views::filter([](const registration_field& one) {
            return spl::visit(spl::overloaded{[](field_shown::read) { return false; }, [](const auto&) { return true; }}, one.shown);
-         }), [](const registration_field& one) {
+         }) | std::views::transform([](const registration_field& one) {
            return registration_answer{.var = one.var, .value = one.value.empty() ? std::string() : one.value.front()};
-         }));
+         }) | std::ranges::to<std::vector>();
 }
 // The account made: from now on, signed in to.
 struct registered {

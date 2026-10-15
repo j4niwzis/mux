@@ -8,23 +8,17 @@ skiff-widgets) are written. A change that does not follow this is not done.
 - C++26, **modules only**: every unit is a module interface, partition or
   implementation unit. No headers of our own; a library's headers only in a
   global module fragment, where a library has no module.
-- clang 23. Build with libc++ or libstdc++; both are supported.
+- clang 23.1.4 or later (CMake checks). Build with libc++ or libstdc++; both are supported.
 - Where the toolchain has a bug, work around it in the code and say why in a
   comment, with the reduced case if there is one. Known ones:
-  - libstdc++ range adaptor pipes across modules: write
-    `std::ranges::to<T>(view)` and `std::views::transform(range, f)` (call
-    form), not `range | std::views::transform(f) | std::ranges::to<T>()`.
-    libstdc++ gives a closure's `operator|` only as a hidden friend of the
-    closure template, and clang does not find it on a specialization another
-    imported module instantiated first: module `a` pipes
-    `text | std::views::split('\n') | ...`, module `b` imports `a` and
-    writes the same pipe -- "invalid operands to binary expression
-    ('std::string_view' and '_Partial<std::ranges::views::_Split, char>')".
-    Checked again with clang 23.1.2 and libstdc++ 15.2 (Alpine g++
-    15.2.0-r9, musl 1.2.6) on 2026-10-15; the call form builds.
-  - `std::ranges::for_each` is not a loop: a value updated in place is
-    `std::ranges::transform(xs, xs.begin(), f)` with `f` returning it; a
-    body with effects is a range-for.
+  - (Gone with clang 23.1.4.) Before it, clang with libstdc++'s std module
+    found no `operator|` for a range adaptor closure that another imported
+    module had instantiated first -- module `a` piping
+    `text | std::views::split('\n') | ...`, module `b` importing `a` and
+    writing the same pipe: "invalid operands to binary expression
+    ('std::string_view' and '_Partial<std::ranges::views::_Split, char>')"
+    (clang 23.1.2, libstdc++ 15.2, musl 1.2.6). Pipes were written in the
+    call form then; 23.1.4 builds the same case, and they are pipes again.
   - A class template specialization declared `extern template` in a module
     must not be deleted in a unit that imports it: destroy it in the unit
     that instantiates it (see `destroy_account`).
@@ -83,10 +77,15 @@ skiff-widgets) are written. A change that does not follow this is not done.
 
 ## Declarative code
 
-- What builds or scans a sequence is a ranges pipeline or algorithm
+- What builds or scans a sequence is a ranges pipeline or algorithm, read in
+  the order the data flows: `xs | std::views::filter(f) |
+  std::views::transform(g) | std::ranges::to<T>()`, not nested calls
   (`std::views::transform`, `filter`, `join`, `enumerate`/`iota`,
   `std::ranges::to`, `std::ranges::find_if`...), not a hand-written loop
   pushing into an output.
+- `std::ranges::for_each` is no stand-in for a loop: a value updated in
+  place is `std::ranges::transform(xs, xs.begin(), f)` with `f` returning
+  it; a body with effects is a range-for.
 - Lazy where it can be: conversions and encodings are views that allocate
   nothing. A whole copy is made only where its consumer keeps a pointer to
   contiguous memory (a C API's buffer), with a comment saying so.

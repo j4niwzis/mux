@@ -83,16 +83,16 @@ struct explore_events {
 auto explore_view(const palette& colours, const explore_facts& facts) {
   namespace c = skiff::compose;
   const auto wanted = mux::logic::folded(facts.query);
-  const auto rooms = facts.listing ? std::ranges::to<std::vector>(std::views::filter(facts.listing->rooms, [&](const auto& room) {
+  const auto rooms = facts.listing ? facts.listing->rooms | std::views::filter([&](const auto& room) {
     return !facts.space || wanted.empty() || mux::logic::folded(room.name).contains(wanted) ||
         mux::logic::folded(room.topic).contains(wanted) || mux::logic::folded(room.alias).contains(wanted);
-  })) : std::vector<directory_room>{};
+  }) | std::ranges::to<std::vector>() : std::vector<directory_room>{};
   std::ranges::for_each(rooms, [](const auto& room) {
     if (room.avatar && !room.avatar->empty()) listed_avatars().emplace_back(room.id, *room.avatar);
   });
-  auto rows = std::ranges::to<std::vector>(std::views::transform(rooms, [&](const auto& room) {
+  auto rows = rooms | std::views::transform([&](const auto& room) {
     return directory_room_row(colours, room, facts.listing->server, facts.by);
-  }));
+  }) | std::ranges::to<std::vector>();
   const bool more = facts.listing && facts.listing->next && !facts.space;
   const auto status = facts.loading ? std::string("Loading rooms…") :
       !facts.listing ? std::string() : rooms.empty() ? std::string("No rooms found.") : std::format("{} rooms", rooms.size());

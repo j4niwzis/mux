@@ -283,7 +283,7 @@ struct mentioned {
   for (std::size_t at = text.find("\u2002"); at != std::string::npos; at = text.find("\u2002", at))
     text.erase(at, std::string_view("\u2002").size());
   const auto blank = [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
-  std::string out = std::ranges::to<std::string>(std::views::join(std::views::transform(std::views::chunk_by(text, [&](char a, char b) { return blank(a) == blank(b); }), [&](auto run) { return blank(run.front()) ? std::string(" ") : std::string(run.begin(), run.end()); })));
+  std::string out = text | std::views::chunk_by([&](char a, char b) { return blank(a) == blank(b); }) | std::views::transform([&](auto run) { return blank(run.front()) ? std::string(" ") : std::string(run.begin(), run.end()); }) | std::views::join | std::ranges::to<std::string>();
   const auto first = out.find_first_not_of(' ');
   const auto last = out.find_last_not_of(' ');
   return first == std::string::npos ? std::string() : out.substr(first, last - first + 1);
@@ -453,8 +453,7 @@ struct text_piece {
                                                       const std::vector<html_disclosure>& disclosures = {}) {
   if (!disclosures.empty())
     return {text_piece{}, text_piece{.disclosure = true}, text_piece{}};
-  std::vector<nodes::Text::Styled> blocks = std::ranges::to<std::vector>(
-      std::views::filter(styles, [](const auto& one) { return one.block; }));
+  std::vector<nodes::Text::Styled> blocks = styles | std::views::filter([](const auto& one) { return one.block; }) | std::ranges::to<std::vector>();
   std::ranges::sort(blocks, {}, &nodes::Text::Styled::first);
   // Words from `a` to `b`: their links and styles cut to them, counted from
   // their start; the line breaks around a block gone.
@@ -464,16 +463,16 @@ struct text_piece {
     while (b > a && text[b - 1] == '\n')
       --b;
     text_piece out{.text = text.substr(a, b - a)};
-    out.links = std::ranges::to<std::vector>(std::views::transform(std::views::filter(links, [&](const auto& one) { return one.first >= a && one.last <= b; }), [&](auto one) {
+    out.links = links | std::views::filter([&](const auto& one) { return one.first >= a && one.last <= b; }) | std::views::transform([&](auto one) {
                   one.first -= a;
                   one.last -= a;
                   return one;
-                }));
-    out.styles = std::ranges::to<std::vector>(std::views::transform(std::views::filter(styles, [&](const auto& one) { return !one.block && one.last > a && one.first < b; }), [&](auto one) {
+                }) | std::ranges::to<std::vector>();
+    out.styles = styles | std::views::filter([&](const auto& one) { return !one.block && one.last > a && one.first < b; }) | std::views::transform([&](auto one) {
                    one.first = std::max(one.first, a) - a;
                    one.last = std::min(one.last, b) - a;
                    return one;
-                 }));
+                 }) | std::ranges::to<std::vector>();
     return out;
   };
   std::vector<text_piece> out;
@@ -638,7 +637,7 @@ inline auto disclosure_piece(const palette& colours, const mentioned& shown,
     ancestors.push_back(index);
     const auto body = [&](std::size_t first, std::size_t last) {
       auto at = first;
-      for (const auto& [child_index, child] : std::views::enumerate(shown.disclosures))
+      for (const auto& [child_index, child] : shown.disclosures | std::views::enumerate)
         if (child.parent == index && child.first >= first && child.last <= last) {
           words(at, child.first, ancestors);
           self(self, static_cast<std::size_t>(child_index), ancestors);
@@ -650,15 +649,14 @@ inline auto disclosure_piece(const palette& colours, const mentioned& shown,
     body(detail.summary_last, detail.last);
   };
   std::size_t at = 0;
-  for (const auto& [index, detail] : std::views::enumerate(shown.disclosures))
+  for (const auto& [index, detail] : shown.disclosures | std::views::enumerate)
     if (!detail.parent) {
       words(at, detail.first, {});
       append(append, static_cast<std::size_t>(index), {});
       at = detail.last;
     }
   words(at, shown.text.size(), {});
-  disclosure_state initial{std::ranges::to<std::vector<bool>>(std::views::transform(shown.disclosures,
-      [](const auto& detail) { return detail.open; }))};
+  disclosure_state initial{shown.disclosures | std::views::transform([](const auto& detail) { return detail.open; }) | std::ranges::to<std::vector<bool>>()};
   for (std::size_t i = 0; i < shown.disclosures.size(); ++i)
     if (initial.open[i] && !shown.disclosures[i].group.empty())
       for (std::size_t earlier = 0; earlier < i; ++earlier)
@@ -721,9 +719,9 @@ inline auto readers_row(const palette& colours, const conversation& in, const st
   namespace c = skiff::compose;
   return c::row(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),
       c::many(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),
-              std::ranges::to<std::vector>(std::views::transform(std::views::take(users, kReadersShown), [&](const std::string& user) {
+              users | std::views::take(kReadersShown) | std::views::transform([&](const std::string& user) {
                 return avatar_mark(avatar_of::person{}, user, sender_name(in, user), kReaderFace);
-              }))),
+              }) | std::ranges::to<std::vector>()),
       c::styled({.alignSelf = scene::align::kMiddle},
                 c::visible(users.size() > kReadersShown,
                            nodes::Text(users.size() > kReadersShown ? std::format("+{}", users.size() - kReadersShown) : std::string(),

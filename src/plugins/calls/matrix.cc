@@ -138,9 +138,9 @@ template <class Heard>
 heard_t matrix_heard(contract::matrix_events, type_tag<feature>, const loom::ev::m_call_candidates_content_t& content,
                      Heard& heard) {
   calls::signalled(heard, content.call_id, content.party_id.value_or(""),
-                   call_said::candidates{std::ranges::to<std::vector>(std::views::transform(content.candidates, [](const auto& each) {
+                   call_said::candidates{content.candidates | std::views::transform([](const auto& each) {
                      return mux::calls::ice_candidate{each.candidate, each.sdp_mid.value_or("")};
-                   }))});
+                   }) | std::ranges::to<std::vector>()});
   return heard_as::quiet{};
 }
 template <class Heard>
@@ -217,13 +217,13 @@ struct send_signal {
             },
             [&](const call_said::candidates& one) {
               loom::ev::m_call_candidates_content_t content{};
-              content.candidates = std::ranges::to<std::vector>(std::views::transform(one.them, [](const mux::calls::ice_candidate& each) {
+              content.candidates = one.them | std::views::transform([](const mux::calls::ice_candidate& each) {
                 loom::ev::m_call_candidates_content_t::candidate_t made{};
                 made.candidate = each.line;
                 made.sdp_mid = each.mid;
                 made.sdp_m_line_index = 0;
                 return made;
-              }));
+              }) | std::ranges::to<std::vector>();
               content.call_id = call;
               content.version = wire;
               content.party_id = party;
@@ -288,12 +288,9 @@ struct ask_servers {
     account.ask_server(loom::cs::get_turn_server{}, [&account](const auto& got) {
       std::vector<mux::calls::ice_server> servers;
       if (got)
-        servers = std::ranges::to<std::vector>(
-            std::views::transform(std::views::filter(std::views::transform(got->uris, [&](const std::string& uri) {
+        servers = got->uris | std::views::transform([&](const std::string& uri) {
                                                        return ice_server_of(uri, got->username, got->password);
-                                                     }),
-                                                     [](const auto& one) { return one.has_value(); }),
-                                  [](const auto& one) { return *one; }));
+                                                     }) | std::views::filter([](const auto& one) { return one.has_value(); }) | std::views::transform([](const auto& one) { return *one; }) | std::ranges::to<std::vector>();
       else
         log(account.id(), "no TURN servers: {}", got.error().said());
       account.tell_program(call_servers{account.id(), std::move(servers), account.party()});

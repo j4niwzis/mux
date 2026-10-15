@@ -73,9 +73,9 @@ inline auto forward_row(const palette& colours, const forward_target& one) {
 // The chats whose names have what is typed, in any case.
 inline std::vector<forward_target> matching_forward_targets(const std::vector<forward_target>& all, std::string_view text) {
   const std::string wanted = mux::logic::folded(text);
-  return std::ranges::to<std::vector>(std::views::filter(all, [&](const forward_target& one) {
+  return all | std::views::filter([&](const forward_target& one) {
     return wanted.empty() || mux::logic::folded(one.name).contains(wanted);
-  }));
+  }) | std::ranges::to<std::vector>();
 }
 inline auto forward_view(const palette& colours, const std::vector<forward_target>& chats) {
   namespace c = skiff::compose;
@@ -161,7 +161,7 @@ inline auto people_rows(const new_chat_facts& facts) {
   skiff::model::Keyed<std::string, found_person> rows;
   const auto wanted = mux::logic::folded(facts.query);
   if (direct_address(facts, facts.query)) rows.put(facts.query, found_person{.id = facts.query});
-  std::ranges::for_each(std::views::filter(facts.people, [&](const auto& person) {
+  std::ranges::for_each(facts.people | std::views::filter([&](const auto& person) {
     return wanted.empty() || mux::logic::folded(person.name).contains(wanted) || mux::logic::folded(person.id).contains(wanted);
   }), [&](const auto& person) { if (rows.size() < 60) rows.put(person.id, person); });
   std::ranges::for_each(facts.found, [&](const auto& person) { if (rows.size() < 60) rows.put(person.id, person); });
@@ -181,9 +181,9 @@ inline std::optional<choose_person_request> start_chat_request(const new_chat_fa
   return std::nullopt;
 }
 inline auto person_rows(const palette& colours, const new_chat_facts& facts) {
-  return std::ranges::to<std::vector>(std::views::transform(facts.rows, [&](const auto& row) {
+  return facts.rows | std::views::transform([&](const auto& row) {
     return person_pick_row(colours, row.second, choose_person(facts.inviting, row.second.id));
-  }));
+  }) | std::ranges::to<std::vector>();
 }
 using person_rows_t = decltype(skiff::compose::many(skiff::compose::vbox(),
     person_rows(std::declval<const palette&>(), std::declval<const new_chat_facts&>())));

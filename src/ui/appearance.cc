@@ -258,7 +258,7 @@ inline auto percent_heading(const palette &colours, std::string_view what) {
 // shown so by the projection, the slider's choices the setting's own type.
 inline constexpr int kRoundAvatar = 100;
 inline std::vector<std::optional<int>> rounding_steps() {
-  return std::ranges::to<std::vector>(std::views::transform(std::views::iota(0, kRoundAvatar / 5 + 1), [](int step) { return std::optional<int>(step * 5); }));
+  return std::views::iota(0, kRoundAvatar / 5 + 1) | std::views::transform([](int step) { return std::optional<int>(step * 5); }) | std::ranges::to<std::vector>();
 }
 template <auto Member>
 inline auto rounding_setting(const palette& colours, std::string_view what) {

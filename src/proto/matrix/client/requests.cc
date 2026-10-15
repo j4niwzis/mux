@@ -279,7 +279,7 @@ void account<Sink>::fetch_room_settings(std::string room) {
     const auto capabilities = perform(*api_, loom::cs::get_capabilities{});
     if (capabilities && capabilities->capabilities.m_room_versions) {
       const auto& versions = *capabilities->capabilities.m_room_versions;
-      out.data.versions = std::ranges::to<std::vector<std::string>>(std::views::keys(versions.available));
+      out.data.versions = versions.available | std::views::keys | std::ranges::to<std::vector<std::string>>();
       out.data.default_version = versions.default_;
     } else failure(capabilities);
     const auto tags = perform(*api_, loom::cs::get_room_state_with_key{
@@ -290,7 +290,7 @@ void account<Sink>::fetch_room_settings(std::string room) {
     }
     const auto members = perform(*api_, loom::cs::get_members_by_room{.room_id = room});
     if (members && members->chunk) {
-      const auto mapped = std::views::transform(*members->chunk, [&](const auto& event) {
+      const auto mapped = (*members->chunk) | std::views::transform([&](const auto& event) {
         using namespace proto::matrix;
         return spl::visit(spl::overloaded{[&](const loom::ev::m_room_member_content_t& content) -> std::optional<managed_member> {
           if (!event.state_key) return std::nullopt;
@@ -305,14 +305,11 @@ void account<Sink>::fetch_room_settings(std::string room) {
           return managed_member{*event.state_key, content.displayname.value_or(*event.state_key), content.avatar_url, status, event.origin_server_ts};
         }, [](const auto&) -> std::optional<managed_member> { return std::nullopt; }}, event.content.data());
       });
-      out.data.members = std::ranges::to<std::vector<proto::matrix::managed_member>>(std::views::transform(
-          std::views::filter(mapped, [](const auto& member) { return member.has_value(); }), [](const auto& member) { return *member; }));
+      out.data.members = mapped | std::views::filter([](const auto& member) { return member.has_value(); }) | std::views::transform([](const auto& member) { return *member; }) | std::ranges::to<std::vector<proto::matrix::managed_member>>();
     } else failure(members);
     if (const auto kept = state_.joined.find(room); kept != state_.joined.end()) {
-      out.data.state_events = std::ranges::to<std::vector<proto::matrix::managed_state_event>>(std::views::transform(
-          kept->second.state.events, [](const auto& entry) { return proto::matrix::managed_state_event{entry.first.first, entry.first.second, knot::to_pretty_json_string(entry.second), spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, entry.second.content.data())}; }));
-      out.data.account_data = std::ranges::to<std::vector<proto::matrix::managed_account_data>>(std::views::transform(
-          kept->second.account_data, [](const auto& entry) { return proto::matrix::managed_account_data{entry.first, spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, entry.second.content.data())}; }));
+      out.data.state_events = kept->second.state.events | std::views::transform([](const auto& entry) { return proto::matrix::managed_state_event{entry.first.first, entry.first.second, knot::to_pretty_json_string(entry.second), spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, entry.second.content.data())}; }) | std::ranges::to<std::vector<proto::matrix::managed_state_event>>();
+      out.data.account_data = kept->second.account_data | std::views::transform([](const auto& entry) { return proto::matrix::managed_account_data{entry.first, spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, entry.second.content.data())}; }) | std::ranges::to<std::vector<proto::matrix::managed_account_data>>();
     }
     sink_(std::move(out));
     this->list_packs(room);
@@ -444,7 +441,7 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
             [&](const proto::matrix::room_change::set_addresses& one) {
               loom::ev::m_room_canonical_alias_content_t content;
               content.alias = one.main;
-              content.alt_aliases = std::ranges::to<std::vector<std::string>>(std::views::filter(one.published, [&](const auto& alias) { return !one.main || alias != *one.main; }));
+              content.alt_aliases = one.published | std::views::filter([&](const auto& alias) { return !one.main || alias != *one.main; }) | std::ranges::to<std::vector<std::string>>();
               set("m.room.canonical_alias", content);
             },
             [&](const proto::matrix::room_change::create_alias& one) {
@@ -588,7 +585,7 @@ bool account<Sink>::save_notifications(std::optional<std::string> room, mux::not
         if (own && effective.on.value_or(true)) {
           const auto shadow = [&](const auto& rules, bool content) {
             if (!rules) return;
-            for (const auto& rule : std::views::reverse(*rules)) {
+            for (const auto& rule : (*rules) | std::views::reverse) {
               const bool notifies = rule.enabled && std::ranges::any_of(rule.actions, [](const knot::raw& raw) {
                 const auto action = knot::try_read<std::string>(raw.text);
                 return action && *action == "notify";

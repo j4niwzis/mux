@@ -48,7 +48,7 @@ struct kept_root {
 // The chats whose own choices have a flag set.
 template <auto M>
 [[nodiscard]] std::set<conversation_id> chats_where(const kept_root& root) {
-  return std::ranges::to<std::set>(std::views::transform(std::views::filter(std::views::zip(root.chats.keys(), root.chats.values()), [](const auto& one) { return static_cast<bool>(std::get<1>(one).*M); }), [](const auto& one) { return std::get<0>(one); }));
+  return std::views::zip(root.chats.keys(), root.chats.values()) | std::views::filter([](const auto& one) { return static_cast<bool>(std::get<1>(one).*M); }) | std::views::transform([](const auto& one) { return std::get<0>(one); }) | std::ranges::to<std::set>();
 }
 // An account's settings, by its address: none where it is not kept.
 [[nodiscard]] inline const config::account_t* account_settings(const kept_root& root, std::string_view address) {
@@ -61,9 +61,9 @@ template <auto M>
   // Each space's own rooms -- not itself -- by the room, the first space
   // that holds one kept.
   const auto rooms_of = [](const conversation& space) {
-    return std::views::transform(std::views::filter(space.children, [&space](const std::string& child) { return child != space.id.id; }), [&space](const std::string& child) { return std::pair{conversation_id{space.id.account, child}, space.id}; });
+    return space.children | std::views::filter([&space](const std::string& child) { return child != space.id.id; }) | std::views::transform([&space](const std::string& child) { return std::pair{conversation_id{space.id.account, child}, space.id}; });
   };
-  return std::ranges::to<std::map>(std::views::join(std::views::transform(std::views::filter(std::views::join(std::views::transform(accounts.values(), [](const account& one) { return one.conversations.values(); })), &conversation::space), rooms_of)));
+  return accounts.values() | std::views::transform([](const account& one) { return one.conversations.values(); }) | std::views::join | std::views::filter(&conversation::space) | std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::map>();
 }
 
 // What a chat's settings come to, read from what is kept and the spaces
@@ -135,7 +135,7 @@ struct chat_settings {
       levels.push_back(*everywhere);
     if (levels.empty())
       return config::bubble_look{};
-    return std::ranges::fold_left(std::views::drop(levels, 1), levels.front(), [](config::bubble_look below, const config::bubble_look& above) {
+    return std::ranges::fold_left(levels | std::views::drop(1), levels.front(), [](config::bubble_look below, const config::bubble_look& above) {
       return config::filled_from(std::move(below), above);
     });
   }

@@ -127,7 +127,7 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
     // each judged by its call, an invite by its lifetime.
     {
       const late_news_while news{late_news_, true};
-      for (const auto& one : std::views::reverse(gap))
+      for (const auto& one : gap | std::views::reverse)
         this->event(in, one, placement::in_window{});
     }
     // The reactions to what the user sent: known by who sent it, where the
@@ -332,8 +332,7 @@ inline body biography_of(const biography& bio) {
 inline profile_details details_of(const profile& wire) {
   profile_details out{.banner = wire.banner ? wire.banner : wire.unstable_banner};
   const auto& pronouns = wire.pronouns ? wire.pronouns : wire.unstable_pronouns;
-  if (pronouns) out.pronouns = std::ranges::to<std::vector<mux::pronouns>>(
-      std::views::transform(*pronouns, [](const auto& p) { return mux::pronouns{p.language, p.summary}; }));
+  if (pronouns) out.pronouns = (*pronouns) | std::views::transform([](const auto& p) { return mux::pronouns{p.language, p.summary}; }) | std::ranges::to<std::vector<mux::pronouns>>();
   const auto& bio = wire.bio ? wire.bio : wire.unstable_bio;
   if (bio) out.biography = biography_of(*bio);
   return out;
@@ -422,8 +421,7 @@ void account<Sink>::set_profile(user_profile profile) {
     };
     const auto send = [&](auto field) { send_request(profile_wire::put{id_.address, std::move(field)}); };
     send(profile_wire::display_name{profile.name.value_or("")});
-    auto pronouns = std::ranges::to<std::vector<profile_wire::pronoun>>(std::views::transform(profile.details.pronouns,
-        [](const auto& p) { return profile_wire::pronoun{p.language, p.summary}; }));
+    auto pronouns = profile.details.pronouns | std::views::transform([](const auto& p) { return profile_wire::pronoun{p.language, p.summary}; }) | std::ranges::to<std::vector<profile_wire::pronoun>>();
     if (current->pronouns) send(profile_wire::stable_pronouns{std::move(pronouns)});
     else send(profile_wire::pronouns{std::move(pronouns)});
     profile_wire::biography biography{{profile_wire::representation{profile.details.biography.plain, profile_wire::mime::plain{}}}};
@@ -558,7 +556,7 @@ void account<Sink>::list_sessions() {
       return;
     }
     std::vector<mux::proto::matrix::session_info> out =
-        std::ranges::to<std::vector>(std::views::transform(got->devices.value_or(std::vector<loom::cs::def::device_t>{}), [](const loom::cs::def::device_t& one) {
+        got->devices.value_or(std::vector<loom::cs::def::device_t>{}) | std::views::transform([](const loom::cs::def::device_t& one) {
           return mux::proto::matrix::session_info{
               .id = one.device_id,
               .name = one.display_name.value_or(""),
@@ -566,7 +564,7 @@ void account<Sink>::list_sessions() {
               .last_seen = one.last_seen_ts ? std::optional(std::chrono::sys_time<std::chrono::milliseconds>(
                                                   std::chrono::milliseconds(*one.last_seen_ts)))
                                             : std::nullopt};
-        }));
+        }) | std::ranges::to<std::vector>();
     sink_(proto::matrix::sessions_listed{id_, how_.device_id.value_or(""), std::move(out)});
     sink_(proto::matrix::security_state{id_, crypto_ && crypto_->cross_signing_keys().has_value(), crypto_ && crypto_->backup().has_value()});
   });

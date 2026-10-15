@@ -30,17 +30,17 @@ struct part {
       return;
     auto events = said->reaction_events;
     std::ranges::stable_sort(events, {}, &message::reaction_event::at);
-    auto entries = std::ranges::to<std::vector>(std::views::transform(events, [&](const message::reaction_event& event) {
+    auto entries = events | std::views::transform([&](const message::reaction_event& event) {
                      return entry{event.event, event.who, ui::sender_name(*chat, event.who), event.key, event.at,
                                   event.who == chat->id.account.address, one.message, event.shortcode};
-                   }));
+                   }) | std::ranges::to<std::vector>();
     // Those whose reaction came without its event -- read back from the
     // history -- listed too, at the message's time.
     std::ranges::for_each(said->reactions, [&](const auto& reacted) {
       const auto& [key, who] = reacted;
-      entries.append_range(std::views::transform(std::views::filter(who, [&](const std::string& user) {
+      entries.append_range(who | std::views::filter([&](const std::string& user) {
                              return std::ranges::none_of(events, [&](const auto& event) { return event.key == key && event.who == user; });
-                           }), [&](const std::string& user) {
+                           }) | std::views::transform([&](const std::string& user) {
                              return entry{std::string(), user, ui::sender_name(*chat, user), key, said->at,
                                           user == chat->id.account.address, one.message};
                            }));

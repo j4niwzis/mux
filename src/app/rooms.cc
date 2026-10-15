@@ -33,9 +33,7 @@ class rooms_part {
       return;
     mux::ui::new_chat_facts facts{.by = one.room.account, .inviting = one.room, .room_name = mux::ui::display_name(*chat)};
     if (const auto* own = s_->model->accounts().find(one.room.account))
-      facts.people = std::ranges::to<std::vector>(std::views::transform(
-          std::views::filter(own->conversations.values(), [](const auto& in) { return !mux::ui::is_group(in); }),
-          [&](const auto& in) { return mux::found_person{.id = mux::ui::contact_of(s_->ui, in), .name = mux::ui::display_name(in), .avatar = in.avatar}; }));
+      facts.people = own->conversations.values() | std::views::filter([](const auto& in) { return !mux::ui::is_group(in); }) | std::views::transform([&](const auto& in) { return mux::found_person{.id = mux::ui::contact_of(s_->ui, in), .name = mux::ui::display_name(in), .avatar = in.avatar}; }) | std::ranges::to<std::vector>();
     std::ranges::sort(facts.people, {}, &mux::found_person::name);
     facts.rows = mux::ui::people_rows(facts);
     mux::ui::show(*s_->showing, std::optional(std::move(facts)));

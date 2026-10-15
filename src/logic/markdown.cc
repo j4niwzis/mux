@@ -42,11 +42,10 @@ struct runs_in {
   std::vector<std::size_t> open_runs;
   // The runs at `here`, opened, and those that ended closed.
   const auto sync = [&](std::size_t here) {
-    std::vector<std::size_t> now = std::ranges::to<std::vector<std::size_t>>(std::views::filter(
-        std::views::iota(std::size_t{0}, runs.size()), [&](std::size_t i) { return !runs[i].replacement && runs[i].first <= here && here < runs[i].last; }));
+    std::vector<std::size_t> now = std::views::iota(std::size_t{0}, runs.size()) | std::views::filter([&](std::size_t i) { return !runs[i].replacement && runs[i].first <= here && here < runs[i].last; }) | std::ranges::to<std::vector<std::size_t>>();
     if (now == open_runs)
       return;
-    for (const std::size_t i : std::views::reverse(open_runs))
+    for (const std::size_t i : open_runs | std::views::reverse)
       out += runs[i].close;
     for (const std::size_t i : now)
       out += runs[i].open;
@@ -123,7 +122,7 @@ struct runs_in {
     out += chevron::escaped(line.substr(at, 1));
     ++at;
   }
-  for (const std::size_t i : std::views::reverse(open_runs))
+  for (const std::size_t i : open_runs | std::views::reverse)
     out += runs[i].close;
   return out;
 }

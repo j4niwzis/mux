@@ -124,13 +124,13 @@ class suggestions_part {
     auto out = spl::visit(
         spl::overloaded{[&](const mention_asked&) {
                           // The chat's members, by name or id -- not the reader.
-                          return std::ranges::to<std::vector>(std::views::transform(std::views::take(std::views::filter(chat.members, [&](const mux::member& one) {
+                          return chat.members | std::views::filter([&](const mux::member& one) {
                                    return one.id != chat.id.account.address &&
                                           (lower(one.name).contains(wanted) || lower(one.id).contains(wanted));
-                                 }), 6), [](const mux::member& one) {
+                                 }) | std::views::take(6) | std::views::transform([](const mux::member& one) {
                                    return mux::ui::suggestion{.person = true, .id = one.id, .title = one.name.empty() ? one.id : one.name,
                                                               .sub = one.id};
-                                 }));
+                                 }) | std::ranges::to<std::vector>();
                         },
                         [&](const emoji_asked&) {
                           // The room's own, where its protocol has packs; then
@@ -147,13 +147,13 @@ class suggestions_part {
                                 continue;
                               emoji.push_back({.glyph = label, .picture = one.url, .title = one.shortcode, .sub = label});
                             }
-                          emoji.append_range(std::views::transform(mux::logic::emoji_found(asked.query, 6 - emoji.size()), [](const auto* one) {
+                          emoji.append_range(mux::logic::emoji_found(asked.query, 6 - emoji.size()) | std::views::transform([](const auto* one) {
                                                return mux::ui::suggestion{.glyph = std::string(one->text), .title = std::string(one->name)};
                                              }));
                           return emoji;
                         }},
         asked.kind);
-    std::ranges::for_each(std::views::enumerate(out), [](auto pair) { std::get<1>(pair).at = static_cast<std::size_t>(std::get<0>(pair)); });
+    std::ranges::for_each(out | std::views::enumerate, [](auto pair) { std::get<1>(pair).at = static_cast<std::size_t>(std::get<0>(pair)); });
     return out;
   }
   void put() {

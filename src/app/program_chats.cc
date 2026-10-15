@@ -154,7 +154,7 @@ void app::apply(const request::toggle_info&) {
   // it holds, and no more than a page of rows is looked at.
   if (const auto& chosen = shared.chosen(); chosen && !shared.demo())
     if (const mux::conversation* chat = model->find(*chosen); chat && chat->encrypted)
-      for (const mux::member& each : std::views::take(chat->members, 200))
+      for (const mux::member& each : chat->members | std::views::take(200))
         net->ask_trust(chosen->account, each.id);
 }
 

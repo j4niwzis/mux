@@ -62,9 +62,8 @@ struct history_facts {
       }
     return out;
   };
-  auto versions = std::ranges::to<std::vector>(std::views::transform(std::views::iota(std::size_t{0}, now.versions.size()),
-      [&](std::size_t i) { return as_message(now.versions[i].body, i == 0 ? now.at : now.versions[i - 1].until,
-          now.versions[i].event.empty() && i == 0 ? now.id : now.versions[i].event); }));
+  auto versions = std::views::iota(std::size_t{0}, now.versions.size()) | std::views::transform([&](std::size_t i) { return as_message(now.versions[i].body, i == 0 ? now.at : now.versions[i - 1].until,
+          now.versions[i].event.empty() && i == 0 ? now.id : now.versions[i].event); }) | std::ranges::to<std::vector>();
   versions.push_back(as_message(now.body, now.versions.empty() ? now.at : now.versions.back().until,
       now.latest_edit_event.empty() && now.versions.empty() ? now.id : now.latest_edit_event));
   return versions;
@@ -80,9 +79,9 @@ auto edit_history_panel(const ui_needs& n, const history_facts& facts) {
   namespace c = skiff::compose;
   const auto& chat = chat_or_none(facts.known, facts.in);
   const auto versions = edit_versions_of(facts.said, &chat);
-  auto rows = std::ranges::to<std::vector>(std::views::transform(versions, [&](const message& event) {
+  auto rows = versions | std::views::transform([&](const message& event) {
     return edit_history_row(n, chat, event, facts.known);
-  }));
+  }) | std::ranges::to<std::vector>();
   auto list = dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)));
   list.scrollToEnd(false);
   return c::column(list_dialog(560.0f),
@@ -167,9 +166,9 @@ inline auto marks_panel(const ui_needs& n, const marks_facts& facts) {
   const conversation* in = facts.now == nullptr ? nullptr : facts.now->find(facts.in);
   auto rows = in == nullptr
                   ? std::vector<row_t>{}
-                  : std::ranges::to<std::vector>(std::views::transform(facts.entries, [&](const mark_entry& one) {
+                  : facts.entries | std::views::transform([&](const mark_entry& one) {
                       return mark_row(n, facts.kind, *in, one, facts.now);
-                    }));
+                    }) | std::ranges::to<std::vector>();
   return c::column(
       list_dialog(520.0f),
       page_header<no_back, close_act>(

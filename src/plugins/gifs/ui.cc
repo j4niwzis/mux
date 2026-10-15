@@ -36,9 +36,9 @@ inline auto grid(const ui::palette& colours, const std::vector<std::string>& pat
   namespace c = skiff::compose;
   namespace scene = skiff::scene;
   namespace nodes = skiff::nodes;
-  auto cells = std::ranges::to<std::vector>(std::views::transform(paths, [&](const auto& path) {
+  auto cells = paths | std::views::transform([&](const auto& path) {
     return cell(colours, path);
-  }));
+  }) | std::ranges::to<std::vector>();
   return c::column(c::vbox(0.0f, {.padding = {4.0f, 4.0f, 4.0f, 4.0f}}),
       c::visible(paths.empty(), c::styled({.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}},
           ui::wrapped(nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, colours.dim)))),

@@ -75,7 +75,7 @@ struct resize_info_to {
 // written: closed at the end, as the field showed it, so that what is sent
 // says the block where it ends, as the field did.
 [[nodiscard]] inline std::string with_blocks_closed(std::string_view text) {
-  const bool open = std::ranges::count_if(std::views::split(text, '\n'), [](auto line) {
+  const bool open = std::ranges::count_if(text | std::views::split('\n'), [](auto line) {
                       return std::string_view(line.begin(), line.end()).starts_with("```");
                     }) % 2 == 1;
   std::string out(text);
@@ -411,7 +411,7 @@ struct field_quotes {
   // The spans with [from, to) cut out of those `of` takes.
   template <class Of>
   [[nodiscard]] static std::vector<span> without(const std::vector<span>& spans, std::size_t from, std::size_t to, Of of) {
-    return std::ranges::to<std::vector<span>>(std::views::join(std::views::transform(spans, [&](const span& one) {
+    return spans | std::views::transform([&](const span& one) {
       if (!of(one) || one.last <= from || one.first >= to)
         return std::vector<span>{one};
       std::vector<span> kept;
@@ -420,7 +420,7 @@ struct field_quotes {
       if (one.last > to)
         kept.push_back({to, one.last, one.format});
       return kept;
-    })));
+    }) | std::views::join | std::ranges::to<std::vector<span>>();
   }
   // A style put on what is selected -- or taken off it, where all of it has
   // it already: tdesktop's toggleSelectionMarkdown. A link put on replaces
@@ -430,7 +430,7 @@ struct field_quotes {
       return std::nullopt;
     const std::size_t low = field.low(), high = field.high();
     const auto same = [&](const span& one) { return one.format.index() == style.index(); };
-    std::vector<span> kind = std::ranges::to<std::vector<span>>(std::views::filter(field.spans, same));
+    std::vector<span> kind = field.spans | std::views::filter(same) | std::ranges::to<std::vector<span>>();
     std::ranges::sort(kind, {}, &span::first);
     const std::size_t reached = std::ranges::fold_left(
         kind, low, [](std::size_t at, const span& one) { return one.first <= at && one.last > at ? one.last : at; });
@@ -456,10 +456,9 @@ struct field_quotes {
     }
     const bool off = std::ranges::all_of(starts, [&](std::size_t at) { return depth(text, at) > 0; });
     // Back to front: each edit leaves the offsets before it as they were.
-    std::vector<widgets::TextReplace> edits = std::ranges::to<std::vector<widgets::TextReplace>>(std::views::transform(
-        std::views::reverse(starts), [&](std::size_t at) {
+    std::vector<widgets::TextReplace> edits = starts | std::views::reverse | std::views::transform([&](std::size_t at) {
           return off ? widgets::TextReplace{at, at + 2, ""} : widgets::TextReplace{at, at, "> "};
-        }));
+        }) | std::ranges::to<std::vector<widgets::TextReplace>>();
     // The selection moved by the marks put in or taken out before it.
     const auto moved = [&](std::size_t at) {
       const auto before = static_cast<std::size_t>(std::ranges::count_if(starts, [&](std::size_t one) { return one <= at; }));
@@ -609,13 +608,13 @@ struct draft_told {
 [[nodiscard]] inline std::string draft_text(const composer_doc& doc) { return widgets::document::plain(doc); }
 // Who is mentioned in it: its pills, as they are now.
 [[nodiscard]] inline std::vector<mention> composer_mentions(const composer_doc& doc) {
-  return std::ranges::to<std::vector>(std::views::transform(std::views::filter(doc.atoms, [](const widgets::TextAtom& one) { return !one.picture; }), [](const widgets::TextAtom& one) { return mention{one.plain, one.target}; }));
+  return doc.atoms | std::views::filter([](const widgets::TextAtom& one) { return !one.picture; }) | std::views::transform([](const widgets::TextAtom& one) { return mention{one.plain, one.target}; }) | std::ranges::to<std::vector>();
 }
 // How what is written is formatted, by offsets in its plain text: its runs,
 // and each custom emoji's picture as a run of its own.
 [[nodiscard]] inline std::vector<mux::styled_run> composer_styles(const composer_doc& doc) {
-  auto runs = std::ranges::to<std::vector>(std::views::transform(widgets::document::plainSpans(doc), [](const field_quotes::span& one) { return mux::styled_run{one.first, one.last, one.format}; }));
-  runs.append_range(std::views::transform(std::views::filter(doc.atoms, &widgets::TextAtom::picture), [&](const widgets::TextAtom& atom) {
+  auto runs = widgets::document::plainSpans(doc) | std::views::transform([](const field_quotes::span& one) { return mux::styled_run{one.first, one.last, one.format}; }) | std::ranges::to<std::vector>();
+  runs.append_range(doc.atoms | std::views::filter(&widgets::TextAtom::picture) | std::views::transform([&](const widgets::TextAtom& atom) {
                       const std::size_t first = widgets::document::plainOffset(doc, atom.first);
                       return mux::styled_run{first, first + atom.plain.size(), run_style::custom_emoji{atom.target}};
                     }));
@@ -696,9 +695,9 @@ inline void prepend_quote(composer_doc& doc, const scene::ClipboardFragment& sel
 // A draft of this text and its runs, as a message edited had them.
 [[nodiscard]] inline composer_doc formatted_draft(std::string text, const std::vector<mux::styled_run>& runs) {
   auto doc = widgets::document::of<run_style_t>(std::move(text));
-  widgets::document::setSpans(doc, std::ranges::to<std::vector>(std::views::transform(runs, [](const mux::styled_run& one) {
+  widgets::document::setSpans(doc, runs | std::views::transform([](const mux::styled_run& one) {
                                      return field_quotes::span{one.first, one.last, one.style};
-                                   })));
+                                   }) | std::ranges::to<std::vector>());
   return doc;
 }
 // A draft of plain text, the caret at its end.

@@ -219,7 +219,7 @@ class accounts_part {
   [[nodiscard]] bool narrow() const { return s_->showing->look<mux::ui::window_shape>()->width < kNarrow; }
   // The proxy profiles by their names, as the adding pane lists them.
   [[nodiscard]] std::vector<std::string> proxy_names() const {
-    return std::ranges::to<std::vector>(std::views::transform(k_->proxies(), &mux::config::proxy_settings::name));
+    return k_->proxies() | std::views::transform(&mux::config::proxy_settings::name) | std::ranges::to<std::vector>();
   }
   // The account chosen, where one is.
   [[nodiscard]] std::optional<std::string> chosen() const { return mux::ui::chosen_of(*s_->showing->look<std::optional<mux::ui::panel_facts>>()); }

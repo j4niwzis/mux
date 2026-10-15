@@ -331,9 +331,9 @@ template <class Choose>
 inline auto make_choice_menu(const palette& colours, std::string label,
                              std::vector<std::string> names, std::size_t current, Choose choose) {
   auto head = choice_menu_head(colours, std::move(label), current < names.size() ? names[current] : std::string());
-  auto rows = std::ranges::to<std::vector>(std::views::transform(names, [&](const std::string& name) {
+  auto rows = names | std::views::transform([&](const std::string& name) {
     return choice_menu_option(colours, name);
-  }));
+  }) | std::ranges::to<std::vector>();
   return choice_menu<Choose>(std::move(names), current, std::move(choose), std::move(head), std::move(rows),
       show_choice_menu{colours.text, colours.accent});
 }
@@ -366,7 +366,7 @@ inline auto space_bars_row(const palette& colours, const std::string& account, c
 inline auto spaces_choices(const palette& colours, const ui_shared& shared) {
   namespace c = skiff::compose;
   return c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                 std::ranges::to<std::vector>(std::views::transform(shared.space_items, [&](const space_item_shown& one) { return space_bars_row(colours, shared.space_account, one); })));
+                 shared.space_items | std::views::transform([&](const space_item_shown& one) { return space_bars_row(colours, shared.space_account, one); }) | std::ranges::to<std::vector>());
 }
 
 // What a level holds of room events: all of them or messages only, and
@@ -545,9 +545,9 @@ inline auto event_kinds_field(const palette& colours, choice_level_t level,
     return events_way_of(level, now.at(level)) - (has_level_above(level) ? 0 : 1);
   }, make_choice_menu(colours, "Room events", std::move(names), 0, choose_events_way{level}));
   mode.apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
-  auto rows = std::ranges::to<std::vector>(std::views::transform(kinds, [&](const room_event_t& kind) {
+  auto rows = kinds | std::views::transform([&](const room_event_t& kind) {
     return event_kind_row<Owner>(colours, level, kind);
-  }));
+  }) | std::ranges::to<std::vector>();
   return c::visible(!kinds.empty(), c::scoped<Owner>(c::handlers(), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       std::move(mode), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))));
 }
@@ -614,11 +614,11 @@ auto jump_search_field(const palette& colours, choice_level_t level) {
     const auto said = said_of(now);
     return top ? std::optional<std::int64_t>(said.value_or(5000)) : said;
   };
-  auto choices = std::ranges::to<std::vector>(std::views::transform(counts, [&](auto most) {
+  auto choices = counts | std::views::transform([&](auto most) {
     return setting_button<Want>(colours, most == 0 ? std::string("No limit") : std::format("{}", most), 64.0f,
         [shown, most](const T& now) { return shown(now) == most; },
         sets<T>{count_of(most, std::type_identity<T>{})});
-  }));
+  }) | std::ranges::to<std::vector>();
   return c::row(setting_row(),
       setting_label(nodes::Text("Look back for a message", 14.0f, colours.text)),
       c::visible(has_level_above(level), setting_button<Want>(colours, "Default", 64.0f,
@@ -902,11 +902,11 @@ template <class Want, class Choose, class Chosen>
 auto accent_circles_for(Choose choose, const config::theme_t& in, bool with_theme_own, Chosen chosen) {
   namespace c = skiff::compose;
   return c::many(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}}),
-                 std::ranges::to<std::vector>(std::views::transform(accents_of(with_theme_own), [&](const config::accent_t& one) {
+                 accents_of(with_theme_own) | std::views::transform([&](const config::accent_t& one) {
                    return c::spec_for<Want>(
                        [chosen, one, shade = colour_of(one, in)](const auto& now) { return accent_ring(shade, chosen(now) == one); },
                        accent_circle(choose, one, in, false));
-                 })));
+                 }) | std::ranges::to<std::vector>());
 }
 
 

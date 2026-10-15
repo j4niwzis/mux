@@ -37,9 +37,9 @@ inline constexpr struct composer_banners_t {
   std::vector<part::banner> operator()(const State& state, const conversation& chat, const Model& known) const {
     return spl::visit([&](const auto& now) {
       using banner_defaults::composer_banners;
-      return std::ranges::to<std::vector>(std::views::transform(composer_banners(now, chat, known), [](auto one) {
+      return composer_banners(now, chat, known) | std::views::transform([](auto one) {
                return part::banner{std::move(one.text), one.tone, std::move(one.button), std::nullopt};
-             }));
+             }) | std::ranges::to<std::vector>();
     }, state);
   }
 } composer_banners{};
@@ -110,7 +110,7 @@ inline constexpr struct person_actions_t {
   std::vector<std::string> operator()(const State& state, const account_id& by, std::string_view who) const {
     return spl::visit([&](const auto& now) {
       using action_defaults::person_actions;
-      return std::ranges::to<std::vector>(std::views::transform(std::views::filter(person_actions(now, by, who), [](const auto& one) { return one.asks.has_value(); }), [](const auto& one) { return one.label; }));
+      return person_actions(now, by, who) | std::views::filter([](const auto& one) { return one.asks.has_value(); }) | std::views::transform([](const auto& one) { return one.label; }) | std::ranges::to<std::vector>();
     }, state);
   }
 } person_actions{};
@@ -119,7 +119,7 @@ inline constexpr struct person_action_asked_t {
   void operator()(const State& state, const account_id& by, std::string_view who, std::size_t index, const Asked& asked) const {
     spl::visit([&](const auto& now) {
       using action_defaults::person_actions;
-      auto offered = std::views::filter(person_actions(now, by, who), [](const auto& one) { return one.asks.has_value(); });
+      auto offered = person_actions(now, by, who) | std::views::filter([](const auto& one) { return one.asks.has_value(); });
       auto at = std::ranges::next(std::ranges::begin(offered), static_cast<std::ptrdiff_t>(index), std::ranges::end(offered));
       if (at != std::ranges::end(offered))
         asked(*at->asks);

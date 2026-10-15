@@ -451,11 +451,11 @@ void app::refresh_shown() {
   // the one listed marked.
   {
     const auto listed = shared.listed();
-    mux::ui::drawer_accounts now{std::ranges::to<std::vector>(std::views::transform(state.root().accounts.values(), [&](const mux::config::account_t& one) {
+    mux::ui::drawer_accounts now{state.root().accounts.values() | std::views::transform([&](const mux::config::account_t& one) {
       const auto [how, failed] = mux::ui::connection_state_of(one, *model);
       return mux::ui::drawer_account{mux::config::address_of(one), std::string(mux::config::protocol_name(one)), how, failed,
                                      listed && listed->address == mux::config::address_of(one)};
-    }))};
+    }) | std::ranges::to<std::vector>()};
     if (*showing.look<mux::ui::drawer_accounts>() != now)
       mux::ui::show(showing, std::move(now));
   }

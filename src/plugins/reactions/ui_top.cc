@@ -61,10 +61,9 @@ inline auto panel(const ui_needs& n, const shown& facts) {
   namespace c = skiff::compose;
   const auto& chat = chat_or_none(facts.now, facts.in);
   const auto& entries = facts.entries;
-  auto rows = std::ranges::to<std::vector>(std::views::transform(std::views::iota(std::size_t{0}, entries.size()),
-      [&](std::size_t i) { return reaction_event_row(n, chat, entries[i],
+  auto rows = std::views::iota(std::size_t{0}, entries.size()) | std::views::transform([&](std::size_t i) { return reaction_event_row(n, chat, entries[i],
           i == 0 || entries[i - 1].who != entries[i].who,
-          i + 1 == entries.size() || entries[i + 1].who != entries[i].who, facts.now); }));
+          i + 1 == entries.size() || entries[i + 1].who != entries[i].who, facts.now); }) | std::ranges::to<std::vector>();
   return c::column(list_dialog(420.0f),
       page_header<sends<back>, sends<request::close_shown<shown>>>(*n.colours, "Reactions", {}, {}, facts.back, true),
       dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));

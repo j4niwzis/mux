@@ -73,13 +73,11 @@ inline user_profile profile_of(const tern::vcard4::card& card) {
         [](const tern::vcard4::pronouns&) {}, [](const auto&) {}}, property.data());
   });
   if (!out.name) out.name = std::move(nickname);
-  auto ranked = std::ranges::to<std::vector<ranked_pronouns>>(std::views::transform(
-      std::views::filter(std::views::transform(card.properties, [](const auto& p) { return pronouns_of(p); }),
-          [](const auto& p) { return p.has_value(); }), [](const auto& p) { return *p; }));
+  auto ranked = card.properties | std::views::transform([](const auto& p) { return pronouns_of(p); }) | std::views::filter([](const auto& p) { return p.has_value(); }) | std::views::transform([](const auto& p) { return *p; }) | std::ranges::to<std::vector<ranked_pronouns>>();
   std::ranges::stable_sort(ranked, {}, &ranked_pronouns::preference);
-  out.details.pronouns = std::ranges::to<std::vector<mux::pronouns>>(std::views::transform(ranked, [&](auto p) {
+  out.details.pronouns = ranked | std::views::transform([&](auto p) {
     return mux::pronouns{p.language.value_or(language.value_or("und")), std::move(p.summary)};
-  }));
+  }) | std::ranges::to<std::vector<mux::pronouns>>();
   return out;
 }
 struct wire_presence { bool available = true; std::optional<std::string> show; };
@@ -124,24 +122,24 @@ inline mux::proto::xmpp::registration_asked registration_asked_of(const account_
   using mux::proto::xmpp::registration_field;
   namespace shown = mux::proto::xmpp::field_shown;
   const auto picture_of = [&](const tern::data_form::field& one) {
-    const auto cids = one.media ? std::ranges::to<std::vector<std::string_view>>(std::views::transform(std::views::filter(one.media->uri, [](const tern::data_form::uri& where) {
+    const auto cids = one.media ? one.media->uri | std::views::filter([](const tern::data_form::uri& where) {
                                     return where.location.starts_with("cid:");
-                                  }), [](const tern::data_form::uri& where) {
+                                  }) | std::views::transform([](const tern::data_form::uri& where) {
                                     return std::string_view(where.location).substr(4);
-                                  }))
+                                  }) | std::ranges::to<std::vector<std::string_view>>()
                                 : std::vector<std::string_view>{};
     const auto sent = std::ranges::find_if(asked.data, [&](const tern::bob::data& one_sent) {
       return std::ranges::contains(cids, std::string_view(one_sent.cid));
     });
     if (sent == asked.data.end())
       return std::vector<std::uint8_t>{};
-    const std::string packed = std::ranges::to<std::string>(std::views::filter(sent->base64, [](char c) { return c != ' ' && c != '\n' && c != '\r' && c != '\t'; }));
+    const std::string packed = sent->base64 | std::views::filter([](char c) { return c != ' ' && c != '\n' && c != '\r' && c != '\t'; }) | std::ranges::to<std::string>();
     return tern::crypto::base64_decode(packed).value_or(std::vector<std::uint8_t>{});
   };
   const auto links_of = [](const tern::data_form::field& one) {
-    return one.media ? std::ranges::to<std::vector<std::string>>(std::views::transform(std::views::filter(one.media->uri, [](const tern::data_form::uri& where) {
+    return one.media ? one.media->uri | std::views::filter([](const tern::data_form::uri& where) {
                          return where.location.starts_with("http://") || where.location.starts_with("https://");
-                       }), &tern::data_form::uri::location))
+                       }) | std::views::transform(&tern::data_form::uri::location) | std::ranges::to<std::vector<std::string>>()
                      : std::vector<std::string>{};
   };
   // The form's type says how a field is shown; what XEP-0004 has not, typed.
@@ -155,14 +153,14 @@ inline mux::proto::xmpp::registration_asked registration_asked_of(const account_
                                             .instructions = asked.instructions.value_or(""),
                                             .page = asked.page ? asked.page->url : std::nullopt};
   if (asked.form) {
-    out.instructions = (std::ranges::to<std::string>(std::views::join_with(asked.form->instructions, '\n')));
+    out.instructions = (asked.form->instructions | std::views::join_with('\n') | std::ranges::to<std::string>());
     if (out.instructions.empty())
       out.instructions = asked.instructions.value_or("");
     // The address and the password are the form's own fields: not asked
     // again.
-    out.fields = std::ranges::to<std::vector<registration_field>>(std::views::transform(std::views::filter(asked.form->fields, [](const tern::data_form::field& one) {
+    out.fields = asked.form->fields | std::views::filter([](const tern::data_form::field& one) {
                    return one.var != std::optional<std::string>("username") && one.var != std::optional<std::string>("password");
-                 }), [&](const tern::data_form::field& one) {
+                 }) | std::views::transform([&](const tern::data_form::field& one) {
                    return registration_field{.var = one.var.value_or(""),
                                              .label = one.label.value_or(one.var.value_or("")),
                                              .desc = one.desc.value_or(""),
@@ -171,10 +169,10 @@ inline mux::proto::xmpp::registration_asked registration_asked_of(const account_
                                              .required = one.required.has_value(),
                                              .picture = picture_of(one),
                                              .links = links_of(one),
-                                             .choices = std::ranges::to<std::vector<std::string>>(std::views::transform(one.options, [](const tern::data_form::option& o) {
+                                             .choices = one.options | std::views::transform([](const tern::data_form::option& o) {
                                                           return o.label ? *o.label + " (" + o.value + ")" : o.value;
-                                                        }))};
-                 }));
+                                                        }) | std::ranges::to<std::vector<std::string>>()};
+                 }) | std::ranges::to<std::vector<registration_field>>();
   } else if (asked.email) {
     out.fields.push_back(registration_field{.var = "email", .label = "Email", .shown = shown::typed{}, .required = true});
   }
@@ -410,7 +408,7 @@ class account {
         });
         if (name_changed) card.properties.emplace_back(tern::vcard4::name{profile.name.value_or(id_.address), {}});
         if (biography_changed && !profile.details.biography.plain.empty()) card.properties.emplace_back(tern::vcard4::note{profile.details.biography.plain, {}});
-        auto pronouns = std::views::transform(std::views::enumerate(profile.details.pronouns), [](const auto& entry) {
+        auto pronouns = profile.details.pronouns | std::views::enumerate | std::views::transform([](const auto& entry) {
           const auto& [index, p] = entry;
           return tern::vcard4::pronouns{p.summary, tern::vcard4::parameters{
               .language = tern::vcard4::language_parameter{p.language},
@@ -633,14 +631,13 @@ class account {
           settings.configuring = true;
           settings.title = found->second.form->title.value_or("");
           settings.instructions = found->second.form->instructions;
-          settings.fields = std::ranges::to<std::vector<muc_field>>(std::views::transform(found->second.form->fields, [](const auto& field) {
+          settings.fields = found->second.form->fields | std::views::transform([](const auto& field) {
             return muc_field{.var = field.var.value_or(""), .label = field.label.value_or(field.var.value_or("")),
                 .description = field.desc.value_or(""), .kind = muc_kind_of(field.type.value_or("text-single")),
                 .values = field.value,
-                .options = std::ranges::to<std::vector<std::pair<std::string, std::string>>>(std::views::transform(field.options,
-                    [](const auto& option) { return std::pair{option.label.value_or(option.value), option.value}; })),
+                .options = field.options | std::views::transform([](const auto& option) { return std::pair{option.label.value_or(option.value), option.value}; }) | std::ranges::to<std::vector<std::pair<std::string, std::string>>>(),
                 .required = field.required.has_value(), .use = muc_field_use_of(field.var.value_or(""))};
-          }));
+          }) | std::ranges::to<std::vector<muc_field>>();
         } else {
           found->second.settings.configuring = false;
           found->second.settings.fields.clear();
@@ -880,9 +877,9 @@ class account {
         if (!session_) return std::vector<directory_room>{};
         auto items = session_->template try_request<tern::query::disco_items>({.to = jid});
         if (!items) return std::vector<directory_room>{};
-        return std::ranges::to<std::vector>(std::views::transform(items->list, [](const auto& item) {
+        return items->list | std::views::transform([](const auto& item) {
           return directory_room{.id = item.jid, .name = item.name.value_or(item.jid), .alias = item.jid};
-        }));
+        }) | std::ranges::to<std::vector>();
       };
       std::vector<directory_room> rooms;
       if (session_) {
@@ -892,18 +889,17 @@ class account {
           auto services = session_->template try_request<tern::query::disco_items>({.to = target});
           if (services) {
             // Each reply owns its room data across the yielding requests.
-            const auto pages = std::ranges::to<std::vector>(std::views::transform(
-                services->list, [&](const auto& item) {
+            const auto pages = services->list | std::views::transform([&](const auto& item) {
                   return !item.node && is_muc(item.jid) ? rooms_at(item.jid) : std::vector<directory_room>{};
-                }));
-            rooms = std::ranges::to<std::vector>(std::views::join(pages));
+                }) | std::ranges::to<std::vector>();
+            rooms = pages | std::views::join | std::ranges::to<std::vector>();
           }
         }
       }
       const auto wanted = mux::logic::folded(query);
-      rooms = std::ranges::to<std::vector>(std::views::filter(rooms, [&](const auto& room) {
+      rooms = rooms | std::views::filter([&](const auto& room) {
         return wanted.empty() || mux::logic::folded(room.name).contains(wanted) || mux::logic::folded(room.id).contains(wanted);
-      }));
+      }) | std::ranges::to<std::vector>();
       sink_(change::directory_listed{.by = id_, .server = server, .query = query, .rooms = std::move(rooms)});
     });
   }
@@ -1392,9 +1388,9 @@ class account {
     std::ranges::for_each(rooms_, [](auto& entry) { entry.second.occupants.clear(); entry.second.settings.people.clear(); entry.second.settings.joined = false; });
     // Sending may yield to a leave request: do not retain map iterators or
     // references across it, or join a room removed while another was sent.
-    const auto rejoining = std::ranges::to<std::vector>(std::views::transform(rooms_, [](const auto& entry) {
+    const auto rejoining = rooms_ | std::views::transform([](const auto& entry) {
       return std::pair{entry.first, entry.second.nick};
-    }));
+    }) | std::ranges::to<std::vector>();
     for (const auto& [jid, nick] : rejoining)
       if (rooms_.contains(jid) && wire_presence_of(own_presence_.state).available) this->join(jid, nick);
 
@@ -1703,7 +1699,7 @@ class account {
       bool members = false, listed = false, persistent = false;
       auto form = *configuration->form;
       form.type = "submit";
-      form.fields = std::ranges::to<std::vector>(std::views::transform(form.fields, [&](auto field) {
+      form.fields = form.fields | std::views::transform([&](auto field) {
         spl::visit(spl::overloaded{
             [&](tern::muc::config_field::name) { field.value = {wanted.name}; },
             [&](tern::muc::config_field::description) { field.value = {wanted.topic}; },
@@ -1713,7 +1709,7 @@ class account {
             [](tern::muc::config_field::form_type) {},
             [](tern::muc::config_field::other) {}}, tern::muc::kind_of(field));
         return field;
-      }));
+      }) | std::ranges::to<std::vector>();
       if (!members || !listed || !persistent) { failed("The service cannot configure the requested persistent room and access."); return; }
       if (!session_ || !session_->template try_request<tern::query::muc_configure>({.to = room, .query = {std::move(form)}})) {
         failed("The service refused the room configuration."); return;

@@ -51,12 +51,12 @@ inline bool operator<(const folder_t& a, const folder_t& b) {
 
 auto server_search_arguments(const palette& colours, const server_search_facts& facts) {
   namespace c = skiff::compose;
-  auto rooms = std::ranges::to<std::vector>(std::views::transform(std::views::take(facts.rooms, 30), [&](const auto& room) {
+  auto rooms = facts.rooms | std::views::take(30) | std::views::transform([&](const auto& room) {
     return directory_room_row(colours, room, std::string(), facts.by);
-  }));
-  auto people = std::ranges::to<std::vector>(std::views::transform(std::views::take(facts.people, 30), [&](const auto& person) {
+  }) | std::ranges::to<std::vector>();
+  auto people = facts.people | std::views::take(30) | std::views::transform([&](const auto& person) {
     return found_person_row(colours, person);
-  }));
+  }) | std::ranges::to<std::vector>();
   const scene::Spec caption{.margin = {6.0f, 16.0f, 2.0f, 16.0f}};
   return std::tuple{
       c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 8.0f, 0.0f}}),
@@ -346,14 +346,14 @@ inline auto side_chat_menu(const palette& colours, const conversation_id& id, st
                            const account_id& listing, const std::vector<account_id>& accounts,
                            const config::theme_t& theme) {
   namespace c = skiff::compose;
-  auto places = std::ranges::to<std::vector>(std::views::transform(std::views::filter(accounts, [&](const auto& to) { return to != id.account && to != listing; }), [&](const auto& to) {
+  auto places = accounts | std::views::filter([&](const auto& to) { return to != id.account && to != listing; }) | std::views::transform([&](const auto& to) {
         return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
             side_menu_button(colours, std::format("Copy to {}", to.address), place_act{id, to, false}),
             side_menu_button(colours, std::format("Move to {}", to.address), place_act{id, to, true}));
-      }));
-  auto accents = std::ranges::to<std::vector>(std::views::transform(accents_of(false), [&](const auto& accent) {
+      }) | std::ranges::to<std::vector>();
+  auto accents = accents_of(false) | std::views::transform([&](const auto& accent) {
     return accent_circle(strip_colour_act{id, listing}, accent, theme, false);
-  }));
+  }) | std::ranges::to<std::vector>();
   return c::column(side_popup_look(colours, 320.0f),
       c::styled({.fillX = true}, elided(nodes::Text(std::move(name), 13.0f, colours.dim, true))),
       side_menu_button(colours, "Chat settings\u2026", chat_settings_act{id}),
@@ -446,9 +446,9 @@ auto side_spaces_for(const palette& colours, Pick pick, bool horizontal) {
       : c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 6.0f, 8.0f, 6.0f}})),
       {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
   return c::projected<side_shown>([horizontal](const side_shown& now) {
-    return std::ranges::to<std::vector>(std::views::transform((horizontal ? now.top_bar : now.side_bar), [&](const auto& entry) {
+    return ((horizontal ? now.top_bar : now.side_bar)) | std::views::transform([&](const auto& entry) {
       return std::pair{entry.item, side_space_view{entry.folder, now.account, entry.key, entry.name, entry.chosen, entry.size}};
-    }));
+    }) | std::ranges::to<std::vector>();
   }, std::move(line));
 }
 template <class Pick> struct side_folder_row_make {
@@ -469,7 +469,7 @@ auto side_folders_for(const palette& colours, Pick pick) {
   auto tabs = rows(make{&colours, std::move(pick)}, std::move(flow), {.autoSize = scene::axes::kBoth});
   tabs.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
   return c::projected<side_shown>([](const side_shown& now) {
-    return std::ranges::to<std::vector>(std::views::transform(now.folders, [](const side_folder_view& tab) { return std::pair{tab.folder, tab}; }));
+    return now.folders | std::views::transform([](const side_folder_view& tab) { return std::pair{tab.folder, tab}; }) | std::ranges::to<std::vector>();
   }, std::move(tabs));
 }
 
@@ -508,9 +508,9 @@ inline auto side_chats_for(const ui_needs& needs) {
       return owner ? owner->conversations.find(id.id) : nullptr;
     };
     if (!now.chats) return std::vector<side_chat_item>{};
-    return std::ranges::to<std::vector>(std::views::transform(std::views::filter(now.chats->chats, [&](const listed_chat& one) { return find(one.id) != nullptr; }), [&](const listed_chat& one) {
+    return now.chats->chats | std::views::filter([&](const listed_chat& one) { return find(one.id) != nullptr; }) | std::views::transform([&](const listed_chat& one) {
           return side_chat_item{one.id, {one.view, now.context}, find(one.id), &one, &needs};
-        }));
+        }) | std::ranges::to<std::vector>();
   }, std::move(viewport)));
   return c::projected<list_shown>([](const list_shown& now) {
     return side_list_place{now.account, now.folder, now.forum};
@@ -528,7 +528,7 @@ inline auto side_found_for(const palette& colours) {
   using row = std::invoke_result_t<side_found_row_make, const std::pair<std::size_t, side_found_view>&>;
   using rows = nodes::MemoRows<std::size_t, side_found_view, row, side_found_row_make>;
   auto contents = c::projected<found_shown>([](const found_shown& now) {
-    return std::ranges::to<std::vector>(std::views::transform(now.results, [](const search_result& one) { return std::pair{one.index, side_found_of(one)}; }));
+    return now.results | std::views::transform([](const search_result& one) { return std::pair{one.index, side_found_of(one)}; }) | std::ranges::to<std::vector>();
   }, c::styled({.fillX = true, .autoSize = scene::axes::kY}, rows(side_found_row_make{&colours})));
   return c::shown_for<found_shown>([](const found_shown& now) { return now.count.has_value(); },
       c::projected<found_shown>([](const found_shown& now) { return now; },

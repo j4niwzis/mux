@@ -17,13 +17,13 @@ export namespace mux::logic {
 // A quoted copy never replaces the version already kept in a timeline.
 [[nodiscard]] inline std::vector<const message*> selected_messages(const conversation& chat, const auto& ids) {
   const auto chosen = [&](const auto& messages) {
-    return std::views::transform(std::views::filter(messages, [&](const message& one) {
+    return messages | std::views::filter([&](const message& one) {
       return !one.redacted && std::ranges::find(ids, one.id) != std::ranges::end(ids);
-    }), [](const message& one) { return &one; });
+    }) | std::views::transform([](const message& one) { return &one; });
   };
-  auto ordered = std::ranges::to<std::vector>(chosen(chat.timeline));
-  ordered.append_range(chosen(std::views::join(std::views::values(chat.threads))));
-  ordered.append_range(chosen(std::views::values(chat.quoted)));
+  auto ordered = chosen(chat.timeline) | std::ranges::to<std::vector>();
+  ordered.append_range(chosen(chat.threads | std::views::values | std::views::join));
+  ordered.append_range(chosen(chat.quoted | std::views::values));
   std::set<std::string_view> seen;
   std::erase_if(ordered, [&](const message* one) { return !seen.insert(one->id).second; });
   std::ranges::stable_sort(ordered, {}, [](const message* one) { return one->local_order.value_or(one->at); });

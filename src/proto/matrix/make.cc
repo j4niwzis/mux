@@ -30,9 +30,9 @@ make_account(const kept& saved, ::mux::net::loop& loop,
                               // Named by the user ID with what a file name cannot hold put
                               // aside: ':' is not one on Windows.
                               .crypto_store = ::mux::config::state_path("crypto") /
-                                              ((std::ranges::to<std::string>(std::views::transform(saved.user_id, [](char c) {
+                                              ((saved.user_id | std::views::transform([](char c) {
                                                   return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
-                                                }))) + ".json"),
+                                                }) | std::ranges::to<std::string>()) + ".json"),
                               .only_verified = saved.only_verified.value_or(false),
                               .mentions_shared = saved.mentions_shared.value_or(false),
                               .mentions_sealed = saved.mentions_sealed.value_or(false),

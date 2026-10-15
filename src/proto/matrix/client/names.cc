@@ -117,9 +117,9 @@ using loom::names::errcode_of;
     const join_rule_t& rule) {
   using condition = loom::ev::m_room_join_rules_content_t::allow_condition_t;
   const auto of = [](const std::vector<std::string>& spaces) {
-    return std::optional(std::ranges::to<std::vector<condition>>(std::views::transform(spaces, [](const std::string& space) {
+    return std::optional(spaces | std::views::transform([](const std::string& space) {
       return condition{.type = condition::type_values::m_room_membership{}, .room_id = space};
-    })));
+    }) | std::ranges::to<std::vector<condition>>());
   };
   return spl::visit(spl::overloaded{[&](const mux::proto::matrix::join_rule::restricted& one) { return of(one.spaces); },
                                     [&](const mux::proto::matrix::join_rule::knock_restricted& one) { return of(one.spaces); },

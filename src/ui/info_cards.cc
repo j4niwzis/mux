@@ -57,8 +57,7 @@ inline nodes::Text profile_biography(const palette& colours, const body& biograp
   return text;
 }
 inline std::string profile_pronouns(const profile_details& profile) {
-  return std::ranges::to<std::string>(std::views::join_with(
-      std::views::transform(profile.pronouns, &pronouns::summary), std::string_view(" · ")));
+  return profile.pronouns | std::views::transform(&pronouns::summary) | std::views::join_with(std::string_view(" · ")) | std::ranges::to<std::string>();
 }
 inline palette profile_text_colours(palette colours, bool banner) {
   if (banner) {
@@ -176,7 +175,7 @@ inline auto person_card_details(const palette& colours, const ui_shared& shared,
   const bool can_accept = facts.trust && spl::visit(spl::overloaded{[](trust::changed) { return true; },
                                                                     [](const auto&) { return false; }},
                                                     *facts.trust);
-  auto sessions = std::ranges::to<std::vector>(std::views::transform(facts.devices, [&](const change::device_view& one) {
+  auto sessions = facts.devices | std::views::transform([&](const change::device_view& one) {
                     return c::styled(
                         {.fillX = true, .margin = {2.0f, 22.0f, 0.0f, 22.0f}},
                         elided(nodes::Text(
@@ -184,12 +183,12 @@ inline auto person_card_details(const palette& colours, const ui_shared& shared,
                                         one.name.empty() ? one.id : one.name,
                                         one.verified ? std::string(" \u00b7 Verified") : std::string(" \u00b7 Not verified")),
                             13.0f, one.verified ? colours.text : colours.dim)));
-                  }));
-  auto theirs = std::ranges::to<std::vector>(std::views::transform(std::views::enumerate(proto::person_actions(proto_state, account, key)), [&](const auto& one) {
+                  }) | std::ranges::to<std::vector>();
+  auto theirs = proto::person_actions(proto_state, account, key) | std::views::enumerate | std::views::transform([&](const auto& one) {
                   const auto& [index, label] = one;
                   return c::styled(tile_spec, action_tile<person_protocol_act>(
                       colours, label, icon::check{}, {{account, key, static_cast<std::size_t>(index)}}));
-                }));
+                }) | std::ranges::to<std::vector>();
   return c::column(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       profile_cover(colours, key, facts),

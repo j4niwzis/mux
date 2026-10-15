@@ -23,6 +23,13 @@ endif()
 
 project(mux VERSION 0.1 LANGUAGES C CXX)
 
+# clang 23.1.4 at least: before it, clang with libstdc++'s std module found
+# no operator| for a range adaptor closure another imported module had made
+# first, and every pipe had to be written in the call form (CODE_STYLE.md).
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 23.1.4)
+  message(FATAL_ERROR "mux needs clang 23.1.4 or later; this is ${CMAKE_CXX_COMPILER_VERSION}")
+endif()
+
 # Keep direct requests distinct from requests made by the libraries themselves.
 macro(mux_find_package mux_requested_package)
   set_property(GLOBAL APPEND PROPERTY MUX_ABOUT_PRIMARY_PACKAGES "${mux_requested_package}")
@@ -244,14 +251,14 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin 8b15fe8079ad9855d5d35022c13c3e2fe931459a)
+set(mux_skiff_pin 30451a5c2a68901e093158187affddc0118a15b3)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
   VERSION 0.1.0)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 424e0a9a0b3ddbe4754ca941cfdd1f7dc19ed8d8
+  GIT_TAG 52707dff7bf35b5316c4910d897942c5cec7745b
   VERSION 0.1.0)
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on

@@ -104,10 +104,10 @@ using emoji_cell_t = decltype(emoji_cell(std::declval<const palette&>(), {}, {})
 [[nodiscard]] inline nodes::Flow<std::vector<emoji_cell_t>> emoji_row(const palette& colours, const verification_step_t& step) {
   auto cells = spl::visit(spl::overloaded{
       [&](const verification_step::compare& shown) {
-        return std::ranges::to<std::vector>(std::views::transform(shown.emoji, [&](int index) {
+        return shown.emoji | std::views::transform([&](int index) {
           const auto& [picture, name] = sas_emoji[static_cast<std::size_t>(index & 63)];
           return emoji_cell(colours, picture, name);
-        }));
+        }) | std::ranges::to<std::vector>();
       }, [](const auto&) { return std::vector<emoji_cell_t>{}; }}, step);
   const bool comparing = !cells.empty();
   return skiff::compose::visible(comparing, skiff::compose::styled(
@@ -247,7 +247,7 @@ inline constexpr float kChatHeadHeight = 56.0f;
   // Who is typing, by their names, as Telegram says it: one, two ("A and
   // B"), three ("A, B and C"); past three, the first two and how many more.
   if (!one->typing.empty()) {
-    const auto names = std::ranges::to<std::vector>(std::views::transform(one->typing, [&](const std::string& who) { return sender_name(*one, who); }));
+    const auto names = one->typing | std::views::transform([&](const std::string& who) { return sender_name(*one, who); }) | std::ranges::to<std::vector>();
     switch (names.size()) {
       case 1: about = names[0] + " is typing\u2026"; break;
       case 2: about = std::format("{} and {} are typing\u2026", names[0], names[1]); break;

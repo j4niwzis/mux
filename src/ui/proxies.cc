@@ -75,11 +75,11 @@ using animations_page_t = decltype(animations_page(std::declval<const palette&>(
 // Settings' Proxies page, as Gajim's Manage Proxies: the profiles, and a way
 // to add one.
 inline auto proxies_page(const palette& colours, const std::vector<config::proxy_settings>& profiles, bool with_back) {
-  auto rows = std::ranges::to<std::vector>(std::views::transform(std::views::iota(std::size_t{0}, profiles.size()), [&](std::size_t index) {
+  auto rows = std::views::iota(std::size_t{0}, profiles.size()) | std::views::transform([&](std::size_t index) {
         const auto& profile = profiles[index];
         return settings_link(colours, std::format("{} ({} {}:{})", profile.name, config::label_of(profile.kind), profile.host, profile.port),
                              icon::dot{proxy_colour(profile.name)}, request::edit_proxy{static_cast<int>(index)});
-      }));
+      }) | std::ranges::to<std::vector>();
   return skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},

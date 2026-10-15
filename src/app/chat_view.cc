@@ -96,7 +96,7 @@ class chat_view_part {
     };
     const std::ptrdiff_t top = s_->list.top ? place(*s_->list.top) : std::numeric_limits<std::ptrdiff_t>::max();
     // Not const: a filter_view caches its begin, so begin() and end() are not.
-    auto above = std::views::filter(std::views::enumerate(chat->pinned), [&](const auto& pin) { return place(std::get<1>(pin)) < top; });
+    auto above = chat->pinned | std::views::enumerate | std::views::filter([&](const auto& pin) { return place(std::get<1>(pin)) < top; });
     const auto best = std::ranges::max_element(above, {}, [&](const auto& pin) { return place(std::get<1>(pin)); });
     const std::size_t count = chat->pinned.size();
     const std::size_t at = best == std::ranges::end(above) ? 0 : static_cast<std::size_t>(std::get<0>(*best));
@@ -116,7 +116,7 @@ class chat_view_part {
       return {};
     const auto banners = mux::proto::composer_banners(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat, *s_->model);
     mux::ui::banner_shown now{
-        .text = std::ranges::to<std::string>(std::views::join_with(std::views::transform(banners, &mux::proto::part::banner::text), '\n')),
+        .text = banners | std::views::transform(&mux::proto::part::banner::text) | std::views::join_with('\n') | std::ranges::to<std::string>(),
         .button = banners.empty() ? std::string() : banners.front().button,
         .tone = banners.empty() ? mux::proto::part::tone_t{mux::proto::part::tone::plain{}} : banners.front().tone};
     if (now.text.empty())
@@ -164,7 +164,7 @@ class chat_view_part {
     const bool fresh = members_seen_ != seen;
     if (fresh) {
       members_seen_ = seen;
-      members_ = std::ranges::to<std::vector>(std::views::transform(std::views::take(chat.members, seen.made), [&](const mux::member& each) { return this->member_of(chat, each); }));
+      members_ = chat.members | std::views::take(seen.made) | std::views::transform([&](const mux::member& each) { return this->member_of(chat, each); }) | std::ranges::to<std::vector>();
     }
     members_total_ = chat.members.size();
     // The rest is small: looked at each frame, the members put with it

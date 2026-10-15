@@ -68,7 +68,7 @@ class proxies_part {
       return;
     }
     if (request.index >= 0 && static_cast<std::size_t>(request.index) >= k_->proxies().size()) return;
-    const bool taken = std::ranges::any_of(std::views::enumerate(k_->proxies()), [&](const auto& each) {
+    const bool taken = std::ranges::any_of(k_->proxies() | std::views::enumerate, [&](const auto& each) {
       const auto& [at, one] = each;
       return one.name == typed->name && at != request.index;
     });
@@ -82,10 +82,9 @@ class proxies_part {
     } else {
       const auto& kept = k_->proxies()[static_cast<std::size_t>(request.index)];
       // The accounts going through it, through it under its new name.
-      const auto users = std::ranges::to<std::vector<std::string>>(
-          std::views::filter(k_->accounts().keys(), [&](const std::string& address) {
+      const auto users = k_->accounts().keys() | std::views::filter([&](const std::string& address) {
             return mux::config::proxy_of(*k_->settings_of(address)) == kept.name;
-          }));
+          }) | std::ranges::to<std::vector<std::string>>();
       for (const std::string& address : users)
         k_->change_account(address, [&](mux::config::account_t& one) { mux::config::proxy_in(one) = name; });
       k_->change_part<std::vector<mux::config::proxy_settings>>(
@@ -106,10 +105,10 @@ class proxies_part {
     if (!s_->settings_open() || request.index < 0 || static_cast<std::size_t>(request.index) >= k_->proxies().size())
       return;
     const std::string name = k_->proxies()[static_cast<std::size_t>(request.index)].name;
-    const auto users = std::ranges::to<std::vector<std::string>>(std::views::transform(std::views::filter(k_->accounts().values(), [&](const auto& one) { return mux::config::proxy_of(one) == name; }), [](const auto& one) { return mux::config::address_of(one); }));
+    const auto users = k_->accounts().values() | std::views::filter([&](const auto& one) { return mux::config::proxy_of(one) == name; }) | std::views::transform([](const auto& one) { return mux::config::address_of(one); }) | std::ranges::to<std::vector<std::string>>();
     if (!users.empty()) {
       mux::ui::show(*s_->showing, mux::ui::proxy_notice{std::format("In use by {}: choose another proxy for them, or none, first.",
-                              std::ranges::to<std::string>(std::views::join_with(users, std::string_view(", "))))});
+                              users | std::views::join_with(std::string_view(", ")) | std::ranges::to<std::string>())});
       return;
     }
     k_->change_part<std::vector<mux::config::proxy_settings>>([&](auto& all) { all.erase(all.begin() + request.index); });

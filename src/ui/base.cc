@@ -540,7 +540,7 @@ struct frost_out {
 };
 using wallpaper_t = widgets::Wallpaper<frost_out>;
 struct frost_source {
-  [[nodiscard]] auto operator()() const { return std::views::values(frost_backdrops()); }
+  [[nodiscard]] auto operator()() const { return frost_backdrops() | std::views::values; }
 };
 // Frosted glass behind what a node holds: its first part, filling it.
 using frost_pane = widgets::BackdropPane<frost_source>;

@@ -271,9 +271,9 @@ void part_apply(menu_part& self, const request::selection_cancel&) {
 
 void part_apply(menu_part& self, const request::selection_copy&) {
   self.s_->close_text_menu();
-  const std::string text = std::ranges::to<std::string>(std::views::join_with(std::views::transform(selected_messages(self), [](const message* one) {
+  const std::string text = selected_messages(self) | std::views::transform([](const message* one) {
     return !one->body.plain.empty() ? one->body.plain : one->attachment ? one->attachment->name : std::string();
-  }), std::string("\n\n")));
+  }) | std::views::join_with(std::string("\n\n")) | std::ranges::to<std::string>();
   skiff::scene::setClipboardText(text);
   self.selected_.clear();
   show_selection(self);
@@ -289,7 +289,7 @@ void part_apply(menu_part& self, const request::selection_delete&) {
   if (!proto::available(now)) return;
   std::erase_if(chosen, [&](const message* one) { return !proto::may_delete(now, *chat, one->outgoing); });
   if (chosen.empty()) return;
-  self.deleting_ = std::pair{chat->id, std::ranges::to<std::vector>(std::views::transform(chosen, [](const message* one) { return one->id; }))};
+  self.deleting_ = std::pair{chat->id, chosen | std::views::transform([](const message* one) { return one->id; }) | std::ranges::to<std::vector>()};
   mux::ui::show(*self.s_->showing, std::optional(mux::ui::notice_facts{
       "Delete messages?", std::format("Delete {} selected messages for everyone? This cannot be undone.", chosen.size()), true}));
 }
@@ -322,7 +322,7 @@ void part_apply(menu_part& self, const request::selection_forward&) {
   self.s_->close_text_menu();
   if (!self.selected_chat_ || !mux::ui::ops_of(self.s_->ui, self.selected_chat_->account).forward || selected_messages(self).empty())
     return;
-  forward_from(self, *self.selected_chat_, std::ranges::to<std::vector>(std::views::transform(selected_messages(self), [](const message* one) { return one->id; })));
+  forward_from(self, *self.selected_chat_, selected_messages(self) | std::views::transform([](const message* one) { return one->id; }) | std::ranges::to<std::vector>());
   self.selected_.clear();
   show_selection(self);
 }
@@ -352,7 +352,7 @@ void part_apply(menu_part& self, const request::menu_edit_history&) {
   const mux::conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
   if (!chat)
     return;
-  const auto in_threads = std::views::join(std::views::values(chat->threads));
+  const auto in_threads = chat->threads | std::views::values | std::views::join;
   const auto is_it = [&](const mux::message& one) { return one.id == self.target_.id; };
   const mux::message* found = nullptr;
   if (const auto at = std::ranges::find_if(chat->timeline, is_it); at != chat->timeline.end())
@@ -370,10 +370,10 @@ void part_apply(menu_part& self, const request::forward_to& one) {
     return;
   const auto [from, events] = *std::exchange(self.forwarding_, std::nullopt);
   const auto* chat = self.s_->model->find(from);
-  auto sources = std::ranges::to<std::vector>(std::views::transform(events, [&](const std::string& id) {
+  auto sources = events | std::views::transform([&](const std::string& id) {
     const message* kept = chat ? mux::ui::held_message(*chat, id) : nullptr;
     return kept ? mux::logic::forward_source_of(*kept) : forward_source{.event = id};
-  }));
+  }) | std::ranges::to<std::vector>();
   self.s_->net->forward(from, std::move(sources), one.to);
   self.s_->notice("Forward", "Forwarded to " + [&] {
     const conversation* to = self.s_->model->find(one.to);

@@ -266,11 +266,11 @@ void account<Sink>::leave(std::string room) {
 }
 [[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes,
                                                         const std::vector<styled_run>& styles) {
-  const auto valid = std::views::filter(styles, [&](const styled_run& run) {
+  const auto valid = styles | std::views::filter([&](const styled_run& run) {
     return run.first < run.last && run.last <= body.size();
   });
   const std::vector<mux::logic::html_run> runs =
-      std::ranges::to<std::vector<mux::logic::html_run>>(std::views::transform(valid, [&](const styled_run& run) { return html_run_of(run, body); }));
+      valid | std::views::transform([&](const styled_run& run) { return html_run_of(run, body); }) | std::ranges::to<std::vector<mux::logic::html_run>>();
   if (auto marked = mux::logic::markdown_html(body, runs))
     return emotes.empty() ? *marked : emotes_in_html(*marked, emotes);
   return with_emotes(body, emotes);
@@ -520,7 +520,7 @@ void account<Sink>::sign_out_unverified(std::string password) {
     if (!all)
       return;
     std::vector<std::string> unverified =
-        std::ranges::to<std::vector>(std::views::transform(std::views::filter(*all, [&](const own_session& one) { return one.id != crypto_->device_id() && !one.trusted; }), &own_session::id));
+        (*all) | std::views::filter([&](const own_session& one) { return one.id != crypto_->device_id() && !one.trusted; }) | std::views::transform(&own_session::id) | std::ranges::to<std::vector>();
     if (unverified.empty()) {
       sink_(change::notice{id_, "Sign out unverified sessions", "Every other session of yours is verified."});
       return;

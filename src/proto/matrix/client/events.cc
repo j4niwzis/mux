@@ -421,7 +421,7 @@ void account<Sink>::decrypt_waiting(const std::string& session) {
 }
 template <class Sink>
 void account<Sink>::decrypt_all_waiting() {
-  const auto sessions = std::ranges::to<std::vector<std::string>>(std::views::keys(undecrypted_));
+  const auto sessions = undecrypted_ | std::views::keys | std::ranges::to<std::vector<std::string>>();
   for (const std::string& session : sessions)
     this->decrypt_waiting(session);
 }

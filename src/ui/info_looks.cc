@@ -239,9 +239,9 @@ inline auto element_rows(const palette& colours, choice_level_t level, const std
                          const std::array<std::pair<std::string_view, Which>, N>& elements) {
   namespace c = skiff::compose;
   return c::many(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                 std::ranges::to<std::vector>(std::views::transform(std::views::zip(labels, elements), [&](const auto& one) {
+                 std::views::zip(labels, elements) | std::views::transform([&](const auto& one) {
                    return element_row(colours, level, std::get<0>(one), std::get<1>(one).second);
-                 })));
+                 }) | std::ranges::to<std::vector>());
 }
 
 // How bubbles -- or the panels -- look, at a level: as the level over it

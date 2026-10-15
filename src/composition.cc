@@ -206,7 +206,7 @@ consteval message broken() {
   const std::array<std::string_view, 5> said{"the ", Feature::name, " plugin says it provides ", Contract::name,
                                              ", but what it gives for it does not compile"};
   message out;
-  const auto end = std::ranges::copy(std::views::take(std::views::join(said), out.chars.size()), out.chars.begin()).out;
+  const auto end = std::ranges::copy(said | std::views::join | std::views::take(out.chars.size()), out.chars.begin()).out;
   out.length = static_cast<std::size_t>(end - out.chars.begin());
   return out;
 }

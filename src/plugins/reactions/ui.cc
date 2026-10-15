@@ -43,14 +43,13 @@ inline auto reaction_chip(const palette& colours, const looks_shown& looks,
   label.setLinks(std::move(words.spans), colour);
   label.setSelectable(false);
   label.setMaxWidth(240.0f);
-  auto avatars = std::ranges::to<std::vector>(std::views::transform(
-      std::views::enumerate(std::views::take(people, faces ? people.size() : 0)), [&](const auto& item) {
+  auto avatars = people | std::views::take(faces ? people.size() : 0) | std::views::enumerate | std::views::transform([&](const auto& item) {
         const auto& [index, person] = item;
         // Overlap faces with one another, never with the reaction label.
         return c::styled({.margin = {0.0f, 0.0f, 0.0f, index == 0 ? 0.0f : -6.0f},
                           .border = scene::Border{own ? colours.accent : colours.tile, 1.5f}},
                          avatar_mark(avatar_of::person{}, person.first, person.second, 20.0f));
-      }));
+      }) | std::ranges::to<std::vector>();
   const auto tint = at_opacity(own ? colours.accent : colours.tile,
       element_opacity_of(looks.bubbles, &config::element_opacity::reactions));
   std::optional<frost_pane> frost;
@@ -93,14 +92,14 @@ std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>
   if (std::ranges::none_of(said.reactions, [](const auto& one) { return !one.second.empty(); }))
     return std::nullopt;
   auto made = reaction_row_of();
-  std::ranges::for_each(std::views::filter(said.reactions, [](const auto& one) { return !one.second.empty(); }), [&](const auto& one) {
+  std::ranges::for_each(said.reactions | std::views::filter([](const auto& one) { return !one.second.empty(); }), [&](const auto& one) {
     const auto& [key, who] = one;
     const auto shortcode = std::ranges::find_if(said.reaction_events, [&](const auto& event) {
       return event.key == key && event.shortcode.has_value();
     });
     reaction_chips(made).push_back(reaction_chip(
         facts.colours, facts.looks, facts.message_id, key, who.size(), who.contains(said.in.account.address), facts.in.emotes,
-        std::ranges::to<std::vector>(std::views::transform(who, [&](const std::string& person) { return std::pair{person, sender_name(facts.in, person)}; })),
+        who | std::views::transform([&](const std::string& person) { return std::pair{person, sender_name(facts.in, person)}; }) | std::ranges::to<std::vector>(),
         shortcode == said.reaction_events.end() ? std::nullopt : shortcode->shortcode));
   });
   return made;
@@ -132,9 +131,9 @@ inline auto quick_reaction(const palette& colours, std::string key) {
 inline auto quick_reactions(const palette& colours) {
   namespace c = skiff::compose;
   const std::array<std::string_view, 6> keys{"👍", "❤️", "😂", "😮", "😢", "🙏"};
-  auto each = std::ranges::to<std::vector>(std::views::transform(keys, [&](auto key) {
+  auto each = keys | std::views::transform([&](auto key) {
     return quick_reaction(colours, std::string(key));
-  }));
+  }) | std::ranges::to<std::vector>();
   return c::row(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}}),
       c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(each)),
       // The arrow, put away once unrolled.

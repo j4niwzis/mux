@@ -236,7 +236,7 @@ struct timeline_rows {
     if (newest)
       if (const auto at = index(now, told, *newest))
         newest_at = at;
-    return std::ranges::to<std::vector>(std::views::transform(std::views::iota(from, to), [&](std::size_t i) {
+    return std::views::iota(from, to) | std::views::transform([&](std::size_t i) {
              const message& said = all.at(i);
              bubble_facts facts{.said = said,
                                 .first = !same(i, neighbour(i, false)),
@@ -265,7 +265,7 @@ struct timeline_rows {
                                                                    said.delivery);
              const bool arrives = newest_at && i > *newest_at && shows(said) && !acknowledged;
              return bubble_item{said.id, std::move(facts), chat, told.needs, arrives};
-           }));
+           }) | std::ranges::to<std::vector>();
   }
 };
 // A row of the window made from its item.

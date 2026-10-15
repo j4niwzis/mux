@@ -359,7 +359,7 @@ struct leave_events {
     auto leaving = spl::visit(spl::overloaded{
         [](leave_choice::none) { return std::vector<std::string>{}; },
         [&](leave_choice::all) {
-          return std::ranges::to<std::vector>(std::views::transform(facts.rooms, [](const auto& room) { return room.id; }));
+          return facts.rooms | std::views::transform([](const auto& room) { return room.id; }) | std::ranges::to<std::vector>();
         },
         [&](leave_choice::some) { return std::vector<std::string>(draft.chosen.begin(), draft.chosen.end()); }}, draft.choice);
     return skiff::model::Up{request::leave_space{facts.space, std::move(leaving)}};
@@ -386,7 +386,7 @@ inline auto leave_space_box(const palette& colours, const leave_space_facts& fac
           widgets::ChoiceRowField<leave_choice_t>(colours.widgets, "Leave some rooms", leave_choice::some{}))),
       skiff::compose::shown_for<choice>([](const auto& picked) { return picked == leave_choice_t(leave_choice::some{}); },
           skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              std::ranges::to<std::vector>(std::views::transform(facts.rooms, [&](const auto& room) { return leave_room_row(colours, room); })))),
+              facts.rooms | std::views::transform([&](const auto& room) { return leave_room_row(colours, room); }) | std::ranges::to<std::vector>())),
       skiff::compose::row(skiff::compose::justified(
           skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}), nodes::justify::end{}),
           skiff::compose::styled({.width = 130.0f, .height = 36.0f}, widgets::SendButton<request::close_leave_space>(colours.widgets, "Cancel", {})),
@@ -647,7 +647,7 @@ auto presence_fields(const palette& colours, const presence_form_seed& seed) {
   const auto index = selected == choices.end() ? std::size_t{0} : static_cast<std::size_t>(selected - choices.begin());
   return c::local<presence_draft>(c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::projected<presence_draft>([](const presence_draft& draft) { return draft.choice; },
-          make_choice_menu(colours, "Presence", std::ranges::to<std::vector>(std::views::transform(choices, [](const auto& one) { return one.first; })), index, pick_presence_choice{})),
+          make_choice_menu(colours, "Presence", choices | std::views::transform([](const auto& one) { return one.first; }) | std::ranges::to<std::vector>(), index, pick_presence_choice{})),
       model_field<&presence_draft::status>(colours, "Status", "What you are doing"),
       c::asking_for<presence_draft>([by = seed.by](const presence_draft& draft) {
         const auto choices = Policy::presences();

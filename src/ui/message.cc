@@ -737,7 +737,7 @@ inline auto message_body(const bubble_needs& n, const conversation& in, const bu
   std::optional<album_view_t> album;
   if (!said.album.empty())
     album.emplace(album_view(colours, said.album,
-                             std::ranges::to<std::vector>(std::views::transform(said.album, [&](const attachment& one) { return opens(one.source, std::nullopt, one.name); }))));
+                             said.album | std::views::transform([&](const attachment& one) { return opens(one.source, std::nullopt, one.name); }) | std::ranges::to<std::vector>()));
   // Pictures at the chat's look's opacity for them.
   if (const float images = static_cast<float>(element_opacity_of(looks.bubbles, &config::element_opacity::images)) / 100.0f; images < 1.0f) {
     if (picture)
@@ -857,10 +857,10 @@ inline auto message_body(const bubble_needs& n, const conversation& in, const bu
                               "Open thread"));
   }
   // What its protocol says under it, and its node of its own.
-  auto lines = std::ranges::to<std::vector>(std::views::transform(proto::message_lines(protocol_state_of(*n.shared, in.id.account), in, said), [&](const proto::part::line& one) {
+  auto lines = proto::message_lines(protocol_state_of(*n.shared, in.id.account), in, said) | std::views::transform([&](const proto::part::line& one) {
                  return c::styled({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}},
                                   wrapped(nodes::Text(one.text, 12.0f, tone_colour(colours, one.tone))));
-               }));
+               }) | std::ranges::to<std::vector>();
   std::optional<view_holder> their_view;
   spl::visit(
       [&](const auto& state) {
@@ -930,7 +930,7 @@ inline auto message_body(const bubble_needs& n, const conversation& in, const bu
   if (!mine)
     return {};
   const auto when = chat.timeline[*mine].at;
-  auto out = std::ranges::to<std::vector>(std::views::transform(std::views::filter(chat.read_by, [&](const auto& read) {
+  auto out = chat.read_by | std::views::filter([&](const auto& read) {
                const auto& [user, event] = read;
                if (user == sender || user == chat.id.account.address)
                  return false;
@@ -941,11 +941,11 @@ inline auto message_body(const bubble_needs& n, const conversation& in, const bu
                  return *theirs >= *mine;
                const auto read_at = chat.receipt_times.find(user);
                return read_at != chat.receipt_times.end() && read_at->second >= when;
-             }), [&](const auto& read) {
+             }) | std::views::transform([&](const auto& read) {
                const auto read_at = chat.receipt_times.find(read.first);
                return seen_reader{read.first, sender_name(chat, read.first),
                                   read_at == chat.receipt_times.end() ? std::nullopt : std::optional(read_at->second)};
-             }));
+             }) | std::ranges::to<std::vector>();
   std::ranges::sort(out, {}, &seen_reader::name);
   return out;
 }
@@ -996,7 +996,7 @@ struct row_menu {
       // Delete as the protocol allows it -- Matrix: as the room's power levels do.
       facts.deletable = proto::may_delete(now, *chat, said.outgoing);
       facts.reaction_events = !current.reaction_events.empty();
-      facts.reaction_count = std::ranges::fold_left(std::views::transform(std::views::values(current.reactions), [](const auto& who) { return who.size(); }),
+      facts.reaction_count = std::ranges::fold_left(current.reactions | std::views::values | std::views::transform([](const auto& who) { return who.size(); }),
                                                     std::size_t{0}, std::plus{});
       // The message's link, where its protocol has one.
       if (auto link = proto::message_link(now, *chat, said.id))

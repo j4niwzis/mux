@@ -274,9 +274,9 @@ struct peer_verification {
             ders.push_back(std::move(der));
         }
       const std::vector<const unsigned char*> pointers =
-          std::ranges::to<std::vector<const unsigned char*>>(std::views::transform(ders, [](const auto& one) { return one.data(); }));
+          ders | std::views::transform([](const auto& one) { return one.data(); }) | std::ranges::to<std::vector<const unsigned char*>>();
       const std::vector<std::size_t> sizes =
-          std::ranges::to<std::vector<std::size_t>>(std::views::transform(ders, [](const auto& one) { return one.size(); }));
+          ders | std::views::transform([](const auto& one) { return one.size(); }) | std::ranges::to<std::vector<std::size_t>>();
       char why[256] = {};
       *android_said = mux_android_trusts(pointers.data(), sizes.data(), pointers.size(), host.c_str(), why, sizeof why);
       if (!**android_said)

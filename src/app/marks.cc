@@ -89,8 +89,8 @@ class marks_part {
                                        -> decltype(void(account.share_marks_seen(room, seen))) { account.share_marks_seen(room, seen); });
       }
     saved_ = now;
-    std::ranges::copy(std::views::values(now), std::back_inserter(out.chats));
-    std::ranges::copy(std::views::values(not_here_), std::back_inserter(out.chats));
+    std::ranges::copy(now | std::views::values, std::back_inserter(out.chats));
+    std::ranges::copy(not_here_ | std::views::values, std::back_inserter(out.chats));
     (void)s_->vault->write_file(mux::config::state_path("marks.json"), knot::to_json_string(out));
   }
 
@@ -201,7 +201,7 @@ class marks_part {
       }
       return entry;
     };
-    const auto entries = std::ranges::to<std::vector>(std::views::transform(marks_of(*chat, one.kind), entry_of));
+    const auto entries = marks_of(*chat, one.kind) | std::views::transform(entry_of) | std::ranges::to<std::vector>();
     mux::ui::show(*s_->showing, std::optional(mux::ui::marks_facts{one.kind, in, entries, s_->model}));
     listed_ = one.kind;
   }
@@ -267,7 +267,7 @@ class marks_part {
       }
     auto on_disk = on_disk_.find(in);
     if (on_disk == on_disk_.end())
-      on_disk = on_disk_.emplace(in, std::ranges::to<std::set<std::string>>(std::views::keys(s_->store->marked(in)))).first;
+      on_disk = on_disk_.emplace(in, s_->store->marked(in) | std::views::keys | std::ranges::to<std::set<std::string>>()).first;
     if (on_disk->second.contains(id))
       return;
     kept_.erase(id);

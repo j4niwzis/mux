@@ -745,20 +745,24 @@ using window_body_t = decltype(window_body(std::declval<const ui_needs&>()));
 // it, where the program says something is up to let go of -- what, it says
 // (escape_in); Ctrl+C, where nothing under the keys took it: what any text
 // shows selected copied.
+// What the window's own handlers answer -- Esc, Ctrl+C, a press -- as one
+// type: they wrap one node, which answers as the outermost of them does.
+using window_answer = std::variant<request::escape, request::copy_selected, request::pressed_at>;
 struct escape_key {
-  std::optional<request::escape> operator()(const overlay_shown& now, const scene::key::down& press) const {
-    return now.escapes && press.key == scene::keys::kEscape ? std::optional(request::escape{}) : std::nullopt;
+  std::optional<window_answer> operator()(const overlay_shown& now, const scene::key::down& press) const {
+    return now.escapes && press.key == scene::keys::kEscape ? std::optional<window_answer>(request::escape{}) : std::nullopt;
   }
 };
 struct copy_key {
-  std::optional<request::copy_selected> operator()(const scene::key::down& press) const {
-    return press.key == scene::keys::kC && press.modifiers.template has<scene::modifier::control>() ? std::optional(request::copy_selected{})
-                                                                                                     : std::nullopt;
+  std::optional<window_answer> operator()(const scene::key::down& press) const {
+    return press.key == scene::keys::kC && press.modifiers.template has<scene::modifier::control>()
+               ? std::optional<window_answer>(request::copy_selected{})
+               : std::nullopt;
   }
 };
 // Where the pointer is pressed: where a menu that press asks for is put.
 struct pressed_where {
-  template <class N> std::optional<request::pressed_at> operator()(const N&, const scene::pointer::down& press, scene::PointerReply&) const {
+  template <class N> std::optional<window_answer> operator()(const N&, const scene::pointer::down& press, scene::PointerReply&) const {
     return request::pressed_at{press.x, press.y};
   }
 };
@@ -768,7 +772,7 @@ inline auto window_view(const ui_needs& n) {
   namespace c = skiff::compose;
   return c::keys_for<overlay_shown, scene::phase::capture>([](const overlay_shown& now) { return now; }, escape_key{},
       c::onKeys(copy_key{},
-          c::onCapture<request::pressed_at>(pressed_where{},
+          c::onCapture<window_answer>(pressed_where{},
               c::projected<window_made>([](const window_made& now) { return std::optional(now.count); },
                   c::mount_now<window_body_t, std::uint64_t>([at = &n](std::uint64_t) { return std::tuple{window_body(*at)}; }, std::uint64_t{0},
                                                              {.fill = true})))));

@@ -55,6 +55,7 @@ import mux.app.manage;
 import mux.app.looks;
 import mux.app.threads;
 import mux.app.jumps;
+import mux.app.chat_view;
 import mux.app.emoji;
 import mux.app.accounts;
 import mux.app.local_data;
@@ -124,6 +125,7 @@ struct app : kept_settings {
   looks_part looks{shared, *this};
   threads_part threads{shared};
   jumps_part jumps{shared};
+  chat_view_part chat_view{shared};
   emoji_part emoji{&shared};
   accounts_part accounts_screen{shared, *this};
   local_data_part local_data{shared, *this};
@@ -265,7 +267,7 @@ struct app : kept_settings {
   auto parts() {
     return std::tuple_cat(
         std::tie(search, pictures, reading, outbox, settings, menu, notices, marks, paging, verification, proxying,
-                 packs, rooms, room_card, preferences, manage, looks, threads, jumps, emoji, accounts_screen, local_data),
+                 packs, rooms, room_card, preferences, manage, looks, threads, jumps, chat_view, emoji, accounts_screen, local_data),
         std::apply([](auto&... theirs) { return std::tie(theirs...); }, plugin_parts));
   }
   template <class Request>
@@ -445,7 +447,7 @@ struct app : kept_settings {
   void apply(const request::open_drawer&);
   void apply(const request::close_drawer&);
   void apply(const request::banner_pressed&);
-  void apply(const request::dismiss_banner&);
+  void apply(const request::head_pressed&);
   void apply(const request::card_action&);
   void apply(const request::quit&);
   void apply(const request::toggle_info&);

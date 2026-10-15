@@ -244,7 +244,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin 0726476fb4b1d4d3f10aace7dbd4dd6d63aba7d0)
+set(mux_skiff_pin 0b4223d10b5fce9d746f8a1eec72434a940dc2c2)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
@@ -474,7 +474,7 @@ if(MUX_UI)
           src/app/sink.cc ${mux_generated}/proto/accounts.cc src/proto/demo.cc src/app/network.cc src/app/workers.cc src/app/demo.cc
           src/app/store.cc src/app/requests.cc src/app/words.cc src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc
           src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc
-          src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/jumps.cc src/app/emoji.cc src/app/accounts.cc
+          src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/jumps.cc src/app/chat_view.cc src/app/emoji.cc src/app/accounts.cc
           src/app/local_data.cc src/app/marks.cc src/app/history.cc src/proto/app.cc)
   target_sources(mux_app PRIVATE src/app/shown_binding.cc)
   target_compile_definitions(mux_app PUBLIC $<${mux_split}:MUX_SPLIT_ACCOUNTS>)

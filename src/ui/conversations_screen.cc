@@ -103,12 +103,6 @@ struct conversations_screen : skiff::compose::Stacked {
   std::optional<conversation_id> chosen;
   // The account whose chats are listed.
   std::optional<account_id> current;
-  // Dismissed warnings stay hidden for this chat until their text changes.
-  std::map<conversation_id, std::string> dismissed_banners;
-  // Which of the chat's pins the bar shows, by its place among them: the
-  // one above the view (the newest until that is worked out).
-  std::size_t pinned_step = 0;
-  std::optional<conversation_id> pinned_of;
   // Which room events a chat shows, kind by kind, as the program's settings
   // say: set by the program before it shows the model; a chat not in it
   // shows them all.
@@ -634,42 +628,6 @@ struct conversations_screen : skiff::compose::Stacked {
   using side_column = ui::side_column<pick_folder>;
   // The chat: its header, its messages, and where one writes; or, with no
   // account at all, what to do about it.
-  // The pinned bar pressed: to the pinned message -- the bar then shows the
-  // one pinned above it, as it always shows the one above the view.
-  struct pinned_press {
-    using Answer = ::mux::ui::request::jump_to_message;
-    conversations_screen* screen;
-    std::string id;
-    ::mux::ui::request::jump_to_message operator()() const { return ::mux::ui::request::jump_to_message{id}; }
-  };
-  // A banner's button pressed: its protocol's request, asked.
-  struct banner_press {
-    using Answer = ::mux::ui::request::banner_pressed;
-    const conversations_screen* screen;
-    Answer operator()() const { return {*screen->chosen}; }
-  };
-  struct banner_close {
-    using Answer = ::mux::ui::request::dismiss_banner;
-    const conversations_screen* screen;
-    Answer operator()() const { return {*screen->chosen}; }
-  };
-  struct composer_banner : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text text;
-      std::optional<widgets::Button<banner_press>> verify;
-      legacy::icon_button<banner_close> close;
-    } parts;
-    composer_banner(const palette& colours, conversations_screen* screen)
-        : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
-                                             .padding = {10.0f, 12.0f, 10.0f, 12.0f}})),
-          parts{.text = skiff::compose::styled(
-                    {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                    wrapped(nodes::Text("", 13.0f, colours.text))),
-                .close = legacy::icon_button<banner_close>(colours, icon::close{}, {screen})} {
-      parts.close.apply({.alignSelf = scene::align::kMiddle});
-      this->setVisible(false);
-    }
-  };
   // A node of the chat's protocol's own over the composer (a Telegram bot's
   // keyboard): listed by composer_views(state), made for
   // a chat by make_composer_view, found by ADL; none by default.
@@ -725,18 +683,16 @@ struct conversations_screen : skiff::compose::Stacked {
     chat_column(chat_column&&) = delete;
     chat_column& operator=(chat_column&&) = delete;
 
-    using header_t = chat_head;
-    using pinned_t = nodes::Memo<pinned_view, pinned_bar<pinned_press>>;
     using empty_state = decltype(no_accounts_yet(std::declval<const palette&>()));
     using select_hint = decltype(select_a_chat());
     struct parts_t {
       // The head, as a function of the chat shown.
-      header_t header;
-      connection_bar connection;
-      search_bar search;
+      chat_header_t header;
+      decltype(connection_bar_for<connection_shown>(std::declval<const palette&>(), &connection_shown::chat)) connection;
+      search_bar_t search;
       selection_bar_t selection;
       // The pinned message, under the head, where the chat has any.
-      pinned_t pinned;
+      decltype(pinned_bar_for(std::declval<const palette&>())) pinned;
       // What plugins put under the head (contract::chat_column): a call in
       // this chat, as Element's call view.
       typename column_parts_t::nodes_t plugins;
@@ -747,15 +703,14 @@ struct conversations_screen : skiff::compose::Stacked {
       emoji_list emojis;
       // Over the composer: what the chat's protocol says there -- Matrix's
       // warning that the other is not verified, or was reset.
-      composer_banner banner;
+      composer_banner_t banner;
       std::optional<composer_view_holder> their_view;
       composer_bar_t<> line;
       empty_state empty;
       select_hint hint;
     } parts;
     // Its parts by their names, for what reads them: it is never moved.
-    header_t& header = parts.header;
-    search_bar& search = parts.search;
+    chat_header_t& header = parts.header;
     chat_area_t& area = parts.area;
     composer_bar_t<>& line = parts.line;
     empty_state& empty = parts.empty;
@@ -767,23 +722,20 @@ struct conversations_screen : skiff::compose::Stacked {
                      .background = n.looks->window.behind ? skia::SkColor{0}
                                                           : n.colours->chat})),
           parts{
-              .connection = connection_bar(*n.colours),
-              .search = search_bar(n),
+              .header = chat_header_for(*n.colours),
+              .connection = connection_bar_for<connection_shown>(*n.colours, &connection_shown::chat),
+              .search = search_bar_for(*n.colours),
               .selection = selection_bar(n),
+              .pinned = pinned_bar_for(*n.colours),
               .plugins = column_parts_t::made(n),
               .area = chat_area(n),
               .mentions =
                   skiff::compose::visible(false, mention_list(*n.colours)),
               .emojis = skiff::compose::visible(false, emoji_list(*n.colours)),
-              .banner = composer_banner(*n.colours, screen),
+              .banner = composer_banner_for(*n.colours),
               .line = composer_bar<>(n),
               .empty = no_accounts_yet(*n.colours),
               .hint = select_a_chat()} {
-      header.apply({.fillX = true, .height = chat_header::kHeight});
-      parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
-      parts.pinned.setVisible(false);
-      header.needs = n;
-      header.show({}, [&n](const auto& shown) { return chat_header(n, shown); });
       // A plain colour: the wallpaper is the messages' own -- the timeline's
       // Wallpaper -- not behind Select a chat, where Telegram has none.
       // Nothing, where the background is behind the whole window.
@@ -811,8 +763,7 @@ struct conversations_screen : skiff::compose::Stacked {
   // The old names, for what is kept in the parts.
   nodes::ScrollContainer<chat_rows>& list = side.list;
   nodes::Text& no_chats = side.no_chats;
-  chat_head& header = chat.header;
-  search_bar& search = chat.search;
+  chat_header_t& header = chat.header;
   // The keys of a chat, as tdesktop's -- what the input leaves to it:
   // Ctrl+F finds in it; Up in an empty input edits the last message sent;
   // Ctrl+Up answers the last message, and each Ctrl+Up after it the one
@@ -820,21 +771,11 @@ struct conversations_screen : skiff::compose::Stacked {
   // messages; Esc lets an answer or an edit go.
   using Node::onKey;
   std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply);
-  // Messages selected: the selection bar in place of the head, and the
-  // messages marked; none, the head back.
-  void show_selection(const std::set<std::string>& ids) {
-    header.setVisible(ids.empty() && !search.visible());
-    this->fState.relayoutQuietly();
-  }
-  // The search bar in place of the head, or the head back.
-  void show_search(bool shown) {
-    search.setVisible(shown);
-    header.setVisible(!shown);
-    if (!shown) {
-      search.parts.field.setText({});
-    }
-    this->invalidateLayout();
-  }
+  // Messages selected: the threads' answers marked too, where they still
+  // are the old rows (none, now: the marks are the model's).
+  void show_selection(const std::set<std::string>&) {}
+  // The chat's search field, for the focus.
+  [[nodiscard]] auto& search_field() { return std::get<0>(std::get<0>(chat.parts.search.fParts).fParts); }
   // The chat's messages: the list in its area (chat_area), told by the
   // program; read here for the pinned bar and the page keys.
   [[nodiscard]] auto& messages() { return std::get<1>(chat.area.fParts).list().list(); }
@@ -956,11 +897,8 @@ struct conversations_screen : skiff::compose::Stacked {
     const skia::SkRect box = fState.contentBox();
     const bool now = box.width() < 600.0f && box.height() > box.width();
     if (now != single || (now && box.width() != single_width)) {
-      if (now != single)
-        header.go_back(now);
       single = now;
       single_width = box.width();
-      if (last_model) this->show_connections(*last_model);
       this->show_info();
     }
     this->nodes::Stack::layoutChildren();
@@ -1036,64 +974,6 @@ struct conversations_screen : skiff::compose::Stacked {
 
   bool was_typing = false;
   std::string typed_last;
-  // The pinned bar: of the chat's pins, the one `pinned_step` says -- the
-  // newest where none was worked out yet.
-  void show_pinned(const conversation* one) {
-    {
-      auto& bar = chat.parts.pinned;
-      if (!one || one->pinned.empty()) {
-        bar.setVisible(false);
-      } else {
-        const std::size_t count = one->pinned.size();
-        const std::size_t at = std::min(pinned_step, count - 1);
-        const std::string& id = one->pinned[at];
-        pinned_view shown{id, count == 1 ? std::string("Pinned message")
-                                         : std::format("Pinned message #{} of {}", at + 1, count),
-                          "A message"};
-        if (const message* said = held_message(*one, id)) {
-          shown.line = said->body.plain.empty() && said->attachment ? std::string("Photo") : said->body.plain;
-          std::ranges::replace(shown.line, '\n', ' ');
-        }
-        bar.setVisible(true);
-        bar.show(shown, [this](const pinned_view& view) { return pinned_bar<pinned_press>(*needs_.colours, {this, view.id}, view); });
-      }
-    }
-  }
-  // The pin the bar shows, as Telegram's: the newest pinned above the view
-  // -- before the first message seen -- else the oldest. A pin not loaded
-  // is taken as older than all that is.
-  [[nodiscard]] std::size_t pin_above(const conversation& one) {
-    auto& list = this->messages();
-    const skia::SkRect view = list.bounds();
-    const auto& rows = list.rows().fRows;
-    const auto first = std::ranges::find_if(rows, [&](const auto& row) {
-      const skia::SkRect box = list.toView(row.bounds());
-      return !box.isEmpty() && box.fBottom > view.fTop + 8.0f;
-    });
-    const auto place = [&](const std::string& id) -> std::ptrdiff_t {
-      const auto found = std::ranges::find(one.timeline, id, &message::id);
-      return found == one.timeline.end() ? -1 : found - one.timeline.begin();
-    };
-    const std::ptrdiff_t top = first == rows.end() ? std::numeric_limits<std::ptrdiff_t>::max() : place(first->fKey);
-    std::optional<std::size_t> best;
-    std::ptrdiff_t best_place = -2;
-    for (std::size_t i = 0; i < one.pinned.size(); ++i)
-      if (const std::ptrdiff_t at = place(one.pinned[i]); at < top && at >= best_place) {
-        best = i;
-        best_place = at;
-      }
-    return best.value_or(0);
-  }
-  // What the pin above the view was last worked out from.
-  struct pin_inputs {
-    conversation_id chat;
-    float at = 0.0f;
-    std::size_t held = 0;
-    std::size_t pins = 0;
-    std::string first;
-    friend bool operator==(const pin_inputs&, const pin_inputs&) = default;
-  };
-  std::optional<pin_inputs> pin_worked_out;
   // Ticked while something moves: the list sliding in, the panels' ease,
   // the docked panel's height. What the list does is its own.
   [[nodiscard]] bool wantsTick() const {
@@ -1217,19 +1097,8 @@ struct conversations_screen : skiff::compose::Stacked {
     if (made)
       chat.parts.their_view.emplace(std::move(*made));
   }
-  void dismiss_banner(const conversation_id& in) {
-    if (chosen != in || !chat.parts.banner.visible())
-      return;
-    dismissed_banners.insert_or_assign(in, chat.parts.banner.parts.text.text());
-    chat.parts.banner.setVisible(false);
-    chat.invalidateLayout();
-  }
-  void show_connections(const model& now) {
-    side.parts.connection.show(current ? now.accounts().find(*current) : nullptr);
-    chat.parts.connection.show(chosen ? now.accounts().find(chosen->account) : nullptr,
-                                single || (chosen && current != chosen->account));
-  }
-  void show_banners(const conversation* one, const model& now);
+  // The connection bands are the program's (connection_shown).
+  void show_banners(const conversation* one);
   void show_conversation(const model& now);
 };
 

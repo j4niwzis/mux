@@ -180,6 +180,12 @@ struct copy_picture {
   std::string source;
 };
 struct return_to_chat {};
+// The chat's head pressed, off its buttons: its info, where the chat is
+// shown one thing at a time.
+struct head_pressed {};
+// The pinned bar pressed: to the pin it shows, and the bar on to the one
+// pinned before it.
+struct pinned_pressed {};
 struct menu_copy_link {};
 struct menu_copy_url {};
 struct favourite_emoji { emote emoji; };
@@ -695,9 +701,10 @@ struct settings_animations {};
 struct banner_pressed {
   conversation_id in;
 };
-struct dismiss_banner {
-  conversation_id in;
-};
+// The banner over the chat's composer: its button, or its close -- of the
+// chat shown.
+struct banner_button {};
+struct banner_close {};
 // One of a person's card's buttons of its protocol's own: by where it is
 // among them.
 struct card_action {

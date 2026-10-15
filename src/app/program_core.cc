@@ -496,6 +496,7 @@ void app::before_frame() {
   if (std::exchange(shared.newest_due, false))
     jumps.to_newest();
   jumps.go_on(taker{this});
+  chat_view.show();
   if (model->expire_typing())
     chats_binding.refresh(root(), model->chats());
   store.flush_reads();

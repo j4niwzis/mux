@@ -34,21 +34,23 @@ export namespace mux::ui {
       [](connection::online) { return std::string(); },
       [](const connection::failed& one) { return "Connection failed: " + one.error; }}, state);
 }
-struct connection_bar : skiff::compose::Stacked {
-  struct parts_t { nodes::Text text; } parts;
-  connection_bar(const palette& colours)
-      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
-                                           .padding = {8.0f, 12.0f, 8.0f, 12.0f},
-                                           .background = (colours.error & 0x00FFFFFFu) | (0x22u << 24)})),
-        parts{.text = skiff::compose::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.text)))} {
-    this->setVisible(false);
-  }
-  void show(const account* one, bool enabled = true) {
-    const auto text = one && enabled ? connection_notice(one->state) : std::string();
-    if (parts.text.text() != text) parts.text.setText(text);
-    if (this->visible() != !text.empty()) this->setVisible(!text.empty());
-  }
+// What the connection notices say, as the program has them: of the
+// account whose chats are listed, and of the chat's.
+struct connection_shown {
+  std::string list, chat;
+  friend bool operator==(const connection_shown&, const connection_shown&) = default;
 };
+// A connection's notice -- Offline, Connecting..., Connection failed -- in a
+// band over a list or a chat, where `said` makes one of the part Want; none,
+// and the band is not there.
+template <class Want, class Said>
+auto connection_bar_for(const palette& colours, Said said) {
+  namespace c = skiff::compose;
+  return c::shown_for<Want>([said](const Want& now) { return !std::invoke(said, now).empty(); },
+      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f},
+                               .background = (colours.error & 0x00FFFFFFu) | (0x22u << 24)}),
+                c::text_for<Want>([said](const Want& now) { return std::string(std::invoke(said, now)); }, c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.text))))));
+}
 
 // Something not there yet, said in a box over the window.
 // A notice's box: as high as what it says, its heading and text wrapped,
@@ -200,6 +202,11 @@ struct header_buttons<plugin_list<Features...>> {
     return extend(contract::chat_header{}, type_tag<Feature>{}, colours);
   }
   using nodes_t = std::tuple<decltype(button_of<Features>(std::declval<const palette&>()))...>;
+  // In a row of their own, in the plugins' order.
+  static auto row_of(const palette& colours) {
+    return skiff::compose::row(skiff::compose::hbox(12.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+                               button_of<Features>(colours)...);
+  }
   static nodes_t made(const palette& colours, bool chat) {
     return [&]<std::size_t... At>(std::index_sequence<At...>) {
       return nodes_t{skiff::compose::visible(chat, button_of<Features>(colours))...};
@@ -208,165 +215,80 @@ struct header_buttons<plugin_list<Features...>> {
 };
 using chat_header_buttons = header_buttons<composition::providers<contract::chat_header, enabled_plugins>>;
 
-struct chat_header : skiff::compose::Stacked {
-  // What the head shows: the chat's key and name, and how it is -- or no
-  // chat. The head is made from it, nothing set in it afterwards.
-  struct view {
-    std::optional<std::string> key;
-    std::string title = "Choose a chat";
-    std::string status;
-    // A back arrow before it, to the chats: shown one thing at a time.
-    bool back = false;
-    friend bool operator==(const view&, const view&) = default;
-  };
-  [[nodiscard]] static view view_of(const ui_shared& shared, const conversation* one, const model& now) {
-    if (one == nullptr)
-      return {};
-    const auto count = std::max<std::int64_t>(static_cast<std::int64_t>(one->members.size()), one->member_count);
-    // As its protocol says it, where it does (a channel's subscribers);
-    // else its members, or how the other is.
-    std::string about = proto::chat_status(protocol_state_of(shared, one->id.account), *one, now)
-                            .value_or(is_group(*one) ? std::format("{} member{}", count, count == 1 ? "" : "s")
-                                                     : presence_of(shared, now, one->id.account, contact_of(shared, *one)));
-    // Who is typing, by their names, as Telegram says it: one, two ("A and
-    // B"), three ("A, B and C"); past three, the first two and how many more.
-    if (!one->typing.empty()) {
-      std::vector<std::string> names;
-      for (const std::string& who : one->typing)
-        names.push_back(sender_name(*one, who));
-      switch (names.size()) {
-        case 1: about = names[0] + " is typing…"; break;
-        case 2: about = std::format("{} and {} are typing…", names[0], names[1]); break;
-        case 3: about = std::format("{}, {} and {} are typing…", names[0], names[1], names[2]); break;
-        default:
-          about = std::format("{}, {} and {} more are typing…", names[0], names[1], names.size() - 2);
-      }
-    }
-    // What its protocol says of it after (proto::header_badges): Matrix's
-    // shield, for one.
-    about = std::ranges::fold_left(proto::header_badges(protocol_state_of(shared, one->id.account), *one, now), std::move(about),
-                                   [](std::string so_far, const proto::part::badge& badge) {
-                                     return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
-                                   });
-    return {.key = one->id.id,
-            .title = display_name(*one),
-            .status = std::move(about)};
-  }
-
-  // The chat's avatar, its name over how it is, and the button to its info.
-  struct head_row : skiff::compose::Stacked {
-    // What its handlers ask for, returned.
-    using Answer = ::mux::ui::request::toggle_info;
-    using find_button = legacy::icon_button<sends<::mux::ui::request::open_search>>;
-    using info_button = legacy::icon_button<sends<::mux::ui::request::toggle_info>>;
-    using threads_button = legacy::icon_button<sends<::mux::ui::request::toggle_threads>>;
-    using back_button = legacy::icon_button<sends<::mux::ui::request::close_chat>>;
-    // Shown one thing at a time, a tap on the chat's name or avatar opens
-    // its info, as on Telegram's phones.
-    bool taps_to_info = false;
-    struct parts_t {
-      back_button back;
-      legacy::avatar_mark face;
-      two_lines_t texts;
-      find_button find;
-      // The plugins' buttons: a call to the other, for one.
-      typename chat_header_buttons::nodes_t buttons;
-      // The room's threads, as Element's header has them.
-      threads_button threads;
-      info_button info;
-    } parts;
-    head_row(const palette &colours, const view &shown)
-        : Stacked(skiff::compose::hbox(
-              12.0f, {.fillX = true,
-                      .grow = scene::axes::kY,
-                      .padding = {0.0f, 16.0f, 0.0f, 22.0f}})),
-          taps_to_info(shown.back && shown.key.has_value()),
-          parts{.back = skiff::compose::visible(
-                    shown.back && shown.key.has_value(),
-                    skiff::compose::styled(
-                        {.alignSelf = scene::align::kMiddle},
-                        back_button(colours, icon::back{}, {}))),
-                .face = skiff::compose::visible(
-                    shown.key.has_value(),
-                    legacy::avatar_mark(avatar_of::chat{}, shown.key.value_or(""), shown.title, 38.0f)),
-                .texts =
-                    two_lines(colours, shown.title, shown.status, 15.0f, 3.0f, two_line_style{.show_second = shown.key.has_value()}),
-                .find = skiff::compose::visible(
-                    shown.key.has_value(),
-                    skiff::compose::styled(
-                        {.alignSelf = scene::align::kMiddle},
-                        find_button(colours, icon::search{}, {}))),
-                .buttons = chat_header_buttons::made(colours, shown.key.has_value()),
-                .threads = skiff::compose::visible(
-                    shown.key.has_value(),
-                    skiff::compose::styled(
-                        {.alignSelf = scene::align::kMiddle},
-                        threads_button(colours, icon::threads{}, {}))),
-                .info = skiff::compose::visible(
-                    shown.key.has_value(),
-                    skiff::compose::styled(
-                        {.alignSelf = scene::align::kMiddle},
-                        info_button(colours, icon::info{}, {})))} {
-
-    }
-    [[nodiscard]] bool acceptsInput() const { return taps_to_info; }
-    std::optional<Answer> onClick(float, float) {
-      if (!taps_to_info)
-        return std::nullopt;
-      return ::mux::ui::request::toggle_info{};
-    }
-  };
-  struct parts_t {
-    head_row row;
-    nodes::Box<> divider;
-  } parts;
-
-  static constexpr float kHeight = 56.0f;
-
-  // Declared: the row over a line dividing it from the messages.
-  chat_header(const ui_needs &n, const view &shown)
-      : Stacked(skiff::compose::vbox(
-            0.0f, {.fill = true, .background = n.colours->sidebar})),
-        parts{.row = head_row(*n.colours, shown),
-              .divider =
-                  skiff::compose::styled({.fillX = true, .height = 1.0f},
-                                         nodes::Box<>(n.colours->band))} {}
-};
-
-// The head as the chats model has it: the chosen chat's, read by the
-// window's binding as the chats move, and made again only where what it
-// shows did.
-struct chat_head : nodes::Memo<typename chat_header::view, chat_header> {
-  ui_needs needs;
-  const model* now = nullptr;
-  std::optional<conversation_id> chosen;
+// What the head shows: the chat's key and name, and how it is -- or no chat
+// -- and whether a back arrow goes before it, to the chats (shown one thing
+// at a time). The program's, in the shown model.
+struct chat_head_shown {
+  std::optional<std::string> key;
+  std::string title = "Choose a chat";
+  std::string status;
   bool back = false;
-  // The chat chosen, or the window gone single or not: shown as it is now.
-  void choose(const model& with, std::optional<conversation_id> one, bool single) {
-    now = &with;
-    chosen = std::move(one);
-    back = single;
-    this->redo();
-  }
-  void go_back(bool single) {
-    back = single;
-    this->redo();
-  }
-  void refresh(const chats_model&) { this->redo(); }
-  // What the runtime binding walks call it by (outside a release build):
-  // its refresh, made where it is made, not where a table of it is.
-  skiff::bind::Refreshes<1> fRefreshes = skiff::bind::refreshes(skiff::bind::refreshFrom<chat_head, chats_model>());
-
- private:
-  void redo() {
-    if (now == nullptr)
-      return;
-    const conversation* one = chosen ? now->find(*chosen) : nullptr;
-    auto shown = chat_header::view_of(*needs.shared, one, *now);
-    shown.back = back;
-    this->show(shown, [this](const auto& made) { return chat_header(needs, made); });
-  }
+  // In place of it: the chat's search, or the bar of messages selected.
+  bool hidden = false;
+  friend bool operator==(const chat_head_shown&, const chat_head_shown&) = default;
 };
+inline constexpr float kChatHeadHeight = 56.0f;
+[[nodiscard]] inline chat_head_shown chat_head_of(const ui_shared& shared, const conversation* one, const model& now) {
+  if (one == nullptr)
+    return {};
+  const auto count = std::max<std::int64_t>(static_cast<std::int64_t>(one->members.size()), one->member_count);
+  // As its protocol says it, where it does (a channel's subscribers); else
+  // its members, or how the other is.
+  std::string about = proto::chat_status(protocol_state_of(shared, one->id.account), *one, now)
+                          .value_or(is_group(*one) ? std::format("{} member{}", count, count == 1 ? "" : "s")
+                                                   : presence_of(shared, now, one->id.account, contact_of(shared, *one)));
+  // Who is typing, by their names, as Telegram says it: one, two ("A and
+  // B"), three ("A, B and C"); past three, the first two and how many more.
+  if (!one->typing.empty()) {
+    const auto names = one->typing | std::views::transform([&](const std::string& who) { return sender_name(*one, who); }) |
+                       std::ranges::to<std::vector>();
+    switch (names.size()) {
+      case 1: about = names[0] + " is typing\u2026"; break;
+      case 2: about = std::format("{} and {} are typing\u2026", names[0], names[1]); break;
+      case 3: about = std::format("{}, {} and {} are typing\u2026", names[0], names[1], names[2]); break;
+      default: about = std::format("{}, {} and {} more are typing\u2026", names[0], names[1], names.size() - 2);
+    }
+  }
+  // What its protocol says of it after (proto::header_badges): Matrix's
+  // shield, for one.
+  about = std::ranges::fold_left(proto::header_badges(protocol_state_of(shared, one->id.account), *one, now), std::move(about),
+                                 [](std::string so_far, const proto::part::badge& badge) {
+                                   return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
+                                 });
+  return {.key = one->id.id, .title = display_name(*one), .status = std::move(about)};
+}
+// The head of a chat, over its messages: the back arrow where it is shown
+// one thing at a time, the chat's avatar, its name over how it is, and Find,
+// the plugins' buttons (a call), its threads and its info. A press on it
+// elsewhere asks for its info -- the program says whether that opens it (on
+// a phone, as Telegram's). All as the program says (chat_head_shown).
+inline auto chat_header_for(const palette& colours) {
+  namespace c = skiff::compose;
+  const auto chat = [](const chat_head_shown& now) { return now.key.has_value(); };
+  const scene::Spec middle{.alignSelf = scene::align::kMiddle};
+  return c::shown_for<chat_head_shown>([](const chat_head_shown& now) { return now.key && !now.hidden; },
+    c::column(c::vbox(0.0f, {.fillX = true, .height = kChatHeadHeight, .background = colours.sidebar}),
+      c::onClick(request::head_pressed{},
+          c::row(c::hbox(12.0f, {.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 16.0f, 0.0f, 22.0f}}),
+              c::shown_for<chat_head_shown>([](const chat_head_shown& now) { return now.back && now.key; },
+                  c::styled(middle, icon_button(colours, icon::back{}, sends<request::close_chat>{}))),
+              c::shown_for<chat_head_shown>(chat,
+                  avatar_for<chat_head_shown>(avatar_of::chat{}, 38.0f, [](const chat_head_shown& now) {
+                    return avatar_who{now.key.value_or(""), now.title};
+                  })),
+              c::column(c::vbox(3.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+                  c::text_for<chat_head_shown>([](const chat_head_shown& now) { return now.title; },
+                      c::styled({.fillX = true}, elided(nodes::Text("", 15.0f, colours.text, true)))),
+                  c::shown_for<chat_head_shown>(chat,
+                      c::text_for<chat_head_shown>([](const chat_head_shown& now) { return now.status; },
+                          c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.dim)))))),
+              c::shown_for<chat_head_shown>(chat, c::styled(middle, icon_button(colours, icon::search{}, sends<request::open_search>{}))),
+              c::shown_for<chat_head_shown>(chat, chat_header_buttons::row_of(colours)),
+              c::shown_for<chat_head_shown>(chat, c::styled(middle, icon_button(colours, icon::threads{}, sends<request::toggle_threads>{}))),
+              c::shown_for<chat_head_shown>(chat, c::styled(middle, icon_button(colours, icon::info{}, sends<request::toggle_info>{}))))),
+      c::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))));
+}
+using chat_header_t = decltype(chat_header_for(std::declval<const palette&>()));
 
 // The pinned message, as tdesktop's bar under a chat's head: a stripe in
 // the accent, "Pinned message" -- "#2 of 3" where there are more -- over a
@@ -378,36 +300,60 @@ struct pinned_view {
   std::string line;
   friend bool operator==(const pinned_view&, const pinned_view&) = default;
 };
-template <class Press>
-struct pinned_bar : skiff::compose::Stacked {
-  Press press;
-  struct parts_t {
-    nodes::Box<> stripe;
-    two_lines_t texts;
-    nodes::Box<> divider;
-  } parts;
-  static constexpr float kHeight = 46.0f;
-  pinned_bar(const palette& colours, Press what, const pinned_view& shown)
-      : Stacked(skiff::compose::hbox(10.0f, {.fill = true, .padding = {6.0f, 16.0f, 7.0f, 18.0f}, .background = colours.sidebar,
-                                             .hoverBackground = colours.chosen})),
-        press(std::move(what)),
-        parts{.stripe = skiff::compose::styled({.fillY = true, .width = 2.0f, .cornerRadius = 1.0f}, nodes::Box<>(colours.accent)),
-              .texts = two_lines(colours, shown.title, shown.line, 13.0f, 2.0f, two_line_style{.first_ink = colours.accent}),
-              .divider = skiff::compose::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))} {
-    fState.setCursor(scene::cursor::hand{});
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    act_on(fState, press);
-    return true;
-  }
-  auto onPress()
-    requires skiff::scene::Answering<Press>
-  {
-    return press();
-  }
+// The pin the bar shows, as the program has it: the one above the view;
+// none, and no bar.
+struct pinned_shown {
+  std::optional<pinned_view> pin;
+  friend bool operator==(const pinned_shown&, const pinned_shown&) = default;
 };
+inline constexpr float kPinnedHeight = 46.0f;
+// tdesktop's bar under a chat's head: a stripe in the accent, "Pinned
+// message" -- "#2 of 3" where there are more -- over a line of it. Pressed,
+// the program goes to it, and the bar to the one pinned before it.
+inline auto pinned_bar_for(const palette& colours) {
+  namespace c = skiff::compose;
+  const auto pin = [](const pinned_shown& now) { return now.pin.value_or(pinned_view{}); };
+  return c::shown_for<pinned_shown>([](const pinned_shown& now) { return now.pin.has_value(); },
+      c::onClick(request::pinned_pressed{},
+          c::row(c::hbox(10.0f, {.fillX = true, .height = kPinnedHeight, .padding = {6.0f, 16.0f, 7.0f, 18.0f},
+                                 .background = colours.sidebar, .hoverBackground = colours.chosen}),
+                 c::styled({.fillY = true, .width = 2.0f, .cornerRadius = 1.0f}, nodes::Box<>(colours.accent)),
+                 c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+                           c::text_for<pinned_shown>([pin](const pinned_shown& now) { return pin(now).title; },
+                               c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.accent)))),
+                           c::text_for<pinned_shown>([pin](const pinned_shown& now) { return pin(now).line; },
+                               c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.dim))))),
+                 c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))),
+          "Pinned message"));
+}
+
+// What the chat's protocol says over its composer -- Matrix's warning that
+// the other is not verified, or was reset -- its button's label, and its
+// tone; nothing, and no banner. The program's, dismissed as it says.
+struct banner_shown {
+  std::string text;
+  std::string button;
+  proto::part::tone_t tone = proto::part::tone::plain{};
+  friend bool operator==(const banner_shown&, const banner_shown&) = default;
+};
+inline auto composer_banner_for(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::shown_for<banner_shown>([](const banner_shown& now) { return !now.text.empty(); },
+      c::spec_for<banner_shown>([&colours](const banner_shown& now) {
+        return scene::Spec{.background = (tone_colour(colours, now.tone) & 0x00FFFFFFu) | (0x22u << 24)};
+      },
+          c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {10.0f, 12.0f, 10.0f, 12.0f}}),
+                 c::text_for<banner_shown>([](const banner_shown& now) { return now.text; },
+                     c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text("", 13.0f, colours.text)))),
+                 c::shown_for<banner_shown>([](const banner_shown& now) { return !now.button.empty(); },
+                     c::onClick(request::banner_button{},
+                         c::row(c::hbox(0.0f, {.width = 112.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
+                                               .background = colours.accent, .hoverBackground = skiff::paint::lighten(colours.accent, 0.12f)}),
+                                c::text_for<banner_shown>([](const banner_shown& now) { return now.button; },
+                                    c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 13.0f, colours.on_accent, true)))))),
+                 c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::close{}, sends<request::banner_close>{})))));
+}
+using composer_banner_t = decltype(composer_banner_for(std::declval<const palette&>()));
 
 // Messages selected, as what is shown says: how many, and what can be
 // done with them.
@@ -443,7 +389,7 @@ auto selection_bar(const ui_needs& n) {
   return c::shown_if<selection_shown>(
       [](const selection_shown& now) { return now.count > 0; },
       c::onKey(scene::keys::kEscape, ::mux::ui::request::selection_cancel{},
-          c::row(c::hbox(8.0f, {.fillX = true, .height = chat_header::kHeight,
+          c::row(c::hbox(8.0f, {.fillX = true, .height = kChatHeadHeight,
                                .padding = {0.0f, 12.0f, 1.0f, 12.0f}, .background = colours.sidebar}),
               c::shown_if<selection_shown>([](const selection_shown& now) { return now.forwardable; },
                   selected_action(::mux::ui::request::selection_forward{}, "Forward")),
@@ -467,6 +413,9 @@ struct search_found {
   std::optional<std::size_t> at;
   std::size_t of = 0;
   bool asked = false;
+  // Open, in place of the head.
+  bool open = false;
+  friend bool operator==(const search_found&, const search_found&) = default;
 };
 // What the bar says of it: a callable type, made as it is shown.
 struct found_said_t {
@@ -488,59 +437,43 @@ struct search_step {
   bool older = true;
   ::mux::ui::request::search_step operator()() { return ::mux::ui::request::search_step{older}; }
 };
-struct search_bar : skiff::compose::Stacked {
-  // What its handlers ask for, returned.
-  using Answer = std::variant<::mux::ui::request::search_step, ::mux::ui::request::close_search>;
-  using field_t = widgets::TextBox<search_typed>;
-  using step_button = legacy::icon_button<search_step>;
-  using close_button = legacy::icon_button<sends<::mux::ui::request::close_search>>;
-  struct parts_t {
-    field_t field;
-    decltype(skiff::compose::text_of<search_found>(found_said_t{}, nodes::Text("", 13.0f, 0u))) found;
-    step_button newer, older;
-    close_button close;
-    nodes::Box<> bottom_line;
-  } parts;
-
-  explicit search_bar(const ui_needs& n) : search_bar(*n.colours) {}
-  [[nodiscard]] static scene::Spec middle() { return {.alignSelf = scene::align::kMiddle}; }
-  // The field, with the magnifier in it.
-  [[nodiscard]] static field_t searching(field_t field) {
-    field.setSearchIcon(true);
-    return field;
-  }
-  search_bar(const palette& colours)
-      : Stacked(skiff::compose::hbox(4.0f, {.fillX = true, .height = chat_header::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
-                                            .background = colours.sidebar})),
-        parts{.field = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                                              searching(field_t(colours.widgets, "Search", {}))),
-              .found = skiff::compose::text_of<search_found>(found_said_t{}, skiff::compose::styled(middle(), nodes::Text("", 13.0f, colours.dim))),
-              .newer = skiff::compose::styled(middle(), step_button(colours, icon::up{}, {false})),
-              .older = skiff::compose::styled(middle(), step_button(colours, icon::down{}, {true})),
-              .close = skiff::compose::styled(middle(), close_button(colours, icon::close{}, {})),
-              .bottom_line = skiff::compose::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f},
-                                                    nodes::Box<>(colours.band))} {
-    this->setVisible(false);
-  }
-  using Node::onKey;
-  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
-    std::optional<Answer> answer;
-    if (press.key == scene::keys::kEnter) {
-      answer = ::mux::ui::request::search_step{!press.modifiers.template has<scene::modifier::shift>()};
-      reply.handle();
-    } else if (press.key == scene::keys::kEscape) {
-      answer = ::mux::ui::request::close_search{};
-      reply.handle();
-    } else if (press.key == scene::keys::kUp) {
-      answer = ::mux::ui::request::search_step{false};
-      reply.handle();
-    } else if (press.key == scene::keys::kDown) {
-      answer = ::mux::ui::request::search_step{true};
-      reply.handle();
-    }
-    return answer;
-  }
-};
+// Finding in a chat, as tdesktop's search in a chat: in place of the head,
+// a field with the magnifier, how many are found and which is shown ("3 of
+// 12"), the arrows to the newer and the older, and close. Enter goes to the
+// older one, Shift+Enter to the newer, Esc closes; Up and Down step. Shown
+// while the program says it is open, its field empty again once it is not.
+inline auto search_bar_for(const palette& colours) {
+  namespace c = skiff::compose;
+  const scene::Spec middle{.alignSelf = scene::align::kMiddle};
+  auto field = widgets::TextBox<search_typed>(colours.widgets, "Search", {});
+  field.setSearchIcon(true);
+  const auto keys = [](const scene::key::down& press) -> std::optional<std::variant<request::search_step, request::close_search>> {
+    namespace keys = scene::keys;
+    if (press.key == keys::kEnter)
+      return request::search_step{!press.modifiers.template has<scene::modifier::shift>()};
+    if (press.key == keys::kEscape)
+      return request::close_search{};
+    if (press.key == keys::kUp || press.key == keys::kDown)
+      return request::search_step{press.key == keys::kDown};
+    return std::nullopt;
+  };
+  return c::shown_for<search_found>([](const search_found& now) { return now.open; },
+      c::onKeys(keys,
+          c::row(c::hbox(4.0f, {.fillX = true, .height = kChatHeadHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
+                                .background = colours.sidebar}),
+                 c::applied<search_found>([](const search_found& now) { return now.open; },
+                     [](widgets::TextBox<search_typed>& typed, bool open) {
+                       if (!open && !typed.text().empty())
+                         typed.setText({});
+                     },
+                     c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field))),
+                 c::text_for<search_found>(found_said_t{}, c::styled(middle, nodes::Text("", 13.0f, colours.dim))),
+                 c::styled(middle, icon_button(colours, icon::up{}, search_step{false})),
+                 c::styled(middle, icon_button(colours, icon::down{}, search_step{true})),
+                 c::styled(middle, icon_button(colours, icon::close{}, sends<request::close_search>{})),
+                 c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)))));
+}
+using search_bar_t = decltype(search_bar_for(std::declval<const palette&>()));
 
 }  // namespace mux::ui
 

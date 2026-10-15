@@ -164,11 +164,11 @@ struct form_said {
 };
 // An account form, as the program shows it: the draft it is made from --
 // an account's own, or a protocol's blank one -- made again where the round
-// moves; whether it edits an account kept; what it says; and what its
-// protocol keeps beside it.
+// moves; the account it edits, by the address it was kept under, where it
+// edits one; what it says; and what its protocol keeps beside it.
 struct account_form_facts {
   account_draft_t seed;
-  bool editing = false;
+  std::optional<std::string> editing;
   std::uint32_t round = 0;
   form_said said;
   form_part_t part;

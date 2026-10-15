@@ -53,8 +53,9 @@ struct first_form_part<proto::form_part_list<First, Rest...>> {
 };
 template <class Tag>
 using first_form_part_t = typename first_form_part<decltype(proto::form_parts_of(state_of<Tag>{}))>::type;
-[[nodiscard]] inline account_form_facts form_opened(account_draft_t seed, const protocol_t& speaks, bool editing, std::uint32_t round) {
-  account_form_facts facts{.seed = std::move(seed), .editing = editing, .round = round};
+[[nodiscard]] inline account_form_facts form_opened(account_draft_t seed, const protocol_t& speaks, std::optional<std::string> editing,
+                                                   std::uint32_t round) {
+  account_form_facts facts{.seed = std::move(seed), .editing = std::move(editing), .round = round};
   spl::visit([&](auto tag) { facts.part = form_part_t(std::in_place_type<first_form_part_t<decltype(tag)>>); }, speaks);
   return facts;
 }
@@ -73,7 +74,7 @@ struct form_seed {
 inline auto account_form_view(const ui_needs& n) {
   namespace c = skiff::compose;
   using facts = std::optional<account_form_facts>;
-  return c::projected<facts>([](const facts& now) { return now ? std::optional(form_seed{now->round, now->seed, now->editing}) : std::nullopt; },
+  return c::projected<facts>([](const facts& now) { return now ? std::optional(form_seed{now->round, now->seed, now->editing.has_value()}) : std::nullopt; },
                              c::mount<account_form_node, form_seed>([at = n.colours](const form_seed& now) { return std::tuple{form_made(*at, now)}; },
                                                                     {.fillX = true, .autoSize = scene::axes::kY}));
 }

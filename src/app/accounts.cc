@@ -115,7 +115,7 @@ class accounts_part {
     auto adding = *s_->showing->look<mux::ui::add_account_shown>();
     adding.speaks = one.speaks;
     mux::ui::show(*s_->showing, std::move(adding));
-    this->open_form(mux::ui::blank_draft(one.speaks), one.speaks, false);
+    this->open_form(mux::ui::blank_draft(one.speaks), one.speaks, std::nullopt);
     s_->refresh_due = true;
   }
   // An account chosen from the list: its pages, its connection beside them
@@ -173,7 +173,7 @@ class accounts_part {
     }
     mux::config::account_t account{.own = std::move(*made)};
     if (open->editing)
-      this->edit(std::move(account));
+      this->edit(std::move(account), *open->editing);
     else
       this->add(std::move(account));
   }
@@ -246,8 +246,8 @@ class accounts_part {
     this->change_form([&](mux::ui::account_form_facts& now) { now.said = {std::move(text), error}; });
   }
   // A form of this draft, made afresh.
-  void open_form(mux::ui::account_draft_t draft, const mux::protocol_t& speaks, bool editing) {
-    mux::ui::show(*s_->showing, std::optional(mux::ui::form_opened(std::move(draft), speaks, editing, ++form_round_)));
+  void open_form(mux::ui::account_draft_t draft, const mux::protocol_t& speaks, std::optional<std::string> editing) {
+    mux::ui::show(*s_->showing, std::optional(mux::ui::form_opened(std::move(draft), speaks, std::move(editing), ++form_round_)));
   }
   // What is beside the list, and what it reads: an account's page and its
   // facts -- its connection, its form, made from what it keeps -- or the
@@ -268,7 +268,7 @@ class accounts_part {
                      facts.proxies = k_->proxies();
                      mux::ui::show(*s_->showing, std::optional(std::move(facts)));
                      spl::visit(spl::overloaded{[&](mux::ui::account_page::connection) {
-                                                  this->open_form(mux::ui::draft_of_account(*found), by.speaks, true);
+                                                  this->open_form(mux::ui::draft_of_account(*found), by.speaks, one.address);
                                                 },
                                                 [&](const auto&) { mux::ui::show<mux::ui::account_form_facts>(*s_->showing, std::nullopt); }},
                                 one.page);
@@ -277,7 +277,7 @@ class accounts_part {
                      mux::ui::show<mux::ui::account_page_facts>(*s_->showing, std::nullopt);
                      auto adding = mux::ui::with_proxies(*s_->showing->look<mux::ui::add_account_shown>(), this->proxy_names());
                      mux::ui::show(*s_->showing, adding);
-                     this->open_form(mux::ui::blank_draft(adding.speaks), adding.speaks, false);
+                     this->open_form(mux::ui::blank_draft(adding.speaks), adding.speaks, std::nullopt);
                    }},
                detail);
     const bool up = spl::visit(spl::overloaded{[](mux::ui::panel_detail::none) { return false; }, [](const auto&) { return true; }}, detail);
@@ -336,11 +336,11 @@ class accounts_part {
     pending_login_ = address;
     this->say("Connecting…", false);
   }
-  // An account's settings changed: the old one stops, and the new one, on
+  // An account's settings changed -- the one the form was opened for, by
+  // the address it was kept under: the old one stops, and the new one, on
   // or off as the old one was, takes its place in the list.
-  void edit(mux::config::account_t account) {
+  void edit(mux::config::account_t account, const std::string& was) {
     const std::string address = mux::config::address_of(account);
-    const std::string was = this->chosen().value_or(address);
     const auto* old = k_->settings_of(was);
     if (old == nullptr)
       return;

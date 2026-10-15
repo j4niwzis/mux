@@ -158,7 +158,7 @@ using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::requ
   if (one.parts.body.parts.forwarded && one.said.forwarded &&
       one.parts.body.parts.forwarded->shownBounds().contains(press.x, press.y)) {
     if (proto::person_link(state_before(protocol_of(one.said.forwarded->from)), one.said.forwarded->from) &&
-        one.parts.body.parts.forwarded->parts.who.bounds()
+        std::get<1>(one.parts.body.parts.forwarded->fParts).bounds()
             .makeOffset(one.parts.body.parts.forwarded->fState.fShiftX, one.parts.body.parts.forwarded->fState.fShiftY)
             .contains(press.x, press.y)) {
       return ::mux::ui::request::open_member_info{one.said.forwarded->from};

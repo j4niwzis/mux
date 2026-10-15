@@ -307,6 +307,10 @@ struct thread_told : timeline_told {};
 // left, and the loader while a jump is on its way.
 struct chat_ways {
   bool back_here = false, back_to_chat = false, loading = false;
+  // A window of its history away from the newest: the way down wanted.
+  bool detached = false;
+  // The mentions of the user, and reactions to theirs, not seen yet.
+  std::size_t mentions = 0, reactions = 0;
   friend bool operator==(const chat_ways&, const chat_ways&) = default;
 };
 // Which of the two lists a list's answers are of.
@@ -369,7 +373,11 @@ struct timeline_rows {
   }
   // Come while the reader was away from the end, counted on the way down:
   // another's message the chat shows, not one's own nor an event it hides.
+  // A chat a window away from its newest counts nothing: what comes after
+  // its window is a page of what is older than the newest, not new.
   static bool counts(const chats_model& now, const Told& told, std::size_t i) {
+    if (const conversation* chat = chat_of(now, told); chat && chat->detached && !told.thread)
+      return false;
     const message& said = seen_of(now, told).at(i);
     return !said.outgoing && (!said.service || told.filter.shows(said.event_kind));
   }
@@ -479,7 +487,10 @@ struct make_bubble_row {
 // Where in a row the stretch of its text a quote of it pointed at is: what a
 // jump with a quote aims at.
 [[nodiscard]] inline auto& row_text_of(message_row_t& row) {
-  auto& swiped = std::get<0>(row.fParts);
+  // Its parts: held by what takes its presses while rows are selected; the
+  // swiped row in its column; its face and body in that.
+  auto& column = std::get<0>(row.fParts);
+  auto& swiped = std::get<0>(column.fParts);
   auto& inner = std::get<0>(swiped.fParts);
   auto& body = std::get<1>(inner.fParts);
   return part_of<bubble_part::text>(body);
@@ -506,6 +517,65 @@ auto timeline_list() {
                                       .padding = {8.0f, kListSide, 8.0f, kListSide}});
   return c::bound<Want>(std::move(list));
 }
+
+// The loader's cross: the message jumped to no longer looked for.
+struct stop_jump_act {
+  using Answer = ::mux::ui::request::stop_jump;
+  ::mux::ui::request::stop_jump operator()() const { return {}; }
+};
+// The buttons over the list's bottom right corner, stacked: Telegram's
+// heart and @ -- reactions to the user's and mentions of them not seen
+// yet, pressed the oldest gone to, pressed with the other button all
+// listed -- the way back to the chat a jump left, and "\u2193", back to the
+// newest (or a way back in this chat first), with how many came meanwhile.
+// What shows each is read from what the program says (chat_ways); "\u2193"
+// is told by the list (with_way_down: its fourth part).
+inline auto list_corner(const palette& colours) {
+  namespace c = skiff::compose;
+  const scene::Spec plate{.width = 42.0f, .height = 42.0f, .cornerRadius = 21.0f, .background = colours.sidebar,
+                          .hoverBackground = colours.chosen, .border = scene::Border{colours.band, 1.0f}};
+  const auto mark = [&](mark_kind_t which, std::string glyph, auto count) {
+    return c::shown_for<chat_ways>([count](const chat_ways& now) { return count(now) > 0; },
+        c::onRightPress(request::list_marks{which},
+            c::onClick(request::jump_to_mark{which},
+                c::column(c::vbox(0.0f, plate),
+                          c::styled({.place = scene::anchor::kCentre}, nodes::Text(std::move(glyph), 18.0f, colours.text, true)),
+                          count_badge_for<chat_ways>(colours, count)))));
+  };
+  return c::column(c::vbox(10.0f, {.place = scene::anchor::kBottomRight, .x = -18.0f, .y = -12.0f, .autoSize = scene::axes::kBoth}),
+                   mark(mark_kind::reaction{}, "\u2665", [](const chat_ways& now) { return now.reactions; }),
+                   mark(mark_kind::mention{}, "@", [](const chat_ways& now) { return now.mentions; }),
+                   c::shown_for<chat_ways>([](const chat_ways& now) { return now.back_to_chat; },
+                       c::onClick(request::return_to_chat{},
+                                  c::column(c::vbox(0.0f, plate), c::styled({.fill = true}, nodes::Icon(shape_of(icon::back{}), colours.text))))),
+                   c::visible(false, c::onClick(request::jump_to_end{},
+                                                c::column(c::vbox(0.0f, plate),
+                                                          c::styled({.fill = true}, nodes::Icon(shape_of(icon::down{}), colours.text)),
+                                                          c::visible(false, count_badge(colours))))));
+}
+// The chat's messages over its wallpaper -- the theme's gradient and
+// Telegram's pattern, a colour, a picture -- with the corner over them, and
+// the loader turning in the middle while a jump is on its way. The list is
+// told by the program and answers it (timeline_list); the wallpaper is put
+// by what shows the chat (show_wallpaper_on, its first part).
+inline auto chat_area(const ui_needs& n) {
+  namespace c = skiff::compose;
+  wallpaper_t wall;
+  wall.apply({.place = scene::anchor::kTopLeft, .fill = true});
+  auto list = c::projected<chat_ways>([](const chat_ways& now) { return now.back_here || now.detached; },
+      c::with_way_down(c::vbox(0.0f, {.fill = true}), timeline_list<chat_told, chat_list_tag>(), list_corner(*n.colours),
+                       [](auto& corner, bool wanted, std::size_t unseen) {
+                         auto& down = std::get<3>(corner.fParts);
+                         down.setVisible(wanted);
+                         auto& badge = std::get<1>(down.fParts);
+                         show_count(badge, unseen);
+                         badge.setVisible(unseen > 0);
+                       }));
+  auto loading = c::shown_for<chat_ways>([](const chat_ways& now) { return now.loading; },
+      c::styled({.place = scene::anchor::kCentre}, widgets::RadialLoader<stop_jump_act>(44.0f, {})));
+  return c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), std::move(wall), std::move(list), std::move(loading));
+}
+using chat_area_t = decltype(chat_area(std::declval<const ui_needs&>()));
 
 // Selection owns the gesture before any link, photo, or text child sees
 // it. A tap toggles one message; a drag commits the displayed message range.

@@ -372,6 +372,8 @@ class jumps_part {
       now.filter = this->filter_of(*chat);
       now.receipts = reads.receipts_shown(*in);
       now.previews = reads.previews_shown(*in) && !chat->encrypted;
+      // The program's model, as it is now: rooms found, previews fetched.
+      needs_.now = s_->model;
       now.needs = &needs_;
       now.unread_from = unread_from_;
       now.frost = s_->looks.window.frost;
@@ -426,9 +428,13 @@ class jumps_part {
   void show_ways() {
     const auto in = this->chosen();
     const auto stack = in ? returns_.find(*in) : returns_.end();
+    const mux::conversation* chat = in ? s_->model->find(*in) : nullptr;
     mux::ui::chat_ways now{.back_here = stack != returns_.end() && !stack->second.empty(),
                            .back_to_chat = !chat_returns_.empty(),
-                           .loading = going_.has_value()};
+                           .loading = going_.has_value(),
+                           .detached = chat && chat->detached,
+                           .mentions = chat ? chat->unread_mentions.size() : 0,
+                           .reactions = chat ? chat->unread_reactions.size() : 0};
     if (*s_->showing->look<mux::ui::chat_ways>() != now)
       mux::ui::show(*s_->showing, now);
     s_->list = {.jump_target = this->going_to(), .top = seen_.top, .bottom = seen_.bottom};

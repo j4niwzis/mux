@@ -78,7 +78,17 @@ inline auto time_pill(std::string when) {
 // A message's picture, marked: what its proportions are read from.
 struct message_picture {};
 using picture_image_t = nodes::Image<from_moving_thumbnail>;
-inline auto picture_view(const palette& colours, std::string source, int width, int height, picture_look look, media_open open) {
+// The picture's own proportions: its picture's, where it has come -- found
+// by its mark; none where it is not shown.
+struct picture_ratio {
+  std::optional<float> operator()(auto& box) const {
+    const auto* image = skiff::scene::findNode<skiff::compose::Marked<message_picture, picture_image_t>>(box);
+    return image ? image->ratio() : std::nullopt;
+  }
+};
+// What a picture shows: its blurred preview, the picture over it as it
+// comes, a loader turning meanwhile, a video's marks, its time.
+inline auto picture_box(const palette& colours, const std::string& source, picture_look look) {
   namespace c = skiff::compose;
   auto preview = c::visible(look.thumbnail, c::styled({.fill = true, .cornerRadius = 10.0f}, nodes::Image<from_previews>({source})));
   auto picture = c::Marked<message_picture, picture_image_t>(c::visible(look.thumbnail, c::styled({.fill = true, .cornerRadius = 10.0f},
@@ -87,21 +97,21 @@ inline auto picture_view(const palette& colours, std::string source, int width, 
   std::optional<decltype(video_marks(0))> video;
   if (look.video_ms)
     video.emplace(video_marks(*look.video_ms));
-  // The picture's own proportions: its picture's, where it has come --
-  // found by its mark; none where it is not shown.
-  const auto ratio = [](auto& box) {
-    const auto* image = skiff::scene::findNode<skiff::compose::Marked<message_picture, picture_image_t>>(box);
-    return image ? image->ratio() : decltype(image->ratio()){};
-  };
-  return c::onClick(std::move(open),
-      c::fitted({.width = static_cast<float>(width), .height = static_cast<float>(height),
-                 .most = look.sticker ? kStickerMost : kPictureMost, .least = look.sticker ? 0.0f : kPictureLeast, .cell = look.cell},
-                ratio,
-                c::column(c::vbox(0.0f, {.cornerRadius = 10.0f, .background = look.sticker ? skia::SkColor{0} : colours.tile, .masking = true}),
-                          std::move(preview),
-                          c::while_coming(c::vbox(0.0f, {.fill = true}), std::move(picture), std::move(loader)),
-                          std::move(video), time_pill(std::move(look.time)))),
-      look.sticker ? "Sticker" : look.video_ms ? "Play video" : "Open picture");
+  return c::column(c::vbox(0.0f, {.cornerRadius = 10.0f, .background = look.sticker ? skia::SkColor{0} : colours.tile, .masking = true}),
+                   std::move(preview),
+                   c::while_coming(c::vbox(0.0f, {.fill = true}), std::move(picture), std::move(loader)),
+                   std::move(video), time_pill(std::move(look.time)));
+}
+// The picture fitted: its own type, for an album to shrink its cells alike.
+using picture_fitted_t =
+    skiff::compose::Fitted<picture_ratio, decltype(picture_box(std::declval<const palette&>(), std::string(), picture_look{}))>;
+inline auto picture_view(const palette& colours, std::string source, int width, int height, picture_look look, media_open open) {
+  namespace c = skiff::compose;
+  const char* label = look.sticker ? "Sticker" : look.video_ms ? "Play video" : "Open picture";
+  const skiff::compose::Fit fit{.width = static_cast<float>(width), .height = static_cast<float>(height),
+                                .most = look.sticker ? kStickerMost : kPictureMost, .least = look.sticker ? 0.0f : kPictureLeast,
+                                .cell = look.cell};
+  return c::onClick(std::move(open), picture_fitted_t(fit, picture_ratio{}, picture_box(colours, source, std::move(look))), label);
 }
 using picture_view_t = decltype(picture_view(std::declval<const palette&>(), std::string(), 0, 0, picture_look{}, media_open{}));
 
@@ -140,12 +150,17 @@ inline auto album_view(const palette& colours, const std::vector<attachment>& it
     at += count;
   }
   return c::shrunk(kAlbumWidth, kAlbumGap,
+      // Its cells, in their order, as the walks see them: each fitted
+      // picture's cell shrunk alike.
       [sizes](auto& album, float share) {
-        auto cells = album.fParts | std::views::transform([](row_t& row) -> std::vector<picture_view_t>& { return row.fParts; }) | std::views::join;
-        for (auto&& [cell, size] : std::views::zip(cells, sizes)) {
-          cell.fFit.cell = std::pair{std::floor(size.first * share), std::floor(size.second * share)};
+        std::size_t at = 0;
+        skiff::scene::forEachNode<picture_fitted_t>(album, [&](picture_fitted_t& cell) {
+          if (at >= sizes.size())
+            return;
+          const auto& [w, h] = sizes[at++];
+          cell.fFit.cell = std::pair{std::floor(w * share), std::floor(h * share)};
           cell.invalidateLayout();
-        }
+        });
       },
       c::many(c::vbox(kAlbumGap, {.autoSize = scene::axes::kBoth}), std::move(rows)));
 }

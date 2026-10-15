@@ -136,7 +136,12 @@ void app::apply(const request::banner_pressed& one) {
   if (const mux::conversation* chat = model->find(one.in))
     mux::proto::banner_asked(mux::ui::protocol_state_of(shared.ui, one.in.account), *chat, *model, taker{this});
 }
-void app::apply(const request::dismiss_banner& one) { root().main().dismiss_banner(one.in); }
+// The chat's head pressed, off its buttons: its info, where the chat is
+// shown one thing at a time -- as Telegram's phones.
+void app::apply(const request::head_pressed&) {
+  if (root().main().single && root().main().chosen)
+    this->apply(request::toggle_info{});
+}
 void app::apply(const request::card_action& one) {
   mux::proto::person_action_asked(mux::ui::protocol_state_of(shared.ui, one.by), one.by, one.who, one.index, taker{this});
 }

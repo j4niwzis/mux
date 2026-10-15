@@ -31,6 +31,11 @@ export namespace mux::app {
 using chat_aimed = skiff::compose::ListAimed<std::string, mux::ui::chat_list_tag>;
 using chat_edge = skiff::compose::ListEdge<mux::ui::chat_list_tag>;
 using chat_seen = skiff::compose::ListSeen<std::string, mux::ui::chat_list_tag>;
+using thread_aimed = skiff::compose::ListAimed<std::string, mux::ui::thread_list_tag>;
+using thread_edge = skiff::compose::ListEdge<mux::ui::thread_list_tag>;
+using thread_seen = skiff::compose::ListSeen<std::string, mux::ui::thread_list_tag>;
+using chat_span = skiff::compose::ListSpan<std::string, mux::ui::chat_list_tag>;
+using thread_span = skiff::compose::ListSpan<std::string, mux::ui::thread_list_tag>;
 
 // The first unread message among those held: the one after the message
 // read up to that the reader did not send. Where that marker is not known
@@ -172,6 +177,71 @@ class jumps_part {
     this->tell();
   }
 
+  // -- the thread open beside the chat
+
+  // A message of the thread open -- its root or an answer -- brought into
+  // view in its panel and flashed: a quote of it pressed. False where it
+  // is not one of its.
+  bool aim_in_thread(const std::string& id) {
+    const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
+    const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
+    if (!chat || !shown.thread)
+      return false;
+    const auto answers = chat->threads.find(*shown.thread);
+    if (id != *shown.thread && (answers == chat->threads.end() || !std::ranges::contains(answers->second, id, &mux::message::id)))
+      return false;
+    thread_aim_ = {.key = id, .number = ++number_};
+    this->tell_thread();
+    return true;
+  }
+  void apply(const thread_aimed& one) {
+    mux::ui::change_shown<mux::ui::message_marks>(*s_->showing, [&](mux::ui::message_marks& marks) {
+      marks.flashed = one.key;
+      marks.fragment.reset();
+      ++marks.flash;
+    });
+  }
+  // Its edges and what is seen in it: its answers are all held, fetched as
+  // it opens; nothing to ask.
+  void apply(const thread_edge&) {}
+  void apply(const thread_seen&) {}
+  // What the thread's list is told: the thread open, if one is.
+  void tell_thread() {
+    const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
+    const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
+    if (thread_of_ != shown.thread) {
+      thread_of_ = shown.thread;
+      thread_aim_ = {};
+    }
+    mux::ui::thread_told now;
+    if (chat && shown.threads_open && shown.thread) {
+      now.of = chat->id;
+      now.thread = shown.thread;
+      now.aim = thread_aim_;
+      needs_.now = s_->model;
+      now.needs = &needs_;
+      now.frost = s_->looks.window.frost;
+      now.looks = looks_;
+      now.fetched = this->fetched();
+    }
+    if (*s_->showing->look<mux::ui::thread_told>() != now)
+      mux::ui::show(*s_->showing, std::move(now));
+  }
+
+  // -- rows selected by a press, or a drag across them
+
+  // As the drag goes, the rows it would select (or let go) washed as
+  // selected; let go, the span selected -- or let go, where its first was
+  // selected -- a press that did not move, the one row.
+  template <class Asked>
+  void apply(const chat_span& one, const Asked& asked) {
+    this->spanned(one.first, one.last, one.done, false, asked);
+  }
+  template <class Asked>
+  void apply(const thread_span& one, const Asked& asked) {
+    this->spanned(one.first, one.last, one.done, true, asked);
+  }
+
   // -- what the list answers
 
   // Brought into view: the jump done, and flashed where it is not quiet.
@@ -240,6 +310,10 @@ class jumps_part {
   // does not bring it, paged back to -- as far as the chat's limit says.
   template <class Asked>
   void go_on(const Asked& asked) {
+    this->tell_thread();
+    this->follow_looks();
+    if (this->chosen() && s_->showing->look<mux::ui::chat_told>()->fetched != this->fetched())
+      this->tell();
     if (!going_) {
       this->show_ways();
       return;
@@ -331,6 +405,12 @@ class jumps_part {
     this->show_ways();
   }
   void apply(const request::stop_jump&) { this->stop(); }
+  // A text sent: the ways back let go.
+  void clear_returns() {
+    if (const auto in = this->chosen())
+      returns_.erase(*in);
+    this->show_ways();
+  }
   // To the newest, the ways back let go: what was sent is there.
   void to_newest() {
     going_.reset();
@@ -353,6 +433,17 @@ class jumps_part {
       return {};
     return std::ranges::subrange(top, std::next(bottom)) | std::views::transform(&mux::message::id) | std::ranges::to<std::vector>();
   }
+  // The chat's bubbles as its levels say now: where a setting moved them,
+  // set and the rows made again.
+  void follow_looks() {
+    const auto in = this->chosen();
+    if (!in)
+      return;
+    if (auto now = s_->kept->reads().bubbles_of(*in); now != s_->looks.bubbles) {
+      s_->looks.bubbles = std::move(now);
+      this->looks_changed();
+    }
+  }
   // The looks moved -- a theme, a chat's bubbles chosen: the rows made
   // again.
   void looks_changed() {
@@ -372,10 +463,13 @@ class jumps_part {
       now.filter = this->filter_of(*chat);
       now.receipts = reads.receipts_shown(*in);
       now.previews = reads.previews_shown(*in) && !chat->encrypted;
+      // The program's model, as it is now: rooms found, previews fetched.
+      needs_.now = s_->model;
       now.needs = &needs_;
       now.unread_from = unread_from_;
       now.frost = s_->looks.window.frost;
       now.looks = looks_;
+      now.fetched = this->fetched();
     }
     if (*s_->showing->look<mux::ui::chat_told>() != now)
       mux::ui::show(*s_->showing, std::move(now));
@@ -399,6 +493,8 @@ class jumps_part {
     bool context_asked = false, paging = false;
     std::optional<std::size_t> base;
   };
+  // What the program has fetched for rows, counted: more come, rows read.
+  [[nodiscard]] std::size_t fetched() const { return s_->model->previews.size() + s_->model->rooms_found.size(); }
   static double now_ms() {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
   }
@@ -421,14 +517,59 @@ class jumps_part {
     asked(request::load_older{chat.id, *chat.history_from});
     return true;
   }
+  template <class Asked>
+  void spanned(const std::string& first, const std::string& last, bool done, bool in_thread, const Asked& asked) {
+    const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
+    const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
+    if (!chat)
+      return;
+    // The messages of the list it is in: the thread's root and answers, or
+    // the chat's timeline.
+    std::vector<const mux::message*> all;
+    if (in_thread && shown.thread) {
+      if (const mux::message* root = mux::ui::held_message(*chat, *shown.thread))
+        all.push_back(root);
+      if (const auto answers = chat->threads.find(*shown.thread); answers != chat->threads.end())
+        all.append_range(answers->second | std::views::transform([](const mux::message& one) { return &one; }));
+    } else {
+      all = chat->timeline | std::views::transform([](const mux::message& one) { return &one; }) | std::ranges::to<std::vector>();
+    }
+    const auto place = [&](const std::string& id) { return std::ranges::find(all, id, &mux::message::id); };
+    const auto from = place(first), to = place(last);
+    if (from == all.end() || to == all.end())
+      return;
+    const auto [begin, end] = std::minmax(from, to);
+    auto ids = std::ranges::subrange(begin, std::next(end)) |
+               std::views::filter([](const mux::message* one) { return !one->redacted && !one->id.empty(); }) |
+               std::views::transform([](const mux::message* one) { return one->id; }) | std::ranges::to<std::vector>();
+    const auto& marks = *s_->showing->look<mux::ui::message_marks>();
+    const bool selecting = !marks.selected.contains(first);
+    if (done) {
+      mux::ui::change_shown<mux::ui::message_marks>(*s_->showing, [](mux::ui::message_marks& now) { now.previewed.reset(); });
+      asked(request::selection_span{std::move(ids), selecting});
+      return;
+    }
+    // As the drag goes: at most a hundred, as a selection is.
+    std::set<std::string> preview = marks.selected;
+    for (const std::string& id : ids)
+      if (!selecting)
+        preview.erase(id);
+      else if (preview.size() < 100)
+        preview.insert(id);
+    mux::ui::change_shown<mux::ui::message_marks>(*s_->showing, [&](mux::ui::message_marks& now) { now.previewed = std::move(preview); });
+  }
   // What the corner over the list shows: a way back in this chat, one to
   // the chat a jump left, and the loader while a jump is on its way.
   void show_ways() {
     const auto in = this->chosen();
     const auto stack = in ? returns_.find(*in) : returns_.end();
+    const mux::conversation* chat = in ? s_->model->find(*in) : nullptr;
     mux::ui::chat_ways now{.back_here = stack != returns_.end() && !stack->second.empty(),
                            .back_to_chat = !chat_returns_.empty(),
-                           .loading = going_.has_value()};
+                           .loading = going_.has_value(),
+                           .detached = chat && chat->detached,
+                           .mentions = chat ? chat->unread_mentions.size() : 0,
+                           .reactions = chat ? chat->unread_reactions.size() : 0};
     if (*s_->showing->look<mux::ui::chat_ways>() != now)
       mux::ui::show(*s_->showing, now);
     s_->list = {.jump_target = this->going_to(), .top = seen_.top, .bottom = seen_.bottom};
@@ -446,6 +587,8 @@ class jumps_part {
   std::optional<std::pair<std::string, std::string>> older_asked_;
   double older_asked_ms_ = 0.0;
   std::optional<std::string> newer_asked_;
+  skiff::compose::WindowAim<std::string> thread_aim_;
+  std::optional<std::string> thread_of_;
 };
 
 }  // namespace mux::app

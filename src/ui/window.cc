@@ -161,6 +161,9 @@ struct shown_root {
   skiff::model::Tracked<std::optional<passphrase_facts>> passphrase;
   skiff::model::Tracked<std::optional<menu_facts>> menu;
   skiff::model::Tracked<std::optional<viewer_facts>> viewer;
+  // What the viewer has coming, and the video it plays: the program's.
+  skiff::model::Tracked<viewer_load> viewer_coming;
+  skiff::model::Tracked<video_shown> video;
   skiff::model::Tracked<std::optional<emoji_facts>> emoji;
   skiff::model::Tracked<std::optional<panel_facts>> panel;
   // What the speaker plays: the voice messages' buttons and times read it.
@@ -171,6 +174,14 @@ struct shown_root {
   skiff::model::Tracked<thread_told> thread_list;
   skiff::model::Tracked<message_marks> messages_marked;
   skiff::model::Tracked<chat_ways> ways;
+  // The chat's own bands, as the program says (app: chat_view, suggestions).
+  skiff::model::Tracked<chats_shown> chats_now;
+  skiff::model::Tracked<chat_head_shown> head;
+  skiff::model::Tracked<connection_shown> connections;
+  skiff::model::Tracked<pinned_shown> pinned;
+  skiff::model::Tracked<banner_shown> banner;
+  skiff::model::Tracked<suggestions_shown> suggested;
+  skiff::model::Tracked<threads_shown> threads_list;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -284,8 +295,9 @@ struct shown_screen : Screen {
       this->current = now.current;
     if (this->info_open != now.info_open)
       this->set_info_open(now.info_open);
-    if (this->threads_open != now.threads_open || this->parts.threads.open != now.thread)
+    if (this->threads_open != now.threads_open || this->thread_root != now.thread)
       this->set_threads(now.threads_open, now.thread);
+    this->thread_answering = now.thread_answer.has_value();
     // A forum opened or left as the program says it, where that changed:
     // one the screen let go itself -- its space gone -- stays gone.
     if (std::exchange(forum_read, now.forum) != now.forum && this->forum_open != now.forum) {
@@ -349,6 +361,22 @@ template <class Needs> struct layer_arguments {
   template <class Facts> auto operator()(const Facts &facts) const {
     return std::tie(needs, facts);
   }
+};
+// A layer made by a function of what it shows: its node made anew as that
+// changes (Make: the function, as a type).
+template <class Needs, class Make> struct layer_made {
+  Needs needs;
+  template <class Facts> auto operator()(const Facts& facts) const { return std::tuple{Make{}(needs, facts)}; }
+};
+template <class Facts, class Needs, class Make>
+using made_layer = skiff::compose::Mounted<std::invoke_result_t<Make, const Needs&, const Facts&>, Facts, layer_made<Needs, Make>>;
+template <class Facts, class Make, class Needs>
+auto layer_made_by(const Needs& needs) {
+  return skiff::bind::Bound<std::optional<Facts>, made_layer<Facts, Needs, Make>>(std::in_place, layer_made<Needs, Make>{needs},
+                                                                              scene::Spec{.fill = true}, true);
+}
+struct make_viewer {
+  auto operator()(const ui_needs& n, const viewer_facts& facts) const { return picture_viewer(n, facts); }
 };
 template <class Content, class Facts, class Needs>
 using shown_layer =
@@ -511,6 +539,10 @@ struct window : skiff::compose::Specced {
     static std::optional<escaped> escape(skiff::bind::Bound<std::optional<Facts>, shown_layer<Content, Facts, ui_needs>>& layer) {
       return layer.shown() ? std::optional<escaped>(escaped{closing_of(std::type_identity<Facts>{})}) : std::nullopt;
     }
+    template <class Facts, class Make>
+    static std::optional<escaped> escape(skiff::bind::Bound<std::optional<Facts>, made_layer<Facts, ui_needs, Make>>& layer) {
+      return layer.shown() ? std::optional<escaped>(escaped{closing_of(std::type_identity<Facts>{})}) : std::nullopt;
+    }
     // The one drawn last -- on top -- asked first.
     template <class... Part> static std::optional<escaped> topmost_first(Part&... part) {
       std::optional<escaped> found;
@@ -639,7 +671,7 @@ struct window : skiff::compose::Specced {
       shown_in<verification_box, verification_view> verifying;
       skiff::bind::Bound<std::optional<emoji_facts>, shown_layer<emoji_popup, emoji_facts, ui_needs>> emoji;
       skiff::bind::Bound<std::optional<menu_facts>, shown_layer<context_menu, menu_facts, ui_needs>> menu;
-      skiff::bind::Bound<std::optional<viewer_facts>, shown_layer<picture_viewer, viewer_facts, ui_needs>> viewer;
+      skiff::bind::Bound<std::optional<viewer_facts>, made_layer<viewer_facts, ui_needs, make_viewer>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
       std::optional<text_menu> text_menu_up;
       // The plugins' layers, over everything: a call's card, and on a phone
@@ -802,7 +834,7 @@ struct window : skiff::compose::Specced {
                     shown_made<verification_box, verification_view>(n),
                 .emoji = layer_for<emoji_popup, emoji_facts>(n),
                 .menu = layer_for<context_menu, menu_facts>(n),
-                .viewer = layer_for<picture_viewer, viewer_facts>(n),
+                .viewer = layer_made_by<viewer_facts, make_viewer>(n),
                 .over_all = plugin_layers_t::made(n)} {
       // (A pack of the parts: bound in a generic lambda, the template a pack
       // declaration needs.)
@@ -1033,7 +1065,7 @@ struct window : skiff::compose::Specced {
   }
   [[nodiscard]] bool emoji_open() { return layer().emoji.shown() != nullptr; }
   // The sticker pictures the panel shows, for the program to ask for.
-  [[nodiscard]] std::vector<emote_picture> emoji_pictures_shown() {
+  [[nodiscard]] std::vector<emote_picture> emoji_pictures_shown(const suggestions_shown& listed) {
     auto* up = layer().emoji.shown();
     std::vector<emote_picture> shown;
     // Those the panel's pages show, in view: the emoji's, every plugin's.
@@ -1047,10 +1079,10 @@ struct window : skiff::compose::Specced {
       std::apply([&](auto&... over) { ((over ? emote_pictures_in(*over, menu->parts.menu.bounds(), shown) : void()), ...); },
                  menu->parts.menu.parts.overs);
     auto& screen = main();
-    if (screen.chat.parts.emojis.visible())
-      for (const auto& emoji : screen.emoji_matches)
-        if (!emoji.picture.empty())
-          shown.push_back({emoji.picture, emote_kind::emoji});
+    // The custom emoji the list over the composer shows.
+    for (const suggestion& emoji : listed.items)
+      if (!emoji.picture.empty())
+        shown.push_back({emoji.picture, emote_kind::emoji});
     const auto inserted = [&](const auto& field) {
       for (const auto& atom : field.atoms())
         if (atom.picture)
@@ -1058,7 +1090,7 @@ struct window : skiff::compose::Specced {
     };
     inserted(composer_field(screen.line));
     if (screen.thread_open())
-      inserted(composer_field(screen.parts.threads.parts.line));
+      inserted(composer_field(screen.thread_line()));
     return shown;
   }
   // The menu's card, where one is up: what takes the keys while it is.

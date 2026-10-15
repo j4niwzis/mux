@@ -26,12 +26,11 @@ class search_part {
       return;
     if (!searching_ || searching_->in != *screen.chosen)
       searching_ = state{*screen.chosen, {}, {}, std::nullopt};
-    screen.show_search(true);
-    s_->scene->focus(screen.search.parts.field);
+    mux::ui::show(*s_->showing, mux::ui::search_found{.open = true});
+    s_->scene->focus(screen.search_field());
   }
   void apply(const request::close_search&) {
     searching_.reset();
-    s_->root().main().show_search(false);
     s_->root().main().show_search_results({}, std::nullopt);
     mux::ui::show(*s_->showing, mux::ui::search_found{});
   }
@@ -78,7 +77,6 @@ class search_part {
   void chat_chosen(const conversation_id& which) {
     if (searching_ && searching_->in != which) {
       searching_.reset();
-      s_->root().main().show_search(false);
       s_->root().main().show_search_results({}, std::nullopt);
       mux::ui::show(*s_->showing, mux::ui::search_found{});
     }
@@ -123,7 +121,7 @@ class search_part {
   void show_at() {
     if (searching_->at)
       s_->show_message_due = services::message_asked{searching_->found[*searching_->at], searching_->query};
-    mux::ui::show(*s_->showing, mux::ui::search_found{searching_->at, searching_->found.size(), !searching_->query.empty()});
+    mux::ui::show(*s_->showing, mux::ui::search_found{searching_->at, searching_->found.size(), !searching_->query.empty(), true});
   }
 
   // To the next found, older or newer, shown and flashed; the count set.

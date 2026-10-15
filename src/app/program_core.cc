@@ -287,7 +287,7 @@ void app::woken() {
   // An answer gone to, scrolled to once its thread's panel has it.
   if (thread_target_) {
     auto& screen = root().main();
-    if (!screen.thread_open() || screen.parts.threads.scroll_to(*thread_target_))
+    if (!screen.thread_open() || jumps.aim_in_thread(*thread_target_))
       thread_target_.reset();
   }
 }
@@ -495,7 +495,13 @@ void app::before_frame() {
     jumps.go(*root().main().chosen, std::move(asked->id), std::move(asked->fragment), false, taker{this});
   if (std::exchange(shared.newest_due, false))
     jumps.to_newest();
+  if (std::exchange(shared.returns_due, false))
+    jumps.clear_returns();
   jumps.go_on(taker{this});
+  chat_view.show();
+  suggestions.show();
+  threads.show();
+  pictures.viewer_tick();
   if (model->expire_typing())
     chats_binding.refresh(root(), model->chats());
   store.flush_reads();
@@ -534,7 +540,7 @@ void app::before_frame() {
   // The emoji panel's stickers in view, asked for as they change -- as it
   // opens, as it scrolls, as its tab or its search changes -- and not only
   // when something else refreshed the window.
-  if (auto shown = root().emoji_pictures_shown(); shown != shared.ui.panel_pictures_shown) {
+  if (auto shown = root().emoji_pictures_shown(*showing.look<mux::ui::suggestions_shown>()); shown != shared.ui.panel_pictures_shown) {
     shared.ui.panel_pictures_shown = std::move(shown);
     shared.ui.pictures_due = true;
   }

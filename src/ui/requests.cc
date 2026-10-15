@@ -180,6 +180,12 @@ struct copy_picture {
   std::string source;
 };
 struct return_to_chat {};
+// The chat's head pressed, off its buttons: its info, where the chat is
+// shown one thing at a time.
+struct head_pressed {};
+// The pinned bar pressed: to the pin it shows, and the bar on to the one
+// pinned before it.
+struct pinned_pressed {};
 struct menu_copy_link {};
 struct menu_copy_url {};
 struct favourite_emoji { emote emoji; };
@@ -695,8 +701,28 @@ struct settings_animations {};
 struct banner_pressed {
   conversation_id in;
 };
-struct dismiss_banner {
-  conversation_id in;
+// The banner over the chat's composer: its button, or its close -- of the
+// chat shown.
+struct banner_button {};
+struct banner_close {};
+// The list over the composer -- the @ list, the : list: the next or the
+// one before lit, one picked (the lit one, where none is said), or the
+// list closed until something else is asked.
+struct suggestion_step {
+  bool down = true;
+};
+struct suggestion_pick {
+  std::optional<std::size_t> at;
+};
+struct suggestion_close {};
+// The thread's field: what is written sent in the thread open, an answer to
+// what is answered there; the answer let go.
+struct thread_send {};
+struct thread_answer_cancel {};
+// The video in the viewer: paused or played on; and gone to a share of it.
+struct toggle_video {};
+struct video_seek {
+  float share = 0.0f;
 };
 // One of a person's card's buttons of its protocol's own: by where it is
 // among them.

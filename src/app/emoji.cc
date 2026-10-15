@@ -62,7 +62,7 @@ void part_apply(emoji_part& self, const request::toggle_thread_emoji&) {
     return;
   }
   self.into_ = request::writing::thread{};
-  const auto at = mux::ui::input_emoji(mux::ui::composer_input(self.s_->root().main().parts.threads.parts.line)).bounds();
+  const auto at = mux::ui::input_emoji(mux::ui::composer_input(self.s_->root().main().thread_line())).bounds();
   open_at(self, at.fRight, at.fTop);
 }
 
@@ -89,7 +89,7 @@ void part_apply(emoji_part& self, const request::insert_emoji& one) {
       self.s_->scene->focus(field);
   };
   spl::visit(spl::overloaded{[&](request::writing::chat) { put(mux::ui::composer_field(screen.line)); },
-                                   [&](request::writing::thread) { put(mux::ui::composer_field(screen.parts.threads.parts.line)); }},
+                                   [&](request::writing::thread) { put(mux::ui::composer_field(screen.thread_line())); }},
                 self.into_);
 }
 

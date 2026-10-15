@@ -506,12 +506,14 @@ template <class Owner> struct event_kind_change {
     events_in(now, held);
   }
 };
+// Answered as a change of the Owner the field is scoped to -- not the part
+// bound nearest the button (what it reads to light itself, room_events_picked).
 template <class Owner> struct set_event_kind {
-  using Answer = skiff::bind::Own<event_kind_change<Owner>>;
+  using Answer = decltype(skiff::model::over<Owner>(std::declval<event_kind_change<Owner>>()));
   choice_level_t level;
   room_event_t kind;
   bool show;
-  Answer operator()() const { return skiff::bind::own(event_kind_change<Owner>{level, kind, show ? 1u : 2u}); }
+  Answer operator()() const { return skiff::model::over<Owner>(event_kind_change<Owner>{level, kind, show ? 1u : 2u}); }
 };
 template <class Owner>
 inline auto event_kind_button(const palette& colours, choice_level_t level, room_event_t kind, bool show) {

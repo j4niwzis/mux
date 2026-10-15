@@ -312,9 +312,9 @@ struct threads_panel : skiff::compose::Stacked {
         // the list lays nothing out. The view stepped a screen toward it,
         // as the chat steps, until it is laid out and aimed at.
         const auto laid = std::ranges::find_if(bubbles, [](const message_bubble& row) { return !row.bounds().isEmpty(); });
-        if (laid == bubbles.end()) {
-          aiming.reset();
-        } else {
+        // A new window may not have had its first layout yet. Keep the
+        // target pending until that layout supplies a row to step from.
+        if (laid != bubbles.end()) {
           const float page = view.bounds().height();
           view.setCurrent(std::max(0.0f, view.current() + (found < laid ? -page : page)));
           this->markDamaged();

@@ -29,165 +29,78 @@ export import :emoji_popup;
 
 export namespace mux::ui {
 
-// What is done with a message from its menu, as the program keeps it.
 // Who has seen a message, as tdesktop's menu shows it (chat_helpers.style's
 // defaultWhoRead, who_reacted_context_action.cpp): the read ticks 15 in;
 // "N Seen", the one reader's name, or "Nobody Viewed", 44 in; up to three
 // userpics of 22 at the right, 17 in, each 8 over the next, in a ring of the
-// menu's colour. Hovered, every reader in a submenu beside the menu: a
+// menu's colour. Pointed at, every reader in a list beside the menu: a
 // userpic of 30, 13 in, the name 57 in, and under it when they read.
-struct seen_row : skiff::compose::Stacked {
-  static constexpr float kHeight = 33.0f, kFace = 22.0f, kOverlap = 8.0f, kRight = 17.0f;
-  static constexpr std::size_t kMostFaces = 3;
-  // How far the readers list lies over the menu it opens from.
-  static constexpr float kOverlapMenu = 6.0f;
-  // A reader, as a line of the submenu: pressed, their card, as a name
-  // pressed anywhere opens it.
-  struct reader_row : skiff::compose::Stacked {
-    // A press: the menu closed, the reader's card opened.
-    using Answer = std::tuple<::mux::ui::request::close_menu, ::mux::ui::request::open_member_info>;
-    std::string id;
-    struct lines_t : skiff::compose::Stacked {
-      struct parts_t {
-        nodes::Text name;
-        nodes::Text when;
-      } parts;
-      lines_t(const palette &colours, const seen_reader &one)
-          : Stacked(skiff::compose::vbox(0.0f,
-                                         {.autoSize = scene::axes::kY,
-                                          .grow = scene::axes::kX,
-                                          .alignSelf = scene::align::kMiddle})),
-            parts{.name = elided(nodes::Text(one.name, 13.0f, colours.text)),
-                  .when = elided(nodes::Text(one.at ? clock_of(*one.at)
-                                                    : std::string("seen"),
-                                             12.0f, colours.dim))} {}
-    };
-    struct parts_t {
-      legacy::avatar_mark face;
-      lines_t lines;
-    } parts;
-    reader_row(const palette &colours, const seen_reader &one)
-        : Stacked(skiff::compose::hbox(14.0f,
-                                       {.fillX = true,
-                                        .height = 44.0f,
-                                        .padding = {6.0f, 17.0f, 6.0f, 13.0f},
-                                        .hoverBackground = colours.chosen})),
-          id(one.id), parts{.face = legacy::avatar_mark(avatar_of::person{}, one.id, one.name, 30.0f),
-                            .lines = lines_t(colours, one)} {
-      // the name at 13 + 30 + 14 = 57
-      // 6 over and under: the name at 13 and the time at 12 are 31.25 high,
-      // and 7 left them 30 -- 1.25 out of the row.
-    }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    std::optional<Answer> onClick(float, float) { return Answer{::mux::ui::request::close_menu{}, ::mux::ui::request::open_member_info{id}}; }
-  };
-  // The readers, scrolling where there are more than fit: at most about
-  // seven rows tall.
-  struct submenu_t : skiff::compose::Stacked {
-    static constexpr float kRow = 44.0f, kMostHeight = 320.0f, kWidth = 240.0f;
-    [[nodiscard]] static float height_for(std::size_t readers) {
-      return std::min(kMostHeight, kRow * static_cast<float>(readers) + 10.0f);
-    }
-    using rows_t = nodes::Flow<std::vector<reader_row>>;
-    struct parts_t {
-      nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
-    } parts;
-    submenu_t(const palette &colours, const std::vector<seen_reader> &readers)
-        : Stacked(skiff::compose::vbox(0.0f, {})) {
-      auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
-      rows.reserve(readers.size());
-      for (const seen_reader& one : readers)
-        rows.emplace_back(colours, one);
-      std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.list.apply({.fill = true});
-      const float tall = height_for(readers.size());
-      fState.apply({.width = kWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f},
-                    .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
-                    .masking = true});
-    }
-  };
-  // The colours it is made in, for the readers' list it opens.
-  const palette* colours_ = nullptr;
-  std::vector<seen_reader> readers;
-  // The window, as the menu fills it: the submenu kept inside it.
-  const skia::SkRect* window = nullptr;
-  // The submenu, held by the menu's layer over the whole window -- not by
-  // this row, outside whose box and its card's it lies: what is repainted
-  // or pointed at there went by the card's box, and missed it. And that
-  // layer, laid out again as it opens or goes.
-  std::optional<submenu_t>* submenu = nullptr;
-  scene::Node* layer = nullptr;
-  struct parts_t {
-    icon_mark_t mark;
-    nodes::Text label;
-    std::vector<legacy::avatar_mark> faces;
-  } parts;
-  seen_row(const palette &colours, std::vector<seen_reader> who)
-      : Stacked(skiff::compose::hbox(0.0f, {})), colours_(&colours),
-        readers(std::move(who)),
-        parts{.mark = skiff::compose::styled(
-                  {.place = scene::anchor::kCentreLeft, .x = 15.0f - 44.0f},
-                  icon_mark(colours, icon::check{})),
-              .label = skiff::compose::styled(
-                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                  elided(nodes::Text(
-                      readers.empty() ? std::string("Nobody Viewed")
-                      : readers.size() == 1
-                          ? readers.front().name
-                          : std::to_string(readers.size()) + " Seen",
-                      13.0f, colours.text)))} {
-    auto& [mark, label, faces] = parts;
-    const std::size_t shown = std::min(kMostFaces, readers.size());
-    const float faces_width = shown ? kFace + static_cast<float>(shown - 1) * (kFace - kOverlap) : 0.0f;
-    // The text 44 in, 9 over and 7 under it; the faces' room kept at the right.
-    fState.apply({.fillX = true,
-                  .height = kHeight,
-                  .padding = {9.0f, kRight + (shown ? faces_width + 8.0f : 0.0f), 7.0f, 44.0f},
-                  .hoverBackground = colours.chosen});
-    // The ticks 15 in, in the middle of the row's height: out of the flow,
-    // back over the padding.
-
-    // The faces out of the flow, in the room at the right: the first the
-    // rightmost, 17 in from the edge, each next 14 to its left.
-    for (std::size_t i = 0; i < shown; ++i) {
-      faces.emplace_back(avatar_of::person{}, readers[i].id, readers[i].name, kFace);
-      faces.back().apply({.place = scene::anchor::kCentreRight,
-                          .x = faces_width + 8.0f - static_cast<float>(i) * (kFace - kOverlap),
-                          .border = scene::Border{colours.sidebar, 2.0f}});
-    }
-  }
-  // The submenu while the row or the submenu is hovered, as tdesktop's opens
-  // under the pointer: moving over to it no longer closes it. It overlaps the
-  // menu's edge: a gap between them, where neither is hovered, closed it on
-  // the way over.
-  void update(double) {
-    if (submenu == nullptr || layer == nullptr)
-      return;
-    const bool open = (fState.hovered() || (*submenu && (*submenu)->fState.hovered())) && !readers.empty();
-    if (open == submenu->has_value())
-      return;
-    if (open) {
-      submenu->emplace(*colours_, readers);
-      // Beside the menu, over its edge -- left of it where the window has
-      // no room on the right. Its top at the row's, or higher where it would
-      // pass the window's bottom -- as Telegram's, kept on the screen -- but
-      // never above its top. In the layer's box, the window's.
-      const skia::SkRect row = fState.fBounds;
-      const skia::SkRect box = window != nullptr && !window->isEmpty() ? *window : row;
-      const float tall = submenu_t::height_for(readers.size());
-      const float top = std::max(box.fTop + 8.0f, std::min(row.fTop, box.fBottom - 8.0f - tall));
-      float left = row.fRight - kOverlapMenu;
-      if (left + submenu_t::kWidth > box.fRight - 8.0f)
-        left = std::max(box.fLeft + 8.0f, row.fLeft + kOverlapMenu - submenu_t::kWidth);
-      (*submenu)->apply({.place = scene::anchor::kTopLeft, .x = left - box.fLeft, .y = top - box.fTop});
-    } else {
-      submenu->reset();
-    }
-    layer->invalidateLayout();
-    layer->markDamaged();
-  }
+inline constexpr float kSeenHeight = 33.0f, kSeenFace = 22.0f, kSeenOverlap = 8.0f, kSeenRight = 17.0f;
+inline constexpr std::size_t kSeenMostFaces = 3;
+// The row and the list, pointed at or left: the list open while either is.
+struct seen_row_hovered {
+  bool on = false;
+  skia::SkRect box;
 };
+struct seen_list_hovered {
+  bool on = false;
+};
+struct seen_row_says {
+  using Answer = seen_row_hovered;
+  seen_row_hovered operator()(bool on, const skia::SkRect& box) const { return {on, box}; }
+};
+struct seen_list_says {
+  using Answer = seen_list_hovered;
+  seen_list_hovered operator()(bool on, const skia::SkRect&) const { return {on}; }
+};
+inline auto seen_row(const palette& colours, const std::vector<seen_reader>& readers) {
+  namespace c = skiff::compose;
+  const std::size_t shown = std::min(kSeenMostFaces, readers.size());
+  const float faces_width = shown ? kSeenFace + static_cast<float>(shown - 1) * (kSeenFace - kSeenOverlap) : 0.0f;
+  // The faces out of the flow, in the room at the right: the first the
+  // rightmost, 17 in from the edge, each next 14 to its left.
+  auto faces = std::views::iota(std::size_t{0}, shown) | std::views::transform([&](std::size_t i) {
+                 return c::styled({.place = scene::anchor::kCentreRight,
+                                   .x = faces_width + 8.0f - static_cast<float>(i) * (kSeenFace - kSeenOverlap),
+                                   .border = scene::Border{colours.sidebar, 2.0f}},
+                                  avatar_mark(avatar_of::person{}, readers[i].id, readers[i].name, kSeenFace));
+               }) |
+               std::ranges::to<std::vector>();
+  const std::string said = readers.empty() ? std::string("Nobody Viewed")
+                           : readers.size() == 1 ? readers.front().name
+                                                 : std::to_string(readers.size()) + " Seen";
+  return c::hovering(seen_row_says{},
+      c::row(c::hbox(0.0f, {.fillX = true, .height = kSeenHeight,
+                            .padding = {9.0f, kSeenRight + (shown ? faces_width + 8.0f : 0.0f), 7.0f, 44.0f}, .hoverBackground = colours.chosen}),
+             c::styled({.place = scene::anchor::kCentreLeft, .x = 15.0f - 44.0f}, icon_mark(colours, icon::check{})),
+             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(said, 13.0f, colours.text))),
+             c::many(c::hbox(), std::move(faces))));
+}
+// A reader in the list: pressed, the menu closed and their card opened.
+inline auto reader_row(const palette& colours, const seen_reader& one) {
+  namespace c = skiff::compose;
+  return c::onClick(std::tuple{request::close_menu{}, request::open_member_info{one.id}},
+      c::row(c::hbox(14.0f, {.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = colours.chosen}),
+             avatar_mark(avatar_of::person{}, one.id, one.name, 30.0f),
+             c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+                       elided(nodes::Text(one.name, 13.0f, colours.text)),
+                       elided(nodes::Text(one.at ? clock_of(*one.at) : std::string("seen"), 12.0f, colours.dim)))),
+      one.name);
+}
+// The readers, scrolling where there are more than fit: at most about
+// seven rows tall.
+inline constexpr float kSeenRow = 44.0f, kSeenMostTall = 320.0f, kSeenListWidth = 240.0f;
+inline auto seen_list(const palette& colours, const std::vector<seen_reader>& readers) {
+  namespace c = skiff::compose;
+  const float tall = std::min(kSeenMostTall, kSeenRow * static_cast<float>(readers.size()) + 10.0f);
+  return c::hovering(seen_list_says{},
+      c::column(c::vbox(0.0f, {.width = kSeenListWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f}, .cornerRadius = 10.0f,
+                               .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .masking = true}),
+                c::styled({.fill = true},
+                          nodes::ScrollContainer(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                              readers | std::views::transform([&](const seen_reader& one) { return reader_row(colours, one); }) |
+                                  std::ranges::to<std::vector>())))));
+}
 
 inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, const std::optional<emote>& emoji) {
   namespace c = skiff::compose;
@@ -196,356 +109,176 @@ inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, 
           c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(emoji && kept.emoji_is_favourite(emoji->url)
               ? "Remove from favorites" : "Add to favorites", 13.0f, colours.text)))));
 }
-struct context_menu : skiff::compose::Specced {
-  // Child references and handlers require a fixed address.
-  context_menu(const context_menu&) = delete;
-  context_menu& operator=(const context_menu&) = delete;
-  context_menu(context_menu&&) = delete;
-  context_menu& operator=(context_menu&&) = delete;
-
-  // A press off it, Esc in it: closed.
-  using Answer = ::mux::ui::request::close_menu;
-  struct card : skiff::compose::Stacked {
-    using Answer = ::mux::ui::request::close_menu;
-    // What plugins put at its top (contract::message_menu_top) -- the quick
-    // reactions -- each its head, and what it unrolls over the items as it
-    // asks: in their order, what is unrolled in a slot of its own.
-    template <class List>
-    struct plugin_tops;
-    template <class... Features>
-    struct plugin_tops<plugin_list<Features...>> {
-      // A head's ask to unroll its own over the items.
-      template <std::size_t At>
-      struct unroll {
-        card* of;
-        scene::Taken operator()() const {
-          of->template unroll_top<At>();
-          return {};
-        }
-      };
-      template <std::size_t At>
-      static auto head_of(const palette& colours, const menu_facts& facts, card* of) -> decltype(extend(contract::message_menu_top{}, type_tag<Features...[At]>{}, colours, facts, unroll<At>{of})) {
-        using feature = Features...[At];
-        static_assert(requires { extend(contract::message_menu_top{}, type_tag<feature>{}, colours, facts, unroll<At>{of}); },
-                      composition::broken<contract::message_menu_top, feature>());
-        return extend(contract::message_menu_top{}, type_tag<feature>{}, colours, facts, unroll<At>{of});
-      }
-      template <class Feature>
-      static auto over_of(const palette& colours, emoji_kept& kept) -> decltype(unrolled(contract::message_menu_top{}, type_tag<Feature>{}, colours, kept)) {
-        return unrolled(contract::message_menu_top{}, type_tag<Feature>{}, colours, kept);
-      }
-      template <class Indices>
-      struct heads_of;
-      template <std::size_t... At>
-      struct heads_of<std::index_sequence<At...>> {
-        using type = std::tuple<decltype(head_of<At>(std::declval<const palette&>(), std::declval<const menu_facts&>(), nullptr))...>;
-      };
-      using heads_t = typename heads_of<std::index_sequence_for<Features...>>::type;
-      using overs_t = std::tuple<std::optional<composition::node_t<decltype(over_of<Features>(
-          std::declval<const palette&>(), std::declval<emoji_kept&>()))>>...>;
-      static heads_t heads(const palette& colours, const menu_facts& facts, card* of) {
-        return [&]<std::size_t... At>(std::index_sequence<At...>) {
-          return heads_t{head_of<At>(colours, facts, of)...};
-        }(std::index_sequence_for<Features...>{});
-      }
-      // The head's own unrolled: made in its slot; the head told.
-      template <std::size_t At>
-      static auto& open(heads_t& heads, overs_t& overs, const palette& colours, emoji_kept& kept) {
-        using feature = Features...[At];
-        auto& made = composition::put(std::get<At>(overs), over_of<feature>(colours, kept));
-        unrolled_head(contract::message_menu_top{}, type_tag<feature>{}, std::get<At>(heads));
-        return made;
-      }
-    };
-    using tops_t = plugin_tops<composition::providers<contract::message_menu_top, enabled_plugins>>;
-    // The colours it is made in, for the emoji it unrolls; and the emoji
-    // kept, the program's.
-    const palette* colours_ = nullptr;
-    emoji_kept* kept_ = nullptr;
-    using reply_row = legacy::row_item<sends<::mux::ui::request::menu_reply>>;
-    using thread_row = legacy::row_item<sends<::mux::ui::request::menu_thread>>;
-    using quote_reply_row = legacy::row_item<sends<::mux::ui::request::menu_quote_reply>>;
-    using edit_row = legacy::row_item<sends<::mux::ui::request::menu_edit>>;
-    using later_row = legacy::row_item<not_yet>;
-    using copy_row = legacy::row_item<sends<::mux::ui::request::menu_copy>>;
-    using link_row = legacy::row_item<sends<::mux::ui::request::menu_copy_link>>;
-    using url_row = legacy::row_item<sends<::mux::ui::request::menu_copy_url>>;
-    using copy_image_row = legacy::row_item<sends<::mux::ui::request::menu_copy_image>>;
-    using save_row = legacy::row_item<sends<::mux::ui::request::menu_save>>;
-    // The rows plugins add to a message's menu (contract::message_menu),
-    // after Save As, in the plugins' order: each made by its extend(), found
-    // where the window is instantiated, which imports them (mux.plugins.ui).
-    template <class List>
-    struct plugin_rows;
-    template <class... Features>
-    struct plugin_rows<plugin_list<Features...>> {
-      template <class Feature>
-      static auto row_of(const palette& colours, const emoji_kept& kept, const menu_facts& facts) -> decltype(extend(contract::message_menu{}, type_tag<Feature>{}, colours, kept, facts)) {
-        static_assert(requires { extend(contract::message_menu{}, type_tag<Feature>{}, colours, kept, facts); },
-                      composition::broken<contract::message_menu, Feature>());
-        return extend(contract::message_menu{}, type_tag<Feature>{}, colours, kept, facts);
-      }
-      using nodes_t = std::tuple<decltype(row_of<Features>(std::declval<const palette&>(), std::declval<const emoji_kept&>(),
-                                                           std::declval<const menu_facts&>()))...>;
-      static nodes_t nodes(const palette& colours, const emoji_kept& kept, const menu_facts& facts) {
-        return nodes_t{row_of<Features>(colours, kept, facts)...};
-      }
-    };
-    using rows_t = plugin_rows<composition::providers<contract::message_menu, enabled_plugins>>;
-    using pin_row = legacy::row_item<sends<::mux::ui::request::menu_pin>>;
-    using forward_row = legacy::row_item<sends<::mux::ui::request::menu_forward>>;
-    using source_row = legacy::row_item<sends<::mux::ui::request::menu_view_source>>;
-    using history_row = legacy::row_item<sends<::mux::ui::request::menu_edit_history>>;
-    using select_row = legacy::row_item<sends<::mux::ui::request::menu_select>>;
-    using delete_row = legacy::row_item<sends<::mux::ui::request::menu_delete>>;
-    // As tdesktop's, in its order: the quick reactions; every emoji, in
-    // place of the rest once asked for; Reply, Edit, Pin, Copy, Copy
-    // Message Link, Save As, Forward, Delete; and who has seen it -- how
-    // many, and their names under it -- at the foot.
-    struct parts_t {
-      // The plugins' heads: the quick reactions, and the band under them.
-      typename tops_t::heads_t tops;
-      reply_row reply;
-      // Reply in thread, as Element's menu has it: a Matrix room's.
-      thread_row thread_reply;
-      // What is selected of another's message, quoted in an answer.
-      quote_reply_row quote_reply;
-      edit_row edit;
-      pin_row pin;
-      copy_row copy;
-      link_row copy_link;
-      // The link pressed on, in the text or its preview.
-      url_row copy_url;
-      decltype(emoji_favourite_row(std::declval<const palette&>(), std::declval<const emoji_kept&>(), std::optional<emote>{})) fave_emoji;
-      copy_image_row copy_image;
-      save_row save;
-      typename rows_t::nodes_t added;
-      forward_row forward;
-      source_row source;
-      history_row history;
-      select_row select;
-      delete_row remove;
-      nodes::Box<> seen_band;
-      seen_row seen;
-      // What a head unrolls -- every emoji, for the quick reactions -- once
-      // asked for: over the items, out of their flow, and after them, so
-      // drawn on top of them and pressed first.
-      typename tops_t::overs_t overs;
-    } parts;
-    bool unrolled_now = false;
-    // As Telegram's: what a head unrolls takes the room the items had under
-    // it, and unrolls down over them from the top; they stay under it until
-    // it is down, and the menu keeps its size -- grown only where the items
-    // left too little room for a list.
-    template <std::size_t At>
-    void unroll_top() {
-      if (std::exchange(unrolled_now, true))
-        return;
-      const skia::SkRect box = fState.contentBox();
-      const float top = std::get<At>(parts.tops).bounds().fBottom;
-      const float under = box.fBottom - top;
-      rolled = std::max(under, kEmojiLeast);
-      fState.apply({.minHeight = this->bounds().height() + (rolled - under)});
-      tops_t::template open<At>(parts.tops, parts.overs, *colours_, *kept_)
-          .apply({.place = scene::anchor::kTopLeft,
-                  .y = top - box.fTop,
-                  .fillX = true,
-                  .height = 0.0f,
-                  .background = colours_->sidebar,
-                  .masking = true});
-      unroll.jump(0.0f);
-      unroll.setTarget(rolled);
-      this->invalidateLayout();
-    }
-    // The items, once the list is down over them: gone, the menu keeping
-    // its size by its least height.
-    void hide_items() {
-      auto& [tops, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave_emoji, copy_image, save, added, forward, source, history, select, remove,
-             seen_band, seen, overs] = parts;
-      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_url, &fave_emoji, &copy_image, &save,
-                                                                   &forward, &source,
-                                                                   &remove, &seen_band, &seen})
-        item->setVisible(false);
-      std::apply([](auto&... row) { (row.setVisible(false), ...); }, added);
-      this->invalidateLayout();
-    }
-    static constexpr float kEmojiLeast = 220.0f;
-    float rolled = 0.0f;
-    skiff::paint::Tween unroll{0.0f, 220.0f};
-    [[nodiscard]] bool settling() const { return unroll.moving(); }
-    void update(double now_ms) {
-      if (unroll.step(now_ms) && unrolled_now) {
-        std::apply([&](auto&... over) { ((over ? over->apply({.height = unroll.value()}) : void()), ...); }, parts.overs);
-        if (!unroll.moving())
-          this->hide_items();
-        this->invalidateLayout();
-      }
-    }
-    // The keys, as tdesktop's menu takes them: Up and Down through its
-    // items, round; Enter does what is lit (the item's own); Esc closes it.
-    [[nodiscard]] bool focusable() const { return true; }
-    using Node::onKey;
-    std::optional<::mux::ui::request::close_menu> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
-      namespace keys = scene::keys;
-      if (press.key == keys::kUp || press.key == keys::kDown) {
-        reply.moveFocus(press.key == keys::kUp);
-      } else if (press.key == keys::kEscape) {
-        reply.handle();
-        return ::mux::ui::request::close_menu{};
-      }
-      return std::nullopt;
-    }
-    // What does not apply to the message left out.
-    card(const palette &colours, emoji_kept &kept, const menu_facts &facts,
-         scene::Spec placement = {})
-        : Stacked(skiff::compose::vbox(
-                      0.0f,
-                      {.autoSize = scene::axes::kBoth,
-                       .minWidth = 220.0f,
-                       .padding = {6.0f, 0.0f, 6.0f, 0.0f},
-                       .cornerRadius = 10.0f,
-                       .background = colours.popup(),
-                       .border = scene::Border{colours.band, 1.0f},
-                       .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0),
-                                               3.0f}}),
-                  placement),
-          colours_(&colours), kept_(&kept),
-          parts{
-              .tops = tops_t::heads(colours, facts, this),
-              .reply = reply_row(colours, "Reply", {}, icon::back{},
-                                 std::nullopt, menu_row_look),
-              .thread_reply = skiff::compose::visible(
-                  facts.can.threads && !facts.link.empty(),
-                  thread_row(colours, "Reply in thread", {}, icon::threads{},
-                             std::nullopt, menu_row_look)),
-              .quote_reply = skiff::compose::visible(
-                  facts.selection && !facts.own && !facts.copied.empty(),
-                  quote_reply_row(colours, "Quote & Reply", {}, icon::back{},
-                                  std::nullopt, menu_row_look)),
-              .edit = skiff::compose::visible(
-                  facts.editable && !facts.reaction &&
-                      ((!facts.text.empty() && !facts.media) ||
-                       facts.captioned),
-                  edit_row(colours, "Edit", {}, icon::sliders{}, std::nullopt,
-                           menu_row_look)),
-              .pin = skiff::compose::visible(
-                  facts.pinnable,
-                  pin_row(colours, facts.pinned ? "Unpin" : "Pin", {},
-                          icon::check{}, std::nullopt, menu_row_look)),
-              .copy = skiff::compose::visible(
-                  !facts.copied.empty(),
-                  copy_row(colours,
-                           facts.selection ? "Copy Selected Text" : "Copy Text",
-                           {}, icon::clip{}, std::nullopt, menu_row_look)),
-              .copy_link = skiff::compose::visible(
-                  !facts.link.empty(),
-                  link_row(colours, "Copy Message Link", {}, icon::info{},
-                           std::nullopt, menu_row_look)),
-              .copy_url = skiff::compose::visible(
-                  !facts.pressed_link.empty(),
-                  url_row(colours, "Copy Link", {}, icon::clip{}, std::nullopt,
-                          menu_row_look)),
-              .fave_emoji = emoji_favourite_row(colours, kept, facts.emoji),
-              .copy_image = skiff::compose::visible(
-                  facts.picture.has_value(),
-                  copy_image_row(colours, "Copy Image", {}, icon::clip{},
-                                 std::nullopt, menu_row_look)),
-              .save = skiff::compose::visible(
-                  facts.media.has_value(),
-                  save_row(colours, "Save As…", {}, icon::send{}, std::nullopt,
-                           menu_row_look)),
-              .added = rows_t::nodes(colours, kept, facts),
-              .forward = skiff::compose::visible(
-                  facts.can.forward,
-                  forward_row(colours, "Forward", {}, icon::send{},
-                              std::nullopt, menu_row_look)),
-              .source = skiff::compose::visible(
-                  facts.can.view_source && !facts.link.empty(),
-                  source_row(colours, "View Source", {}, icon::info{},
-                             std::nullopt, menu_row_look)),
-              .history = skiff::compose::visible(
-                  facts.history,
-                  history_row(colours, "Edit History", {}, icon::pencil{})),
-              .select = skiff::compose::visible(
-                  !facts.id.empty(),
-                  select_row(colours, "Select", {}, icon::check{})),
-              .remove = skiff::compose::visible(
-                  facts.deletable,
-                  delete_row(colours, "Delete", {}, icon::close{}, std::nullopt,
-                             menu_row_look)),
-              .seen_band =
-                  skiff::compose::styled({.fillX = true,
-                                          .height = 1.0f,
-                                          .margin = {4.0f, 0.0f, 4.0f, 0.0f}},
-                                         nodes::Box<>(colours.band)),
-              .seen = seen_row(colours, facts.seen)} {
-      fState.setFloats(true);  // over the chat: frosted live, where asked
-      auto& [tops, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave_emoji, copy_image, save, added, forward, source, history, select,
-             remove, seen_band, seen, overs] = parts;
-      // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
-      // 13px normalFont's line -- 33 high -- the icon 15 in, the text 54 in.
-      // One's own text, or one's own picture's caption, as Element edits it.
-      // Reactions can receive nested reactions; their relation itself is not edited.
-      // Reactions where the account sends them.
-
-      // A message the server named, where the account has threads, and its
-      // source: what was offered by being pinnable, a Matrix room's.
-
-      // Who reacted, as Telegram's menu lists them: wherever there are any.
-      // As wide as its widest -- the quick reactions -- and no narrower than a
-      // menu reads well at; the items fill that width.
-    }
+// What the menu's own parts do to what it has open: a top unrolled (its
+// place among the plugins' tops), the list of readers pointed at or left.
+template <class List>
+struct menu_events_of;
+template <class... Features>
+struct menu_events_of<plugin_list<Features...>> {
+  // Each's place among them, from 1: found by overloading on its tag.
+  template <class Feature, std::size_t At> struct slot_entry {
+    static constexpr std::size_t at(type_tag<Feature>) { return At; }
   };
-  struct parts_t {
-    card menu;
-    // Who has seen it, listed beside the menu: over the whole window, as the
-    // menu is.
-    std::optional<typename seen_row::submenu_t> seen_list;
-  } parts;
-
-  // Where it was asked for: the pointer.
-  float at_x = 0.0f, at_y = 0.0f;
-  context_menu(const ui_needs &n, const menu_facts &facts)
-      : Specced({.fill = true}),
-        parts{.menu = card(*n.colours, *n.emoji, facts,
-                           {.x = facts.x, .y = facts.y})},
-        at_x(facts.x), at_y(facts.y) {
-    parts.menu.parts.seen.window = &fState.fBounds;
-    parts.menu.parts.seen.submenu = &parts.seen_list;
-    parts.menu.parts.seen.layer = this;
+  template <class Seq> struct slots;
+  template <std::size_t... At> struct slots<std::index_sequence<At...>> : slot_entry<Features, At + 1>... {
+    using slot_entry<Features, At + 1>::at...;
+  };
+  template <class Feature>
+  static constexpr std::size_t slot_of() {
+    return slots<std::index_sequence_for<Features...>>::at(type_tag<Feature>{});
   }
-  // As tdesktop's popup menu: at the pointer, going down and right -- up
-  // where it would pass the window's bottom, left where it would pass its
-  // right -- and kept inside the window.
-  void layoutChildren() {
-    scene::layoutChildrenInContentBox(*this);
-    const skia::SkRect box = fState.contentBox();
-    auto& menu = parts.menu;
-    const float w = menu.bounds().width(), h = menu.bounds().height();
-    constexpr float kEdge = 8.0f;
-    float x = at_x, y = at_y;
-    if (box.fTop + y + h > box.fBottom - kEdge)
-      y = at_y - h;
-    if (box.fLeft + x + w > box.fRight - kEdge)
-      x = at_x - w;
-    x = std::clamp(x, kEdge, std::max(kEdge, box.width() - w - kEdge));
-    y = std::clamp(y, kEdge, std::max(kEdge, box.height() - h - kEdge));
-    if (x != placed_x || y != placed_y) {
-      placed_x = x;
-      placed_y = y;
-      menu.apply({.x = x, .y = y});
-      scene::layoutChildrenInContentBox(*this);
+  template <class Feature>
+  auto on(const contract::menu_unroll<Feature>&, const contract::message_menu_state& now) const {
+    auto next = now;
+    next.unrolled = slot_of<Feature>();
+    return skiff::model::over<contract::message_menu_state>(skiff::model::setTo(std::move(next)));
+  }
+  auto on(const seen_row_hovered& one, const contract::message_menu_state& now) const {
+    auto next = now;
+    next.seen_row = one.on;
+    if (one.on) {
+      next.seen_left = one.box.fLeft;
+      next.seen_top = one.box.fTop;
+      next.seen_right = one.box.fRight;
+      next.seen_bottom = one.box.fBottom;
     }
+    return skiff::model::over<contract::message_menu_state>(skiff::model::setTo(std::move(next)));
   }
-  float placed_x = -1.0f, placed_y = -1.0f;
-  // A press off the menu closes it.
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  using Node::onPointer;
-  ::mux::ui::request::close_menu onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
-    reply.handle();
-    return ::mux::ui::request::close_menu{};
+  auto on(const seen_list_hovered& one, const contract::message_menu_state& now) const {
+    auto next = now;
+    next.seen_list = one.on;
+    return skiff::model::over<contract::message_menu_state>(skiff::model::setTo(std::move(next)));
   }
 };
+// What plugins put at its top (contract::message_menu_top) -- the quick
+// reactions -- each its head, and what it unrolls over the items once it
+// asks, made then: in their order.
+template <class List>
+struct menu_tops;
+template <class... Features>
+struct menu_tops<plugin_list<Features...>> {
+  template <class Feature>
+  static auto head_of(const palette& colours, const menu_facts& facts) {
+    static_assert(requires { extend(contract::message_menu_top{}, type_tag<Feature>{}, colours, facts); },
+                  composition::broken<contract::message_menu_top, Feature>());
+    return extend(contract::message_menu_top{}, type_tag<Feature>{}, colours, facts);
+  }
+  static auto heads(const palette& colours, const menu_facts& facts) {
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}), head_of<Features>(colours, facts)...);
+  }
+  // Each's own, over the items: made once it unrolls, from their top,
+  // filling them -- grown where they left too little room for a list.
+  template <class Feature>
+  static auto over_of(const palette& colours, emoji_kept& kept) {
+    namespace c = skiff::compose;
+    using made_t = decltype(unrolled(contract::message_menu_top{}, type_tag<Feature>{}, colours, kept));
+    constexpr std::size_t slot = menu_events_of<plugin_list<Features...>>::template slot_of<Feature>();
+    return c::projected<contract::message_menu_state>(
+        [](const contract::message_menu_state& now) { return now.unrolled == slot ? std::optional(true) : std::nullopt; },
+        c::mount<made_t, bool>([at = &colours, from = &kept](bool) { return std::tuple{unrolled(contract::message_menu_top{}, type_tag<Feature>{}, *at, *from)}; },
+                               {.place = scene::anchor::kTopLeft, .fill = true, .background = colours.sidebar, .masking = true}));
+  }
+  static auto overs(const palette& colours, emoji_kept& kept) {
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), over_of<Features>(colours, kept)...);
+  }
+};
+using menu_tops_t = menu_tops<composition::providers<contract::message_menu_top, enabled_plugins>>;
+using menu_events = menu_events_of<composition::providers<contract::message_menu_top, enabled_plugins>>;
+// The rows plugins add to a message's menu (contract::message_menu), after
+// Save As, in the plugins' order.
+template <class List>
+struct menu_rows;
+template <class... Features>
+struct menu_rows<plugin_list<Features...>> {
+  template <class Feature>
+  static auto row_of(const palette& colours, const emoji_kept& kept, const menu_facts& facts) {
+    static_assert(requires { extend(contract::message_menu{}, type_tag<Feature>{}, colours, kept, facts); },
+                  composition::broken<contract::message_menu, Feature>());
+    return extend(contract::message_menu{}, type_tag<Feature>{}, colours, kept, facts);
+  }
+  static auto rows(const palette& colours, const emoji_kept& kept, const menu_facts& facts) {
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), row_of<Features>(colours, kept, facts)...);
+  }
+};
+using menu_rows_t = menu_rows<composition::providers<contract::message_menu, enabled_plugins>>;
+inline constexpr float kMenuListLeast = 220.0f;
+// A message's menu, as tdesktop's, in its order: the quick reactions; every
+// emoji, in place of the rest once asked for; Reply, Edit, Pin, Copy, Copy
+// Message Link, Save As, Forward, Delete; who has seen it at the foot -- how
+// many, and their names beside it as it is pointed at. What does not apply
+// to the message left out. At the pointer, going down and right -- up where
+// it would pass the window's bottom, left where it would pass its right --
+// and kept inside the window. Up and Down go through its items, Enter does
+// what is lit, Esc and a press off it close it.
+inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts& facts) {
+  namespace c = skiff::compose;
+  const auto item = [&](bool shown, std::string label, auto act, icon_t mark) {
+    return c::visible(shown, row_item(colours, std::move(label), std::move(act), mark, std::nullopt, menu_row_look));
+  };
+  auto items = c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      item(true, "Reply", sends<request::menu_reply>{}, icon::back{}),
+      item(facts.can.threads && !facts.link.empty(), "Reply in thread", sends<request::menu_thread>{}, icon::threads{}),
+      item(facts.selection && !facts.own && !facts.copied.empty(), "Quote & Reply", sends<request::menu_quote_reply>{}, icon::back{}),
+      item(facts.editable && !facts.reaction && ((!facts.text.empty() && !facts.media) || facts.captioned), "Edit", sends<request::menu_edit>{},
+           icon::sliders{}),
+      item(facts.pinnable, facts.pinned ? "Unpin" : "Pin", sends<request::menu_pin>{}, icon::check{}),
+      item(!facts.copied.empty(), facts.selection ? "Copy Selected Text" : "Copy Text", sends<request::menu_copy>{}, icon::clip{}),
+      item(!facts.link.empty(), "Copy Message Link", sends<request::menu_copy_link>{}, icon::info{}),
+      item(!facts.pressed_link.empty(), "Copy Link", sends<request::menu_copy_url>{}, icon::clip{}),
+      emoji_favourite_row(colours, kept, facts.emoji),
+      item(facts.picture.has_value(), "Copy Image", sends<request::menu_copy_image>{}, icon::clip{}),
+      item(facts.media.has_value(), "Save As\u2026", sends<request::menu_save>{}, icon::send{}),
+      menu_rows_t::rows(colours, kept, facts),
+      item(facts.can.forward, "Forward", sends<request::menu_forward>{}, icon::send{}),
+      item(facts.can.view_source && !facts.link.empty(), "View Source", sends<request::menu_view_source>{}, icon::info{}),
+      item(facts.history, "Edit History", sends<request::menu_edit_history>{}, icon::pencil{}),
+      item(!facts.id.empty(), "Select", sends<request::menu_select>{}, icon::check{}),
+      item(facts.deletable, "Delete", sends<request::menu_delete>{}, icon::close{}),
+      c::styled({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band)),
+      seen_row(colours, facts.seen));
+  return c::onClick(scene::Taken{},
+          c::moves_focus([](const scene::key::down& press) {
+                           return press.key == scene::keys::kEscape ? std::optional(request::close_menu{}) : std::nullopt;
+                         },
+                         c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth, .minWidth = 220.0f, .padding = {6.0f, 0.0f, 6.0f, 0.0f},
+                                                  .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
+                                                  .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
+              menu_tops_t::heads(colours, facts),
+              // The items, and over them what a top unrolled: the items kept
+              // under it, unseen, so the menu keeps its size -- grown only
+              // where they left too little room for a list.
+              c::spec_for<contract::message_menu_state>([](const contract::message_menu_state& now) {
+                return scene::Spec{.minHeight = now.unrolled ? kMenuListLeast : 0.0f};
+              },
+                  c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                            c::spec_for<contract::message_menu_state>([](const contract::message_menu_state& now) {
+                              return scene::Spec{.alpha = now.unrolled ? 0.0f : 1.0f, .disabled = now.unrolled != 0};
+                            }, std::move(items)),
+                            menu_tops_t::overs(colours, kept))))));
+}
+// The menu over the whole window: its card at the pointer, the readers'
+// list beside its row while pointed at; a press off them closes it.
+inline auto context_menu(const ui_needs& n, const menu_facts& facts) {
+  namespace c = skiff::compose;
+  const palette& colours = *n.colours;
+  const skiff::compose::PopAt at{.from = skia::SkRect::MakeXYWH(facts.x, facts.y, 0.0f, 0.0f)};
+  const bool readers = !facts.seen.empty();
+  return c::local<contract::message_menu_state>(menu_events{},
+      c::onClick(request::close_menu{},
+          c::column(c::vbox(0.0f, {.fill = true}),
+              c::popped_at<contract::message_menu_state>([at](const contract::message_menu_state&) { return std::optional(at); }, 8.0f,
+                                                         c::styled({}, menu_card(colours, *n.emoji, facts))),
+              c::popped_at<contract::message_menu_state>([readers](const contract::message_menu_state& now) -> std::optional<skiff::compose::PopAt> {
+                if (!readers || !(now.seen_row || now.seen_list))
+                  return std::nullopt;
+                return skiff::compose::PopAt{.from = skia::SkRect::MakeLTRB(now.seen_left, now.seen_top, now.seen_right, now.seen_bottom),
+                                             .beside = true, .overlap = 6.0f};
+              }, 8.0f, seen_list(colours, facts.seen)))));
+}
+using context_menu_t = decltype(context_menu(std::declval<const ui_needs&>(), std::declval<const menu_facts&>()));
+// Its card, for the keys' focus; and what a top unrolled, for the emoji
+// pictures it shows.
+[[nodiscard]] inline auto& card_of(context_menu_t& menu) { return std::get<0>(menu.fParts); }
 
 }  // namespace mux::ui
 
@@ -555,5 +288,5 @@ struct context_menu : skiff::compose::Specced {
 // of everything under it, there -- the chats screen's took this unit past
 // ten minutes. Their tables are made once, each in a walks unit of this
 // module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::context_menu> = true;  // walks_popups.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::context_menu>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::context_menu_t> = true;  // walks_popups.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::context_menu_t>() noexcept;

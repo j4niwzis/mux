@@ -375,6 +375,9 @@ auto layer_made_by(const Needs& needs) {
   return skiff::bind::Bound<std::optional<Facts>, made_layer<Facts, Needs, Make>>(std::in_place, layer_made<Needs, Make>{needs},
                                                                               scene::Spec{.fill = true}, true);
 }
+struct make_menu {
+  auto operator()(const ui_needs& n, const menu_facts& facts) const { return context_menu(n, facts); }
+};
 struct make_viewer {
   auto operator()(const ui_needs& n, const viewer_facts& facts) const { return picture_viewer(n, facts); }
 };
@@ -663,14 +666,14 @@ struct window : skiff::compose::Specced {
       shown_in<explore_box, explore_facts> explore;
       // A protocol's own dialog: Matrix's developer tools, for one.
       widgets::Dialog<tool_holder> tools;
-      shown_in<send_box, send_facts> sending;
+      shown_in<send_box_t, send_facts> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
       shown_in<passphrase_box_t, passphrase_facts> passphrase;
       // An emoji verification, as it goes.
       shown_in<verification_box, verification_view> verifying;
       skiff::bind::Bound<std::optional<emoji_facts>, shown_layer<emoji_popup, emoji_facts, ui_needs>> emoji;
-      skiff::bind::Bound<std::optional<menu_facts>, shown_layer<context_menu, menu_facts, ui_needs>> menu;
+      skiff::bind::Bound<std::optional<menu_facts>, made_layer<menu_facts, ui_needs, make_menu>> menu;
       skiff::bind::Bound<std::optional<viewer_facts>, made_layer<viewer_facts, ui_needs, make_viewer>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
       std::optional<text_menu> text_menu_up;
@@ -827,13 +830,13 @@ struct window : skiff::compose::Specced {
                 .wallpaper =
                     shown_made<wallpaper_box, wallpaper_facts>(n),
                 .explore = shown_made<explore_box, explore_facts>(n),
-                .sending = shown_made<send_box, send_facts>(n),
+                .sending = shown_made<send_box_t, send_facts>(n),
                 .passphrase =
                     shown_made<passphrase_box_t, passphrase_facts>(n),
                 .verifying =
                     shown_made<verification_box, verification_view>(n),
                 .emoji = layer_for<emoji_popup, emoji_facts>(n),
-                .menu = layer_for<context_menu, menu_facts>(n),
+                .menu = layer_made_by<menu_facts, make_menu>(n),
                 .viewer = layer_made_by<viewer_facts, make_viewer>(n),
                 .over_all = plugin_layers_t::made(n)} {
       // (A pack of the parts: bound in a generic lambda, the template a pack
@@ -980,7 +983,6 @@ struct window : skiff::compose::Specced {
     parts.now->over_chats([](auto&... over) { (layers::drop_of(over), ...); });
   }
 
-  [[nodiscard]] send_box* send_box_up() { return layer().sending.shown(); }
   [[nodiscard]] settings_view_t* settings_up() { return layer().settings.shown(); }
   // A selectable text's menu, where the pointer was pressed, kept in the
   // window; and gone.
@@ -1076,8 +1078,7 @@ struct window : skiff::compose::Specced {
     }
     // And those of what a message's menu unrolled: every emoji.
     if (auto* menu = layer().menu.shown())
-      std::apply([&](auto&... over) { ((over ? emote_pictures_in(*over, menu->parts.menu.bounds(), shown) : void()), ...); },
-                 menu->parts.menu.parts.overs);
+      emote_pictures_in(card_of(*menu), card_of(*menu).bounds(), shown);
     auto& screen = main();
     // The custom emoji the list over the composer shows.
     for (const suggestion& emoji : listed.items)
@@ -1096,7 +1097,7 @@ struct window : skiff::compose::Specced {
   // The menu's card, where one is up: what takes the keys while it is.
   [[nodiscard]] scene::Node* menu_card() {
     auto* up = layer().menu.shown();
-    return up ? &up->parts.menu : nullptr;
+    return up ? &card_of(*up) : nullptr;
   }
 
   void show_packs(std::vector<emote_pack> packs) {

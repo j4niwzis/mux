@@ -137,6 +137,91 @@ inline auto select_a_chat() {
                                            {.plate = skia::colorSetARGB(0x66, 0, 0, 0), .size = 13.0f, .height = 26.0f, .padX = 12.0f})));
 }
 
+// A node of the chat's protocol's own over the composer (a Telegram bot's
+// keyboard): listed by composer_views(state), made for
+// a chat by make_composer_view, found by ADL; none by default.
+template <class List>
+struct view_nodes;
+template <class... Vs>
+struct view_nodes<proto::sticker_view_list<Vs...>> {
+  using type = type_list<Vs...>;
+};
+template <class>
+struct protocol_composer_nodes;
+template <class... Tags>
+struct protocol_composer_nodes<protocol_list<Tags...>> {
+  using type = typename joined<
+      type_list<>, typename view_nodes<decltype(composer_views_for(::mux::state_of<Tags>{}))>::type...>::type;
+};
+using composer_view_t = typename variant_of_types<
+    typename joined<type_list<nodes::Text>, typename protocol_composer_nodes<protocols>::type>::type>::type;
+// And under the chat's header, over its messages (an IRC channel's topic
+// and modes, a Telegram channel's join button): head_views(state,
+// type_tag), made by make_head_view.
+template <class>
+struct protocol_head_nodes;
+template <class... Tags>
+struct protocol_head_nodes<protocol_list<Tags...>> {
+  using type = typename joined<
+      type_list<>, typename view_nodes<decltype(head_views_for(::mux::state_of<Tags>{}))>::type...>::type;
+};
+using head_view_t = typename variant_of_types<
+    typename joined<type_list<nodes::Text>, typename protocol_head_nodes<protocols>::type>::type>::type;
+using head_view_holder = skiff::compose::Holding<head_view_t>;
+using composer_view_holder = skiff::compose::Holding<composer_view_t>;
+
+// What plugins put in the chat's column under its head
+// (contract::chat_column), in their order.
+template <class List>
+struct column_parts;
+template <class... Features>
+struct column_parts<plugin_list<Features...>> {
+  template <class Feature>
+  static auto made_of(const ui_needs& n) -> decltype(extend(contract::chat_column{}, type_tag<Feature>{}, n)) {
+    static_assert(requires { extend(contract::chat_column{}, type_tag<Feature>{}, n); },
+                  composition::broken<contract::chat_column, Feature>());
+    return extend(contract::chat_column{}, type_tag<Feature>{}, n);
+  }
+  // One under another, in the plugins' order.
+  static auto column_of(const ui_needs& n) {
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), made_of<Features>(n)...);
+  }
+};
+using column_parts_t = column_parts<composition::providers<contract::chat_column, enabled_plugins>>;
+// The chat: its head (or its search, or the bar of messages selected),
+// the connection band, the pin, the plugins' parts under the head (a
+// call), its protocol's own node there, the messages, the list over the
+// composer, the banner over it, its protocol's node there (a bot's
+// keyboard), and where one writes -- while a chat is open; else the hint
+// to choose one, or, with no account at all, what to do about it. What
+// shows is what the program says.
+inline auto chat_column(const ui_needs& n) {
+  namespace c = skiff::compose;
+  const auto open = [](const chat_shown& now) { return now.chosen.has_value(); };
+  return c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX,
+                                  .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat}),
+      chat_header_for(*n.colours),
+      connection_bar_for<connection_shown>(*n.colours, &connection_shown::chat),
+      search_bar_for(*n.colours),
+      selection_bar(n),
+      pinned_bar_for(*n.colours),
+      column_parts_t::column_of(n),
+      std::optional<head_view_holder>{},
+      c::shown_for<chat_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, chat_area(n))),
+      suggestions_for(*n.colours),
+      composer_banner_for(*n.colours),
+      std::optional<composer_view_holder>{},
+      c::shown_for<chat_shown>(open, composer_bar<>(n)),
+      c::shown_for<chats_shown>([](const chats_shown& now) { return now.none; }, no_accounts_yet(*n.colours)),
+      c::shown_for<chats_shown>([](const chats_shown& now) { return !now.none && !now.chosen; }, select_a_chat()));
+}
+using chat_column_t = decltype(chat_column(std::declval<const ui_needs&>()));
+// Its parts, by where they are in it.
+struct chat_part {
+  static constexpr std::size_t header = 0, connection = 1, search = 2, selection = 3, pinned = 4, plugins = 5,
+                               their_head = 6, area = 7, suggestions = 8, banner = 9, their_view = 10, line = 11;
+};
+
 struct conversations_screen : skiff::compose::Stacked {
   // What its keys and its swipes ask for.
   using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::selection_copy, ::mux::ui::request::selection_delete, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of, ::mux::ui::request::suggestion_step, ::mux::ui::request::suggestion_pick, ::mux::ui::request::suggestion_close, ::mux::ui::request::thread_answer_cancel>;
@@ -470,89 +555,6 @@ struct conversations_screen : skiff::compose::Stacked {
   using side_column = ui::side_column<pick_folder>;
   // The chat: its header, its messages, and where one writes; or, with no
   // account at all, what to do about it.
-  // A node of the chat's protocol's own over the composer (a Telegram bot's
-  // keyboard): listed by composer_views(state), made for
-  // a chat by make_composer_view, found by ADL; none by default.
-  template <class List>
-  struct view_nodes;
-  template <class... Vs>
-  struct view_nodes<proto::sticker_view_list<Vs...>> {
-    using type = type_list<Vs...>;
-  };
-  template <class>
-  struct protocol_composer_nodes;
-  template <class... Tags>
-  struct protocol_composer_nodes<protocol_list<Tags...>> {
-    using type = typename joined<
-        type_list<>, typename view_nodes<decltype(composer_views_for(::mux::state_of<Tags>{}))>::type...>::type;
-  };
-  using composer_view_t = typename variant_of_types<
-      typename joined<type_list<nodes::Text>, typename protocol_composer_nodes<protocols>::type>::type>::type;
-  // And under the chat's header, over its messages (an IRC channel's topic
-  // and modes, a Telegram channel's join button): head_views(state,
-  // type_tag), made by make_head_view.
-  template <class>
-  struct protocol_head_nodes;
-  template <class... Tags>
-  struct protocol_head_nodes<protocol_list<Tags...>> {
-    using type = typename joined<
-        type_list<>, typename view_nodes<decltype(head_views_for(::mux::state_of<Tags>{}))>::type...>::type;
-  };
-  using head_view_t = typename variant_of_types<
-      typename joined<type_list<nodes::Text>, typename protocol_head_nodes<protocols>::type>::type>::type;
-  using head_view_holder = skiff::compose::Holding<head_view_t>;
-  using composer_view_holder = skiff::compose::Holding<composer_view_t>;
-  // What plugins put in the chat's column under its head
-  // (contract::chat_column), in their order.
-  template <class List>
-  struct column_parts;
-  template <class... Features>
-  struct column_parts<plugin_list<Features...>> {
-    template <class Feature>
-    static auto made_of(const ui_needs& n) -> decltype(extend(contract::chat_column{}, type_tag<Feature>{}, n)) {
-      static_assert(requires { extend(contract::chat_column{}, type_tag<Feature>{}, n); },
-                    composition::broken<contract::chat_column, Feature>());
-      return extend(contract::chat_column{}, type_tag<Feature>{}, n);
-    }
-    // One under another, in the plugins' order.
-    static auto column_of(const ui_needs& n) {
-      return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), made_of<Features>(n)...);
-    }
-  };
-  using column_parts_t = column_parts<composition::providers<contract::chat_column, enabled_plugins>>;
-  // The chat: its head (or its search, or the bar of messages selected),
-  // the connection band, the pin, the plugins' parts under the head (a
-  // call), its protocol's own node there, the messages, the list over the
-  // composer, the banner over it, its protocol's node there (a bot's
-  // keyboard), and where one writes -- while a chat is open; else the hint
-  // to choose one, or, with no account at all, what to do about it. What
-  // shows is what the program says.
-  static auto chat_column(const ui_needs& n) {
-    namespace c = skiff::compose;
-    const auto open = [](const chat_shown& now) { return now.chosen.has_value(); };
-    return c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX,
-                                    .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat}),
-        chat_header_for(*n.colours),
-        connection_bar_for<connection_shown>(*n.colours, &connection_shown::chat),
-        search_bar_for(*n.colours),
-        selection_bar(n),
-        pinned_bar_for(*n.colours),
-        column_parts_t::column_of(n),
-        std::optional<head_view_holder>{},
-        c::shown_for<chat_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, chat_area(n))),
-        suggestions_for(*n.colours),
-        composer_banner_for(*n.colours),
-        std::optional<composer_view_holder>{},
-        c::shown_for<chat_shown>(open, composer_bar<>(n)),
-        c::shown_for<chats_shown>([](const chats_shown& now) { return now.none; }, no_accounts_yet(*n.colours)),
-        c::shown_for<chats_shown>([](const chats_shown& now) { return !now.none && !now.chosen; }, select_a_chat()));
-  }
-  using chat_column_t = decltype(chat_column(std::declval<const ui_needs&>()));
-  // Its parts, by where they are in it.
-  struct chat_part {
-    static constexpr std::size_t header = 0, connection = 1, search = 2, selection = 3, pinned = 4, plugins = 5,
-                                 their_head = 6, area = 7, suggestions = 8, banner = 9, their_view = 10, line = 11;
-  };
   using side_edge = decltype(drag_edge(std::declval<const palette&>(), resize_sidebar_to{}));
   using info_edge_t = decltype(drag_edge(std::declval<const palette&>(), resize_info_to{}, false));
   struct parts_t {

@@ -238,12 +238,11 @@ class outbox_part {
     files_thread_.reset();
     mux::ui::show<mux::ui::send_facts>(*s_->showing, std::nullopt);
   }
-  void apply(const request::send_files&) {
+  void apply(const request::send_files& one) {
     const auto& chosen = s_->root().main().chosen;
-    auto* box = s_->root().send_box_up();
-    if (!chosen || !box || to_send_.empty())
+    if (!chosen || to_send_.empty())
       return;
-    std::string caption = box->parts.caption.text();
+    std::string caption = one.caption;
     auto& screen = s_->root().main();
     // Into a thread: its root and its latest, and what is answered in it.
     std::optional<mux::thread_place> thread;

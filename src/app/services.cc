@@ -87,6 +87,9 @@ struct services {
   bool newest_due = false;
   // A text sent, or asked as a command: the ways back from jumps let go.
   bool returns_due = false;
+  // Where the pointer was last pressed: where a menu that press asked for
+  // goes.
+  skia::SkPoint last_press{};
   // What is left written in each chat, as the program keeps it; and how
   // many times that changed, for what lists the chats to see it moved.
   std::map<conversation_id, std::string> drafts;
@@ -170,7 +173,7 @@ struct services {
   }
   void close_emoji() const {
     mux::ui::show<mux::ui::emoji_facts>(*showing, std::nullopt);
-    this->root().emoji_closed();
+    ui.set_docked_panel_height(0.0f);  // the field back at the bottom
   }
   [[nodiscard]] bool emoji_open() const { return showing->root().emoji.fValue.has_value(); }
   // The threads' panel, as what is shown says: opened on a thread, the
@@ -215,7 +218,7 @@ struct services {
   }
   // A text menu, at the press that asked for it; and let go of.
   void show_text_menu(std::vector<mux::ui::text_menu_item> items, std::optional<skiff::scene::text_menu::of_field> field = std::nullopt) const {
-    mux::ui::show(*showing, std::optional(mux::ui::text_menu_at(std::move(items), std::move(field), root().last_press(), scene->viewport())));
+    mux::ui::show(*showing, std::optional(mux::ui::text_menu_at(std::move(items), std::move(field), last_press, scene->viewport())));
   }
   void close_text_menu() const { mux::ui::show<mux::ui::text_menu_facts>(*showing, std::nullopt); }
   void close_notice() const { mux::ui::show<mux::ui::notice_facts>(*showing, std::nullopt); }
@@ -242,7 +245,7 @@ struct services {
   // The chosen account, and its accounts page, when they are up.
   template <class F>
   void with_chosen_account(F&& f) {
-    auto* up = root().open_panel();
+    auto* up = mux::ui::open_panel(root());
     if (!up)
       return;
     spl::visit(

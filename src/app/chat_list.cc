@@ -136,7 +136,7 @@ class chat_list_part {
       asked(request::reply_step{true});
     else if (one.key == keys::kDown && one.control)
       asked(request::reply_step{false});
-    else if (one.key == keys::kUp && !any && mux::ui::composer_text(s_->root().chat_line()).empty())
+    else if (one.key == keys::kUp && !any && mux::ui::composer_text(mux::ui::chat_line_of(s_->root())).empty())
       asked(request::edit_last{});
     else if (one.key == keys::kC && one.control && selected)
       asked(request::selection_copy{});

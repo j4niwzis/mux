@@ -27,7 +27,7 @@ class search_part {
     if (!searching_ || searching_->in != *s_->chosen())
       searching_ = state{*s_->chosen(), {}, {}, std::nullopt};
     mux::ui::show(*s_->showing, mux::ui::search_found{.open = true});
-    s_->scene->focus(screen.search_field());
+    s_->scene->focus(mux::ui::search_field_of(screen));
   }
   void apply(const request::close_search&) {
     searching_.reset();

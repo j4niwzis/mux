@@ -39,6 +39,6 @@ template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ap
 
 namespace mux::app {
 window_scene::window_scene(const mux::ui::ui_needs& needs)
-    : fScene(std::in_place, needs) {}
+    : fScene(std::in_place, mux::ui::window_view(needs)) {}
 window_scene::~window_scene() { std::destroy_at(&fScene); }
 }

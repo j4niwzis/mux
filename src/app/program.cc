@@ -353,8 +353,11 @@ struct app : kept_settings {
   mux::ui::palette colours;
   std::optional<mux::config::style_settings> active_style;
   actions ask;
-  window_scene scene_storage{mux::ui::ui_needs{.sound = &speaker, .colours = &colours, .emoji = &shared.emoji,
-      .looks = &shared.looks, .paint = &shared.paint, .shared = &shared.ui}};
+  // What the window is made with: the program's own, which its nodes point
+  // at for as long as it is.
+  mux::ui::ui_needs window_needs{.sound = &speaker, .colours = &colours, .emoji = &shared.emoji,
+                                 .looks = &shared.looks, .paint = &shared.paint, .shared = &shared.ui};
+  window_scene scene_storage{window_needs};
   skiff::scene::Scene<window_type>& scene = scene_storage.get();
 
   // -- what the host asks
@@ -486,6 +489,9 @@ struct app : kept_settings {
   // the oldest in memory, from the server past that.
   // A window around a message jumped to, and a window paged forward.
   void apply(const request::resize_sidebar& one);
+  void apply(const request::escape&);
+  void apply(const request::copy_selected&);
+  void apply(const request::pressed_at& one);
   // A member written to: their direct chat, where there is one already.
   void apply(const request::message_person& one);
   void apply(const request::jump_to_message& one);

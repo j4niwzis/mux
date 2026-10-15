@@ -111,10 +111,10 @@ void part_apply(menu_part& self, const request::menu_quote_reply&) {
   // Into the field that answers it: the thread's, where it is answered there.
   auto& screen = self.s_->root();
   if (self.s_->showing->look<mux::ui::chat_shown>()->thread_answer == self.target_.id) {
-    mux::ui::prepend_quote(mux::ui::composer_field(screen.thread_line()), fragment);
+    mux::ui::prepend_quote(mux::ui::composer_field(mux::ui::thread_line_of(screen)), fragment);
     return;
   }
-  mux::ui::prepend_quote(mux::ui::composer_field(screen.chat_line()), fragment);
+  mux::ui::prepend_quote(mux::ui::composer_field(mux::ui::chat_line_of(screen)), fragment);
 }
 
 void part_apply(menu_part& self, const request::menu_reply&) {

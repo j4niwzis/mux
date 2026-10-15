@@ -545,6 +545,15 @@ struct set_events_way {
   mux::choice_level_t level;
   std::size_t way = 0;
 };
+// Esc on the window, something up to let go of: what, the program says.
+struct escape {};
+// Ctrl+C, nothing under the keys having taken it: what any text shows
+// selected copied.
+struct copy_selected {};
+// The pointer pressed, where: where a menu that press asks for is put.
+struct pressed_at {
+  float x = 0.0f, y = 0.0f;
+};
 // The text menu let go of: pressed off, Esc, or done.
 struct close_text_menu {};
 struct text_formatting {

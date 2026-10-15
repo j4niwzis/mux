@@ -333,11 +333,11 @@ skiff::scene::NodeId bound_part_of(Page& page) {
 }
 void app::take_page_input() {
   std::array<skiff::scene::NodeId, 3> now{};
-  if (auto* up = root().settings_up())
+  if (auto* up = mux::ui::settings_up(root()))
     now[0] = spl::visit([](auto& page) { return bound_part_of(page); }, up->page());
-  if (auto* managing = root().manage_up())
+  if (auto* managing = mux::ui::manage_up(root()))
     now[1] = managing->fState.fId;
-  if (auto* panel = root().open_panel())
+  if (auto* panel = mux::ui::open_panel(root()))
     now[2] = spl::visit([](auto& accounts) { return spl::visit([](auto& page) { return bound_part_of(page); }, accounts.detail); },
                         *panel);
   if (now != bound_pages) {
@@ -438,7 +438,7 @@ void app::take_wants() {
 }
 
 void app::refresh_shown() {
-  root().show_drawer(*model, shared.listed());
+  mux::ui::show_drawer(root(), state.root().accounts.values(), *model, shared.listed());
   // The looks as their choices show them: what the window last read of
   // what is kept, for the chat chosen.
   looks.read();
@@ -447,7 +447,7 @@ void app::refresh_shown() {
     mux::ui::change_shown<mux::ui::chat_shown>(showing, [](auto& now) { now.forum.reset(); });
   shared.read_shown_now();
   if (std::exchange(shared.menu_focus_due, false))
-    if (skiff::scene::Node* card = root().menu_card())
+    if (skiff::scene::Node* card = mux::ui::menu_card(root()))
       scene.focus(*card);
 }
 
@@ -504,6 +504,10 @@ void app::before_frame() {
   suggestions.show();
   threads.show();
   pictures.viewer_tick();
+  // Whether Esc lets go of something up: a dialog, a layer, the drawer.
+  if (const mux::ui::overlay_shown up{mux::ui::escape_in(showing, mux::ui::escape_order{}).has_value() || showing.look<mux::ui::drawer_shown>()->out};
+      *showing.look<mux::ui::overlay_shown>() != up)
+    mux::ui::show(showing, up);
   // And the looks, as the chats binding last read them for the chat chosen.
   looks.read();
   // The window's shape, as its size is: and the panel docked under the
@@ -521,18 +525,18 @@ void app::before_frame() {
   this->take_page_input();
   // What the screen came to want as it was updated: done.
   this->take_wants();
-  root().drop_closed();
+  mux::ui::drop_closed(root());
   // What has been on screen in the chat shown is read, as far as it goes,
   // as in tdesktop: the chat list's counts go down as it is read, not all
   // at once when it is opened or left.
-  if (const auto& chosen = shared.chosen(); chosen && !root().open_panel() && !root().settings_up())
+  if (const auto& chosen = shared.chosen(); chosen && !mux::ui::open_panel(root()) && !mux::ui::settings_up(root()))
     if (const auto seen = jumps.last_seen(); seen && reading.mark_seen(*chosen, *seen))
       this->refresh();
   // The mentions and reactions for the user whose messages are on screen,
   // seen -- only those, as tdesktop's.
   if (const auto& chosen = shared.chosen())
     if (const mux::conversation* chat = model->find(*chosen);
-        chat && (!chat->unread_mentions.empty() || !chat->unread_reactions.empty()) && !root().open_panel()) {
+        chat && (!chat->unread_mentions.empty() || !chat->unread_reactions.empty()) && !mux::ui::open_panel(root())) {
       auto shown = jumps.shown_now();
       const auto marked = [&](const mux::unread_mark& mark) { return std::ranges::contains(shown, mark.target); };
       if (std::ranges::any_of(chat->unread_mentions, marked) || std::ranges::any_of(chat->unread_reactions, marked)) {
@@ -546,19 +550,19 @@ void app::before_frame() {
   // as in tdesktop.
   // Not under a finger: there the keys' focus is the text input started,
   // and a phone's keyboard up over the chat until it is put away.
-  if (scene.focusedId() == 0 && !shared.by_touch && shared.chosen() && !root().open_panel() && !root().settings_up())
-    scene.focus(mux::ui::composer_field(root().chat_line()));
+  if (scene.focusedId() == 0 && !shared.by_touch && shared.chosen() && !mux::ui::open_panel(root()) && !mux::ui::settings_up(root()))
+    scene.focus(mux::ui::composer_field(mux::ui::chat_line_of(root())));
   // The emoji panel's stickers in view, asked for as they change -- as it
   // opens, as it scrolls, as its tab or its search changes -- and not only
   // when something else refreshed the window.
-  if (auto shown = root().emoji_pictures_shown(*showing.look<mux::ui::suggestions_shown>()); shown != shared.ui.panel_pictures_shown) {
+  if (auto shown = mux::ui::emoji_pictures_shown(root(), *showing.look<mux::ui::suggestions_shown>()); shown != shared.ui.panel_pictures_shown) {
     shared.ui.panel_pictures_shown = std::move(shown);
     shared.ui.pictures_due = true;
   }
   const auto style = reads().style_of(shared.listed(), shared.chosen());
   // Text fields save as they are edited; apply when the editor closes or
   // its Apply button is pressed, so rebuilding cannot interrupt typing.
-  if ((!root().settings_up() && !root().manage_up() && !root().open_panel()) &&
+  if ((!mux::ui::settings_up(root()) && !mux::ui::manage_up(root()) && !mux::ui::open_panel(root())) &&
       (!active_style || *active_style != style)) {
     active_style = style;
     skiff::scene::forgetStyles();
@@ -568,7 +572,7 @@ void app::before_frame() {
   keep_selection(menu);
   // A selectable text or a field pressed with the right button -- a long
   // press, on a phone: its menu, the last asked for.
-  if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !root().context_menu_up())
+  if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !mux::ui::context_menu_up(root()))
     spl::visit(spl::overloaded{[&](skiff::scene::text_menu::of_text& text) {
                                        shared.show_text_menu(mux::ui::text_menu_items(std::move(text.text), std::move(text.link), shared.emoji));
                                      },
@@ -597,16 +601,16 @@ void app::before_frame() {
       now.favourite_stickers = shared.emoji.favourite_stickers;
     });
   }
-  if (shared.drawer_waits && !root().pages_moving()) {
+  if (shared.drawer_waits && !mux::ui::pages_moving(root())) {
     mux::ui::show(showing, mux::ui::drawer_shown{false});
-    root().close_drawer_now();
+    mux::ui::close_drawer_now(root());
     shared.drawer_waits = false;
   }
 }
 
 void app::closing() {
   if (const auto& chosen = shared.chosen())
-    drafts.keep(*chosen, mux::ui::composer_plain(root().chat_line()));
+    drafts.keep(*chosen, mux::ui::composer_plain(mux::ui::chat_line_of(root())));
   store.flush_reads(true);
   net->shutdown();
 }
@@ -643,7 +647,7 @@ void app::refresh(std::source_location from) {
   pictures.ask();
   // The accounts page, where it is up: the account being added shown in,
   // and the chats then.
-  if (auto* up = root().open_panel())
+  if (auto* up = mux::ui::open_panel(root()))
     if (spl::visit([this](auto& panel) { return accounts_screen.bring_up_to_date(panel); }, *up))
       this->show_conversations();
 }
@@ -720,4 +724,21 @@ void app::apply(const request::give_passphrase& one) {
 
 // From an account's Privacy page: its room keys, to a file or from one.
 
+}  // namespace mux::app
+
+namespace mux::app {
+// Esc on the window: the top-most up let go of, as what is shown says; else
+// the drawer pushed back.
+void app::apply(const request::escape&) {
+  if (auto asked = mux::ui::escape_in(showing, mux::ui::escape_order{}))
+    std::visit([&](const auto& one) { this->route(one); }, *asked);
+  else if (showing.look<mux::ui::drawer_shown>()->out)
+    this->route(request::close_drawer{});
+}
+// Ctrl+C on the window: what any text shows selected, copied.
+void app::apply(const request::copy_selected&) {
+  if (const std::string selected = skiff::scene::selectedText(); !selected.empty())
+    skiff::scene::setClipboardText(selected);
+}
+void app::apply(const request::pressed_at& one) { shared.last_press = skia::SkPoint::Make(one.x, one.y); }
 }  // namespace mux::app

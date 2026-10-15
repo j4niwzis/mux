@@ -24,7 +24,7 @@ import splice.bytes;
 namespace mux::app {
 
 void app::rebuild_in_theme() {
-  const float settings_at = root().settings_up() ? root().settings_up()->offset() : 0.0f;
+  const float settings_at = mux::ui::settings_up(root()) ? mux::ui::settings_up(root())->offset() : 0.0f;
   const auto style = reads().style_of(shared.listed(), shared.chosen());
   active_style = style;
   const auto theme = style.theme.value_or(this->appearance().theme);
@@ -46,7 +46,7 @@ void app::rebuild_in_theme() {
     shared.notice("Fonts", "The selected font could not be loaded. Enter an installed family or a font file path.");
   accounts_screen.forget_login();
   shared.drawer_waits = false;
-  root().rebuild();
+  mux::ui::change_shown<mux::ui::window_made>(showing, [](mux::ui::window_made& now) { ++now.count; });
   // The new tree has not read the saved settings or chats, even when the
   // models' revisions match what the old tree last read.
   window_binding.invalidate();
@@ -66,7 +66,7 @@ void app::rebuild_in_theme() {
   showing_binding.invalidate();
   this->refresh_shown();
   this->refresh();
-  if (auto* up = root().settings_up())
+  if (auto* up = mux::ui::settings_up(root()))
     up->keepOffset(settings_at);
 }
 

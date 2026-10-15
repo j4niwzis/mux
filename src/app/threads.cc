@@ -57,11 +57,11 @@ class threads_part {
   void apply(const request::thread_send&) {
     auto& screen = s_->root();
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
-    const std::string text = mux::ui::composer_plain(screen.thread_line());
+    const std::string text = mux::ui::composer_plain(mux::ui::thread_line_of(screen));
     if (!shown.thread || text.empty())
       return;
-    request::send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(screen.thread_line())};
-    mux::ui::clear_composer(screen.thread_line());
+    request::send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(mux::ui::thread_line_of(screen))};
+    mux::ui::clear_composer(mux::ui::thread_line_of(screen));
     s_->stop_thread_answer();
     this->apply(asked);
   }

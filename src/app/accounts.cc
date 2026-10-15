@@ -36,7 +36,7 @@ class accounts_part {
   // What is beside the list said too; shown as the panel is brought up to
   // date, at the next frame.
   void show_accounts(mux::ui::panel_detail_t detail = mux::ui::panel_detail::none{}) {
-    if (s_->root().drawer_open())
+    if (mux::ui::drawer_open(s_->root()))
       s_->drawer_waits = true;
     mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt);
     pending_login_.reset();
@@ -50,7 +50,7 @@ class accounts_part {
   accounts* show_account_now(const std::string& address) {
     this->show_account(address);
     s_->read_shown_now();
-    auto* up = s_->root().open_panel();
+    auto* up = mux::ui::open_panel(s_->root());
     if (!up)
       return nullptr;
     accounts* panel = up->visit(spl::overloaded{[](accounts& one) -> accounts* { return &one; }});
@@ -99,7 +99,7 @@ class accounts_part {
     s_->refresh_due = true;
   }
   void apply(const request::select_account& one) {
-    auto* up = s_->root().open_panel();
+    auto* up = mux::ui::open_panel(s_->root());
     if (!up)
       return;
     spl::visit(
@@ -128,7 +128,7 @@ class accounts_part {
   }
   // The form sent: an account edited, or a new one added.
   void apply(const request::submit_login&) {
-    auto* up = s_->root().open_panel();
+    auto* up = mux::ui::open_panel(s_->root());
     if (!up)
       return;
     spl::visit(
@@ -167,7 +167,7 @@ class accounts_part {
   }
   // The proxy the account being added is to go through.
   void apply(const request::choose_new_proxy& one) {
-    if (auto* up = s_->root().open_panel())
+    if (auto* up = mux::ui::open_panel(s_->root()))
       spl::visit(
           [&](accounts& panel) {
             if (auto* pane = panel.adding())
@@ -176,7 +176,7 @@ class accounts_part {
           *up);
   }
   void apply(const request::close_account_pages&) {
-    if (auto* up = s_->root().open_panel())
+    if (auto* up = mux::ui::open_panel(s_->root()))
       spl::visit([](accounts& panel) { panel.close_pages(); }, *up);
   }
   // A page of the chosen account: one that wants something of the server
@@ -192,7 +192,7 @@ class accounts_part {
  private:
   // The panel that is up, if one is, and the form in it, if there is one.
   [[nodiscard]] mux::ui::account_form* form_up() {
-    auto* up = s_->root().open_panel();
+    auto* up = mux::ui::open_panel(s_->root());
     if (!up)
       return nullptr;
     return spl::visit([](auto& panel) { return panel.form(); }, *up);
@@ -287,7 +287,7 @@ class accounts_part {
   // Written, and what went wrong said on the accounts page.
   void save() {
     if (auto failed = k_->write())
-      if (auto* up = s_->root().open_panel())
+      if (auto* up = mux::ui::open_panel(s_->root()))
         spl::visit([&](accounts& panel) { panel.say(*failed); }, *up);
   }
 

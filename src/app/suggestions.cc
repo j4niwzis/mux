@@ -37,7 +37,7 @@ class suggestions_part {
     auto& screen = s_->root();
     const auto& chosen = s_->showing->look<mux::ui::chat_shown>()->chosen;
     const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
-    const std::optional<asked_t> now = chat ? asked_in(mux::ui::composer_text(screen.chat_line()), *chat) : std::nullopt;
+    const std::optional<asked_t> now = chat ? asked_in(mux::ui::composer_text(mux::ui::chat_line_of(screen)), *chat) : std::nullopt;
     if (now == asked_)
       return;
     asked_ = now;
@@ -67,7 +67,7 @@ class suggestions_part {
     if (at >= items_.size() || !asked_)
       return;
     const mux::ui::suggestion picked = items_[at];
-    auto& line = s_->root().chat_line();
+    auto& line = mux::ui::chat_line_of(s_->root());
     const std::string& text = mux::ui::composer_text(line);
     spl::visit(spl::overloaded{[&](const mention_asked&) {
                                  if (const auto sign = text.rfind('@'); sign != std::string::npos)

@@ -718,7 +718,7 @@ void program_told(App& app, const verification_changed& one) {
 template <class App, class Then>
 void on_sessions_page(App& app, const account_id& by, Then then) {
   using accounts = typename App::accounts;
-  if (auto* up = app.root().open_panel())
+  if (auto* up = mux::ui::open_panel(app.root()))
     spl::visit([&](accounts& panel) {
                     if (auto* page = panel.template shown_page<sessions_page>();
                         page && panel.selected == by.address)

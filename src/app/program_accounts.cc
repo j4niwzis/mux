@@ -108,7 +108,7 @@ void app::apply(const request::resize_info& one) {
 }
 
 void app::apply(const request::accounts_back&) {
-  auto* up = root().open_panel();
+  auto* up = mux::ui::open_panel(root());
   if (!up)
     return;
   spl::visit(

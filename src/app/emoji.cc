@@ -52,7 +52,7 @@ void part_apply(emoji_part& self, const request::toggle_emoji&) {
     return;
   }
   self.into_ = request::writing::chat{};
-  const auto at = mux::ui::input_emoji(mux::ui::composer_input(self.s_->root().chat_line())).bounds();
+  const auto at = mux::ui::input_emoji(mux::ui::composer_input(mux::ui::chat_line_of(self.s_->root()))).bounds();
   open_at(self, at.fRight, at.fTop);
 }
 
@@ -62,7 +62,7 @@ void part_apply(emoji_part& self, const request::toggle_thread_emoji&) {
     return;
   }
   self.into_ = request::writing::thread{};
-  const auto at = mux::ui::input_emoji(mux::ui::composer_input(self.s_->root().thread_line())).bounds();
+  const auto at = mux::ui::input_emoji(mux::ui::composer_input(mux::ui::thread_line_of(self.s_->root()))).bounds();
   open_at(self, at.fRight, at.fTop);
 }
 
@@ -88,8 +88,8 @@ void part_apply(emoji_part& self, const request::insert_emoji& one) {
     if (!self.s_->by_touch)
       self.s_->scene->focus(field);
   };
-  spl::visit(spl::overloaded{[&](request::writing::chat) { put(mux::ui::composer_field(screen.chat_line())); },
-                                   [&](request::writing::thread) { put(mux::ui::composer_field(screen.thread_line())); }},
+  spl::visit(spl::overloaded{[&](request::writing::chat) { put(mux::ui::composer_field(mux::ui::chat_line_of(screen))); },
+                                   [&](request::writing::thread) { put(mux::ui::composer_field(mux::ui::thread_line_of(screen))); }},
                 self.into_);
 }
 

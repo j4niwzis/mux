@@ -77,6 +77,14 @@ using proxy_row_t = decltype(proxy_row(std::declval<const palette&>(), proxy_cho
   return spl::visit([](auto tag) { return std::string(form_of_t<decltype(tag)>::note); }, speaks);
 }
 
+// The protocol's form, in a box of its own -- the form is one of the
+// protocols' (a variant), the box what comes in as it is made.
+inline auto adding_form(const ui_needs& n, const protocol_t& speaks) {
+  namespace c = skiff::compose;
+  return c::appearing(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), account_form_view(n, speaks)), 0.0f);
+}
+using adding_form_t = decltype(adding_form(std::declval<const ui_needs&>(), protocol_t{}));
+
 // Adding an account, beside the list of them: the switch, what its protocol
 // says, the proxy row, and that protocol's form under them -- made anew
 // where the protocol changes, coming in as it does.
@@ -95,9 +103,8 @@ inline auto add_account_view(const ui_needs& n) {
               [at = &colours](const proxy_choice& now) { return std::tuple{proxy_row(*at, now)}; },
               {.fillX = true, .autoSize = scene::axes::kY})),
       c::projected<add_account_shown>([](const add_account_shown& now) { return now.speaks; },
-          c::mount<c::Appearing<account_form_view_t>, protocol_t>(
-              [at = &n](const protocol_t& speaks) { return std::tuple{c::appearing(true, account_form_view(*at, speaks), 0.0f)}; },
-              {.fillX = true, .grow = scene::axes::kY})));
+          c::mount<adding_form_t, protocol_t>([at = &n](const protocol_t& speaks) { return std::tuple{adding_form(*at, speaks)}; },
+                                              {.fillX = true, .grow = scene::axes::kY})));
 }
 using add_account_view_t = decltype(add_account_view(std::declval<const ui_needs&>()));
 

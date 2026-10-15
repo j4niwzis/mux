@@ -58,11 +58,32 @@ class accounts_part {
     return panel;
   }
   // Adding an account: beside the list, on the accounts page.
-  void show_adding() { this->show_accounts(mux::ui::panel_detail::adding{std::nullopt}); }
+  void show_adding() { this->show_accounts(mux::ui::panel_detail::adding{.proxies = this->proxy_names()}); }
+  // The proxy profiles by their names, as the pane lists them.
+  [[nodiscard]] std::vector<std::string> proxy_names() const {
+    return k_->proxies() | std::views::transform(&mux::config::proxy_settings::name) | std::ranges::to<std::vector>();
+  }
+  // What the pane adding an account shows, changed, where it is up.
+  template <class Change>
+  void change_adding(Change change) {
+    auto facts = *s_->showing->look<std::optional<mux::ui::panel_facts>>();
+    if (!facts)
+      return;
+    spl::visit(spl::overloaded{[&](mux::ui::panel_detail::adding& now) { change(now); }, [](auto&) {}}, facts->detail);
+    mux::ui::show(*s_->showing, std::move(facts));
+  }
   // The page brought up to date with the model and the settings. Whether
   // the account being added is in now -- the chats to be shown.
   [[nodiscard]] bool bring_up_to_date(accounts& panel) {
     panel.proxies = k_->proxies();
+    // The profiles the pane adding one lists, as they are now.
+    if (const auto& facts = *s_->showing->look<std::optional<mux::ui::panel_facts>>())
+      spl::visit(spl::overloaded{[&](const mux::ui::panel_detail::adding& now) {
+                                   if (now.proxies != this->proxy_names())
+                                     this->change_adding([&](mux::ui::panel_detail::adding& it) { it = mux::ui::with_proxies(std::move(it), this->proxy_names()); });
+                                 },
+                                 [](const auto&) {}},
+                 facts->detail);
     // What is beside the list as what is shown last said, shown.
     if (auto due = std::exchange(panel.detail_due, std::nullopt))
       spl::visit(spl::overloaded{[](mux::ui::panel_detail::none) {},
@@ -90,12 +111,8 @@ class accounts_part {
   void apply(const request::show_account& one) { this->show_account(one.address); }
   // A protocol chosen for the account being added: its form.
   void apply(const request::add_account_of& one) {
-    auto facts = *s_->showing->look<std::optional<mux::ui::panel_facts>>();
-    if (!facts)
-      return;
     pending_login_.reset();
-    facts->detail = mux::ui::panel_detail::adding{one.speaks};
-    mux::ui::show(*s_->showing, std::move(facts));
+    this->change_adding([&](mux::ui::panel_detail::adding& now) { now.speaks = one.speaks; });
     s_->refresh_due = true;
   }
   void apply(const request::select_account& one) {
@@ -167,13 +184,11 @@ class accounts_part {
   }
   // The proxy the account being added is to go through.
   void apply(const request::choose_new_proxy& one) {
-    if (auto* up = mux::ui::open_panel(s_->root()))
-      spl::visit(
-          [&](accounts& panel) {
-            if (auto* pane = panel.adding())
-              pane->set_proxy(one.index);
-          },
-          *up);
+    this->change_adding([&](mux::ui::panel_detail::adding& now) {
+      now = mux::ui::with_proxies(std::move(now), this->proxy_names());
+      if (!one.name || std::ranges::contains(now.proxies, *one.name))
+        now.proxy = one.name;
+    });
   }
   void apply(const request::close_account_pages&) {
     if (auto* up = mux::ui::open_panel(s_->root()))

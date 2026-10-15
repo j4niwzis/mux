@@ -22,8 +22,8 @@ template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::account_proxy>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::account_proxy>();
 }
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::add_account_pane>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::add_account_pane>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::add_account_view_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::add_account_view_t>();
 }
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::look_choices_t>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::look_choices_t>();

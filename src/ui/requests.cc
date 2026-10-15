@@ -732,8 +732,10 @@ struct play_audio {
 struct audio_tick {
   friend bool operator==(audio_tick, audio_tick) = default;
 };
+// The proxy profile an account being added goes through, by its name: none
+// for none.
 struct choose_new_proxy {
-  int index = -1;
+  std::optional<std::string> name;
 };
 struct resize_info {
   float x = 0.0f;

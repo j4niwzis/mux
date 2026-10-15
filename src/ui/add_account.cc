@@ -19,146 +19,87 @@ import :account_forms;
 export namespace mux::ui {
 
 // ---- adding an account ------------------------------------------------------------
-
-// A proxy chosen for an account being added: -1 for none.
-struct choose_new_proxy {
-  using Answer = ::mux::ui::request::choose_new_proxy;
-  int index = -1;
-  ::mux::ui::request::choose_new_proxy operator()() { return ::mux::ui::request::choose_new_proxy{index}; }
-};
-
-// Adding an account, beside the list of them: XMPP or Matrix at the top, and
-// that protocol's form under it.
-struct add_account_pane : skiff::compose::Stacked {
-  // A segment a protocol, in a thin frame -- from the list, each named as
-  // its protocol names itself.
-  struct pick_protocol {
-    using Answer = ::mux::ui::request::add_account_of;
-    protocol_t speaks;
-    ::mux::ui::request::add_account_of operator()() { return ::mux::ui::request::add_account_of{speaks}; }
-  };
-  struct protocol_switch : skiff::compose::Stacked {
-    struct parts_t {
-      std::vector<legacy::segment<pick_protocol>> each;
-    } parts;
-    template <class... Tags>
-    void make(const palette& colours, protocol_list<Tags...>) {
-      (parts.each.emplace_back(colours, std::string(protocol_name(config::kept_of<Tags>{})), pick_protocol{protocol_t{Tags{}}}), ...);
-    }
-    protocol_switch(const palette &colours)
-        : Stacked(
-              skiff::compose::hbox(1.0f, {.autoSize = scene::axes::kBoth,
-                                          .padding = {1.0f, 1.0f, 1.0f, 1.0f},
-                                          .background = colours.chosen})) {
-      this->make(colours, protocols{});
-    }
-  };
-  // The proxy the new account goes through: none, or one of the profiles --
-  // and, always there, a way to make one.
-  struct proxy_row : skiff::compose::Stacked {
-    using add_button = legacy::segment<sends<::mux::ui::request::manage_proxies>>;
-    struct parts_t {
-      nodes::Text title;
-      std::vector<legacy::segment<choose_new_proxy>> choices;
-      add_button add;
-    } parts;
-    proxy_row(const palette &colours)
-        : Stacked(skiff::compose::hbox(
-              4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.title = skiff::compose::styled(
-                    {.alignSelf = scene::align::kMiddle},
-                    nodes::Text("Proxy", 13.0f, colours.dim)),
-                .add = add_button(colours, "Add proxy\u2026", {})} {}
-  };
-  // The colours it is made in, for the proxies it lists as they change.
-  const palette* colours_ = nullptr;
-  struct parts_t {
-    protocol_switch tabs;
-    nodes::Text note;
-    proxy_row proxies_row;
-    account_form form;
-  } parts;
-  std::vector<std::string> proxy_names;
+// What the pane shows, as the program says: the protocol whose form is up,
+// the proxy profiles there are now (one made or dropped in the settings
+// meanwhile is there), and the one the new account is to go through, where
+// one is chosen. The program keeps it: a press asks it (add_account_of,
+// choose_new_proxy) and it says the new state.
+struct add_account_shown {
+  protocol_t speaks{};
+  std::vector<std::string> proxies;
   std::optional<std::string> proxy;
-  // The form coming in when the protocol changes, fading in.
-  skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
-
-  add_account_pane(const ui_needs &n,
-                   const std::vector<config::proxy_settings> &proxies)
-      : Stacked(skiff::compose::vbox(12.0f, {.fill = true})),
-        colours_(n.colours),
-        parts{.tabs = protocol_switch(*n.colours),
-              .note = skiff::compose::styled(
-                  {.fillX = true},
-                  wrapped(nodes::Text("", 13.0f, n.colours->dim))),
-              .proxies_row = proxy_row(*n.colours),
-              .form = account_form(std::in_place_index<0>, *n.colours,
-                                            std::nullopt)} {
-
-    this->set_proxies(proxies);
-    this->light();
-  }
-
-  // A protocol's form, blank, in place of the one up.
-  void show(const protocol_t& speaks) {
-    spl::visit([this](auto of) {
-      parts.form.template emplace<form_of_t<decltype(of)>>(*colours_, std::nullopt);
-    }, speaks);
-    this->begin_swap();
-    this->light();
-  }
-  // The profiles to choose from, as they are now: one made or dropped in the
-  // settings meanwhile is there, and what was chosen stays so while it is.
-  void set_proxies(const std::vector<config::proxy_settings>& proxies) {
-    std::vector<std::string> names;
-    for (const auto& one : proxies)
-      names.push_back(one.name);
-    auto& choices = parts.proxies_row.parts.choices;
-    if (names == proxy_names && !choices.empty())
-      return;
-    const auto chosen = proxy;
-    proxy_names = std::move(names);
-    choices.clear();
-    choices.emplace_back(*colours_, "None", choose_new_proxy{-1});
-    for (std::size_t k = 0; k < proxy_names.size(); ++k)
-      choices.emplace_back(*colours_, proxy_names[k], choose_new_proxy{static_cast<int>(k)});
-    const auto at = chosen ? std::ranges::find(proxy_names, *chosen) : proxy_names.end();
-    this->set_proxy(at == proxy_names.end() ? -1 : static_cast<int>(at - proxy_names.begin()));
-    this->invalidateLayout();
-  }
-  // The proxy chosen for the new account: -1 for none.
-  void set_proxy(int index) {
-    proxy.reset();
-    if (index >= 0 && static_cast<std::size_t>(index) < proxy_names.size())
-      proxy = proxy_names[static_cast<std::size_t>(index)];
-    auto& choices = parts.proxies_row.parts.choices;
-    for (std::size_t i = 0; i < choices.size(); ++i)
-      choices[i].set_active(static_cast<int>(i) - 1 == index);
-  }
-  void begin_swap() {
-    swap.jump(0.0f);
-    swap.setTarget(1.0f);
-    this->fade();
-  }
-  void fade() {
-    const float value = swap.value();
-    spl::visit([value](auto& one) { one.fState.setAlpha(value); }, parts.form);
-  }
-  [[nodiscard]] bool settling() const { return swap.moving(); }
-  void update(double now_ms) {
-    if (swap.step(now_ms))
-      this->fade();
-  }
-
-  // The tab of the form that is up, lit, and what that protocol is: its form
-  // says.
-  void light() {
-    auto& each = parts.tabs.parts.each;
-    for (std::size_t i = 0; i < each.size(); ++i)
-      each[i].set_active(i == parts.form.index());
-    parts.note.setText(std::string(spl::visit([](const auto& one) { return one.note; }, parts.form)));
-  }
+  friend bool operator==(const add_account_shown&, const add_account_shown&) = default;
 };
+// The proxy chosen again, where the profiles moved: what was chosen stays so
+// while it is there.
+[[nodiscard]] inline add_account_shown with_proxies(add_account_shown now, std::vector<std::string> proxies) {
+  if (now.proxy && std::ranges::find(proxies, *now.proxy) == proxies.end())
+    now.proxy.reset();
+  now.proxies = std::move(proxies);
+  return now;
+}
+
+// XMPP or Matrix at the top, each named as its protocol names itself, the
+// one whose form is up lit: in a thin frame.
+template <class... Tags>
+auto protocol_switch(const palette& colours, const protocol_t& speaks, protocol_list<Tags...>) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(1.0f, {.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen}),
+                segment(colours, std::string(protocol_name(config::kept_of<Tags>{})), sends<request::add_account_of>{{protocol_t{Tags{}}}},
+                        speaks.index() == protocol_t{Tags{}}.index())...);
+}
+using protocol_switch_t = decltype(protocol_switch(std::declval<const palette&>(), protocol_t{}, protocols{}));
+
+// The proxy the new account goes through: none, or one of the profiles --
+// and, always there, a way to make one.
+struct proxy_choice {
+  std::vector<std::string> names;
+  std::optional<std::string> chosen;
+  friend bool operator==(const proxy_choice&, const proxy_choice&) = default;
+};
+inline auto proxy_row(const palette& colours, const proxy_choice& now) {
+  namespace c = skiff::compose;
+  const auto one = [&](std::optional<std::string> name) {
+    return segment(colours, name.value_or("None"), sends<request::choose_new_proxy>{{name}}, name == now.chosen);
+  };
+  return c::row(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Proxy", 13.0f, colours.dim)),
+                c::many(c::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
+                        std::views::iota(std::size_t{0}, now.names.size() + 1) | std::views::transform([&](std::size_t at) {
+                          return one(at == 0 ? std::nullopt : std::optional(now.names[at - 1]));
+                        }) | std::ranges::to<std::vector>()),
+                segment(colours, "Add proxy…", sends<request::manage_proxies>{}, false));
+}
+using proxy_row_t = decltype(proxy_row(std::declval<const palette&>(), proxy_choice{}));
+
+// What its protocol says of adding one: under the switch.
+[[nodiscard]] inline std::string adding_note(const protocol_t& speaks) {
+  return spl::visit([](auto tag) { return std::string(form_of_t<decltype(tag)>::note); }, speaks);
+}
+
+// Adding an account, beside the list of them: the switch, what its protocol
+// says, the proxy row, and that protocol's form under them -- made anew
+// where the protocol changes, coming in as it does.
+inline auto add_account_view(const ui_needs& n) {
+  namespace c = skiff::compose;
+  const palette& colours = *n.colours;
+  return c::column(c::vbox(12.0f, {.fill = true}),
+      c::projected<add_account_shown>([](const add_account_shown& now) { return now.speaks; },
+          c::mount<protocol_switch_t, protocol_t>(
+              [at = &colours](const protocol_t& speaks) { return std::tuple{protocol_switch(*at, speaks, protocols{})}; },
+              {.autoSize = scene::axes::kBoth})),
+      c::text_for<add_account_shown>([](const add_account_shown& now) { return adding_note(now.speaks); },
+                                     c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.dim)))),
+      c::projected<add_account_shown>([](const add_account_shown& now) { return proxy_choice{now.proxies, now.proxy}; },
+          c::mount<proxy_row_t, proxy_choice>(
+              [at = &colours](const proxy_choice& now) { return std::tuple{proxy_row(*at, now)}; },
+              {.fillX = true, .autoSize = scene::axes::kY})),
+      c::projected<add_account_shown>([](const add_account_shown& now) { return now.speaks; },
+          c::mount<c::Appearing<account_form_view_t>, protocol_t>(
+              [at = &n](const protocol_t& speaks) { return std::tuple{c::appearing(true, account_form_view(*at, speaks), 0.0f)}; },
+              {.fillX = true, .grow = scene::axes::kY})));
+}
+using add_account_view_t = decltype(add_account_view(std::declval<const ui_needs&>()));
 
 }  // namespace mux::ui
 
@@ -166,5 +107,5 @@ struct add_account_pane : skiff::compose::Stacked {
 // stack lays itself out through its own: these tables, and the walks of
 // everything under them, are made once, in their walks units -- not in
 // every unit that lays one out or walks it.
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::add_account_pane> = true;  // walks_account_pages.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::add_account_pane>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::add_account_view_t> = true;  // walks_account_pages.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::add_account_view_t>() noexcept;

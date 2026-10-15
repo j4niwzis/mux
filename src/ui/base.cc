@@ -411,7 +411,7 @@ void look_as_its_content(const Node&, const palette&) {}
 //   void toggle_mute()               -- the chosen chat muted, or not
 //   void leave_chat()                -- the chosen chat left
 //   void close_account_pages()       -- back to the list of accounts
-//   void choose_new_proxy(int)       -- the proxy of an account being added
+//   void choose_new_proxy(name)      -- the proxy of an account being added
 //   void accounts_back()              -- ← on the accounts page
 //   void account_page(account_page_t) -- a page of the chosen account
 //   void flip_account_receipts(), flip_account_mentions_shared(), flip_account_mentions_sealed(), flip_only_verified(), accept_identity(who), flip_account_typing(), choose_account_proxy(int), manage_proxies()

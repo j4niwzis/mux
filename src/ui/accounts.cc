@@ -454,10 +454,8 @@ struct account {
   std::optional<std::string> said;
   bool error = false;
 };
-// Adding one: of the protocol chosen, its form, where one is.
-struct adding {
-  std::optional<protocol_t> speaks;
-};
+// Adding one: the protocol chosen, the proxies, the one chosen.
+using adding = add_account_shown;
 }  // namespace panel_detail
 using panel_detail_t = spl::variant<panel_detail::none, panel_detail::account, panel_detail::adding>;
 // The accounts panel open: what is beside its list, and a word said at its

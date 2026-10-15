@@ -469,6 +469,32 @@ struct delete_pack {
   mux::emote_pack pack;
 };
 struct pick_pack_images {};
+// The packs dialog: a pack opened (a new one, where none is said), the
+// list again; the one open named, attributed, its use flipped; one of its
+// images renamed, its use flipped, taken out; it saved, or deleted.
+struct pack_open {
+  std::optional<std::size_t> at;
+};
+struct pack_back {};
+struct pack_named {
+  std::string text;
+  bool attribution = false;
+};
+struct pack_use {
+  bool emoji = true;
+};
+struct pack_picture_renamed {
+  std::string url, shortcode;
+};
+struct pack_picture_use {
+  std::string url;
+  bool emoji = true;
+};
+struct pack_picture_removed {
+  std::string url;
+};
+struct pack_save {};
+struct pack_delete {};
 struct close_new_room {};
 // A text menu's item for a field: the key the field takes for it, given to
 // the field with the focus -- Ctrl+V a paste.

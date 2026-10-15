@@ -93,6 +93,16 @@ void send_custom(Net& net, const conversation_id& in, std::string type, std::opt
 
 }  // namespace mux::proto::matrix::ops
 
+namespace mux::proto::matrix::app_detail {
+// What the packs dialog shows, changed as `change` says, where it is up.
+template <class App, class Change>
+void change_packs(App& app, Change change) {
+  if (!app.showing.template look<std::optional<mux::ui::packs_facts>>()->has_value())
+    return;
+  mux::ui::change_shown<std::optional<mux::ui::packs_facts>>(app.showing, [&](std::optional<mux::ui::packs_facts>& now) { change(*now); });
+}
+}  // namespace mux::proto::matrix::app_detail
+
 export namespace mux::proto::matrix {
 
 // A session the server gave at login: kept with the account, as its kept
@@ -167,7 +177,7 @@ void program_told(App& app, const packs_listed& listed) {
     box->show_again();
     box->template part<state>().kept.packs = listed.packs;
   }
-  app.root().show_packs(listed.packs);
+  app_detail::change_packs(app, [&](mux::ui::packs_facts& now) { mux::ui::packs_listed(now, listed.packs); });
 }
 template <class App>
 void program_told(App& app, const pack_saved& saved) {
@@ -183,11 +193,11 @@ void program_told(App& app, const pack_saved& saved) {
       }
     } else kept.error = "The pack was not saved.";
   }
-  app.root().pack_saved(saved.pack, saved.removed, saved.done);
+  app_detail::change_packs(app, [&](mux::ui::packs_facts& now) { mux::ui::pack_saved(now, saved.pack, saved.removed, saved.done); });
 }
 template <class App>
 void program_told(App& app, const pack_picture_uploaded& uploaded) {
-  app.root().pack_picture_uploaded(uploaded.picture, uploaded.done);
+  app_detail::change_packs(app, [&](mux::ui::packs_facts& now) { mux::ui::pack_picture_uploaded(now, uploaded.picture, uploaded.done); });
 }
 // An emoji verification, as it goes: its dialog.
 template <class App>

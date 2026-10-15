@@ -146,7 +146,6 @@ struct ui_shared {
   // The images of the pack being edited, and the stickers the emoji panel
   // shows -- in view, and its packs' tabs: keyed by source and kind,
   // fetched into their separate stores while they show.
-  std::vector<emote_picture> pack_pictures_shown;
   std::vector<emote_picture> panel_pictures_shown;
   // A viewport moved onto messages whose media has not been requested yet.
   bool pictures_due = false;

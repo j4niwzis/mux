@@ -666,7 +666,7 @@ struct window : skiff::compose::Specced {
       shown_in<start_chat_box, new_chat_facts> new_chat;
       shown_in<create_room_box, new_room_facts> new_room;
       // Emojis & Stickers: a room's packs, or one's own.
-      shown_in<packs_box, packs_facts> packs;
+      shown_in<packs_box_t, packs_facts> packs;
       // A chat background chosen, at a level.
       shown_in<wallpaper_box, wallpaper_facts> wallpaper;
       // A server's public rooms, searched.
@@ -833,7 +833,7 @@ struct window : skiff::compose::Specced {
                     shown_made<start_chat_box, new_chat_facts>(n),
                 .new_room =
                     shown_made<create_room_box, new_room_facts>(n),
-                .packs = shown_made<packs_box, packs_facts>(n),
+                .packs = shown_made<packs_box_t, packs_facts>(n),
                 .wallpaper =
                     shown_made<wallpaper_box, wallpaper_facts>(n),
                 .explore = shown_made<explore_box, explore_facts>(n),
@@ -1107,37 +1107,6 @@ struct window : skiff::compose::Specced {
     return up ? &card_of(*up) : nullptr;
   }
 
-  void show_packs(std::vector<emote_pack> packs) {
-    if (auto* up = layer().packs.shown())
-      up->show_packs(std::move(packs));
-  }
-  // A pack saved: in the list as it is now, the list shown again -- or one's
-  // own left open; one taken away, out of it.
-  void pack_saved(const emote_pack& pack, bool removed, bool done) {
-    auto* up = layer().packs.shown();
-    if (!up)
-      return;
-    if (!done) {
-      up->parts.note.setText(removed ? "The pack was not deleted." : "The pack was not saved.");
-      return;
-    }
-    const auto same = [&](const emote_pack& one) { return one.chat == pack.chat && one.key == pack.key; };
-    std::erase_if(up->packs, same);
-    if (!removed)
-      up->packs.push_back(pack);
-    if (up->room)
-      up->show_list();
-    else
-      up->parts.note.setText("Saved.");
-  }
-  void pack_picture_uploaded(const pack_picture& picture, bool done) {
-    if (auto* up = layer().packs.shown()) {
-      if (done)
-        up->add_picture(picture);
-      else
-        up->parts.note.setText("An image could not be uploaded: " + picture.body);
-    }
-  }
 
   // Its layers, each filling the window, as the default layout places them:
   // nothing placed by hand.

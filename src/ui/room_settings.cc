@@ -218,7 +218,7 @@ struct room_settings : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text heading;
       decltype(skiff::compose::scoped<config::chat_choices>(skiff::compose::handlers(), style_controls(std::declval<const palette&>()), std::declval<conversation_id>())) fonts;
-      look_choices choices;
+      look_choices_t choices;
     } parts;
     looks_page(room_settings *box, const room_settings_facts &facts)
         : Stacked(skiff::compose::vbox(
@@ -227,8 +227,7 @@ struct room_settings : skiff::compose::Stacked {
                      .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
           parts{.heading = tab_heading(*box->colours_, "Appearance"),
                 .fonts = skiff::compose::scoped<config::chat_choices>(skiff::compose::handlers(), style_controls(*box->colours_), facts.chat),
-                .choices = look_choices(*box->colours_, *box->looks_,
-                                                 choice_level::chat{})} {}
+                .choices = look_choices(*box->colours_, choice_level::chat{})} {}
   };
 
   using page_t = typename variant_of_types<

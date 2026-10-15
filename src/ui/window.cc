@@ -208,6 +208,8 @@ struct shown_root {
   skiff::model::Tracked<threads_shown> threads_list;
   // The window's shape, from its size: a phone's, or not.
   skiff::model::Tracked<window_shape> shape;
+  // The looks, as their choices show them (app: refresh_shown).
+  skiff::model::Tracked<looks_picked> looks;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -223,6 +225,11 @@ void change_shown(shown_model& showing, Change change) {
   Part now = *showing.look<Part>();
   change(now);
   show(showing, std::move(now));
+}
+// The looks as their choices show them, where they moved.
+inline void show_looks(shown_model& showing, const looks_shown& looks) {
+  if (auto now = looks_picked_of(looks); *showing.look<looks_picked>() != now)
+    show(showing, std::move(now));
 }
 // A dialog shown with these facts, or closed: its part of what is shown set.
 template <class Facts>
@@ -668,7 +675,7 @@ struct window : skiff::compose::Specced {
       // Emojis & Stickers: a room's packs, or one's own.
       shown_in<packs_box_t, packs_facts> packs;
       // A chat background chosen, at a level.
-      shown_in<wallpaper_box, wallpaper_facts> wallpaper;
+      shown_in<wallpaper_box_t, wallpaper_facts> wallpaper;
       // A server's public rooms, searched.
       shown_in<explore_box, explore_facts> explore;
       // The protocols' own dialogs: Matrix's developer tools, for one.
@@ -835,7 +842,7 @@ struct window : skiff::compose::Specced {
                     shown_made<create_room_box, new_room_facts>(n),
                 .packs = shown_made<packs_box_t, packs_facts>(n),
                 .wallpaper =
-                    shown_made<wallpaper_box, wallpaper_facts>(n),
+                    shown_made<wallpaper_box_t, wallpaper_facts>(n),
                 .explore = shown_made<explore_box, explore_facts>(n),
                 .sending = shown_made<send_box_t, send_facts>(n),
                 .passphrase =

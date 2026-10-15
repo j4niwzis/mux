@@ -357,12 +357,12 @@ struct account_chats : skiff::compose::Stacked {
     nodes::Text title;
     decltype(account_chats_view(std::declval<const palette&>(), std::string())) settings;
     nodes::Text looks_title;
-    look_choices looks;
+    look_choices_t looks;
     nodes::Text spaces_title;
     choice_menu<pick_home> home;
     legacy::spaces_choices places;
   } parts;
-  account_chats(const palette &colours, const looks_shown &looks,
+  account_chats(const palette &colours, const looks_shown &,
                 const ui_shared &shared, std::string address,
                 const chat_choice_values &chats, std::optional<bool> home_hides,
                 std::optional<bool> home_direct, const config::accent_t &colour,
@@ -378,7 +378,7 @@ struct account_chats : skiff::compose::Stacked {
             .settings = account_chats_view(colours, std::move(address)),
             .looks_title = section_title(colours, "LOOKS"),
             .looks =
-                look_choices(colours, looks, choice_level::account{}),
+                look_choices(colours, choice_level::account{}),
             .spaces_title = section_title(colours, "SPACES"),
             .home = make_choice_menu<pick_home>(colours, "Home",
                 {"As above", "Every chat", "Without chats spaces hold",

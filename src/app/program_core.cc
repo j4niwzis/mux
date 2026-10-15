@@ -441,6 +441,9 @@ void app::take_wants() {
 }
 
 void app::refresh_shown() {
+  // The looks as their choices show them: what the window last read of
+  // what is kept, for the chat chosen.
+  mux::ui::show_looks(showing, shared.looks);
   const auto shown = showing.look<mux::ui::chat_shown>();
   const auto& screen = root().main();
   if (shown->forum && screen.current && !screen.is_forum({*screen.current, *shown->forum}))
@@ -502,6 +505,8 @@ void app::before_frame() {
   suggestions.show();
   threads.show();
   pictures.viewer_tick();
+  // And the looks, as the chats binding last read them for the chat chosen.
+  mux::ui::show_looks(showing, shared.looks);
   // The window's shape, as its size is: and the panel docked under the
   // field on a phone's, the field standing over it.
   if (const auto box = scene.viewport(); *showing.look<mux::ui::window_shape>() != mux::ui::window_shape{box.width(), box.height()})

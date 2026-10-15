@@ -443,6 +443,38 @@ struct set_wallpaper {
   mux::choice_level_t level;
   mux::config::wallpaper_pick_t pick;
 };
+// A look changed by its choices -- a kind picked, a slider let go, an
+// element given back to the bubbles' -- at a level: the program works the
+// look out of what it holds (bubbles_asked) and sets it.
+namespace bubbles_change {
+// A kind; none: as the level over it.
+struct kind {
+  std::optional<mux::config::bubbles_t> to;
+};
+// How opaque, and Frosted's blur: where along their sliders.
+struct opacity {
+  float at = 0.0f;
+};
+struct blur {
+  float at = 0.0f;
+};
+// An element's opacity or blur, apart from the bubbles' (where along its
+// slider), or given back to them (none). The bubbles' only.
+template <class Which>
+struct element {
+  Which which;
+  std::optional<float> at;
+};
+}  // namespace bubbles_change
+using element_opacity_t = std::optional<int> mux::config::element_opacity::*;
+using element_blur_t = std::optional<double> mux::config::element_blur::*;
+using bubbles_change_t = spl::variant<bubbles_change::kind, bubbles_change::opacity, bubbles_change::blur,
+                                      bubbles_change::element<element_opacity_t>, bubbles_change::element<element_blur_t>>;
+struct change_bubbles {
+  mux::choice_level_t level;
+  mux::config::look_part_t part = mux::config::look_part::bubbles{};
+  bubbles_change_t change;
+};
 struct toggle_threads {};
 struct open_thread {
   std::string root;

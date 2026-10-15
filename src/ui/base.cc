@@ -106,6 +106,7 @@ struct window_look_t {
   bool home_direct = false;  // and without direct messages
   bool live_blur = false;   // frosted popups and sheets blur what is under them, live
   int interface_scale = 100;  // in percent of the display's scale
+  friend bool operator==(const window_look_t&, const window_look_t&) = default;
 };
 // The interface scales one can choose, in percent: Telegram Desktop's from
 // 100 up, and smaller ones under it -- a window on a small screen, or one
@@ -179,6 +180,7 @@ struct looks_held {
   std::optional<config::wallpaper_t> wallpaper;
   std::optional<config::bubble_look> bubbles;
   std::optional<config::bubble_look> panels;
+  friend bool operator==(const looks_held&, const looks_held&) = default;
 };
 // The looks the window shows, as the program holds them: handed down with
 // the colours (ui_needs).
@@ -201,6 +203,28 @@ struct looks_shown {
                          level);
   }
 };
+// The looks the choices of them show -- Appearance's, an account's Chats
+// page, Manage's, the background dialog -- as the program last said: what
+// each level holds, the look in effect for the chat shown and every chat's,
+// and the window's. A part of what is shown, read where it moves.
+struct looks_picked {
+  looks_held everywhere, account, chat;
+  config::bubble_look bubbles, panels;
+  config::bubble_look bubbles_everywhere, panels_everywhere;
+  window_look_t window;
+  template <class Self>
+  [[nodiscard]] auto& at(this Self& self, const choice_level_t& level) {
+    return spl::visit(spl::overloaded{[&](choice_level::everywhere) -> auto& { return self.everywhere; },
+                                      [&](choice_level::account) -> auto& { return self.account; },
+                                      [&](choice_level::chat) -> auto& { return self.chat; }},
+                      level);
+  }
+  friend bool operator==(const looks_picked&, const looks_picked&) = default;
+};
+[[nodiscard]] inline looks_picked looks_picked_of(const looks_shown& looks) {
+  return {looks.everywhere, looks.account,  looks.chat,  looks.bubbles, looks.panels, looks.bubbles_everywhere,
+          looks.panels_everywhere, looks.window};
+}
 // The panels' opacity going from one chat's to another's: eased, the look
 // otherwise as it is.
 struct panel_ease_t {

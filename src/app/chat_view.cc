@@ -85,7 +85,8 @@ class chat_view_part {
       return found == chat->timeline.end() ? -1 : found - chat->timeline.begin();
     };
     const std::ptrdiff_t top = s_->list.top ? place(*s_->list.top) : std::numeric_limits<std::ptrdiff_t>::max();
-    const auto above = chat->pinned | std::views::enumerate |
+    // Not const: a filter_view caches its begin, so begin() and end() are not.
+    auto above = chat->pinned | std::views::enumerate |
                        std::views::filter([&](const auto& pin) { return place(std::get<1>(pin)) < top; });
     const auto best = std::ranges::max_element(above, {}, [&](const auto& pin) { return place(std::get<1>(pin)); });
     const std::size_t count = chat->pinned.size();

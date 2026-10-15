@@ -25,9 +25,9 @@ template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::add_account_pane>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::add_account_pane>();
 }
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::look_choices>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::look_choices>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::look_choices_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::look_choices_t>();
 }
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::bubbles_picker>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::bubbles_picker>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::bubbles_picker_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::bubbles_picker_t>();
 }

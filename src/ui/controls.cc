@@ -806,6 +806,18 @@ auto label_button_row(const palette& colours, std::string label, std::string but
                 c::visible(shown, c::styled({.width = 96.0f, .height = 26.0f}, button_for<Act>(colours.widgets, std::move(button), std::move(act)))));
 }
 
+// The same row, as what it reads of the model says: its words, and
+// whether its button is there.
+template <class Want, class Label, class Act, class Shown>
+auto label_button_row_for(const palette& colours, Label label, std::string button, Act act, Shown shown) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                c::text_for<Want>(std::move(label),
+                                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text("", 13.0f, colours.text))),
+                c::shown_for<Want>(std::move(shown),
+                                   c::styled({.width = 96.0f, .height = 26.0f}, button_for<Act>(colours.widgets, std::move(button), std::move(act)))));
+}
+
 // A run of things under a name, as the emoji and sticker panels list them:
 // the name, dim, over its cells, wrapped as wide as it is. The cells are put
 // in by what it is a section of.
@@ -1226,20 +1238,6 @@ struct count_badge : skiff::compose::Stacked {
         parts{.count = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 11.0f, colours.on_accent, true))} {}
 };
 
-// A label, and a small button on its right that is there only where it
-// does something: an element's look over a way back to the bubbles'.
-template <class Act>
-struct label_button_row : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text label;
-    button_for<Act> reset;
-  } parts;
-  label_button_row(const palette& colours, std::string label, std::string button, Act act, bool shown)
-      : Stacked(skiff::compose::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        parts{.label = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 13.0f, colours.text)),
-              .reset = skiff::compose::visible(shown, skiff::compose::styled({.width = 96.0f, .height = 26.0f},
-                                                                             button_for<Act>(colours.widgets, std::move(button), std::move(act))))} {}
-};
 
 
 // A dialog's buttons, at its bottom right: Cancel, and what it does --

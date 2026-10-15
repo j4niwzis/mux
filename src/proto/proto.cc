@@ -123,9 +123,15 @@ struct passphrase_words {
 // not verified.
 namespace part {
 namespace tone {
-struct plain {};   // as a note
-struct accent {};  // as news
-struct danger {};  // as a warning
+struct plain {     // as a note
+  friend bool operator==(plain, plain) = default;
+};
+struct accent {    // as news
+  friend bool operator==(accent, accent) = default;
+};
+struct danger {    // as a warning
+  friend bool operator==(danger, danger) = default;
+};
 }  // namespace tone
 using tone_t = spl::variant<tone::plain, tone::accent, tone::danger>;
 struct line {

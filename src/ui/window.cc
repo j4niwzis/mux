@@ -146,6 +146,19 @@ inline auto text_menu_layer(const ui_needs& n, const text_menu_facts& facts) {
 
 // ---- the window -------------------------------------------------------------------
 
+// The chat's background behind the whole window, as the program says: the
+// chosen chat's, else every chat's.
+struct behind_shown {
+  config::wallpaper_t wallpaper = config::wallpaper::theme{};
+  friend bool operator==(const behind_shown&, const behind_shown&) = default;
+};
+inline auto behind_of(const ui_needs& n) {
+  return skiff::compose::applied<behind_shown>([](const behind_shown& now) { return now.wallpaper; },
+      [at = &n](wallpaper_t& wall, const config::wallpaper_t& chosen) { show_wallpaper_on(wall, chosen, *at->colours, *at->looks); },
+      wallpaper_t{});
+}
+using behind_t = decltype(behind_of(std::declval<const ui_needs&>()));
+
 // What the window shows that the program opens and closes, as a model:
 // each dialog's facts, while it is open. The program edits it; the
 // dialogs, bound to it, open and close as they read it.
@@ -257,6 +270,9 @@ struct shown_root {
   skiff::model::Tracked<window_shape> shape;
   // The looks, as their choices show them (app: refresh_shown).
   skiff::model::Tracked<looks_picked> looks;
+  skiff::model::Tracked<room_events_picked> room_events;
+  // The background behind the whole window, where it is so.
+  skiff::model::Tracked<behind_shown> behind;
   // The chat's info, while it is open (app: chat_view).
   skiff::model::Tracked<info_shown> info;
 };
@@ -692,7 +708,7 @@ struct window : skiff::compose::Specced {
       // The chat's background behind all of the window, where it is so:
       // drawn at its own opacity -- the desktop through it only where the
       // picture itself lets it be seen.
-      wallpaper_t behind;
+      behind_t behind;
       // The pages slide over the drawer too: Manage accounts comes in over it.
       frame_t frame;
       shown_in<settings_view_t, settings_facts> settings;
@@ -860,6 +876,7 @@ struct window : skiff::compose::Specced {
     layers(const ui_needs &n)
         : Specced({.fill = true}),
           parts{.backdrop = nodes::Box<>(n.colours->background),
+                .behind = behind_of(n),
                 .frame = frame_t(std::in_place, &n,
                                  std::in_place, n),
                 .settings =
@@ -942,7 +959,7 @@ struct window : skiff::compose::Specced {
   // What is kept, as the window's binding last read it.
   const kept_root* kept_ = nullptr;
   // Read by the window's binding as what is kept moves, and by the chats
-  // binding as the chats -- or the chat chosen -- do: the looks in effect.
+  // binding as the chats do: the drawer.
   template <class Reactions>
   void refresh(const skiff::model::Model<kept_root, Reactions>& kept) {
     this->refresh_kept(kept.root());
@@ -950,9 +967,9 @@ struct window : skiff::compose::Specced {
   // What is kept read: by its root, whatever the model's reactions.
   void refresh_kept(const kept_root& root) {
     kept_ = &root;
-    this->read_looks();
+    this->show_drawer();
   }
-  void refresh(const chats_model&) { this->read_looks(); }
+  void refresh(const chats_model&) { this->show_drawer(); }
   // What the runtime binding walks call it by (outside a release build):
   // its refresh is overloaded, which they cannot pick by themselves -- the
   // window was never read there, and the drawer, the panels' look and the
@@ -960,58 +977,20 @@ struct window : skiff::compose::Specced {
   skiff::bind::Refreshes<2> fRefreshes = skiff::bind::refreshes(
       skiff::bind::refreshFrom<window, chats_model>(),
       skiff::bind::refreshFromRoot<window, kept_root, &window::refresh_kept>());
-  // The looks in effect, as what is kept says for the chat chosen: what each
-  // level holds of the looks and of room events, for the choices to show
-  // what is in effect; the panels' look, the window repainted where it
-  // changes; and the background behind the window -- the chat's, else
-  // every chat's.
-  void read_looks() {
+  // The drawer: the accounts saved, with what the chats say of each.
+  void show_drawer() {
     auto& screen = this->main();
     if (kept_ == nullptr || screen.last_model == nullptr)
       return;
-    const auto& looks = kept_->looks.fValue;
-    const auto& history = kept_->history.fValue;
-    const auto space = space_above_of(screen.last_model->accounts());
-    const chat_settings reads{kept_, &space};
-    const std::optional<conversation_id>& chosen = screen.chosen;
-    looks_shown& shown = *needs_.looks;
-    looks_held account_held, chat_held;
-    room_events_held account_events, chat_events;
-    if (chosen) {
-      chat_held = {reads.own_of<&config::chat_choices::wallpaper>(*chosen), reads.own_of<&config::chat_choices::bubbles>(*chosen),
-                   reads.own_of<&config::chat_choices::panels>(*chosen)};
-      chat_events = {reads.own_of<&config::chat_choices::room_events>(*chosen), reads.own_of<&config::chat_choices::room_event_kinds>(*chosen)};
-      if (const config::account_t* account = reads.settings_of(chosen->account.address)) {
-        if (const auto& word = config::wallpaper_of(*account))
-          account_held.wallpaper = config::wallpaper_of(std::string_view(*word));
-        if (const auto& word = config::bubbles_of(*account))
-          account_held.bubbles = config::bubble_look_of(*word);
-        if (const auto& word = config::panels_of(*account))
-          account_held.panels = config::bubble_look_of(*word);
-        account_events = {config::room_events_of(*account), config::room_event_kinds_of(*account)};
-      }
-    }
-    shown.at(choice_level::everywhere{}) = {looks.wallpaper, looks.bubbles, looks.panels};
-    shown.at(choice_level::account{}) = std::move(account_held);
-    shown.at(choice_level::chat{}) = std::move(chat_held);
-    room_events_at(choice_level::everywhere{}) = {history.show_room_events, history.room_event_kinds};
-    room_events_at(choice_level::account{}) = std::move(account_events);
-    room_events_at(choice_level::chat{}) = std::move(chat_events);
-    shown.panels = chosen ? reads.panels_of(*chosen) : looks.panels.value_or(config::bubble_look{});
-    if (show_panels(*needs_.paint, shown.panels, shown.window, *needs_.colours)) {
-      this->markDamaged();
-      scene::work::mark(screen.fState.fId);  // an ease ticked by the screen
-    }
-    this->show_behind(chosen ? reads.wallpaper_of(*chosen) : looks.wallpaper.value_or(config::wallpaper_t{config::wallpaper::theme{}}));
-    // The drawer: the accounts saved, with what the chats say of each.
     const auto& current = screen.current;
     layer().frame.base().content().show(kept_->accounts.values(), *screen.last_model,
                                         current ? std::string_view(current->address) : std::string_view());
   }
-  // The background behind the whole window, where it is so.
-  void show_behind(const config::wallpaper_t& chosen) {
-    if (needs_.looks->window.behind)
-      show_wallpaper_on(layer().behind, chosen, *needs_.colours, *needs_.looks);
+  // The panels' paint changed (app: looks): repainted, and the screen's ease
+  // ticked.
+  void panels_changed() {
+    this->markDamaged();
+    scene::work::mark(this->main().fState.fId);
   }
   // The panel that is up, not on its way out.
   [[nodiscard]] panel_type* open_panel() { return layer().frame.shown(); }

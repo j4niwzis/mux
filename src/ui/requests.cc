@@ -537,6 +537,12 @@ struct text_key {
   bool shift = false;  // with Shift too: Ctrl+Shift+X struck through
   bool control = true;
 };
+// Which room events show at a level, set to a way: as above, all, messages
+// only, or custom -- from what was in effect.
+struct set_events_way {
+  mux::choice_level_t level;
+  std::size_t way = 0;
+};
 // The text menu let go of: pressed off, Esc, or done.
 struct close_text_menu {};
 struct text_formatting {

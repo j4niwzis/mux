@@ -371,24 +371,32 @@ inline auto spaces_choices(const palette& colours, const ui_shared& shared) {
                      std::ranges::to<std::vector>());
 }
 
-// What each level holds of room events, as the program last said: for a
-// list to show what is in effect where a level is not its own.
+// What a level holds of room events: all of them or messages only, and
+// each kind chosen apart.
 struct room_events_held {
   std::optional<bool> all;
   std::optional<config::room_event_kinds> kinds;
+  friend bool operator==(const room_events_held&, const room_events_held&) = default;
 };
-inline room_events_held& room_events_at(const choice_level_t& level) {
-  static room_events_held everywhere, account, chat;
-  return spl::visit(spl::overloaded{[](choice_level::everywhere) -> room_events_held& { return everywhere; },
-                                          [](choice_level::account) -> room_events_held& { return account; },
-                                          [](choice_level::chat) -> room_events_held& { return chat; }},
-                       level);
-}
+// What each level holds, as the program last said (its looks part): a part
+// of what is shown, for a list to show what is in effect where a level is
+// not its own.
+struct room_events_picked {
+  room_events_held everywhere, account, chat;
+  template <class Self>
+  [[nodiscard]] auto& at(this Self& self, const choice_level_t& level) {
+    return spl::visit(spl::overloaded{[&](choice_level::everywhere) -> auto& { return self.everywhere; },
+                                      [&](choice_level::account) -> auto& { return self.account; },
+                                      [&](choice_level::chat) -> auto& { return self.chat; }},
+                      level);
+  }
+  friend bool operator==(const room_events_picked&, const room_events_picked&) = default;
+};
 // What is shown with a level as it is, and the levels over it.
-[[nodiscard]] inline room_event_filter events_in_effect(const choice_level_t& level) {
-  const room_events_held& every = room_events_at(choice_level::everywhere{});
-  const room_events_held& account = room_events_at(choice_level::account{});
-  const room_events_held& chat = room_events_at(choice_level::chat{});
+[[nodiscard]] inline room_event_filter events_in_effect(const room_events_picked& now, const choice_level_t& level) {
+  const room_events_held& every = now.everywhere;
+  const room_events_held& account = now.account;
+  const room_events_held& chat = now.chat;
   return spl::visit(
       spl::overloaded{[&](choice_level::everywhere) {
                            return logic::filter_of(std::nullopt, std::nullopt, std::nullopt, std::nullopt, every.kinds, every.all.value_or(true));
@@ -402,10 +410,10 @@ inline room_events_held& room_events_at(const choice_level_t& level) {
       level);
 }
 // And with the level as the one over it: what "As above" shows.
-[[nodiscard]] inline room_event_filter events_above(const choice_level_t& level) {
-  return spl::visit(spl::overloaded{[](choice_level::chat) { return events_in_effect(choice_level::account{}); },
-                                          [](const auto&) { return events_in_effect(choice_level::everywhere{}); }},
-                       level);
+[[nodiscard]] inline room_event_filter events_above(const room_events_picked& now, const choice_level_t& level) {
+  return spl::visit(spl::overloaded{[&](choice_level::chat) { return events_in_effect(now, choice_level::account{}); },
+                                    [&](const auto&) { return events_in_effect(now, choice_level::everywhere{}); }},
+                    level);
 }
 
 // Which room events show, at one level -- every account's, one's, a chat's:
@@ -460,46 +468,33 @@ inline constexpr std::size_t kEventsAbove = 0, kEventsAll = 1, kEventsMessages =
   return *held.all ? kEventsAll : kEventsMessages;
 }
 
-// Each button edits its bound owner. The window tries several models for a
-// press; an Own change defers to the right one without leaking a UI event
-// to the application's request dispatcher when a scope is in another model.
-template <class Owner>
-inline Owner with_events_way(const Owner& now, const choice_level_t& level, std::size_t way) {
-  room_events_at(level) = events_of(now);
-  const auto effective = events_in_effect(level);
+// What a level is asked to hold, set to a way: Custom starts from what
+// was in effect there (the program's, which holds every level).
+[[nodiscard]] inline room_events_held events_for_way(const room_events_picked& now, const choice_level_t& level, std::size_t way) {
   room_events_held held;
-  if (way == kEventsAll) held.all = true;
-  else if (way == kEventsMessages) held.all = false;
+  if (way == kEventsAll)
+    held.all = true;
+  else if (way == kEventsMessages)
+    held.all = false;
   else if (way == kEventsCustom)
-    held.kinds = std::ranges::fold_left(all_room_events, config::room_event_kinds{},
-        [&](config::room_event_kinds kinds, const room_event_t& kind) {
-          logic::choice_in(kinds, kind) = effective.shows(kind);
-          return kinds;
-        });
-  Owner next = now;
-  events_in(next, held);
-  return next;
+    held.kinds = std::ranges::fold_left(all_room_events, config::room_event_kinds{}, [&](config::room_event_kinds kinds, const room_event_t& kind) {
+      logic::choice_in(kinds, kind) = events_in_effect(now, level).shows(kind);
+      return kinds;
+    });
+  return held;
 }
-template <class Owner>
-inline bool event_kind_shown(const Owner& now, const choice_level_t& level, const room_event_t& kind) {
-  room_events_at(level) = events_of(now);
-  const auto way = events_way_of(level, events_of(now));
-  if (way == kEventsAll || way == kEventsMessages) return way == kEventsAll;
-  return (way == kEventsAbove ? events_above(level) : events_in_effect(level)).shows(kind);
+// Whether a kind shows at a level, as its way says.
+[[nodiscard]] inline bool event_kind_shown(const room_events_picked& now, const choice_level_t& level, const room_event_t& kind) {
+  const auto way = events_way_of(level, now.at(level));
+  if (way == kEventsAll || way == kEventsMessages)
+    return way == kEventsAll;
+  return (way == kEventsAbove ? events_above(now, level) : events_in_effect(now, level)).shows(kind);
 }
-// Changes are data returned from the dropdown's bound node, never raw
-// application requests. Trying another model safely defers the change.
-template <class Owner> struct events_way_change {
+// The way picked in the dropdown: the program sets the level so.
+struct choose_events_way {
+  using Answer = request::set_events_way;
   choice_level_t level;
-  std::size_t way;
-  void operator()(Owner& now) const { now = with_events_way(now, level, way); }
-};
-template <class Owner> struct choose_events_way {
-  using Answer = skiff::bind::Own<events_way_change<Owner>>;
-  choice_level_t level;
-  Answer operator()(std::size_t index) const {
-    return skiff::bind::own(events_way_change<Owner>{level, index + (has_level_above(level) ? 0 : 1)});
-  }
+  Answer operator()(std::size_t index) const { return {level, index + (has_level_above(level) ? 0 : 1)}; }
 };
 template <class Owner> struct event_kind_change {
   choice_level_t level;
@@ -523,7 +518,7 @@ template <class Owner> struct set_event_kind {
 template <class Owner>
 inline auto event_kind_button(const palette& colours, choice_level_t level, room_event_t kind, bool show) {
   namespace c = skiff::compose;
-  return c::spec_for<Owner>([level, kind, show](const Owner& now) {
+  return c::spec_for<room_events_picked>([level, kind, show](const room_events_picked& now) {
     return scene::Spec{.selected = event_kind_shown(now, level, kind) == show};
   }, c::onPress(set_event_kind<Owner>{level, kind, show}, c::column(
       c::justified(c::vbox(0.0f, {.width = 70.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle,
@@ -535,8 +530,8 @@ inline auto event_kind_button(const palette& colours, choice_level_t level, room
 template <class Owner>
 inline auto event_kind_row(const palette& colours, choice_level_t level, room_event_t kind) {
   namespace c = skiff::compose;
-  return c::spec_for<Owner>([level](const Owner& now) {
-    const bool custom = events_way_of(level, events_of(now)) == kEventsCustom;
+  return c::spec_for<room_events_picked>([level](const room_events_picked& now) {
+    const bool custom = events_way_of(level, now.at(level)) == kEventsCustom;
     return scene::Spec{.alpha = custom ? 1.0f : 0.4f, .disabled = !custom};
   }, c::row(setting_row(),
       setting_label(nodes::Text(spl::visit([](auto one) { return std::string(label_of(one)); }, kind), 14.0f, colours.text)),
@@ -548,10 +543,9 @@ inline auto event_kinds_field(const palette& colours, choice_level_t level,
   namespace c = skiff::compose;
   auto names = std::vector<std::string>{"All events", "Messages only", "Custom"};
   if (has_level_above(level)) names.insert(names.begin(), "As above");
-  auto mode = c::projected<Owner>([level](const Owner& now) {
-    room_events_at(level) = events_of(now);
-    return events_way_of(level, events_of(now)) - (has_level_above(level) ? 0 : 1);
-  }, make_choice_menu(colours, "Room events", std::move(names), 0, choose_events_way<Owner>{level}));
+  auto mode = c::projected<room_events_picked>([level](const room_events_picked& now) {
+    return events_way_of(level, now.at(level)) - (has_level_above(level) ? 0 : 1);
+  }, make_choice_menu(colours, "Room events", std::move(names), 0, choose_events_way{level}));
   mode.apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
   auto rows = std::ranges::to<std::vector>(std::views::transform(kinds, [&](const room_event_t& kind) {
     return event_kind_row<Owner>(colours, level, kind);

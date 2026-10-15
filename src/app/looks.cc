@@ -26,10 +26,71 @@ export namespace mux::app {
 class looks_part {
  public:
   using accounts = mux::ui::accounts_panel;
-  looks_part(services& shared, kept_settings& kept) : s_(&shared), k_(&kept) {}
+  looks_part(services& shared, kept_settings& kept, const mux::ui::palette& colours) : s_(&shared), k_(&kept), colours_(&colours) {}
   looks_part(const looks_part&) = delete;
   looks_part& operator=(const looks_part&) = delete;
 
+  // The looks in effect, as what is kept says: what each level holds of the
+  // looks and of room events -- every chat's, the account's and the chat's
+  // that settings are open for -- for the choices to show what is in effect;
+  // the panels' look for the chat chosen, the window repainted where it
+  // changes; and the background behind the window -- the chat's, else every
+  // chat's. Put where they moved.
+  void read() {
+    const mux::chat_settings reads = k_->reads();
+    const auto& looks = k_->appearance();
+    const auto& history = k_->history();
+    const auto& chosen = s_->showing->look<mux::ui::chat_shown>()->chosen;
+    const std::optional<mux::conversation_id> managed = s_->managed();
+    auto& shown = s_->looks;
+    shown.at(mux::choice_level::everywhere{}) = {looks.wallpaper, looks.bubbles, looks.panels};
+    mux::ui::room_events_picked events{.everywhere = {history.show_room_events, history.room_event_kinds}};
+    const mux::config::account_t* account = managed ? reads.settings_of(managed->account.address) : nullptr;
+    shown.at(mux::choice_level::account{}) =
+        account ? mux::ui::looks_held{mux::config::wallpaper_of(*account).transform([](const std::string& word) { return mux::config::wallpaper_of(std::string_view(word)); }),
+                                      mux::config::bubbles_of(*account).transform([](const std::string& word) { return mux::config::bubble_look_of(word); }),
+                                      mux::config::panels_of(*account).transform([](const std::string& word) { return mux::config::bubble_look_of(word); })}
+                : mux::ui::looks_held{};
+    if (account)
+      events.account = {mux::config::room_events_of(*account), mux::config::room_event_kinds_of(*account)};
+    shown.at(mux::choice_level::chat{}) =
+        managed ? mux::ui::looks_held{reads.own_of<&mux::config::chat_choices::wallpaper>(*managed), reads.own_of<&mux::config::chat_choices::bubbles>(*managed),
+                                      reads.own_of<&mux::config::chat_choices::panels>(*managed)}
+                : mux::ui::looks_held{};
+    if (managed)
+      events.chat = {reads.own_of<&mux::config::chat_choices::room_events>(*managed), reads.own_of<&mux::config::chat_choices::room_event_kinds>(*managed)};
+    shown.panels = chosen ? reads.panels_of(*chosen) : looks.panels.value_or(mux::config::bubble_look{});
+    if (mux::ui::show_panels(s_->paint, shown.panels, shown.window, *colours_))
+      s_->root().panels_changed();
+    this->put(mux::ui::behind_shown{chosen ? reads.wallpaper_of(*chosen) : looks.wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}})});
+    this->put(std::move(events));
+    mux::ui::show_looks(*s_->showing, shown);
+  }
+  // Which room events show at a level, set to a way: Custom from what was
+  // in effect there.
+  void apply(const request::set_events_way& one) {
+    const auto held = mux::ui::events_for_way(*s_->showing->look<mux::ui::room_events_picked>(), one.level, one.way);
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
+                                 auto now = k_->history();
+                                 mux::ui::events_in(now, held);
+                                 k_->set_part(std::move(now));
+                               },
+                               [&](mux::choice_level::account) {
+                                 s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                   mux::config::room_events_in(account) = held.all;
+                                   mux::config::room_event_kinds_in(account) = held.kinds;
+                                 });
+                               },
+                               [&](mux::choice_level::chat) {
+                                 if (const auto chat = s_->managed()) {
+                                   k_->choose<&mux::app::chat_choices::room_events>(*chat, held.all);
+                                   k_->choose<&mux::app::chat_choices::room_event_kinds>(*chat, held.kinds);
+                                 }
+                               }},
+               one.level);
+    (void)k_->write();
+    s_->refresh_due = true;
+  }
   void apply(const request::open_wallpaper& one) { mux::ui::show(*s_->showing, std::optional(mux::ui::wallpaper_facts{one.level})); }
   void apply(const request::close_wallpaper&) { mux::ui::show<mux::ui::wallpaper_facts>(*s_->showing, std::nullopt); }
   // A background chosen: the theme's, plain, or as the level over it says,
@@ -142,8 +203,15 @@ class looks_part {
     s_->refresh_due = true;
   }
 
+  template <class Part>
+  void put(Part now) {
+    if (*s_->showing->look<Part>() != now)
+      mux::ui::show(*s_->showing, std::move(now));
+  }
+
   services* s_;
   kept_settings* k_;
+  const mux::ui::palette* colours_;
   // A picture being chosen for a background: at which level.
   std::optional<mux::choice_level_t> picking_;
 };

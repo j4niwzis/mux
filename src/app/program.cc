@@ -123,7 +123,7 @@ struct app : kept_settings {
   room_card_part room_card{shared};
   preferences_part preferences{shared, *this, proxying};
   manage_part manage{shared, *this};
-  looks_part looks{shared, *this};
+  looks_part looks{shared, *this, colours};
   threads_part threads{shared};
   jumps_part jumps{shared};
   chat_view_part chat_view{shared};

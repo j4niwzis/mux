@@ -716,9 +716,9 @@ struct window : skiff::compose::Specced {
       shown_in<settings_view_t, settings_facts> settings;
       shown_in<notice_box_t, notice_facts> notice;
       // A person's info, in the middle, as tdesktop's profile layer.
-      shown_in<person_card, person_shown> person;
+      shown_in<person_card_t, person_shown> person;
       // A room not joined, from a link: its card, as a person's.
-      shown_in<room_card, room_card_facts> room;
+      shown_in<room_card_t, room_card_facts> room;
       // The plugins' dialogs: a message's reactions as events, for one.
       typename dialogs_t::nodes_t dialogs;
       // A message's earlier versions, as AyuGram's edit history.
@@ -884,8 +884,8 @@ struct window : skiff::compose::Specced {
                 .settings =
                     shown_made<settings_view_t, settings_facts>(n),
                 .notice = shown_made<notice_box_t, notice_facts>(n),
-                .person = shown_made<person_card, person_shown>(n),
-                .room = shown_made<room_card, room_card_facts>(n),
+                .person = shown_made<person_card_t, person_shown>(n),
+                .room = shown_made<room_card_t, room_card_facts>(n),
                 .history =
                     shown_made<edit_history_box, history_facts>(n),
                 .linking = shown_made<link_box_t, link_facts>(n),

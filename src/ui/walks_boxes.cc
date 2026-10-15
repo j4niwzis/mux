@@ -23,11 +23,11 @@ template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::create_room_box>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::create_room_box>();
 }
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::person_card>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::person_card>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::person_card_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::person_card_t>();
 }
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::room_card>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::room_card>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::room_card_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::room_card_t>();
 }
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::edit_history_box>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::edit_history_box>();

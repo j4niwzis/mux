@@ -255,6 +255,67 @@ struct shown_how {
   std::optional<std::string> unread_from;
 };
 
+// Which of a list's messages are made into bubbles -- a chat's timeline, a
+// thread's root and answers: a stretch of them, at most a few hundred, that
+// slides with the reader -- more made above as the view nears its top, the
+// far ones below let go -- and is kept by the messages at its ends, so that
+// history coming in above does not move it. A whole long thread made at
+// once -- every bubble wrapped, measured and laid out -- was what made one
+// slow to open, and every change in it slow after.
+// Slid a little at a time, well before the reader reaches its edge: sixty
+// bubbles made in one frame was a frame of jank.
+inline constexpr std::size_t kFirstMade = 80, kMostMade = 240, kMadeStep = 16;
+struct made_range {
+  std::optional<std::string> from, to;
+  bool to_end = true;
+  friend bool operator==(const made_range&, const made_range&) = default;
+};
+[[nodiscard]] inline std::pair<std::size_t, std::size_t> made_indices(const made_range& made, const std::vector<message>& all) {
+  const auto index_of = [&](const std::optional<std::string>& id) -> std::optional<std::size_t> {
+    if (!id)
+      return std::nullopt;
+    const auto it = std::ranges::find(all, *id, &message::id);
+    return it == all.end() ? std::nullopt : std::optional<std::size_t>(static_cast<std::size_t>(it - all.begin()));
+  };
+  std::size_t to = all.size();
+  if (!made.to_end)
+    if (const auto at = index_of(made.to))
+      to = *at + 1;
+  std::size_t from = to > kFirstMade ? to - kFirstMade : 0;
+  if (const auto at = index_of(made.from); at && *at <= to)
+    from = *at;
+  if (to - from > kMostMade)
+    from = to - kMostMade;
+  return {from, to};
+}
+// The stretch from `from` to `to`, kept by its ends: whether it is another.
+[[nodiscard]] inline bool set_made(made_range& made, const std::vector<message>& all, std::size_t from, std::size_t to) {
+  to = std::min(to, all.size());
+  from = std::min(from, to);
+  made_range next{from < all.size() ? std::optional<std::string>(all[from].id) : std::nullopt,
+                  to > 0 ? std::optional<std::string>(all[to - 1].id) : std::nullopt, to == all.size()};
+  const made_range was = std::exchange(made, std::move(next));
+  return was != made;
+}
+// Slid as the view nears an edge of what is made, while a screen and a half
+// is still made beyond it: up, where there is more above; down, where it is
+// not at the end. Whether it moved.
+[[nodiscard]] inline bool slide_made(made_range& made, const std::vector<message>& all, float at, float extent, float view) {
+  auto [from, to] = made_indices(made, all);
+  const float ahead = std::max(300.0f, view * 1.5f);
+  if (at <= ahead && from > 0) {
+    from = from > kMadeStep ? from - kMadeStep : 0;
+    to = std::min(to, from + kMostMade);
+    return set_made(made, all, from, to);
+  }
+  if (!made.to_end && at >= extent - ahead) {
+    to = std::min(all.size(), to + kMadeStep);
+    from = to > kMostMade && to - from > kMostMade ? to - kMostMade : from;
+    return set_made(made, all, from, to);
+  }
+  return false;
+}
+
 // Selection owns the gesture before any link, photo, or text child sees
 // it. A tap toggles one message; a drag commits the displayed message range.
 struct message_selection_drag {

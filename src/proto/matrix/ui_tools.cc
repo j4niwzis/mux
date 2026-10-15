@@ -89,7 +89,7 @@ auto devtools_head(const palette& colours, std::string title, Back back) {
   const scene::Spec middle{.alignSelf = scene::align::kMiddle};
   return c::row(c::hbox(8.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
       std::move(back),
-      c::column(c::vbox(0.0f, {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .autoSize = scene::axes::kY}),
+      c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
                 elided(nodes::Text(std::move(title), 16.0f, colours.text, true)),
                 c::fading_for<devtools_said>([](const devtools_said& now) { return now.copied; }, 1200.0,
                     nodes::Text("Copied", 12.0f, colours.accent))),

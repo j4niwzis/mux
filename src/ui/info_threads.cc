@@ -301,11 +301,24 @@ struct threads_panel : skiff::compose::Stacked {
     if (aiming) {
       auto& bubbles = parts.answers.bubbles();
       const auto found = std::ranges::find(bubbles, *aiming, &message_bubble::message_id);
-      if (found == bubbles.end())
+      auto& view = parts.answers.parts.timeline;
+      if (found == bubbles.end()) {
         aiming.reset();  // gone meanwhile
-      else if (!found->bounds().isEmpty()) {
+      } else if (!found->bounds().isEmpty()) {
         aiming.reset();
         this->aim_at(*found);
+      } else if (!view.moving()) {
+        // Made, but not laid out: more than a screen from the view, where
+        // the list lays nothing out. The view stepped a screen toward it,
+        // as the chat steps, until it is laid out and aimed at.
+        const auto laid = std::ranges::find_if(bubbles, [](const message_bubble& row) { return !row.bounds().isEmpty(); });
+        if (laid == bubbles.end()) {
+          aiming.reset();
+        } else {
+          const float page = view.bounds().height();
+          view.setCurrent(std::max(0.0f, view.current() + (found < laid ? -page : page)));
+          this->markDamaged();
+        }
       }
       return;
     }

@@ -591,13 +591,11 @@ auto message_input(const palette& colours, std::string placeholder, Submit submi
   namespace c = skiff::compose;
   auto field = widgets::TextArea<Submit, message_pictures, field_quotes>(colours.widgets, std::move(placeholder), std::move(submit));
   field.setFontSize(13.0f);
-  auto send = icon_button<Send>(colours, icon::send{}, std::move(send_it));
-  send.set_colour(colours.accent);
   return c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}}),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Attach>(colours, icon::clip{}, std::move(attach_it))),
                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field)),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Emoji>(colours, icon::smile{}, std::move(emoji_it))),
-                c::styled({.alignSelf = scene::align::kEnd}, std::move(send)));
+                c::styled({.alignSelf = scene::align::kEnd}, icon_button<Send>(colours, icon::send{}, std::move(send_it), colours.accent)));
 }
 // Its paperclip, and its field.
 inline auto& input_attach(auto& input) { return std::get<0>(input.fParts); }
@@ -754,12 +752,16 @@ template <class Compute, class Part> auto read_from_chat(std::true_type, Compute
 template <class Compute, class Part> auto read_from_chat(std::false_type, Compute, Part part) { return part; }
 // What is written answers or edits something: as what is shown says, where
 // the composer has a part of it (composing); else as it is told.
-template <class Where, class Row>
+template <class Where, class Cancel>
   requires requires { typename Where::composing; }
-auto context_shown(Row row) {
-  return skiff::compose::projected<typename Where::composing>([](const auto& now) { return now.said; }, std::move(row));
+auto context_shown(const palette& colours, Cancel cancel) {
+  return context_bar<typename Where::composing>(colours, [](const typename Where::composing& now) { return now.said; },
+                                                std::move(cancel));
 }
-template <class Where, class Row> auto context_shown(Row row) { return row; }
+// A thread's: told what it answers by its panel, which holds that in no model yet.
+template <class Where, class Cancel> auto context_shown(const palette& colours, Cancel cancel) {
+  return skiff::compose::visible(false, legacy::context_bar<Cancel>(colours, std::move(cancel)));
+}
 // The chat's own composer: in the chat chosen, as what is shown says it --
 // the scope it reads the chat in moved to it.
 template <class Column> auto in_chosen_chat(std::true_type, Column column) {
@@ -794,7 +796,7 @@ auto composer_bar(const ui_needs& n, typename Where::cancel cancel = {}, typenam
                                    {.fillX = true, .autoSize = scene::axes::kY})),
                 shown_by_chat(reads{}, [](const conversation& chat) { return any_unsent(chat); },
                               c::visible(false, unsent_bar(colours))),
-                context_shown<Where>(c::visible(false, context_bar<typename Where::cancel>(colours, std::move(cancel)))),
+                context_shown<Where>(colours, std::move(cancel)),
                 shown_by_chat(reads{}, [shared](const conversation& chat) { return may_post_in(*shared, chat); },
                               message_input(colours, std::string(Where::placeholder), std::move(submit), std::move(attach),
                                             std::move(emoji), std::move(send))),
@@ -920,7 +922,7 @@ inline auto mark_button(const palette& colours, mark_kind_t which, std::string g
       c::onClick(::mux::ui::request::jump_to_mark{which},
                  c::column(c::vbox(0.0f, corner_button(colours)),
                            c::styled({.place = scene::anchor::kCentre}, nodes::Text(std::move(glyph), 18.0f, colours.text, true)),
-                           count_badge(colours)))));
+                           legacy::count_badge(colours)))));
 }
 using mark_button_t = decltype(mark_button(std::declval<const palette&>(), mark_kind_t{}, std::string()));
 // How many, and which place up the stack it takes: 0 at the bottom.
@@ -937,7 +939,7 @@ inline auto jump_button(const palette& colours) {
   return c::onClick(::mux::ui::request::jump_to_end{},
                     c::column(c::vbox(0.0f, corner_button(colours)),
                               c::styled({.fill = true}, nodes::Icon(shape_of(icon::down{}), colours.text)),
-                              c::visible(false, count_badge(colours))));
+                              c::visible(false, legacy::count_badge(colours))));
 }
 using jump_button_t = decltype(jump_button(std::declval<const palette&>()));
 inline void set_unseen(auto& button, int count) {

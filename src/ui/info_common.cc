@@ -45,8 +45,8 @@ using action_tile_t = decltype(action_tile(std::declval<const palette&>(), "", i
 
 
 // A round avatar on its own: the chat's, big, over its name.
-struct big_avatar : avatar_mark {
-  big_avatar() : avatar_mark(avatar_of::chat{}, std::string(), std::string(), 96.0f) {}
+struct big_avatar : legacy::avatar_mark {
+  big_avatar() : legacy::avatar_mark(avatar_of::chat{}, std::string(), std::string(), 96.0f) {}
 };
 // An icon on its own, not to be pressed.
 inline auto icon_view(const palette& colours, icon_t mark) {

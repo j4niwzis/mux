@@ -32,7 +32,7 @@ template <auto Setting, class T = bool>
 auto setting_switch(const palette& colours, std::string text) {
   return skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true,
-                                   .height = row_item<nothing>::kHeight,
+                                   .height = kRowHeight,
                                    .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
       skiff::compose::styled(
           {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
@@ -83,9 +83,9 @@ auto limit_stepper(const palette& colours, std::string what, std::string_view un
       skiff::compose::text_for<config::cache_limits>(limit_words<Which>{unit},
           skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 14.0f, colours.accent, true))),
       skiff::compose::bound<config::cache_limits>(skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-          icon_button<limit_press<Which>>(colours, icon::minus{}, {false}))),
+          legacy::icon_button<limit_press<Which>>(colours, icon::minus{}, {false}))),
       skiff::compose::bound<config::cache_limits>(skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-          icon_button<limit_press<Which>>(colours, icon::plus{}, {true}))));
+          legacy::icon_button<limit_press<Which>>(colours, icon::plus{}, {true}))));
 }
 
 // Settings' Storage page: whether what mux keeps on disk is sealed; how
@@ -99,7 +99,7 @@ inline auto seal_settings_view(const palette& colours) {
   using field = skiff::model::Field<&local_seal::on>;
   return skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      skiff::compose::row(skiff::compose::hbox(16.0f, {.fillX = true, .height = row_item<nothing>::kHeight,
+      skiff::compose::row(skiff::compose::hbox(16.0f, {.fillX = true, .height = kRowHeight,
           .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
           skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
               nodes::Text("Encrypt local data", 15.0f, colours.text)),

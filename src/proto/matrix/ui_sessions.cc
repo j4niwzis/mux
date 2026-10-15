@@ -166,12 +166,12 @@ struct account_sessions : skiff::compose::Stacked {
   // set up here, or brought back with the recovery key -- the Privacy page's
   // own rows, the same buttons. Without it, a session verified by emoji is
   // trusted only by the client that verified it, and nothing is signed.
-  using set_up_row = row_item<sends<request::setup_cross_signing>>;
-  using restore_row = row_item<sends<request::restore_cross_signing>>;
-  using reset_row = row_item<sends<request::reset_identity>>;
-  using reset_backup_row = row_item<sends<request::reset_backup>>;
-  using delete_backup_row = row_item<sends<request::delete_backup>>;
-  using sign_out_unverified_row = row_item<sends<request::sign_out_unverified>>;
+  using set_up_row = legacy::row_item<sends<request::setup_cross_signing>>;
+  using restore_row = legacy::row_item<sends<request::restore_cross_signing>>;
+  using reset_row = legacy::row_item<sends<request::reset_identity>>;
+  using reset_backup_row = legacy::row_item<sends<request::reset_backup>>;
+  using delete_backup_row = legacy::row_item<sends<request::delete_backup>>;
+  using sign_out_unverified_row = legacy::row_item<sends<request::sign_out_unverified>>;
   struct parts_t {
     nodes::Text verification_title;
     nodes::Text verification_note;
@@ -336,10 +336,10 @@ struct account_sessions : skiff::compose::Stacked {
 // imported, as Element does them; cross-signing set up, or restored.
 struct encryption_page : skiff::compose::Stacked {
   using only_verified_row = switch_row<sends<::mux::ui::request::flip_only_verified>>;
-  using export_row = row_item<sends<request::export_room_keys>>;
-  using import_row = row_item<sends<request::import_room_keys>>;
-  using cross_signing_row = row_item<sends<request::setup_cross_signing>>;
-  using recovery_row = row_item<sends<request::restore_cross_signing>>;
+  using export_row = legacy::row_item<sends<request::export_room_keys>>;
+  using import_row = legacy::row_item<sends<request::import_room_keys>>;
+  using cross_signing_row = legacy::row_item<sends<request::setup_cross_signing>>;
+  using recovery_row = legacy::row_item<sends<request::restore_cross_signing>>;
   struct parts_t {
     nodes::Text title;
     only_verified_row only_verified;

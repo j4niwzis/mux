@@ -588,7 +588,7 @@ template <class Box = manage_box> inline auto general_page(Box* box, const room_
                       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                           action(colours, "Upload", sends<::mux::ui::request::pick_room_avatar>{{facts.chat}}, editable(box, power_need::change_avatar{})),
                           action(colours, "Remove", sends<remove_avatar>{}, editable(box, power_need::change_avatar{})))),
-                  avatar_mark(avatar_of::chat{}, facts.id, facts.name, 96.0f)),
+                  legacy::avatar_mark(avatar_of::chat{}, facts.id, facts.name, 96.0f)),
               c::shown_for<skiff::model::Field<&draft::avatar>>([](const auto& avatar) { return avatar.has_value(); }, explained(colours, "Avatar change pending. Save to apply.")),
               c::styled({.disabled = !editable(box, power_need::rename{})}, model_field<&draft::name>(colours, "Name", "")),
               c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), settings_section_heading(colours, "Topic"), topic_input),

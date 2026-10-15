@@ -100,7 +100,7 @@ template <class Pick> struct space_icon : skiff::compose::Stacked {
   // The colours it is made and ringed in.
   const palette* colours_ = nullptr;
   struct parts_t {
-    std::optional<avatar_mark> face;
+    std::optional<legacy::avatar_mark> face;
     std::optional<nodes::Text> mark;
   } parts;
   space_icon(const palette &colours, config::space_item_t what, folder_t shows,
@@ -258,7 +258,7 @@ struct side_column : skiff::compose::Stacked {
   // All of the window across: one thing at a time (single, below).
   bool whole = false;
   struct head_row : skiff::compose::Stacked {
-    using explore_button = icon_button<sends<::mux::ui::request::open_explore>>;
+    using explore_button = legacy::icon_button<sends<::mux::ui::request::open_explore>>;
     struct parts_t {
       decltype(menu_button(std::declval<const palette&>())) menu;
       nodes::Text name;
@@ -319,10 +319,10 @@ struct side_column : skiff::compose::Stacked {
   // A forum open: its name, and the way back to the chats.
   struct forum_head_t : skiff::compose::Stacked {
     struct parts_t {
-      icon_button<sends<::mux::ui::request::close_forum>> back;
+      legacy::icon_button<sends<::mux::ui::request::close_forum>> back;
       nodes::Text name;
       // Its settings: it is in no bar, to be right-pressed.
-      icon_button<sends<::mux::ui::request::manage_forum>> settings;
+      legacy::icon_button<sends<::mux::ui::request::manage_forum>> settings;
     } parts;
     forum_head_t(const palette &colours)
         : Stacked(skiff::compose::hbox(8.0f,
@@ -332,14 +332,14 @@ struct side_column : skiff::compose::Stacked {
           parts{
               .back = skiff::compose::styled(
                   {.alignSelf = scene::align::kMiddle},
-                  icon_button<sends<::mux::ui::request::close_forum>>(
+                  legacy::icon_button<sends<::mux::ui::request::close_forum>>(
                       colours, icon::back{}, {})),
               .name = skiff::compose::styled(
                   {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                   elided(nodes::Text("", 15.0f, colours.text, true))),
               .settings = skiff::compose::styled(
                   {.alignSelf = scene::align::kMiddle},
-                  icon_button<sends<::mux::ui::request::manage_forum>>(
+                  legacy::icon_button<sends<::mux::ui::request::manage_forum>>(
                       colours, icon::gear{}, {}))} {}
   };
   // A message found, in the list of them: who, when, and its words.
@@ -351,9 +351,9 @@ struct side_column : skiff::compose::Stacked {
   struct found_row : skiff::compose::Stacked {
     pick_found pick;
     struct lines_t : skiff::compose::Stacked {
-      struct top_t : name_time_line {
+      struct top_t : legacy::name_time_line {
         top_t(const palette& colours, std::string name, std::string when)
-            : name_time_line(std::move(name), std::move(when), colours.text, colours.dim, 12.0f) {}
+            : legacy::name_time_line(std::move(name), std::move(when), colours.text, colours.dim, 12.0f) {}
       };
       struct parts_t {
         top_t top;
@@ -374,7 +374,7 @@ struct side_column : skiff::compose::Stacked {
                     elided(nodes::Text(one.snippet, 13.0f, colours.dim)))} {}
     };
     struct parts_t {
-      avatar_mark face;
+      legacy::avatar_mark face;
       lines_t lines;
     } parts;
     found_row(const palette &colours, const search_result &one)
@@ -385,7 +385,7 @@ struct side_column : skiff::compose::Stacked {
                                         .hoverBackground = colours.chosen})),
           pick{one.index}, parts{.face = skiff::compose::styled(
                                      {.alignSelf = scene::align::kMiddle},
-                                     avatar_mark(avatar_of::person{}, one.sender, one.name, 40.0f)),
+                                     legacy::avatar_mark(avatar_of::person{}, one.sender, one.name, 40.0f)),
                                  .lines = lines_t(colours, one)} {}
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -550,7 +550,7 @@ struct side_column : skiff::compose::Stacked {
       std::vector<widgets::Button<place_act>> places;
       std::optional<widgets::Button<unplace_act>> unplace;
       std::optional<widgets::Button<strip_act>> strip;
-      std::optional<accent_circles<strip_colour_act>> strip_colours;
+      std::optional<legacy::accent_circles<strip_colour_act>> strip_colours;
     } parts;
     // Its places: Copy to and Move to each other account. Listed here from
     // another, its way out of this list, and its strip.

@@ -72,14 +72,14 @@ struct picture_viewer : skiff::compose::Stacked {
     ::mux::ui::request::press_loader operator()() const { return ::mux::ui::request::press_loader{viewer->video.value_or(viewer->source)}; }
   };
   struct top_bar : skiff::compose::Stacked {
-    using close_button = icon_button<sends<::mux::ui::request::close_picture>>;
+    using close_button = legacy::icon_button<sends<::mux::ui::request::close_picture>>;
     struct parts_t {
-      avatar_mark face;
+      legacy::avatar_mark face;
       two_lines_t texts;
       nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
-      icon_button<zoom_by> smaller;
-      icon_button<zoom_by> larger;
-      icon_button<save_it> save;
+      legacy::icon_button<zoom_by> smaller;
+      legacy::icon_button<zoom_by> larger;
+      legacy::icon_button<save_it> save;
       close_button close;
     } parts;
     top_bar(const palette &colours, picture_viewer *viewer,
@@ -90,14 +90,14 @@ struct picture_viewer : skiff::compose::Stacked {
                      .height = 56.0f,
                      .padding = {0.0f, 12.0f, 0.0f, 16.0f}})),
           parts{
-              .face = avatar_mark(avatar_of::person{}, sender, name, 36.0f),
+              .face = legacy::avatar_mark(avatar_of::person{}, sender, name, 36.0f),
               .texts = two_lines(colours, name, when, 14.0f, 2.0f, two_line_style{
                   .first_ink = skia::colorSetARGB(255, 255, 255, 255), .second_ink = skia::colorSetARGB(255, 200, 200, 200)}),
-              .smaller = icon_button<zoom_by>(colours, icon::minus{},
+              .smaller = legacy::icon_button<zoom_by>(colours, icon::minus{},
                                               {viewer, 1.0f / 1.25f}),
               .larger =
-                  icon_button<zoom_by>(colours, icon::plus{}, {viewer, 1.25f}),
-              .save = icon_button<save_it>(colours, icon::download{}, {source}),
+                  legacy::icon_button<zoom_by>(colours, icon::plus{}, {viewer, 1.25f}),
+              .save = legacy::icon_button<save_it>(colours, icon::download{}, {source}),
               .close = close_button(colours, icon::close{}, {})} {
       parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
       // White on the dark of the viewer.

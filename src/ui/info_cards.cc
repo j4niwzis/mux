@@ -40,7 +40,7 @@ struct person_shown {
 auto person_cover(const palette& colours, const std::string& key, const person_facts& facts) {
   return skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
-      avatar_button(avatar_of::person{}, key, facts.name, 72.0f),
+      legacy::avatar_button(avatar_of::person{}, key, facts.name, 72.0f),
       two_lines(colours, facts.name, facts.status, 17.0f, 6.0f, two_line_style{.selectable = true}));
 }
 using person_cover_t = decltype(person_cover(std::declval<const palette&>(), "", std::declval<const person_facts&>()));
@@ -117,7 +117,7 @@ struct person_card : skiff::compose::Stacked {
     Answer operator()() const { return {::mux::ui::request::message_person{who}, ::mux::ui::request::close_person_info{}}; }
   };
   using close_act = sends<::mux::ui::request::close_person_info>;
-  using close_button = icon_button<close_act>;
+  using close_button = legacy::icon_button<close_act>;
   using top_bar = page_header_t<no_back, close_act>;
   // tdesktop's cover: 108 high, a 72 photo, the name and status beside it.
   // What a moderator does to them, as Element's user info offers it.
@@ -262,7 +262,7 @@ struct room_card_facts {
 inline auto room_cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line) {
   return skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
-      avatar_mark(avatar_of::chat{}, key, name, 72.0f),
+      legacy::avatar_mark(avatar_of::chat{}, key, name, 72.0f),
       two_lines(colours, name, line, 17.0f, 6.0f, two_line_style{.selectable = true}));
 }
 using room_cover_t = decltype(room_cover(std::declval<const palette&>(), "", "", ""));
@@ -284,7 +284,7 @@ struct room_card : skiff::compose::Stacked {
     ::mux::ui::request::decline_room_card operator()() { return ::mux::ui::request::decline_room_card{}; }
   };
   using close_act = sends<::mux::ui::request::close_room_card>;
-  using close_button = icon_button<close_act>;
+  using close_button = legacy::icon_button<close_act>;
   using top_bar = page_header_t<no_back, close_act>;
   // Its name, else its address, else what the link said.
   static std::string name_of(const std::string& asked, const room_preview& known) {

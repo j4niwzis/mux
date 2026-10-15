@@ -40,7 +40,7 @@ struct devtools_box : skiff::compose::Stacked {
     devtools_box* box;
     void operator()() const { box->go_back(); }
   };
-  using header_t = page_header_t<back_up, close_it>;
+  using header_t = legacy::page_header_t<back_up, close_it>;
   // A line of the state's list: a type, or a key of one; pressed, what is
   // under it, at the next frame -- not from inside the list it is in.
   struct pick {
@@ -57,7 +57,7 @@ struct devtools_box : skiff::compose::Stacked {
     using Answer = std::optional<request::send_custom>;
     Answer operator()() const { return box->send(); }
   };
-  using entry_row = row_item<pick>;
+  using entry_row = legacy::row_item<pick>;
   using rows_t = nodes::Flow<std::vector<entry_row>>;
   struct form : skiff::compose::Stacked {
     struct parts_t {
@@ -117,7 +117,7 @@ struct devtools_box : skiff::compose::Stacked {
 
   devtools_box(const palette &colours, std::string title, std::string text)
       : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 560.0f})),
-        colours_(&colours), parts{.header = page_header<back_up, close_it>(colours, std::move(title),
+        colours_(&colours), parts{.header = legacy::page_header<back_up, close_it>(colours, std::move(title),
                                                      {this}, {}, false, true),
                                   .reading = reading_of(colours)} {
     this->show_text(std::move(text));
@@ -125,7 +125,7 @@ struct devtools_box : skiff::compose::Stacked {
   devtools_box(const palette &colours,
                std::vector<proto::matrix::state_entry> entries)
       : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 560.0f})),
-        colours_(&colours), parts{.header = page_header<back_up, close_it>(colours, "Room state",
+        colours_(&colours), parts{.header = legacy::page_header<back_up, close_it>(colours, "Room state",
                                                      {this}, {}, false, true),
                                   .reading = reading_of(colours)},
         state(std::move(entries)) {
@@ -145,7 +145,7 @@ struct devtools_box : skiff::compose::Stacked {
   devtools_box(const palette &colours, send_form_t)
       : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 560.0f})),
         colours_(&colours),
-        parts{.header = page_header<back_up, close_it>(colours, "Send custom event", {this}, {},
+        parts{.header = legacy::page_header<back_up, close_it>(colours, "Send custom event", {this}, {},
                                  false, true),
               .reading = skiff::compose::visible(false, reading_of(colours))} {
     parts.sending.emplace(this);
@@ -274,7 +274,7 @@ struct uia_box : skiff::compose::Stacked {
     nodes::Text title;
     nodes::Text about;
     widgets::Button<open_again> again;
-    dialog_buttons<cancel, go> buttons;
+    legacy::dialog_buttons<cancel, go> buttons;
   } parts;
   uia_box(const palette &colours, std::string what, std::string url)
       : Stacked(skiff::compose::vbox(
@@ -294,7 +294,7 @@ struct uia_box : skiff::compose::Stacked {
                   widgets::Button<open_again>(colours.widgets,
                                               "Open the page again",
                                               {std::move(url)})),
-              .buttons = dialog_buttons<cancel, go>(colours, "Continue", {}, {},
+              .buttons = legacy::dialog_buttons<cancel, go>(colours, "Continue", {}, {},
                                                     120.0f)} {}
 };
 

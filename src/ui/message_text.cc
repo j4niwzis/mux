@@ -777,7 +777,7 @@ struct readers_row : skiff::compose::Stacked {
   static constexpr float kFace = 14.0f;  // Element's read receipt avatar
   static constexpr std::size_t kMost = 3;
   struct parts_t {
-    std::vector<avatar_mark> faces;
+    std::vector<legacy::avatar_mark> faces;
     nodes::Text more;
   } parts;
   readers_row(const palette &colours, const conversation &in,

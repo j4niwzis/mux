@@ -28,7 +28,7 @@ struct drawer_account : skiff::compose::Stacked {
   std::string address;
   bool current = false;
   struct parts_t {
-    avatar_mark face;
+    legacy::avatar_mark face;
     two_lines_t texts;
     // The account whose chats are shown: a tick at the end.
     icon_mark_t tick;
@@ -44,7 +44,7 @@ struct drawer_account : skiff::compose::Stacked {
                  const model &now, bool is_current)
       : Stacked(skiff::compose::hbox(14.0f, {})),
         address(config::address_of(saved)), current(is_current),
-        parts{.face = avatar_mark(avatar_of::person{}, address, address, 38.0f),
+        parts{.face = legacy::avatar_mark(avatar_of::person{}, address, address, 38.0f),
               .texts = account_lines(*n.colours, saved, now),
               .tick = skiff::compose::visible(
                   current, icon_mark(*n.colours, icon::check{}))} {
@@ -71,11 +71,11 @@ struct drawer_account : skiff::compose::Stacked {
 // accounts under them, then Settings and Quit, each a full-width line with
 // its icon.
 struct drawer_panel : skiff::compose::Stacked {
-  using manage_row = row_item<sends<::mux::ui::request::open_accounts>>;
-  using new_chat_row = row_item<sends<::mux::ui::request::open_new_chat>>;
-  using new_room_row = row_item<sends<::mux::ui::request::open_new_room>>;
-  using settings_row = row_item<sends<::mux::ui::request::open_settings>>;
-  using quit_row = row_item<sends<::mux::ui::request::quit>>;
+  using manage_row = legacy::row_item<sends<::mux::ui::request::open_accounts>>;
+  using new_chat_row = legacy::row_item<sends<::mux::ui::request::open_new_chat>>;
+  using new_room_row = legacy::row_item<sends<::mux::ui::request::open_new_room>>;
+  using settings_row = legacy::row_item<sends<::mux::ui::request::open_settings>>;
+  using quit_row = legacy::row_item<sends<::mux::ui::request::quit>>;
   // What it was handed, for the accounts it lists.
   ui_needs needs_;
   struct parts_t {

@@ -63,7 +63,7 @@ struct seen_row : skiff::compose::Stacked {
                                              12.0f, colours.dim))} {}
     };
     struct parts_t {
-      avatar_mark face;
+      legacy::avatar_mark face;
       lines_t lines;
     } parts;
     reader_row(const palette &colours, const seen_reader &one)
@@ -72,7 +72,7 @@ struct seen_row : skiff::compose::Stacked {
                                         .height = 44.0f,
                                         .padding = {6.0f, 17.0f, 6.0f, 13.0f},
                                         .hoverBackground = colours.chosen})),
-          id(one.id), parts{.face = avatar_mark(avatar_of::person{}, one.id, one.name, 30.0f),
+          id(one.id), parts{.face = legacy::avatar_mark(avatar_of::person{}, one.id, one.name, 30.0f),
                             .lines = lines_t(colours, one)} {
       // the name at 13 + 30 + 14 = 57
       // 6 over and under: the name at 13 and the time at 12 are 31.25 high,
@@ -121,7 +121,7 @@ struct seen_row : skiff::compose::Stacked {
   struct parts_t {
     icon_mark_t mark;
     nodes::Text label;
-    std::vector<avatar_mark> faces;
+    std::vector<legacy::avatar_mark> faces;
   } parts;
   seen_row(const palette &colours, std::vector<seen_reader> who)
       : Stacked(skiff::compose::hbox(0.0f, {})), colours_(&colours),
@@ -262,16 +262,16 @@ struct context_menu : skiff::compose::Specced {
     // kept, the program's.
     const palette* colours_ = nullptr;
     emoji_kept* kept_ = nullptr;
-    using reply_row = row_item<sends<::mux::ui::request::menu_reply>>;
-    using thread_row = row_item<sends<::mux::ui::request::menu_thread>>;
-    using quote_reply_row = row_item<sends<::mux::ui::request::menu_quote_reply>>;
-    using edit_row = row_item<sends<::mux::ui::request::menu_edit>>;
-    using later_row = row_item<not_yet>;
-    using copy_row = row_item<sends<::mux::ui::request::menu_copy>>;
-    using link_row = row_item<sends<::mux::ui::request::menu_copy_link>>;
-    using url_row = row_item<sends<::mux::ui::request::menu_copy_url>>;
-    using copy_image_row = row_item<sends<::mux::ui::request::menu_copy_image>>;
-    using save_row = row_item<sends<::mux::ui::request::menu_save>>;
+    using reply_row = legacy::row_item<sends<::mux::ui::request::menu_reply>>;
+    using thread_row = legacy::row_item<sends<::mux::ui::request::menu_thread>>;
+    using quote_reply_row = legacy::row_item<sends<::mux::ui::request::menu_quote_reply>>;
+    using edit_row = legacy::row_item<sends<::mux::ui::request::menu_edit>>;
+    using later_row = legacy::row_item<not_yet>;
+    using copy_row = legacy::row_item<sends<::mux::ui::request::menu_copy>>;
+    using link_row = legacy::row_item<sends<::mux::ui::request::menu_copy_link>>;
+    using url_row = legacy::row_item<sends<::mux::ui::request::menu_copy_url>>;
+    using copy_image_row = legacy::row_item<sends<::mux::ui::request::menu_copy_image>>;
+    using save_row = legacy::row_item<sends<::mux::ui::request::menu_save>>;
     // The rows plugins add to a message's menu (contract::message_menu),
     // after Save As, in the plugins' order: each made by its extend(), found
     // where the window is instantiated, which imports them (mux.plugins.ui).
@@ -292,12 +292,12 @@ struct context_menu : skiff::compose::Specced {
       }
     };
     using rows_t = plugin_rows<composition::providers<contract::message_menu, enabled_plugins>>;
-    using pin_row = row_item<sends<::mux::ui::request::menu_pin>>;
-    using forward_row = row_item<sends<::mux::ui::request::menu_forward>>;
-    using source_row = row_item<sends<::mux::ui::request::menu_view_source>>;
-    using history_row = row_item<sends<::mux::ui::request::menu_edit_history>>;
-    using select_row = row_item<sends<::mux::ui::request::menu_select>>;
-    using delete_row = row_item<sends<::mux::ui::request::menu_delete>>;
+    using pin_row = legacy::row_item<sends<::mux::ui::request::menu_pin>>;
+    using forward_row = legacy::row_item<sends<::mux::ui::request::menu_forward>>;
+    using source_row = legacy::row_item<sends<::mux::ui::request::menu_view_source>>;
+    using history_row = legacy::row_item<sends<::mux::ui::request::menu_edit_history>>;
+    using select_row = legacy::row_item<sends<::mux::ui::request::menu_select>>;
+    using delete_row = legacy::row_item<sends<::mux::ui::request::menu_delete>>;
     // As tdesktop's, in its order: the quick reactions; every emoji, in
     // place of the rest once asked for; Reply, Edit, Pin, Copy, Copy
     // Message Link, Save As, Forward, Delete; and who has seen it -- how

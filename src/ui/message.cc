@@ -603,7 +603,7 @@ struct message_bubble : skiff::compose::Stacked {
   struct parts_t {
     // The sender's avatar, beside the last of their run in a group; the
     // same room, empty, beside the rest.
-    avatar_mark face;
+    legacy::avatar_mark face;
     body_column body;
     // The arrow a swipe shows, filling as it reaches its mark.
     nodes::Icon swipe_mark;
@@ -669,7 +669,7 @@ struct message_bubble : skiff::compose::Stacked {
                   {.place = scene::anchor::kBottomLeft,
                    .x = -(kAvatar + 8.0f),
                    .y = -1.0f},
-                  avatar_mark(avatar_of::person{}, said.sender, sender_name(in, said.sender),
+                  legacy::avatar_mark(avatar_of::person{}, said.sender, sender_name(in, said.sender),
                               kAvatar)),
               .body = body_column(*n.colours, *n.looks, said.outgoing,
                                   said.body.plain,

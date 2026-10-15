@@ -235,14 +235,14 @@ inline auto theme_row(const palette& colours) {
 }
 // The themes move sideways in narrow pages; each card binds its own edit.
 inline auto theme_field(const palette& colours) {
-  return side_scroll<decltype(theme_row(colours))>(theme_row(colours));
+  return legacy::side_scroll<decltype(theme_row(colours))>(theme_row(colours));
 }
 // Telegram's accents, the theme's own first: bound to the accent the model
 // holds. Their shades are the theme's: the page is made again with it.
 inline auto accent_view(const config::theme_t &theme) {
   using field = skiff::model::Field<&config::look_settings::accent>;
   auto circles =
-      accent_circles<pick<config::accent_t>>::accents_of(true) |
+      legacy::accent_circles<pick<config::accent_t>>::accents_of(true) |
       std::views::transform([&](const config::accent_t &accent) {
         const auto shade = colour_of(accent, theme);
         return skiff::compose::spec_for<field>(
@@ -251,7 +251,7 @@ inline auto accent_view(const config::theme_t &theme) {
               return {.border = scene::Border{chosen ? shade : 0u,
                                               chosen ? 2.0f : 0.0f}};
             },
-            accent_circle<pick<config::accent_t>>({}, accent, theme));
+            legacy::accent_circle<pick<config::accent_t>>({}, accent, theme));
       }) |
       std::ranges::to<std::vector>();
   return skiff::compose::many(
@@ -302,7 +302,7 @@ inline auto avatar_rounding_view(const palette& colours) {
 // hold, so it reads both, and is flipped only then.
 inline auto home_direct_switch(const palette& colours) {
   return skiff::compose::row(
-      skiff::compose::hbox(16.0f, {.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+      skiff::compose::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
       skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                              elided(nodes::Text("And without direct messages", 15.0f, colours.text))),
       skiff::compose::bound<skiff::model::Field<&config::look_settings::home_hides_direct>>(
@@ -389,7 +389,7 @@ struct appearance_page_node : skiff::compose::Stacked {
     std::unique_ptr<fonts> style;
     std::unique_ptr<look_choices> looks;
     std::unique_ptr<spaces> window;
-    std::unique_ptr<spaces_choices> bars;
+    std::unique_ptr<legacy::spaces_choices> bars;
     std::unique_ptr<frame> rendering;
   } parts;
   appearance_page_node(const ui_needs& needs, const config::theme_t& theme)
@@ -402,7 +402,7 @@ struct appearance_page_node : skiff::compose::Stacked {
                 skiff::compose::handlers(), style_controls(*needs.colours, false))),
             .looks = std::make_unique<look_choices>(*needs.colours, *needs.looks, choice_level::everywhere{}),
             .window = std::make_unique<spaces>(window_settings_view(*needs.colours)),
-            .bars = std::make_unique<spaces_choices>(*needs.colours, *needs.shared),
+            .bars = std::make_unique<legacy::spaces_choices>(*needs.colours, *needs.shared),
             .rendering = std::make_unique<frame>(frame_look_view(*needs.colours, needs.looks->window.see_through))} {
     parts.looks->apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
     parts.bars->setVisible(needs.looks->window.spaces);

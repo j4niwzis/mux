@@ -173,7 +173,7 @@ struct packs_box : skiff::compose::Stacked {
       widgets::Toggle<flip_its_emoji> emoji;
       nodes::Text sticker_label;
       widgets::Toggle<flip_its_sticker> sticker;
-      icon_button<remove_it> remove;
+      legacy::icon_button<remove_it> remove;
     } parts;
     picture_row(packs_box *box, std::size_t index, const pack_picture &one)
         : Stacked(skiff::compose::hbox(
@@ -201,7 +201,7 @@ struct packs_box : skiff::compose::Stacked {
                     nodes::Text("Sticker", 12.0f, box->colours_->dim),
                 .sticker = widgets::Toggle<flip_its_sticker>(
                     box->colours_->widgets, {box, index}),
-                .remove = icon_button<remove_it>(*box->colours_, icon::close{},
+                .remove = legacy::icon_button<remove_it>(*box->colours_, icon::close{},
                                                  {box, index})} {
 
       parts.face.keepBox();

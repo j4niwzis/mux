@@ -115,10 +115,10 @@ inline auto info_head_of(const palette& colours, info_panel* panel, const info_v
     addresses.push_back(id_line(colours, address, "", "Address"));
   return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}),
-          c::visible(shown.of_person, icon_button<info_back_to_group>(colours, icon::back{}, {panel})),
+          c::visible(shown.of_person, legacy::icon_button<info_back_to_group>(colours, icon::back{}, {panel})),
           c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::colorSetARGB(0, 0, 0, 0))),
-          icon_button<sends<request::toggle_info>>(colours, icon::close{}, {})),
-      avatar_button(avatar_of::chat{}, shown.key, shown.name, 96.0f),
+          legacy::icon_button<sends<request::toggle_info>>(colours, icon::close{}, {})),
+      legacy::avatar_button(avatar_of::chat{}, shown.key, shown.name, 96.0f),
       centred(shown.name, 17.0f, colours.text, true),
       centred(shown.status, 13.0f, colours.dim, false),
       c::visible(!shown.of_person, info_tiles(colours, shown.muted, shown.leavable)),
@@ -141,7 +141,7 @@ inline auto info_members_head(const palette& colours, const info_members_heading
       icon_view(colours, icon::people{}),
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text(
           std::format("{} MEMBER{}", facts.count, facts.count == 1 ? "" : "S"), 13.0f, colours.dim, true)),
-      c::visible(facts.invite, icon_button<sends<request::open_room_invite>>(
+      c::visible(facts.invite, legacy::icon_button<sends<request::open_room_invite>>(
           colours, icon::add_person{}, {facts.room})));
 }
 

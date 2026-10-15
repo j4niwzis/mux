@@ -212,7 +212,7 @@ inline auto extend(contract::chat_header, type_tag<feature>, const palette& colo
       // Hidden until what is shown says otherwise: a head made anew is not
       // read before what is shown next moves.
       skiff::compose::visible(false, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                                           icon_button<sends<call_chosen>>(colours, icon::phone{}, {}))));
+                                                           legacy::icon_button<sends<call_chosen>>(colours, icon::phone{}, {}))));
 }
 
 } // namespace mux::plugins::calls

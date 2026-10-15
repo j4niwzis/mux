@@ -39,7 +39,7 @@ struct add_account_pane : skiff::compose::Stacked {
   };
   struct protocol_switch : skiff::compose::Stacked {
     struct parts_t {
-      std::vector<segment<pick_protocol>> each;
+      std::vector<legacy::segment<pick_protocol>> each;
     } parts;
     template <class... Tags>
     void make(const palette& colours, protocol_list<Tags...>) {
@@ -56,10 +56,10 @@ struct add_account_pane : skiff::compose::Stacked {
   // The proxy the new account goes through: none, or one of the profiles --
   // and, always there, a way to make one.
   struct proxy_row : skiff::compose::Stacked {
-    using add_button = segment<sends<::mux::ui::request::manage_proxies>>;
+    using add_button = legacy::segment<sends<::mux::ui::request::manage_proxies>>;
     struct parts_t {
       nodes::Text title;
-      std::vector<segment<choose_new_proxy>> choices;
+      std::vector<legacy::segment<choose_new_proxy>> choices;
       add_button add;
     } parts;
     proxy_row(const palette &colours)

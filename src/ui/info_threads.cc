@@ -103,7 +103,7 @@ struct threads_panel : skiff::compose::Stacked {
       }
     };
     struct parts_t {
-      avatar_mark face;
+      legacy::avatar_mark face;
       lines_t lines;
     } parts;
     thread_row(const palette &colours, const conversation &chat,
@@ -117,7 +117,7 @@ struct threads_panel : skiff::compose::Stacked {
           root(said.id),
           parts{.face = skiff::compose::styled(
                     {.alignSelf = scene::align::kStart},
-                    avatar_mark(avatar_of::person{}, said.sender, sender_name(chat, said.sender),
+                    legacy::avatar_mark(avatar_of::person{}, said.sender, sender_name(chat, said.sender),
                                 36.0f)),
                 .lines = lines_t(colours, sender_name(chat, said.sender),
                                  flat(said.body.plain), meta_of(chat, said))} {}

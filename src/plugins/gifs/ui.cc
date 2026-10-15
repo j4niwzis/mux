@@ -56,7 +56,7 @@ inline auto extend(contract::media_pages, type_tag<feature>, const ui::ui_needs&
 // Save GIF, in the menu of a GIF or a moving WebP (mux.ui:context_menu).
 inline auto extend(contract::message_menu, type_tag<feature>, const ui::palette& colours, const ui::emoji_kept&,
             const ui::menu_facts& facts) {
-  using row = ui::row_item<ui::sends<save>>;
+  using row = ui::legacy::row_item<ui::sends<save>>;
   return skiff::compose::visible(facts.media.has_value() && facts.moving,
       row(colours, "Save GIF", ui::sends<save>{save{facts.media.value_or(std::string())}}, ui::icon::check{}, std::nullopt,
           ui::menu_row_look));

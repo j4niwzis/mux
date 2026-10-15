@@ -128,11 +128,11 @@ struct marks_box : skiff::compose::Stacked {
   // On the chat's colour: its bubbles, as in the chat.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 520.0f}}; }
   using close_act = sends<::mux::ui::request::close_marks>;
-  using close_button = icon_button<close_act>;
+  using close_button = legacy::icon_button<close_act>;
   using top_bar = page_header_t<no_back, close_act>;
   struct badge : skiff::compose::Stacked {
     struct parts_t {
-      avatar_mark face;
+      legacy::avatar_mark face;
       nodes::Text key;
     } parts;
     badge(const palette &colours, const std::string &who,
@@ -145,7 +145,7 @@ struct marks_box : skiff::compose::Stacked {
                                           .padding = {2.0f, 6.0f, 2.0f, 3.0f},
                                           .cornerRadius = 12.0f,
                                           .background = colours.sidebar})),
-          parts{.face = avatar_mark(avatar_of::person{}, who, name, 20.0f),
+          parts{.face = legacy::avatar_mark(avatar_of::person{}, who, name, 20.0f),
                 .key = skiff::compose::styled(
                     {.alignSelf = scene::align::kMiddle},
                     nodes::Text(proto::is_media(key) ? std::string(":emoji:")

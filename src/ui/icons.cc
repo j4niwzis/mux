@@ -288,6 +288,52 @@ namespace steps = nodes::path_step;
   return spl::visit([](auto one) { return shape_of(one); }, which);
 }
 
+// What an icon says to assistive technology where nothing names its button: its
+// button's usual meaning, as a screen reader reads it. A button with another
+// meaning says its own label.
+[[nodiscard]] constexpr std::string_view name_of(icon::none) { return ""; }
+[[nodiscard]] constexpr std::string_view name_of(icon::lock) { return "Encrypted"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::terminal) { return "Developer tools"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::room) { return "Room"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::person) { return "Person"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::gear) { return "Settings"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::power) { return "Quit"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::plus) { return "More"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::motion) { return "Animations"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::back) { return "Back"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::close) { return "Close"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::info) { return "Info"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::people) { return "Members"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::add_person) { return "Invite"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::bell) { return "Notifications"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::sliders) { return "Adjust"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::leave) { return "Leave"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::check) { return "Done"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::clip) { return "Attach a file"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::send) { return "Send"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::eye) { return "Appearance"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::minus) { return "Less"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::search) { return "Search"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::up) { return "Up"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::down) { return "Down"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::right) { return "Open"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::download) { return "Save"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::compass) { return "Explore rooms"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::phone) { return "Call"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::hang_up) { return "Hang up"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::microphone) { return "Microphone"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::microphone_off) { return "Microphone off"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::threads) { return "Threads"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::reply) { return "Reply"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::pencil) { return "Edit"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::smile) { return "Emoji"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::play) { return "Play"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::pause) { return "Pause"; }
+[[nodiscard]] constexpr std::string_view name_of(const icon::dot&) { return ""; }
+[[nodiscard]] constexpr std::string_view name_of(const icon_t& which) {
+  return spl::visit([](const auto& one) { return name_of(one); }, which);
+}
+
 // Whether an icon draws anything: all but none.
 [[nodiscard]] constexpr bool drawn(icon::none) { return false; }
 [[nodiscard]] constexpr bool drawn(const auto&) { return true; }

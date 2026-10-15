@@ -37,58 +37,70 @@ inline auto icon_mark(const palette& colours, icon_t mark = icon::none{}, float 
                                 nodes::Icon(shape_of(mark), colours.dim));
 }
 using icon_mark_t = decltype(icon_mark(std::declval<const palette&>()));
-// A radio's ring, with a dot in it while it is the one chosen.
-struct radio_mark : nodes::Icon {
-  bool on = false;
-  // The colours it is lit in as it is chosen.
-  const palette* colours_ = nullptr;
-  explicit radio_mark(const palette& colours) : nodes::Icon(shape(false), colours.dim), colours_(&colours) {
-    fState.apply({.width = 20.0f, .height = 20.0f, .alignSelf = scene::align::kMiddle});
-  }
-  // A ring, and a dot in it while chosen.
-  static IconShape shape(bool chosen) {
-    IconShape out{{{nodes::mark::circle{0.0f, 0.0f, 8.0f}, 2.0f}}};
-    if (chosen)
-      out.marks.push_back({nodes::mark::circle{0.0f, 0.0f, 4.0f}, 0.0f, true});
-    return out;
-  }
-  void set_on(bool chosen) {
-    on = chosen;
-    this->setShape(shape(chosen));
-    this->setColour(chosen ? colours_->accent : colours_->dim);
-  }
+// A radio's ring, with a dot in it while it is the one chosen: in the accent
+// then, dim otherwise.
+[[nodiscard]] inline IconShape radio_shape(bool chosen) {
+  IconShape out{{{nodes::mark::circle{0.0f, 0.0f, 8.0f}, 2.0f}}};
+  if (chosen)
+    out.marks.push_back({nodes::mark::circle{0.0f, 0.0f, 4.0f}, 0.0f, true});
+  return out;
+}
+inline auto radio_dot(const palette& colours, bool chosen) {
+  return skiff::compose::styled({.width = 20.0f, .height = 20.0f, .alignSelf = scene::align::kMiddle},
+                                nodes::Icon(radio_shape(chosen), chosen ? colours.accent : colours.dim));
+}
+// The same, chosen as the model says: `chosen` makes it of the part Want.
+template <class Want, class Chosen>
+auto radio_dot_for(const palette& colours, Chosen chosen) {
+  return skiff::compose::applied<Want>(
+      std::move(chosen),
+      [at = &colours](nodes::Icon& dot, bool on) {
+        dot.setShape(radio_shape(on));
+        dot.setColour(on ? at->accent : at->dim);
+      },
+      radio_dot(colours, false));
+}
+
+// A round avatar of a size, in a row: a chat's or a person's (Kind, which
+// rounding it takes), by their id and the name its initials come from.
+template <class Kind>
+auto avatar_mark(Kind kind, std::string id, std::string_view shown, float size) {
+  auto avatar = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                       widgets::Avatar<from_avatars>(initials_of(shown), size, picture_of(id), gradient_of(id)));
+  round_avatar(avatar, size, kind);
+  return avatar;
+}
+template <class Kind>
+using avatar_mark_t = decltype(avatar_mark(Kind{}, std::string(), std::string_view(), 0.0f));
+// Whose an avatar is, as the model says: the id it is found by, and the name
+// its initials come from.
+struct avatar_who {
+  std::string id;
+  std::string name;
+  friend bool operator==(const avatar_who&, const avatar_who&) = default;
 };
-// A round avatar of a size, in a row.
-struct avatar_mark : widgets::Avatar<from_avatars> {
-  std::string key;
-  // Kind is avatar_of::chat or avatar_of::person: which rounding it takes.
-  avatar_mark(auto kind, std::string id, std::string shown, float size)
-      : widgets::Avatar<from_avatars>(initials_of(shown), size, picture_of(id), gradient_of(id)), key(std::move(id)) {
-    fState.apply({.alignSelf = scene::align::kMiddle});
-    round_avatar(*this, size, kind);
-  }
-  // Another's: a chat's or a person's, by their id and name.
-  void show(std::string id, std::string_view shown) {
-    key = std::move(id);
-    widgets::Avatar<from_avatars>::show(initials_of(shown), picture_of(key), gradient_of(key));
-  }
-};
+// An avatar showing whoever `who` makes of the part Want, as it moves.
+template <class Want, class Kind, class Who>
+auto avatar_for(Kind kind, float size, Who who) {
+  return skiff::compose::applied<Want>(
+      std::move(who),
+      [](widgets::Avatar<from_avatars>& avatar, const avatar_who& now) {
+        avatar.show(initials_of(now.name), picture_of(now.id), gradient_of(now.id));
+      },
+      avatar_mark(kind, std::string(), std::string_view(), size));
+}
 // An avatar that opens: pressed, its picture in the viewer, where it can be
 // looked at whole and saved -- a person's in their card, a chat's in its
-// info.
-struct avatar_button : avatar_mark {
-  using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::open_avatar>;
-  avatar_button(auto kind, std::string id, std::string shown, float size)
-      : avatar_mark(kind, std::move(id), shown, size) {
-    fState.setCursor(scene::cursor::hand{});
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  std::optional<Answer> onClick(float, float) {
-    if (key.empty())
-      return ::skiff::scene::Taken{};
-    return ::mux::ui::request::open_avatar{key};
-  }
+// info. One with no id asks for nothing.
+struct open_avatar_of {
+  using Answer = std::optional<request::open_avatar>;
+  std::string id;
+  Answer operator()() const { return id.empty() ? Answer() : Answer(request::open_avatar{id}); }
 };
+template <class Kind>
+auto avatar_button(Kind kind, std::string id, std::string_view shown, float size) {
+  return skiff::compose::onPress(open_avatar_of{id}, avatar_mark(kind, id, shown, size), "Open picture");
+}
 
 // A name over how it is: two lines, each cut where it runs out of room,
 // taking what their row leaves them.
@@ -124,111 +136,56 @@ struct row_look {
 inline constexpr row_look menu_row_look{
     33.0f, 15.0f, {0.0f, 17.0f, 0.0f, 15.0f}, 24.0f, 24.0f, 13.0f};
 
+// A line of a list or a menu as tall as its look says, as wide as what holds
+// it: its icon on the left where it has one, its text taking the room, and
+// a radio at the end where it is one of a choice (`choice`: whether it is the
+// one chosen). It lights under the pointer and the keyboard's focus; a press
+// asks what `act` answers.
+inline constexpr float kRowHeight = 46.0f;
 template <class Act>
-struct row_item : pressable<skiff::compose::Stacked> {
-  Act act;
-  // Whether it is one of a choice, and the chosen one.
-  std::optional<bool> radio;
-  struct parts_t {
-    icon_mark_t mark;
-    nodes::Text label;
-    radio_mark dot;
-  } parts;
-
-  static constexpr float kHeight = 46.0f;
-
-  // Declared: its icon, its text taking the room, and a radio at the end.
-  row_item(const palette &colours, std::string text, Act what,
-           icon_t icon = icon::none{},
-           std::optional<bool> choice = std::nullopt, row_look look = {})
-      : pressable<skiff::compose::Stacked>(skiff::compose::hbox(
-            look.gap, {.fillX = true,
-                       .height = look.height,
-                       .padding = look.padding,
-                       .hoverBackground = colours.chosen,
-                       .selectedBackground = colours.chosen,
-                       .focusBackground = colours.chosen})),
-        act(std::move(what)), radio(choice),
-        parts{.mark = skiff::compose::visible(
-                  spl::visit([](auto one) { return drawn(one); }, icon),
-                  icon_mark(colours, icon, look.icon_width, look.icon_height)),
-              .label = skiff::compose::styled(
-                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                  elided(nodes::Text(std::move(text), look.text_size,
-                                     colours.text))),
-              .dot = skiff::compose::visible(
-                  choice.has_value(),
-                  dot_lit(radio_mark(colours), choice.value_or(false)))} {}
-  [[nodiscard]] static radio_mark dot_lit(radio_mark dot, bool on) {
-    dot.set_on(on);
-    return dot;
-  }
-
-  void set_chosen(bool on) {
-    radio = on;
-    parts.dot.set_on(on);
-    parts.dot.setVisible(true);
-    parts.dot.markDamaged();
-  }
-  // Lit as the line whose page is shown beside the list.
-  void set_lit(bool on) {
-    lit = on;
-    fState.apply({.selected = on});
-    this->markDamaged();
-  }
-  bool lit = false;
-
-  [[nodiscard]] bool focusChangesAppearance() const { return true; }
-  [[nodiscard]] scene::Semantics semantics() const {
-    scene::Semantics out;
-    out.fRole = scene::semantic_role::button{};
-    out.fLabel = parts.label.text();
-    out.fSelected = radio.value_or(false);
-    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
-    return out;
-  }
-};
-
-// A round button with only an icon in it: back, close.
+  requires skiff::scene::Answering<Act>
+auto row_item(const palette& colours, std::string text, Act act, icon_t icon = icon::none{},
+              std::optional<bool> choice = std::nullopt, row_look look = {}) {
+  namespace c = skiff::compose;
+  std::string label = text;
+  return c::said(std::nullopt, choice.value_or(false),
+      c::onPress(std::move(act),
+          c::row(c::hbox(look.gap, {.fillX = true, .height = look.height, .padding = look.padding,
+                                    .hoverBackground = colours.chosen, .selectedBackground = colours.chosen,
+                                    .focusBackground = colours.chosen}),
+                 c::visible(spl::visit([](auto one) { return drawn(one); }, icon), icon_mark(colours, icon, look.icon_width, look.icon_height)),
+                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                           elided(nodes::Text(std::move(text), look.text_size, colours.text))),
+                 c::visible(choice.has_value(), radio_dot(colours, choice.value_or(false)))),
+          std::move(label)));
+}
 template <class Act>
-struct icon_button : skiff::compose::Specced {
-  Act act;
-  struct parts_t {
-    nodes::Icon mark;
-  } parts;
+using row_item_t = decltype(row_item<Act>(std::declval<const palette&>(), std::string(), std::declval<Act>()));
 
-  // Round, lit under the pointer or the keyboard's focus.
-  icon_button(const palette& colours, icon_t mark, Act what)
-      : Specced({.width = 36.0f, .height = 36.0f, .cornerRadius = 18.0f, .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
-        act(std::move(what)),
-        parts{.mark = skiff::compose::styled({.fill = true}, nodes::Icon(shape_of(mark), colours.text))} {}
-  void set_colour(skia::SkColor colour) { parts.mark.setColour(colour); }
-
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool focusChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    act_on(fState, act);
-    return true;
-  }
-  // Its act's answer, as the press is delivered.
-  auto onPress()
-    requires skiff::scene::Answering<Act>
-  {
-    return act();
-  }
-  [[nodiscard]] scene::Semantics semantics() const {
-    scene::Semantics out;
-    out.fRole = scene::semantic_role::button{};
-    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
-    return out;
-  }
-};
+// A round button with only an icon in it -- back, close, send -- lit under
+// the pointer or the keyboard's focus; a press asks what `act` answers. Its
+// icon in the text's colour unless said, and named by it unless said.
+template <class Act>
+  requires skiff::scene::Answering<Act>
+auto icon_button(const palette& colours, icon_t mark, Act act, std::optional<skia::SkColor> ink = std::nullopt,
+                 std::string label = {}) {
+  namespace c = skiff::compose;
+  if (label.empty())
+    label = std::string(name_of(mark));
+  return c::onPress(std::move(act),
+      c::column(c::vbox(0.0f, {.width = 36.0f, .height = 36.0f, .cornerRadius = 18.0f, .hoverBackground = colours.chosen,
+                               .focusBackground = colours.chosen}),
+                c::styled({.fill = true}, nodes::Icon(shape_of(mark), ink.value_or(colours.text)))),
+      std::move(label));
+}
+template <class Act>
+using icon_button_t = decltype(icon_button<Act>(std::declval<const palette&>(), icon_t{}, std::declval<Act>()));
 
 // A page with nowhere to go back to: its header's ← hidden, and pressing
 // it does nothing.
 struct no_action {
-  void operator()() const {}
+  using Answer = skiff::scene::Taken;
+  skiff::scene::Taken operator()() const { return {}; }
 };
 using no_back = no_action;
 
@@ -259,43 +216,23 @@ template <class Header> bool page_step_back(Header& header) {
   return true;
 }
 
-// One segment of a segmented control: square, its text centred, filled
-// with the accent while it is the one chosen.
+// One segment of a segmented control: its text centred, filled with the
+// accent while it is the one chosen (`active`), and said to be a tab.
 template <class Act>
-struct segment : pressable<skiff::compose::Stacked> {
-  Act act;
-  bool active = false;
-  struct parts_t {
-    nodes::Text label;
-  } parts;
-
-  // The colours its text turns as it is chosen.
-  const palette* colours_ = nullptr;
-  segment(const palette& colours, std::string text, Act what)
-      : pressable<skiff::compose::Stacked>(skiff::compose::justified(
-            skiff::compose::vbox(0.0f, {.width = 92.0f, .height = 28.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.accent,
-                                        .focusBackground = colours.chosen}),
-            nodes::justify::middle{})),
-        act(std::move(what)),
-        parts{.label = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(text), 13.0f, colours.text, true))},
-        colours_(&colours) {}
-
-  void set_active(bool on) {
-    active = on;
-    parts.label.setColour(on ? colours_->on_accent : colours_->text);
-    fState.apply({.selected = on});
-  }
-
-  [[nodiscard]] bool focusChangesAppearance() const { return true; }
-  [[nodiscard]] scene::Semantics semantics() const {
-    scene::Semantics out;
-    out.fRole = scene::semantic_role::tab{};
-    out.fLabel = parts.label.text();
-    out.fSelected = active;
-    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
-    return out;
-  }
-};
+  requires skiff::scene::Answering<Act>
+auto segment(const palette& colours, std::string text, Act act, bool active) {
+  namespace c = skiff::compose;
+  std::string label = text;
+  return c::said(scene::SemanticRole{scene::semantic_role::tab{}}, active,
+      c::onPress(std::move(act),
+          c::column(c::justified(c::vbox(0.0f, {.width = 92.0f, .height = 28.0f, .hoverBackground = colours.chosen,
+                                                .selectedBackground = colours.accent, .focusBackground = colours.chosen,
+                                                .selected = active}),
+                                 nodes::justify::middle{}),
+                    c::styled({.alignSelf = scene::align::kMiddle},
+                              nodes::Text(std::move(text), 13.0f, active ? colours.on_accent : colours.text, true))),
+          std::move(label)));
+}
 
 // What a press of a field's part sets the field's own part to: given it as
 // the field read the model -- nothing, where the part does nothing now.
@@ -402,43 +339,37 @@ inline auto make_choice_menu(const palette& colours, std::string label,
 }
 
 // The items of the space bars -- Home, Direct messages, each space -- each
-// with where it is: the side bar, the top one, both, or hidden.
-struct spaces_choices : skiff::compose::Stacked {
-  struct pick_bars {
-    using Answer = std::optional<::mux::ui::request::set_space_bars>;
-    std::string account;
-    config::space_item_t item;
-    std::optional<::mux::ui::request::set_space_bars> operator()(std::size_t index) {
-      static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
-      if (index < kWays.size())
-        return ::mux::ui::request::set_space_bars{account, item, kWays[index].first, kWays[index].second};
+// with where it is: the side bar, the top one, both, or hidden. A choice
+// asks for the item's bars to be set so.
+struct pick_space_bars {
+  using Answer = std::optional<request::set_space_bars>;
+  std::string account;
+  config::space_item_t item;
+  Answer operator()(std::size_t index) const {
+    static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
+    if (index >= kWays.size())
       return std::nullopt;
-    }
-  };
-  struct row : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text name;
-      choice_menu<pick_bars> where;
-    } parts;
-    row(const palette& colours, const std::string& account, const space_item_shown& one)
-        : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}})),
-          parts{.name = nodes::Text(one.name, 14.0f, colours.text),
-                .where = make_choice_menu<pick_bars>(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"},
-                                                one.side && !one.top   ? 0
-                                                : one.top && !one.side ? 1
-                                                : one.side && one.top  ? 2
-                                                                       : 3,
-                                                pick_bars{account, one.item})} {}
-  };
-  struct parts_t {
-    std::vector<row> rows;
-  } parts;
-  spaces_choices(const palette& colours, const ui_shared& shared)
-      : Stacked(skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        parts{.rows = shared.space_items |
-                      std::views::transform([&](const space_item_shown& one) { return row(colours, shared.space_account, one); }) |
-                      std::ranges::to<std::vector>()} {}
+    return request::set_space_bars{account, item, kWays[index].first, kWays[index].second};
+  }
 };
+// Where an item is now, as the dropdown lists the ways.
+[[nodiscard]] inline std::size_t space_bars_way(const space_item_shown& one) {
+  return one.side && !one.top ? 0 : one.top && !one.side ? 1 : one.side && one.top ? 2 : 3;
+}
+inline auto space_bars_row(const palette& colours, const std::string& account, const space_item_shown& one) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}}),
+                   nodes::Text(one.name, 14.0f, colours.text),
+                   make_choice_menu(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"}, space_bars_way(one),
+                                    pick_space_bars{account, one.item}));
+}
+inline auto spaces_choices(const palette& colours, const ui_shared& shared) {
+  namespace c = skiff::compose;
+  return c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                 shared.space_items |
+                     std::views::transform([&](const space_item_shown& one) { return space_bars_row(colours, shared.space_account, one); }) |
+                     std::ranges::to<std::vector>());
+}
 
 // What each level holds of room events, as the program last said: for a
 // list to show what is in effect where a level is not its own.
@@ -813,6 +744,411 @@ struct compose_context {
 // its icon in the left column (historyReplySkip wide), then two lines --
 // "Reply to <name>" or "Edit message" in the accent, semibold, over a line
 // of the message -- and ✕ on the right to go back to a plain one. One bar
+// for every field that answers: the chat's composer, a thread's. Each part
+// reads what `said` makes of the part Want (an optional compose_context) --
+// none, and the bar is not there; Cancel is what its ✕ asks.
+inline constexpr float kContextHeight = 49.0f;  // historyReplyHeight
+inline constexpr float kContextSkip = 51.0f;    // historyReplySkip
+template <class Want, class Said, class Cancel>
+auto context_bar(const palette& colours, Said said, Cancel cancel) {
+  namespace c = skiff::compose;
+  const auto line = [said](std::string compose_context::* which) {
+    return [said, which](const auto& now) {
+      const std::optional<compose_context> shown = said(now);
+      return shown ? (*shown).*which : std::string();
+    };
+  };
+  return c::shown_for<Want>([said](const auto& now) { return said(now).has_value(); },
+      c::row(c::hbox(8.0f, {.fillX = true, .height = kContextHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}}),
+             c::applied<Want>(said,
+                              [](nodes::Icon& mark, const std::optional<compose_context>& now) {
+                                mark.setShape(now ? shape_of(now->mark) : IconShape{});
+                              },
+                              c::styled({.fillY = true, .width = kContextSkip - 8.0f}, nodes::Icon(IconShape{}, colours.accent))),
+             c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+                       c::text_for<Want>(line(&compose_context::title),
+                                         c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.accent, true)))),
+                       c::text_for<Want>(line(&compose_context::line),
+                                         c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.text))))),
+             c::styled({.alignSelf = scene::align::kMiddle}, icon_button<Cancel>(colours, icon::close{}, std::move(cancel), std::nullopt, "Cancel"))));
+}
+
+// A count on an accent badge over the top of a round button: the @ and the
+// heart's, and the down arrow's. Shown while `count` makes more than none of
+// the part Want.
+inline auto count_badge(const palette& colours, std::string count = {}) {
+  namespace c = skiff::compose;
+  return c::column(c::justified(c::vbox(0.0f, {.place = scene::anchor::kTopCentre, .y = -10.0f, .height = 18.0f,
+                                               .autoSize = scene::axes::kX, .minWidth = 20.0f, .padding = {1.0f, 5.0f, 1.0f, 5.0f},
+                                               .cornerRadius = 9.0f, .background = colours.accent}),
+                                nodes::justify::middle{}),
+                   c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(count), 11.0f, colours.on_accent, true)));
+}
+template <class Want, class Count>
+auto count_badge_for(const palette& colours, Count count) {
+  namespace c = skiff::compose;
+  return c::shown_for<Want>([count](const auto& now) { return count(now) > 0; },
+      c::column(c::justified(c::vbox(0.0f, {.place = scene::anchor::kTopCentre, .y = -10.0f, .height = 18.0f,
+                                            .autoSize = scene::axes::kX, .minWidth = 20.0f, .padding = {1.0f, 5.0f, 1.0f, 5.0f},
+                                            .cornerRadius = 9.0f, .background = colours.accent}),
+                             nodes::justify::middle{}),
+                c::text_for<Want>([count](const auto& now) { return std::to_string(count(now)); },
+                                  c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 11.0f, colours.on_accent, true)))));
+}
+
+// A label, and a small button on its right that is there only where it
+// does something: an element's look over a way back to the bubbles'.
+template <class Act>
+auto label_button_row(const palette& colours, std::string label, std::string button, Act act, bool shown) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 13.0f, colours.text)),
+                c::visible(shown, c::styled({.width = 96.0f, .height = 26.0f}, button_for<Act>(colours.widgets, std::move(button), std::move(act)))));
+}
+
+// A run of things under a name, as the emoji and sticker panels list them:
+// the name, dim, over its cells, wrapped as wide as it is. The cells are put
+// in by what it is a section of.
+template <class Cell>
+auto cell_section(const palette& colours, std::string name, std::vector<Cell> cells,
+                  std::optional<emote_pack> pack = std::nullopt, std::optional<account_id> by = std::nullopt) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::row(c::hbox(8.0f, {.fillX = true, .height = 32.0f, .padding = {0.0f, 7.0f, 0.0f, 7.0f}}),
+          c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                    nodes::Text(std::move(name), 13.0f, colours.dim, true)),
+          c::visible(pack && pack->chat,
+              c::onClick(request::adopt_pack{pack.value_or(emote_pack{}), by},
+                  c::styled({.width = 100.0f, .height = 26.0f, .alignSelf = scene::align::kMiddle,
+                              .cornerRadius = 6.0f, .hoverBackground = colours.chosen},
+                            nodes::Text("Add to account", 11.0f, colours.accent)), "Add pack to account"))),
+      c::styled({.fillX = true, .autoSize = scene::axes::kY},
+          nodes::Flow<std::vector<Cell>>({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, std::move(cells))));
+}
+template <class Cell>
+using cell_section_t = decltype(cell_section(std::declval<const palette&>(), "", std::vector<Cell>{}));
+
+inline auto& cell_section_cells(auto& section) {
+  return std::get<0>(std::get<1>(section.fParts).fChildren);
+}
+
+
+// A dialog's buttons, at its bottom right: Cancel, and what it does --
+// Send, Save, Create room -- the primary one.
+template <class Cancel, class Confirm>
+auto dialog_buttons(const palette& colours, std::string confirm, Cancel cancel_it, Confirm confirm_it, float width = 96.0f) {
+  namespace c = skiff::compose;
+  return c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}),
+                             nodes::justify::end{}),
+                c::styled({.width = width, .height = 36.0f}, widgets::Button<Cancel>(colours.widgets, "Cancel", std::move(cancel_it))),
+                c::styled({.width = width, .height = 36.0f},
+                          primary(widgets::Button<Confirm>(colours.widgets, std::move(confirm), std::move(confirm_it)))));
+}
+
+// A row's top line, as a chat's in the list: the name, bold, as long as it
+// can be, and the time on the right.
+inline auto name_time_line(std::string name, std::string time, skia::SkColor name_colour, skia::SkColor time_colour,
+                           float time_size) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                c::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(name), 13.0f, name_colour, true))),
+                nodes::Text(std::move(time), time_size, time_colour));
+}
+
+// Telegram's eight accents, in its order -- after the theme's own, where it
+// is one to choose.
+[[nodiscard]] inline std::vector<config::accent_t> accents_of(bool with_theme_own) {
+  std::vector<config::accent_t> all;
+  if (with_theme_own)
+    all.emplace_back(config::accent::theme_own{});
+  const std::initializer_list<config::accent_t> eight{
+      config::accent_t{config::accent::blue{}},   config::accent_t{config::accent::green{}},  config::accent_t{config::accent::pink{}},
+      config::accent_t{config::accent::orange{}}, config::accent_t{config::accent::purple{}}, config::accent_t{config::accent::red{}},
+      config::accent_t{config::accent::grey{}},   config::accent_t{config::accent::gold{}}};
+  all.insert(all.end(), eight.begin(), eight.end());
+  return all;
+}
+// A press of an accent's circle: what its chooser answers for that accent.
+template <class Choose>
+struct accent_chosen {
+  Choose choose;
+  config::accent_t accent;
+  auto operator()() { return choose(accent); }
+};
+// An accent's circle: its colour in the theme in use, a ring in it where it
+// is the one in use; pressed, what `choose` answers for it.
+[[nodiscard]] inline scene::Spec accent_ring(skia::SkColor shade, bool on) {
+  return {.border = scene::Border{on ? shade : 0u, on ? 2.0f : 0.0f}};
+}
+template <class Choose>
+auto accent_circle(Choose choose, config::accent_t which, const config::theme_t& in, bool chosen) {
+  namespace c = skiff::compose;
+  const skia::SkColor shade = colour_of(which, in);
+  return c::styled(accent_ring(shade, chosen),
+      c::onPress(accent_chosen<Choose>{std::move(choose), which},
+          c::column(c::vbox(0.0f, {.width = 34.0f, .height = 34.0f, .cornerRadius = 17.0f}),
+                    c::styled({.place = scene::anchor::kCentre, .width = 24.0f, .height = 24.0f, .cornerRadius = 12.0f},
+                              nodes::Box<>(shade))),
+          "Accent colour"));
+}
+// Telegram's eight accents in a row -- the theme's own first, where it is
+// one to choose: the window's accent, an account's colour. The one in use
+// ringed, as `chosen` makes it of the part Want.
+template <class Want, class Choose, class Chosen>
+auto accent_circles_for(Choose choose, const config::theme_t& in, bool with_theme_own, Chosen chosen) {
+  namespace c = skiff::compose;
+  return c::many(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}}),
+                 accents_of(with_theme_own) | std::views::transform([&](const config::accent_t& one) {
+                   return c::spec_for<Want>(
+                       [chosen, one, shade = colour_of(one, in)](const auto& now) { return accent_ring(shade, chosen(now) == one); },
+                       accent_circle(choose, one, in, false));
+                 }) | std::ranges::to<std::vector>());
+}
+
+// ---- the old ones -------------------------------------------------------------
+// The components as they were, structs with setters: kept only for the nodes
+// not rewritten yet, each of which stops using them as it is, and gone with
+// the last (the rewrite of every inheritance component into functions).
+namespace legacy {
+// A radio's ring, with a dot in it while it is the one chosen.
+struct radio_mark : nodes::Icon {
+  bool on = false;
+  // The colours it is lit in as it is chosen.
+  const palette* colours_ = nullptr;
+  explicit radio_mark(const palette& colours) : nodes::Icon(shape(false), colours.dim), colours_(&colours) {
+    fState.apply({.width = 20.0f, .height = 20.0f, .alignSelf = scene::align::kMiddle});
+  }
+  // A ring, and a dot in it while chosen.
+  static IconShape shape(bool chosen) {
+    IconShape out{{{nodes::mark::circle{0.0f, 0.0f, 8.0f}, 2.0f}}};
+    if (chosen)
+      out.marks.push_back({nodes::mark::circle{0.0f, 0.0f, 4.0f}, 0.0f, true});
+    return out;
+  }
+  void set_on(bool chosen) {
+    on = chosen;
+    this->setShape(shape(chosen));
+    this->setColour(chosen ? colours_->accent : colours_->dim);
+  }
+};
+// A round avatar of a size, in a row.
+struct avatar_mark : widgets::Avatar<from_avatars> {
+  std::string key;
+  // Kind is avatar_of::chat or avatar_of::person: which rounding it takes.
+  avatar_mark(auto kind, std::string id, std::string shown, float size)
+      : widgets::Avatar<from_avatars>(initials_of(shown), size, picture_of(id), gradient_of(id)), key(std::move(id)) {
+    fState.apply({.alignSelf = scene::align::kMiddle});
+    round_avatar(*this, size, kind);
+  }
+  // Another's: a chat's or a person's, by their id and name.
+  void show(std::string id, std::string_view shown) {
+    key = std::move(id);
+    widgets::Avatar<from_avatars>::show(initials_of(shown), picture_of(key), gradient_of(key));
+  }
+};
+// An avatar that opens: pressed, its picture in the viewer, where it can be
+// looked at whole and saved -- a person's in their card, a chat's in its
+// info.
+struct avatar_button : avatar_mark {
+  using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::open_avatar>;
+  avatar_button(auto kind, std::string id, std::string shown, float size)
+      : avatar_mark(kind, std::move(id), shown, size) {
+    fState.setCursor(scene::cursor::hand{});
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  std::optional<Answer> onClick(float, float) {
+    if (key.empty())
+      return ::skiff::scene::Taken{};
+    return ::mux::ui::request::open_avatar{key};
+  }
+};
+
+
+template <class Act>
+struct row_item : pressable<skiff::compose::Stacked> {
+  Act act;
+  // Whether it is one of a choice, and the chosen one.
+  std::optional<bool> radio;
+  struct parts_t {
+    icon_mark_t mark;
+    nodes::Text label;
+    radio_mark dot;
+  } parts;
+
+  static constexpr float kHeight = 46.0f;
+
+  // Declared: its icon, its text taking the room, and a radio at the end.
+  row_item(const palette &colours, std::string text, Act what,
+           icon_t icon = icon::none{},
+           std::optional<bool> choice = std::nullopt, row_look look = {})
+      : pressable<skiff::compose::Stacked>(skiff::compose::hbox(
+            look.gap, {.fillX = true,
+                       .height = look.height,
+                       .padding = look.padding,
+                       .hoverBackground = colours.chosen,
+                       .selectedBackground = colours.chosen,
+                       .focusBackground = colours.chosen})),
+        act(std::move(what)), radio(choice),
+        parts{.mark = skiff::compose::visible(
+                  spl::visit([](auto one) { return drawn(one); }, icon),
+                  icon_mark(colours, icon, look.icon_width, look.icon_height)),
+              .label = skiff::compose::styled(
+                  {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                  elided(nodes::Text(std::move(text), look.text_size,
+                                     colours.text))),
+              .dot = skiff::compose::visible(
+                  choice.has_value(),
+                  dot_lit(radio_mark(colours), choice.value_or(false)))} {}
+  [[nodiscard]] static radio_mark dot_lit(radio_mark dot, bool on) {
+    dot.set_on(on);
+    return dot;
+  }
+
+  void set_chosen(bool on) {
+    radio = on;
+    parts.dot.set_on(on);
+    parts.dot.setVisible(true);
+    parts.dot.markDamaged();
+  }
+  // Lit as the line whose page is shown beside the list.
+  void set_lit(bool on) {
+    lit = on;
+    fState.apply({.selected = on});
+    this->markDamaged();
+  }
+  bool lit = false;
+
+  [[nodiscard]] bool focusChangesAppearance() const { return true; }
+  [[nodiscard]] scene::Semantics semantics() const {
+    scene::Semantics out;
+    out.fRole = scene::semantic_role::button{};
+    out.fLabel = parts.label.text();
+    out.fSelected = radio.value_or(false);
+    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
+    return out;
+  }
+};
+
+// A round button with only an icon in it: back, close.
+template <class Act>
+struct icon_button : skiff::compose::Specced {
+  Act act;
+  struct parts_t {
+    nodes::Icon mark;
+  } parts;
+
+  // Round, lit under the pointer or the keyboard's focus.
+  icon_button(const palette& colours, icon_t mark, Act what)
+      : Specced({.width = 36.0f, .height = 36.0f, .cornerRadius = 18.0f, .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
+        act(std::move(what)),
+        parts{.mark = skiff::compose::styled({.fill = true}, nodes::Icon(shape_of(mark), colours.text))} {}
+  void set_colour(skia::SkColor colour) { parts.mark.setColour(colour); }
+
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool focusChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    act_on(fState, act);
+    return true;
+  }
+  // Its act's answer, as the press is delivered.
+  auto onPress()
+    requires skiff::scene::Answering<Act>
+  {
+    return act();
+  }
+  [[nodiscard]] scene::Semantics semantics() const {
+    scene::Semantics out;
+    out.fRole = scene::semantic_role::button{};
+    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
+    return out;
+  }
+};
+
+
+// One segment of a segmented control: square, its text centred, filled
+// with the accent while it is the one chosen.
+template <class Act>
+struct segment : pressable<skiff::compose::Stacked> {
+  Act act;
+  bool active = false;
+  struct parts_t {
+    nodes::Text label;
+  } parts;
+
+  // The colours its text turns as it is chosen.
+  const palette* colours_ = nullptr;
+  segment(const palette& colours, std::string text, Act what)
+      : pressable<skiff::compose::Stacked>(skiff::compose::justified(
+            skiff::compose::vbox(0.0f, {.width = 92.0f, .height = 28.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.accent,
+                                        .focusBackground = colours.chosen}),
+            nodes::justify::middle{})),
+        act(std::move(what)),
+        parts{.label = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(text), 13.0f, colours.text, true))},
+        colours_(&colours) {}
+
+  void set_active(bool on) {
+    active = on;
+    parts.label.setColour(on ? colours_->on_accent : colours_->text);
+    fState.apply({.selected = on});
+  }
+
+  [[nodiscard]] bool focusChangesAppearance() const { return true; }
+  [[nodiscard]] scene::Semantics semantics() const {
+    scene::Semantics out;
+    out.fRole = scene::semantic_role::tab{};
+    out.fLabel = parts.label.text();
+    out.fSelected = active;
+    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
+    return out;
+  }
+};
+
+
+// The items of the space bars -- Home, Direct messages, each space -- each
+// with where it is: the side bar, the top one, both, or hidden.
+struct spaces_choices : skiff::compose::Stacked {
+  struct pick_bars {
+    using Answer = std::optional<::mux::ui::request::set_space_bars>;
+    std::string account;
+    config::space_item_t item;
+    std::optional<::mux::ui::request::set_space_bars> operator()(std::size_t index) {
+      static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
+      if (index < kWays.size())
+        return ::mux::ui::request::set_space_bars{account, item, kWays[index].first, kWays[index].second};
+      return std::nullopt;
+    }
+  };
+  struct row : skiff::compose::Stacked {
+    struct parts_t {
+      nodes::Text name;
+      choice_menu<pick_bars> where;
+    } parts;
+    row(const palette& colours, const std::string& account, const space_item_shown& one)
+        : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}})),
+          parts{.name = nodes::Text(one.name, 14.0f, colours.text),
+                .where = make_choice_menu<pick_bars>(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"},
+                                                one.side && !one.top   ? 0
+                                                : one.top && !one.side ? 1
+                                                : one.side && one.top  ? 2
+                                                                       : 3,
+                                                pick_bars{account, one.item})} {}
+  };
+  struct parts_t {
+    std::vector<row> rows;
+  } parts;
+  spaces_choices(const palette& colours, const ui_shared& shared)
+      : Stacked(skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.rows = shared.space_items |
+                      std::views::transform([&](const space_item_shown& one) { return row(colours, shared.space_account, one); }) |
+                      std::ranges::to<std::vector>()} {}
+};
+
+
+// What is written answers or edits, as tdesktop's FieldHeader shows it:
+// its icon in the left column (historyReplySkip wide), then two lines --
+// "Reply to <name>" or "Edit message" in the accent, semibold, over a line
+// of the message -- and ✕ on the right to go back to a plain one. One bar
 // for every field that answers: the chat's composer, a thread's;
 // Cancel is what its ✕ does there.
 template <class Cancel>
@@ -854,6 +1190,23 @@ struct context_bar : skiff::compose::Stacked {
   }
 };
 
+
+// The head of a page, its buttons the struct ones (a callback as its ←).
+template <class Back, class Close>
+auto page_header(const palette& colours, std::string name, Back back, Close close, bool has_back, bool has_close) {
+  return skiff::compose::row(
+      skiff::compose::hbox(12.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+      skiff::compose::visible(has_back, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+          icon_button<Back>(colours, icon::back{}, std::move(back)))),
+      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle,
+                             .margin = {0.0f, 0.0f, 0.0f, has_back ? 0.0f : 10.0f}},
+          elided(nodes::Text(std::move(name), 17.0f, colours.text, true))),
+      skiff::compose::visible(has_close, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+          icon_button<Close>(colours, icon::close{}, std::move(close)))));
+}
+template <class Back, class Close>
+using page_header_t = decltype(page_header(std::declval<const palette&>(), std::string{}, Back{}, Close{}, false, false));
+
 // A count on an accent badge over the top of a round button: the @ and the
 // heart's, and the down arrow's.
 struct count_badge : skiff::compose::Stacked {
@@ -888,32 +1241,6 @@ struct label_button_row : skiff::compose::Stacked {
                                                                              button_for<Act>(colours.widgets, std::move(button), std::move(act))))} {}
 };
 
-// A run of things under a name, as the emoji and sticker panels list them:
-// the name, dim, over its cells, wrapped as wide as it is. The cells are put
-// in by what it is a section of.
-template <class Cell>
-auto cell_section(const palette& colours, std::string name, std::vector<Cell> cells,
-                  std::optional<emote_pack> pack = std::nullopt, std::optional<account_id> by = std::nullopt) {
-  namespace c = skiff::compose;
-  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::row(c::hbox(8.0f, {.fillX = true, .height = 32.0f, .padding = {0.0f, 7.0f, 0.0f, 7.0f}}),
-          c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                    nodes::Text(std::move(name), 13.0f, colours.dim, true)),
-          c::visible(pack && pack->chat,
-              c::onClick(request::adopt_pack{pack.value_or(emote_pack{}), by},
-                  c::styled({.width = 100.0f, .height = 26.0f, .alignSelf = scene::align::kMiddle,
-                              .cornerRadius = 6.0f, .hoverBackground = colours.chosen},
-                            nodes::Text("Add to account", 11.0f, colours.accent)), "Add pack to account"))),
-      c::styled({.fillX = true, .autoSize = scene::axes::kY},
-          nodes::Flow<std::vector<Cell>>({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, std::move(cells))));
-}
-template <class Cell>
-using cell_section_t = decltype(cell_section(std::declval<const palette&>(), "", std::vector<Cell>{}));
-
-inline auto& cell_section_cells(auto& section) {
-  return std::get<0>(std::get<1>(section.fParts).fChildren);
-}
-
 
 // A dialog's buttons, at its bottom right: Cancel, and what it does --
 // Send, Save, Create room -- the primary one.
@@ -931,6 +1258,7 @@ struct dialog_buttons : skiff::compose::Stacked {
                                                 primary(widgets::Button<Confirm>(colours.widgets, std::move(confirm), std::move(confirm_it))))} {}
 };
 
+
 // A row's top line, as a chat's in the list: the name, bold, as long as it
 // can be, and the time on the right.
 struct name_time_line : skiff::compose::Stacked {
@@ -943,6 +1271,7 @@ struct name_time_line : skiff::compose::Stacked {
         parts{.name = skiff::compose::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(name), 13.0f, name_colour, true))),
               .time = nodes::Text(std::move(time), time_size, time_colour)} {}
 };
+
 
 // An accent's circle: its colour, a ring where it is the one in use; pressed,
 // Choose is told it.
@@ -1010,6 +1339,7 @@ struct accent_circles : skiff::compose::Stacked {
       circle.set_chosen(circle.accent == now);
   }
 };
+
 
 // A row longer than its room, moved sideways -- by a finger or a mouse
 // dragged along it, flicked to glide on, or a sideways wheel -- and cut to
@@ -1142,5 +1472,7 @@ template <class Line> struct side_scroll : skiff::compose::Stacked {
   float press_x = 0.0f, press_y = 0.0f;
   double last_ms = 0.0;
 };
+
+}  // namespace legacy
 
 }  // namespace mux::ui

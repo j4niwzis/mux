@@ -130,9 +130,9 @@ struct bubbles_picker : skiff::compose::Stacked {
     }
   };
   struct element_row : skiff::compose::Stacked {
-    struct head_t : label_button_row<element_reset> {
+    struct head_t : legacy::label_button_row<element_reset> {
       head_t(const palette& colours, std::string label, element_reset reset, bool own)
-          : label_button_row<element_reset>(colours, std::move(label), "As bubbles", reset, own) {}
+          : legacy::label_button_row<element_reset>(colours, std::move(label), "As bubbles", reset, own) {}
     };
     struct parts_t {
       head_t head;
@@ -259,9 +259,9 @@ struct bubbles_picker : skiff::compose::Stacked {
   };
   // An element drawn frosted: its blur, and a way back to the bubbles'.
   struct element_blur_row : skiff::compose::Stacked {
-    struct head_t : label_button_row<element_blur_reset> {
+    struct head_t : legacy::label_button_row<element_blur_reset> {
       head_t(const palette& colours, std::string label, element_blur_reset reset, bool own)
-          : label_button_row<element_blur_reset>(colours, std::move(label), "As bubbles", reset, own) {}
+          : legacy::label_button_row<element_blur_reset>(colours, std::move(label), "As bubbles", reset, own) {}
     };
     struct parts_t {
       head_t head;

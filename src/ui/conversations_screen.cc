@@ -177,7 +177,7 @@ struct conversations_screen : skiff::compose::Stacked {
 
   using emoji_face = spl::variant<nodes::Text, nodes::Image<from_emotes>>;
   using mention_row = decltype(suggestion_row(std::declval<const palette&>(), std::declval<pick_mention>(),
-      std::declval<avatar_mark>(), std::string{}, std::string{}));
+      std::declval<legacy::avatar_mark>(), std::string{}, std::string{}));
   using emoji_row = decltype(suggestion_row(std::declval<const palette&>(), std::declval<pick_emoji>(),
       std::declval<emoji_face>(), std::string{}, std::string{}));
   template <class Row> struct suggestion_list : skiff::compose::Stacked {
@@ -467,7 +467,7 @@ struct conversations_screen : skiff::compose::Stacked {
     rows.clear();
     for (std::size_t i = 0; i < mention_matches.size(); ++i)
       rows.push_back(suggestion_row(*needs_.colours, pick_mention{this, i},
-                        avatar_mark(avatar_of::person{}, mention_matches[i].id,
+                        legacy::avatar_mark(avatar_of::person{}, mention_matches[i].id,
                                     mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, 28.0f),
                         mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, mention_matches[i].id));
     mention_lit = 0;
@@ -671,7 +671,7 @@ struct conversations_screen : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text text;
       std::optional<widgets::Button<banner_press>> verify;
-      icon_button<banner_close> close;
+      legacy::icon_button<banner_close> close;
     } parts;
     composer_banner(const palette& colours, conversations_screen* screen)
         : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
@@ -679,7 +679,7 @@ struct conversations_screen : skiff::compose::Stacked {
           parts{.text = skiff::compose::styled(
                     {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                     wrapped(nodes::Text("", 13.0f, colours.text))),
-                .close = icon_button<banner_close>(colours, icon::close{}, {screen})} {
+                .close = legacy::icon_button<banner_close>(colours, icon::close{}, {screen})} {
       parts.close.apply({.alignSelf = scene::align::kMiddle});
       this->setVisible(false);
     }

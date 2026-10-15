@@ -257,16 +257,16 @@ struct chat_header : skiff::compose::Stacked {
   struct head_row : skiff::compose::Stacked {
     // What its handlers ask for, returned.
     using Answer = ::mux::ui::request::toggle_info;
-    using find_button = icon_button<sends<::mux::ui::request::open_search>>;
-    using info_button = icon_button<sends<::mux::ui::request::toggle_info>>;
-    using threads_button = icon_button<sends<::mux::ui::request::toggle_threads>>;
-    using back_button = icon_button<sends<::mux::ui::request::close_chat>>;
+    using find_button = legacy::icon_button<sends<::mux::ui::request::open_search>>;
+    using info_button = legacy::icon_button<sends<::mux::ui::request::toggle_info>>;
+    using threads_button = legacy::icon_button<sends<::mux::ui::request::toggle_threads>>;
+    using back_button = legacy::icon_button<sends<::mux::ui::request::close_chat>>;
     // Shown one thing at a time, a tap on the chat's name or avatar opens
     // its info, as on Telegram's phones.
     bool taps_to_info = false;
     struct parts_t {
       back_button back;
-      avatar_mark face;
+      legacy::avatar_mark face;
       two_lines_t texts;
       find_button find;
       // The plugins' buttons: a call to the other, for one.
@@ -288,7 +288,7 @@ struct chat_header : skiff::compose::Stacked {
                         back_button(colours, icon::back{}, {}))),
                 .face = skiff::compose::visible(
                     shown.key.has_value(),
-                    avatar_mark(avatar_of::chat{}, shown.key.value_or(""), shown.title, 38.0f)),
+                    legacy::avatar_mark(avatar_of::chat{}, shown.key.value_or(""), shown.title, 38.0f)),
                 .texts =
                     two_lines(colours, shown.title, shown.status, 15.0f, 3.0f, two_line_style{.show_second = shown.key.has_value()}),
                 .find = skiff::compose::visible(
@@ -492,8 +492,8 @@ struct search_bar : skiff::compose::Stacked {
   // What its handlers ask for, returned.
   using Answer = std::variant<::mux::ui::request::search_step, ::mux::ui::request::close_search>;
   using field_t = widgets::TextBox<search_typed>;
-  using step_button = icon_button<search_step>;
-  using close_button = icon_button<sends<::mux::ui::request::close_search>>;
+  using step_button = legacy::icon_button<search_step>;
+  using close_button = legacy::icon_button<sends<::mux::ui::request::close_search>>;
   struct parts_t {
     field_t field;
     decltype(skiff::compose::text_of<search_found>(found_said_t{}, nodes::Text("", 13.0f, 0u))) found;

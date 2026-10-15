@@ -352,7 +352,7 @@ struct account_chats : skiff::compose::Stacked {
     // Its colour, as only this page shows it: the strip of
     // its chats listed in other accounts' lists, unless they chose another.
     nodes::Text colour_title;
-    accent_circles<set_colour> colours;
+    legacy::accent_circles<set_colour> colours;
     switch_row<sends<::mux::ui::request::flip_account_strip>> strip;
     nodes::Text title;
     decltype(account_chats_view(std::declval<const palette&>(), std::string())) settings;
@@ -360,7 +360,7 @@ struct account_chats : skiff::compose::Stacked {
     look_choices looks;
     nodes::Text spaces_title;
     choice_menu<pick_home> home;
-    spaces_choices places;
+    legacy::spaces_choices places;
   } parts;
   account_chats(const palette &colours, const looks_shown &looks,
                 const ui_shared &shared, std::string address,
@@ -371,7 +371,7 @@ struct account_chats : skiff::compose::Stacked {
             8.0f, {.fillX = true, .autoSize = scene::axes::kY})),
         parts{
             .colour_title = section_title(colours, "COLOUR"),
-            .colours = accent_circles<set_colour>({}, theme, false),
+            .colours = legacy::accent_circles<set_colour>({}, theme, false),
             .strip = switch_row<sends<::mux::ui::request::flip_account_strip>>(
                 colours, "A strip on its chats in other lists", {}),
             .title = section_title(colours, "CHATS"),
@@ -388,7 +388,7 @@ struct account_chats : skiff::compose::Stacked {
                 : home_direct.value_or(false) ? 3
                                               : 2,
                 pick_home{}),
-            .places = spaces_choices(colours, shared)} {
+            .places = legacy::spaces_choices(colours, shared)} {
     for (nodes::Text* each : {&parts.title, &parts.looks_title, &parts.spaces_title})
       each->apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
     this->show_colour(colour, strip_on);
@@ -410,10 +410,10 @@ struct choose_account_proxy {
 // An account's Proxy page, as Gajim's: which of the program's proxy profiles
 // it connects through, or none; and the way to the profiles themselves.
 struct account_proxy : skiff::compose::Stacked {
-  using manage_row = row_item<sends<::mux::ui::request::manage_proxies>>;
+  using manage_row = legacy::row_item<sends<::mux::ui::request::manage_proxies>>;
   struct parts_t {
     nodes::Text title;
-    std::vector<row_item<choose_account_proxy>> choices;
+    std::vector<legacy::row_item<choose_account_proxy>> choices;
     manage_row manage;
   } parts;
 
@@ -494,7 +494,7 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
   // Under the header: the list down the side, and beside it what is chosen.
   struct body_row : skiff::compose::Stacked {
     struct side_column : skiff::compose::Stacked {
-      using add_row = row_item<sends<::mux::ui::request::open_new_account>>;
+      using add_row = legacy::row_item<sends<::mux::ui::request::open_new_account>>;
       struct parts_t {
         add_row add;
         account_pages pages;

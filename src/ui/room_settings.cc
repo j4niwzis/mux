@@ -76,9 +76,9 @@ template <class Pick, class Rows, class Context>
 auto manage_tab_list_of(Context* box, Rows protocol) {
   namespace c = skiff::compose;
   return c::column(c::vbox(0.0f, {.fillY = true, .width = box->presentation.navigation_width, .padding = {0.0f, 8.0f, 32.0f, 8.0f}, .background = box->colours_->sidebar}),
-      c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), avatar_mark(avatar_of::chat{}, box->facts.id, box->facts.name, 24.0f),
+      c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), legacy::avatar_mark(avatar_of::chat{}, box->facts.id, box->facts.name, 24.0f),
           c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(box->facts.name, 18.0f, box->colours_->text, true))),
-          c::visible(false, icon_button<sends<::mux::ui::request::close_manage>>(*box->colours_, icon::close{}, {}))),
+          c::visible(false, legacy::icon_button<sends<::mux::ui::request::close_manage>>(*box->colours_, icon::close{}, {}))),
       c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(protocol)),
       c::visible(true, manage_tab_row(*box->colours_, spl::visit([](auto tag) { return std::string(preferences_title(state_of<decltype(tag)>{})); }, box->facts.speaks), icon::gear{}, Pick{box->owner, settings_tab::general{}})),
       c::visible(true, manage_tab_row(*box->colours_, "Notifications", icon::bell{}, Pick{box->owner, settings_tab::notifications{}})),

@@ -239,7 +239,7 @@ template <class Act> struct radio_choice : pressable<skiff::compose::Stacked> {
     }
   };
   struct parts_t {
-    radio_mark ring;
+    legacy::radio_mark ring;
     texts words;
   } parts;
   radio_choice(const palette &colours, std::string title, std::string about,
@@ -252,7 +252,7 @@ template <class Act> struct radio_choice : pressable<skiff::compose::Stacked> {
                                          .hoverBackground = colours.chosen,
                                          .disabled = !allowed})),
         act(std::move(what)),
-        parts{.ring = radio_mark(colours),
+        parts{.ring = legacy::radio_mark(colours),
               .words = texts(colours, std::move(title), std::move(about))} {
 
     if (allowed)
@@ -498,7 +498,7 @@ struct switch_row : skiff::compose::Stacked {
 
   // Declared: the text taking the room, the switch at the end.
   switch_row(const palette& colours, std::string text, Act what)
-      : Stacked(skiff::compose::hbox(16.0f, {.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}})),
+      : Stacked(skiff::compose::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}})),
         parts{.label = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(text), 15.0f, colours.text))),
               .toggle = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(what)))} {}
 };
@@ -705,7 +705,7 @@ inline auto member_row(const palette& colours, const member& one, std::string ho
   return skiff::compose::recorded(skiff::compose::onClick(request::open_member_info{one.id}, skiff::compose::row(
       skiff::compose::hbox(12.0f, {.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f},
           .hoverBackground = colours.chosen}),
-      avatar_mark(avatar_of::person{}, one.id, name, 40.0f), two_lines(colours, name, std::move(how), 14.0f, 4.0f),
+      legacy::avatar_mark(avatar_of::person{}, one.id, name, 40.0f), two_lines(colours, name, std::move(how), 14.0f, 4.0f),
       skiff::compose::visible(one.role.has_value(), skiff::compose::styled(
           {.alignSelf = scene::align::kStart, .margin = {10.0f, 0.0f, 0.0f, 0.0f}},
           widgets::Pill(one.role.value_or(""), {.plate = skia::colorSetARGB(255, 62, 52, 96),

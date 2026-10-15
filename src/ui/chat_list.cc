@@ -94,9 +94,9 @@ struct conversation_row : skiff::compose::Stacked {
   bool muted = false;
   // The name and the time over the last message and the unread count.
   struct lines_column : skiff::compose::Stacked {
-    struct top_line : name_time_line {
+    struct top_line : legacy::name_time_line {
       top_line(const palette& colours, std::string shown, bool chosen)
-          : name_time_line(std::move(shown), "", chosen ? colours.selected_text : colours.text,
+          : legacy::name_time_line(std::move(shown), "", chosen ? colours.selected_text : colours.text,
                            chosen ? colours.selected_text : colours.dim, 13.0f) {}
     };
     struct bottom_line : skiff::compose::Stacked {
@@ -178,7 +178,7 @@ struct conversation_row : skiff::compose::Stacked {
                 .bottom = bottom_line(colours, count, chosen, muted)} {}
   };
   struct parts_t {
-    avatar_mark face;
+    legacy::avatar_mark face;
     lines_column lines;
     // Listed in another account's list than its own: a rounded strip on its
     // left in its colour -- out of the flow, in the row's padding.
@@ -230,7 +230,7 @@ struct conversation_row : skiff::compose::Stacked {
       : Stacked(skiff::compose::hbox(12.0f, {})), id(one.id), chosen(is_chosen),
         muted(is_muted), shown(view_of(*n.shared, one, is_chosen, is_muted,
                                        draft, events, strip)),
-        parts{.face = avatar_mark(avatar_of::chat{}, one.id.id, display_name(one), 46.0f),
+        parts{.face = legacy::avatar_mark(avatar_of::chat{}, one.id.id, display_name(one), 46.0f),
               .lines =
                   lines_column(*n.colours, display_name(one),
                                one.unread_here(events), is_chosen, is_muted)} {

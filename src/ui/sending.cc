@@ -49,7 +49,7 @@ struct send_box : skiff::compose::Stacked {
     };
     struct parts_t {
       std::vector<picture_preview> pictures;
-      std::vector<file_view> files;
+      std::vector<file_row_t> files;
     } parts;
     static constexpr float kGap = 8.0f;
     // A picture's size in the box: its own, scaled down to fit -- lower
@@ -66,7 +66,7 @@ struct send_box : skiff::compose::Stacked {
     [[nodiscard]] static float height_of(const std::vector<pending_file>& all) {
       float total = all.empty() ? 0.0f : static_cast<float>(all.size() - 1) * kGap;
       for (const pending_file& one : all)
-        total += one.image ? size_of(one, all.size()).second : file_view::kIcon;
+        total += one.image ? size_of(one, all.size()).second : kFileIcon;
       return total;
     }
     previews_column(const palette &colours,
@@ -78,7 +78,7 @@ struct send_box : skiff::compose::Stacked {
           const auto [w, h] = size_of(one, all.size());
           parts.pictures.emplace_back(one.key, w, h);
         } else {
-          parts.files.emplace_back(colours, nullptr, std::string(), one.name, one.size);
+          parts.files.push_back(file_row(colours, std::string(), one.name, one.size, false));
         }
       }
     }

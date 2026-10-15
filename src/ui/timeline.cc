@@ -81,42 +81,6 @@ using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::requ
   const struct {
     float x, y;
   } press{x, y};
-  // A picture: seen whole. A file: saved and opened.
-  // A video, shown by its thumbnail: played in the viewer -- or, built
-  // without video, by the system's player, as a file is opened.
-  if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
-      one.said.attachment && one.said.attachment->video && !mux::platform::video::kPlays) {
-    return ::mux::ui::request::open_file{*one.said.attachment->video, one.said.attachment->name};
-  }
-  if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
-      one.said.attachment && one.said.attachment->video) {
-    const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-    return ::mux::ui::request::open_video{one.parts.body.parts.picture->source, *one.said.attachment->video, one.sender,
-                        chat ? sender_name(*chat, one.sender) : one.sender,
-                        std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))};
-  }
-  if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y)) {
-    const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-    return ::mux::ui::request::open_picture{one.parts.body.parts.picture->source, one.sender,
-                          chat ? sender_name(*chat, one.sender) : one.sender,
-                          std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))};
-  }
-  // A picture of an album: seen whole, as one alone is.
-  if (one.parts.body.parts.album)
-    for (const auto& row : one.parts.body.parts.album->parts.rows)
-      for (const picture_view& cell : row.parts.cells)
-        if (cell.bounds().contains(press.x, press.y)) {
-          const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-          return ::mux::ui::request::open_picture{cell.source, one.sender, chat ? sender_name(*chat, one.sender) : one.sender,
-                                std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day},
-                                            clock_of(one.said.at))};
-        }
-  if (one.parts.body.parts.file && one.parts.body.parts.file->bounds().contains(press.x, press.y) && one.said.attachment) {
-    if (one.parts.body.parts.file->sound)
-      return ::mux::ui::request::play_audio{one.parts.body.parts.file->source};
-    else
-      return ::mux::ui::request::open_file{one.parts.body.parts.file->source, one.said.attachment->name};
-  }
   // A card of a link to a room or a message: followed.
   if (const auto url = message_link_at(one.parts.body.parts.blocks, press.x, press.y))
     return ::mux::ui::request::open_url{*url};

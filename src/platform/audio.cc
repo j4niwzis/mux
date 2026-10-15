@@ -187,6 +187,9 @@ class speaker {
       this->stop();
   }
   [[nodiscard]] bool holds(std::string_view key) const { return stream_ && key_ == key; }
+  // What it holds, by its key; none where it holds nothing.
+  [[nodiscard]] const std::string& key() const noexcept { return key_; }
+  [[nodiscard]] bool paused() const noexcept { return paused_; }
   [[nodiscard]] bool playing(std::string_view key) const { return this->holds(key) && !paused_; }
   [[nodiscard]] double position() const {
     if (!stream_ || per_second_ <= 0.0)

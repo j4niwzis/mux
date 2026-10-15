@@ -156,6 +156,15 @@ struct ui_shared {
   std::map<protocol_t, proto::account_ops> protocol_ops;
   std::map<account_id, protocol_state_t> protocol_states;
 };
+// What the speaker plays, as the program says it: which sound -- by its
+// source -- whether it plays or is paused, and where it is and how long it
+// is, in seconds. None: nothing held.
+struct audio_shown {
+  std::string source;
+  bool playing = false;
+  double at = 0.0, length = 0.0;
+  friend bool operator==(const audio_shown&, const audio_shown&) = default;
+};
 // A message found by a chat's search, as the list of them shows it: its
 // place among them, who said it, when, and its words around what was found.
 struct search_result {

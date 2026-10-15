@@ -17,6 +17,7 @@ import skiff.nodes.text;
 import skiff.widgets.loader;
 import skiff.widgets.pill;
 import mux.platform.audio;
+import mux.platform.video;
 import mux.core;
 import mux.config;
 import mux.logic.links;
@@ -241,11 +242,11 @@ struct message_bubble : skiff::compose::Stacked {
       // Forwarded: from whom, in the accent, as Telegram's.
       std::optional<forward_line_t> forwarded;
       std::optional<quote_row_t> quote;
-      std::optional<picture_view> picture;
+      std::optional<picture_view_t> picture;
       // A sticker its protocol draws itself, in the picture's place.
       std::optional<sticker_holder> their_sticker;
-      std::optional<album_view> album;
-      std::optional<file_view> file;
+      std::optional<album_view_t> album;
+      std::optional<file_view_t> file;
       nodes::BasicText<message_pictures> text;
       // Code blocks and link cards in text order, each with the words after it.
       std::vector<message_piece> blocks;
@@ -265,6 +266,8 @@ struct message_bubble : skiff::compose::Stacked {
       nodes::Text inline_time;
     } parts;
     skia::SkColor plate = 0;
+    // Its picture a sticker's: no bubble under it, its time over it.
+    bool sticker = false;
     // The last trailer shown, where there is one: what the time goes beside.
     [[nodiscard]] auto last_trailer() const { return trailers_t::last(parts.trailers); }
     // A protocol's sticker placed, where it made one.
@@ -404,7 +407,7 @@ struct message_bubble : skiff::compose::Stacked {
       const auto trailer = this->last_trailer();
       // A sticker's time is over it, and nowhere else: placed beside its
       // reactions too, it was shown twice.
-      if (picture && picture->sticker) {
+      if (picture && sticker) {
         time_placed = true;
         // Over it where it was sent; beside it where it came, shown by
         // skiff while the message is under the pointer (revealOnHover).
@@ -793,32 +796,51 @@ struct message_bubble : skiff::compose::Stacked {
                                               return body.place_sticker(make_sticker(now, said));
                                             },
                                             protocol_state_of(*shared_, in.id.account));
+    // What a picture of it opens, pressed: it in the viewer -- a video played
+    // there, or, built without video, by the system's player.
+    const std::string sender_shown = sender_name(in, said.sender);
+    const std::string when_shown = std::format("{:%d.%m.%Y} at {}",
+        std::chrono::year_month_day{std::chrono::floor<std::chrono::days>(said.at)}, clock_of(said.at));
+    const auto opens = [&](const std::string& source, const std::optional<std::string>& video, const std::string& name) -> media_open {
+      if (video && !mux::platform::video::kPlays)
+        return request::open_file{*video, name};
+      if (video)
+        return request::open_video{source, *video, said.sender, sender_shown, when_shown};
+      return request::open_picture{source, said.sender, sender_shown, when_shown};
+    };
     // What it carries: a picture, sized as tdesktop's; or a file's row.
     if (said.attachment && !theirs) {
       const mux::attachment& carried = *said.attachment;
+      const bool bare = said.body.plain.empty() && !said.body.html;
+      body.sticker = said.sticker && is_picture(carried.kind);
+      // Its time over it: a sticker sent, at its bottom right corner (tdesktop's
+      // UnwrappedMedia); a picture with no caption.
+      const bool time_over = body.sticker ? said.outgoing : bare;
       spl::visit(spl::overloaded{[&](attachment_kind::image) {
-                              body.parts.picture.emplace(*colours_, carried.source, carried.width, carried.height);
-                              if (carried.video)
-                                body.parts.picture->show_video(carried.duration_ms, carried.video != carried.source);
+                              body.parts.picture.emplace(picture_view(*colours_, carried.source, carried.width, carried.height,
+                                  {.sticker = body.sticker,
+                                   .video_ms = carried.video ? std::optional<std::int64_t>(carried.duration_ms) : std::nullopt,
+                                   .thumbnail = !carried.video || carried.video != carried.source,
+                                   .time = time_over ? when : std::string()},
+                                  opens(carried.source, carried.video, carried.name)));
                             },
                             [&](attachment_kind::file) {
-                              body.parts.file.emplace(*colours_, n.sound, carried.source, carried.name, carried.size,
-                                                      audio_type(carried.mimetype, carried.name));
+                              const bool sound = audio_type(carried.mimetype, carried.name);
+                              body.parts.file.emplace(file_view(*colours_, carried.source, carried.name, carried.size, sound,
+                                  sound ? file_open(request::play_audio{carried.source})
+                                        : file_open(request::open_file{carried.source, carried.name})));
                             }},
                  carried.kind);
-      // A sticker: on nothing -- no bubble, no padding -- its time over it.
-      if (said.sticker && body.parts.picture) {
-        body.parts.picture->as_sticker();
+      // A sticker: on nothing -- no bubble, no padding.
+      if (body.sticker && body.parts.picture) {
         body.parts.text.setVisible(false);
-        // Its time as tdesktop's (UnwrappedMedia, calculateFullRight): one
-        // sent, at its bottom right corner, over it; one that came, beside
-        // it at the bottom, to its right, on a plate of its own.
         if (said.outgoing) {
-          body.parts.picture->show_time(when);
           body.parts.time.setVisible(false);
         } else {
-          // Shown while the pointer is over the message, as tdesktop's
-          // needInfoDisplay (isUnderCursor): skiff shows and hides it.
+          // One that came: its time beside it at the bottom, to its right, on
+          // a plate of its own, shown while the pointer is over the message,
+          // as tdesktop's needInfoDisplay (isUnderCursor): skiff shows and
+          // hides it.
           body.parts.time.apply({.place = scene::anchor::kBottomRight, .origin = scene::anchor::kBottomLeft, .x = 6.0f,
                                  .padding = {2.0f, 6.0f, 2.0f, 6.0f}, .cornerRadius = 8.0f, .background = body.plate,
                                  .visible = false, .revealOnHover = true});
@@ -826,20 +848,22 @@ struct message_bubble : skiff::compose::Stacked {
         body.parts.frost.reset();
         body.apply({.padding = {0.0f, 0.0f, 0.0f, 0.0f}, .background = skia::SkColor{0},
                     .border = scene::Border{skia::SkColor{0}, 0.0f}});
-      } else if (said.body.plain.empty() && !said.body.html) {
+      } else if (bare) {
         // No caption: the text goes, and a picture has its time over it.
         body.parts.text.setVisible(false);
         if (body.parts.picture) {
-          body.parts.picture->show_time(when);
           body.parts.time.setVisible(false);
           body.apply({.padding = {3.0f, 3.0f, 3.0f, 3.0f}});
           body.sync_frost();
         }
       }
     }
-    // A gallery: its pictures as an album, its body the caption under it.
+    // A gallery: its pictures as an album, its body the caption under it,
+    // each pressed opening it in the viewer.
     if (!said.album.empty())
-      body.parts.album.emplace(*colours_, said.album);
+      body.parts.album.emplace(album_view(*colours_, said.album,
+          said.album | std::views::transform([&](const attachment& one) { return opens(one.source, std::nullopt, one.name); }) |
+              std::ranges::to<std::vector>()));
     // Pictures at the chat's look's opacity for them.
     if (const float images = static_cast<float>(element_opacity_of(looks_->bubbles, &config::element_opacity::images)) / 100.0f;
         images < 1.0f) {
@@ -970,7 +994,7 @@ struct message_bubble : skiff::compose::Stacked {
     // A sticker's: no bubble under it, so what is over it -- the sender's
     // name, a forward's line, the quote of what it answers -- each on a small
     // plate of its own, as Telegram's; they stood on the wallpaper.
-    if (said.sticker && body.parts.picture) {
+    if (body.sticker && body.parts.picture) {
       const auto plated = [&](scene::Node& part) {
         part.apply({.padding = {3.0f, 8.0f, 3.0f, 8.0f}, .cornerRadius = 8.0f, .background = body.plate});
       };

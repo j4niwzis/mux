@@ -389,6 +389,20 @@ inline auto side_space_menu(const palette& colours, const std::string& account,
       side_menu_button(colours, "Hide", set_bars_act{account, item, false, false}));
 }
 
+using side_space_menu_t = decltype(side_space_menu(std::declval<const palette&>(),
+    std::declval<const std::string&>(), std::declval<const config::space_item_t&>(), std::string{}));
+using side_chat_menu_t = decltype(side_chat_menu(std::declval<const palette&>(),
+    std::declval<const conversation_id&>(), std::string{}, std::declval<const account_id&>(),
+    std::declval<const std::vector<account_id>&>(), std::declval<const config::theme_t&>()));
+} // namespace mux::ui
+
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::side_space_menu_t> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::side_space_menu_t>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::side_chat_menu_t> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::side_chat_menu_t>() noexcept;
+
+export namespace mux::ui {
+
 struct side_space_menu_at {
   std::string account;
   config::space_item_t item;
@@ -532,6 +546,20 @@ inline auto side_server_for(const palette& colours) {
           c::restarted_scroll<elsewhere_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(contents))))));
 }
 
+using side_chat_list_t = decltype(side_chats_for(std::declval<const ui_needs&>()));
+using side_found_list_t = decltype(side_found_for(std::declval<const palette&>()));
+using side_server_list_t = decltype(side_server_for(std::declval<const palette&>()));
+} // namespace mux::ui
+
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::side_chat_list_t> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::side_chat_list_t>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::side_found_list_t> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::side_found_list_t>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::side_server_list_t> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::side_server_list_t>() noexcept;
+
+export namespace mux::ui {
+
 inline constexpr float kMinSidebar = 240.0f;
 struct side_bar_layout {
   struct State {
@@ -603,22 +631,37 @@ struct side_pick_folder {
   using Answer = request::pick_folder;
   Answer operator()(const folder_t& folder) const { return {folder}; }
 };
-inline auto side_column(const ui_needs& needs) {
+using side_space_rows_t = decltype(side_spaces_for(std::declval<const palette&>(), side_pick_folder{}, true));
+using side_folder_rows_t = decltype(side_folders_for(std::declval<const palette&>(), side_pick_folder{}));
+} // namespace mux::ui
+
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::side_folder_rows_t> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::side_folder_rows_t>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::side_space_rows_t> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::side_space_rows_t>() noexcept;
+
+export namespace mux::ui {
+
+inline auto side_header_for(const palette& colours) {
   namespace c = skiff::compose;
-  const auto& colours = *needs.colours;
   auto top = c::shown_for<side_shown>([](const side_shown& now) { return now.top_on || now.dragging; },
       c::styled({.height = 34.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle,
           .cornerRadius = 8.0f, .masking = true},
           c::SideScroll(side_spaces_for(colours, side_pick_folder{}, true), true)));
-  auto side = c::shown_for<side_shown>([](const side_shown& now) { return now.side_on || now.dragging; },
-      c::styled({.fillY = true, .width = 56.0f},
-          nodes::ScrollContainer(side_spaces_for(colours, side_pick_folder{}, false))));
   auto head = c::row(c::hbox(10.0f, {.fillX = true, .height = 52.0f,
       .padding = {8.0f, 8.0f, 8.0f, 8.0f}}),
       menu_button(colours),
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("mux", 17.0f, colours.text, true)),
       std::move(top), c::styled({.alignSelf = scene::align::kMiddle},
           icon_button(colours, icon::compass{}, sends<request::open_explore>{})));
+  return head;
+}
+inline auto side_body_for(const ui_needs& needs) {
+  namespace c = skiff::compose;
+  const auto& colours = *needs.colours;
+  auto side = c::shown_for<side_shown>([](const side_shown& now) { return now.side_on || now.dragging; },
+      c::styled({.fillY = true, .width = 56.0f},
+          nodes::ScrollContainer(side_spaces_for(colours, side_pick_folder{}, false))));
   auto chats = c::shown_for<side_shown>([](const side_shown& now) { return now.chats_on; },
       c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), side_chats_for(needs)));
   auto rest = c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX}),
@@ -634,6 +677,23 @@ inline auto side_column(const ui_needs& needs) {
           }, nodes::Text("", 13.0f, colours.dim, true)))),
       side_found_for(colours), side_server_for(colours));
   auto body = c::row(c::hbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), std::move(side), std::move(rest));
+  return body;
+}
+using side_header_t = decltype(side_header_for(std::declval<const palette&>()));
+using side_body_t = decltype(side_body_for(std::declval<const ui_needs&>()));
+} // namespace mux::ui
+
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::side_header_t> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::side_header_t>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::side_body_t> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::side_body_t>() noexcept;
+
+export namespace mux::ui {
+inline auto side_column(const ui_needs& needs) {
+  namespace c = skiff::compose;
+  const auto& colours = *needs.colours;
+  auto head = side_header_for(colours);
+  auto body = side_body_for(needs);
   auto surface = c::projected<list_shown>([](const list_shown& now) { return side_bar_layout::State{now.big_bars}; },
       c::arranged<side_bar_layout>({}, c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar}),
           std::move(head), connection_bar_for<connection_shown>(colours, &connection_shown::list),

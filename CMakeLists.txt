@@ -426,6 +426,8 @@ if(MUX_UI)
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_window.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_chats.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_side.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_side_menus.cc>
+    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_side_rows.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_column.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_composer.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_info.cc>

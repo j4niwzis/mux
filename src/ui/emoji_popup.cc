@@ -212,9 +212,6 @@ inline auto emoji_popup(const ui_needs& n, const emoji_facts& facts) {
   return c::column(c::vbox(0.0f, {.fill = true}), std::move(card));
 }
 using emoji_popup_t = decltype(emoji_popup(std::declval<const ui_needs&>(), std::declval<const emoji_facts&>()));
-// Its card, for where a press off it is; and what it shows, for the
-// pictures it asks for.
-[[nodiscard]] inline auto& popup_card(emoji_popup_t& popup) { return std::get<0>(popup.fParts); }
 
 }  // namespace mux::ui
 

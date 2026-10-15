@@ -396,7 +396,8 @@ struct app : kept_settings {
   void refresh_shown();
   [[nodiscard]] bool accounts_up();
   [[nodiscard]] bool page_over_chats();
-  std::array<skiff::scene::NodeId, 3> bound_pages{};
+  // The keys asked for the chat's field since they were last let go.
+  bool keys_asked_free = false;
   // And to the chats, the window's other model.
   skiff::bind::Binding<mux::chats_model> chats_binding;
   // What the window wants of the program as its state comes to want it.

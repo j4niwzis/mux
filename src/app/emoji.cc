@@ -39,31 +39,29 @@ struct emoji_part {
 
 };
 
-void part_apply(emoji_part& self, const request::toggle_emoji&);
-void part_apply(emoji_part& self, const request::toggle_thread_emoji&);
+void part_apply(emoji_part& self, const request::toggle_emoji& one);
+void part_apply(emoji_part& self, const request::toggle_thread_emoji& one);
 void part_apply(emoji_part& self, const request::close_emoji&);
 void part_apply(emoji_part& self, const request::insert_emoji& one);
 void part_apply(emoji_part& self, const request::favourite_emoji& one);
 void open_at(emoji_part& self, float right, float top);
 
-void part_apply(emoji_part& self, const request::toggle_emoji&) {
+void part_apply(emoji_part& self, const request::toggle_emoji& one) {
   if (self.s_->emoji_open()) {
     self.s_->close_emoji();
     return;
   }
   self.into_ = request::writing::chat{};
-  const auto at = mux::ui::input_emoji(mux::ui::composer_input(mux::ui::chat_line_of(self.s_->root()))).bounds();
-  open_at(self, at.fRight, at.fTop);
+  open_at(self, one.right, one.top);
 }
 
-void part_apply(emoji_part& self, const request::toggle_thread_emoji&) {
+void part_apply(emoji_part& self, const request::toggle_thread_emoji& one) {
   if (self.s_->emoji_open()) {
     self.s_->close_emoji();
     return;
   }
   self.into_ = request::writing::thread{};
-  const auto at = mux::ui::input_emoji(mux::ui::composer_input(mux::ui::thread_line_of(self.s_->root()))).bounds();
-  open_at(self, at.fRight, at.fTop);
+  open_at(self, one.right, one.top);
 }
 
 void part_apply(emoji_part& self, const request::close_emoji&) { self.s_->close_emoji(); }
@@ -75,22 +73,21 @@ void part_apply(emoji_part& self, const request::favourite_emoji& one) {
 }
 
 void part_apply(emoji_part& self, const request::insert_emoji& one) {
-  auto& screen = self.s_->root();
   // Put in the draft of the field it is for; that field given the keys --
   // not under a finger, where the panel stands where the keyboard would:
   // focused, the field brought the keyboard up over the panel at each emoji.
-  const auto focus = [&](auto& field) {
+  const auto focus = [&](mux::ui::keys_target field) {
     if (!self.s_->by_touch)
-      self.s_->scene->focus(field);
+      self.s_->ask_keys(std::move(field));
   };
   const auto put = [&](mux::ui::composer_doc& now) { mux::ui::put_emoji(now, one.text, one.picture); };
   spl::visit(spl::overloaded{[&](request::writing::chat) {
                                self.s_->edit_chat_writing(put);
-                               focus(mux::ui::composer_field(mux::ui::chat_line_of(screen)));
+                               focus(mux::ui::keys::chat{});
                              },
                              [&](request::writing::thread) {
                                self.s_->edit_thread_writing(put);
-                               focus(mux::ui::composer_field(mux::ui::thread_line_of(screen)));
+                               focus(mux::ui::keys::thread{});
                              }},
              self.into_);
 }

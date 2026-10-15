@@ -367,19 +367,6 @@ inline auto chats_screen(const ui_needs& n) {
                           c::spec_for<screen_shown>(beside_width, c::column(c::vbox(0.0f, {.fillY = true}), threads_panel(n)))))))));
 }
 using chats_screen_t = decltype(chats_screen(std::declval<const ui_needs&>()));
-// Its parts, where the program reaches them: the chat's column, its field,
-// the threads' field, the chat's search field.
-// (keys_for, onKeys, flicked and slid_for each derive from the row under
-// them: its parts are the screen's.)
-[[nodiscard]] inline auto& chat_column_of(chats_screen_t& screen) { return std::get<0>(std::get<2>(screen.fParts).fParts); }
-[[nodiscard]] inline auto& chat_line_of(chats_screen_t& screen) { return std::get<chat_part::line>(chat_column_of(screen).fParts); }
-[[nodiscard]] inline auto& thread_line_of(chats_screen_t& screen) {
-  return std::get<kThreadLine>(std::get<0>(std::get<5>(screen.fParts).fParts).fParts);
-}
-[[nodiscard]] inline auto& search_field_of(chats_screen_t& screen) {
-  return std::get<0>(std::get<chat_part::search>(chat_column_of(screen).fParts).fParts);
-}
-
 }  // namespace mux::ui
 
 // Outside a release build each child is walked through its table, and a

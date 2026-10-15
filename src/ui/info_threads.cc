@@ -81,7 +81,7 @@ struct in_thread {
   using draft = thread_draft;
   using told = draft_told<request::thread_draft_edited, request::thread_send>;
   using attach = sends<request::attach_in_thread>;
-  using emoji = sends<request::toggle_thread_emoji>;
+  using emoji = emoji_beside<request::toggle_thread_emoji>;
   using send = sends<request::thread_send>;
   static constexpr std::string_view placeholder = "Reply in thread\u2026";
   using reads_chat = std::false_type;

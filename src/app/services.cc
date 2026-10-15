@@ -35,7 +35,6 @@ struct services {
   // nothing of the window is being answered -- what the network told.
   skiff::bind::Binding<mux::ui::shown_model>* showing_binding = nullptr;
   // A message's menu asked for: focused once it is made.
-  bool menu_focus_due = false;
   // The emoji and stickers kept, as the window's panels show them.
   mux::ui::emoji_kept emoji;
   // The looks the window shows.
@@ -65,7 +64,6 @@ struct services {
   // one edited; and the message whose menu is up.
   // The drawer, left open under a page coming in over it, to go when the
   // page is in.
-  bool drawer_waits = false;
   // A chat to open, a link to follow -- its card, or its room -- once a part
   // is done; and a room joined, from a link or the directory, opened once
   // the model has it.
@@ -194,6 +192,21 @@ struct services {
     mux::ui::show<mux::ui::emoji_facts>(*showing, std::nullopt);
   }
   [[nodiscard]] bool emoji_open() const { return showing->root().emoji.fValue.has_value(); }
+  // The keys given to a field: what is shown says which, and asks again with
+  // a count raised -- the field takes them as it reads that.
+  void ask_keys(mux::ui::keys_target which) const {
+    spl::visit(spl::overloaded{[&](mux::ui::keys::chat) { written_last = mux::ui::request::writing::chat{}; },
+                               [&](mux::ui::keys::thread) { written_last = mux::ui::request::writing::thread{}; },
+                               [](const auto&) {}},
+               which);
+    mux::ui::change_shown<mux::ui::keys_asked>(*showing, [&](mux::ui::keys_asked& now) {
+      now.which = std::move(which);
+      ++now.count;
+    });
+  }
+  // The field written in last, of the chat's and the thread's: where the keys
+  // were last given, or what was last typed into.
+  mutable mux::ui::request::writing_t written_last = mux::ui::request::writing::chat{};
   // The threads' panel, as what is shown says: opened on a thread, the
   // thread closed in it, or the panel toggled -- whether it is open now.
   void open_thread(std::string root) const {

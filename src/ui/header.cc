@@ -467,12 +467,13 @@ inline auto search_bar_for(const palette& colours) {
       c::onKeys(keys,
           c::row(c::hbox(4.0f, {.fillX = true, .height = kChatHeadHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
                                 .background = colours.sidebar}),
-                 c::applied<search_found>([](const search_found& now) { return now.open; },
-                     [](widgets::TextBox<search_typed>& typed, bool open) {
-                       if (!open && !typed.text().empty())
-                         typed.setText({});
-                     },
-                     c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field))),
+                 c::focused_by<keys_asked>(keys_on<keys::search>{},
+                     c::applied<search_found>([](const search_found& now) { return now.open; },
+                         [](widgets::TextBox<search_typed>& typed, bool open) {
+                           if (!open && !typed.text().empty())
+                             typed.setText({});
+                         },
+                         c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field)))),
                  c::text_for<search_found>(found_said_t{}, c::styled(middle, nodes::Text("", 13.0f, colours.dim))),
                  c::styled(middle, icon_button(colours, icon::up{}, search_step{false})),
                  c::styled(middle, icon_button(colours, icon::down{}, search_step{true})),

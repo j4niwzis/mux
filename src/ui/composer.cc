@@ -709,23 +709,30 @@ inline void prepend_quote(composer_doc& doc, const scene::ClipboardFragment& sel
 // does is said by where it is. What is typed looks as it will be sent: the
 // messages' size, as in tdesktop, whose field takes the message font; the
 // arrow in the accent.
+// The emoji button's answer: the panel toggled, opened beside where the
+// button is laid out.
+template <class Toggle> struct emoji_beside {
+  Toggle operator()(const skia::SkRect& at) const { return {at.fRight, at.fTop}; }
+};
+// Which field a draft's input is, for the keys.
+inline keys::chat keys_target_of(std::type_identity<chat_draft>) { return {}; }
+inline keys::thread keys_target_of(std::type_identity<thread_draft>) { return {}; }
 template <class Draft, class Told, class Attach, class Emoji, class Send>
 auto message_input(const palette& colours, std::string placeholder, Attach attach_it, Emoji emoji_it, Send send_it) {
   namespace c = skiff::compose;
   auto text = widgets::TextArea<Told, message_pictures, field_quotes>(colours.widgets, std::move(placeholder), Told{});
   text.setFontSize(13.0f);
   // What it shows: the draft, as the program keeps it.
-  auto field = c::projected<Draft>([](const Draft& now) { return now.now; }, std::move(text));
+  // What it shows: the draft, as the program keeps it; and the keys, where
+  // the program gives them to it.
+  using target = decltype(keys_target_of(std::type_identity<Draft>{}));
+  auto field = c::focused_by<keys_asked>(keys_on<target>{}, c::projected<Draft>([](const Draft& now) { return now.now; }, std::move(text)));
   return c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}}),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Attach>(colours, icon::clip{}, std::move(attach_it))),
                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field)),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Emoji>(colours, icon::smile{}, std::move(emoji_it))),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Send>(colours, icon::send{}, std::move(send_it), colours.accent)));
 }
-// Its paperclip, and its field.
-inline auto& input_attach(auto& input) { return std::get<0>(input.fParts); }
-inline auto& input_field(auto& input) { return std::get<1>(input.fParts); }
-inline auto& input_emoji(auto& input) { return std::get<2>(input.fParts); }
 
 // The chat screen as the program sets it: the account shown, the chat
 // chosen, if one is, and whether its info is open beside it.
@@ -765,7 +772,7 @@ struct in_chat {
   using draft = chat_draft;
   using told = draft_told<request::chat_draft_edited, ::mux::ui::request::send_typed>;
   using attach = sends<::mux::ui::request::attach_files>;
-  using emoji = sends<::mux::ui::request::toggle_emoji>;
+  using emoji = emoji_beside<::mux::ui::request::toggle_emoji>;
   using send = sends<::mux::ui::request::send_typed>;
   static constexpr std::string_view placeholder = "Write a message…";
   using reads_chat = std::true_type;
@@ -925,10 +932,6 @@ auto composer_bar(const ui_needs& n, typename Where::cancel cancel = {}, typenam
 }
 template <class Where = in_chat> using composer_bar_t = decltype(composer_bar<Where>(std::declval<const ui_needs&>()));
 
-// Its parts: what is answered or edited, the row with the field, the field.
-inline auto& composer_context(auto& bar) { return std::get<3>(bar.fParts); }
-inline auto& composer_input(auto& bar) { return std::get<4>(bar.fParts); }
-inline auto& composer_field(auto& bar) { return input_field(composer_input(bar)); }
 
 }  // namespace mux::ui
 

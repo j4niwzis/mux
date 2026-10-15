@@ -254,14 +254,14 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin 5cca2c69b0e857414302a972dffcac8f163ea182)
+set(mux_skiff_pin db6945eab4efb3e6b035d8dde033343ea2b96af2)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
   VERSION 0.1.0)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 52707dff7bf35b5316c4910d897942c5cec7745b
+  GIT_TAG bd73016c316cfd16a21ba7d1769fa161fd7a2ed6
   VERSION 0.1.0)
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on

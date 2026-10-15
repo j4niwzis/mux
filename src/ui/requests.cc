@@ -639,7 +639,12 @@ struct join_room_card {};
 // The room card's room asked to be let into.
 struct knock_room_card {};
 struct decline_room_card {};
-struct toggle_emoji {};
+// The input's emoji button pressed: where it is laid out, the panel opened
+// beside it.
+struct toggle_emoji {
+  float right = 0.0f;
+  float top = 0.0f;
+};
 // The account chosen in Accounts: its colour, and its strip on its chats in
 // other accounts' lists.
 struct set_account_colour {
@@ -670,13 +675,44 @@ struct set_chat_strip_colour {
 };
 // The thread panel's own: its paperclip, and its emoji button.
 struct attach_in_thread {};
-struct toggle_thread_emoji {};
+struct toggle_thread_emoji {
+  float right = 0.0f;
+  float top = 0.0f;
+};
+// Which field the program gives the keys to, and each time it does: a count
+// it raises -- the field asked reads it and takes the keys (focused_by); the
+// others read 0. One target at a time, so only one field asks.
+namespace keys {
+struct none {};
+struct chat {};
+struct thread {};
+struct search {};
+struct menu {};
+}  // namespace keys
+using keys_target = spl::variant<keys::none, keys::chat, keys::thread, keys::search, keys::menu>;
+struct keys_asked {
+  keys_target which = keys::none{};
+  std::uint64_t count = 0;
+  friend bool operator==(const keys_asked&, const keys_asked&) = default;
+};
+// What a field of Target reads of it: the count, where the keys are asked
+// for it; 0, where not.
+template <class Target> struct keys_on {
+  std::uint64_t operator()(const keys_asked& now) const {
+    return spl::visit(spl::overloaded{[&](Target) { return now.count; }, [](const auto&) { return std::uint64_t{0}; }}, now.which);
+  }
+};
 // Which field the emoji picker writes in: the chat's, or the thread's.
 namespace writing {
 struct chat {};
 struct thread {};
 }  // namespace writing
 using writing_t = spl::variant<writing::chat, writing::thread>;
+// Where the settings page has come to rest, scrolled: kept by the program,
+// the page put back there when it is made again.
+struct settings_scrolled {
+  float at = 0.0f;
+};
 struct close_emoji {};
 struct insert_emoji {
   std::string text;

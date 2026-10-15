@@ -55,8 +55,10 @@ class accounts_part {
   // comes in over it, and the drawer goes once the page is in: not two
   // things moving at once.
   void show_accounts(mux::ui::panel_detail_t detail = mux::ui::panel_detail::none{}) {
+    // The drawer pushed back: it waits under the page coming in, and goes
+    // as the page covers it (the slide-over tells it).
     if (s_->showing->look<mux::ui::drawer_shown>()->out)
-      s_->drawer_waits = true;
+      mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt);
     pending_login_.reset();
     mux::ui::panel_facts facts{.note = k_->config_error, .theme = k_->appearance().theme};

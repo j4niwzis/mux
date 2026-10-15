@@ -322,28 +322,12 @@ void app::wire() {
 }
 
 // The window, bound to the model whole: one binding, its change log read
-// once a frame. Where a page with the model's widgets has come up -- the
-// settings dialog's, the room settings', the accounts panel's -- the tree
-// was changed by hand, and is walked whole once; else only what changed.
-template <class Page>
-skiff::scene::NodeId bound_part_of(Page& page) {
-  // Combinator pages have no named settings member. Their node identity
-  // changes whenever a page is replaced, even at the same address.
-  return page.fState.fId;
-}
+// once a frame. Where something made a subtree in place -- a dialog opened,
+// a panel slid in, a settings page shown (skiff's work::subtreeMade) -- it
+// is walked whole once, for what was made to read the model; else only
+// what changed.
 void app::take_page_input() {
-  std::array<skiff::scene::NodeId, 3> now{};
-  if (auto* up = mux::ui::settings_up(root()))
-    now[0] = spl::visit([](auto& page) { return bound_part_of(page); }, up->page());
-  if (auto* managing = mux::ui::manage_up(root()))
-    now[1] = managing->fState.fId;
-  // The accounts page: made anew as it opens, and its page beside the list
-  // made anew as what is chosen there changes.
-  if (auto* panel = mux::ui::open_panel(root()))
-    now[2] = spl::visit([](auto& accounts) { return accounts.fState.fId; }, *panel) ^
-             mux::ui::detail_identity(*showing.look<std::optional<mux::ui::panel_facts>>());
-  if (now != bound_pages) {
-    bound_pages = now;
+  if (std::exchange(skiff::scene::work::subtreeMade(), false)) {
     window_binding.invalidate();
     window_binding.refresh(root(), this->state);
     showing_binding.invalidate();
@@ -477,9 +461,6 @@ void app::refresh_shown() {
   if (shown->forum && shared.listed() && !chat_list.is_forum({*shared.listed(), *shown->forum}))
     mux::ui::change_shown<mux::ui::chat_shown>(showing, [](auto& now) { now.forum.reset(); });
   shared.read_shown_now();
-  if (std::exchange(shared.menu_focus_due, false))
-    if (skiff::scene::Node* card = mux::ui::menu_card(root()))
-      scene.focus(*card);
 }
 
 // Right after an event is handled, what it asked for -- taken from the
@@ -520,6 +501,10 @@ void app::after_event() {
 double app::wake_in() const { return model->typing_wake_in(); }
 
 void app::before_frame() {
+  // What the window's nodes answered as they ticked (a page come to rest
+  // scrolled, a timer): delivered as an event's are.
+  if (!skiff::scene::hostWork().pressed.empty())
+    this->after_event();
   // What the parts asked of the chat's list, and a jump on its way gone on
   // with: aimed at once held, fetched or paged back to while it is not.
   if (auto asked = std::exchange(shared.show_message_due, std::nullopt); asked && shared.chosen())
@@ -556,7 +541,6 @@ void app::before_frame() {
   this->take_page_input();
   // What the screen came to want as it was updated: done.
   this->take_wants();
-  mux::ui::drop_closed(root());
   // What has been on screen in the chat shown is read, as far as it goes,
   // as in tdesktop: the chat list's counts go down as it is read, not all
   // at once when it is opened or left.
@@ -581,12 +565,18 @@ void app::before_frame() {
   // as in tdesktop.
   // Not under a finger: there the keys' focus is the text input started,
   // and a phone's keyboard up over the chat until it is put away.
-  if (scene.focusedId() == 0 && !shared.by_touch && shared.chosen() && !this->page_over_chats())
-    scene.focus(mux::ui::composer_field(mux::ui::chat_line_of(root())));
+  // Asked once each time the keys are let go, the field taking them as it
+  // reads that.
+  if (scene.focusedId() != 0)
+    keys_asked_free = false;
+  else if (!keys_asked_free && !shared.by_touch && shared.chosen() && !this->page_over_chats()) {
+    keys_asked_free = true;
+    shared.ask_keys(mux::ui::keys::chat{});
+  }
   // The emoji panel's stickers in view, asked for as they change -- as it
   // opens, as it scrolls, as its tab or its search changes -- and not only
   // when something else refreshed the window.
-  if (auto shown = mux::ui::emoji_pictures_shown(root(), *showing.look<mux::ui::suggestions_shown>(), *showing.look<mux::ui::chat_draft>(),
+  if (auto shown = mux::ui::emoji_pictures_wanted(*showing.look<mux::ui::suggestions_shown>(), *showing.look<mux::ui::chat_draft>(),
                                                 *showing.look<mux::ui::thread_draft>()); shown != shared.ui.panel_pictures_shown) {
     shared.ui.panel_pictures_shown = std::move(shown);
     shared.ui.pictures_due = true;
@@ -632,11 +622,6 @@ void app::before_frame() {
       now.stickers = shared.emoji.recent_stickers;
       now.favourite_stickers = shared.emoji.favourite_stickers;
     });
-  }
-  if (shared.drawer_waits && !mux::ui::pages_moving(root())) {
-    mux::ui::show(showing, mux::ui::drawer_shown{false});
-    mux::ui::close_drawer_now(root());
-    shared.drawer_waits = false;
   }
 }
 

@@ -57,7 +57,13 @@ class settings_part {
     mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show(*s_->showing, std::optional(mux::ui::settings_facts{}));
   }
-  void apply(const request::close_settings&) { mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt); }
+  void apply(const request::close_settings&) {
+    mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt);
+    mux::ui::show(*s_->showing, mux::ui::settings_scroll{});
+  }
+  // Where the page came to rest scrolled: kept, for it to go back there
+  // when it is made again.
+  void apply(const request::settings_scrolled& one) { mux::ui::show(*s_->showing, mux::ui::settings_scroll{one.at}); }
   void apply(const request::settings_about&) { s_->settings_page(mux::ui::settings_page::about{}); }
   void apply(const request::settings_library& one) { s_->settings_page(mux::ui::settings_page::library{one.name}); }
   void apply(const request::settings_home&) {

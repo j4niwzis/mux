@@ -59,6 +59,15 @@ using settings_page_t = spl::variant<settings_page::home, settings_page::animati
 struct settings_facts {
   settings_page_t page = settings_page::home{};
 };
+// Where the settings page rests scrolled, as the program keeps it.
+struct settings_scroll {
+  float at = 0.0f;
+  friend bool operator==(const settings_scroll&, const settings_scroll&) = default;
+};
+// What the page says as it comes to rest scrolled.
+struct settings_scrolled_to {
+  request::settings_scrolled operator()(float at) const { return {at}; }
+};
 // A page's header is the first child of its expression. Older pages keep
 // named parts until their own conversion reaches them.
 template <class Page> auto& settings_header(Page& page)
@@ -115,8 +124,11 @@ inline auto settings_view(const ui_needs& needs) {
                                       [](auto& one) { return page_step_back(settings_header(one)); }},
                       page);
   };
-  return skiff::compose::page_view<settings_facts, settings_page_node>(
-      std::move(show), same, side, pin, back, settings_page_node(std::in_place_index<0>, settings_home(*colours)), {.fill = true});
+  // Where it is scrolled, kept by the program: a page made again (another
+  // theme) goes back where it rested.
+  return skiff::compose::kept_scroll<skiff::model::Field<&settings_scroll::at>>(settings_scrolled_to{},
+      skiff::compose::page_view<settings_facts, settings_page_node>(
+          std::move(show), same, side, pin, back, settings_page_node(std::in_place_index<0>, settings_home(*colours)), {.fill = true}));
 }
 using settings_view_t = decltype(settings_view(std::declval<const ui_needs&>()));
 // The window's dialog of it: made from what is shown, then told it as it changes.

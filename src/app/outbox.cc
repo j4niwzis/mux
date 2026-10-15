@@ -205,7 +205,10 @@ class outbox_part {
     this->compose(compose::plain{}, std::nullopt);
   }
   // The chat's field edited: what is written, kept.
-  void apply(const request::chat_draft_edited& one) { s_->write_chat(one.now); }
+  void apply(const request::chat_draft_edited& one) {
+    s_->written_last = request::writing::chat{};
+    s_->write_chat(one.now);
+  }
   // Enter in the field, or its arrow: what is written, sent. Two asked for
   // before the first was handled send once: the draft emptied by the first.
   template <class Asked>
@@ -346,7 +349,11 @@ class outbox_part {
     // Dropped while the thread's field has the keys: into the thread, as
     // its paperclip sends.
     if (dropped && to_send_.empty())
-      files_thread_ = s_->thread_open() && mux::ui::composer_field(mux::ui::thread_line_of(s_->root())).focused() ? s_->thread_open() : std::nullopt;
+      files_thread_ = s_->thread_open() && spl::visit(spl::overloaded{[](request::writing::thread) { return true; },
+                                                                        [](request::writing::chat) { return false; }},
+                                                         s_->written_last)
+                          ? s_->thread_open()
+                          : std::nullopt;
     for (const std::string& path : paths) {
       auto bytes_read = mux::platform::files::read(path);
       if (!bytes_read)

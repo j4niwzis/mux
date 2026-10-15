@@ -21,13 +21,12 @@ class search_part {
   explicit search_part(services& shared) : s_(&shared) {}
 
   void apply(const request::open_search&) {
-    auto& screen = s_->root();
     if (!s_->chosen())
       return;
     if (!searching_ || searching_->in != *s_->chosen())
       searching_ = state{*s_->chosen(), {}, {}, std::nullopt};
     mux::ui::show(*s_->showing, mux::ui::search_found{.open = true});
-    s_->scene->focus(mux::ui::search_field_of(screen));
+    s_->ask_keys(mux::ui::keys::search{});
   }
   void apply(const request::close_search&) {
     searching_.reset();

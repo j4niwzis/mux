@@ -359,9 +359,21 @@ struct from_avatars {  // a chat's or a person's
   picture_ptr operator()() const { return avatar_images().find(key); }
   skiff::scene::Waiters& waiters() const { return avatar_images().waiting; }
 };
+// The emotes drawn without their pictures since the program last took them:
+// what it fetches for the panels and menus in view (it drains this).
+inline std::vector<emote_picture>& emotes_wanted() {
+  static std::vector<emote_picture> kept;
+  return kept;
+}
 struct from_emotes {
   std::string key;
   emote_kind kind = emote_kind::emoji;
+  // Drawn without its picture: wanted, once per frame it is drawn so.
+  void want() const {
+    auto& wanted = emotes_wanted();
+    if (!std::ranges::contains(wanted, key, &emote_picture::source))
+      wanted.push_back({key, kind});
+  }
   picture_ptr operator()() const {
     if (picture_ptr moving = emote_animations(kind).at(key, animation_clock()))
       return moving;

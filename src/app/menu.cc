@@ -90,8 +90,8 @@ void part_apply(menu_part& self, const request::message_menu& one) {
   mux::ui::show(*self.s_->showing, std::optional(one));
   // The menu takes the keys, as tdesktop's: the arrows go through it,
   // Enter does what is lit, Esc closes it. Nothing lit until an arrow.
-  // Focused once it is made, as what is shown is read.
-  self.s_->menu_focus_due = true;
+  // Asked for as it is made: the card takes them as it reads that.
+  self.s_->ask_keys(mux::ui::keys::menu{});
 }
 
 void part_apply(menu_part& self, const request::close_menu&) { mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt); }

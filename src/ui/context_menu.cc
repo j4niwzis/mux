@@ -235,6 +235,7 @@ inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts
       c::styled({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band)),
       seen_row(colours, facts.seen));
   return c::onClick(scene::Taken{},
+          c::focused_by<keys_asked>(keys_on<keys::menu>{},
           c::moves_focus([](const scene::key::down& press) {
                            return press.key == scene::keys::kEscape ? std::optional(request::close_menu{}) : std::nullopt;
                          },
@@ -252,7 +253,7 @@ inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts
                             c::spec_for<contract::message_menu_state>([](const contract::message_menu_state& now) {
                               return scene::Spec{.alpha = now.unrolled ? 0.0f : 1.0f, .disabled = now.unrolled != 0};
                             }, std::move(items)),
-                            menu_tops_t::overs(colours, kept))))));
+                            menu_tops_t::overs(colours, kept)))))));
 }
 // The menu over the whole window: its card at the pointer, the readers'
 // list beside its row while pointed at; a press off them closes it.
@@ -274,9 +275,6 @@ inline auto context_menu(const ui_needs& n, const menu_facts& facts) {
               }, 8.0f, seen_list(colours, facts.seen)))));
 }
 using context_menu_t = decltype(context_menu(std::declval<const ui_needs&>(), std::declval<const menu_facts&>()));
-// Its card, for the keys' focus; and what a top unrolled, for the emoji
-// pictures it shows.
-[[nodiscard]] inline auto& card_of(context_menu_t& menu) { return std::get<0>(menu.fParts); }
 
 }  // namespace mux::ui
 

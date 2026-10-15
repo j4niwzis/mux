@@ -66,7 +66,10 @@ class threads_part {
   }
   void apply(const request::thread_answer_cancel&) { s_->stop_thread_answer(); }
   // The thread's field edited: what is written, kept.
-  void apply(const request::thread_draft_edited& one) { s_->write_thread(one.now); }
+  void apply(const request::thread_draft_edited& one) {
+    s_->written_last = request::writing::thread{};
+    s_->write_thread(one.now);
+  }
 
   // The panel as the chat is: the thread open -- an answer being written
   // let go where it changes -- or the room's threads, each root once, the

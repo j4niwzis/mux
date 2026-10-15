@@ -213,56 +213,6 @@ inline nodes::Text explained(const palette& colours, std::string text) {
   return out;
 }
 
-// One of a choice, as Element's radio buttons: a ring, and a title over
-// what it means.
-template <class Act> struct radio_choice : pressable<skiff::compose::Stacked> {
-  Act act;
-  struct texts : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text title;
-      nodes::Text about;
-    } parts;
-    texts(const palette &colours, std::string title, std::string about)
-        : Stacked(
-              skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY,
-                                          .grow = scene::axes::kX,
-                                          .alignSelf = scene::align::kMiddle})),
-          parts{
-              .title = skiff::compose::styled(
-                  {.fillX = true},
-                  wrapped(nodes::Text(std::move(title), 14.0f, colours.text))),
-              .about = skiff::compose::styled(
-                  {.fillX = true},
-                  wrapped(nodes::Text(std::move(about), 12.0f, colours.dim)))} {
-
-      parts.about.setVisible(!parts.about.text().empty());
-    }
-  };
-  struct parts_t {
-    legacy::radio_mark ring;
-    texts words;
-  } parts;
-  radio_choice(const palette &colours, std::string title, std::string about,
-               Act what, bool on, bool allowed)
-      : pressable<skiff::compose::Stacked>(
-            skiff::compose::hbox(10.0f, {.fillX = true,
-                                         .autoSize = scene::axes::kY,
-                                         .padding = {6.0f, 6.0f, 6.0f, 6.0f},
-                                         .cornerRadius = 6.0f,
-                                         .hoverBackground = colours.chosen,
-                                         .disabled = !allowed})),
-        act(std::move(what)),
-        parts{.ring = legacy::radio_mark(colours),
-              .words = texts(colours, std::move(title), std::move(about))} {
-
-    if (allowed)
-      fState.setCursor(scene::cursor::hand{});
-    parts.ring.set_on(on);
-    if (!allowed)
-      fState.setAlpha(0.55f);
-  }
-};
-
 // Leaving a space, as Element's LeaveSpaceDialog: the rooms of it one is in
 // left with it -- none of them, all, or those chosen, each by a switch.
 struct leave_space_facts {
@@ -333,36 +283,6 @@ template <class Needs>
 auto make_content(std::type_identity<leave_space_box_t>, const Needs& needs, const leave_space_facts& facts) {
   return leave_space_box(*needs.colours, facts);
 }
-
-// A text to copy, as Element's "Internal room ID": the text, and a button.
-struct copy_line : skiff::compose::Stacked {
-  struct copy_it {
-    std::string text;
-    void operator()() const { skiff::scene::setClipboardText(text); }
-  };
-  struct parts_t {
-    nodes::Text label;
-    nodes::Text value;
-    widgets::Button<copy_it> copy;
-  } parts;
-  copy_line(const palette &colours, std::string label, std::string value)
-      : Stacked(
-            skiff::compose::hbox(10.0f, {.fillX = true,
-                                         .autoSize = scene::axes::kY,
-                                         .padding = {4.0f, 0.0f, 4.0f, 0.0f}})),
-        parts{
-            .label = skiff::compose::styled(
-                {.alignSelf = scene::align::kMiddle},
-                nodes::Text(std::move(label), 14.0f, colours.dim)),
-            .value = skiff::compose::styled(
-                {.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                elided(nodes::Text(value, 14.0f, colours.text))),
-            .copy = skiff::compose::styled(
-                {.width = 70.0f,
-                 .height = 28.0f,
-                 .alignSelf = scene::align::kMiddle},
-                widgets::Button<copy_it>(colours.widgets, "Copy", {value}))} {}
-};
 
 // A chat's own choices, bound to them in the model: receipts, previews,
 // where previews come from, typing sent -- Default as the level above.
@@ -489,19 +409,16 @@ template <class State> auto manage_avatar_icon_of(const State& state, const room
   return manage_avatar_icon(state, facts);
 }
 
+// A setting's row with a switch at its end: the text taking the room; the
+// switch flips what `act` answers.
 template <class Act>
-struct switch_row : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text label;
-    toggle_for<Act> toggle;
-  } parts;
-
-  // Declared: the text taking the room, the switch at the end.
-  switch_row(const palette& colours, std::string text, Act what)
-      : Stacked(skiff::compose::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}})),
-        parts{.label = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(text), 15.0f, colours.text))),
-              .toggle = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(what)))} {}
-};
+auto switch_row(const palette& colours, std::string text, Act act) {
+  namespace c = skiff::compose;
+  std::string label = text;
+  return c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+                c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(text), 15.0f, colours.text))),
+                c::named(std::move(label), {}, c::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(act)))));
+}
 
 
 template <class Policy>
@@ -533,30 +450,30 @@ struct profile_editor : skiff::compose::Stacked {
   bool pending = false, initialized = false, presence_initialized = false;
   struct parts_t {
     nodes::Text title;
-    field name, language, pronouns, biography;
+    legacy::field name, language, pronouns, biography;
     button_for<sends<request::pick_profile_banner>> banner;
     button_for<sends<request::remove_profile_banner>> remove_banner;
     widgets::Button<save> submit;
     nodes::Text feedback;
     choice_menu<choose> availability;
-    field status;
+    legacy::field status;
     widgets::Button<presence_save> presence;
   } parts;
   profile_editor(const palette& colours, const ui_shared&, const config::account_t& saved, const model& now)
       : Stacked(skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
         by{protocol_of(config::address_of(saved)), config::address_of(saved)}, known(&now),
         parts{.title = nodes::Text("Profile", 20.0f, colours.text, true),
-            .name = field(colours, "Display name", "Your name"),
-            .language = field(colours, "Pronouns language", "en", "en"),
-            .pronouns = field(colours, "Pronouns", "One set per line"),
-            .biography = field(colours, "About you", "Your biography"),
+            .name = legacy::field(colours, "Display name", "Your name"),
+            .language = legacy::field(colours, "Pronouns language", "en", "en"),
+            .pronouns = legacy::field(colours, "Pronouns", "One set per line"),
+            .biography = legacy::field(colours, "About you", "Your biography"),
             .banner = button_for<sends<request::pick_profile_banner>>(colours.widgets, "Choose banner…", {by}),
             .remove_banner = button_for<sends<request::remove_profile_banner>>(colours.widgets, "Remove banner", {by}),
             .submit = widgets::Button<save>(colours.widgets, "Save profile", {this}),
             .feedback = wrapped(nodes::Text("", 13.0f, colours.dim)),
             .availability = make_choice_menu(colours, "Presence", std::ranges::to<std::vector<std::string>>(
                 std::views::transform(Policy::presences(), [](const auto& p) { return p.first; })), 0, choose{}),
-            .status = field(colours, "Status", "What you are doing"),
+            .status = legacy::field(colours, "Status", "What you are doing"),
             .presence = widgets::Button<presence_save>(colours.widgets, "Set presence", {this})} {
     parts.pronouns.multi_line(3); parts.biography.multi_line(6);
     parts.banner.setVisible(Policy::banners); parts.remove_banner.setVisible(Policy::banners);
@@ -712,5 +629,23 @@ inline auto member_row(const palette& colours, const member& one, std::string ho
               .text = skia::colorSetARGB(255, 190, 170, 250), .size = 12.0f, .height = 20.0f, .padX = 8.0f})))), name));
 }
 using member_row_t = decltype(member_row(std::declval<const palette&>(), std::declval<const member&>(), ""));
+
+namespace legacy {
+template <class Act>
+struct switch_row : skiff::compose::Stacked {
+  struct parts_t {
+    nodes::Text label;
+    toggle_for<Act> toggle;
+  } parts;
+
+  // Declared: the text taking the room, the switch at the end.
+  switch_row(const palette& colours, std::string text, Act what)
+      : Stacked(skiff::compose::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}})),
+        parts{.label = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(text), 15.0f, colours.text))),
+              .toggle = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(what)))} {}
+};
+
+
+}  // namespace legacy
 
 }  // namespace mux::ui

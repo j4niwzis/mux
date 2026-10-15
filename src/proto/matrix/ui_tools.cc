@@ -61,8 +61,8 @@ struct devtools_box : skiff::compose::Stacked {
   using rows_t = nodes::Flow<std::vector<entry_row>>;
   struct form : skiff::compose::Stacked {
     struct parts_t {
-      field type;
-      field key;
+      legacy::field type;
+      legacy::field key;
       nodes::Text body_caption;
       widgets::TextArea<> body;
       widgets::Button<send_press> send;
@@ -72,8 +72,8 @@ struct devtools_box : skiff::compose::Stacked {
               8.0f, {.fillX = true,
                      .autoSize = scene::axes::kY,
                      .padding = {0.0f, 12.0f, 12.0f, 12.0f}})),
-          parts{.type = field(*box->colours_, "Event type", "m.room.message"),
-                .key = field(
+          parts{.type = legacy::field(*box->colours_, "Event type", "m.room.message"),
+                .key = legacy::field(
                     *box->colours_,
                     "State key (for a state event; empty for a timeline one)",
                     ""),

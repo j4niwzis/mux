@@ -39,74 +39,31 @@ auto model_field(const palette& colours, std::string label, std::string placehol
   return model_field<Member>(colours, nodes::Text(std::move(label), 13.0f, colours.dim), std::move(placeholder), masked, margin);
 }
 
-// A locally edited checkbox, using the widget library's toggle input and
-// checkbox presentation. Its value is collected with the rest of the form.
-struct check_press { void operator()() const {} };
-struct check_box : widgets::internal::Toggle<check_press, widgets::internal::CheckboxLook> {
-  using Base = widgets::internal::Toggle<check_press, widgets::internal::CheckboxLook>;
-  std::string label, hint;
-  check_box(const palette& colours, bool checked, std::string name = {}, std::string description = {})
-      : Base(colours.widgets, {}), label(std::move(name)), hint(std::move(description)) { setOnNow(checked); }
-  bool onClick(float x, float y) {
-    if (!bounds().contains(x, y)) return false;
-    setOnNow(!on());
-    return Base::onClick(x, y);
-  }
-  scene::Semantics semantics() const {
-    auto out = Base::semantics();
-    out.fLabel = label; out.fHint = hint;
-    return out;
-  }
-};
-
-// ---- a form row: a caption and a field -----------------------------------
-
-struct field : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text caption;
-    widgets::TextArea<> box;
-  } parts;
-
-  // The colours its border turns as it has the focus.
-  const palette* colours_ = nullptr;
-  // Declared: the caption over the field, which sits on a plate.
-  field(const palette& colours, std::string label, std::string placeholder, std::string text = {})
-      : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        parts{.caption = nodes::Text(std::move(label), 13.0f, colours.dim),
-              .box = skiff::compose::styled({.fillX = true, .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .background = colours.tile,
-                                             .border = scene::Border{colours.band, 1.0f}},
-                                            one_line(widgets::TextArea<>(colours.widgets, std::move(placeholder)), std::move(text)))},
-        colours_(&colours) {}
-  // One line, holding what it starts with.
-  [[nodiscard]] static widgets::TextArea<> one_line(widgets::TextArea<> box, std::string text) {
-    box.setSingleLine(true);
-    box.setText(std::move(text));
-    return box;
-  }
-  // Its typing hidden, as a passphrase's.
-  [[nodiscard]] field masked() && {
-    parts.box.setMasked(true);
-    return std::move(*this);
-  }
-  // Its border in the accent while it has the focus.
-  bool lit = false;
-  void update(double) {
-    auto& box = parts.box;
-    if (box.focused() == lit)
-      return;
-    lit = box.focused();
-    box.apply({.border = scene::Border{lit ? colours_->accent : colours_->band, 1.0f}});
-  }
-  // What is typed in it.
-  [[nodiscard]] const std::string& text() const { return parts.box.text(); }
-  // Several lines, as a topic's: Enter starts a new one, up to `lines`
-  // shown before it scrolls.
-  void multi_line(int lines) {
-    parts.box.setSingleLine(false);
-    parts.box.setMaxLines(lines);
-    parts.box.apply({.padding = {6.0f, 10.0f, 6.0f, 10.0f}});
-  }
-};
+// Several lines of a part, as a topic's or a biography's: Enter starts a
+// new one, up to `lines` shown before it scrolls; its caption over it.
+template <auto Member>
+auto model_area(const palette& colours, std::string label, std::string placeholder, int lines, scene::Margin margin = {}) {
+  return skiff::compose::column(
+      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = margin}),
+      nodes::Text(std::move(label), 13.0f, colours.dim),
+      skiff::compose::bound<skiff::model::Field<Member>>(skiff::compose::styled(
+          {.fillX = true, .padding = {6.0f, 10.0f, 6.0f, 10.0f}, .cornerRadius = 6.0f, .background = colours.tile,
+           .border = scene::Border{colours.band, 1.0f}},
+          widgets::TextAreaField<typename skiff::bind::BoundValueT<skiff::model::Field<Member>>::type>(
+              colours.widgets, std::move(placeholder), lines))));
+}
+// A checkbox of a bool part, its words beside it -- and read out with them:
+// pressed, the part set to the other.
+template <auto Member>
+auto check_field(const palette& colours, std::string label, std::string hint = {}) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                c::named(label, std::move(hint),
+                         c::bound<skiff::model::Field<Member>>(c::styled({.alignSelf = scene::align::kMiddle},
+                             widgets::ToggleField<bool, widgets::internal::CheckboxLook>(colours.widgets)))),
+                c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                          wrapped(nodes::Text(label, 14.0f, colours.text))));
+}
 
 // A link put on what is selected in the message field, as tdesktop's
 // EditLinkBox: its text and its URL, the forms' own fields; Apply puts it on,
@@ -237,6 +194,122 @@ auto make_content(std::type_identity<passphrase_box_t>, const Needs& needs, cons
 
 // ---- the account forms ---------------------------------------------------------
 
+// What an account form says at its end: what went wrong, or what is
+// happening.
+struct form_said {
+  std::string text;
+  bool error = false;
+  friend bool operator==(const form_said&, const form_said&) = default;
+};
+// What every account form ends with: what it says, as `said` makes it of
+// the part Want, and its buttons -- Log in (Save, where an account is being
+// edited) and, editing, Close. Enter in any of the form's fields submits it.
+template <class Want, class Said>
+auto form_end(const palette& colours, bool editing, Said said) {
+  namespace c = skiff::compose;
+  using submit_button = button_for<sends<request::submit_login>>;
+  using close_button = button_for<sends<request::pop_panel>>;
+  return c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::applied<Want>(std::move(said),
+                       [at = &colours](nodes::Text& message, const form_said& now) {
+                         message.setText(now.text);
+                         message.setColour(now.error ? at->error : at->dim);
+                       },
+                       c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.error)))),
+      c::row(c::hbox(10.0f, {.autoSize = scene::axes::kBoth}),
+             c::styled({.width = 120.0f, .height = 36.0f}, primary(submit_button(colours.widgets, editing ? "Save" : "Log in", {}))),
+             c::visible(editing, c::styled({.width = 120.0f, .height = 36.0f}, close_button(colours.widgets, "Close", {})))));
+}
+
+// Text typed into an optional: nothing when the field is empty.
+[[nodiscard]] inline std::optional<std::string> typed_or_nothing(const std::string& text) {
+  if (text.empty())
+    return std::nullopt;
+  return text;
+}
+
+
+// Esc leaves a panel: back to what is under it, or a step back within it
+// first, as Back answers.
+template <class Back = sends<request::pop_panel>, class N>
+auto closes_on_escape(N node) {
+  return skiff::compose::onKey(scene::keys::kEscape, Back{}(), std::move(node));
+}
+
+// ---- the old ones -------------------------------------------------------------
+// As they were, for the nodes not rewritten yet; gone with the last of them.
+namespace legacy {
+// A locally edited checkbox, using the widget library's toggle input and
+// checkbox presentation. Its value is collected with the rest of the form.
+struct check_press { void operator()() const {} };
+struct check_box : widgets::internal::Toggle<check_press, widgets::internal::CheckboxLook> {
+  using Base = widgets::internal::Toggle<check_press, widgets::internal::CheckboxLook>;
+  std::string label, hint;
+  check_box(const palette& colours, bool checked, std::string name = {}, std::string description = {})
+      : Base(colours.widgets, {}), label(std::move(name)), hint(std::move(description)) { setOnNow(checked); }
+  bool onClick(float x, float y) {
+    if (!bounds().contains(x, y)) return false;
+    setOnNow(!on());
+    return Base::onClick(x, y);
+  }
+  scene::Semantics semantics() const {
+    auto out = Base::semantics();
+    out.fLabel = label; out.fHint = hint;
+    return out;
+  }
+};
+
+
+// ---- a form row: a caption and a field -----------------------------------
+
+struct field : skiff::compose::Stacked {
+  struct parts_t {
+    nodes::Text caption;
+    widgets::TextArea<> box;
+  } parts;
+
+  // The colours its border turns as it has the focus.
+  const palette* colours_ = nullptr;
+  // Declared: the caption over the field, which sits on a plate.
+  field(const palette& colours, std::string label, std::string placeholder, std::string text = {})
+      : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.caption = nodes::Text(std::move(label), 13.0f, colours.dim),
+              .box = skiff::compose::styled({.fillX = true, .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .background = colours.tile,
+                                             .border = scene::Border{colours.band, 1.0f}},
+                                            one_line(widgets::TextArea<>(colours.widgets, std::move(placeholder)), std::move(text)))},
+        colours_(&colours) {}
+  // One line, holding what it starts with.
+  [[nodiscard]] static widgets::TextArea<> one_line(widgets::TextArea<> box, std::string text) {
+    box.setSingleLine(true);
+    box.setText(std::move(text));
+    return box;
+  }
+  // Its typing hidden, as a passphrase's.
+  [[nodiscard]] field masked() && {
+    parts.box.setMasked(true);
+    return std::move(*this);
+  }
+  // Its border in the accent while it has the focus.
+  bool lit = false;
+  void update(double) {
+    auto& box = parts.box;
+    if (box.focused() == lit)
+      return;
+    lit = box.focused();
+    box.apply({.border = scene::Border{lit ? colours_->accent : colours_->band, 1.0f}});
+  }
+  // What is typed in it.
+  [[nodiscard]] const std::string& text() const { return parts.box.text(); }
+  // Several lines, as a topic's: Enter starts a new one, up to `lines`
+  // shown before it scrolls.
+  void multi_line(int lines) {
+    parts.box.setSingleLine(false);
+    parts.box.setMaxLines(lines);
+    parts.box.apply({.padding = {6.0f, 10.0f, 6.0f, 10.0f}});
+  }
+};
+
+
 // Buttons side by side, as a form ends.
 template <class... Buttons>
 struct button_row : skiff::compose::Stacked {
@@ -274,13 +347,6 @@ struct form_end : skiff::compose::Stacked {
   }
 };
 
-// Text typed into an optional: nothing when the field is empty.
-[[nodiscard]] inline std::optional<std::string> typed_or_nothing(const std::string& text) {
-  if (text.empty())
-    return std::nullopt;
-  return text;
-}
-
 
 // Esc leaves a panel: back to what is under it, or a step back within it
 // first, as Back says.
@@ -298,5 +364,7 @@ struct closes_on_escape : skiff::compose::Stacked {
     return Back{}();
   }
 };
+
+}  // namespace legacy
 
 }  // namespace mux::ui

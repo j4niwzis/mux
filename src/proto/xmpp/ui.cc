@@ -51,9 +51,9 @@ struct xmpp_advanced : skiff::compose::Stacked {
                         13.0f, colours.error)))} {}
   };
   struct parts_t {
-    field resource;
-    field host;
-    field port;
+    legacy::field resource;
+    legacy::field host;
+    legacy::field port;
     plain_row row;
   } parts;
 
@@ -63,9 +63,9 @@ struct xmpp_advanced : skiff::compose::Stacked {
                                         .autoSize = scene::axes::kY,
                                         .padding = {0.0f, 0.0f, 12.0f, 0.0f}})),
         parts{.resource =
-                  field(colours, "Device name (resource)", "mux", "mux"),
-              .host = field(colours, "Host", "from the domain's SRV records"),
-              .port = field(colours, "Port", "5222"),
+                  legacy::field(colours, "Device name (resource)", "mux", "mux"),
+              .host = legacy::field(colours, "Host", "from the domain's SRV records"),
+              .port = legacy::field(colours, "Port", "5222"),
               .row = plain_row(colours)} {}
   [[nodiscard]] plain_toggle& plain() { return parts.row.parts.plain; }
   [[nodiscard]] const plain_toggle& plain() const { return parts.row.parts.plain; }
@@ -107,7 +107,7 @@ struct asked_row : skiff::compose::Stacked {
   struct parts_t {
     nodes::Image<sent_picture> picture;
     nodes::Text note;
-    field box;
+    legacy::field box;
   } parts;
   std::string var;
   field_shown_t shown;
@@ -128,7 +128,7 @@ struct asked_row : skiff::compose::Stacked {
               .note = skiff::compose::styled(
                   {.fillX = true},
                   wrapped(nodes::Text(note_of(one), 13.0f, colours.dim))),
-              .box = field(
+              .box = legacy::field(
                   colours, one.label + (one.required ? " (required)" : ""),
                   one.desc,
                   one.value.empty() ? std::string() : one.value.front())},
@@ -205,13 +205,13 @@ struct xmpp_form : skiff::compose::Stacked {
 
   using advanced_button_t = button_for<sends<::mux::ui::request::toggle_advanced>>;
   struct parts_t {
-    field address;
-    field password;
+    legacy::field address;
+    legacy::field password;
     choice_menu<pick_mode> mode;
     asked_part asked;
     advanced_button_t advanced_button;
     widgets::Collapsible<xmpp_advanced> more;
-    form_end end;
+    legacy::form_end end;
   } parts;
 
   xmpp_form(const palette &colours,
@@ -223,8 +223,8 @@ struct xmpp_form : skiff::compose::Stacked {
             from ? from->answers.value_or(std::vector<registration_answer>{})
                  : std::vector<registration_answer>{}),
         colours_(&colours),
-        parts{.address = field(colours, "Address (JID)", "user@example.com"),
-              .password = field(colours, "Password", "Password"),
+        parts{.address = legacy::field(colours, "Address (JID)", "user@example.com"),
+              .password = legacy::field(colours, "Password", "Password"),
               .mode = skiff::compose::visible(
                   !from || creating,
                   make_choice_menu<pick_mode>(colours, "Account",
@@ -235,7 +235,7 @@ struct xmpp_form : skiff::compose::Stacked {
                   {.width = 120.0f, .height = 36.0f},
                   advanced_button_t(colours.widgets, "Advanced", {})),
               .more = widgets::Collapsible<xmpp_advanced>(colours),
-              .end = form_end(colours, from.has_value())} {
+              .end = legacy::form_end(colours, from.has_value())} {
     auto& [address, password, mode, asked, advanced_button, more, end] = parts;
     // An account kept and signed in to: one already, nothing to choose.
     auto& folded = more.child().parts;
@@ -363,11 +363,11 @@ struct config_label : nodes::Text {
 };
 struct choice_press { void operator()(std::size_t) const {} };
 struct config_option : skiff::compose::Stacked {
-  struct parts_t { check_box check; nodes::Text label; } parts;
+  struct parts_t { legacy::check_box check; nodes::Text label; } parts;
   std::string value;
   config_option(const palette& colours, const std::pair<std::string, std::string>& option, bool selected)
       : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .height = 32.0f})),
-        parts{.check = check_box(colours, selected, option.first),
+        parts{.check = legacy::check_box(colours, selected, option.first),
               .label = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                   elided(nodes::Text(option.first, 13.0f, colours.text)))}, value(option.second) {}
 };
@@ -393,11 +393,11 @@ struct jid_list : skiff::compose::Stacked {
     void operator()() const { *pending = what; }
   };
   struct entry : skiff::compose::Stacked {
-    struct parts_t { check_box selected; field address; } parts;
+    struct parts_t { legacy::check_box selected; legacy::field address; } parts;
     entry(const palette& colours, const std::string& value)
         : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.selected = check_box(colours, false, "Select address"),
-              .address = field(colours, "", "user@example.org", value)} {
+          parts{.selected = legacy::check_box(colours, false, "Select address"),
+              .address = legacy::field(colours, "", "user@example.org", value)} {
       parts.selected.apply({.alignSelf = scene::align::kMiddle});
       parts.address.apply({.grow = scene::axes::kX});
       parts.address.parts.caption.setVisible(false);
@@ -451,22 +451,22 @@ struct config_row : skiff::compose::Stacked {
   struct editor : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text fixed;
-      check_box check;
+      legacy::check_box check;
       choice_menu<choice_press> single;
       nodes::ScrollContainer<config_options> multiple;
       jid_list addresses;
-      field text;
+      legacy::field text;
       nodes::Text error;
     } parts;
     editor(const palette& colours, const muc_field& f)
         : Stacked(skiff::compose::vbox(4.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX})),
           parts{.fixed = wrapped(nodes::Text(joined(f), 13.0f, colours.text)),
-              .check = check_box(colours, !f.values.empty() && muc_boolean_of(f.values.front()).value_or(false), f.label, f.description),
+              .check = legacy::check_box(colours, !f.values.empty() && muc_boolean_of(f.values.front()).value_or(false), f.label, f.description),
               .single = make_choice_menu(colours, "", std::ranges::to<std::vector<std::string>>(
                   std::views::transform(f.options, &std::pair<std::string, std::string>::first)), selected(f), choice_press{}),
               .multiple = nodes::ScrollContainer<config_options>(config_options(colours, f)),
               .addresses = jid_list(colours, f),
-              .text = field(colours, "", "", joined(f)),
+              .text = legacy::field(colours, "", "", joined(f)),
               .error = wrapped(nodes::Text("", 12.0f, colours.error))} {
       parts.fixed.setVisible(false); parts.check.setVisible(false); parts.single.setVisible(false);
       parts.multiple.setVisible(false); parts.addresses.setVisible(false); parts.text.setVisible(false); parts.error.setVisible(false);
@@ -568,11 +568,11 @@ struct room_page : skiff::compose::Stacked {
   };
   struct parts_t {
     nodes::Text heading, status;
-    field topic;
+    legacy::field topic;
     widgets::Button<topic_press> set_topic;
-    field nick;
+    legacy::field nick;
     widgets::Button<nick_press> set_nick;
-    field password;
+    legacy::field password;
     widgets::Button<rejoin_press> rejoin;
     button_for<sends<request::refresh_muc>> refresh;
 
@@ -581,11 +581,11 @@ struct room_page : skiff::compose::Stacked {
       : Stacked(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
         parts{.heading = tab_heading(colours, "Room"),
             .status = wrapped(nodes::Text("Nickname: " + settings_of(facts).nick + " · " + settings_of(facts).affiliation + " · " + settings_of(facts).role, 13.0f, colours.dim)),
-            .topic = field(colours, "Subject", "Room subject", facts.topic),
+            .topic = legacy::field(colours, "Subject", "Room subject", facts.topic),
             .set_topic = widgets::Button<topic_press>(colours.widgets, "Change subject", {this}),
-            .nick = field(colours, "Nickname", "Your nickname", settings_of(facts).nick),
+            .nick = legacy::field(colours, "Nickname", "Your nickname", settings_of(facts).nick),
             .set_nick = widgets::Button<nick_press>(colours.widgets, "Change nickname", {this}),
-            .password = field(colours, "Room password", "Password, if required"),
+            .password = legacy::field(colours, "Room password", "Password, if required"),
             .rejoin = widgets::Button<rejoin_press>(colours.widgets, "Join room", {this}),
             .refresh = button_for<sends<request::refresh_muc>>(colours.widgets, "Refresh room settings", {})} {
     parts.password.parts.box.setMasked(true);
@@ -719,10 +719,10 @@ struct roles_page : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text heading, explanation;
     std::vector<nodes::Text> people;
-    field user, rank;
+    legacy::field user, rank;
     widgets::Button<grant> affiliation, role;
     nodes::Text destruction;
-    field reason, confirm;
+    legacy::field reason, confirm;
     widgets::Button<destroy> remove;
   } parts;
   bool wantsTick() const { return true; }
@@ -735,13 +735,13 @@ struct roles_page : skiff::compose::Stacked {
       : Stacked(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
         parts{.heading = tab_heading(colours, "Roles & Permissions"),
             .explanation = wrapped(nodes::Text("Affiliations use a real bare JID: none, member, admin, owner, outcast (ban). Roles use an occupant nickname: visitor, participant, moderator, none (kick). The server checks your privileges.", 13.0f, colours.dim)),
-            .user = field(colours, "User JID or occupant nickname", "user@example.org or nickname"),
-            .rank = field(colours, "Affiliation or role", "member"),
+            .user = legacy::field(colours, "User JID or occupant nickname", "user@example.org or nickname"),
+            .rank = legacy::field(colours, "Affiliation or role", "member"),
             .affiliation = widgets::Button<grant>(colours.widgets, "Set affiliation", {this, true}),
             .role = widgets::Button<grant>(colours.widgets, "Set occupant role", {this, false}),
             .destruction = wrapped(nodes::Text("Destroy room permanently (owner only). Type the room address to confirm.", 13.0f, colours.error)),
-            .reason = field(colours, "Reason", "Optional reason"),
-            .confirm = field(colours, "Confirm room address", facts.id),
+            .reason = legacy::field(colours, "Reason", "Optional reason"),
+            .confirm = legacy::field(colours, "Confirm room address", facts.id),
             .remove = widgets::Button<destroy>(colours.widgets, "Destroy room", {this, facts.id})} {
     const auto& room = settings_of(facts);
     parts.people = std::ranges::to<std::vector<nodes::Text>>(std::views::transform(permission_rows(room), [&](auto text) {

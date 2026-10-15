@@ -1205,7 +1205,7 @@ auto page_header(const palette& colours, std::string name, Back back, Close clos
           icon_button<Close>(colours, icon::close{}, std::move(close)))));
 }
 template <class Back, class Close>
-using page_header_t = decltype(page_header(std::declval<const palette&>(), std::string{}, Back{}, Close{}, false, false));
+using page_header_t = decltype(legacy::page_header(std::declval<const palette&>(), std::string{}, Back{}, Close{}, false, false));
 
 // A count on an accent badge over the top of a round button: the @ and the
 // heart's, and the down arrow's.

@@ -211,9 +211,9 @@ inline auto account_chats_view(const palette& colours, std::string address) {
 }
 
 struct account_privacy : skiff::compose::Stacked {
-  using receipts_row = switch_row<sends<::mux::ui::request::flip_account_receipts>>;
-  using mentions_shared_row = switch_row<sends<::mux::ui::request::flip_account_mentions_shared>>;
-  using mentions_sealed_row = switch_row<sends<::mux::ui::request::flip_account_mentions_sealed>>;
+  using receipts_row = legacy::switch_row<sends<::mux::ui::request::flip_account_receipts>>;
+  using mentions_shared_row = legacy::switch_row<sends<::mux::ui::request::flip_account_mentions_shared>>;
+  using mentions_sealed_row = legacy::switch_row<sends<::mux::ui::request::flip_account_mentions_sealed>>;
   struct parts_t {
     nodes::Text title;
     receipts_row receipts;
@@ -353,7 +353,7 @@ struct account_chats : skiff::compose::Stacked {
     // its chats listed in other accounts' lists, unless they chose another.
     nodes::Text colour_title;
     legacy::accent_circles<set_colour> colours;
-    switch_row<sends<::mux::ui::request::flip_account_strip>> strip;
+    legacy::switch_row<sends<::mux::ui::request::flip_account_strip>> strip;
     nodes::Text title;
     decltype(account_chats_view(std::declval<const palette&>(), std::string())) settings;
     nodes::Text looks_title;
@@ -372,7 +372,7 @@ struct account_chats : skiff::compose::Stacked {
         parts{
             .colour_title = section_title(colours, "COLOUR"),
             .colours = legacy::accent_circles<set_colour>({}, theme, false),
-            .strip = switch_row<sends<::mux::ui::request::flip_account_strip>>(
+            .strip = legacy::switch_row<sends<::mux::ui::request::flip_account_strip>>(
                 colours, "A strip on its chats in other lists", {}),
             .title = section_title(colours, "CHATS"),
             .settings = account_chats_view(colours, std::move(address)),
@@ -466,7 +466,7 @@ struct panel_facts {
   panel_detail_t detail = panel_detail::none{};
   std::optional<std::string> note;
 };
-struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back>> {
+struct accounts_panel : legacy::closes_on_escape<sends<::mux::ui::request::accounts_back>> {
   // Child references and handlers require a fixed address.
   accounts_panel(const accounts_panel&) = delete;
   accounts_panel& operator=(const accounts_panel&) = delete;
@@ -641,7 +641,7 @@ struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back
   // What it was handed, for the panes it makes.
   ui_needs needs_;
   accounts_panel(const ui_needs& n)
-      : closes_on_escape<sends<::mux::ui::request::accounts_back>>(),
+      : legacy::closes_on_escape<sends<::mux::ui::request::accounts_back>>(),
         parts{.header = page_header<sends<::mux::ui::request::accounts_back>, sends<::mux::ui::request::accounts_back>>(*n.colours, "Accounts", {}, {}, true, false), .body = body_row(*n.colours)},
         needs_(n) {
     this->fState.apply({.fill = true});

@@ -56,43 +56,43 @@ struct matrix_form : skiff::compose::Stacked {
   };
 
   struct parts_t {
-    field user_id;
+    legacy::field user_id;
     choice_menu<pick_way> way;
-    field password;
-    field homeserver;
-    field device_name;
+    legacy::field password;
+    legacy::field homeserver;
+    legacy::field device_name;
     choice_menu<pick_mode> mode;
-    field token;
+    legacy::field token;
     choice_menu<pick_terms> terms;
-    form_end end;
+    legacy::form_end end;
   } parts;
 
   matrix_form(const palette &colours,
               const std::optional<::mux::proto::matrix::kept> &from)
       : Stacked(skiff::compose::vbox(
             12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        parts{.user_id = field(colours, "User ID", "@user:example.org"),
+        parts{.user_id = legacy::field(colours, "User ID", "@user:example.org"),
               .way = make_choice_menu<pick_way>(colours, "Sign in",
                   {"With a password", "In the browser, on the server's page"},
                   from && from->oauth.value_or(false) ? 1 : 0, pick_way{this}),
               .password = skiff::compose::visible(
-                  !in_browser, field(colours, "Password", "Password")),
-              .homeserver = field(colours, "Homeserver",
+                  !in_browser, legacy::field(colours, "Password", "Password")),
+              .homeserver = legacy::field(colours, "Homeserver",
                                   "found through the server's .well-known"),
-              .device_name = field(colours, "Device name", "mux", "mux"),
+              .device_name = legacy::field(colours, "Device name", "mux", "mux"),
               .mode = skiff::compose::visible(
                   !from.has_value(),
                   make_choice_menu<pick_mode>(colours, "Account",
                       {"Sign in to an account", "Create a new account"}, 0,
                       pick_mode{this})),
               .token = skiff::compose::visible(
-                  false, field(colours, "Registration token",
+                  false, legacy::field(colours, "Registration token",
                                "where the server registers by invitation")),
               .terms = skiff::compose::visible(
                   false, make_choice_menu<pick_terms>(colours, "The server's terms",
                              {"Not agreed to", "I agree to the server's terms"},
                              0, pick_terms{this})),
-              .end = form_end(colours, from.has_value())} {
+              .end = legacy::form_end(colours, from.has_value())} {
     auto& [user_id, way, password, homeserver, device_name, mode, token, terms, end] = parts;
     in_browser = from && from->oauth.value_or(false);
     // Editing an account kept: it is one already.

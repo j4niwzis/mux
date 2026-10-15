@@ -335,7 +335,7 @@ struct account_sessions : skiff::compose::Stacked {
 // compared with what another session shows; its room keys exported or
 // imported, as Element does them; cross-signing set up, or restored.
 struct encryption_page : skiff::compose::Stacked {
-  using only_verified_row = switch_row<sends<::mux::ui::request::flip_only_verified>>;
+  using only_verified_row = legacy::switch_row<sends<::mux::ui::request::flip_only_verified>>;
   using export_row = legacy::row_item<sends<request::export_room_keys>>;
   using import_row = legacy::row_item<sends<request::import_room_keys>>;
   using cross_signing_row = legacy::row_item<sends<request::setup_cross_signing>>;

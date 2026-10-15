@@ -72,19 +72,18 @@ export namespace mux::logic {
 // through its base, not beside it, as tdesktop's panel does.
 
 // The table's groups -- how many, each one's name and first emoji -- and
-// everything below that reads it: not inline, made here once. alef builds the
-// table while its interface compiles, and clang builds it again (5.5 s) in
-// every unit that has code reading it -- every unit that made the picker.
-[[nodiscard]] std::size_t emoji_group_count() { return alef::emoji_groups.size(); }
-[[nodiscard]] std::string_view emoji_group_name(std::size_t group) { return alef::emoji_groups[group].name; }
-[[nodiscard]] const alef::emoji& emoji_group_face(std::size_t group) { return alef::emoji_groups[group].all.front(); }
+// everything below that reads it: not inline, made here once. Alef's accessors
+// read the table built in its module; callers do not rebuild it while compiled.
+[[nodiscard]] std::size_t emoji_group_count() { return alef::emoji_groups().size(); }
+[[nodiscard]] std::string_view emoji_group_name(std::size_t group) { return alef::emoji_groups()[group].name; }
+[[nodiscard]] const alef::emoji& emoji_group_face(std::size_t group) { return alef::emoji_groups()[group].all.front(); }
 
 // A group's emoji, their skin-tone variants left out.
 [[nodiscard]] std::vector<const alef::emoji*> emoji_of_group(std::size_t group) {
   std::vector<const alef::emoji*> out;
-  if (group >= alef::emoji_groups.size())
+  if (group >= alef::emoji_groups().size())
     return out;
-  for (const alef::emoji& one : alef::emoji_groups[group].all)
+  for (const alef::emoji& one : alef::emoji_groups()[group].all)
     if (!one.toned)
       out.push_back(&one);
   return out;
@@ -96,7 +95,7 @@ export namespace mux::logic {
 [[nodiscard]] std::vector<const alef::emoji*> tones_of(const alef::emoji& base) {
   static constexpr std::array<std::string_view, 5> kTones{"light", "medium-light", "medium", "medium-dark", "dark"};
   std::vector<const alef::emoji*> out;
-  for (const alef::emoji_group& group : alef::emoji_groups)
+  for (const alef::emoji_group& group : alef::emoji_groups())
     for (std::size_t i = 0; i < group.all.size(); ++i) {
       if (&group.all[i] != &base)
         continue;
@@ -121,7 +120,7 @@ export namespace mux::logic {
   const std::string asked = folded(query);
   if (asked.empty() || most == 0)
     return out;
-  for (const alef::emoji_group& group : alef::emoji_groups)
+  for (const alef::emoji_group& group : alef::emoji_groups())
     for (const alef::emoji& one : group.all)
       if (!one.toned && (folded(one.name).contains(asked) || [&] {
             const auto words = emoji_keywords().find(bare_emoji(one.text));

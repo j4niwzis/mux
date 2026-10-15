@@ -145,24 +145,24 @@ void program_told(App& app, const state_listed& listed) {
 template <class App>
 void program_told(App& app, const management_loaded& one) {
   if (auto* box = app.root().manage_up(); box && box->facts.chat == one.in)
-    manage_detail::loaded(box, one);
+    manage_detail::loaded(&box->template part<state>(), one);
 }
 template <class App>
 void program_told(App& app, const room_avatar_uploaded& one) {
   if (auto* box = app.root().manage_up(); box && box->facts.chat == one.in)
-    manage_detail::avatar_uploaded(box, one);
+    manage_detail::avatar_uploaded(&box->template part<state>(), one);
 }
 template <class App>
 void program_told(App& app, const management_saved& one) {
   if (auto* box = app.root().manage_up(); box && box->facts.chat == one.in)
-    manage_detail::completed(box, one);
+    manage_detail::completed(&box->template part<state>(), one);
 }
 // Packs: listed, saved, an image uploaded -- in their dialog.
 template <class App>
 void program_told(App& app, const packs_listed& listed) {
   if (auto* box = app.root().manage_up(); box && box->facts.chat.account == listed.by && listed.room == box->facts.id) {
     box->show_again();
-    box->template part<state>().packs = listed.packs;
+    box->template part<state>().kept.packs = listed.packs;
   }
   app.root().show_packs(listed.packs);
 }
@@ -170,7 +170,7 @@ template <class App>
 void program_told(App& app, const pack_saved& saved) {
   if (auto* box = app.root().manage_up(); box && box->facts.chat.account == saved.by && saved.pack.chat == box->facts.id) {
     box->show_again();
-    auto& kept = box->template part<state>();
+    auto& kept = box->template part<state>().kept;
     if (saved.done) {
       if (saved.removed) std::erase_if(kept.packs, [&](const auto& pack) { return pack.key == saved.pack.key; });
       else {

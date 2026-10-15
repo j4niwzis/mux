@@ -36,12 +36,9 @@ struct room_settings;
 
 // Page factories need a complete type while the dialog's child types are
 // deduced. Keep their data and refresh entry point outside the dialog.
-struct room_settings_context {
+struct room_settings_context : room_settings_shown {
   room_settings* owner;
   room_manage_style presentation;
-  const palette* colours_;
-  const looks_shown* looks_;
-  room_settings_facts facts;
   template <class Tag>
   using tabs_of_t = decltype(manage_tabs_of(state_of<Tag>{}));
   template <class>
@@ -61,11 +58,8 @@ struct room_settings_context {
   template <class State> [[nodiscard]] auto& part() {
     return std::get<index_in<proto::id<State>>(protocols{})>(protocol_parts);
   }
-  void show_again();
   room_settings_context(room_settings* owner, const palette* colours, const looks_shown* looks,
-                        const room_settings_facts& shown)
-      : owner(owner), presentation(spl::visit([&](auto tag) { return manage_style_of(state_of<decltype(tag)>{}, *colours); }, shown.speaks)),
-        colours_(&presentation.colours), looks_(looks), facts(shown) {}
+                        const room_settings_facts& shown);
 };
 
 // The dialog's parts, made before it: their types known as it is defined.
@@ -145,7 +139,11 @@ struct room_settings : skiff::compose::Stacked {
   struct pages_of;
   template <class... Tabs>
   struct pages_of<type_list<Tabs...>> {
-    using type = type_list<page_of_t<Tabs>...>;
+    // Debug Matrix tabs share an owning erased page; the variant needs one
+    // alternative for that type, while the tab list keeps every tab.
+    using distinct = skiff::compose::Union<skiff::model::Types<>, skiff::model::Types<page_of_t<Tabs>...>>;
+    template <class... Pages> static type_list<Pages...> listed(skiff::model::Types<Pages...>);
+    using type = decltype(listed(distinct{}));
   };
   using protocol_pages = typename pages_of<protocol_tabs>::type;
   using settings_tab_t = typename variant_of_types<typename joined<
@@ -348,6 +346,7 @@ struct room_settings : skiff::compose::Stacked {
       narrow = phone;
       this->arrange_navigation();
     }
+    if (std::exchange(context.again, false)) rebuild_due = true;
     if (std::exchange(rebuild_due, false))
       this->rebuild();
   }
@@ -362,7 +361,7 @@ struct room_settings : skiff::compose::Stacked {
                       [&](auto theirs) {
                         if constexpr (requires { make_manage_page(theirs, &context, facts); })
                           page.template emplace<page_of_t<decltype(theirs)>>(make_manage_page(theirs, &context, facts));
-                        else page.template emplace<page_of_t<decltype(theirs)>>(&context, facts);
+                        else page.template emplace<page_of_t<decltype(theirs)>>(*colours_, facts);
                       }},
                   to);
     std::get<1>(pane_header().fParts).setText(spl::visit(spl::overloaded{[&](settings_tab::general) { return spl::visit([](auto tag) { return std::string(preferences_title(state_of<decltype(tag)>{})); }, facts.speaks); }, [](auto one) { return std::string(tab_title(one)); }}, tab));
@@ -379,7 +378,20 @@ struct room_settings : skiff::compose::Stacked {
   }
 };
 
-void room_settings_context::show_again() { owner->show_again(); }
+room_settings_context::room_settings_context(room_settings* dialog, const palette* colours,
+                                               const looks_shown* looks, const room_settings_facts& shown)
+    : room_settings_shown{.facts = shown, .looks_ = looks, .owner = dialog}, owner(dialog),
+      presentation(spl::visit([&](auto tag) { return manage_style_of(state_of<decltype(tag)>{}, *colours); }, shown.speaks)) {
+  colours_ = &presentation.colours;
+  preserve_input = [](skiff::scene::Node* node) {
+    auto& dialog = *static_cast<room_settings*>(node);
+    spl::visit([](auto& page) { preserve_manage_input(page); }, dialog.page());
+  };
+  std::apply([&](auto&... parts) {
+    using manage_defaults::manage_attach;
+    (manage_attach(parts, *this), ...);
+  }, protocol_parts);
+}
 
 }  // namespace mux::ui
 

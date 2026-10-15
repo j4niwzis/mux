@@ -97,6 +97,22 @@ struct room_settings_facts {
   conversation_id chat{};
 };
 
+// What a protocol's settings pages see of the dialog. A refresh is deferred
+// until the dialog's next update, so a handler never replaces its own page.
+struct room_settings_shown {
+  room_settings_facts facts;
+  const palette* colours_ = nullptr;
+  const looks_shown* looks_ = nullptr;
+  skiff::scene::Node* owner = nullptr;
+  bool again = false;
+  void (*preserve_input)(skiff::scene::Node*) = nullptr;
+  void show_again() {
+    if (preserve_input) preserve_input(owner);
+    again = true;
+    if (owner) owner->markDamaged();
+  }
+};
+
 // Element's names for levels: 100 Admin, 50 Moderator, the default Default.
 [[nodiscard]] inline std::string level_name(std::int64_t level, std::int64_t fallback) {
   if (level >= 100)
@@ -118,6 +134,7 @@ struct room_settings_facts {
 template <class... Tabs>
 struct manage_tab_list {};
 namespace manage_defaults {
+constexpr void manage_attach(auto&, room_settings_shown&) {}
 constexpr manage_tab_list<> manage_tabs(const auto&) { return {}; }
 constexpr bool tab_visible(const auto&, const room_settings_facts&) { return true; }
 // And what a protocol keeps while its pages are made again: none by default.

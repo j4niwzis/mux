@@ -550,7 +550,7 @@ struct config_row : skiff::compose::Stacked {
     return now != original.values;
   }
 };
-template <class Box> struct room_page : skiff::compose::Stacked {
+struct room_page : skiff::compose::Stacked {
   struct topic_press {
     room_page* page;
     using Answer = ::mux::ui::request::room_act;
@@ -577,17 +577,17 @@ template <class Box> struct room_page : skiff::compose::Stacked {
     button_for<sends<request::refresh_muc>> refresh;
 
   } parts;
-  room_page(Box* box, const room_settings_facts& facts)
+  room_page(const palette& colours, const room_settings_facts& facts)
       : Stacked(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
-        parts{.heading = tab_heading(*box->colours_, "Room"),
-            .status = wrapped(nodes::Text("Nickname: " + settings_of(facts).nick + " · " + settings_of(facts).affiliation + " · " + settings_of(facts).role, 13.0f, box->colours_->dim)),
-            .topic = field(*box->colours_, "Subject", "Room subject", facts.topic),
-            .set_topic = widgets::Button<topic_press>(box->colours_->widgets, "Change subject", {this}),
-            .nick = field(*box->colours_, "Nickname", "Your nickname", settings_of(facts).nick),
-            .set_nick = widgets::Button<nick_press>(box->colours_->widgets, "Change nickname", {this}),
-            .password = field(*box->colours_, "Room password", "Password, if required"),
-            .rejoin = widgets::Button<rejoin_press>(box->colours_->widgets, "Join room", {this}),
-            .refresh = button_for<sends<request::refresh_muc>>(box->colours_->widgets, "Refresh room settings", {})} {
+        parts{.heading = tab_heading(colours, "Room"),
+            .status = wrapped(nodes::Text("Nickname: " + settings_of(facts).nick + " · " + settings_of(facts).affiliation + " · " + settings_of(facts).role, 13.0f, colours.dim)),
+            .topic = field(colours, "Subject", "Room subject", facts.topic),
+            .set_topic = widgets::Button<topic_press>(colours.widgets, "Change subject", {this}),
+            .nick = field(colours, "Nickname", "Your nickname", settings_of(facts).nick),
+            .set_nick = widgets::Button<nick_press>(colours.widgets, "Change nickname", {this}),
+            .password = field(colours, "Room password", "Password, if required"),
+            .rejoin = widgets::Button<rejoin_press>(colours.widgets, "Join room", {this}),
+            .refresh = button_for<sends<request::refresh_muc>>(colours.widgets, "Refresh room settings", {})} {
     parts.password.parts.box.setMasked(true);
     parts.password.setVisible(!settings_of(facts).joined); parts.rejoin.setVisible(!settings_of(facts).joined);
     parts.set_nick.setVisible(settings_of(facts).joined);
@@ -595,7 +595,7 @@ template <class Box> struct room_page : skiff::compose::Stacked {
     for (scene::Node* n : std::initializer_list<scene::Node*>{&parts.set_topic, &parts.set_nick, &parts.refresh}) n->apply({.height = 32.0f});
   }
 };
-template <class Box> struct configuration_page : skiff::compose::Stacked {
+struct configuration_page : skiff::compose::Stacked {
   struct save {
     configuration_page* page;
     using Answer = request::configure_muc;
@@ -615,18 +615,18 @@ template <class Box> struct configuration_page : skiff::compose::Stacked {
     nodes::Text feedback;
     std::vector<config_row> fields;
   } parts;
-  configuration_page(Box* box, const room_settings_facts& facts)
+  configuration_page(const palette& colours, const room_settings_facts& facts)
       : Stacked(skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
             .padding = {12.0f, 12.0f, 18.0f, 12.0f}})),
-        parts{.title = wrapped(nodes::Text(settings_of(facts).title, 16.0f, box->colours_->text, true)),
+        parts{.title = wrapped(nodes::Text(settings_of(facts).title, 16.0f, colours.text, true)),
             .instructions = wrapped(nodes::Text(settings_of(facts).configuring
                 ? std::ranges::to<std::string>(std::views::join_with(settings_of(facts).instructions, std::string_view("\n")))
-                : "You need Owner permission to change the configuration.", 13.0f, box->colours_->dim)),
-            .refresh = button_for<sends<request::refresh_muc>>(box->colours_->widgets, "Refresh", {}),
-            .submit = widgets::Button<save>(box->colours_->widgets, "Save", {this}),
-            .feedback = wrapped(nodes::Text("", 13.0f, box->colours_->dim)),
+                : "You need Owner permission to change the configuration.", 13.0f, colours.dim)),
+            .refresh = button_for<sends<request::refresh_muc>>(colours.widgets, "Refresh", {}),
+            .submit = widgets::Button<save>(colours.widgets, "Save", {this}),
+            .feedback = wrapped(nodes::Text("", 13.0f, colours.dim)),
             .fields = std::ranges::to<std::vector<config_row>>(std::views::transform(settings_of(facts).fields,
-                [&](const auto& field) { return config_row(*box->colours_, field); }))} {
+                [&](const auto& field) { return config_row(colours, field); }))} {
     parts.title.setVisible(!settings_of(facts).title.empty());
     parts.instructions.setVisible(!parts.instructions.text().empty());
     parts.submit.setEnabled(false);
@@ -697,7 +697,7 @@ inline std::vector<std::string> permission_rows(const muc_room& room) {
     return text;
   }));
 }
-template <class Box> struct roles_page : skiff::compose::Stacked {
+struct roles_page : skiff::compose::Stacked {
   struct grant {
     roles_page* page;
     bool affiliation;
@@ -731,21 +731,21 @@ template <class Box> struct roles_page : skiff::compose::Stacked {
     parts.role.action().page = this;
     parts.remove.action().page = this;
   }
-  roles_page(Box* box, const room_settings_facts& facts)
+  roles_page(const palette& colours, const room_settings_facts& facts)
       : Stacked(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}})),
-        parts{.heading = tab_heading(*box->colours_, "Roles & Permissions"),
-            .explanation = wrapped(nodes::Text("Affiliations use a real bare JID: none, member, admin, owner, outcast (ban). Roles use an occupant nickname: visitor, participant, moderator, none (kick). The server checks your privileges.", 13.0f, box->colours_->dim)),
-            .user = field(*box->colours_, "User JID or occupant nickname", "user@example.org or nickname"),
-            .rank = field(*box->colours_, "Affiliation or role", "member"),
-            .affiliation = widgets::Button<grant>(box->colours_->widgets, "Set affiliation", {this, true}),
-            .role = widgets::Button<grant>(box->colours_->widgets, "Set occupant role", {this, false}),
-            .destruction = wrapped(nodes::Text("Destroy room permanently (owner only). Type the room address to confirm.", 13.0f, box->colours_->error)),
-            .reason = field(*box->colours_, "Reason", "Optional reason"),
-            .confirm = field(*box->colours_, "Confirm room address", facts.id),
-            .remove = widgets::Button<destroy>(box->colours_->widgets, "Destroy room", {this, facts.id})} {
+        parts{.heading = tab_heading(colours, "Roles & Permissions"),
+            .explanation = wrapped(nodes::Text("Affiliations use a real bare JID: none, member, admin, owner, outcast (ban). Roles use an occupant nickname: visitor, participant, moderator, none (kick). The server checks your privileges.", 13.0f, colours.dim)),
+            .user = field(colours, "User JID or occupant nickname", "user@example.org or nickname"),
+            .rank = field(colours, "Affiliation or role", "member"),
+            .affiliation = widgets::Button<grant>(colours.widgets, "Set affiliation", {this, true}),
+            .role = widgets::Button<grant>(colours.widgets, "Set occupant role", {this, false}),
+            .destruction = wrapped(nodes::Text("Destroy room permanently (owner only). Type the room address to confirm.", 13.0f, colours.error)),
+            .reason = field(colours, "Reason", "Optional reason"),
+            .confirm = field(colours, "Confirm room address", facts.id),
+            .remove = widgets::Button<destroy>(colours.widgets, "Destroy room", {this, facts.id})} {
     const auto& room = settings_of(facts);
     parts.people = std::ranges::to<std::vector<nodes::Text>>(std::views::transform(permission_rows(room), [&](auto text) {
-      return wrapped(nodes::Text(std::move(text), 13.0f, box->colours_->text));
+      return wrapped(nodes::Text(std::move(text), 13.0f, colours.text));
     }));
     parts.affiliation.apply({.height = 32.0f, .disabled = room.affiliation != "owner" && room.affiliation != "admin"});
     parts.role.apply({.height = 32.0f, .disabled = room.role != "moderator"});
@@ -769,9 +769,9 @@ constexpr std::string_view tab_title(roles) { return "Roles & Permissions"; }
 inline ui::icon_t tab_icon(room) { return ui::icon::people{}; }
 inline ui::icon_t tab_icon(configuration) { return ui::icon::gear{}; }
 inline ui::icon_t tab_icon(roles) { return ui::icon::people{}; }
-template <class Box> constexpr type_tag<manage_detail::room_page<Box>> page_type(room, type_tag<Box>) { return {}; }
-template <class Box> constexpr type_tag<manage_detail::configuration_page<Box>> page_type(configuration, type_tag<Box>) { return {}; }
-template <class Box> constexpr type_tag<manage_detail::roles_page<Box>> page_type(roles, type_tag<Box>) { return {}; }
+template <class Box> constexpr type_tag<manage_detail::room_page> page_type(room, type_tag<Box>) { return {}; }
+template <class Box> constexpr type_tag<manage_detail::configuration_page> page_type(configuration, type_tag<Box>) { return {}; }
+template <class Box> constexpr type_tag<manage_detail::roles_page> page_type(roles, type_tag<Box>) { return {}; }
 }
 
 export namespace mux::proto::xmpp::settings {

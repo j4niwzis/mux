@@ -266,7 +266,7 @@ void account<Sink>::leave(std::string room) {
 }
 [[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes,
                                                         const std::vector<styled_run>& styles) {
-  const auto valid = styles | std::views::filter([&](const styled_run& run) {
+  auto valid = styles | std::views::filter([&](const styled_run& run) {
     return run.first < run.last && run.last <= body.size();
   });
   const std::vector<mux::logic::html_run> runs =

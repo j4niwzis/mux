@@ -80,7 +80,7 @@ export namespace mux::ui {
   const auto pictured = [](std::uint32_t code) {
     return code >= 0x1F000 || (code >= 0x2600 && code <= 0x27BF) || code == 0xFE0F;
   };
-  const auto characters = name | std::views::chunk_by([](char, char next) { return (static_cast<unsigned char>(next) & 0xC0) == 0x80; }) | std::views::transform([](auto&& each) { return std::string_view(each.begin(), each.end()); }) | std::ranges::to<std::vector>();
+  auto characters = name | std::views::chunk_by([](char, char next) { return (static_cast<unsigned char>(next) & 0xC0) == 0x80; }) | std::views::transform([](auto&& each) { return std::string_view(each.begin(), each.end()); }) | std::ranges::to<std::vector>();
   const auto codes = characters | std::views::transform(code_of) | std::ranges::to<std::vector>();
   // A zero-width joiner between two emoji makes them one (a family, a
   // rainbow flag): kept there, and stripped anywhere else, as before.

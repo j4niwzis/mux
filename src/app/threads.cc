@@ -95,14 +95,13 @@ class threads_part {
       for (const mux::message& one : chat->timeline)
         if (one.threaded && one.threaded->count > 0)
           add(one.id);
-      std::ranges::for_each(chat->threads | std::views::keys, add);
+      std::ranges::for_each(std::views::keys(chat->threads), add);
       const auto latest = [](const mux::message* one) { return one->threaded ? one->threaded->last_at : one->at; };
       std::ranges::sort(roots, std::ranges::greater{}, latest);
-      now.roots = roots | std::views::transform([&](const mux::message* one) {
+      now.roots = std::ranges::to<std::vector>(std::views::transform(roots, [&](const mux::message* one) {
                     return mux::ui::thread_root{one->id, one->sender, mux::ui::sender_name(*chat, one->sender),
                                                 mux::ui::flat_line(one->body.plain), mux::ui::thread_meta_of(*chat, *one)};
-                  }) |
-                  std::ranges::to<std::vector>();
+                  }));
     }
     if (*s_->showing->look<mux::ui::threads_shown>() != now)
       mux::ui::show(*s_->showing, std::move(now));

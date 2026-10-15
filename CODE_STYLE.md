@@ -14,6 +14,17 @@ skiff-widgets) are written. A change that does not follow this is not done.
   - libstdc++ range adaptor pipes across modules: write
     `std::ranges::to<T>(view)` and `std::views::transform(range, f)` (call
     form), not `range | std::views::transform(f) | std::ranges::to<T>()`.
+    libstdc++ gives a closure's `operator|` only as a hidden friend of the
+    closure template, and clang does not find it on a specialization another
+    imported module instantiated first: module `a` pipes
+    `text | std::views::split('\n') | ...`, module `b` imports `a` and
+    writes the same pipe -- "invalid operands to binary expression
+    ('std::string_view' and '_Partial<std::ranges::views::_Split, char>')".
+    Checked again with clang 23.1.2 and libstdc++ 15.2 (Alpine g++
+    15.2.0-r9, musl 1.2.6) on 2026-10-15; the call form builds.
+  - `std::ranges::for_each` is not a loop: a value updated in place is
+    `std::ranges::transform(xs, xs.begin(), f)` with `f` returning it; a
+    body with effects is a range-for.
   - A class template specialization declared `extern template` in a module
     must not be deleted in a unit that imports it: destroy it in the unit
     that instantiates it (see `destroy_account`).

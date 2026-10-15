@@ -41,12 +41,9 @@ struct part {
     const auto chosen = s_->chosen();
     if (!chosen || !ui::may_send_files(s_->ui, chosen->account)) return;
     std::error_code failed;
-    auto kept = std::filesystem::directory_iterator(saved(), failed) |
-                std::views::filter([&](const auto& entry) { return entry.is_regular_file(failed); }) |
-                std::views::transform([&](const auto& entry) { return std::pair{entry.last_write_time(failed), entry.path().string()}; }) |
-                std::ranges::to<std::vector>();
+    auto kept = std::ranges::to<std::vector>(std::views::transform(std::views::filter(std::filesystem::directory_iterator(saved(), failed), [&](const auto& entry) { return entry.is_regular_file(failed); }), [&](const auto& entry) { return std::pair{entry.last_write_time(failed), entry.path().string()}; }));
     std::ranges::sort(kept, std::greater{});
-    auto paths = kept | std::views::values | std::ranges::to<std::vector>();
+    auto paths = std::ranges::to<std::vector>(std::views::values(kept));
     auto* scene = s_->scene;
     std::ranges::for_each(paths, [&](const std::string& path) {
       const std::string key = "gif:" + path;

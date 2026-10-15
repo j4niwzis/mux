@@ -247,8 +247,7 @@ inline constexpr float kChatHeadHeight = 56.0f;
   // Who is typing, by their names, as Telegram says it: one, two ("A and
   // B"), three ("A, B and C"); past three, the first two and how many more.
   if (!one->typing.empty()) {
-    const auto names = one->typing | std::views::transform([&](const std::string& who) { return sender_name(*one, who); }) |
-                       std::ranges::to<std::vector>();
+    const auto names = std::ranges::to<std::vector>(std::views::transform(one->typing, [&](const std::string& who) { return sender_name(*one, who); }));
     switch (names.size()) {
       case 1: about = names[0] + " is typing\u2026"; break;
       case 2: about = std::format("{} and {} are typing\u2026", names[0], names[1]); break;

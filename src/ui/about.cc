@@ -72,10 +72,10 @@ inline auto library_page(const palette& colours, std::string_view id) {
   const library_info missing{id, id, "Unknown", {}, "Unknown", {}, {}, {}};
   const auto* found = library_of(id);
   const auto library = library_details(found ? *found : missing);
-  auto dependencies = library.dependencies | std::views::transform([&](std::string_view dep) {
+  auto dependencies = std::ranges::to<std::vector>(std::views::transform(library.dependencies, [&](std::string_view dep) {
     const auto* info = library_of(dep);
     return library_link(colours, info ? *info : missing);
-  }) | std::ranges::to<std::vector>();
+  }));
   return skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_about>, sends<request::close_settings>>(colours, std::string(library.name), {}, {}, true, true),

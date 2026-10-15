@@ -105,8 +105,7 @@ class paster {
     std::size_t count = 0;
     char** offered = sdl::SDL_GetClipboardMimeTypes(&count);
     const std::vector<std::string> mimes =
-        offered ? std::views::counted(offered, static_cast<std::ptrdiff_t>(count)) |
-                      std::views::transform([](const char* one) { return std::string(one); }) | std::ranges::to<std::vector>()
+        offered ? std::ranges::to<std::vector>(std::views::transform(std::views::counted(offered, static_cast<std::ptrdiff_t>(count)), [](const char* one) { return std::string(one); }))
                 : std::vector<std::string>{};
     sdl::SDL_free(offered);
     // A picture itself, in one of the kinds read here.
@@ -151,21 +150,18 @@ class paster {
     const std::string list(static_cast<const char*>(data), size);
     sdl::SDL_free(data);
     static constexpr std::array kExtensions{".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"};
-    return list | std::views::split('\n') |
-           std::views::transform([](auto line) {
+    return std::ranges::to<std::vector>(std::views::transform(std::views::filter(std::views::transform(std::views::split(list, '\n'), [](auto line) {
              std::string_view one(line.begin(), line.end());
              if (one.ends_with('\r'))
                one.remove_suffix(1);
              return one.starts_with('#') ? std::optional<std::string>() : path_of_uri(one);
-           }) |
-           std::views::filter([](const std::optional<std::string>& path) {
+           }), [](const std::optional<std::string>& path) {
              if (!path)
                return false;
              std::string ext = std::filesystem::path(*path).extension().string();
              std::ranges::transform(ext, ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
              return std::ranges::contains(kExtensions, std::string_view(ext));
-           }) |
-           std::views::transform([](const std::optional<std::string>& path) { return *path; }) | std::ranges::to<std::vector>();
+           }), [](const std::optional<std::string>& path) { return *path; }));
   }
 
   unsigned counter_ = 0;

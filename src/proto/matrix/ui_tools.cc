@@ -112,11 +112,10 @@ inline auto devtools_state_view(const palette& colours, const tool::devtools_sta
     by_type[one.type].push_back(one);
   // Joined, not formatted: clang 23 crashed on such format strings made
   // first in this module (see app/network.cc).
-  auto types = by_type | std::views::transform([&](const auto& group) {
+  auto types = std::ranges::to<std::vector>(std::views::transform(by_type, [&](const auto& group) {
                  return row_item(colours, group.first + "  (" + std::to_string(group.second.size()) + ")",
                                  sends<state_picked>{{group.first, std::nullopt}});
-               }) |
-               std::ranges::to<std::vector>();
+               }));
   using keys_t = decltype(c::many(c::vbox(), std::vector<row_item_t<sends<state_picked>>>{}));
   using event_t = decltype(reading_of(colours, std::string()));
   return c::local<devtools_said>(devtools_events{},
@@ -134,11 +133,9 @@ inline auto devtools_state_view(const palette& colours, const tool::devtools_sta
                 // Named: a conditional's temporary is no view to pipe.
                 const std::vector<tool::devtools_entry> entries = found == by_type.end() ? std::vector<tool::devtools_entry>{} : found->second;
                 return std::tuple{c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                    entries |
-                        std::views::transform([&](const tool::devtools_entry& one) {
+                    std::ranges::to<std::vector>(std::views::transform(entries, [&](const tool::devtools_entry& one) {
                           return row_item(colours, one.key.empty() ? std::string("(empty key)") : one.key, sends<state_picked>{{one.type, one.key}});
-                        }) |
-                        std::ranges::to<std::vector>())};
+                        })))};
               },
                   {.fillX = true, .grow = scene::axes::kY})),
           // An event's JSON, made as it is chosen.

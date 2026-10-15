@@ -55,7 +55,7 @@ inline constexpr float kSendGap = 8.0f, kMostSendPreviews = 420.0f;
 // As high as what it holds: the pictures' heights and the files' rows, with
 // the gaps between -- so the box is as high as it needs.
 [[nodiscard]] inline float send_height_of(const std::vector<pending_file>& all) {
-  return std::ranges::fold_left(all | std::views::transform([&](const pending_file& one) {
+  return std::ranges::fold_left(std::views::transform(all, [&](const pending_file& one) {
                                   return one.image ? send_size_of(one, all.size()).second : kFileIcon;
                                 }),
                                 all.empty() ? 0.0f : static_cast<float>(all.size() - 1) * kSendGap, std::plus{});
@@ -74,16 +74,14 @@ inline auto send_box(const ui_needs& n, const send_facts& facts) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const auto& all = facts.files;
-  auto pictures = all | std::views::filter(&pending_file::image) | std::views::transform([&](const pending_file& one) {
+  auto pictures = std::ranges::to<std::vector>(std::views::transform(std::views::filter(all, &pending_file::image), [&](const pending_file& one) {
                     const auto [w, h] = send_size_of(one, all.size());
                     return c::styled({.width = w, .height = h, .alignSelf = scene::align::kMiddle, .cornerRadius = 10.0f},
                                      nodes::Image<from_thumbnails>({one.key}));
-                  }) |
-                  std::ranges::to<std::vector>();
-  auto files = all | std::views::filter(std::not_fn(&pending_file::image)) | std::views::transform([&](const pending_file& one) {
+                  }));
+  auto files = std::ranges::to<std::vector>(std::views::transform(std::views::filter(all, std::not_fn(&pending_file::image)), [&](const pending_file& one) {
                  return file_row(colours, std::string(), one.name, one.size, false);
-               }) |
-               std::ranges::to<std::vector>();
+               }));
   return c::local<send_draft>(
       c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {18.0f, 20.0f, 16.0f, 20.0f}}),
           nodes::Text(send_title_of(all), 17.0f, colours.text, true),

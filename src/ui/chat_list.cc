@@ -201,8 +201,7 @@ inline auto chat_preview_line(const ui_needs& needs, const conversation& one,
           elided(nodes::Text(preview.sender, 13.0f,
               view.chosen ? colours.selected_text : preview.draft ? colours.error : colours.accent)))),
       chat_preview_text(colours, view, preview),
-      view.badges | std::views::transform([&](const auto& mark) { return chat_protocol_mark(colours, mark); }) |
-          std::ranges::to<std::vector>(),
+      std::ranges::to<std::vector>(std::views::transform(view.badges, [&](const auto& mark) { return chat_protocol_mark(colours, mark); })),
       protocol_row_of(*needs.shared, one), chat_unread(colours, view));
 }
 

@@ -609,17 +609,13 @@ struct draft_told {
 [[nodiscard]] inline std::string draft_text(const composer_doc& doc) { return widgets::document::plain(doc); }
 // Who is mentioned in it: its pills, as they are now.
 [[nodiscard]] inline std::vector<mention> composer_mentions(const composer_doc& doc) {
-  return doc.atoms | std::views::filter([](const widgets::TextAtom& one) { return !one.picture; }) |
-         std::views::transform([](const widgets::TextAtom& one) { return mention{one.plain, one.target}; }) |
-         std::ranges::to<std::vector>();
+  return std::ranges::to<std::vector>(std::views::transform(std::views::filter(doc.atoms, [](const widgets::TextAtom& one) { return !one.picture; }), [](const widgets::TextAtom& one) { return mention{one.plain, one.target}; }));
 }
 // How what is written is formatted, by offsets in its plain text: its runs,
 // and each custom emoji's picture as a run of its own.
 [[nodiscard]] inline std::vector<mux::styled_run> composer_styles(const composer_doc& doc) {
-  auto runs = widgets::document::plainSpans(doc) |
-              std::views::transform([](const field_quotes::span& one) { return mux::styled_run{one.first, one.last, one.format}; }) |
-              std::ranges::to<std::vector>();
-  runs.append_range(doc.atoms | std::views::filter(&widgets::TextAtom::picture) | std::views::transform([&](const widgets::TextAtom& atom) {
+  auto runs = std::ranges::to<std::vector>(std::views::transform(widgets::document::plainSpans(doc), [](const field_quotes::span& one) { return mux::styled_run{one.first, one.last, one.format}; }));
+  runs.append_range(std::views::transform(std::views::filter(doc.atoms, &widgets::TextAtom::picture), [&](const widgets::TextAtom& atom) {
                       const std::size_t first = widgets::document::plainOffset(doc, atom.first);
                       return mux::styled_run{first, first + atom.plain.size(), run_style::custom_emoji{atom.target}};
                     }));
@@ -700,9 +696,9 @@ inline void prepend_quote(composer_doc& doc, const scene::ClipboardFragment& sel
 // A draft of this text and its runs, as a message edited had them.
 [[nodiscard]] inline composer_doc formatted_draft(std::string text, const std::vector<mux::styled_run>& runs) {
   auto doc = widgets::document::of<run_style_t>(std::move(text));
-  widgets::document::setSpans(doc, runs | std::views::transform([](const mux::styled_run& one) {
+  widgets::document::setSpans(doc, std::ranges::to<std::vector>(std::views::transform(runs, [](const mux::styled_run& one) {
                                      return field_quotes::span{one.first, one.last, one.style};
-                                   }) | std::ranges::to<std::vector>());
+                                   })));
   return doc;
 }
 // A draft of plain text, the caret at its end.

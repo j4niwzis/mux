@@ -366,9 +366,7 @@ inline auto space_bars_row(const palette& colours, const std::string& account, c
 inline auto spaces_choices(const palette& colours, const ui_shared& shared) {
   namespace c = skiff::compose;
   return c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                 shared.space_items |
-                     std::views::transform([&](const space_item_shown& one) { return space_bars_row(colours, shared.space_account, one); }) |
-                     std::ranges::to<std::vector>());
+                 std::ranges::to<std::vector>(std::views::transform(shared.space_items, [&](const space_item_shown& one) { return space_bars_row(colours, shared.space_account, one); })));
 }
 
 // What a level holds of room events: all of them or messages only, and
@@ -904,11 +902,11 @@ template <class Want, class Choose, class Chosen>
 auto accent_circles_for(Choose choose, const config::theme_t& in, bool with_theme_own, Chosen chosen) {
   namespace c = skiff::compose;
   return c::many(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}}),
-                 accents_of(with_theme_own) | std::views::transform([&](const config::accent_t& one) {
+                 std::ranges::to<std::vector>(std::views::transform(accents_of(with_theme_own), [&](const config::accent_t& one) {
                    return c::spec_for<Want>(
                        [chosen, one, shade = colour_of(one, in)](const auto& now) { return accent_ring(shade, chosen(now) == one); },
                        accent_circle(choose, one, in, false));
-                 }) | std::ranges::to<std::vector>());
+                 })));
 }
 
 

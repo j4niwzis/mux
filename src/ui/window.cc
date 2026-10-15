@@ -830,12 +830,10 @@ inline void panels_changed(window& root) {
     emote_pictures_in(popup_card(*up), popup_card(*up).bounds(), shown);
   if (auto* menu = layer_of<layer::menu>(root).shown())
     emote_pictures_in(card_of(*menu), card_of(*menu).bounds(), shown);
-  shown.append_range(listed.items | std::views::filter([](const suggestion& one) { return !one.picture.empty(); }) |
-                     std::views::transform([](const suggestion& one) { return emote_picture{one.picture, emote_kind::emoji}; }));
+  shown.append_range(std::views::transform(std::views::filter(listed.items, [](const suggestion& one) { return !one.picture.empty(); }), [](const suggestion& one) { return emote_picture{one.picture, emote_kind::emoji}; }));
   // Those put in what is being written: the drafts' pictures.
   const auto inserted = [&](const composer_doc& draft) {
-    shown.append_range(draft.atoms | std::views::filter(&widgets::TextAtom::picture) |
-                       std::views::transform([](const widgets::TextAtom& atom) { return emote_picture{atom.target, emote_kind::emoji}; }));
+    shown.append_range(std::views::transform(std::views::filter(draft.atoms, &widgets::TextAtom::picture), [](const widgets::TextAtom& atom) { return emote_picture{atom.target, emote_kind::emoji}; }));
   };
   inserted(chat.now);
   inserted(thread.now);

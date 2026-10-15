@@ -94,8 +94,7 @@ inline auto info_head(const palette& colours, const info_view& shown) {
       c::visible(!shown.topic.empty(), c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}}),
                                                  std::move(description), nodes::Text("Description", 12.0f, colours.dim))),
       c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              shown.addresses | std::views::transform([&](const std::string& address) { return id_line(colours, address, "", "Address"); }) |
-                  std::ranges::to<std::vector>()),
+              std::ranges::to<std::vector>(std::views::transform(shown.addresses, [&](const std::string& address) { return id_line(colours, address, "", "Address"); }))),
       id_line(colours, shown.key, shown.copied));
 }
 using info_head_t = decltype(info_head(std::declval<const palette&>(), std::declval<const info_view&>()));
@@ -165,8 +164,7 @@ inline auto info_panel(const ui_needs& n) {
                               [at = &colours](const info_members_heading& facts) { return std::tuple{info_members_head(*at, facts)}; },
                               {.fillX = true, .height = 48.0f})),
                       c::projected<info_shown>([](const info_shown& now) {
-                        return now.members | std::views::transform([](const info_member& one) { return std::tuple{one.who.id, one}; }) |
-                               std::ranges::to<std::vector>();
+                        return std::ranges::to<std::vector>(std::views::transform(now.members, [](const info_member& one) { return std::tuple{one.who.id, one}; }));
                       },
                           c::styled({.fillX = true, .autoSize = scene::axes::kY}, info_member_rows_t(info_member_row{&colours}))))))))),
       c::styled({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f}, nodes::Box<>(colours.band)));

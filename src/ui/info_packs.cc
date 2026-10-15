@@ -127,15 +127,13 @@ inline void pack_picture_uploaded(packs_facts& facts, pack_picture one, bool don
 // The pictures it shows: the pack open's images, else each pack's own.
 [[nodiscard]] inline std::vector<emote_picture> pack_pictures_of(const packs_facts& facts) {
   if (facts.draft)
-    return facts.draft->pictures | std::views::transform([](const pack_picture& one) {
+    return std::ranges::to<std::vector>(std::views::transform(facts.draft->pictures, [](const pack_picture& one) {
              return emote_picture{one.url, one.emoji ? emote_kind::emoji : emote_kind::sticker};
-           }) |
-           std::ranges::to<std::vector>();
-  return facts.packs | std::views::transform([](const emote_pack& pack) {
+           }));
+  return std::ranges::to<std::vector>(std::views::filter(std::views::transform(facts.packs, [](const emote_pack& pack) {
            return emote_picture{pack.avatar.value_or(pack.pictures.empty() ? std::string() : pack.pictures.front().url),
                                 pack.emoji ? emote_kind::emoji : emote_kind::sticker};
-         }) |
-         std::views::filter([](const emote_picture& one) { return !one.source.empty(); }) | std::ranges::to<std::vector>();
+         }), [](const emote_picture& one) { return !one.source.empty(); }));
 }
 // Whether the pack open may be changed here: the room's own, where its
 // rights allow -- not one of a space it is in.
@@ -253,9 +251,9 @@ inline auto pack_editor(const palette& colours, const pack_opened& opened) {
       c::styled({.margin = {6.0f, 10.0f, 0.0f, 10.0f}}, nodes::Text("Images", 13.0f, colours.dim, true)),
       c::styled({.fillX = true, .grow = scene::axes::kY, .disabled = !opened.editable},
                 nodes::ScrollContainer(c::projected<std::optional<packs_facts>>([](const std::optional<packs_facts>& facts) {
-                  return facts && facts->draft ? facts->draft->pictures | std::views::transform([](const pack_picture& one) {
+                  return facts && facts->draft ? std::ranges::to<std::vector>(std::views::transform(facts->draft->pictures, [](const pack_picture& one) {
                                                    return std::tuple{one.url, std::pair{one.emoji, one.sticker}, one};
-                                                 }) | std::ranges::to<std::vector>()
+                                                 }))
                                                : std::vector<std::tuple<std::string, std::pair<bool, bool>, pack_picture>>{};
                 },
                     c::styled({.fillX = true, .autoSize = scene::axes::kY}, rows_t(picture_row_of{&colours}))))),
@@ -288,9 +286,7 @@ inline auto packs_box(const ui_needs& n, const packs_facts& first) {
       c::shown_for<facts_t>(listing,
           c::styled({.fillX = true, .grow = scene::axes::kY},
                     nodes::ScrollContainer(c::projected<facts_t>([](const facts_t& facts) {
-                      return facts ? std::views::zip(std::views::iota(std::size_t{0}), facts->packs) |
-                                         std::views::transform([](const auto& one) { return pack_item{std::get<0>(one), std::get<1>(one)}; }) |
-                                         std::ranges::to<std::vector>()
+                      return facts ? std::ranges::to<std::vector>(std::views::transform(std::views::zip(std::views::iota(std::size_t{0}), facts->packs), [](const auto& one) { return pack_item{std::get<0>(one), std::get<1>(one)}; }))
                                    : std::vector<pack_item>{};
                     },
                         c::listed<pack_item>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), pack_row_of{&colours, first.room}))))),

@@ -115,8 +115,7 @@ inline auto asked_rows(const palette& colours, const registration_asked& asked) 
   return c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::visible(!said.empty(), c::styled({.fillX = true}, selectable_text(wrapped(nodes::Text(said, 13.0f, colours.text))))),
       c::many(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              asked.fields | std::views::transform([&](const registration_field& one) { return asked_row(colours, one); }) |
-                  std::ranges::to<std::vector>()));
+              std::ranges::to<std::vector>(std::views::transform(asked.fields, [&](const registration_field& one) { return asked_row(colours, one); }))));
 }
 using asked_rows_t = decltype(asked_rows(std::declval<const palette&>(), std::declval<const registration_asked&>()));
 // The registration the program keeps beside the form, where it has one.
@@ -291,8 +290,7 @@ struct muc_form_events {
 // blank; else what its editor said; else as it came.
 [[nodiscard]] inline std::vector<std::string> values_in(const muc_form& form, const muc_field& f) {
   if (const auto lines = form.jids.find(f.var); lines != form.jids.end())
-    return lines->second | std::views::transform(&jid_line::address) | std::views::filter(std::not_fn(&std::string::empty)) |
-           std::ranges::to<std::vector>();
+    return std::ranges::to<std::vector>(std::views::filter(std::views::transform(lines->second, &jid_line::address), std::not_fn(&std::string::empty)));
   const auto set = form.values.find(f.var);
   return set == form.values.end() ? f.values : set->second;
 }
@@ -440,9 +438,9 @@ inline auto jid_list(const palette& colours, const muc_field& f) {
           nodes::ScrollContainer(c::projected<muc_form>([var](const muc_form& form) {
             const auto lines = form.jids.find(var);
             return lines == form.jids.end() ? std::vector<std::tuple<std::uint32_t, bool, std::string>>{}
-                                            : lines->second | std::views::transform([](const jid_line& one) {
+                                            : std::ranges::to<std::vector>(std::views::transform(lines->second, [](const jid_line& one) {
                                                 return std::tuple{one.row, one.picked, one.address};
-                                              }) | std::ranges::to<std::vector>();
+                                              }));
           },
               c::styled({.fillX = true, .autoSize = scene::axes::kY}, rows_t(jid_row_of{&colours, var}))))),
       c::row(c::hbox(6.0f, {.fillX = true, .height = 32.0f}),
@@ -483,18 +481,18 @@ inline field_editor_t field_editor(const palette& colours, const muc_field& f) {
                                                                                                 &std::pair<std::string, std::string>::second) -
                                                                               f.options.begin());
             return field_editor_t(std::in_place_index<2>,
-                                  make_choice_menu(colours, "", f.options | std::views::keys | std::ranges::to<std::vector<std::string>>(), selected,
-                                                   field_chosen{f.var, f.options | std::views::values | std::ranges::to<std::vector<std::string>>()}));
+                                  make_choice_menu(colours, "", std::ranges::to<std::vector<std::string>>(std::views::keys(f.options)), selected,
+                                                   field_chosen{f.var, std::ranges::to<std::vector<std::string>>(std::views::values(f.options))}));
           },
           [&](muc_kind::list_multi) {
             return field_editor_t(std::in_place_index<3>,
                 c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                        f.options | std::views::transform([&](const std::pair<std::string, std::string>& option) {
+                        std::ranges::to<std::vector>(std::views::transform(f.options, [&](const std::pair<std::string, std::string>& option) {
                           return c::row(c::hbox(8.0f, {.fillX = true, .height = 32.0f}),
                                         form_checkbox(colours, f.var, option.second, option_flipped{f.var, option.second}),
                                         c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                                                   elided(nodes::Text(option.first, 13.0f, colours.text))));
-                        }) | std::ranges::to<std::vector>()));
+                        }))));
           },
           [&](muc_kind::text_single) { return text(false); }, [&](muc_kind::text_private) { return text(true); },
           [&](muc_kind::jid_single) { return text(false); },
@@ -566,8 +564,7 @@ inline auto configuration_page(const palette& colours, const muc_room& room) {
                         return scene::Spec{.width = 100.0f, .height = 32.0f, .alignSelf = scene::align::kStart, .disabled = !changed_and_valid(form)};
                       },
                           c::asking_for<muc_form>([room](const muc_form& form) {
-                            return request::configure_muc{room.fields | std::views::transform([&](const muc_field& f) { return answer_of(form, room, f); }) |
-                                                          std::ranges::to<std::vector>()};
+                            return request::configure_muc{std::ranges::to<std::vector>(std::views::transform(room.fields, [&](const muc_field& f) { return answer_of(form, room, f); }))};
                           },
                               widgets::Button<scene::NoAction>(colours.widgets, "Save", {})))))),
           c::shown_for<facts_t>([](const facts_t& facts) { return room_of(facts).saving || room_of(facts).failure.has_value(); },
@@ -576,8 +573,7 @@ inline auto configuration_page(const palette& colours, const muc_room& room) {
               },
                   wrapped(nodes::Text("", 13.0f, colours.dim)))),
           c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                  room.fields | std::views::transform([&](const muc_field& f) { return config_row(colours, room, f); }) |
-                      std::ranges::to<std::vector>())),
+                  std::ranges::to<std::vector>(std::views::transform(room.fields, [&](const muc_field& f) { return config_row(colours, room, f); })))),
       form_of(room));
 }
 using configuration_page_t = decltype(configuration_page(std::declval<const palette&>(), std::declval<const muc_room&>()));
@@ -670,8 +666,7 @@ inline auto roles_page(const palette& colours, const roles_basis& basis) {
                               "participant, moderator, none (kick). The server checks your privileges.",
                               13.0f, colours.dim)),
           c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                  permission_rows(room) | std::views::transform([&](std::string text) { return wrapped(nodes::Text(std::move(text), 13.0f, colours.text)); }) |
-                      std::ranges::to<std::vector>()),
+                  std::ranges::to<std::vector>(std::views::transform(permission_rows(room), [&](std::string text) { return wrapped(nodes::Text(std::move(text), 13.0f, colours.text)); }))),
           model_field<&roles_form::user>(colours, "User JID or occupant nickname", "user@example.org or nickname"),
           model_field<&roles_form::rank>(colours, "Affiliation or role", "member"),
           c::asking_for<roles_form>([](const roles_form& form) { return request::muc_privilege{form.user, form.rank, ""}; },

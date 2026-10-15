@@ -171,8 +171,7 @@ struct flick_pages {
   emoji_facts facts;
   std::optional<request::select_emoji_page> operator()(bool on) const {
     static const auto kPages = all_pages(media_page_plugins{});
-    const auto offered = kPages | std::views::filter([&](const popup_page_t& page) { return page_available(facts, page); }) |
-                         std::ranges::to<std::vector>();
+    const auto offered = std::ranges::to<std::vector>(std::views::filter(kPages, [&](const popup_page_t& page) { return page_available(facts, page); }));
     const auto at = static_cast<int>(std::ranges::find(offered, facts.page) - offered.begin());
     const int to = std::clamp(at + (on ? 1 : -1), 0, static_cast<int>(offered.size()) - 1);
     return to == at ? std::nullopt : std::optional(request::select_emoji_page{offered[static_cast<std::size_t>(to)]});

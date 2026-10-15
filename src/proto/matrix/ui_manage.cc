@@ -329,10 +329,10 @@ struct choose_access {
 [[nodiscard]] inline access_key access_now(const facts_t& now) {
   const auto& facts = facts_of(now);
   const auto version = integer(rules_now(now).version).value_or(12);
-  const auto parents = facts.parents | std::views::transform(&room_settings_facts::named_room::id) | std::ranges::to<std::vector>();
+  const auto parents = std::ranges::to<std::vector>(std::views::transform(facts.parents, &room_settings_facts::named_room::id));
   const auto rules = access_rules(version, parents);
   const auto selected = std::ranges::find_if(rules, [&](const auto& rule) { return rule.first.index() == rules_now(now).join_rule.index(); });
-  return {rules | std::views::values | std::ranges::to<std::vector<std::string>>(), static_cast<std::size_t>(selected - rules.begin()),
+  return {std::ranges::to<std::vector<std::string>>(std::views::values(rules)), static_cast<std::size_t>(selected - rules.begin()),
           editable(now, power_need::change_access{}), version, parents};
 }
 // A plain choice's: its names, the one chosen, whether it does anything.
@@ -370,7 +370,7 @@ struct published_key {
 inline auto published_rows(const palette& colours, const published_key& key) {
   namespace c = skiff::compose;
   using act = manage_change::address;
-  return c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.aliases | std::views::transform([&](const std::string& alias) {
+  return c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(std::views::transform(key.aliases, [&](const std::string& alias) {
     const bool main = key.main == alias;
     auto label = nodes::Text(alias, 14.0f, colours.text);
     label.setBold(main);
@@ -379,7 +379,7 @@ inline auto published_rows(const palette& colours, const published_key& key) {
             c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(std::move(label))),
             c::visible(main, address_badge(colours, "Main"))),
         c::visible(key.may, action(colours, main ? "Unset Main" : "Set Main", ask(act{alias, manage_change::address_kind::main}), !key.pending)));
-  }) | std::ranges::to<std::vector>());
+  })));
 }
 using published_rows_t = decltype(published_rows(std::declval<const palette&>(), published_key{}));
 struct local_key {
@@ -390,7 +390,7 @@ struct local_key {
 inline auto local_rows(const palette& colours, const local_key& key) {
   namespace c = skiff::compose;
   using check_t = widgets::internal::Toggle<asks<manage_change::select_address>, widgets::internal::CheckboxLook>;
-  return c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.aliases | std::views::transform([&](const std::string& alias) {
+  return c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(std::views::transform(key.aliases, [&](const std::string& alias) {
     auto checkbox = check_t(colours.widgets, ask(manage_change::select_address{alias}));
     checkbox.setOnNow(std::ranges::contains(key.selected, alias));
     checkbox.apply({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle, .disabled = key.pending});
@@ -398,7 +398,7 @@ inline auto local_rows(const palette& colours, const local_key& key) {
         c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                   elided(nodes::Text(alias, 14.0f, colours.text))),
         c::visible(std::ranges::contains(key.published, alias), address_badge(colours, "Published")));
-  }) | std::ranges::to<std::vector>());
+  })));
 }
 using local_rows_t = decltype(local_rows(std::declval<const palette&>(), local_key{}));
 struct address_draft {
@@ -438,10 +438,10 @@ struct children_key {
 };
 inline auto children_rows(const palette& colours, const children_key& key) {
   namespace c = skiff::compose;
-  return c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.children | std::views::transform([&](const auto& child) {
+  return c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(std::views::transform(key.children, [&](const auto& child) {
     return c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::Text(child.second, 14.0f, colours.text),
                   action(colours, "Remove", ask(manage_change::remove_child{child.first}), key.editable));
-  }) | std::ranges::to<std::vector>());
+  })));
 }
 using children_rows_t = decltype(children_rows(std::declval<const palette&>(), children_key{}));
 struct child_key {
@@ -463,16 +463,15 @@ inline auto space_children(const palette& colours, bool space) {
   return c::visible(space, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       part_heading(colours, "Rooms in this Space"),
       rows_of<children_rows_t, children_key>([](const facts_t& now) {
-        return children_key{facts_of(now).children | std::views::transform([](const auto& one) { return std::pair{one.id, one.name}; }) |
-                                std::ranges::to<std::vector>(),
+        return children_key{std::ranges::to<std::vector>(std::views::transform(facts_of(now).children, [](const auto& one) { return std::pair{one.id, one.name}; })),
                             editable(now, power_need::change_settings{})};
       },
           [at = &colours](const children_key& key) { return children_rows(*at, key); }),
       live_choice<child_key>(colours, [](const facts_t& now) {
         const auto& addable = facts_of(now).addable;
-        return child_key{addable | std::views::transform(&room_settings_facts::named_room::name) | std::ranges::to<std::vector>(), addable.size(),
+        return child_key{std::ranges::to<std::vector>(std::views::transform(addable, &room_settings_facts::named_room::name)), addable.size(),
                          editable(now, power_need::change_settings{}),
-                         addable | std::views::transform(&room_settings_facts::named_room::id) | std::ranges::to<std::vector>()};
+                         std::ranges::to<std::vector>(std::views::transform(addable, &room_settings_facts::named_room::id))};
       },
           [](const child_key& key) { return choose_child{key.rooms}; })));
 }
@@ -545,7 +544,7 @@ inline auto general_page(const palette& colours, const room_settings_facts& firs
           tile(colours, first.space ? "Space Access" : "Room Access",
                first.space ? "Change how people can join the space." : "Change how people can join the room.",
                live_choice<access_key>(colours, access_now, [](const access_key& key) {
-                 return choose_access{access_rules(key.version, key.parents) | std::views::keys | std::ranges::to<std::vector>()};
+                 return choose_access{std::ranges::to<std::vector>(std::views::keys(access_rules(key.version, key.parents)))};
                })),
           tile(colours, "Message History Visibility",
                "Changes to history visibility will only apply to future messages. The visibility of existing history will have no effect.",
@@ -608,7 +607,7 @@ inline auto general_page(const palette& colours, const room_settings_facts& firs
                           rows_of<local_rows_t, local_key>([](const facts_t& now) {
                             const auto& kept = kept_of(now);
                             return local_key{kept.data.local_aliases, published_of(facts_of(now)),
-                                             kept.selected_aliases | std::ranges::to<std::vector<std::string>>(), kept.pending};
+                                             std::ranges::to<std::vector<std::string>>(kept.selected_aliases), kept.pending};
                           },
                               [at = &colours](const local_key& key) { return local_rows(*at, key); })),
                       rows_of<address_maker_t, std::uint32_t>([](const facts_t& now) { return kept_of(now).address_round; },
@@ -677,14 +676,13 @@ struct members_basis {
   };
   // The server's list, else the chat's members, joined.
   auto members = kept.data.members.empty()
-                     ? facts.members | std::views::transform([&](const mux::member& one) { return line(one.id, one.name, one.avatar, 0, 0); }) |
-                           std::ranges::to<std::vector>()
-                     : kept.data.members | std::views::transform([&](const managed_member& one) {
+                     ? std::ranges::to<std::vector>(std::views::transform(facts.members, [&](const mux::member& one) { return line(one.id, one.name, one.avatar, 0, 0); }))
+                     : std::ranges::to<std::vector>(std::views::transform(kept.data.members, [&](const managed_member& one) {
                          return line(one.id, one.name, one.avatar, one.membership.index(), one.timestamp);
-                       }) | std::ranges::to<std::vector>();
+                       }));
   const auto values = power_values(rules, kept.data);
   return {std::move(members), values,
-          values | std::views::transform([&](std::int64_t value) { return power_name(value, kept.data); }) | std::ranges::to<std::vector>(),
+          std::ranges::to<std::vector>(std::views::transform(values, [&](std::int64_t value) { return power_name(value, kept.data); })),
           editable(now, power_need::change_permissions{}), kept.loading, facts.mine, facts.chat.account.address};
 }
 struct member_listing {
@@ -694,9 +692,9 @@ struct member_listing {
 };
 [[nodiscard]] inline member_listing listing_of(const members_basis& basis, const member_draft& now) {
   const auto wanted = logic::folded(now.query);
-  auto rows = basis.members | std::views::filter([&](const member_line& one) {
+  auto rows = std::ranges::to<std::vector>(std::views::filter(basis.members, [&](const member_line& one) {
     return one.membership == now.filter && (wanted.empty() || logic::folded(one.name).contains(wanted) || logic::folded(one.id).contains(wanted));
-  }) | std::ranges::to<std::vector>();
+  }));
   std::ranges::stable_sort(rows, [&](const member_line& a, const member_line& b) {
     if (a.level != b.level) return a.level > b.level;
     switch (now.order) {
@@ -720,7 +718,7 @@ struct choose_member_power {
 inline auto member_rows(const palette& colours, const members_basis& basis, const member_listing& listing) {
   namespace c = skiff::compose;
   return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), listing.rows | std::views::transform([&](const member_line& one) {
+      c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(std::views::transform(listing.rows, [&](const member_line& one) {
         auto values = basis.values;
         auto names = basis.names;
         if (one.level != kCreatorPower && !std::ranges::contains(values, one.level)) {
@@ -735,7 +733,7 @@ inline auto member_rows(const palette& colours, const members_basis& basis, cons
             c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX},
                       member_row(colours, mux::member{one.id, one.name, std::nullopt, one.avatar}, one.level_name)),
             std::move(choice));
-      }) | std::ranges::to<std::vector>()),
+      }))),
       c::visible(listing.rows.empty(), wrapped(nodes::Text(listing.empty, 12.0f, colours.dim))));
 }
 // The rows for the members as they are: listed as the draft says.
@@ -839,8 +837,7 @@ inline auto permission_row(const palette& colours, const permission_item& item) 
         auto values = power_values(rules_now(now), kept.data);
         if (!std::ranges::contains(values, current)) values.push_back(current);
         std::ranges::sort(values, std::greater{});
-        auto names = values | std::views::transform([&](std::int64_t value) { return power_name(value, kept.data) + (user ? "" : " & Above"); }) |
-                     std::ranges::to<std::vector>();
+        auto names = std::ranges::to<std::vector>(std::views::transform(values, [&](std::int64_t value) { return power_name(value, kept.data) + (user ? "" : " & Above"); }));
         return permission_key{std::move(names), static_cast<std::size_t>(std::ranges::find(values, current) - values.begin()),
                               editable(now, power_need::change_permissions{}) && required(rules_now(now).needs, target) <= facts_of(now).mine, std::move(values)};
       },
@@ -850,9 +847,9 @@ inline auto permission_section(const palette& colours, const permission_group& g
   namespace c = skiff::compose;
   return section(colours, group.title,
       c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = colours.tile}),
-              group.items | std::views::transform([&](const permission_item& item) {
+              std::ranges::to<std::vector>(std::views::transform(group.items, [&](const permission_item& item) {
                 return c::styled({.padding = {12.0f, 12.0f, 12.0f, 12.0f}}, permission_row(colours, item));
-              }) | std::ranges::to<std::vector>()));
+              }))));
 }
 using permission_section_t = decltype(permission_section(std::declval<const palette&>(), permission_group{}));
 // Those set apart from the standard ones: each its level, and removed.
@@ -864,12 +861,12 @@ struct custom_key {
 inline auto custom_rows(const palette& colours, const custom_key& key) {
   namespace c = skiff::compose;
   return c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      std::views::zip(key.events, key.removable) | std::views::transform([&](const auto& one) {
+      std::ranges::to<std::vector>(std::views::transform(std::views::zip(key.events, key.removable), [&](const auto& one) {
         const auto& [event, removable] = one;
         return c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
             c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, permission_row(colours, permission_item{event, event_permission{event}})),
             action(colours, "Remove", ask(manage_change::remove_custom_permission{event}), removable));
-      }) | std::ranges::to<std::vector>());
+      })));
 }
 using custom_rows_t = decltype(custom_rows(std::declval<const palette&>(), custom_key{}));
 struct custom_draft {
@@ -892,7 +889,7 @@ inline auto custom_permissions(const palette& colours) {
       rows_of<custom_rows_t, custom_key>([](const facts_t& now) {
         const auto known = standard_permission_events();
         custom_key key;
-        std::ranges::for_each(needs_now(now).events | std::views::keys | std::views::filter([&](const std::string& event) { return !known.contains(event); }),
+        std::ranges::for_each(std::views::filter(std::views::keys(needs_now(now).events), [&](const std::string& event) { return !known.contains(event); }),
                               [&](const std::string& event) {
                                 key.events.push_back(event);
                                 key.removable.push_back(editable(now, power_need::change_permissions{}) &&
@@ -932,7 +929,7 @@ struct chips_key {
 };
 inline auto power_chips(const palette& colours, const chips_key& key) {
   auto chips = skiff::compose::many(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      key.chips | std::views::transform([&](const auto& one) { return power_chip(colours, one.first, one.second); }) | std::ranges::to<std::vector>());
+      std::ranges::to<std::vector>(std::views::transform(key.chips, [&](const auto& one) { return power_chip(colours, one.first, one.second); })));
   chips.fStack.wrap = true;
   return chips;
 }
@@ -994,7 +991,7 @@ struct levels_key {
 };
 inline auto level_rows(const palette& colours, const levels_key& key) {
   namespace c = skiff::compose;
-  return c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.levels | std::views::transform([&](const level_line& one) {
+  return c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(std::views::transform(key.levels, [&](const level_line& one) {
     return card(colours,
         setting_tile(colours, one.name, std::format("({})", one.value),
             c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth}),
@@ -1002,7 +999,7 @@ inline auto level_rows(const palette& colours, const levels_key& key) {
                 action(colours, "Edit", ask(manage_change::edit_power{one.value}), !key.pending && !one.deleted))),
         c::shown_for<facts_t>([value = one.value](const facts_t& now) { return kept_of(now).power_form && kept_of(now).editing_power == value; },
                               power_form_for(colours)));
-  }) | std::ranges::to<std::vector>());
+  })));
 }
 using level_rows_t = decltype(level_rows(std::declval<const palette&>(), levels_key{}));
 inline auto permissions_page(const palette& colours, const room_settings_facts&) {
@@ -1014,7 +1011,7 @@ inline auto permissions_page(const palette& colours, const room_settings_facts&)
           c::column(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   c::shown_for<facts_t>([](const facts_t& now) {
-                    return std::ranges::contains(rules_now(now).powers | std::views::values, kCreatorPower);
+                    return std::ranges::contains(std::views::values(rules_now(now).powers), kCreatorPower);
                   },
                       card(colours, setting_tile(colours, "Founders", "Founding members has all permissions and can only be changed during upgrade.", c::column()),
                            power_chip(colours, "Founder", 0xff0000ffu))),
@@ -1024,14 +1021,13 @@ inline auto permissions_page(const palette& colours, const room_settings_facts&)
                                                 action(colours, "Edit", ask(manage_change::edit{editor::powers, true})))),
                       rows_of<power_chips_t, chips_key>([](const facts_t& now) {
                         const auto& kept = kept_of(now);
-                        return chips_key{power_values(rules_now(now), kept.data) | std::views::transform([&](std::int64_t value) {
+                        return chips_key{std::ranges::to<std::vector>(std::views::transform(power_values(rules_now(now), kept.data), [&](std::int64_t value) {
                           return std::pair{power_name(value, kept.data), power_colour(value, kept.data)};
-                        }) | std::ranges::to<std::vector>()};
+                        }))};
                       },
                           [at = &colours](const chips_key& key) { return power_chips(*at, key); }))),
               c::many(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                      permission_groups() | std::views::transform([&](const permission_group& group) { return permission_section(colours, group); }) |
-                          std::ranges::to<std::vector>()),
+                      std::ranges::to<std::vector>(std::views::transform(permission_groups(), [&](const permission_group& group) { return permission_section(colours, group); }))),
               custom_permissions(colours),
               c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).permissions.has_value(); }, card(colours,
                   wrapped(nodes::Text("You have unsaved changes.", 12.0f, colours.dim)),
@@ -1047,9 +1043,9 @@ inline auto permissions_page(const palette& colours, const room_settings_facts&)
             const auto& kept = kept_of(now);
             const auto effective = staged(kept);
             const auto fixed = power_values(rules_now(now), room_management{});
-            return levels_key{power_values(rules_now(now), effective) | std::views::transform([&](std::int64_t value) {
+            return levels_key{std::ranges::to<std::vector>(std::views::transform(power_values(rules_now(now), effective), [&](std::int64_t value) {
               return level_line{value, power_name(value, effective), kept.deleted_powers.contains(value), !std::ranges::contains(fixed, value)};
-            }) | std::ranges::to<std::vector>(), kept.pending};
+            })), kept.pending};
           },
               [at = &colours](const levels_key& key) { return level_rows(*at, key); }),
           c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).tag_draft.has_value() || !kept_of(now).deleted_powers.empty(); }, card(colours,
@@ -1086,10 +1082,10 @@ struct packs_key {
 };
 inline auto pack_cards(const palette& colours, const packs_key& key) {
   namespace c = skiff::compose;
-  return c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.packs | std::views::transform([&](const pack_line& one) {
+  return c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(std::views::transform(key.packs, [&](const pack_line& one) {
     return card(colours, setting_tile(colours, one.name.empty() ? "Unnamed Pack" : one.name, std::format("{} images", one.pictures),
                                       action(colours, "View", sends<::mux::ui::request::open_room_packs>{{one.key}})));
-  }) | std::ranges::to<std::vector>());
+  })));
 }
 using pack_cards_t = decltype(pack_cards(std::declval<const palette&>(), packs_key{}));
 inline auto packs_page(const palette& colours, const room_settings_facts&) {
@@ -1100,9 +1096,9 @@ inline auto packs_page(const palette& colours, const room_settings_facts&) {
           rows_of<pack_maker_t, std::uint32_t>([](const facts_t& now) { return kept_of(now).pack_round; },
                                                [at = &colours](std::uint32_t) { return pack_maker(*at); }))),
       rows_of<pack_cards_t, packs_key>([](const facts_t& now) {
-        return packs_key{kept_of(now).packs | std::views::transform([](const mux::emote_pack& pack) {
+        return packs_key{std::ranges::to<std::vector>(std::views::transform(kept_of(now).packs, [](const mux::emote_pack& pack) {
           return pack_line{pack.key, pack.name, pack.pictures.size()};
-        }) | std::ranges::to<std::vector>()};
+        }))};
       },
           [at = &colours](const packs_key& key) { return pack_cards(*at, key); }),
       c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).packs.empty(); }, wrapped(nodes::Text("No packs found.", 12.0f, colours.dim)))));
@@ -1139,10 +1135,10 @@ struct state_list_key {
   const auto& kept = kept_of(now);
   std::map<std::string, std::vector<std::string>> groups;
   std::ranges::for_each(kept.data.state_events, [&](const managed_state_event& event) { groups[event.type].push_back(event.key); });
-  return {groups | std::views::transform([](auto& group) {
+  return {std::ranges::to<std::vector>(std::views::transform(groups, [](auto& group) {
             std::ranges::sort(group.second);
             return state_group{group.first, std::move(group.second)};
-          }) | std::ranges::to<std::vector>(),
+          })),
           kept.expanded_state_type};
 }
 inline auto state_event_list(const palette& colours, const state_list_key& key) {
@@ -1151,18 +1147,18 @@ inline auto state_event_list(const palette& colours, const state_list_key& key) 
   return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       setting_tile(colours, "Events", "", nodes::Text(std::format("Total: {}", key.groups.size()), 12.0f, colours.dim)),
       cutout(colours, {}, state_list_row(colours, "Add New", "", ask(open{state_screen::compose, "", ""}), state_row_kind::add),
-          c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.groups | std::views::transform([&](const state_group& group) {
+          c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(std::views::transform(key.groups, [&](const state_group& group) {
             const bool expanded = key.expanded == group.type;
             return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                 state_list_row(colours, group.type, std::to_string(group.keys.size()), ask(manage_change::state_expand{group.type}), state_row_kind::type, expanded),
                 c::visible(expanded, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 0.0f, 0.0f, 16.0f},
                                                               .padding = {0.0f, 0.0f, 0.0f, 8.0f}, .border = scene::Border{colours.band, 1.0f}}),
                     state_list_row(colours, "Add New", "", ask(open{state_screen::compose, group.type, ""}), state_row_kind::add),
-                    c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), group.keys | std::views::transform([&](const std::string& one) {
+                    c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(std::views::transform(group.keys, [&](const std::string& one) {
                       return state_list_row(colours, one.empty() ? "Default" : "\"" + one + "\"", "", ask(open{state_screen::view, group.type, one}),
                                             state_row_kind::key);
-                    }) | std::ranges::to<std::vector>()))));
-          }) | std::ranges::to<std::vector>())));
+                    }))))));
+          })))));
 }
 using state_event_list_t = decltype(state_event_list(std::declval<const palette&>(), state_list_key{}));
 // A state event edited or written: its draft made from the one open.
@@ -1257,7 +1253,7 @@ inline auto developer_page(const palette& colours, const room_settings_facts& fi
                           c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                               action(colours, "Add New", ask(manage_change::edit{editor::account_form, true})),
                               live_choice<choice_key>(colours, [](const facts_t& now) {
-                                auto names = kept_of(now).data.account_data | std::views::transform(&managed_account_data::type) | std::ranges::to<std::vector>();
+                                auto names = std::ranges::to<std::vector>(std::views::transform(kept_of(now).data.account_data, &managed_account_data::type));
                                 const auto count = names.size();
                                 return choice_key{std::move(names), count, true};
                               },

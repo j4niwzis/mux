@@ -110,8 +110,7 @@ inline constexpr struct person_actions_t {
   std::vector<std::string> operator()(const State& state, const account_id& by, std::string_view who) const {
     return spl::visit([&](const auto& now) {
       using action_defaults::person_actions;
-      return person_actions(now, by, who) | std::views::filter([](const auto& one) { return one.asks.has_value(); }) |
-             std::views::transform([](const auto& one) { return one.label; }) | std::ranges::to<std::vector>();
+      return std::ranges::to<std::vector>(std::views::transform(std::views::filter(person_actions(now, by, who), [](const auto& one) { return one.asks.has_value(); }), [](const auto& one) { return one.label; }));
     }, state);
   }
 } person_actions{};
@@ -120,7 +119,7 @@ inline constexpr struct person_action_asked_t {
   void operator()(const State& state, const account_id& by, std::string_view who, std::size_t index, const Asked& asked) const {
     spl::visit([&](const auto& now) {
       using action_defaults::person_actions;
-      auto offered = person_actions(now, by, who) | std::views::filter([](const auto& one) { return one.asks.has_value(); });
+      auto offered = std::views::filter(person_actions(now, by, who), [](const auto& one) { return one.asks.has_value(); });
       auto at = std::ranges::next(std::ranges::begin(offered), static_cast<std::ptrdiff_t>(index), std::ranges::end(offered));
       if (at != std::ranges::end(offered))
         asked(*at->asks);

@@ -135,8 +135,8 @@ struct sessions_key {
     return session_key{one, one.id == kept.current, kept.renaming == one.id};
   };
   const auto is_current = [&](const session_info& one) { return one.id == kept.current; };
-  return {all | std::views::filter(is_current) | std::views::transform(key_of) | std::ranges::to<std::vector>(),
-          all | std::views::filter(std::not_fn(is_current)) | std::views::transform(key_of) | std::ranges::to<std::vector>()};
+  return {std::ranges::to<std::vector>(std::views::transform(std::views::filter(all, is_current), key_of)),
+          std::ranges::to<std::vector>(std::views::transform(std::views::filter(all, std::not_fn(is_current)), key_of))};
 }
 // A list of them under its title, where it has any.
 inline auto session_rows(const palette& colours, std::string title, const std::vector<session_key>& rows) {
@@ -144,7 +144,7 @@ inline auto session_rows(const palette& colours, std::string title, const std::v
   return c::visible(!rows.empty(), c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {10.0f, 0.0f, 0.0f, 0.0f}}),
       section_title(colours, std::move(title)),
       c::many(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              rows | std::views::transform([&](const session_key& one) { return session_row(colours, one); }) | std::ranges::to<std::vector>())));
+              std::ranges::to<std::vector>(std::views::transform(rows, [&](const session_key& one) { return session_row(colours, one); })))));
 }
 inline auto sessions_list(const palette& colours, const sessions_key& key) {
   namespace c = skiff::compose;
@@ -252,12 +252,10 @@ using account_sessions_t = decltype(account_sessions(std::declval<const palette&
   return spl::visit(spl::overloaded{[](const state& known) {
                                       if (known.device_id.empty())
                                         return std::string();
-                                      const std::string grouped = std::views::enumerate(known.ed25519) |
-                                          std::views::transform([](const auto& at) {
+                                      const std::string grouped = std::ranges::to<std::string>(std::views::join(std::views::transform(std::views::enumerate(known.ed25519), [](const auto& at) {
                                             const auto [index, letter] = at;
                                             return index > 0 && index % 4 == 0 ? std::string{' ', letter} : std::string(1, letter);
-                                          }) |
-                                          std::views::join | std::ranges::to<std::string>();
+                                          })));
                                       return std::format("Session ID: {}\nSession key: {}", known.device_id, grouped);
                                     },
                                     [](const auto&) { return std::string(); }},

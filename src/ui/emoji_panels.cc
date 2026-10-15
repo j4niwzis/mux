@@ -91,25 +91,20 @@ inline logic::reaction_text typed_reaction(const emoji_kept& kept, const emoji_s
   std::vector<emote> available = kept.custom_emoji ? kept.chat_emotes.get() : std::vector<emote>{};
   // The favourites not among them, gathered first: the filter reads what
   // is there, which must not grow under it.
-  auto favourites = kept.favourite_emoji |
-                    std::views::take(kept.custom_emoji ? kept.favourite_emoji.size() : std::size_t{0}) |
-                    std::views::filter([&](const emote& one) {
+  auto favourites = std::ranges::to<std::vector>(std::views::filter(std::views::take(kept.favourite_emoji, kept.custom_emoji ? kept.favourite_emoji.size() : std::size_t{0}), [&](const emote& one) {
                       return std::ranges::none_of(available, [&](const emote& other) { return other.url == one.url; });
-                    }) |
-                    std::ranges::to<std::vector>();
+                    }));
   available.append_range(std::move(favourites));
   // Rich clipboard atoms keep the original source even where an emoji of
   // this room has the same name.
-  const auto pictures = kept.custom_emoji ? query.atoms | std::views::filter(&scene::ClipboardAtom::picture) | std::ranges::to<std::vector>()
+  const auto pictures = kept.custom_emoji ? std::ranges::to<std::vector>(std::views::filter(query.atoms, &scene::ClipboardAtom::picture))
                                           : std::vector<scene::ClipboardAtom>{};
-  const auto images = pictures | std::views::transform([](const scene::ClipboardAtom& atom) {
+  const auto images = std::ranges::to<std::vector>(std::views::transform(pictures, [](const scene::ClipboardAtom& atom) {
                         return logic::reaction_image{atom.first, atom.last, atom.target, atom.plain};
-                      }) |
-                      std::ranges::to<std::vector>();
-  available.append_range(pictures | std::views::filter([&](const scene::ClipboardAtom& atom) {
+                      }));
+  available.append_range(std::views::transform(std::views::filter(pictures, [&](const scene::ClipboardAtom& atom) {
                            return std::ranges::none_of(available, [&](const emote& one) { return one.url == atom.target; });
-                         }) |
-                         std::views::transform([](const scene::ClipboardAtom& atom) {
+                         }), [](const scene::ClipboardAtom& atom) {
                            std::string code = atom.plain;
                            if (code.starts_with(':') && code.ends_with(':') && code.size() > 2)
                              code = code.substr(1, code.size() - 2);
@@ -163,7 +158,7 @@ struct emoji_group {
   std::string mark;
   std::optional<emote_pack> pack;
 };
-inline auto emoji_items(const auto& all) { return all | std::views::transform([](const auto& one) { return item_of(one); }) | std::ranges::to<std::vector>(); }
+inline auto emoji_items(const auto& all) { return std::ranges::to<std::vector>(std::views::transform(all, [](const auto& one) { return item_of(one); })); }
 
 // The groups shown: what was picked lately first, then its default list
 // (lib_ui's GetDefaultRecent) up to the section's number, the favourites,
@@ -179,17 +174,14 @@ inline std::vector<emoji_group> emoji_groups_of(const emoji_kept& kept, const em
     if (label.ends_with(':')) label.remove_suffix(1);
     const std::string wanted = logic::folded(label);
     auto available = chat;
-    available.append_range(kept.favourite_emoji |
-                           std::views::take(kept.custom_emoji ? kept.favourite_emoji.size() : std::size_t{0}) |
-                           std::views::filter([&](const emote& one) {
+    available.append_range(std::views::filter(std::views::take(kept.favourite_emoji, kept.custom_emoji ? kept.favourite_emoji.size() : std::size_t{0}), [&](const emote& one) {
                              return std::ranges::none_of(chat, [&](const emote& other) { return other.url == one.url; });
                            }));
-    const auto custom = available | std::views::filter([&](const emote& one) {
+    const auto custom = std::ranges::to<std::vector>(std::views::filter(available, [&](const emote& one) {
                           return logic::folded(one.shortcode).contains(wanted) || logic::folded(one.body).contains(wanted) ||
                                  logic::folded(one.pack).contains(wanted);
-                        }) |
-                        std::ranges::to<std::vector>();
-    out.append_range(grouped_emotes(custom, "Custom emoji") | std::views::transform([](const auto& pack) {
+                        }));
+    out.append_range(std::views::transform(grouped_emotes(custom, "Custom emoji"), [](const auto& pack) {
                        return emoji_group{pack.first, emoji_items(pack.second), std::nullopt, "\u23F2", source_pack(pack.second, pack.first)};
                      }));
     return out;
@@ -198,19 +190,18 @@ inline std::vector<emoji_group> emoji_groups_of(const emoji_kept& kept, const em
       "😂", "😘", "❤️", "😍", "😊", "😁", "👍", "☺️", "😔", "😄", "😭", "💋", "😒", "😳", "😜", "🙈", "😉",
       "😃", "😢", "😝", "😱", "😡", "😏", "😞", "😅", "😚", "🙊", "😌", "😀", "😋", "😆", "👌", "😐", "😕"};
   std::vector<std::string> recent = kept.recent_emoji;
-  recent.append_range(kDefaultRecent | std::views::transform([](std::string_view one) { return std::string(one); }) |
-                      std::views::filter([&](const std::string& one) { return !std::ranges::contains(kept.recent_emoji, one); }));
+  recent.append_range(std::views::filter(std::views::transform(kDefaultRecent, [](std::string_view one) { return std::string(one); }), [&](const std::string& one) { return !std::ranges::contains(kept.recent_emoji, one); }));
   recent.resize(std::min<std::size_t>(recent.size(), std::max<std::size_t>(42, kept.recent_emoji.size())));
   std::vector<emoji_group> out{{"Recently used", emoji_items(recent), std::nullopt, "\u23F2", std::nullopt}};
   if (kept.custom_emoji && !kept.favourite_emoji.empty())
     out.push_back({"Favorites", emoji_items(kept.favourite_emoji), kept.favourite_emoji.front().url, "\u2605",
                    source_pack(kept.favourite_emoji, "Favorites")});
-  out.append_range(grouped_emotes(chat, "Custom emoji") | std::views::transform([](const auto& pack) {
+  out.append_range(std::views::transform(grouped_emotes(chat, "Custom emoji"), [](const auto& pack) {
                      const emote& first = pack.second.front();
                      return emoji_group{pack.first, emoji_items(pack.second), first.pack_avatar.value_or(first.url), "\u23F2",
                                         source_pack(pack.second, pack.first)};
                    }));
-  out.append_range(std::views::iota(std::size_t{0}, logic::emoji_group_count()) | std::views::transform([](std::size_t g) {
+  out.append_range(std::views::transform(std::views::iota(std::size_t{0}, logic::emoji_group_count()), [](std::size_t g) {
                      return emoji_group{std::string(logic::emoji_group_name(g)), emoji_items(logic::emoji_of_group(g)), std::nullopt,
                                         logic::emoji_text(logic::emoji_group_face(g)), std::nullopt};
                    }));
@@ -307,8 +298,7 @@ auto emoji_panel(const palette& colours, emoji_kept& kept, Pick pick) {
       },
       [&colours, &kept, pick](const emoji_group& one) {
         return cell_section(colours, one.name,
-                            one.items | std::views::transform([&](const emoji_item& each) { return emoji_cell(colours, kept, pick, each); }) |
-                                std::ranges::to<std::vector>(),
+                            std::ranges::to<std::vector>(std::views::transform(one.items, [&](const emoji_item& each) { return emoji_cell(colours, kept, pick, each); })),
                             one.pack, kept.pack_account);
       },
       footer, [](std::size_t) { return leave_emoji_search{}; });
@@ -316,8 +306,7 @@ auto emoji_panel(const palette& colours, emoji_kept& kept, Pick pick) {
   auto tones = c::placed_at<tones_field>([](const std::optional<tones_shown>& now) { return now.transform([](const tones_shown& one) { return one.at; }); },
       c::projected<tones_field>([](const std::optional<tones_shown>& now) {
         return !now ? std::vector<emoji_item>{}
-                    : std::views::concat(std::views::single(now->base), logic::tones_of(*now->base)) |
-                          std::views::transform([](const alef::emoji* one) { return item_of(one); }) | std::ranges::to<std::vector>();
+                    : std::ranges::to<std::vector>(std::views::transform(std::views::concat(std::views::single(now->base), logic::tones_of(*now->base)), [](const alef::emoji* one) { return item_of(one); }));
       }, c::listed<emoji_item>(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {4.0f, 4.0f, 4.0f, 4.0f}, .cornerRadius = 8.0f,
                                               .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f},
                                               .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),

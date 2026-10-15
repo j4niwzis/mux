@@ -56,13 +56,13 @@ class chat_list_part {
     this->keep_folder(now, kept, list);
     this->put(list);
     auto listing = std::make_shared<mux::ui::chat_listing>(this->listing_of(now, kept, list, chat));
-    order_ = listing->chats | std::views::transform(&mux::ui::listed_chat::id) | std::ranges::to<std::vector>();
+    order_ = std::ranges::to<std::vector>(std::views::transform(listing->chats, &mux::ui::listed_chat::id));
     auto side = this->side_of(now, kept, list, chat);
     const bool elsewhere = s_->showing->look<mux::ui::elsewhere_shown>()->found.has_value();
     side.no_chats = !now.accounts().empty() && listing->chats.empty() && !elsewhere;
     side.chats_on = !s_->showing->look<mux::ui::found_shown>()->count.has_value() && (!listing->chats.empty() || !elsewhere);
     this->put(std::move(side));
-    this->put(mux::ui::listing_shown{++revision_, std::move(listing), list.account, now.accounts().keys() | std::ranges::to<std::vector>(),
+    this->put(mux::ui::listing_shown{++revision_, std::move(listing), list.account, std::ranges::to<std::vector>(now.accounts().keys()),
                                      k_->state.root().looks.fValue.theme});
     this->search_elsewhere(now, list);
   }
@@ -225,7 +225,7 @@ class chat_list_part {
       return;
     people_ = std::move(people);
     people_came_ = true;
-    std::ranges::for_each(people_ | std::views::filter([](const mux::found_person& one) { return one.avatar && !one.avatar->empty(); }),
+    std::ranges::for_each(std::views::filter(people_, [](const mux::found_person& one) { return one.avatar && !one.avatar->empty(); }),
                           [](const mux::found_person& one) { mux::ui::listed_avatars().emplace_back(one.id, *one.avatar); });
     this->show_elsewhere();
   }
@@ -299,9 +299,9 @@ class chat_list_part {
                                                   by_list[mux::account_id{mux::ui::protocol_of(one.listed_in), one.listed_in}].push_back(chat_of(one));
                                                   return by_list;
                                                 }),
-            .moved_out = placements | std::views::filter(&mux::config::chat_placement::moved) | std::views::transform(chat_of) | std::ranges::to<std::set>(),
+            .moved_out = std::ranges::to<std::set>(std::views::transform(std::views::filter(placements, &mux::config::chat_placement::moved), chat_of)),
             // The last placement of a chat says its strip, as it was written last.
-            .strips = placements | std::views::reverse | std::views::filter(strip_shown) | std::views::transform(strip_of) | std::ranges::to<std::map>(),
+            .strips = std::ranges::to<std::map>(std::views::transform(std::views::filter(std::views::reverse(placements), strip_shown), strip_of)),
             .muted = mux::chats_where<&mux::config::chat_choices::muted>(root),
             .forums = mux::chats_where<&mux::config::chat_choices::forum>(root),
             .hidden_from_home = mux::chats_where<&mux::config::chat_choices::hidden_from_home>(root),
@@ -335,9 +335,9 @@ class chat_list_part {
     if (!listed)
       return out;
     const auto& chats = now.accounts().at(*listed).conversations;
-    std::ranges::for_each(chats.values() | std::views::filter([&](const mux::conversation& one) { return one.space && !kept.spaces_on; }),
+    std::ranges::for_each(std::views::filter(chats.values(), [&](const mux::conversation& one) { return one.space && !kept.spaces_on; }),
                           [&](const mux::conversation& one) { out.emplace_back(mux::ui::display_name(one), mux::ui::folder::space{one.id.id}); });
-    const auto groups = chats.values() | std::views::transform(&mux::conversation::groups) | std::views::join | std::ranges::to<std::set<std::string>>();
+    const auto groups = std::ranges::to<std::set<std::string>>(std::views::join(std::views::transform(chats.values(), &mux::conversation::groups)));
     std::ranges::for_each(groups, [&](const std::string& name) { out.emplace_back(name, mux::ui::folder::group{name}); });
     return out;
   }
@@ -362,10 +362,9 @@ class chat_list_part {
     mux::ui::side_shown out;
     const auto folders = this->folders_of(now, kept, list.account);
     if (folders.size() > 1)
-      out.folders = folders | std::views::transform([&](const auto& one) {
+      out.folders = std::ranges::to<std::vector>(std::views::transform(folders, [&](const auto& one) {
                       return mux::ui::folder_tab_shown{one.first, one.second, one.second == list.folder};
-                    }) |
-                    std::ranges::to<std::vector>();
+                    }));
     this->bars_of(now, kept, list, out);
     out.side_on = out.side_on || dragging_;
     out.dragging = dragging_;
@@ -393,7 +392,7 @@ class chat_list_part {
     std::map<std::string, std::string> parent_of;
     std::map<std::string, std::vector<const mux::conversation*>> spaces_in;
     if (chats)
-      std::ranges::for_each(chats->values() | std::views::filter(&mux::conversation::space), [&](const mux::conversation& one) {
+      std::ranges::for_each(std::views::filter(chats->values(), &mux::conversation::space), [&](const mux::conversation& one) {
         std::ranges::for_each(one.children, [&](const std::string& child) {
           const auto* found = chats->find(child);
           if (found != nullptr && found->space && !this->shown_as_forum(kept, *found) && child != one.id.id && !parent_of.contains(child)) {
@@ -412,29 +411,26 @@ class chat_list_part {
         at = up->second;
       }
     if (chats)
-      std::ranges::for_each(chats->values() | std::views::filter([&](const mux::conversation& one) {
+      std::ranges::for_each(std::views::filter(chats->values(), [&](const mux::conversation& one) {
                               return one.space && !parent_of.contains(one.id.id) && !this->shown_as_forum(kept, one);
                             }),
                             [&](const mux::conversation& one) {
                               all.push_back({mux::config::space_item::space{one.id.id}, mux::ui::folder::space{one.id.id}, one.id.id, mux::ui::display_name(one)});
                             });
-    const auto mine = kept.space_places | std::views::filter([&](const mux::config::space_placed& p) { return p.account == address; }) |
-                      std::ranges::to<std::vector>();
+    const auto mine = std::ranges::to<std::vector>(std::views::filter(kept.space_places, [&](const mux::config::space_placed& p) { return p.account == address; }));
     const auto in_bar = [&](const entry& one, const mux::config::space_bar_t& bar) {
       if (std::ranges::none_of(mine, [&](const auto& p) { return p.item == one.item; }))
         return bar == mux::config::space_bar_t{mux::config::space_bar::side{}};
       return std::ranges::any_of(mine, [&](const auto& p) { return p.item == one.item && p.bar == bar; });
     };
     const auto bar_of = [&](const mux::config::space_bar_t& bar) {
-      auto ranked = std::views::enumerate(all) | std::views::filter([&](const auto& one) { return in_bar(std::get<1>(one), bar); }) |
-                    std::views::transform([&](const auto& one) {
+      auto ranked = std::ranges::to<std::vector>(std::views::transform(std::views::filter(std::views::enumerate(all), [&](const auto& one) { return in_bar(std::get<1>(one), bar); }), [&](const auto& one) {
                       const auto& [i, each] = one;
                       const auto at = std::ranges::find_if(mine, [&](const auto& p) { return p.item == each.item && p.bar == bar; });
                       return std::pair{at == mine.end() ? mine.size() + static_cast<std::size_t>(i) : static_cast<std::size_t>(at - mine.begin()), &each};
-                    }) |
-                    std::ranges::to<std::vector>();
+                    }));
       std::ranges::stable_sort(ranked, {}, &std::pair<std::size_t, const entry*>::first);
-      return ranked | std::views::values | std::ranges::to<std::vector>();
+      return std::ranges::to<std::vector>(std::views::values(ranked));
     };
     // A bar's icons: its items, and under an open space its own spaces, a
     // level at a time -- smaller each level down.
@@ -448,7 +444,7 @@ class chat_list_part {
         std::vector<std::pair<const mux::conversation*, int>> todo;
         const auto push_children = [&](const std::string& of, int depth) {
           if (const auto found = spaces_in.find(of); found != spaces_in.end())
-            std::ranges::for_each(found->second | std::views::reverse, [&](const mux::conversation* sub) { todo.emplace_back(sub, depth); });
+            std::ranges::for_each(std::views::reverse(found->second), [&](const mux::conversation* sub) { todo.emplace_back(sub, depth); });
         };
         push_children(*room, 1);
         std::set<std::string> seen{*room};
@@ -473,11 +469,10 @@ class chat_list_part {
     out.side_on = kept.spaces_on && !side_items.empty();
     // For the settings to list them.
     s_->ui.space_account = address;
-    s_->ui.space_items = all | std::views::transform([&](const entry& one) {
+    s_->ui.space_items = std::ranges::to<std::vector>(std::views::transform(all, [&](const entry& one) {
                            return mux::ui::space_item_shown{one.item, one.name, in_bar(one, mux::config::space_bar::side{}),
                                                             in_bar(one, mux::config::space_bar::top{})};
-                         }) |
-                         std::ranges::to<std::vector>();
+                         }));
   }
 
   // The chats listed: the account's in the folder chosen -- or the forum
@@ -510,17 +505,14 @@ class chat_list_part {
     }
     const auto rooms_of = [](const mux::conversation& one) -> const std::vector<std::string>& { return one.children; };
     // Forums: each listed as one chat; their rooms in them, not beside them.
-    const std::set<std::string> in_forums = in->conversations.values() |
-                                            std::views::filter([&](const mux::conversation& one) { return this->shown_as_forum(kept, one); }) |
-                                            std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::set>();
+    const std::set<std::string> in_forums = std::ranges::to<std::set>(std::views::join(std::views::transform(std::views::filter(in->conversations.values(), [&](const mux::conversation& one) { return this->shown_as_forum(kept, one); }), rooms_of)));
     const mux::conversation* forum = chat.forum ? in->conversations.find(*chat.forum) : nullptr;
     // What the account's spaces hold: out of Home, where it is chosen so --
     // but direct messages.
     const bool home = list.folder == mux::ui::folder_t{mux::ui::folder::all{}};
-    const std::set<std::string> in_spaces = in->conversations.values() | std::views::filter([&](const mux::conversation& each) {
+    const std::set<std::string> in_spaces = std::ranges::to<std::set>(std::views::join(std::views::transform(std::views::filter(in->conversations.values(), [&](const mux::conversation& each) {
                                               return home && each.space && (kept.home_hides_spaced || kept.hidden_from_home.contains(each.id));
-                                            }) |
-                                            std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::set>();
+                                            }), rooms_of)));
     const auto direct = [](const mux::conversation& one) {
       return spl::visit(spl::overloaded{[](mux::conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
     };
@@ -553,12 +545,9 @@ class chat_list_part {
     };
     // Its own chats -- not those moved to another account's list -- and the
     // other accounts' listed in it.
-    std::vector<const mux::conversation*> chats = in->conversations.values() |
-                                                  std::views::filter([&](const mux::conversation& one) { return !kept.moved_out.contains(one.id) && found_by(one); }) |
-                                                  std::views::transform([](const mux::conversation& one) { return &one; }) | std::ranges::to<std::vector>();
+    std::vector<const mux::conversation*> chats = std::ranges::to<std::vector>(std::views::transform(std::views::filter(in->conversations.values(), [&](const mux::conversation& one) { return !kept.moved_out.contains(one.id) && found_by(one); }), [](const mux::conversation& one) { return &one; }));
     if (const auto extra = kept.listed_in.find(*list.account); extra != kept.listed_in.end())
-      chats.append_range(extra->second | std::views::transform([&](const mux::conversation_id& id) { return now.find(id); }) |
-                         std::views::filter([&](const mux::conversation* one) { return one != nullptr && found_by(*one); }));
+      chats.append_range(std::views::filter(std::views::transform(extra->second, [&](const mux::conversation_id& id) { return now.find(id); }), [&](const mux::conversation* one) { return one != nullptr && found_by(*one); }));
     const auto strip_for = [&](const mux::conversation* one) -> std::optional<skia::SkColor> {
       if (one->id.account == *list.account)
         return std::nullopt;
@@ -576,13 +565,12 @@ class chat_list_part {
       made.detached = false;
       made.unread = 0;
       made.highlights = 0;
-      auto topics = one->children | std::views::transform([&](const std::string& child) { return in->conversations.find(child); }) |
-                    std::views::filter([](const mux::conversation* topic) { return topic != nullptr && !topic->space; });
-      made.unread = std::ranges::fold_left(topics | std::views::transform([&](const mux::conversation* topic) { return topic->unread_here(this->events_of(kept, *topic)); }),
+      auto topics = std::views::filter(std::views::transform(one->children, [&](const std::string& child) { return in->conversations.find(child); }), [](const mux::conversation* topic) { return topic != nullptr && !topic->space; });
+      made.unread = std::ranges::fold_left(std::views::transform(topics, [&](const mux::conversation* topic) { return topic->unread_here(this->events_of(kept, *topic)); }),
                                            std::int64_t{0}, std::plus{});
-      made.highlights = std::ranges::fold_left(topics | std::views::transform(&mux::conversation::highlights), decltype(made.highlights){0}, std::plus{});
+      made.highlights = std::ranges::fold_left(std::views::transform(topics, &mux::conversation::highlights), decltype(made.highlights){0}, std::plus{});
       const auto newest_in = [&](const mux::conversation* topic) { return mux::ui::newest(*topic, this->events_of(kept, *topic)); };
-      auto with_one = topics | std::views::filter([&](const mux::conversation* topic) { return newest_in(topic) != nullptr; });
+      auto with_one = std::views::filter(topics, [&](const mux::conversation* topic) { return newest_in(topic) != nullptr; });
       if (const auto best = std::ranges::max_element(with_one, {}, [&](const mux::conversation* topic) { return newest_in(topic)->at; });
           best != std::ranges::end(with_one)) {
         made.timeline.push_back(*newest_in(*best));
@@ -598,7 +586,7 @@ class chat_list_part {
     });
     // The chat open -- or, where Alt+Up or Alt+Down went to a forum, that.
     const auto is_chosen = [&](const mux::conversation* one) { return list.pointed ? *list.pointed == one->id : chat.chosen && *chat.chosen == one->id; };
-    out.chats = chats | std::views::transform([&](const mux::conversation* one) {
+    out.chats = std::ranges::to<std::vector>(std::views::transform(chats, [&](const mux::conversation* one) {
                   const auto events = this->events_of(kept, *one);
                   return mux::ui::listed_chat{.id = one->id,
                                               .view = mux::ui::conversation_view_of(s_->ui, *one, is_chosen(one), kept.muted.contains(one->id),
@@ -606,8 +594,7 @@ class chat_list_part {
                                               .events = events,
                                               .strip = strip_for(one),
                                               .height = mux::ui::conversation_height(*one)};
-                }) |
-                std::ranges::to<std::vector>();
+                }));
     return out;
   }
 

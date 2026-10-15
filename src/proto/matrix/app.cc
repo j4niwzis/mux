@@ -318,8 +318,7 @@ struct manage_step {
       return std::nullopt;
     }
     kept.confirming_upgrade = false;
-    const auto creators = std::views::split(one.creators, ' ') | std::views::filter([](auto id) { return !id.empty(); }) |
-                          std::views::transform([](auto id) { return std::string(id.begin(), id.end()); }) | std::ranges::to<std::vector>();
+    const auto creators = std::ranges::to<std::vector>(std::views::transform(std::views::filter(std::views::split(one.creators, ' '), [](auto id) { return !id.empty(); }), [](auto id) { return std::string(id.begin(), id.end()); }));
     return submit(room_change::upgrade{one.version, integer(one.version).value_or(0) >= 12 ? std::optional(creators) : std::nullopt});
   }
   asked operator()(const manage_change::cancel_upgrade&) {
@@ -452,7 +451,7 @@ struct manage_step {
     std::ranges::replace(pack.key, ' ', '-');
     const auto taken = [&](const std::string& key) { return std::ranges::contains(kept.packs, key, &mux::emote_pack::key); };
     const auto stem = pack.key;
-    pack.key = *std::ranges::find_if(std::views::iota(std::size_t{0}) | std::views::transform([&](std::size_t suffix) {
+    pack.key = *std::ranges::find_if(std::views::transform(std::views::iota(std::size_t{0}), [&](std::size_t suffix) {
       return suffix == 0 ? stem : std::format("{}-{}", stem, suffix);
     }), [&](const std::string& key) { return !taken(key); });
     return manage_ask_t{std::move(pack)};
@@ -546,8 +545,7 @@ inline void saved_in(ui::room_settings_facts& facts, manage_state& kept, const m
       },
       [&](const room_change::set_addresses& change) {
         facts.alias = change.main;
-        facts.other_aliases = change.published | std::views::filter([&](const std::string& alias) { return !change.main || alias != *change.main; }) |
-                              std::ranges::to<std::vector>();
+        facts.other_aliases = std::ranges::to<std::vector>(std::views::filter(change.published, [&](const std::string& alias) { return !change.main || alias != *change.main; }));
         kept.selected_aliases.clear();
       },
       [&](const room_change::set_directory& change) { kept.data.directory = change.published; },
@@ -638,10 +636,9 @@ void program_told(App& app, const devtools_text& shown) {
 // The room's state, for the developer tools.
 template <class App>
 void program_told(App& app, const state_listed& listed) {
-  mux::ui::show(app.showing, std::optional(tool::devtools_state{listed.entries | std::views::transform([](const state_entry& one) {
+  mux::ui::show(app.showing, std::optional(tool::devtools_state{std::ranges::to<std::vector>(std::views::transform(listed.entries, [](const state_entry& one) {
                                                               return tool::devtools_entry{one.type, one.key, one.json};
-                                                            }) |
-                                                            std::ranges::to<std::vector>()}));
+                                                            }))}));
 }
 // Only the room and account that requested the read may receive it.
 template <class App>
@@ -839,9 +836,7 @@ struct account_step {
   }
   void operator()(const account_change::sign_out& one) { this->sign_out(one.devices, {}); }
   void operator()(const account_change::sign_out_others&) {
-    this->sign_out(kept.sessions.value_or(std::vector<session_info>{}) |
-                       std::views::filter([&](const session_info& one) { return one.id != kept.current; }) |
-                       std::views::transform(&session_info::id) | std::ranges::to<std::vector>(),
+    this->sign_out(std::ranges::to<std::vector>(std::views::transform(std::views::filter(kept.sessions.value_or(std::vector<session_info>{}), [&](const session_info& one) { return one.id != kept.current; }), &session_info::id)),
                    {});
   }
   void operator()(const account_change::sign_out_again& one) {

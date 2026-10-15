@@ -467,7 +467,7 @@ struct kept_settings {
       chats[chat_of(one.account, one.conversation)].muted = true;
     std::erase_if(chats, [](const auto& one) { return one.second == chat_choices{}; });
     kept_root root;
-    root.accounts.putAll(accounts_read | std::views::transform([](const mux::config::account_t& one) {
+    root.accounts.putAll(std::views::transform(accounts_read, [](const mux::config::account_t& one) {
                            return std::pair{mux::config::address_of(one), one};
                          }));
     root.chats.putAll(chats);

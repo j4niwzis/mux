@@ -54,8 +54,7 @@ using thread_span = skiff::compose::ListSpan<std::string, mux::ui::thread_list_t
     const auto theirs = std::ranges::find_if(after, std::not_fn(&mux::message::outgoing));
     return theirs == after.end() ? std::nullopt : std::optional(theirs->id);
   }
-  auto counted = all | std::views::reverse | std::views::filter([](const mux::message& said) { return !said.outgoing && !said.service; }) |
-                 std::views::take(one.unread_here());
+  auto counted = std::views::take(std::views::filter(std::views::reverse(all), [](const mux::message& said) { return !said.outgoing && !said.service; }), one.unread_here());
   std::optional<std::string> found;
   std::ranges::for_each(counted, [&](const mux::message& said) { found = said.id; });
   return found;
@@ -350,10 +349,10 @@ class jumps_part {
       const auto shows = [&](const mux::message& said) { return !said.service || filter.shows(said.event_kind); };
       if (!shows(*found)) {
         const auto after = std::ranges::find_if(std::ranges::subrange(found, all.end()), shows);
-        const auto before = std::ranges::find_if(std::ranges::subrange(all.begin(), found) | std::views::reverse, shows);
+        const auto before = std::ranges::find_if(std::views::reverse(std::ranges::subrange(all.begin(), found)), shows);
         if (after != all.end())
           jump.to = after->id;
-        else if (before != std::ranges::end(std::ranges::subrange(all.begin(), found) | std::views::reverse))
+        else if (before != std::ranges::end(std::views::reverse(std::ranges::subrange(all.begin(), found))))
           jump.to = before->id;
         else {
           going_.reset();
@@ -441,7 +440,7 @@ class jumps_part {
     const auto bottom = std::ranges::find(all, *seen_.bottom, &mux::message::id);
     if (top == all.end() || bottom == all.end() || bottom < top)
       return {};
-    return std::ranges::subrange(top, std::next(bottom)) | std::views::transform(&mux::message::id) | std::ranges::to<std::vector>();
+    return std::ranges::to<std::vector>(std::views::transform(std::ranges::subrange(top, std::next(bottom)), &mux::message::id));
   }
   // The chat's bubbles as its levels say now: where a setting moved them,
   // set and the rows made again.
@@ -540,18 +539,16 @@ class jumps_part {
       if (const mux::message* root = mux::ui::held_message(*chat, *shown.thread))
         all.push_back(root);
       if (const auto answers = chat->threads.find(*shown.thread); answers != chat->threads.end())
-        all.append_range(answers->second | std::views::transform([](const mux::message& one) { return &one; }));
+        all.append_range(std::views::transform(answers->second, [](const mux::message& one) { return &one; }));
     } else {
-      all = chat->timeline | std::views::transform([](const mux::message& one) { return &one; }) | std::ranges::to<std::vector>();
+      all = std::ranges::to<std::vector>(std::views::transform(chat->timeline, [](const mux::message& one) { return &one; }));
     }
     const auto place = [&](const std::string& id) { return std::ranges::find(all, id, &mux::message::id); };
     const auto from = place(first), to = place(last);
     if (from == all.end() || to == all.end())
       return;
     const auto [begin, end] = std::minmax(from, to);
-    auto ids = std::ranges::subrange(begin, std::next(end)) |
-               std::views::filter([](const mux::message* one) { return !one->redacted && !one->id.empty(); }) |
-               std::views::transform([](const mux::message* one) { return one->id; }) | std::ranges::to<std::vector>();
+    auto ids = std::ranges::to<std::vector>(std::views::transform(std::views::filter(std::ranges::subrange(begin, std::next(end)), [](const mux::message* one) { return !one->redacted && !one->id.empty(); }), [](const mux::message* one) { return one->id; }));
     const auto& marks = *s_->showing->look<mux::ui::message_marks>();
     const bool selecting = !marks.selected.contains(first);
     if (done) {

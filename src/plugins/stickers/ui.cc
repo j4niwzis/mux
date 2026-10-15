@@ -57,25 +57,21 @@ inline std::vector<pack> packs_of(const emoji_kept& kept, std::string_view query
   constexpr auto lower = mux::logic::folded;
   if (!query.empty()) {
     const std::string wanted = lower(query);
-    const auto found = kept.chat_stickers | std::views::filter([&](const emote& one) {
+    const auto found = std::ranges::to<std::vector>(std::views::filter(kept.chat_stickers, [&](const emote& one) {
                          return lower(one.shortcode).contains(wanted) || lower(one.body).contains(wanted) ||
                                 lower(one.pack).contains(wanted);
-                       }) |
-                       std::ranges::to<std::vector>();
-    return grouped_emotes(found, "Search results") |
-           std::views::transform([](auto one) { return pack{std::move(one.first), std::move(one.second), std::nullopt, "\u23F2"}; }) |
-           std::ranges::to<std::vector>();
+                       }));
+    return std::ranges::to<std::vector>(std::views::transform(grouped_emotes(found, "Search results"), [](auto one) { return pack{std::move(one.first), std::move(one.second), std::nullopt, "\u23F2"}; }));
   }
-  auto recent = kept.recent_stickers | std::views::filter([&](const emote& one) {
+  auto recent = std::ranges::to<std::vector>(std::views::filter(kept.recent_stickers, [&](const emote& one) {
                   return std::ranges::contains(kept.chat_stickers, one.url, &emote::url);
-                }) |
-                std::ranges::to<std::vector>();
+                }));
   std::vector<pack> out;
   if (!recent.empty())
     out.push_back({"Recently used", std::move(recent), std::nullopt, "\u23F2"});
   if (!kept.favourite_stickers.empty())
     out.push_back({"Favourites", kept.favourite_stickers, std::nullopt, "\u2605"});
-  out.append_range(grouped_emotes(kept.chat_stickers, "Stickers") | std::views::transform([](auto one) {
+  out.append_range(std::views::transform(grouped_emotes(kept.chat_stickers, "Stickers"), [](auto one) {
                      const emote& first = one.second.front();
                      auto picture = first.pack_avatar ? first.pack_avatar : std::optional<std::string>(first.url);
                      return pack{std::move(one.first), std::move(one.second), std::move(picture), "\u23F2"};
@@ -123,8 +119,7 @@ inline auto page(const palette& colours, emoji_kept& kept) {
       [&colours](const pack& one) { return tab(colours, one); },
       [&colours, &kept](const pack& one) {
         return cell_section(colours, one.name,
-                            one.stickers | std::views::transform([&](const emote& each) { return cell(colours, kept, each); }) |
-                                std::ranges::to<std::vector>(),
+                            std::ranges::to<std::vector>(std::views::transform(one.stickers, [&](const emote& each) { return cell(colours, kept, each); })),
                             source_pack(one.stickers, one.name), kept.pack_account);
       },
       // The footer: the tabs in rows that wrap, 36 high, scrolled to the one lit.

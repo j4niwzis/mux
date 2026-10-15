@@ -40,12 +40,11 @@ struct account_row {
 // The saved accounts as the list shows them, the one chosen marked.
 template <std::ranges::input_range Saved>
 [[nodiscard]] std::vector<account_row> account_rows(const Saved& saved, const model& now, const std::optional<std::string>& chosen) {
-  return saved | std::views::transform([&](const config::account_t& one) {
+  return std::ranges::to<std::vector>(std::views::transform(saved, [&](const config::account_t& one) {
            const auto [how, failed] = connection_state_of(one, now);
            const std::string& address = config::address_of(one);
            return account_row{address, std::format("{} · {}", config::protocol_name(one), how), failed, chosen == address};
-         }) |
-         std::ranges::to<std::vector>();
+         }));
 }
 // What the accounts panel shows beside its list: nothing chosen, an
 // account's page, or an account being added (its pane reads
@@ -124,8 +123,7 @@ inline auto account_row_view(const palette& colours, const account_row& one) {
 inline auto account_list(const palette& colours, const std::vector<account_row>& rows) {
   namespace c = skiff::compose;
   return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                 rows | std::views::transform([&](const account_row& one) { return account_row_view(colours, one); }) |
-                     std::ranges::to<std::vector>());
+                 std::ranges::to<std::vector>(std::views::transform(rows, [&](const account_row& one) { return account_row_view(colours, one); })));
 }
 using account_list_t = decltype(account_list(std::declval<const palette&>(), {}));
 // The side with no account chosen: Add account, lit while one is being
@@ -404,7 +402,7 @@ inline auto proxy_rows(const palette& colours, const proxy_rows_key& key) {
                     choose_account_proxy{at}, icon::dot{proxy_colour(one.name)}, key.current == one.name);
   };
   return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                 std::views::iota(-1, static_cast<int>(key.all.size())) | std::views::transform(row) | std::ranges::to<std::vector>());
+                 std::ranges::to<std::vector>(std::views::transform(std::views::iota(-1, static_cast<int>(key.all.size())), row)));
 }
 using proxy_rows_t = decltype(proxy_rows(std::declval<const palette&>(), proxy_rows_key{}));
 inline auto account_proxy_view(const palette& colours) {

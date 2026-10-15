@@ -12,6 +12,7 @@ import skia;
 import mux.core;
 import mux.config;
 import mux.ui.base;
+import skiff.scene;
 import :chat_list;
 
 export namespace mux::ui {
@@ -155,6 +156,12 @@ struct list_search {
 // The bars made big for a finger, or as they were.
 struct big_bars {
   bool on = false;
+};
+// A key pressed on the chats screen that nothing under the keys took: what
+// it does is the program's to say, from what it holds.
+struct screen_key {
+  skiff::scene::Key key;
+  bool control = false, shift = false, alt = false;
 };
 }  // namespace request
 

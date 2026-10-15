@@ -495,9 +495,12 @@ void app::before_frame() {
     jumps.go(*root().main().chosen, std::move(asked->id), std::move(asked->fragment), false, taker{this});
   if (std::exchange(shared.newest_due, false))
     jumps.to_newest();
+  if (std::exchange(shared.returns_due, false))
+    jumps.clear_returns();
   jumps.go_on(taker{this});
   chat_view.show();
   suggestions.show();
+  threads.show();
   if (model->expire_typing())
     chats_binding.refresh(root(), model->chats());
   store.flush_reads();

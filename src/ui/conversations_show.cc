@@ -88,8 +88,8 @@ auto conversations_screen::onKey(scene::phase::bubble, const scene::key::down& p
     asked = ::mux::ui::request::selection_cancel{};
   } else if (press.key == keys::kEscape && !any && std::get<chat_part::search>(chat.fParts).visible()) {
     asked = ::mux::ui::request::close_search{};
-  } else if (press.key == keys::kEscape && !any && parts.threads.answering) {
-    parts.threads.stop_answering();
+  } else if (press.key == keys::kEscape && !any && thread_answering) {
+    asked = ::mux::ui::request::thread_answer_cancel{};
   } else if (press.key == keys::kEscape && !any && composer_answering(line)) {
     asked = ::mux::ui::request::cancel_compose{};
   } else if ((press.key == keys::kTab && control) ||
@@ -577,7 +577,7 @@ void conversations_screen::show(const model& now, bool with_chat) {
   if (chosen) {
     const bool files = may_send_files(*needs_.shared, chosen->account);
     input_attach(composer_input(line)).setVisible(files);
-    input_attach(composer_input(parts.threads.parts.line)).setVisible(files);
+    input_attach(composer_input(thread_line())).setVisible(files);
   }
   if (wanted && now.accounts().contains(*wanted)) {
     current = std::exchange(wanted, std::nullopt);
@@ -718,10 +718,6 @@ void conversations_screen::show_conversation(const model& now) {
   // the panel shut or not. Opened, it is shown then (toggle_info).
   info.choose(now, chosen, muted.contains(one->id));
   this->show_wallpaper();
-  // Another chat shown: its thread let go.
-  if (shown_chat != chosen)
-    parts.threads.open.reset();
-  parts.threads.choose(now, chosen);
   shown_chat = chosen;
   // The messages themselves: the list's, told by the program (chat_told)
   // and read from the chats model where it keeps them.

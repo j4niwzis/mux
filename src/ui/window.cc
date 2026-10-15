@@ -178,6 +178,7 @@ struct shown_root {
   skiff::model::Tracked<pinned_shown> pinned;
   skiff::model::Tracked<banner_shown> banner;
   skiff::model::Tracked<suggestions_shown> suggested;
+  skiff::model::Tracked<threads_shown> threads_list;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -291,8 +292,9 @@ struct shown_screen : Screen {
       this->current = now.current;
     if (this->info_open != now.info_open)
       this->set_info_open(now.info_open);
-    if (this->threads_open != now.threads_open || this->parts.threads.open != now.thread)
+    if (this->threads_open != now.threads_open || this->thread_root != now.thread)
       this->set_threads(now.threads_open, now.thread);
+    this->thread_answering = now.thread_answer.has_value();
     // A forum opened or left as the program says it, where that changed:
     // one the screen let go itself -- its space gone -- stays gone.
     if (std::exchange(forum_read, now.forum) != now.forum && this->forum_open != now.forum) {
@@ -1065,7 +1067,7 @@ struct window : skiff::compose::Specced {
     };
     inserted(composer_field(screen.line));
     if (screen.thread_open())
-      inserted(composer_field(screen.parts.threads.parts.line));
+      inserted(composer_field(screen.thread_line()));
     return shown;
   }
   // The menu's card, where one is up: what takes the keys while it is.

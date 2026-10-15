@@ -715,6 +715,10 @@ struct suggestion_pick {
   std::optional<std::size_t> at;
 };
 struct suggestion_close {};
+// The thread's field: what is written sent in the thread open, an answer to
+// what is answered there; the answer let go.
+struct thread_send {};
+struct thread_answer_cancel {};
 // One of a person's card's buttons of its protocol's own: by where it is
 // among them.
 struct card_action {

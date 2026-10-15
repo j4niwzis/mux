@@ -255,7 +255,7 @@ class outbox_part {
           latest = found->second.back().id;
       thread = mux::thread_place{*files_thread_, std::move(latest)};
       if (screen.thread_open() == files_thread_)
-        reply_to = screen.parts.threads.answering;
+        reply_to = s_->showing->look<mux::ui::chat_shown>()->thread_answer;
     } else {
       // Sent while answering: the first of them the answer, as Element sends.
       reply_to = spl::visit(spl::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
@@ -268,7 +268,7 @@ class outbox_part {
                          std::exchange(reply_to, std::nullopt), thread, std::move(one.video));
     if (thread) {
       if (screen.thread_open() == files_thread_)
-        screen.parts.threads.stop_answering();
+        s_->stop_thread_answer();
     } else if (spl::visit(spl::overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }},
                              this->composing())) {
       this->compose(compose::plain{}, std::nullopt);
@@ -416,9 +416,8 @@ class outbox_part {
   template <class Asked>
   void send(std::string text, const Asked& asked) {
     // A text sent: the ways back from jumps let go, as tdesktop's
-    // sendTextWithTags clears its reply returns.
-    if (const auto& chosen = s_->root().main().chosen)
-      s_->root().main().returns.erase(*chosen);
+    // sendTextWithTags clears its reply returns -- whatever comes of it.
+    s_->returns_due = true;
     auto& screen = s_->root().main();
     if (!screen.chosen || !logic::sendable(text))
       return;

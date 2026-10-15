@@ -611,6 +611,8 @@ struct chat_shown {
   // The threads' panel open, and the thread open in it, if one is.
   bool threads_open = false;
   std::optional<std::string> thread;
+  // An answer being written in it: to which of its messages.
+  std::optional<std::string> thread_answer;
   // The space opened as a forum, its rooms listed: by its id.
   std::optional<std::string> forum;
 };

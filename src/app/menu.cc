@@ -110,8 +110,8 @@ void part_apply(menu_part& self, const request::menu_quote_reply&) {
   const auto fragment = selected.value_or(skiff::scene::clipboardFragment(plain, {}));
   // Into the field that answers it: the thread's, where it is answered there.
   auto& screen = self.s_->root().main();
-  if (screen.parts.threads.answering == self.target_.id) {
-    mux::ui::prepend_quote(mux::ui::composer_field(screen.parts.threads.parts.line), fragment);
+  if (self.s_->showing->look<mux::ui::chat_shown>()->thread_answer == self.target_.id) {
+    mux::ui::prepend_quote(mux::ui::composer_field(screen.thread_line()), fragment);
     return;
   }
   mux::ui::prepend_quote(mux::ui::composer_field(screen.line), fragment);
@@ -134,10 +134,11 @@ void part_apply(menu_part& self, const request::menu_reply&) {
   // A thread's root or answer, its thread open: answered there.
   if (said) {
     const std::string root = said->thread ? *said->thread : said->id;
-    if (self.s_->root().main().answer_in_thread(
-            root, self.target_.id,
-            mux::ui::compose_context{mux::ui::icon::reply{}, title, line.empty() ? logic::reply_line(said, self.target_.text) : line}))
+    if (self.s_->root().main().thread_open() == root) {
+      self.s_->answer_in_thread(self.target_.id, mux::ui::compose_context{mux::ui::icon::reply{}, title,
+                                                                          line.empty() ? logic::reply_line(said, self.target_.text) : line});
       return;
+    }
   }
   self.outbox_->answer(self.target_.id, std::move(title), line.empty() ? logic::reply_line(said, self.target_.text) : line);
 }

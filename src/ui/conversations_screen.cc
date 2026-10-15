@@ -139,7 +139,7 @@ inline auto select_a_chat() {
 
 struct conversations_screen : skiff::compose::Stacked {
   // What its keys and its swipes ask for.
-  using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::selection_copy, ::mux::ui::request::selection_delete, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of, ::mux::ui::request::suggestion_step, ::mux::ui::request::suggestion_pick, ::mux::ui::request::suggestion_close>;
+  using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::selection_copy, ::mux::ui::request::selection_delete, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of, ::mux::ui::request::suggestion_step, ::mux::ui::request::suggestion_pick, ::mux::ui::request::suggestion_close, ::mux::ui::request::thread_answer_cancel>;
   // What it was handed, for the rows it makes.
   ui_needs needs_;
   std::optional<conversation_id> chosen;
@@ -562,7 +562,7 @@ struct conversations_screen : skiff::compose::Stacked {
     info_edge_t info_edge;
     info_panel info;
     // Threads, in the info's place while they are open.
-    threads_panel threads;
+    threads_panel_t threads;
   } parts;
   // Its parts by their names, for what reads them: the screen is never moved.
   side_column& side = parts.side;
@@ -719,26 +719,22 @@ struct conversations_screen : skiff::compose::Stacked {
   config::wallpaper_t wallpaper = config::wallpaper::theme{};
   // The threads' panel open or shut, and the thread open in it: an answer
   // being written let go where the thread changes.
+  // The thread open in it, as the program says; and whether an answer is
+  // being written there.
+  std::optional<std::string> thread_root;
+  bool thread_answering = false;
   void set_threads(bool on, std::optional<std::string> root) {
-    if (parts.threads.open != root)
-      parts.threads.stop_answering();
     threads_open = on;
-    parts.threads.open = std::move(root);
+    thread_root = std::move(root);
     this->show_info();
   }
   // The thread open, where the panel shows one.
-  [[nodiscard]] std::optional<std::string> thread_open() const {
-    return threads_open ? parts.threads.open : std::nullopt;
-  }
+  [[nodiscard]] std::optional<std::string> thread_open() const { return threads_open ? thread_root : std::nullopt; }
+  // The thread's field.
+  [[nodiscard]] auto& thread_line() { return std::get<kThreadLine>(parts.threads.fParts); }
+  [[nodiscard]] const auto& thread_line() const { return std::get<kThreadLine>(parts.threads.fParts); }
   // What is written goes into the thread open: its field has the keys.
-  [[nodiscard]] bool writing_in_thread() const { return thread_open() && composer_field(parts.threads.parts.line).focused(); }
-  // An answer in the thread open answered there.
-  [[nodiscard]] bool answer_in_thread(const std::string& root, std::string id, compose_context said) {
-    if (!threads_open || parts.threads.open != root)
-      return false;
-    parts.threads.answer(std::move(id), std::move(said));
-    return true;
-  }
+  [[nodiscard]] bool writing_in_thread() const { return thread_open() && composer_field(thread_line()).focused(); }
 
   void toggle_info() { this->set_info_open(!info_open); }
   void set_info_open(bool on) {

@@ -51,9 +51,6 @@ inline void prepend_quote(auto& field, const scene::ClipboardFragment& selected)
   field.insertFragment(quoted_fragment(selected));
 }
 
-// An edge between two parts of the window, to drag: the pointer turns into
-// a resize arrow over it, and a drag asks `on_drag(x)` for the edge to be at
-// x. It draws a thin line where `with_line`.
 // A round button over the bottom right corner of the messages, on the
 // panels' colour: the @ and the heart, "↓", the way back.
 [[nodiscard]] inline scene::Spec corner_button(const palette& colours) {
@@ -820,8 +817,9 @@ inline auto& composer_field(auto& bar) { return input_field(composer_input(bar))
 [[nodiscard]] inline std::string composer_plain(const auto& bar) { return composer_field(bar).plainText(); }
 // Who is mentioned in it: its pills, as they are now.
 [[nodiscard]] inline std::vector<mention> composer_mentions(const auto& bar) {
-  return composer_field(bar).atoms() | std::views::filter([](const auto& one) { return !one.picture; }) |
-         std::views::transform([](const auto& one) { return mention{one.plain, one.target}; }) | std::ranges::to<std::vector>();
+  return std::ranges::to<std::vector<mention>>(std::views::transform(
+      std::views::filter(composer_field(bar).atoms(), [](const auto& one) { return !one.picture; }),
+      [](const auto& one) { return mention{one.plain, one.target}; }));
 }
 // How what is written is formatted, by offsets in its plain text: sent with it.
 [[nodiscard]] inline std::vector<mux::styled_run> composer_styles(const auto& bar) {

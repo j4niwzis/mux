@@ -84,7 +84,7 @@ class settings_part {
     s_->looks.window.frost = k_->appearance().frost_blur;
     (void)k_->write();
     s_->refresh_due = true;
-    if (auto* up = s_->root().settings_up(); up && up->appearance())
+    if (s_->on_settings_page<mux::ui::settings_page::appearance>())
       s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
   }
   void apply(const request::set_renderer& one) {

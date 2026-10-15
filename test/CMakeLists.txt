@@ -45,6 +45,12 @@ foreach(one IN LISTS mux_protocols)
   endif()
 endforeach()
 
+if(MUX_UI)
+  add_executable(mux-composer-test composer_model_test.cc)
+  target_link_libraries(mux-composer-test PRIVATE mux_modules ${mux_gtest})
+  add_test(NAME composer COMMAND mux-composer-test)
+endif()
+
 # The rest try every protocol side by side, and the plugins with them:
 # built where all are turned on.
 if(NOT mux_all_protocols OR NOT mux_all_plugins)

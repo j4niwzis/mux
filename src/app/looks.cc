@@ -88,7 +88,7 @@ class looks_part {
     (void)k_->write();
     s_->refresh_due = true;
     // Appearance up: its choice marked again.
-    if (const auto* shown = s_->showing->look<std::optional<mux::ui::settings_facts>>();
+    if (const auto shown = s_->showing->look<std::optional<mux::ui::settings_facts>>();
         shown && *shown && spl::visit(spl::overloaded{[](const mux::ui::settings_page::appearance&) { return true; },
                                                       [](const auto&) { return false; }},
                                       (*shown)->page))
@@ -142,7 +142,7 @@ class looks_part {
     (void)k_->write();
     mux::ui::show<mux::ui::wallpaper_facts>(*s_->showing, std::nullopt);
     s_->refresh_due = true;
-    if (const auto* shown = s_->showing->look<std::optional<mux::ui::settings_facts>>();
+    if (const auto shown = s_->showing->look<std::optional<mux::ui::settings_facts>>();
         shown && *shown && spl::visit(spl::overloaded{[](const mux::ui::settings_page::appearance&) { return true; },
                                                       [](const auto&) { return false; }},
                                       (*shown)->page))

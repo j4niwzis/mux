@@ -125,6 +125,12 @@ struct services {
     });
     return showing->look<mux::ui::chat_shown>()->threads_open;
   }
+  // Which settings page is open, as the shown model holds it.
+  template <class Page> [[nodiscard]] bool on_settings_page() const {
+    const auto& shown = *showing->look<std::optional<mux::ui::settings_facts>>();
+    return shown && spl::visit(spl::overloaded{[](const Page&) { return true; },
+                                             [](const auto&) { return false; }}, shown->page);
+  }
   // A page of settings shown, where settings are open.
   void settings_page(mux::ui::settings_page_t page) const {
     if (showing->look<std::optional<mux::ui::settings_facts>>()->has_value())

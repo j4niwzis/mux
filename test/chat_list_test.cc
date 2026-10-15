@@ -5,6 +5,7 @@ import mux.core;
 import mux.ui;
 import splice;
 import skiff.scene;
+import skia;
 import gtest;
 
 #include "gtest/gtest-macros.h"
@@ -120,4 +121,21 @@ TEST(ChatList, RowKeepsListSemanticsArrowCursorAndChoiceRequest) {
     return std::same_as<decltype(cursor), skiff::scene::cursor::arrow>;
   }, row.fState.cursorShape()));
   EXPECT_EQ(row.onPress().which, room.id);
+}
+
+TEST(ChatList, FilteredForumRowsKeepTheHeightUsedByVirtualization) {
+  mux::ui::ui_shared shared{};
+  mux::ui::palette colours{};
+  const mux::ui::ui_needs needs{.colours = &colours, .shared = &shared};
+  auto room = chat("filtered-forum");
+  room.forum_topic = "General";
+  room.timeline.back().service = true;
+  mux::room_event_filter events;
+  events.shown.fill(false);
+  EXPECT_EQ(mux::newest(room, events), nullptr);
+  EXPECT_FALSE(mux::ui::preview_of(room, {}, events).topic);
+  auto row = mux::ui::conversation_row(needs, room, {}, events);
+  skiff::scene::layout(row, skia::SkRect::MakeXYWH(0.0f, 0.0f, 300.0f, 200.0f));
+  EXPECT_FLOAT_EQ(row.bounds().height(), mux::ui::conversation_height(room));
+  EXPECT_FLOAT_EQ(row.bounds().height(), 82.0f);
 }

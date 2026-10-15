@@ -227,6 +227,13 @@ struct chat_head_shown {
   bool hidden = false;
   friend bool operator==(const chat_head_shown&, const chat_head_shown&) = default;
 };
+// Whether there is any account at all, and a chat chosen: the chat's column
+// says what to do about it, or to choose one.
+struct chats_shown {
+  bool none = false;
+  bool chosen = false;
+  friend bool operator==(const chats_shown&, const chats_shown&) = default;
+};
 inline constexpr float kChatHeadHeight = 56.0f;
 [[nodiscard]] inline chat_head_shown chat_head_of(const ui_shared& shared, const conversation* one, const model& now) {
   if (one == nullptr)

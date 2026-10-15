@@ -171,6 +171,13 @@ struct shown_root {
   skiff::model::Tracked<thread_told> thread_list;
   skiff::model::Tracked<message_marks> messages_marked;
   skiff::model::Tracked<chat_ways> ways;
+  // The chat's own bands, as the program says (app: chat_view, suggestions).
+  skiff::model::Tracked<chats_shown> chats_now;
+  skiff::model::Tracked<chat_head_shown> head;
+  skiff::model::Tracked<connection_shown> connections;
+  skiff::model::Tracked<pinned_shown> pinned;
+  skiff::model::Tracked<banner_shown> banner;
+  skiff::model::Tracked<suggestions_shown> suggested;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -1033,7 +1040,7 @@ struct window : skiff::compose::Specced {
   }
   [[nodiscard]] bool emoji_open() { return layer().emoji.shown() != nullptr; }
   // The sticker pictures the panel shows, for the program to ask for.
-  [[nodiscard]] std::vector<emote_picture> emoji_pictures_shown() {
+  [[nodiscard]] std::vector<emote_picture> emoji_pictures_shown(const suggestions_shown& listed) {
     auto* up = layer().emoji.shown();
     std::vector<emote_picture> shown;
     // Those the panel's pages show, in view: the emoji's, every plugin's.
@@ -1047,10 +1054,10 @@ struct window : skiff::compose::Specced {
       std::apply([&](auto&... over) { ((over ? emote_pictures_in(*over, menu->parts.menu.bounds(), shown) : void()), ...); },
                  menu->parts.menu.parts.overs);
     auto& screen = main();
-    if (screen.chat.parts.emojis.visible())
-      for (const auto& emoji : screen.emoji_matches)
-        if (!emoji.picture.empty())
-          shown.push_back({emoji.picture, emote_kind::emoji});
+    // The custom emoji the list over the composer shows.
+    for (const suggestion& emoji : listed.items)
+      if (!emoji.picture.empty())
+        shown.push_back({emoji.picture, emote_kind::emoji});
     const auto inserted = [&](const auto& field) {
       for (const auto& atom : field.atoms())
         if (atom.picture)

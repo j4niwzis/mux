@@ -409,7 +409,7 @@ struct conversations_screen : skiff::compose::Stacked {
   // the list is up. Modified arrows are the screen's reply and chat keys.
   [[nodiscard]] std::optional<Answer> suggestion_keys(const scene::key::down& press) const {
     namespace keys = scene::keys;
-    if (!chat.parts.suggestions.visible() || press.modifiers.template has<scene::modifier::control>() ||
+    if (!std::get<chat_part::suggestions>(chat.fParts).visible() || press.modifiers.template has<scene::modifier::control>() ||
         press.modifiers.template has<scene::modifier::alt>())
       return std::nullopt;
     if (press.key == keys::kUp || press.key == keys::kDown)
@@ -425,7 +425,7 @@ struct conversations_screen : skiff::compose::Stacked {
   std::optional<Answer> onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
     namespace keys = scene::keys;
     // Selection shortcuts precede the composer and its suggestion lists.
-    if (chat.parts.selection.visible()) {
+    if (std::get<chat_part::selection>(chat.fParts).visible()) {
       const bool control = press.modifiers.template has<scene::modifier::control>();
       const bool other = press.modifiers.template has<scene::modifier::shift>() || press.modifiers.template has<scene::modifier::alt>();
       if (press.key == keys::kC && control && !other) {
@@ -514,79 +514,51 @@ struct conversations_screen : skiff::compose::Stacked {
                     composition::broken<contract::chat_column, Feature>());
       return extend(contract::chat_column{}, type_tag<Feature>{}, n);
     }
-    using nodes_t = std::tuple<decltype(made_of<Features>(std::declval<const ui_needs&>()))...>;
-    static nodes_t made(const ui_needs& n) { return nodes_t{made_of<Features>(n)...}; }
+    // One under another, in the plugins' order.
+    static auto column_of(const ui_needs& n) {
+      return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), made_of<Features>(n)...);
+    }
   };
   using column_parts_t = column_parts<composition::providers<contract::chat_column, enabled_plugins>>;
-  struct chat_column : skiff::compose::Stacked {
-    // Child references and handlers require a fixed address.
-    chat_column(const chat_column&) = delete;
-    chat_column& operator=(const chat_column&) = delete;
-    chat_column(chat_column&&) = delete;
-    chat_column& operator=(chat_column&&) = delete;
-
-    using empty_state = decltype(no_accounts_yet(std::declval<const palette&>()));
-    using select_hint = decltype(select_a_chat());
-    struct parts_t {
-      // The head, as a function of the chat shown.
-      chat_header_t header;
-      decltype(connection_bar_for<connection_shown>(std::declval<const palette&>(), &connection_shown::chat)) connection;
-      search_bar_t search;
-      selection_bar_t selection;
-      // The pinned message, under the head, where the chat has any.
-      decltype(pinned_bar_for(std::declval<const palette&>())) pinned;
-      // What plugins put under the head (contract::chat_column): a call in
-      // this chat, as Element's call view.
-      typename column_parts_t::nodes_t plugins;
-      // Its protocol's own node under the head (make_head_view).
-      std::optional<head_view_holder> their_head;
-      chat_area_t area;
-      suggestions_t suggestions;
-      // Over the composer: what the chat's protocol says there -- Matrix's
-      // warning that the other is not verified, or was reset.
-      composer_banner_t banner;
-      std::optional<composer_view_holder> their_view;
-      composer_bar_t<> line;
-      empty_state empty;
-      select_hint hint;
-    } parts;
-    // Its parts by their names, for what reads them: it is never moved.
-    chat_header_t& header = parts.header;
-    chat_area_t& area = parts.area;
-    composer_bar_t<>& line = parts.line;
-    empty_state& empty = parts.empty;
-    select_hint& hint = parts.hint;
-    chat_column(const ui_needs &n, conversations_screen* screen)
-        : Stacked(skiff::compose::vbox(
-              0.0f, {.fillY = true,
-                     .grow = scene::axes::kX,
-                     .background = n.looks->window.behind ? skia::SkColor{0}
-                                                          : n.colours->chat})),
-          parts{
-              .header = chat_header_for(*n.colours),
-              .connection = connection_bar_for<connection_shown>(*n.colours, &connection_shown::chat),
-              .search = search_bar_for(*n.colours),
-              .selection = selection_bar(n),
-              .pinned = pinned_bar_for(*n.colours),
-              .plugins = column_parts_t::made(n),
-              .area = chat_area(n),
-              .suggestions = suggestions_for(*n.colours),
-              .banner = composer_banner_for(*n.colours),
-              .line = composer_bar<>(n),
-              .empty = no_accounts_yet(*n.colours),
-              .hint = select_a_chat()} {
-      // A plain colour: the wallpaper is the messages' own -- the timeline's
-      // Wallpaper -- not behind Select a chat, where Telegram has none.
-      // Nothing, where the background is behind the whole window.
-      area.apply({.fillX = true, .grow = scene::axes::kY});
-    }
+  // The chat: its head (or its search, or the bar of messages selected),
+  // the connection band, the pin, the plugins' parts under the head (a
+  // call), its protocol's own node there, the messages, the list over the
+  // composer, the banner over it, its protocol's node there (a bot's
+  // keyboard), and where one writes -- while a chat is open; else the hint
+  // to choose one, or, with no account at all, what to do about it. What
+  // shows is what the program says.
+  static auto chat_column(const ui_needs& n) {
+    namespace c = skiff::compose;
+    const auto open = [](const chat_shown& now) { return now.chosen.has_value(); };
+    return c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX,
+                                    .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat}),
+        chat_header_for(*n.colours),
+        connection_bar_for<connection_shown>(*n.colours, &connection_shown::chat),
+        search_bar_for(*n.colours),
+        selection_bar(n),
+        pinned_bar_for(*n.colours),
+        column_parts_t::column_of(n),
+        std::optional<head_view_holder>{},
+        c::shown_for<chat_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, chat_area(n))),
+        suggestions_for(*n.colours),
+        composer_banner_for(*n.colours),
+        std::optional<composer_view_holder>{},
+        c::shown_for<chat_shown>(open, composer_bar<>(n)),
+        c::shown_for<chats_shown>([](const chats_shown& now) { return now.none; }, no_accounts_yet(*n.colours)),
+        c::shown_for<chats_shown>([](const chats_shown& now) { return !now.none && !now.chosen; }, select_a_chat()));
+  }
+  using chat_column_t = decltype(chat_column(std::declval<const ui_needs&>()));
+  // Its parts, by where they are in it.
+  struct chat_part {
+    static constexpr std::size_t header = 0, connection = 1, search = 2, selection = 3, pinned = 4, plugins = 5,
+                                 their_head = 6, area = 7, suggestions = 8, banner = 9, their_view = 10, line = 11;
   };
   using side_edge = decltype(drag_edge(std::declval<const palette&>(), resize_sidebar_to{}));
   using info_edge_t = decltype(drag_edge(std::declval<const palette&>(), resize_info_to{}, false));
   struct parts_t {
     side_column side;
     side_edge edge;
-    chat_column chat;
+    chat_column_t chat;
     info_edge_t info_edge;
     info_panel info;
     // Threads, in the info's place while they are open.
@@ -595,14 +567,14 @@ struct conversations_screen : skiff::compose::Stacked {
   // Its parts by their names, for what reads them: the screen is never moved.
   side_column& side = parts.side;
   side_edge& edge = parts.edge;
-  chat_column& chat = parts.chat;
+  chat_column_t& chat = parts.chat;
   info_edge_t& info_edge = parts.info_edge;
   info_panel& info = parts.info;
 
   // The old names, for what is kept in the parts.
   nodes::ScrollContainer<chat_rows>& list = side.list;
   nodes::Text& no_chats = side.no_chats;
-  chat_header_t& header = chat.header;
+  chat_header_t& header = std::get<chat_part::header>(chat.fParts);
   // The keys of a chat, as tdesktop's -- what the input leaves to it:
   // Ctrl+F finds in it; Up in an empty input edits the last message sent;
   // Ctrl+Up answers the last message, and each Ctrl+Up after it the one
@@ -614,22 +586,22 @@ struct conversations_screen : skiff::compose::Stacked {
   // are the old rows (none, now: the marks are the model's).
   void show_selection(const std::set<std::string>&) {}
   // The chat's search field, for the focus.
-  [[nodiscard]] auto& search_field() { return std::get<0>(std::get<0>(chat.parts.search.fParts).fParts); }
+  [[nodiscard]] auto& search_field() { return std::get<0>(std::get<0>(std::get<chat_part::search>(chat.fParts).fParts).fParts); }
   // The chat's messages: the list in its area (chat_area), told by the
   // program; read here for the pinned bar and the page keys.
-  [[nodiscard]] auto& messages() { return std::get<1>(chat.area.fParts).list().list(); }
+  [[nodiscard]] auto& messages() { return std::get<1>(std::get<chat_part::area>(chat.fParts).fParts).list().list(); }
   // The chat last shown: its thread let go where another is.
   std::optional<conversation_id> shown_chat;
   // The chat's wallpaper, as its levels say, behind its messages: not
   // there where the window's background is behind the whole window, and
   // else at the window's opacity, as the panels are.
   void show_wallpaper() {
-    auto& wall = std::get<0>(chat.area.fParts);
+    auto& wall = std::get<0>(std::get<chat_part::area>(chat.fParts).fParts);
     wall.setVisible(!needs_.looks->window.behind);
     wall.setOpacity(static_cast<float>(needs_.looks->window.opacity) / 100.0f);
     show_wallpaper_on(wall, wallpaper, *needs_.colours, *needs_.looks);
   }
-  composer_bar_t<>& line = chat.line;
+  composer_bar_t<>& line = std::get<chat_part::line>(chat.fParts);
 
   // Its child references and handlers point into this screen. Construct it
   // in its final place; moving it would leave them pointing at the old one.
@@ -642,7 +614,7 @@ struct conversations_screen : skiff::compose::Stacked {
       : Stacked(skiff::compose::hbox(0.0f, {.fill = true})), needs_(n),
         parts{.side = side_column(*n.colours),
               .edge = drag_edge(*n.colours, resize_sidebar_to{}),
-              .chat = chat_column(n, this),
+              .chat = chat_column(n),
               .info_edge =
                   drag_edge(*n.colours, resize_info_to{}, false),
               .info = info_panel(*n.colours, *n.shared),
@@ -928,13 +900,13 @@ struct conversations_screen : skiff::compose::Stacked {
   template <class View>
   void place_head_view(std::optional<View> made) {
     if (made)
-      chat.parts.their_head.emplace(std::move(*made));
+      std::get<chat_part::their_head>(chat.fParts).emplace(std::move(*made));
   }
   void place_composer_view(std::nullopt_t) {}
   template <class View>
   void place_composer_view(std::optional<View> made) {
     if (made)
-      chat.parts.their_view.emplace(std::move(*made));
+      std::get<chat_part::their_view>(chat.fParts).emplace(std::move(*made));
   }
   // The connection bands are the program's (connection_shown).
   void show_banners(const conversation* one);

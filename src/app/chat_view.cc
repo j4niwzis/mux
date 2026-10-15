@@ -36,6 +36,7 @@ class chat_view_part {
     head.back = screen.single;
     head.hidden = s_->showing->look<mux::ui::search_found>()->open || s_->showing->look<mux::ui::selection_shown>()->count > 0;
     this->put(std::move(head));
+    this->put(mux::ui::chats_shown{.none = s_->model->accounts().empty(), .chosen = chat != nullptr});
     this->put(mux::ui::pinned_shown{this->pin_of(chat)});
     this->put(this->banner_of(chat));
     // The account listed's, over the list; the chat's, over the chat --

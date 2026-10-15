@@ -71,9 +71,9 @@ auto conversations_screen::onKey(scene::phase::bubble, const scene::key::down& p
     asked = ::mux::ui::request::reply_step{false};
   } else if (press.key == keys::kUp && !any && composer_text(line).empty()) {
     asked = ::mux::ui::request::edit_last{};
-  } else if (press.key == keys::kC && control && chat.parts.selection.visible()) {
+  } else if (press.key == keys::kC && control && std::get<chat_part::selection>(chat.fParts).visible()) {
     asked = ::mux::ui::request::selection_copy{};
-  } else if (press.key == keys::kDelete && !any && chat.parts.selection.visible()) {
+  } else if (press.key == keys::kDelete && !any && std::get<chat_part::selection>(chat.fParts).visible()) {
     asked = ::mux::ui::request::selection_delete{};
   } else if (press.key == keys::kC && control) {
     // Text nodes publish an owned copy of their selection as it changes.
@@ -83,10 +83,10 @@ auto conversations_screen::onKey(scene::phase::bubble, const scene::key::down& p
     if (selected.empty())
       return asked;
     skiff::scene::setClipboardText(selected);
-  } else if (press.key == keys::kEscape && !any && chat.parts.selection.visible()) {
+  } else if (press.key == keys::kEscape && !any && std::get<chat_part::selection>(chat.fParts).visible()) {
     // Messages selected, the focus elsewhere than their bar: let go first.
     asked = ::mux::ui::request::selection_cancel{};
-  } else if (press.key == keys::kEscape && !any && chat.parts.search.visible()) {
+  } else if (press.key == keys::kEscape && !any && std::get<chat_part::search>(chat.fParts).visible()) {
     asked = ::mux::ui::request::close_search{};
   } else if (press.key == keys::kEscape && !any && parts.threads.answering) {
     parts.threads.stop_answering();
@@ -651,13 +651,7 @@ void conversations_screen::show(const model& now, bool with_chat) {
   listing = this->listing_of(now);
   this->show_rows(now);
   const bool none = now.accounts().empty();
-  // The messages' area, not only its list: hidden, it no longer takes the
-  // column's height and pushes what is said instead to the bottom.
-  // A chat open: its head, messages and composer. None chosen: the hint.
-  const bool open = !none && chosen.has_value();
-  for (scene::Node* shown : std::initializer_list<scene::Node*>{&chat.area, &line})
-    shown->setVisible(open);
-  chat.hint.setVisible(!none && !chosen.has_value());
+  // The chat's column shows what the program says (chats_shown).
   // A search of two letters or more also asks the selected account's server --
   // the server is asked for rooms and people that do, once for each
   // thing typed.
@@ -682,7 +676,6 @@ void conversations_screen::show(const model& now, bool with_chat) {
   side.elsewhere.setVisible(elsewhere);
   side.list.setVisible(!listing.chats.empty() || !elsewhere);
   no_chats.setVisible(!none && listing.chats.empty() && !elsewhere);
-  chat.empty.setVisible(none);
   this->show_info();
   // Laid out again, repainting only what moves: what changed repaints
   // itself. Invalidated, the whole window was painted at every change in
@@ -694,7 +687,7 @@ void conversations_screen::show(const model& now, bool with_chat) {
 
 void conversations_screen::show_banners(const conversation* one) {
   // The protocol's own node under the head, made again for the chat.
-  chat.parts.their_head.reset();
+  std::get<chat_part::their_head>(chat.fParts).reset();
   if (one)
     spl::visit(
         [&](const auto& now) {
@@ -703,7 +696,7 @@ void conversations_screen::show_banners(const conversation* one) {
         },
         protocol_state_of(*needs_.shared, one->id.account));
   // The protocol's own node over the composer, made again for the chat.
-  chat.parts.their_view.reset();
+  std::get<chat_part::their_view>(chat.fParts).reset();
   if (one)
     spl::visit(
         [&](const auto& now) {

@@ -141,9 +141,9 @@ inline auto select_a_chat() {
 // keyboard): listed by composer_views(state), made for
 // a chat by make_composer_view, found by ADL; none by default.
 template <class List>
-struct view_nodes;
+struct protocol_view_nodes;
 template <class... Vs>
-struct view_nodes<proto::sticker_view_list<Vs...>> {
+struct protocol_view_nodes<proto::sticker_view_list<Vs...>> {
   using type = type_list<Vs...>;
 };
 template <class>
@@ -151,7 +151,7 @@ struct protocol_composer_nodes;
 template <class... Tags>
 struct protocol_composer_nodes<protocol_list<Tags...>> {
   using type = typename joined<
-      type_list<>, typename view_nodes<decltype(composer_views_for(::mux::state_of<Tags>{}))>::type...>::type;
+      type_list<>, typename protocol_view_nodes<decltype(composer_views_for(::mux::state_of<Tags>{}))>::type...>::type;
 };
 using composer_view_t = typename variant_of_types<
     typename joined<type_list<nodes::Text>, typename protocol_composer_nodes<protocols>::type>::type>::type;
@@ -163,7 +163,7 @@ struct protocol_head_nodes;
 template <class... Tags>
 struct protocol_head_nodes<protocol_list<Tags...>> {
   using type = typename joined<
-      type_list<>, typename view_nodes<decltype(head_views_for(::mux::state_of<Tags>{}))>::type...>::type;
+      type_list<>, typename protocol_view_nodes<decltype(head_views_for(::mux::state_of<Tags>{}))>::type...>::type;
 };
 using head_view_t = typename variant_of_types<
     typename joined<type_list<nodes::Text>, typename protocol_head_nodes<protocols>::type>::type>::type;
@@ -588,7 +588,7 @@ struct conversations_screen : skiff::compose::Stacked {
   // are the old rows (none, now: the marks are the model's).
   void show_selection(const std::set<std::string>&) {}
   // The chat's search field, for the focus.
-  [[nodiscard]] auto& search_field() { return std::get<0>(std::get<0>(std::get<chat_part::search>(chat.fParts).fParts).fParts); }
+  [[nodiscard]] auto& search_field() { return std::get<0>(std::get<chat_part::search>(chat.fParts).fParts); }
   // The chat's messages: the list in its area (chat_area), told by the
   // program; read here for the pinned bar and the page keys.
   [[nodiscard]] auto& messages() { return std::get<1>(std::get<chat_part::area>(chat.fParts).fParts).list().list(); }
@@ -923,5 +923,5 @@ template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::conversat
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::conversations_screen::side_column> = true;  // walks_side.cc
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen::side_column>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::conversations_screen::chat_column> = true;  // walks_column.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen::chat_column>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::chat_column_t> = true;  // walks_column.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::chat_column_t>() noexcept;

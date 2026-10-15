@@ -84,7 +84,7 @@ inline auto info_head(const palette& colours, const info_view& shown) {
   description.setSelectable(true);
   description.setLinks(link_spans_in(shown.topic), colours.accent);
   return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}), nodes::justify::end{},
+      c::row(c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}), nodes::justify::end{}),
                    icon_button(colours, icon::close{}, sends<request::toggle_info>{})),
       c::styled({.alignSelf = scene::align::kMiddle}, avatar_button(avatar_of::chat{}, shown.key, shown.name, 96.0f)),
       centred(shown.name, 17.0f, colours.text, true),

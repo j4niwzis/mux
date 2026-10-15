@@ -85,6 +85,9 @@ struct timeline_told {
   double frost = 10.0;
   // The chat's looks, by their number: the rows made again as they change.
   std::uint64_t looks = 0;
+  // What the program has fetched -- link previews, rooms found to be there:
+  // the window read again as more come, and the rows whose came made again.
+  std::size_t fetched = 0;
   friend bool operator==(const timeline_told&, const timeline_told&) = default;
 };
 // What the chat's list is told, and the thread's: the program's, in the

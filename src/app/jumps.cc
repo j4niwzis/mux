@@ -222,6 +222,7 @@ class jumps_part {
       now.needs = &needs_;
       now.frost = s_->looks.window.frost;
       now.looks = looks_;
+      now.fetched = this->fetched();
     }
     if (*s_->showing->look<mux::ui::thread_told>() != now)
       mux::ui::show(*s_->showing, std::move(now));
@@ -311,6 +312,8 @@ class jumps_part {
   void go_on(const Asked& asked) {
     this->tell_thread();
     this->follow_looks();
+    if (this->chosen() && s_->showing->look<mux::ui::chat_told>()->fetched != this->fetched())
+      this->tell();
     if (!going_) {
       this->show_ways();
       return;
@@ -460,6 +463,7 @@ class jumps_part {
       now.unread_from = unread_from_;
       now.frost = s_->looks.window.frost;
       now.looks = looks_;
+      now.fetched = this->fetched();
     }
     if (*s_->showing->look<mux::ui::chat_told>() != now)
       mux::ui::show(*s_->showing, std::move(now));
@@ -483,6 +487,8 @@ class jumps_part {
     bool context_asked = false, paging = false;
     std::optional<std::size_t> base;
   };
+  // What the program has fetched for rows, counted: more come, rows read.
+  [[nodiscard]] std::size_t fetched() const { return s_->model->previews.size() + s_->model->rooms_found.size(); }
   static double now_ms() {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
   }

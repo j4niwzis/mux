@@ -339,117 +339,120 @@ void show(shown_model& showing, std::optional<Facts> facts) {
   (void)showing.apply(skiff::model::edit(skiff::model::placeOf<std::optional<Facts>, shown_root>(), skiff::model::setTo(std::move(facts))));
 }
 
-// A dialog open while the part it is bound to holds its facts -- made from
-// them, with what the program handed the window (Needs) -- and closed where
-// they are gone. Pressed off, or Esc: that part emptied.
-template <class Content, class Facts, class Needs>
-struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
-  using dialog_content = Content;
-  // The expression-specific overloads are imported here. Looking them up
-  // in base.cc only sees the generic class-member fallback.
-  [[nodiscard]] dialog_look look_of_content() const {
-    if constexpr (requires { content_look(std::type_identity<Content>{}, std::type_identity<Facts>{}); })
-      return content_look(std::type_identity<Content>{}, std::type_identity<Facts>{});
-    else
-      return content_look(std::type_identity<Content>{});
+// A dialog's part emptied -- a press off it, Esc: what it answers.
+template <class Facts>
+struct facts_emptied {
+  static auto answer() { return skiff::bind::own(skiff::model::setTo(std::optional<Facts>{})); }
+};
+// How a dialog of Content looks, by its content and, where it says one, its
+// facts' type.
+template <class Content, class Facts>
+  requires requires { content_look(std::type_identity<Content>{}, std::type_identity<Facts>{}); }
+[[nodiscard]] dialog_look dialog_look_of(std::type_identity<Content>, std::type_identity<Facts>) {
+  return content_look(std::type_identity<Content>{}, std::type_identity<Facts>{});
+}
+template <class Content, class Facts>
+[[nodiscard]] dialog_look dialog_look_of(std::type_identity<Content>, std::type_identity<Facts>) {
+  return content_look(std::type_identity<Content>{});
+}
+// Whether a press off it or Esc dismisses it, where what it shows says so of
+// these facts; else as its look says.
+template <class Content, class Facts>
+  requires requires(const Facts& facts) { Content::dismissable(facts); }
+[[nodiscard]] std::optional<bool> dismissable_of(std::type_identity<Content>, const Facts& facts) {
+  return Content::dismissable(facts);
+}
+template <class Content, class Facts>
+  requires requires(const Facts& facts) { content_dismissable(std::type_identity<Content>{}, facts); }
+[[nodiscard]] std::optional<bool> dismissable_of(std::type_identity<Content>, const Facts& facts) {
+  return content_dismissable(std::type_identity<Content>{}, facts);
+}
+template <class Content, class Facts>
+[[nodiscard]] std::optional<bool> dismissable_of(std::type_identity<Content>, const Facts&) {
+  return std::nullopt;
+}
+// Whether what is up still stands for the facts as they are now, from the
+// most it says of itself down: the same room (content_matches); made once
+// while it is up (content_persistent); a page that reads its facts itself,
+// told them; else not -- made again.
+template <std::size_t N> struct rank : rank<N - 1> {};
+template <> struct rank<0> {};
+template <class Content, class Facts>
+  requires requires(const Content& up, const Facts& facts) { content_matches(up, facts); }
+[[nodiscard]] bool content_stands(Content& up, const Facts& facts, rank<3>) {
+  return content_matches(up, facts);
+}
+template <class Content, class Facts>
+  requires requires { content_persistent(std::type_identity<Content>{}); }
+[[nodiscard]] bool content_stands(Content&, const Facts&, rank<2>) {
+  return content_persistent(std::type_identity<Content>{});
+}
+template <class Content, class Facts>
+  requires requires(Content& up, const Facts& facts) { up.read(facts); }
+[[nodiscard]] bool content_stands(Content& up, const Facts& facts, rank<1>) {
+  up.read(facts);
+  return true;
+}
+template <class Content, class Facts>
+[[nodiscard]] bool content_stands(Content&, const Facts&, rank<0>) {
+  return false;
+}
+// What it is made of: as make_content makes it for these facts -- told them
+// where it reads them itself -- or from what the program handed the window
+// and the facts.
+template <class Content, class Facts>
+  requires requires(Content& up, const Facts& facts) { up.read(facts); }
+void told(Content& made, const Facts& facts) {
+  made.read(facts);
+}
+template <class Content, class Facts>
+void told(Content&, const Facts&) {}
+template <class Content, class Needs, class Facts>
+  requires requires(const Needs& needs, const Facts& facts) { make_content(std::type_identity<Content>{}, needs, facts); }
+[[nodiscard]] Content content_made(std::type_identity<Content>, const Needs& needs, const Facts& facts) {
+  Content made = make_content(std::type_identity<Content>{}, needs, facts);
+  told(made, facts);
+  return made;
+}
+template <class Content, class Needs, class Facts>
+[[nodiscard]] Content content_made(std::type_identity<Content>, const Needs& needs, const Facts& facts) {
+  return Content(needs, facts);
+}
+// What a dialog of Content shows, made from its Facts with what the program
+// handed the window: put as its content looks as it opens, and as its facts
+// say it may be dismissed.
+template <class Content, class Facts>
+using dialog_of = widgets::Dialog<Content, facts_emptied<Facts>>;
+template <class Content, class Facts>
+struct dialog_made {
+  const ui_needs* needs = nullptr;
+  void put(dialog_of<Content, Facts>& dialog, const Facts& facts) const {
+    if (!dialog.shown())
+      look_as_its_content(dialog, *needs->colours, dialog_look_of(std::type_identity<Content>{}, std::type_identity<Facts>{}));
+    if (const auto dismissable = dismissable_of(std::type_identity<Content>{}, facts))
+      dialog.setDismissable(*dismissable);
   }
-  const Needs* needs = nullptr;
-  explicit shown_dialog(const Needs* handed) : needs(handed) {}
-  void read(const std::optional<Facts>& now) {
-    if (now) {
-      this->dismissable_for(*now);
-      this->show_with(*now);
-    } else {
-      this->close();
-    }
-  }
-  // Facts changed while it is up: shown in place where what it shows says
-  // how (show_page); else made again from them.
-  void show_with(const Facts& facts)
-    requires requires(Content& up) { up.show_page(facts); }
-  {
-    if (auto* up = this->shown())
-      up->show_page(facts);
-    else
-      (void)this->open(*needs, facts);
-  }
-  void show_with(const Facts& facts)
-    requires requires { make_content(std::type_identity<Content>{}, *needs, facts); }
-  {
-    if constexpr (requires { content_persistent(std::type_identity<Content>{}); }) {
-      if (content_persistent(std::type_identity<Content>{}) && this->shown()) {
-        if constexpr (requires { content_matches(*this->shown(), facts); }) {
-          if (content_matches(*this->shown(), facts)) return;
-        } else {
-          return;
-        }
-      }
-    }
-    // Content that reads its facts (a page view): told them as they change,
-    // made once.
-    if constexpr (requires(Content& up) { up.read(facts); }) {
-      if (auto* up = this->shown()) {
-        up->read(facts);
-        return;
-      }
-      this->open(make_content(std::type_identity<Content>{}, *needs, facts)).read(facts);
-      return;
-    }
-    (void)this->open(make_content(std::type_identity<Content>{}, *needs, facts));
-  }
-  void show_with(const Facts& facts) { (void)this->open(*needs, facts); }
-  // Whether a press off it or Esc dismisses it, where what it shows says so
-  // of these facts; else as its look says.
-  void dismissable_for(const Facts& facts)
-    requires requires { Content::dismissable(facts); }
-  {
-    this->setDismissable(Content::dismissable(facts));
-  }
-  void dismissable_for(const Facts& facts)
-    requires requires { content_dismissable(std::type_identity<Content>{}, facts); }
-  {
-    this->setDismissable(content_dismissable(std::type_identity<Content>{}, facts));
-  }
-  void dismissable_for(const Facts&) {}
-  auto onPress() { return skiff::bind::own(skiff::model::setTo(std::optional<Facts>{})); }
+  [[nodiscard]] bool stands(Content& up, const Facts& facts) const { return content_stands(up, facts, rank<3>{}); }
+  [[nodiscard]] Content make(const Facts& facts) const { return content_made(std::type_identity<Content>{}, *needs, facts); }
 };
 
 
 // The drawer, out while what is shown says so; pushed back -- the scrim
 // pressed, a swipe, Esc -- that part set so.
-template <class Base, class Content>
-struct shown_drawer : widgets::Drawer<Base, Content, widgets::dismiss::pressed> {
-  // Keep the piecewise construction inside the drawer: the surrounding
-  // binding and slide-over forward only the screen's needs.
-  explicit shown_drawer(const ui_needs& needs)
-      : widgets::Drawer<Base, Content, widgets::dismiss::pressed>(
-            std::piecewise_construct,
-            std::forward_as_tuple(chats_screen(needs)),
-            std::forward_as_tuple(drawer_view(needs))) {}
-  void read(const drawer_shown& now) {
-    if (now.out != this->isOpen())
-      this->setOpen(now.out);
-  }
-  auto onPress() { return skiff::bind::own(skiff::model::setTo(drawer_shown{false})); }
+struct drawer_pushed {
+  static auto answer() { return skiff::bind::own(skiff::model::setTo(drawer_shown{false})); }
 };
 
 // The pages over the chats -- the accounts panel -- up while what is shown
-// holds its facts, and gone where they are not: slid in, made as the panel's
-// function makes it; what it shows it reads from the facts itself.
-template <class Frame, class Panel, class Needs>
-struct shown_frame : Frame {
-  const Needs* needs = nullptr;
-  template <class... Args>
-  explicit shown_frame(const Needs* handed, Args&&... args) : Frame(std::forward<Args>(args)...), needs(handed) {}
-  void read(const std::optional<panel_facts>& now) {
-    if (!now) {
-      if (this->shown())
-        this->close();
-      return;
-    }
-    if (!this->shown())
-      this->open(std::in_place_type<Panel>, accounts_view(*needs));
-  }
+// holds its facts, and gone where they are not: slid in, made as the
+// panel's function makes it, as it opens; what it shows it reads itself.
+template <class Panels>
+struct panel_made {
+  const ui_needs* needs = nullptr;
+  template <class Container>
+  void put(Container&, const panel_facts&) const {}
+  [[nodiscard]] bool stands(Panels&, const panel_facts&) const { return true; }
+  [[nodiscard]] Panels make(const panel_facts&) const { return Panels(std::in_place_type<accounts_panel>, accounts_view(*needs)); }
 };
 
 // A layer holding Node while its part of what is shown holds its facts --
@@ -610,20 +613,19 @@ struct dialogs_fading {
 
 // ---- the window: its frame, and over it the dialogs and the layers ------------------
 using panel_type = spl::variant<accounts_panel>;
-using drawer_node = shown_drawer<chats_screen_t, drawer_view_t>;
-using with_drawer = skiff::bind::Bound<drawer_shown, drawer_node>;
+using drawer_node = widgets::Drawer<chats_screen_t, drawer_view_t, drawer_pushed>;
+using with_drawer = skiff::bind::Bound<skiff::model::Field<&drawer_shown::out>, drawer_node>;
 // The pages slide over the drawer and the chats: Manage accounts comes in
 // over them.
-using frame_t = skiff::bind::Bound<std::optional<panel_facts>, shown_frame<widgets::SlideOver<with_drawer, panel_type>, accounts_panel, ui_needs>>;
+using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
+                                   widgets::Shown<widgets::SlideOver<with_drawer, panel_type>, panel_facts, panel_made<panel_type>>>;
 // A dialog of Content, bound to its Facts' part of what is shown, looking
 // as its content declares.
 template <class Content, class Facts>
-using shown_in = skiff::bind::Bound<std::optional<Facts>, shown_dialog<Content, Facts, ui_needs>>;
+using shown_in = skiff::bind::Bound<std::optional<Facts>, widgets::Shown<dialog_of<Content, Facts>, Facts, dialog_made<Content, Facts>>>;
 template <class Content, class Facts>
 shown_in<Content, Facts> shown_made(const ui_needs& n) {
-  shown_in<Content, Facts> made(std::in_place, &n);
-  look_as_its_content(made, *n.colours);
-  return made;
+  return shown_in<Content, Facts>(std::in_place, dialog_made<Content, Facts>{&n});
 }
 // The plugins' dialogs, each its box -- from its extend(), found where the
 // window is instantiated (mux.plugins.ui).
@@ -693,7 +695,8 @@ inline auto window_body(const ui_needs& n) {
   const scene::Spec everywhere{.place = scene::anchor::kTopLeft, .fill = true};
   auto behind = c::styled(everywhere, behind_of(n));
   behind.setVisible(n.looks->window.behind);
-  frame_t frame(std::in_place, &n, std::in_place, n);
+  frame_t frame(std::in_place, panel_made<panel_type>{&n}, std::in_place, std::piecewise_construct,
+                std::forward_as_tuple(chats_screen(n)), std::forward_as_tuple(drawer_view(n)));
   frame.apply(everywhere);
   // The pages over the chats (Accounts) on the panels' colour: as
   // see-through as the panels are.

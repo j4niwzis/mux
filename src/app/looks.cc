@@ -13,6 +13,7 @@ import splice;
 import skia;
 import mux.core;
 import mux.config;
+import mux.kept_root;
 import mux.media;
 import mux.ui;
 import mux.ui.proto;

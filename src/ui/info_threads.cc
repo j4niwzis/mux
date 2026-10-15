@@ -234,8 +234,10 @@ struct threads_panel : skiff::compose::Stacked {
       this->show(*one, now_);
   }
   void show(const conversation& chat, const model* now) {
-    if (seen_open != open)
+    if (seen_open != open) {
       made = made_range{};  // another thread: from its newest
+      aiming.reset();
+    }
     seen_model = now;
     seen_chat = chat.id;
     seen_revision = revision_of(*now, chat.id);
@@ -298,6 +300,10 @@ struct threads_panel : skiff::compose::Stacked {
   // The window slid as the reader nears an edge of what is made: looked at
   // in the frames there are -- scrolling makes them -- asking for none.
   void update(double) {
+    if (!open || !this->visible() || seen_model == nullptr || !seen_chat) {
+      aiming.reset();
+      return;
+    }
     if (aiming) {
       auto& bubbles = parts.answers.bubbles();
       const auto found = std::ranges::find(bubbles, *aiming, &legacy::message_bubble::message_id);
@@ -322,8 +328,6 @@ struct threads_panel : skiff::compose::Stacked {
       }
       return;
     }
-    if (!open || !this->visible() || seen_model == nullptr || !seen_chat)
-      return;
     const auto& view = parts.answers.parts.timeline;
     if (!slide_made(made, shown, view.current(), view.extent(), view.bounds().height()))
       return;
@@ -364,7 +368,7 @@ struct threads_panel : skiff::compose::Stacked {
   }
   // What a quote pressed asks to be brought into view, once it is laid out.
   std::optional<std::string> aiming;
-  [[nodiscard]] bool settling() const { return aiming.has_value(); }
+  [[nodiscard]] bool settling() const { return this->visible() && open.has_value() && aiming.has_value(); }
   // A message of the thread open answered from its menu, as tdesktop's
   // "Reply to <name>" over the field: in the thread, not the chat.
   void answer(std::string id, compose_context said) {

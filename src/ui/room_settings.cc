@@ -336,7 +336,7 @@ struct room_settings : skiff::compose::Stacked {
   }
   // The tab up, made again: what a page's act asks, once it changed the facts.
   void show_again() { this->show_tab(tab); }
-  [[nodiscard]] bool settling() const { return rebuild_due; }
+  [[nodiscard]] bool settling() const { return rebuild_due || context.again; }
   void update(double) {
     const auto width = parts.body.fState.contentBox().width();
     if (width > 0.0f && width != measured_width) {
@@ -364,6 +364,12 @@ struct room_settings : skiff::compose::Stacked {
                         else page.template emplace<page_of_t<decltype(theirs)>>(*colours_, facts);
                       }},
                   to);
+    spl::visit([&](auto& shown) {
+      std::apply([&](auto&... parts) {
+        using manage_defaults::manage_page_placed;
+        (manage_page_placed(parts, shown), ...);
+      }, context.protocol_parts);
+    }, page);
     std::get<1>(pane_header().fParts).setText(spl::visit(spl::overloaded{[&](settings_tab::general) { return spl::visit([](auto tag) { return std::string(preferences_title(state_of<decltype(tag)>{})); }, facts.speaks); }, [](auto one) { return std::string(tab_title(one)); }}, tab));
     std::get<1>(pane_header().fParts).setFontSize(20.0f);
     std::ranges::for_each(tab_rows(tabs()), [&](auto* row) {
@@ -383,10 +389,6 @@ room_settings_context::room_settings_context(room_settings* dialog, const palett
     : room_settings_shown{.facts = shown, .looks_ = looks, .owner = dialog}, owner(dialog),
       presentation(spl::visit([&](auto tag) { return manage_style_of(state_of<decltype(tag)>{}, *colours); }, shown.speaks)) {
   colours_ = &presentation.colours;
-  preserve_input = [](skiff::scene::Node* node) {
-    auto& dialog = *static_cast<room_settings*>(node);
-    spl::visit([](auto& page) { preserve_manage_input(page); }, dialog.page());
-  };
   std::apply([&](auto&... parts) {
     using manage_defaults::manage_attach;
     (manage_attach(parts, *this), ...);

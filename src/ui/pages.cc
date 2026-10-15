@@ -105,12 +105,7 @@ struct room_settings_shown {
   const looks_shown* looks_ = nullptr;
   skiff::scene::Node* owner = nullptr;
   bool again = false;
-  void (*preserve_input)(skiff::scene::Node*) = nullptr;
-  void show_again() {
-    if (preserve_input) preserve_input(owner);
-    again = true;
-    if (owner) owner->markDamaged();
-  }
+  void show_again() { again = true; if (owner) owner->markDamaged(); }
 };
 
 // Element's names for levels: 100 Admin, 50 Moderator, the default Default.
@@ -135,6 +130,7 @@ template <class... Tabs>
 struct manage_tab_list {};
 namespace manage_defaults {
 constexpr void manage_attach(auto&, room_settings_shown&) {}
+constexpr void manage_page_placed(auto&, auto&) {}
 constexpr manage_tab_list<> manage_tabs(const auto&) { return {}; }
 constexpr bool tab_visible(const auto&, const room_settings_facts&) { return true; }
 // And what a protocol keeps while its pages are made again: none by default.

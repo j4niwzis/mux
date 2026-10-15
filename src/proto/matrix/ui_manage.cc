@@ -60,7 +60,13 @@ struct part {
   std::size_t member_filter = 0, member_order = 0;
 };
 // A concrete page context keeps protocol UI independent of the dialog type.
-struct manage_box { room_settings_shown* shown = nullptr; part kept; };
+struct general_draft; struct member_draft; struct power_draft; struct pack_draft; struct developer_draft;
+struct manage_box {
+  room_settings_shown* shown = nullptr;
+  part kept;
+  spl::variant<std::monostate, const general_draft*, const member_draft*, const power_draft*, const pack_draft*, const developer_draft*> draft;
+};
+inline void show_again(manage_box* box);
 inline void manage_attach(manage_box& box, room_settings_shown& shown) { box.shown = &shown; }
 [[nodiscard]] inline std::optional<std::int64_t> integer(std::string_view text) {
   std::int64_t value = 0;
@@ -119,12 +125,12 @@ inline std::optional<request::change_room> submit(manage_box* box, room_change_t
   if (kept.pending) return std::nullopt;
   kept.pending = true;
   kept.error.clear();
-  box->shown->show_again();
+  show_again(box);
   return request::change_room{std::move(change)};
 }
 inline void loaded(manage_box* box, const management_loaded& one) {
   auto& kept = box->kept;
-  box->shown->show_again(); // Preserve editor text before replacing metadata.
+  show_again(box); // Preserve editor text before replacing metadata.
   kept.data = one.data;
   kept.loading = false;
   kept.error = one.error;
@@ -139,7 +145,7 @@ inline void loaded(manage_box* box, const management_loaded& one) {
 inline void avatar_sending(manage_box& box) { auto& kept = box.kept; kept.pending = true; kept.error.clear(); }
 inline void avatar_uploaded(manage_box* box, const room_avatar_uploaded& one) {
   auto& kept = box->kept;
-  box->shown->show_again(); // Preserve fields before adding the upload to their draft.
+  show_again(box); // Preserve fields before adding the upload to their draft.
   kept.pending = false; kept.error = one.error;
   if (one.error.empty()) {
     if (!kept.profile) kept.profile.emplace();
@@ -176,7 +182,7 @@ inline void completed(manage_box* box, const management_saved& one) {
         },
         [](const auto&) {}}, one.change);
   }
-  box->shown->show_again();
+  show_again(box);
   if (one.error.empty()) spl::visit(spl::overloaded{
       [&](const room_change::set_state_event& change) {
         kept.state_json = change.json;
@@ -278,7 +284,7 @@ struct edit_section {
   using Answer = skiff::model::Nothing;
   manage_box* box; editor target; bool open = true;
   skiff::model::Nothing operator()() const {
-    box->shown->show_again();
+    show_again(box);
     auto& kept = box->kept;
     switch (target) {
       case editor::profile: kept.profile_editor = open; if (!open) kept.profile.reset(); break;
@@ -326,9 +332,9 @@ struct general_actions {
     using Answer = std::optional<request::change_room>;
     Answer operator()() const {
       auto& kept = box->kept;
-      if (cancel) { kept.confirming_encryption = false; box->shown->show_again(); return std::nullopt; }
+      if (cancel) { kept.confirming_encryption = false; show_again(box); return std::nullopt; }
       if (!editable(box, power_need::encrypt{}) || box->shown->facts.encrypted) return std::nullopt;
-      if (!std::exchange(kept.confirming_encryption, true)) { box->shown->show_again(); return std::nullopt; }
+      if (!std::exchange(kept.confirming_encryption, true)) { show_again(box); return std::nullopt; }
       kept.confirming_encryption = false;
       return submit(box, room_change::encrypt{});
     }
@@ -409,20 +415,20 @@ struct general_events {
     auto& kept = box->kept;
     std::optional<request::change_room> answer;
     if (editable(box, power_need::upgrade{})) {
-      if (!std::exchange(kept.confirming_upgrade, true)) box->shown->show_again();
+      if (!std::exchange(kept.confirming_upgrade, true)) show_again(box);
       else if (std::ranges::contains(kept.data.versions, draft.version)) {
         kept.confirming_upgrade = false; const auto creators = std::ranges::to<std::vector<std::string>>(std::views::transform(
             std::views::filter(std::views::split(draft.creators, ' '), [](auto id) { return !id.empty(); }),
             [](auto id) { return std::string(id.begin(), id.end()); }));
         answer = submit(box, room_change::upgrade{draft.version,
             integer(draft.version).value_or(0) >= 12 ? std::optional(creators) : std::nullopt});
-      } else { kept.error = "Choose a room version supported by your server."; box->shown->show_again(); }
+      } else { kept.error = "Choose a room version supported by your server."; show_again(box); }
     }
     return skiff::model::Up{std::move(answer)};
   }
   auto on(cancel_upgrade, const general_draft&) const {
     box->kept.confirming_upgrade = false;
-    box->shown->show_again();
+    show_again(box);
     return skiff::model::Nothing{};
   }
 };
@@ -442,7 +448,7 @@ struct expand_addresses {
   Answer operator()() const {
     auto& kept = box->kept;
     kept.local_addresses_expanded = !kept.local_addresses_expanded;
-    box->shown->show_again();
+    show_again(box);
     return {};
   }
 };
@@ -453,7 +459,7 @@ struct select_address {
     auto& kept = box->kept;
     if (kept.pending) return {};
     if (!kept.selected_aliases.erase(alias)) kept.selected_aliases.insert(alias);
-    box->shown->show_again();
+    show_again(box);
     return {};
   }
 };
@@ -770,7 +776,7 @@ struct permission_actions {
       if (!draft) draft = original;
       assign_permission(*draft, target, values[index]);
       if (*draft == original) draft.reset();
-      box->shown->show_again();
+      show_again(box);
     }
   };
   struct apply {
@@ -779,7 +785,7 @@ struct permission_actions {
     Answer operator()() const {
       auto& kept = box->kept;
       if (kept.pending) return std::nullopt;
-      if (reset) { kept.permissions.reset(); box->shown->show_again(); return std::nullopt; }
+      if (reset) { kept.permissions.reset(); show_again(box); return std::nullopt; }
       if (!editable(box, power_need::change_permissions{}) || !kept.permissions) return std::nullopt;
       return submit(box, room_change::set_permissions{rules_of(box->shown->facts.theirs).needs, *kept.permissions});
     }
@@ -796,7 +802,7 @@ struct power_events {
         draft.event.empty() || draft.event.find_first_of(" \t\n\r") != std::string::npos ||
         required(original, permission_t{event_permission{draft.event}}) > box->shown->facts.mine)
       return skiff::model::Nothing{};
-    box->shown->show_again();
+    show_again(box);
     auto& kept = box->kept;
     if (!kept.permissions) kept.permissions = original;
     kept.permissions->events.insert_or_assign(draft.event, *level);
@@ -820,7 +826,7 @@ struct power_events {
       tag.color = color.empty() ? std::nullopt : std::optional(color);
       const auto icon = draft.icon;
       if (!icon.empty()) { if (!tag.icon) tag.icon.emplace(); tag.icon->key = icon; } else tag.icon.reset();
-      box->shown->show_again();
+      show_again(box);
       box->kept.tag_draft = std::move(tags);
       box->kept.power_form = false;
       return skiff::model::Up{std::optional<request::change_room>{}};
@@ -835,7 +841,7 @@ struct power_events {
       return skiff::model::Up{std::optional<request::change_room>{}};
     auto tags = box->kept.tag_draft.value_or(box->kept.data.tags);
     if (!tags.erase(std::to_string(*number))) return skiff::model::Up{std::optional<request::change_room>{}};
-    box->shown->show_again();
+    show_again(box);
       box->kept.tag_draft = std::move(tags);
       box->kept.power_form = false;
       return skiff::model::Up{std::optional<request::change_room>{}};
@@ -926,7 +932,7 @@ struct remove_custom_permission {
     if (!kept.permissions) kept.permissions = original;
     kept.permissions->events.erase(event);
     if (*kept.permissions == original) kept.permissions.reset();
-    box->shown->show_again();
+    show_again(box);
     return {};
   }
 };
@@ -954,7 +960,7 @@ struct edit_power {
   using Answer = skiff::model::Nothing;
   manage_box* box; std::int64_t power;
   skiff::model::Nothing operator()() const {
-    box->shown->show_again();
+    show_again(box);
     auto& kept = box->kept;
     const auto& tags = kept.tag_draft ? *kept.tag_draft : kept.data.tags;
     const auto found = tags.find(std::to_string(power));
@@ -972,7 +978,7 @@ struct delete_tag {
     auto& kept = box->kept;
     if (kept.pending || std::ranges::contains(power_values(rules_of(box->shown->facts.theirs), room_management{}), power)) return {};
     if (!kept.deleted_powers.erase(power)) kept.deleted_powers.insert(power);
-    box->shown->show_again();
+    show_again(box);
     return {};
   }
 };
@@ -982,7 +988,7 @@ struct apply_tags {
   std::optional<request::change_room> operator()() const {
     auto& kept = box->kept;
     if (kept.pending) return {};
-    if (reset) { kept.tag_draft.reset(); kept.deleted_powers.clear(); box->shown->show_again(); return {}; }
+    if (reset) { kept.tag_draft.reset(); kept.deleted_powers.clear(); show_again(box); return {}; }
     if (!kept.tag_draft && kept.deleted_powers.empty()) return {};
     auto tags = kept.tag_draft.value_or(kept.data.tags);
     std::ranges::for_each(kept.deleted_powers, [&](auto value) { tags.erase(std::to_string(value)); });
@@ -1097,7 +1103,7 @@ struct state_navigation {
   Answer operator()() const {
     auto& kept = box->kept;
     if (kept.pending) return {};
-    box->shown->show_again();
+    show_again(box);
     if (target == state_screen::view && !type.empty()) {
       const auto event = std::ranges::find_if(kept.data.state_events, [&](const auto& one) { return one.type == type && one.key == key; });
       if (event == kept.data.state_events.end()) return {};
@@ -1116,7 +1122,7 @@ struct expand_state_type {
   Answer operator()() const {
     auto& kept = box->kept;
     kept.expanded_state_type = kept.expanded_state_type == type ? std::string() : type;
-    box->shown->show_again();
+    show_again(box);
     return {};
   }
 };
@@ -1199,7 +1205,7 @@ struct developer_events {
     auto next = draft;
     const auto& entries = box->kept.data.account_data;
     if (event.index < entries.size()) { next.type = entries[event.index].type; next.json = entries[event.index].json; }
-    box->shown->show_again();
+    show_again(box);
     auto& kept = box->kept;
     kept.account_editor = true; kept.account_type = next.type; kept.account_json = next.json;
     if (next.content) next.content->setText(next.json);
@@ -1266,6 +1272,14 @@ inline auto developer_page(manage_box* box, const room_settings_facts& facts) {
 }
 template <class Page> requires requires(Page& page) { preserve_draft(page.fModel.root()); }
 inline void preserve_manage_page(Page& page) { preserve_draft(page.fModel.root()); }
+// Preserve before metadata or editor actions change the kept draft. The page
+// itself is replaced only by the dialog's next update.
+inline void show_again(manage_box* box) {
+  spl::visit(spl::overloaded{[](std::monostate) {}, [](auto* draft) {
+    if (draft) preserve_draft(*draft);
+  }}, box->draft);
+  box->shown->show_again();
+}
 } // namespace mux::proto::matrix::manage_detail
 
 export namespace mux::proto::matrix {
@@ -1371,6 +1385,33 @@ template <class Box> auto make_manage_page(advanced tab, Box* box, const ui::roo
 template <class Box> constexpr auto page_type(advanced, type_tag<Box>) {
   if constexpr (skiff::scene::kErasedWalks) return type_tag<erased_page>{};
   else return type_tag<developer_page_t>{};
+}
+}
+
+export namespace mux::proto::matrix::manage_detail {
+inline void manage_page_placed(manage_box& box, auto&) { box.draft = std::monostate{}; }
+inline void manage_page_placed(manage_box& box, manage::general_page_t& page) {
+  box.draft = &page.fModel.root();
+}
+inline void manage_page_placed(manage_box& box, manage::members_page_t& page) {
+  box.draft = &page.fModel.root();
+}
+inline void manage_page_placed(manage_box& box, manage::permissions_page_t& page) {
+  box.draft = &page.fModel.root();
+}
+inline void manage_page_placed(manage_box& box, manage::packs_page_t& page) {
+  box.draft = &page.fModel.root();
+}
+inline void manage_page_placed(manage_box& box, manage::developer_page_t& page) {
+  box.draft = &page.fModel.root();
+}
+void manage_page_placed(manage_box& box, manage::erased_page& page) {
+  box.draft = std::monostate{};
+  if (auto* shown = page.shown().get<manage::general_page_t>()) manage_page_placed(box, *shown);
+  if (auto* shown = page.shown().get<manage::members_page_t>()) manage_page_placed(box, *shown);
+  if (auto* shown = page.shown().get<manage::permissions_page_t>()) manage_page_placed(box, *shown);
+  if (auto* shown = page.shown().get<manage::packs_page_t>()) manage_page_placed(box, *shown);
+  if (auto* shown = page.shown().get<manage::developer_page_t>()) manage_page_placed(box, *shown);
 }
 }
 

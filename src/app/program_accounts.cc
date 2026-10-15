@@ -103,7 +103,10 @@ void app::apply(const request::not_implemented& one) { shared.not_implemented(on
 
 void app::apply(const request::close_notice&) { shared.close_notice(); }
 
-void app::apply(const request::resize_info& one) { root().main().resize_info(one.x); }
+void app::apply(const request::resize_info& one) {
+  root().main().resize_info(one.x);
+  chat_list.resize_info(one.x);
+}
 
 void app::apply(const request::accounts_back&) {
   auto* up = root().open_panel();

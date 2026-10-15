@@ -277,6 +277,14 @@ struct shown_root {
   skiff::model::Tracked<behind_shown> behind;
   // The chat's info, while it is open (app: chat_view).
   skiff::model::Tracked<info_shown> info;
+  // The side column and the screen's frame, as the program says (app:
+  // chat_list).
+  skiff::model::Tracked<list_shown> list;
+  skiff::model::Tracked<side_shown> side;
+  skiff::model::Tracked<found_shown> found_messages;
+  skiff::model::Tracked<elsewhere_shown> elsewhere;
+  skiff::model::Tracked<listing_shown> listing;
+  skiff::model::Tracked<screen_shown> frame;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;

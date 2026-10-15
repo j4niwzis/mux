@@ -131,8 +131,10 @@ inline auto devtools_state_view(const palette& colours, const tool::devtools_sta
           c::projected<devtools_said>([](const devtools_said& now) { return now.type && !now.key ? now.type : std::nullopt; },
               c::mount<keys_t, std::string>([&colours, by_type](const std::string& type) {
                 const auto found = by_type.find(type);
+                // Named: a conditional's temporary is no view to pipe.
+                const std::vector<tool::devtools_entry> entries = found == by_type.end() ? std::vector<tool::devtools_entry>{} : found->second;
                 return std::tuple{c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                    (found == by_type.end() ? std::vector<tool::devtools_entry>{} : found->second) |
+                    entries |
                         std::views::transform([&](const tool::devtools_entry& one) {
                           return row_item(colours, one.key.empty() ? std::string("(empty key)") : one.key, sends<state_picked>{{one.type, one.key}});
                         }) |

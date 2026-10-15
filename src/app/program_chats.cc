@@ -50,9 +50,9 @@ void app::apply(const request::choose& one) {
   search.chat_chosen(one.which);
   if (screen.chosen && *screen.chosen != one.which) {
     drafts.keep(*screen.chosen, mux::ui::composer_plain(screen.line));
-    mux::ui::set_composer_text(screen.line, screen.draft_of(one.which));
+    mux::ui::set_composer_text(screen.line, shared.draft_of(one.which));
   } else if (!screen.chosen) {
-    mux::ui::set_composer_text(screen.line, screen.draft_of(one.which));
+    mux::ui::set_composer_text(screen.line, shared.draft_of(one.which));
   }
   model->touch(one.which);
   paging.restore_reads(one.which);

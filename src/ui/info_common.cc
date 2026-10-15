@@ -44,10 +44,6 @@ template <class Act>
 using action_tile_t = decltype(action_tile(std::declval<const palette&>(), "", icon::none{}, std::declval<Act>()));
 
 
-// A round avatar on its own: the chat's, big, over its name.
-struct big_avatar : legacy::avatar_mark {
-  big_avatar() : legacy::avatar_mark(avatar_of::chat{}, std::string(), std::string(), 96.0f) {}
-};
 // An icon on its own, not to be pressed.
 inline auto icon_view(const palette& colours, icon_t mark) {
   return skiff::compose::styled({.width = 28.0f, .height = 36.0f}, nodes::Icon(shape_of(mark), colours.dim));
@@ -64,48 +60,32 @@ inline auto section_band(const palette& colours) {
 // Declared: a column of these, nothing placed by hand.
 // An ID, whole -- wrapped, never cut -- and copied when pressed: a chat's
 // or a person's.
-struct id_line_t : skiff::compose::Stacked {
-  using Answer = request::copy_text;
-  std::string copied_, confirmation_, label_;
-  struct parts_t {
-    nodes::Text value;
-    nodes::Text feedback;
-  } parts;
-  id_line_t(const palette& colours, std::string text, std::string link, std::string label = "ID")
-      : Stacked(skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
-              .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen,
-              .focusBackground = colours.chosen})),
-        copied_(link.empty() ? text : link), confirmation_(link.empty() ? label + " · copied" : label + " · link copied, with its servers"),
-        label_("Copy " + label),
-        parts{.value = wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(std::move(text), 14.0f, colours.accent, false, true))),
-              .feedback = wrapped(skiff::compose::styled({.fillX = true}, nodes::Text(std::move(label), 13.0f, colours.accent)))} {
-    fState.setCursor(scene::cursor::hand{});
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool focusChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    scene::pressLater(fState);
-    return true;
-  }
-  request::copy_text onPress() {
-    // The confirmation can wrap to more lines. Invalidate the whole row
-    // so a cached info panel lays it out and repaints at the next frame.
-    parts.feedback.setText(confirmation_);
-    this->invalidateLayout();
-    return {copied_};
-  }
-  [[nodiscard]] scene::Semantics semantics() const {
-    scene::Semantics out;
-    out.fRole = scene::semantic_role::button{};
-    out.fLabel = label_;
-    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
-    return out;
+struct id_feedback {
+  bool copied = false;
+};
+struct copy_id_line {};
+struct id_copy_events {
+  std::string copied;
+  auto on(copy_id_line, const id_feedback&) const {
+    return std::tuple{skiff::model::over<id_feedback>(skiff::model::setTo(id_feedback{true})),
+                      skiff::model::Up{request::copy_text{copied}}};
   }
 };
 inline auto id_line(const palette& colours, std::string text, std::string link, std::string label = "ID") {
-  return id_line_t(colours, std::move(text), std::move(link), std::move(label));
+  namespace c = skiff::compose;
+  const bool a_link = !link.empty();
+  const std::string copied = a_link ? link : text;
+  return c::local<id_feedback>(id_copy_events{copied},
+      c::onClick(copy_id_line{}, c::column(
+          c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
+              .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen,
+              .focusBackground = colours.chosen}),
+          wrapped(c::styled({.fillX = true}, nodes::Text(std::move(text), 14.0f, colours.accent, false, true))),
+          c::text_for<id_feedback>([label, a_link](const id_feedback& now) {
+              return !now.copied ? label : a_link ? label + " · link copied, with its servers" : label + " · copied";
+            }, wrapped(c::styled({.fillX = true}, nodes::Text(label, 13.0f, colours.accent))))), "Copy " + label));
 }
+using id_line_t = decltype(id_line(std::declval<const palette&>(), "", ""));
 
 // A person's name and how they are, as a chat knows them: a member's, with
 // their role; the other side of a direct chat; anyone else by their address.

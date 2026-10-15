@@ -1571,7 +1571,7 @@ TEST(Controls, PersonSearchRowSendsItsIdAndNamesItsAction) {
   EXPECT_EQ(std::get<0>(std::get<1>(row.fParts).fParts).text(), "Alice");
 }
 
-TEST(Controls, CopyIdRequestShowsConfirmationWithoutBindingRefresh) {
+TEST(Controls, CopyIdRequestUpdatesOnlyItsLocalFeedback) {
   struct sink {
     std::vector<std::string> copied;
     void take(const mux::ui::request::copy_text& request) { copied.push_back(request.text); }
@@ -1582,11 +1582,12 @@ TEST(Controls, CopyIdRequestShowsConfirmationWithoutBindingRefresh) {
   auto row = mux::ui::id_line(colours, "#room:example.com", "https://matrix.to/#/#room:example.com");
   skiff::bind::Binding<model_t> binding;
   binding.refresh(row, model);
-  auto& label = row.parts.feedback;
+  auto& label = std::get<1>(row.fParts);
   const auto id = label.fState.id();
   EXPECT_EQ(label.text(), "ID");
   ASSERT_TRUE(skiff::bind::press(row, model, scene::Path{}, &requests));
-  // The confirmation is set immediately; no binding refresh is needed.
+  // Refresh after press, matching app::after_event(), so LocalPass projects the Local feedback.
+  binding.refresh(row, model);
   ASSERT_EQ(requests.copied.size(), 1u);
   EXPECT_EQ(requests.copied.front(), "https://matrix.to/#/#room:example.com");
   EXPECT_EQ(label.text(), "ID · link copied, with its servers");
@@ -1624,7 +1625,7 @@ TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
     scene::InputRouter router;
     const std::array layers{scene::InputRouter::Layer{view.handle(), false}};
     router.setLayers(layers);
-    auto& text = view.root().parts.value;
+    auto& text = std::get<0>(view.root().fParts);
     const auto box = text.bounds();
     ASSERT_GT(box.width(), 0.0f);
     ASSERT_GT(box.height(), 0.0f);
@@ -1634,11 +1635,11 @@ TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
     const auto presses = std::exchange(scene::hostWork().pressed, {});
     ASSERT_EQ(presses.size(), 1u);
     for (const auto& path : presses) ASSERT_TRUE(skiff::bind::press(view.root(), model, path, &requests));
-    // A settled scene must show the wrapped confirmation in its next
-    // frame, without a binding refresh or a changed viewport.
+    // Refresh after press, matching app::after_event(), before the next frame lays out the wrapped confirmation.
+    binding.refresh(view.root(), model);
     view.update(32.0);
     EXPECT_TRUE(view.layoutIfNeeded(viewport));
-    const auto& feedback = view.root().parts.feedback;
+    const auto& feedback = std::get<1>(view.root().fParts);
     EXPECT_EQ(feedback.text(), link.empty() ? "ID · copied" : "ID · link copied, with its servers");
     EXPECT_GT(feedback.bounds().width(), 0.0f);
     EXPECT_GT(feedback.bounds().height(), 0.0f);
@@ -2835,9 +2836,11 @@ TEST(Controls, MemoizedRoomIdKeepsCopyFeedbackWithoutAnOuterModelChange) {
   view.update(16.0);
   view.layoutIfNeeded(viewport);
   EXPECT_TRUE(view.finishFrame().fDamage.isEmpty());
-  auto& label = header.content()->parts.feedback;
+  auto& label = std::get<1>(header.content()->fParts);
   const auto id = label.fState.id();
   ASSERT_TRUE(skiff::bind::press(header, model, scene::Path{0}, &requests));
+  // Refresh after press, matching app::after_event(), so LocalPass enters Memo and projects the Local feedback.
+  binding.refresh(header, model);
   ASSERT_EQ(requests.copied.size(), 1u);
   EXPECT_EQ(label.text(), "ID · link copied, with its servers");
   EXPECT_EQ(label.fState.id(), id);

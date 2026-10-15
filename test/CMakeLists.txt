@@ -52,6 +52,9 @@ if(MUX_UI)
   add_executable(mux-chat-list-test chat_list_test.cc)
   target_link_libraries(mux-chat-list-test PRIVATE mux_modules ${mux_gtest})
   add_test(NAME chat-list COMMAND mux-chat-list-test)
+  add_executable(mux-side-column-test side_column_test.cc)
+  target_link_libraries(mux-side-column-test PRIVATE mux_modules ${mux_gtest})
+  add_test(NAME side-column COMMAND mux-side-column-test)
 endif()
 
 # The rest try every protocol side by side, and the plugins with them:

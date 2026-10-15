@@ -49,6 +49,9 @@ if(MUX_UI)
   add_executable(mux-composer-test composer_model_test.cc)
   target_link_libraries(mux-composer-test PRIVATE mux_modules ${mux_gtest})
   add_test(NAME composer COMMAND mux-composer-test)
+  add_executable(mux-chat-list-test chat_list_test.cc)
+  target_link_libraries(mux-chat-list-test PRIVATE mux_modules ${mux_gtest})
+  add_test(NAME chat-list COMMAND mux-chat-list-test)
 endif()
 
 # The rest try every protocol side by side, and the plugins with them:

@@ -531,11 +531,11 @@ chat_listing conversations_screen::listing_of(const model& now) const {
   const auto is_chosen = [&](const conversation* one) { return pointed ? *pointed == one->id : chosen && *chosen == one->id; };
   out.chats = chats | std::views::transform([&](const conversation* one) {
                 return listed_chat{.id = one->id,
-                                            .view = conversation_row::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id),
+                                            .view = conversation_view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id),
                                                                                        draft_of(one->id), events_of(one), strip_for(one)),
                                             .events = events_of(one),
                                             .strip = strip_for(one),
-                                            .height = conversation_row::height_of(*one)};
+                                            .height = conversation_height(*one)};
               }) |
               std::ranges::to<std::vector>();
   return out;

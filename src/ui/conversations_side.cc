@@ -411,7 +411,7 @@ struct side_column : skiff::compose::Stacked {
       nodes::Flow<std::vector<folder_tab<Pick>>> folders{
           {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
       nodes::Text no_chats;
-      list_t list{chat_rows()};
+      list_t list{make_chat_rows()};
       // While a chat is searched: what was found, in the chats' place.
       nodes::Text found_title;
       found_list_t found{nodes::Flow<std::vector<found_row>>({.spacingY = 0.0f, .wrap = false}, {})};
@@ -837,8 +837,8 @@ struct side_column : skiff::compose::Stacked {
     if (!one && press.button == 3 && list.visible())
       for (const auto& kept : std::get<0>(list.fChildren).fRows)
         if (const auto& row = kept.fRow; list.toView(row.bounds()).contains(press.x, press.y)) {
-          parts.row_menu.emplace(*colours_, row.id, row.parts.lines.parts.top.parts.name.text(),
-                                 current_account ? *current_account : row.id.account, accounts_known, theme_now);
+          parts.row_menu.emplace(*colours_, kept.fKey, kept.fView.name,
+                                 current_account ? *current_account : kept.fKey.account, accounts_known, theme_now);
           this->place_menu(*parts.row_menu, press.x, press.y, 320.0f, 260.0f);
           reply.handle();
           return;

@@ -150,6 +150,7 @@ struct threads_panel : skiff::compose::Stacked {
     using emoji = sends<::mux::ui::request::toggle_thread_emoji>;
     using send = send_press;
     static constexpr std::string_view placeholder = "Reply in thread…";
+    using reads_chat = std::false_type;
   };
   using rows_t = nodes::Flow<std::vector<thread_row>>;
   struct parts_t {
@@ -161,7 +162,7 @@ struct threads_panel : skiff::compose::Stacked {
     // -- one renderer for both: runs, readers, quotes, presses,
     // menus, swipes, pictures, all as the chat has them.
     timeline_area answers;
-    composer_bar<in_thread> line;
+    composer_bar_t<in_thread> line;
   } parts;
   threads_panel(const ui_needs &n)
       : Stacked(skiff::compose::vbox(
@@ -280,23 +281,23 @@ struct threads_panel : skiff::compose::Stacked {
   // "Reply to <name>" over the field: in the thread, not the chat.
   void answer(std::string id, compose_context said) {
     answering = std::move(id);
-    parts.line.show_context(std::move(said));
+    show_composer_context(parts.line, std::move(said));
     this->invalidateLayout();
   }
   void stop_answering() {
     answering.reset();
-    parts.line.show_context(std::nullopt);
+    show_composer_context(parts.line, std::nullopt);
     this->invalidateLayout();
   }
   // What is written, sent in the thread open -- an answer to what is
   // answered, where something is.
   std::optional<::mux::ui::request::send_in_thread> send() {
     std::optional<::mux::ui::request::send_in_thread> asked;
-    const std::string text = parts.line.plain();
+    const std::string text = composer_plain(parts.line);
     if (!open || text.empty())
       return asked;
-    asked = ::mux::ui::request::send_in_thread{*open, text, answering, parts.line.styles()};
-    parts.line.clear();
+    asked = ::mux::ui::request::send_in_thread{*open, text, answering, composer_styles(parts.line)};
+    clear_composer(parts.line);
     this->stop_answering();
     return asked;
   }

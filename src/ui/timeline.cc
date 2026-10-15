@@ -335,10 +335,10 @@ struct timeline_area : skiff::compose::Specced {
     wallpaper_t wall;
     nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
         nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
-    jump_button jump;
-    back_button back;
-    mark_button mentions;
-    mark_button reactions;
+    jump_button_t jump;
+    back_button_t back;
+    mark_button_t mentions;
+    mark_button_t reactions;
     // While a message jumped to is being fetched: turning in the middle,
     // its cross stopping the search.
     widgets::RadialLoader<stop_jump> loading;

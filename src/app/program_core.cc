@@ -524,7 +524,7 @@ void app::before_frame() {
   // Not under a finger: there the keys' focus is the text input started,
   // and a phone's keyboard up over the chat until it is put away.
   if (scene.focusedId() == 0 && !shared.by_touch && root().main().chosen && !root().open_panel() && !root().settings_up())
-    scene.focus(root().main().line.field);
+    scene.focus(mux::ui::composer_field(root().main().line));
   // The emoji panel's stickers in view, asked for as they change -- as it
   // opens, as it scrolls, as its tab or its search changes -- and not only
   // when something else refreshed the window.
@@ -581,7 +581,7 @@ void app::before_frame() {
 
 void app::closing() {
   if (const auto& chosen = root().main().chosen)
-    drafts.keep(*chosen, root().main().line.plain());
+    drafts.keep(*chosen, mux::ui::composer_plain(root().main().line));
   store.flush_reads(true);
   net->shutdown();
 }

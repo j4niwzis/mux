@@ -842,6 +842,8 @@ struct context_bar : skiff::compose::Stacked {
               .cancel = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, cancel_button(colours, icon::close{}, std::move(cancel)))} {
     this->setVisible(false);
   }
+  // What is answered or edited, as it is read; or nothing, hidden.
+  void read(const std::optional<compose_context>& said) { this->show(said); }
   // What is answered or edited, shown; or nothing, hidden.
   void show(std::optional<compose_context> said) {
     this->setVisible(said.has_value());

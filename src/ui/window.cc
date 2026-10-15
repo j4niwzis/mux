@@ -103,18 +103,6 @@ inline std::vector<text_menu_item> field_menu_items(const scene::text_menu::of_f
 // What the window shows that the program opens and closes, as a model:
 // each dialog's facts, while it is open. The program edits it; the
 // dialogs, bound to it, open and close as they read it.
-// The chat screen as the program sets it: the account shown, the chat
-// chosen, if one is, and whether its info is open beside it.
-struct chat_shown {
-  std::optional<conversation_id> chosen;
-  std::optional<account_id> current;
-  bool info_open = false;
-  // The threads' panel open, and the thread open in it, if one is.
-  bool threads_open = false;
-  std::optional<std::string> thread;
-  // The space opened as a forum, its rooms listed: by its id.
-  std::optional<std::string> forum;
-};
 // Whether the drawer is out.
 struct drawer_shown {
   bool out = false;
@@ -143,6 +131,8 @@ using layers_shown_t = typename decltype(layers_shown_of(layer_plugins{}))::type
 struct shown_root {
   skiff::model::Tracked<drawer_shown> drawer;
   skiff::model::Tracked<chat_shown> chat;
+  // What the chat's field writes: an answer, an edit, or a plain message.
+  skiff::model::Tracked<chat_compose> composing;
   // Each plugin's layer's: a call, for one.
   layers_shown_t layers;
   skiff::model::Tracked<selection_shown> selection;
@@ -1058,9 +1048,9 @@ struct window : skiff::compose::Specced {
         if (atom.picture)
           shown.push_back({atom.target, emote_kind::emoji});
     };
-    inserted(screen.line.field);
+    inserted(composer_field(screen.line));
     if (screen.thread_open())
-      inserted(screen.parts.threads.parts.line.parts.input.parts.field);
+      inserted(composer_field(screen.parts.threads.parts.line));
     return shown;
   }
   // The menu's card, where one is up: what takes the keys while it is.

@@ -432,7 +432,7 @@ struct conversations_screen : skiff::compose::Stacked {
   // its end -- one at its start or after a space, with no space after it --
   // matched against the chat's members, by name or ID, as Telegram does.
   void find_mentions() {
-    const std::string& text = chat.line.text();
+    const std::string& text = composer_text(chat.line);
     std::optional<std::string> query;
     if (const auto at = text.rfind('@'); at != std::string::npos && (at == 0 || text[at - 1] == ' ' || text[at - 1] == '\n')) {
       const std::string_view after = std::string_view(text).substr(at + 1);
@@ -482,11 +482,11 @@ struct conversations_screen : skiff::compose::Stacked {
     if (index >= mention_matches.size())
       return;
     const member one = mention_matches[index];
-    const std::string& text = chat.line.text();
+    const std::string& text = composer_text(chat.line);
     const auto at = text.rfind('@');
     if (at == std::string::npos)
       return;
-    chat.line.put_mention(at, one.name.empty() ? one.id : one.name, one.id);
+    put_mention(chat.line, at, one.name.empty() ? one.id : one.name, one.id);
     mention_query.clear();
     mention_matches.clear();
     chat.parts.mentions.parts.rows.clear();
@@ -495,7 +495,7 @@ struct conversations_screen : skiff::compose::Stacked {
   }
   // The emoji list, as what is written now asks.
   void find_emoji() {
-    const std::string& text = chat.line.text();
+    const std::string& text = composer_text(chat.line);
     std::optional<std::string> query;
     if (const auto colon = text.rfind(':');
         colon != std::string::npos && (colon == 0 || text[colon - 1] == ' ' || text[colon - 1] == '\n')) {
@@ -554,13 +554,13 @@ struct conversations_screen : skiff::compose::Stacked {
     if (index >= emoji_matches.size())
       return;
     const auto emoji = emoji_matches[index];
-    const auto colon = chat.line.text().rfind(':');
+    const auto colon = composer_text(chat.line).rfind(':');
     if (colon == std::string::npos)
       return;
-    if (emoji.picture.empty()) chat.line.put_over_end(colon, emoji.text);
+    if (emoji.picture.empty()) put_over_end(chat.line, colon, emoji.text);
     else {
-      chat.line.field.select(colon, chat.line.text().size());
-      chat.line.field.insertAtom("\u2003", emoji.picture, emoji.text, true);
+      composer_field(chat.line).select(colon, composer_text(chat.line).size());
+      composer_field(chat.line).insertAtom("\u2003", emoji.picture, emoji.text, true);
     }
     emoji_query.clear();
     emoji_matches.clear();
@@ -763,7 +763,7 @@ struct conversations_screen : skiff::compose::Stacked {
       // warning that the other is not verified, or was reset.
       composer_banner banner;
       std::optional<composer_view_holder> their_view;
-      composer_bar<> line;
+      composer_bar_t<> line;
       empty_state empty;
       select_hint hint;
     } parts;
@@ -771,7 +771,7 @@ struct conversations_screen : skiff::compose::Stacked {
     header_t& header = parts.header;
     search_bar& search = parts.search;
     timeline_area& area = parts.area;
-    composer_bar<>& line = parts.line;
+    composer_bar_t<>& line = parts.line;
     empty_state& empty = parts.empty;
     select_hint& hint = parts.hint;
     chat_column(const ui_needs &n, conversations_screen* screen)
@@ -804,8 +804,8 @@ struct conversations_screen : skiff::compose::Stacked {
       area.apply({.fillX = true, .grow = scene::axes::kY});
     }
   };
-  using side_edge = drag_edge<resize_sidebar_to>;
-  using info_edge_t = drag_edge<resize_info_to>;
+  using side_edge = decltype(drag_edge(std::declval<const palette&>(), resize_sidebar_to{}));
+  using info_edge_t = decltype(drag_edge(std::declval<const palette&>(), resize_info_to{}, false));
   struct parts_t {
     side_column side;
     side_edge edge;
@@ -862,7 +862,7 @@ struct conversations_screen : skiff::compose::Stacked {
   // Where each chat was scrolled to when it was left: it comes back there.
   std::map<conversation_id, float> scrolled;
   int unseen = 0;
-  composer_bar<>& line = chat.line;
+  composer_bar_t<>& line = chat.line;
 
   // Its child references and handlers point into this screen. Construct it
   // in its final place; moving it would leave them pointing at the old one.
@@ -874,10 +874,10 @@ struct conversations_screen : skiff::compose::Stacked {
   conversations_screen(const ui_needs &n)
       : Stacked(skiff::compose::hbox(0.0f, {.fill = true})), needs_(n),
         parts{.side = side_column(*n.colours),
-              .edge = side_edge(*n.colours, resize_sidebar_to{}),
+              .edge = drag_edge(*n.colours, resize_sidebar_to{}),
               .chat = chat_column(n, this),
               .info_edge =
-                  info_edge_t(*n.colours, resize_info_to{}, false),
+                  drag_edge(*n.colours, resize_info_to{}, false),
               .info = info_panel(*n.colours, *n.shared),
               .threads = threads_panel(n)} {
     needs_.shared->docked_panel_watcher = fState.fId;
@@ -997,7 +997,7 @@ struct conversations_screen : skiff::compose::Stacked {
     return threads_open ? parts.threads.open : std::nullopt;
   }
   // What is written goes into the thread open: its field has the keys.
-  [[nodiscard]] bool writing_in_thread() const { return thread_open() && parts.threads.parts.line.parts.input.parts.field.focused(); }
+  [[nodiscard]] bool writing_in_thread() const { return thread_open() && composer_field(parts.threads.parts.line).focused(); }
   // An answer in the thread open answered there.
   [[nodiscard]] bool answer_in_thread(const std::string& root, std::string id, compose_context said) {
     if (!threads_open || parts.threads.open != root)
@@ -1138,7 +1138,7 @@ struct conversations_screen : skiff::compose::Stacked {
     }
     timeline.scrollToEnd();
     unseen = 0;
-    chat.area.parts.jump.set_unseen(0);
+    set_unseen(chat.area.parts.jump, 0);
   }
 
   // What was searched for last, and the model last shown: typing into the

@@ -49,10 +49,10 @@ void app::apply(const request::choose& one) {
   auto& screen = root().main();
   search.chat_chosen(one.which);
   if (screen.chosen && *screen.chosen != one.which) {
-    drafts.keep(*screen.chosen, screen.line.plain());
-    screen.line.set_text(screen.draft_of(one.which));
+    drafts.keep(*screen.chosen, mux::ui::composer_plain(screen.line));
+    mux::ui::set_composer_text(screen.line, screen.draft_of(one.which));
   } else if (!screen.chosen) {
-    screen.line.set_text(screen.draft_of(one.which));
+    mux::ui::set_composer_text(screen.line, screen.draft_of(one.which));
   }
   model->touch(one.which);
   paging.restore_reads(one.which);
@@ -69,8 +69,8 @@ void app::apply(const request::close_chat&) {
   auto& screen = root().main();
   if (!screen.chosen)
     return;
-  drafts.keep(*screen.chosen, screen.line.plain());
-  screen.line.set_text({});
+  drafts.keep(*screen.chosen, mux::ui::composer_plain(screen.line));
+  mux::ui::set_composer_text(screen.line, {});
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) {
     now.chosen.reset();
     now.info_open = false;

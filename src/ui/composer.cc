@@ -68,60 +68,17 @@ inline void prepend_quote(auto& field, const scene::ClipboardFragment& selected)
                   .border = scene::Border{colours.band, 1.0f}};
 }
 
-template <class OnDrag> struct drag_edge : skiff::compose::Specced {
-  OnDrag on_drag;
-  // Where it was last dragged to, and what its act answers there.
-  float dragged_to = 0.0f;
-  auto onPress()
-    requires skiff::scene::Answering<OnDrag>
-  {
-    return on_drag(dragged_to);
-  }
-  bool with_line = true;
-  bool dragging = false;
-
-  // The thin line down its middle, where it has one.
-  struct parts_t {
-    nodes::Box<> line;
-  } parts;
-
-  drag_edge(const palette &colours, OnDrag what, bool line = true)
-      : Specced({}), on_drag(std::move(what)), with_line(line),
-        parts{.line = skiff::compose::visible(
-                  line,
-                  skiff::compose::styled({.place = scene::anchor::kTopCentre,
-                                          .fillY = true,
-                                          .width = 1.0f},
-                                         nodes::Box<>(colours.band)))} {
-    fState.setCursor(scene::cursor::resize_horizontal{});
-  }
-
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool focusable() const { return false; }
-
-  using Node::onPointer;
-  void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
-    dragging = true;
-    reply.capturePointer();
-    reply.handle();
-  }
-  void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
-    if (!dragging)
-      return;
-    dragged_to = at.x;
-    act_on(fState, on_drag, at.x);
-    reply.handle();
-  }
-  void onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) {
-    dragging = false;
-    reply.releasePointer();
-    reply.handle();
-  }
-  void onPointer(scene::phase::target, const scene::pointer::cancel&, scene::PointerReply& reply) {
-    dragging = false;
-    reply.releasePointer();
-  }
-};
+// An edge between two columns, dragged across: the pointer a resize cursor
+// over it, and each move of a drag answered with what its act makes of
+// where it is. A thin line down its middle, where it has one.
+template <class OnDrag> auto drag_edge(const palette& colours, OnDrag what, bool line = true) {
+  namespace c = skiff::compose;
+  return c::onDragAcross(std::move(what),
+                         c::with_cursor(scene::cursor::resize_horizontal{},
+                                        c::column(c::vbox(), c::visible(line, c::styled({.place = scene::anchor::kTopCentre, .fillY = true,
+                                                                                          .width = 1.0f},
+                                                                                         nodes::Box<>(colours.band))))));
+}
 
 // Where an edge was dragged to, asked of the program.
 struct resize_sidebar_to {
@@ -628,42 +585,54 @@ struct field_quotes {
 
 // Where a message is written: the paperclip, the field growing with what is
 // written in it -- quotes and custom emoji shown as they will be sent -- the
-// emoji, the arrow. The chat's composer and a thread's; what each
-// button does is said by where it is.
+// emoji, the arrow. The chat's composer and a thread's; what each button
+// does is said by where it is. What is typed looks as it will be sent: the
+// messages' size, as in tdesktop, whose field takes the message font; the
+// arrow in the accent.
 template <class Submit, class Attach, class Emoji, class Send>
-struct message_input : skiff::compose::Stacked {
-  using attach_button = icon_button<Attach>;
-  using field_t = widgets::TextArea<Submit, message_pictures, field_quotes>;
-  using emoji_button = icon_button<Emoji>;
-  using send_button = icon_button<Send>;
-  struct parts_t {
-    attach_button attach;
-    field_t field;
-    emoji_button emoji;
-    send_button send;
-  } parts;
-  message_input(const palette& colours, std::string placeholder, Submit submit, Attach attach_it, Emoji emoji_it, Send send_it)
-      : Stacked(skiff::compose::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}})),
-        parts{.attach = skiff::compose::styled({.alignSelf = scene::align::kEnd}, attach_button(colours, icon::clip{}, std::move(attach_it))),
-              .field = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                                              message_sized(field_t(colours.widgets, std::move(placeholder), std::move(submit)))),
-              .emoji = skiff::compose::styled({.alignSelf = scene::align::kEnd}, emoji_button(colours, icon::smile{}, std::move(emoji_it))),
-              .send = skiff::compose::styled({.alignSelf = scene::align::kEnd}, accented(colours, send_button(colours, icon::send{}, std::move(send_it))))} {}
-  // What is typed looks as it will be sent: the messages' size, as in
-  // tdesktop, whose field takes the message font.
-  [[nodiscard]] static field_t message_sized(field_t field) {
-    field.setFontSize(13.0f);
-    return field;
-  }
-  [[nodiscard]] static send_button accented(const palette& colours, send_button send) {
-    send.set_colour(colours.accent);
-    return send;
-  }
+auto message_input(const palette& colours, std::string placeholder, Submit submit, Attach attach_it, Emoji emoji_it, Send send_it) {
+  namespace c = skiff::compose;
+  auto field = widgets::TextArea<Submit, message_pictures, field_quotes>(colours.widgets, std::move(placeholder), std::move(submit));
+  field.setFontSize(13.0f);
+  auto send = icon_button<Send>(colours, icon::send{}, std::move(send_it));
+  send.set_colour(colours.accent);
+  return c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}}),
+                c::styled({.alignSelf = scene::align::kEnd}, icon_button<Attach>(colours, icon::clip{}, std::move(attach_it))),
+                c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field)),
+                c::styled({.alignSelf = scene::align::kEnd}, icon_button<Emoji>(colours, icon::smile{}, std::move(emoji_it))),
+                c::styled({.alignSelf = scene::align::kEnd}, std::move(send)));
+}
+// Its paperclip, and its field.
+inline auto& input_attach(auto& input) { return std::get<0>(input.fParts); }
+inline auto& input_field(auto& input) { return std::get<1>(input.fParts); }
+inline auto& input_emoji(auto& input) { return std::get<2>(input.fParts); }
+
+// The chat screen as the program sets it: the account shown, the chat
+// chosen, if one is, and whether its info is open beside it.
+struct chat_shown {
+  std::optional<conversation_id> chosen;
+  std::optional<account_id> current;
+  bool info_open = false;
+  // The threads' panel open, and the thread open in it, if one is.
+  bool threads_open = false;
+  std::optional<std::string> thread;
+  // The space opened as a forum, its rooms listed: by its id.
+  std::optional<std::string> forum;
+};
+// What the chat's field writes, as what is shown holds it: a plain message,
+// an answer or an edit, and what the bar over the field says of it.
+struct chat_compose {
+  compose_t now = compose::plain{};
+  std::optional<compose_context> said;
+  // Changed whole, as one part.
+  using ModelOpaque = void;
 };
 
 // Where what is written goes, as a composer is told it: what its ✕, its
 // Enter, its paperclip, its emoji and its arrow do, and what its empty field
-// says. The chat's own; a thread's is its panel's.
+// says; and whether it shows what the chat says of writing in it -- may one
+// post, was it replaced, who knocks, what was not sent -- read from the
+// chat. The chat's own; a thread's is its panel's.
 struct in_chat {
   using cancel = sends<::mux::ui::request::cancel_compose>;
   using submit = submit_message;
@@ -671,14 +640,9 @@ struct in_chat {
   using emoji = sends<::mux::ui::request::toggle_emoji>;
   using send = sends<::mux::ui::request::send_typed>;
   static constexpr std::string_view placeholder = "Write a message…";
+  using reads_chat = std::true_type;
 };
 
-// Desktop: a line over it, a paperclip on the left, the text growing with
-// what is written, and the send arrow on the right. The chat's, and a
-// thread's: one composer, told where it writes.
-// A bar over the field that says something and offers two ways on: the
-// explanation wraps above two equally sized buttons, so both stay visible
-// on phones. The second is the main action (Resend all, Approve).
 // A round button in the stack over the list's corner: up or not, at its
 // place in the stack.
 inline void place_in_corner(auto& button, bool up, int slot) {
@@ -691,31 +655,21 @@ inline void place_in_corner(auto& button, bool up, int slot) {
   }
 }
 
+// A bar over the field that says something and offers two ways on: the
+// explanation wraps above two equally sized buttons, so both stay visible
+// on phones. The second is the main action (Resend all, Approve).
 template <class First, class Second>
-struct two_choice_bar : skiff::compose::Stacked {
-  struct actions_row : skiff::compose::Stacked {
-    struct parts_t {
-      widgets::Button<First> first;
-      widgets::Button<Second> second;
-    } parts;
-    actions_row(const palette& colours, std::string first_name, First first, std::string second_name, Second second)
-        : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.first = widgets::Button<First>(colours.widgets, std::move(first_name), std::move(first)),
-                .second = primary(widgets::Button<Second>(colours.widgets, std::move(second_name), std::move(second)))} {
-      parts.first.apply({.height = 36.0f, .grow = scene::axes::kX});
-      parts.second.apply({.height = 36.0f, .grow = scene::axes::kX});
-    }
-  };
-  struct parts_t {
-    nodes::Text said;
-    actions_row actions;
-  } parts;
-  two_choice_bar(const palette& colours, std::string said, skia::SkColor said_colour, std::string first_name, First first,
-                 std::string second_name, Second second)
-      : Stacked(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}})),
-        parts{.said = skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::move(said), 13.0f, said_colour))),
-              .actions = actions_row(colours, std::move(first_name), std::move(first), std::move(second_name), std::move(second))} {}
-};
+auto two_choice_bar(const palette& colours, std::string said, skia::SkColor said_colour, std::string first_name, First first,
+                    std::string second_name, Second second) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}}),
+                   c::styled({.fillX = true}, wrapped(nodes::Text(std::move(said), 13.0f, said_colour))),
+                   c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                          c::styled({.height = 36.0f, .grow = scene::axes::kX},
+                                    widgets::Button<First>(colours.widgets, std::move(first_name), std::move(first))),
+                          c::styled({.height = 36.0f, .grow = scene::axes::kX},
+                                    primary(widgets::Button<Second>(colours.widgets, std::move(second_name), std::move(second))))));
+}
 
 // Keep the successor action inside the available width, including a narrow
 // pane: the explanation wraps above a separate button.
@@ -728,339 +682,283 @@ inline auto replaced_room_bar(const palette& colours) {
       c::styled({.height = 30.0f}, primary(widgets::Button<sends<request::open_replacement>>(
           colours.widgets, "Join New Room", {}))));
 }
+// Where the reader may not post: a row as high as the input's, its line in
+// the middle -- padded inside it, not by a margin the bar's height leaves
+// out.
+inline auto no_post_line(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::row(c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f,
+                                            .padding = {18.0f, 12.0f, 18.0f, 12.0f}}),
+                             nodes::justify::middle{}),
+                c::styled({.alignSelf = scene::align::kMiddle},
+                          nodes::Text("You don't have permission to post in this chat", 13.0f, colours.dim)));
+}
 
-template <class Where = in_chat>
-struct composer_bar : skiff::compose::Stacked {
-  // Child references and handlers require a fixed address.
-  composer_bar(const composer_bar&) = delete;
-  composer_bar& operator=(const composer_bar&) = delete;
-  composer_bar(composer_bar&&) = delete;
-  composer_bar& operator=(composer_bar&&) = delete;
-
-  // What is written answers or edits: the reply bar, its ✕ going back to
-  // a plain message.
-  using context_row = context_bar<typename Where::cancel>;
-  using input_row = message_input<typename Where::submit, typename Where::attach, typename Where::emoji, typename Where::send>;
-  // Element's bar over the field while messages here were not sent
-  // (RoomStatusBar's): a warning, and "Delete all" and "Retry all".
-  using unsent_row = two_choice_bar<sends<::mux::ui::request::discard_unsent>, sends<::mux::ui::request::retry_unsent>>;
-  // Where the reader may not post: a row as high as the input's, its line
-  // in the middle -- padded inside it, not by a margin the bar's height
-  // leaves out.
-  struct no_post_row : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text line;
-    } parts;
-    explicit no_post_row(const palette& colours)
-        : Stacked(skiff::compose::justified(
-              skiff::compose::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {18.0f, 12.0f, 18.0f, 12.0f}}),
-              nodes::justify::middle{})),
-          parts{.line = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                               nodes::Text("You don't have permission to post in this chat", 13.0f, colours.dim))} {}
-  };
-  // A tombstoned room's: "This room has been replaced and is no longer
-  // active", and the room it goes on in, opened -- joined, where it is not
-  // yet.
-  using replaced_row = decltype(replaced_room_bar(std::declval<const palette&>()));
-  // Those asking to join, for those who may let them in: the first
-  // of them -- who, and why -- with Approve (an invite) and Deny (their
-  // knock refused), and how many more.
-  struct approve_it {
-    using Answer = ::mux::ui::request::room_act;
-    std::string user;
-    ::mux::ui::request::room_act operator()() { return ::mux::ui::request::room_act{room_action::invite{user}}; }
-  };
-  struct deny_it {
-    using Answer = ::mux::ui::request::room_act;
-    std::string user;
-    ::mux::ui::request::room_act operator()() { return ::mux::ui::request::room_act{room_action::kick{user}}; }
-  };
-  using knock_row = two_choice_bar<deny_it, approve_it>;
-  [[nodiscard]] static std::string knock_said(const knock_request& one, std::size_t more) {
-    return std::format("{} asks to join{}{}", one.name, one.reason.empty() ? std::string() : ": " + one.reason,
-                       more ? std::format(" (and {} more)", more) : std::string());
-  }
-  // The colours it is made in, for the rows it makes later.
-  const palette* colours_ = nullptr;
-  struct parts_t {
-    nodes::Box<> divider;
-    std::optional<knock_row> knocks;
-    unsent_row unsent;
-    context_row context_line;
-    input_row input;
-    // Where the reader may not post: said in place of the field, as Element
-    // says it.
-    no_post_row no_post;
-    // Upgraded away: Element's notice, and the way to where it goes on.
-    replaced_row replaced;
-  } parts;
-  // The old name, for what reads it.
-  typename input_row::field_t& field = parts.input.parts.field;
-
-  // Declared: the divider, the unsent bar, the answer's line where there is
-  // one, the row -- or, where the reader may not post, the line saying so.
-  explicit composer_bar(const ui_needs& n) : composer_bar(n, {}, {}, {}, {}, {}) {}
-  composer_bar(const ui_needs& n, typename Where::cancel cancel, typename Where::submit submit, typename Where::attach attach,
-               typename Where::emoji emoji, typename Where::send send)
-      : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .background = n.colours->sidebar})),
-        colours_(n.colours),
-        parts{.divider = skiff::compose::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(n.colours->band)),
-              .unsent = skiff::compose::visible(false, unsent_row(*n.colours, "Some of your messages have not been sent", n.colours->error,
-                                                                  "Delete all", {}, "Resend all", {})),
-              .context_line = skiff::compose::visible(false, context_row(*n.colours, std::move(cancel))),
-              .input = input_row(*n.colours, std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji),
-                                 std::move(send)),
-              .no_post = skiff::compose::visible(false, no_post_row(*n.colours)),
-              .replaced = skiff::compose::visible(false, replaced_room_bar(*n.colours))} {}
-
-  // What is in the field, as it holds it: a mention picked, the room its
-  // pill's picture takes and the name.
-  [[nodiscard]] const std::string& text() const { return parts.input.parts.field.text(); }
-  // What is written, as it is sent and kept: each mention by its name.
-  [[nodiscard]] std::string plain() const { return parts.input.parts.field.plainText(); }
-  // Who is mentioned in it: its pills, as they are now.
-  [[nodiscard]] std::vector<mention> mentions() const {
-    std::vector<mention> out;
-    for (const auto& one : parts.input.parts.field.atoms())
-      if (!one.picture)
-        out.push_back({one.plain, one.target});
-    return out;
-  }
-  // How what is written is formatted, by offsets in plain(): sent with it.
-  [[nodiscard]] std::vector<mux::styled_run> styles() const {
-    const auto& field = parts.input.parts.field;
-    auto runs = std::ranges::to<std::vector<mux::styled_run>>(std::views::transform(
-        field.plainSpans(), [](const auto& one) { return mux::styled_run{one.first, one.last, one.format}; }));
-    std::ptrdiff_t shift = 0;
-    for (const auto& atom : field.atoms()) {
-      const auto first = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(atom.first) + shift);
-      if (atom.picture)
-        runs.push_back({first, first + atom.plain.size(), run_style::custom_emoji{atom.target}});
-      shift += static_cast<std::ptrdiff_t>(atom.plain.size()) - static_cast<std::ptrdiff_t>(atom.last - atom.first);
-    }
-    return runs;
-  }
-  // What is selected, and the link on it where it has one: what Ctrl+K's
-  // box starts with.
-  [[nodiscard]] std::pair<std::string, std::string> link_asked() const {
-    const auto& field = parts.input.parts.field;
-    const auto [low, high] = field.selectionRange();
-    std::string url;
-    for (const auto& one : field.spans())
-      if (one.first <= low && one.last >= high)
-        spl::visit(spl::overloaded{[&](const run_style::link& link) { url = link.url; }, [](const auto&) {}}, one.format);
-    return {field.text().substr(low, high - low), std::move(url)};
-  }
-  // A link put on what was selected, as tdesktop's EditLinkBox: its text as
-  // given (what was selected replaced where it differs), the URL with a
-  // scheme -- https where it has none; with no URL, the links there taken
-  // off.
-  void put_link(std::string text, std::string url) {
-    auto& field = parts.input.parts.field;
-    auto [low, high] = field.selectionRange();
-    if (text.empty())
-      text = url;
-    if (text.empty())
-      return;
-    if (std::string_view(field.text()).substr(low, high - low) != text) {
-      field.insertText(text);
-      high = low + text.size();
-    }
-    if (!url.empty() && !url.contains("://") && !url.starts_with("mailto:"))
-      url = "https://" + url;
-    const auto link = [](const auto& one) {
-      return spl::visit(spl::overloaded{[](const run_style::link&) { return true; }, [](const auto&) { return false; }}, one.format);
-    };
-    auto spans = field_quotes::without(field.spans(), low, high, link);
-    if (!url.empty())
-      spans.push_back({low, high, run_style::link{std::move(url)}});
-    field.setSpans(std::move(spans));
-    field.select(high, high);
-  }
-  // A mention picked from the list, over the @ and what was typed of it
-  // (from `from` on): a pill, as the message will show it, and a space.
-  void put_mention(std::size_t from, const std::string& name, const std::string& user) {
-    auto& field = parts.input.parts.field;
-    field.select(from, field.text().size());
-    // Taken apart with Backspace: its user's id, not the name it is sent by.
-    field.insertAtom("\u2002\u2002" + name, user, name, false, user);
-    field.insertText(" ");
-  }
-  // The unsent bar up while any message here was not sent.
-  void show_unsent(bool any) {
-    if (any != parts.unsent.visible())
-      parts.unsent.setVisible(any);
-  }
-  // The field, or the line that the reader may not post here.
-  void set_can_post(bool can) {
-    if (can == parts.input.visible())
-      return;
-    parts.input.setVisible(can);
-    parts.no_post.setVisible(!can);
-    if (!can)
-      parts.context_line.setVisible(false);
-  }
-  // Those asking to join, where one may let them in: the first, and how many
-  // more. Made again only as who is first changes.
-  void show_knocks(const std::vector<knock_request>& knocking, bool may) {
-    if (!may || knocking.empty()) {
-      if (parts.knocks) {
-        parts.knocks.reset();
-        knocks_shown.clear();
-        this->invalidateLayout();
-      }
-      return;
-    }
-    const std::string key = std::format("{}\n{}", knocking.front().id, knocking.size());
-    if (key == knocks_shown)
-      return;
-    knocks_shown = key;
-    parts.knocks.emplace(*colours_, knock_said(knocking.front(), knocking.size() - 1), colours_->text, "Deny",
-                         deny_it{knocking.front().id}, "Approve", approve_it{knocking.front().id});
-    this->invalidateLayout();
-  }
-  std::string knocks_shown;
-  // Upgraded away: the notice in place of the field; or not.
-  // After set_can_post: replaced, the field stays hidden whatever it said.
-  void set_replaced(bool replaced) {
-    if (!replaced && !parts.replaced.visible())
-      return;
-    if (replaced && parts.replaced.visible() && !parts.input.visible() && !parts.no_post.visible())
-      return;
-    parts.replaced.setVisible(replaced);
-    if (replaced) {
-      parts.input.setVisible(false);
-      parts.no_post.setVisible(false);
-      parts.context_line.setVisible(false);
-    } else {
-      parts.input.setVisible(true);
-    }
-    this->invalidateLayout();
-  }
-  // Whether what is written answers or edits something.
-  [[nodiscard]] bool answering() const { return parts.context_line.visible(); }
-  // What is written answers or edits something, shown; or nothing.
-  void show_context(std::optional<compose_context> said) {
-    parts.context_line.show(std::move(said));
-    this->invalidateLayout();
-  }
-  void set_text(std::string text) { parts.input.parts.field.setText(std::move(text)); }
-  // What is written from `from` to its end replaced by `text`, the caret
-  // after it: a suggestion picked over what was typed for it.
-  void put_over_end(std::size_t from, const std::string& text) {
-    auto& field = parts.input.parts.field;
-    field.select(from, field.text().size());
-    field.insertText(text);
-  }
-  // Text and its runs, as a message edited had them.
-  void set_formatted(std::string text, const std::vector<mux::styled_run>& runs) {
-    auto& field = parts.input.parts.field;
-    field.setText(std::move(text));
-    field.setSpans(std::ranges::to<std::vector<field_quotes::span>>(
-        std::views::transform(runs, [](const mux::styled_run& one) { return field_quotes::span{one.first, one.last, one.style}; })));
-  }
-  void clear() { parts.input.parts.field.setText({}); }
+// Those asking to join, for those who may let them in: the first of them --
+// who, and why -- with Approve (an invite) and Deny (their knock refused),
+// and how many more.
+struct approve_knock {
+  using Answer = ::mux::ui::request::room_act;
+  std::string user;
+  ::mux::ui::request::room_act operator()() { return ::mux::ui::request::room_act{room_action::invite{user}}; }
 };
+struct deny_knock {
+  using Answer = ::mux::ui::request::room_act;
+  std::string user;
+  ::mux::ui::request::room_act operator()() { return ::mux::ui::request::room_act{room_action::kick{user}}; }
+};
+struct knock_facts {
+  std::string user, name, reason;
+  std::size_t more = 0;
+  friend bool operator==(const knock_facts&, const knock_facts&) = default;
+};
+[[nodiscard]] inline std::optional<knock_facts> first_knock(const ui_shared& shared, const conversation& chat) {
+  if (chat.knocking.empty() || !proto::chat_rights(protocol_state_of(shared, chat.id.account), chat).invite)
+    return std::nullopt;
+  const knock_request& first = chat.knocking.front();
+  return knock_facts{first.id, first.name, first.reason, chat.knocking.size() - 1};
+}
+inline auto knock_bar(const palette& colours, const knock_facts& one) {
+  return two_choice_bar(colours,
+                        std::format("{} asks to join{}{}", one.name, one.reason.empty() ? std::string() : ": " + one.reason,
+                                    one.more ? std::format(" (and {} more)", one.more) : std::string()),
+                        colours.text, "Deny", deny_knock{one.user}, "Approve", approve_knock{one.user});
+}
+using knock_bar_t = decltype(knock_bar(std::declval<const palette&>(), std::declval<const knock_facts&>()));
+// Element's bar over the field while messages here were not sent
+// (RoomStatusBar's): a warning, and "Delete all" and "Retry all".
+inline auto unsent_bar(const palette& colours) {
+  return two_choice_bar(colours, "Some of your messages have not been sent", colours.error, "Delete all",
+                        sends<::mux::ui::request::discard_unsent>{}, "Resend all", sends<::mux::ui::request::retry_unsent>{});
+}
+// What the chat says of writing in it.
+[[nodiscard]] inline bool any_unsent(const conversation& chat) {
+  return std::ranges::any_of(chat.timeline, [](const message& said) {
+    return said.outgoing &&
+           spl::visit(spl::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }}, said.delivery);
+  });
+}
+[[nodiscard]] inline bool replaced_chat(const ui_shared& shared, const conversation& chat) {
+  return proto::successor_of(protocol_state_of(shared, chat.id.account), chat).has_value();
+}
+[[nodiscard]] inline bool may_post_in(const ui_shared& shared, const conversation& chat) {
+  return proto::chat_rights(protocol_state_of(shared, chat.id.account), chat).post && !replaced_chat(shared, chat);
+}
+
+// A part of the composer as the chat says: read from the chat, where the
+// composer is the chat's own (reads_chat); else as it is made, hidden.
+template <class Compute, class Part> auto shown_by_chat(std::true_type, Compute compute, Part part) {
+  return skiff::compose::shown_for<conversation>(std::move(compute), std::move(part));
+}
+template <class Compute, class Part> auto shown_by_chat(std::false_type, Compute, Part part) { return part; }
+template <class Compute, class Part> auto read_from_chat(std::true_type, Compute compute, Part part) {
+  return skiff::compose::projected<conversation>(std::move(compute), std::move(part));
+}
+template <class Compute, class Part> auto read_from_chat(std::false_type, Compute, Part part) { return part; }
+// What is written answers or edits something: as what is shown says, where
+// the composer has a part of it (composing); else as it is told.
+template <class Where, class Row>
+  requires requires { typename Where::composing; }
+auto context_shown(Row row) {
+  return skiff::compose::projected<typename Where::composing>([](const auto& now) { return now.said; }, std::move(row));
+}
+template <class Where, class Row> auto context_shown(Row row) { return row; }
+// The chat's own composer: in the chat chosen, as what is shown says it --
+// the scope it reads the chat in moved to it.
+template <class Column> auto in_chosen_chat(std::true_type, Column column) {
+  namespace c = skiff::compose;
+  return c::rekeyed_by<chat_shown>(
+      [](const chat_shown& now) {
+        return now.chosen ? std::tuple{now.chosen->account, now.chosen->id} : std::tuple{account_id{}, std::string()};
+      },
+      c::scoped<conversation>(c::handlers(), std::move(column), account_id{}, std::string()));
+}
+template <class Column> auto in_chosen_chat(std::false_type, Column column) { return column; }
+
+// Desktop: a line over it, the bars over the field -- who knocks, what was
+// not sent, what is answered or edited -- the paperclip on the left, the
+// text growing with what is written, and the send arrow on the right; or,
+// where the reader may not post, the line saying so; or, upgraded away,
+// Element's notice and the way to where it goes on. The chat's, and a
+// thread's: one composer, told where it writes.
+template <class Where = in_chat>
+auto composer_bar(const ui_needs& n, typename Where::cancel cancel = {}, typename Where::submit submit = {},
+                  typename Where::attach attach = {}, typename Where::emoji emoji = {}, typename Where::send send = {}) {
+  namespace c = skiff::compose;
+  using reads = typename Where::reads_chat;
+  const palette& colours = *n.colours;
+  const ui_shared* shared = n.shared;
+  return in_chosen_chat(reads{},
+      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .background = colours.sidebar}),
+                c::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)),
+                read_from_chat(reads{}, [shared](const conversation& chat) { return first_knock(*shared, chat); },
+                               c::mount<knock_bar_t, knock_facts>(
+                                   [at = &colours](const knock_facts& one) { return std::tuple{knock_bar(*at, one)}; },
+                                   {.fillX = true, .autoSize = scene::axes::kY})),
+                shown_by_chat(reads{}, [](const conversation& chat) { return any_unsent(chat); },
+                              c::visible(false, unsent_bar(colours))),
+                context_shown<Where>(c::visible(false, context_bar<typename Where::cancel>(colours, std::move(cancel)))),
+                shown_by_chat(reads{}, [shared](const conversation& chat) { return may_post_in(*shared, chat); },
+                              message_input(colours, std::string(Where::placeholder), std::move(submit), std::move(attach),
+                                            std::move(emoji), std::move(send))),
+                shown_by_chat(reads{},
+                              [shared](const conversation& chat) { return !may_post_in(*shared, chat) && !replaced_chat(*shared, chat); },
+                              c::visible(false, no_post_line(colours))),
+                shown_by_chat(reads{}, [shared](const conversation& chat) { return replaced_chat(*shared, chat); },
+                              c::visible(false, replaced_room_bar(colours)))));
+}
+template <class Where = in_chat> using composer_bar_t = decltype(composer_bar<Where>(std::declval<const ui_needs&>()));
+
+// Its parts: what is answered or edited, the row with the field, the field.
+inline auto& composer_context(auto& bar) { return std::get<3>(bar.fParts); }
+inline auto& composer_input(auto& bar) { return std::get<4>(bar.fParts); }
+inline auto& composer_field(auto& bar) { return input_field(composer_input(bar)); }
+// What is in the field, as it holds it: a mention picked, the room its
+// pill's picture takes and the name.
+[[nodiscard]] inline const std::string& composer_text(const auto& bar) { return composer_field(bar).text(); }
+// What is written, as it is sent and kept: each mention by its name.
+[[nodiscard]] inline std::string composer_plain(const auto& bar) { return composer_field(bar).plainText(); }
+// Who is mentioned in it: its pills, as they are now.
+[[nodiscard]] inline std::vector<mention> composer_mentions(const auto& bar) {
+  return composer_field(bar).atoms() | std::views::filter([](const auto& one) { return !one.picture; }) |
+         std::views::transform([](const auto& one) { return mention{one.plain, one.target}; }) | std::ranges::to<std::vector>();
+}
+// How what is written is formatted, by offsets in its plain text: sent with it.
+[[nodiscard]] inline std::vector<mux::styled_run> composer_styles(const auto& bar) {
+  const auto& field = composer_field(bar);
+  auto runs = std::ranges::to<std::vector<mux::styled_run>>(std::views::transform(
+      field.plainSpans(), [](const auto& one) { return mux::styled_run{one.first, one.last, one.format}; }));
+  std::ptrdiff_t shift = 0;
+  for (const auto& atom : field.atoms()) {
+    const auto first = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(atom.first) + shift);
+    if (atom.picture)
+      runs.push_back({first, first + atom.plain.size(), run_style::custom_emoji{atom.target}});
+    shift += static_cast<std::ptrdiff_t>(atom.plain.size()) - static_cast<std::ptrdiff_t>(atom.last - atom.first);
+  }
+  return runs;
+}
+// What is selected, and the link on it where it has one: what Ctrl+K's box
+// starts with.
+[[nodiscard]] inline std::pair<std::string, std::string> composer_link_asked(const auto& bar) {
+  const auto& field = composer_field(bar);
+  const auto [low, high] = field.selectionRange();
+  std::string url;
+  for (const auto& one : field.spans())
+    if (one.first <= low && one.last >= high)
+      spl::visit(spl::overloaded{[&](const run_style::link& link) { url = link.url; }, [](const auto&) {}}, one.format);
+  return {field.text().substr(low, high - low), std::move(url)};
+}
+// A link put on what was selected, as tdesktop's EditLinkBox: its text as
+// given (what was selected replaced where it differs), the URL with a scheme
+// -- https where it has none; with no URL, the links there taken off.
+inline void put_link(auto& bar, std::string text, std::string url) {
+  auto& field = composer_field(bar);
+  auto [low, high] = field.selectionRange();
+  if (text.empty())
+    text = url;
+  if (text.empty())
+    return;
+  if (std::string_view(field.text()).substr(low, high - low) != text) {
+    field.insertText(text);
+    high = low + text.size();
+  }
+  if (!url.empty() && !url.contains("://") && !url.starts_with("mailto:"))
+    url = "https://" + url;
+  const auto link = [](const auto& one) {
+    return spl::visit(spl::overloaded{[](const run_style::link&) { return true; }, [](const auto&) { return false; }}, one.format);
+  };
+  auto spans = field_quotes::without(field.spans(), low, high, link);
+  if (!url.empty())
+    spans.push_back({low, high, run_style::link{std::move(url)}});
+  field.setSpans(std::move(spans));
+  field.select(high, high);
+}
+// A mention picked from the list, over the @ and what was typed of it (from
+// `from` on): a pill, as the message will show it, and a space.
+inline void put_mention(auto& bar, std::size_t from, const std::string& name, const std::string& user) {
+  auto& field = composer_field(bar);
+  field.select(from, field.text().size());
+  // Taken apart with Backspace: its user's id, not the name it is sent by.
+  field.insertAtom("  " + name, user, name, false, user);
+  field.insertText(" ");
+}
+// Whether what is written answers or edits something.
+[[nodiscard]] inline bool composer_answering(const auto& bar) { return composer_context(bar).visible(); }
+// A thread's composer, told what is answered in it (its panel holds it).
+inline void show_composer_context(auto& bar, std::optional<compose_context> said) {
+  composer_context(bar).show(std::move(said));
+  bar.invalidateLayout();
+}
+inline void set_composer_text(auto& bar, std::string text) { composer_field(bar).setText(std::move(text)); }
+// What is written from `from` to its end replaced by `text`, the caret after
+// it: a suggestion picked over what was typed for it.
+inline void put_over_end(auto& bar, std::size_t from, const std::string& text) {
+  auto& field = composer_field(bar);
+  field.select(from, field.text().size());
+  field.insertText(text);
+}
+// Text and its runs, as a message edited had them.
+inline void set_formatted(auto& bar, std::string text, const std::vector<mux::styled_run>& runs) {
+  auto& field = composer_field(bar);
+  field.setText(std::move(text));
+  field.setSpans(std::ranges::to<std::vector<field_quotes::span>>(
+      std::views::transform(runs, [](const mux::styled_run& one) { return field_quotes::span{one.first, one.last, one.style}; })));
+}
+inline void clear_composer(auto& bar) { composer_field(bar).setText({}); }
+
+// A count on its badge: shown as said.
+inline void show_count(auto& badge, std::size_t count) {
+  const std::string said = std::to_string(count);
+  if (badge.parts.count.text() != said)
+    badge.parts.count.setText(said);
+}
 
 // Telegram's @ and heart over "↓": how many mentions of the user, or
-// reactions to theirs, are not yet seen; pressed, the oldest is gone to.
-struct mark_button : skiff::compose::Specced {
-  using Answer = std::variant<::mux::ui::request::jump_to_mark, ::mux::ui::request::list_marks>;
-  mark_kind_t kind;
-  using badge_t = count_badge;
-  struct parts_t {
-    nodes::Text glyph;
-    badge_t badge;
-  } parts;
-  mark_button(const palette& colours, mark_kind_t which, std::string glyph)
-      : Specced(corner_button(colours)),
-        kind(which),
-        parts{.glyph = skiff::compose::styled({.place = scene::anchor::kCentre}, nodes::Text(std::move(glyph), 18.0f, colours.text, true)),
-              .badge = badge_t(colours)} {
-    this->setVisible(false);
-  }
-  // How many, and which place up the stack it takes: 0 at the bottom.
-  void show(std::size_t count, int slot) {
-    const bool up = count > 0;
-    const std::string said = std::to_string(count);
-    if (parts.badge.parts.count.text() != said)
-      parts.badge.parts.count.setText(said);
-    place_in_corner(*this, up, slot);
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  std::optional<Answer> onClick(float, float) { return ::mux::ui::request::jump_to_mark{kind}; }
-  // The other button: all of them, listed. On the way back up, not at the
-  // target: a press there of its own hid the one that clicks, and a left
-  // press did nothing.
-  using Node::onPointer;
-  std::optional<Answer> onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
-    if (press.button != 3)
-      return std::nullopt;
-    reply.handle();
-    return ::mux::ui::request::list_marks{kind};
-  }
-  // And where the press is on the button itself -- the target, which the
-  // way back up does not reach: the right button lists them; any other
-  // press as a node's is, a click.
-  std::optional<Answer> onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
-    if (press.button == 3) {
-      reply.handle();
-      return ::mux::ui::request::list_marks{kind};
-    }
-    return scene::defaultPointer(*this, scene::phase::target{}, press, reply);
-  }
-};
+// reactions to theirs, are not yet seen; pressed, the oldest is gone to;
+// pressed with the other button, all of them listed.
+inline auto mark_button(const palette& colours, mark_kind_t which, std::string glyph) {
+  namespace c = skiff::compose;
+  return c::visible(false, c::onRightPress(::mux::ui::request::list_marks{which},
+      c::onClick(::mux::ui::request::jump_to_mark{which},
+                 c::column(c::vbox(0.0f, corner_button(colours)),
+                           c::styled({.place = scene::anchor::kCentre}, nodes::Text(std::move(glyph), 18.0f, colours.text, true)),
+                           count_badge(colours)))));
+}
+using mark_button_t = decltype(mark_button(std::declval<const palette&>(), mark_kind_t{}, std::string()));
+// How many, and which place up the stack it takes: 0 at the bottom.
+inline void show_mark(auto& button, std::size_t count, int slot) {
+  show_count(std::get<1>(button.fParts), count);
+  place_in_corner(button, count > 0, slot);
+}
 
-// "↓": back to the newest, with how many came while one read above them.
-struct jump_button : skiff::compose::Specced {
-  // What its handlers ask for, returned.
-  using Answer = ::mux::ui::request::jump_to_end;
-  int unseen = 0;
-  // A round plate with a chevron down, and over its top the count of what
-  // came while the reader was above, on a badge in the accent.
-  using badge_t = count_badge;
-  struct parts_t {
-    nodes::Icon chevron;
-    badge_t badge;
-  } parts;
-  jump_button(const palette& colours)
-      : Specced(corner_button(colours)),
-        parts{.chevron = skiff::compose::styled({.fill = true}, nodes::Icon(shape_of(icon::down{}), colours.text)),
-              .badge = skiff::compose::visible(false, badge_t(colours))} {}
-  void set_unseen(int count) {
-    unseen = count;
-    parts.badge.parts.count.setText(std::to_string(count));
-    parts.badge.setVisible(count > 0);
-    this->invalidateLayout();
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  std::optional<Answer> onClick(float, float) {
-    return ::mux::ui::request::jump_to_end{};
-  }
-};
+// "↓": back to the newest, with how many came while one read above them: a
+// round plate with a chevron down, and over its top the count, on a badge
+// in the accent.
+inline auto jump_button(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::onClick(::mux::ui::request::jump_to_end{},
+                    c::column(c::vbox(0.0f, corner_button(colours)),
+                              c::styled({.fill = true}, nodes::Icon(shape_of(icon::down{}), colours.text)),
+                              c::visible(false, count_badge(colours))));
+}
+using jump_button_t = decltype(jump_button(std::declval<const palette&>()));
+inline void set_unseen(auto& button, int count) {
+  auto& badge = std::get<1>(button.fParts);
+  show_count(badge, static_cast<std::size_t>(std::max(count, 0)));
+  badge.setVisible(count > 0);
+  button.invalidateLayout();
+}
 
 // Back to the chat a jump came from -- a link or a reply into another chat
-// -- over "↓", as Telegram's: the chat as it was left.
-struct back_button : skiff::compose::Specced {
-  // What its handlers ask for, returned.
-  using Answer = ::mux::ui::request::return_to_chat;
-  struct parts_t {
-    nodes::Icon mark;
-  } parts;
-  back_button(const palette& colours)
-      : Specced(corner_button(colours)), parts{.mark = skiff::compose::styled({.fill = true}, nodes::Icon(shape_of(icon::back{}), colours.text))} {
-    this->setVisible(false);
-  }
-  // Up or not, at a place in the stack of buttons over the list's corner.
-  void show(bool up, int slot) { place_in_corner(*this, up, slot); }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  std::optional<Answer> onClick(float, float) {
-    return ::mux::ui::request::return_to_chat{};
-  }
-};
+// -- over "↓", as Telegram's: the chat as it was left. Up or not at a place
+// in the stack of buttons over the list's corner (place_in_corner).
+inline auto back_button(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::visible(false, c::onClick(::mux::ui::request::return_to_chat{},
+                                      c::column(c::vbox(0.0f, corner_button(colours)),
+                                                c::styled({.fill = true}, nodes::Icon(shape_of(icon::back{}), colours.text)))));
+}
+using back_button_t = decltype(back_button(std::declval<const palette&>()));
 
 }  // namespace mux::ui
 
@@ -1070,5 +968,5 @@ struct back_button : skiff::compose::Specced {
 // of everything under it, there -- the chats screen's took this unit past
 // ten minutes. Their tables are made once, each in a walks unit of this
 // module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::composer_bar<mux::ui::in_chat>> = true;  // walks_composer.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::composer_bar<mux::ui::in_chat>>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::composer_bar_t<mux::ui::in_chat>> = true;  // walks_composer.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::composer_bar_t<mux::ui::in_chat>>() noexcept;

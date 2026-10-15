@@ -69,7 +69,7 @@ auto conversations_screen::onKey(scene::phase::bubble, const scene::key::down& p
     asked = ::mux::ui::request::reply_step{true};
   } else if (press.key == keys::kDown && control) {
     asked = ::mux::ui::request::reply_step{false};
-  } else if (press.key == keys::kUp && !any && line.text().empty()) {
+  } else if (press.key == keys::kUp && !any && composer_text(line).empty()) {
     asked = ::mux::ui::request::edit_last{};
   } else if (press.key == keys::kC && control && chat.parts.selection.visible()) {
     asked = ::mux::ui::request::selection_copy{};
@@ -90,7 +90,7 @@ auto conversations_screen::onKey(scene::phase::bubble, const scene::key::down& p
     asked = ::mux::ui::request::close_search{};
   } else if (press.key == keys::kEscape && !any && parts.threads.answering) {
     parts.threads.stop_answering();
-  } else if (press.key == keys::kEscape && !any && line.answering()) {
+  } else if (press.key == keys::kEscape && !any && composer_answering(line)) {
     asked = ::mux::ui::request::cancel_compose{};
   } else if ((press.key == keys::kTab && control) ||
              ((press.key == keys::kUp || press.key == keys::kDown) && press.modifiers.template has<scene::modifier::alt>())) {
@@ -567,9 +567,9 @@ void conversations_screen::update(double now_ms) {
   this->find_mentions();
   this->find_emoji();
   // What is in the composer: typing while there is text in it.
-  if (const bool has_text = !line.text().empty(); has_text != was_typing || (has_text && line.text() != typed_last)) {
+  if (const bool has_text = !composer_text(line).empty(); has_text != was_typing || (has_text && composer_text(line) != typed_last)) {
     was_typing = has_text;
-    typed_last = line.text();
+    typed_last = composer_text(line);
     if (wants_) want(*wants_, ::mux::ui::request::typing{has_text});
   }
   if (side.search.field.text() != searched && last_model) {
@@ -613,17 +613,17 @@ void conversations_screen::update(double now_ms) {
     // Come back to the chat a jump left by hand: that way back is done.
     while (!chat_returns.empty() && chat_returns.back() == *chosen)
       chat_returns.pop_back();
-    chat.area.parts.back.show(!chat_returns.empty(), slot);
+    place_in_corner(chat.area.parts.back, !chat_returns.empty(), slot);
     if (!chat_returns.empty())
       ++slot;
-    chat.area.parts.mentions.show(here->unread_mentions.size(), slot);
+    show_mark(chat.area.parts.mentions, here->unread_mentions.size(), slot);
     if (!here->unread_mentions.empty())
       ++slot;
-    chat.area.parts.reactions.show(here->unread_reactions.size(), slot);
+    show_mark(chat.area.parts.reactions, here->unread_reactions.size(), slot);
   }
   if (!away && unseen != 0) {
     unseen = 0;
-    chat.area.parts.jump.set_unseen(0);
+    set_unseen(chat.area.parts.jump, 0);
   }
   // Near the top: the stretch made slides up -- the far ones below let
   // go -- and past all that is loaded, the history is paged back. Near
@@ -835,8 +835,8 @@ void conversations_screen::show(const model& now, bool with_chat) {
   // allows it now: no paperclip otherwise, in the chat or its thread.
   if (chosen) {
     const bool files = may_send_files(*needs_.shared, chosen->account);
-    line.parts.input.parts.attach.setVisible(files);
-    parts.threads.parts.line.parts.input.parts.attach.setVisible(files);
+    input_attach(composer_input(line)).setVisible(files);
+    input_attach(composer_input(parts.threads.parts.line)).setVisible(files);
   }
   if (wanted && now.accounts().contains(*wanted)) {
     current = std::exchange(wanted, std::nullopt);
@@ -1033,20 +1033,6 @@ void conversations_screen::show_conversation(const model& now) {
   info.choose(now, chosen, muted.contains(one->id));
   chat.area.show_wallpaper(wallpaper);
   parts.threads.choose(now, chosen);
-  // Whether the reader may post here, as the chat's protocol says (Matrix:
-  // its power levels); and whether any message of theirs here was not sent.
-  {
-    const proto::part::chat_rights may = proto::chat_rights(protocol_state_of(*needs_.shared, one->id.account), *one);
-    chat.line.set_can_post(may.post);
-    chat.line.set_replaced(proto::successor_of(protocol_state_of(*needs_.shared, one->id.account), *one).has_value());
-    // Those knocking, for whoever may invite.
-    chat.line.show_knocks(one->knocking, may.invite);
-    chat.line.show_unsent(std::ranges::any_of(one->timeline, [](const message& said) {
-      return said.outgoing &&
-             spl::visit(spl::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }},
-                           said.delivery);
-    }));
-  }
   chat.area.seen_model = &now;
   chat.area.seen_chat = one->id;
   const auto& all = one->timeline;
@@ -1161,7 +1147,7 @@ void conversations_screen::show_conversation(const model& now) {
           ++after;
     unseen += after;
   }
-  chat.area.parts.jump.set_unseen(unseen);
+  set_unseen(chat.area.parts.jump, unseen);
   shown_chat = chosen;
   shown_last = last;
   shown_detached = one->detached;

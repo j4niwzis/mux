@@ -149,7 +149,7 @@ inline const std::array<config::bubbles_t, 4> kBubbleKinds{config::bubbles::soli
   std::vector<std::string> out;
   if (has_level_above(level))
     out.emplace_back("As above");
-  out.append_range(std::array<std::string_view, 4>{"Solid", "Translucent", "Frosted", "Glass"});
+  out.append_range(std::array<std::string, 4>{"Solid", "Translucent", "Frosted", "Glass"});
   return out;
 }
 // The option in use: what the level holds, else as the level over it.
@@ -303,7 +303,7 @@ struct background_shown {
   std::vector<std::string> names;
   if (has_level_above(level))
     names.emplace_back("As above");
-  names.append_range(std::array<std::string_view, 2>{"Theme default", "Plain colour"});
+  names.append_range(std::array<std::string, 2>{"Theme default", "Plain colour"});
   names.push_back(spl::visit(spl::overloaded{[](const config::wallpaper::picture& at) {
                                                return std::format("Image: {}", std::filesystem::path(at.path).filename().string());
                                              },

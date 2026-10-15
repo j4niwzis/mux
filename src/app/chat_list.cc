@@ -46,6 +46,7 @@ class chat_list_part {
                    : has(list.account) ? list.account
                    : now.accounts().empty() ? std::nullopt
                                             : std::optional<mux::account_id>(now.accounts().keyAt(0));
+    list.forum = chat.forum;
     const inputs seen{now.chats().revision(), k_->state.revision(), list, chat.chosen, chat.forum, s_->drafts_revision};
     if (seen_ == seen)
       return;
@@ -640,6 +641,13 @@ class chat_list_part {
       now.pane = !chat.chosen ? mux::ui::pane_t{mux::ui::pane::list{}}
                  : chat.info_open || chat.threads_open ? mux::ui::pane_t{mux::ui::pane::beside{}}
                                                        : mux::ui::pane_t{mux::ui::pane::chat{}};
+      const bool beside = (chat.info_open || chat.threads_open) && chat.chosen.has_value();
+      now.info_up = beside && !chat.threads_open;
+      now.threads_up = beside && chat.threads_open;
+      now.beside_edge = beside && !now.single;
+      now.side_up = !now.single || !chat.chosen;
+      now.side_edge = !now.single;
+      now.chat_up = !now.single || (chat.chosen && !beside);
     });
   }
   template <class Change>

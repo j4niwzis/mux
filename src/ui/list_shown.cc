@@ -53,6 +53,9 @@ struct list_shown {
   std::optional<conversation_id> pointed;
   std::string search;
   bool big_bars = false;
+  // The forum open, its rooms listed (as chat_shown says): with the account
+  // and the folder, which list it is.
+  std::optional<std::string> forum;
   friend bool operator==(const list_shown&, const list_shown&) = default;
 };
 
@@ -108,6 +111,9 @@ struct screen_shown {
   float info_width = 340.0f;
   bool single = false;
   pane_t pane = pane::list{};
+  // What is up, from those: the chats, the chat, its info or its threads
+  // beside it (in its place, single), and the edges between them.
+  bool side_up = true, chat_up = true, info_up = false, threads_up = false, side_edge = true, beside_edge = false;
   friend bool operator==(const screen_shown&, const screen_shown&) = default;
 };
 // What a search in the chat found, in the chats' place while it is asked:

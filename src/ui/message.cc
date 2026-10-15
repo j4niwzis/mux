@@ -249,6 +249,8 @@ struct bubble_needs {
   const palette* colours = nullptr;
   looks_shown* looks = nullptr;
   ui_shared* shared = nullptr;
+  // The program's model: rooms found, previews fetched.
+  const model* now = nullptr;
 };
 
 // What the program marks on messages: those selected (and, while a range

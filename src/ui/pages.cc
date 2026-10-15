@@ -546,144 +546,107 @@ auto switch_row(const palette& colours, std::string text, Act act) {
 }
 
 
-template <class Policy>
-struct profile_editor : skiff::compose::Stacked {
-  struct choose { void operator()(std::size_t) const {} };
-  struct save {
-    profile_editor* page;
-    using Answer = request::save_profile;
-    Answer operator()() const {
-      page->pending = true;
-      page->parts.feedback.setText("Saving…");
-      page->parts.feedback.setVisible(true);
-      return {page->by, page->answer()};
-    }
-  };
-  struct presence_save {
-    profile_editor* page;
-    using Answer = request::save_presence;
-    Answer operator()() const {
-      const auto choices = Policy::presences();
-      return {page->by, {choices.at(page->parts.availability.current).second,
-          page->parts.status.text().empty() ? std::nullopt : std::optional(page->parts.status.text())}};
-    }
-  };
+struct profile_draft {
+  profile_edit edit;
+  std::optional<user_profile> first;
+};
+struct profile_form_seed {
   account_id by;
-  const model* known;
-  user_profile loaded;
-  std::uint64_t result = 0;
-  bool pending = false, initialized = false, presence_initialized = false;
-  struct parts_t {
-    nodes::Text title;
-    legacy::field name, language, pronouns, biography;
-    button_for<sends<request::pick_profile_banner>> banner;
-    button_for<sends<request::remove_profile_banner>> remove_banner;
-    widgets::Button<save> submit;
-    nodes::Text feedback;
-    choice_menu<choose> availability;
-    legacy::field status;
-    widgets::Button<presence_save> presence;
-  } parts;
-  profile_editor(const palette& colours, const ui_shared&, const config::account_t& saved, const model& now)
-      : Stacked(skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        by{protocol_of(config::address_of(saved)), config::address_of(saved)}, known(&now),
-        parts{.title = nodes::Text("Profile", 20.0f, colours.text, true),
-            .name = legacy::field(colours, "Display name", "Your name"),
-            .language = legacy::field(colours, "Pronouns language", "en", "en"),
-            .pronouns = legacy::field(colours, "Pronouns", "One set per line"),
-            .biography = legacy::field(colours, "About you", "Your biography"),
-            .banner = button_for<sends<request::pick_profile_banner>>(colours.widgets, "Choose banner…", {by}),
-            .remove_banner = button_for<sends<request::remove_profile_banner>>(colours.widgets, "Remove banner", {by}),
-            .submit = widgets::Button<save>(colours.widgets, "Save profile", {this}),
-            .feedback = wrapped(nodes::Text("", 13.0f, colours.dim)),
-            .availability = make_choice_menu(colours, "Presence", std::ranges::to<std::vector<std::string>>(
-                std::views::transform(Policy::presences(), [](const auto& p) { return p.first; })), 0, choose{}),
-            .status = legacy::field(colours, "Status", "What you are doing"),
-            .presence = widgets::Button<presence_save>(colours.widgets, "Set presence", {this})} {
-    parts.pronouns.multi_line(3); parts.biography.multi_line(6);
-    parts.banner.setVisible(Policy::banners); parts.remove_banner.setVisible(Policy::banners);
-    std::ranges::for_each(std::array<scene::Node*, 4>{&parts.banner, &parts.remove_banner, &parts.submit, &parts.presence},
-        [](auto* node) { node->apply({.fillX = true, .height = 36.0f}); });
-    parts.feedback.setVisible(false);
-    if (const auto* account = known->accounts().find(by)) result = account->profile_result;
-    reload();
-  }
-  request::refresh_profile asked_as_it_opens() const { return {by}; }
-  static std::vector<std::string> lines_of(std::string_view text) {
-    return std::ranges::to<std::vector<std::string>>(std::views::transform(
-        std::views::filter(std::views::split(text, '\n'), [](const auto& line) { return !std::ranges::empty(line); }),
-        [](const auto& line) { return std::ranges::to<std::string>(line); }));
-  }
-  user_profile answer() const {
-    auto out = loaded;
-    out.name = parts.name.text();
-    // Editing one language retains the other language representations.
-    const auto same_language = [&](const auto& p) { return p.language == parts.language.text(); };
-    const auto existing = std::ranges::to<std::vector<std::string>>(
-        std::views::transform(std::views::filter(out.details.pronouns, same_language), &mux::pronouns::summary));
-    const auto edited = lines_of(parts.pronouns.text());
-    if (existing != edited) {
-      const auto first = std::ranges::find_if(out.details.pronouns, same_language);
-      const auto position = first - out.details.pronouns.begin();
-      std::erase_if(out.details.pronouns, same_language);
-      auto replacements = std::ranges::to<std::vector<mux::pronouns>>(std::views::transform(edited,
-          [&](const auto& summary) { return mux::pronouns{parts.language.text(), summary}; }));
-      out.details.pronouns.insert(out.details.pronouns.begin() + position, replacements.begin(), replacements.end());
-    }
-    if (parts.biography.text() != loaded.details.biography.plain)
-      out.details.biography = {parts.biography.text(), {}};
-    return out;
-  }
-  void reload() {
-    const auto* account = known->accounts().find(by);
-    if (!account) return;
-    const auto profile = account->profiles.find(by.address);
-    if (profile == account->profiles.end()) return;
-    loaded = profile->second; initialized = true;
-    parts.name.parts.box.setText(loaded.name.value_or(""));
-    if (!loaded.details.pronouns.empty()) parts.language.parts.box.setText(loaded.details.pronouns.front().language);
-    parts.pronouns.parts.box.setText(std::ranges::to<std::string>(std::views::join_with(
-        std::views::transform(std::views::filter(loaded.details.pronouns,
-            [&](const auto& p) { return p.language == parts.language.text(); }), &mux::pronouns::summary), std::string_view("\n"))));
-    parts.biography.parts.box.setText(loaded.details.biography.plain);
-  }
-  bool wantsTick() const { return true; }
-  void update(double) {
-    // Pages move into the panel's variant; actions must point at that final address.
-    parts.submit.action().page = this; parts.presence.action().page = this;
-    const auto* account = known->accounts().find(by);
-    if (account && account->profile_result != result) {
-      result = account->profile_result;
-      if (pending && !account->profile_error) reload();
-      pending = false;
-      parts.feedback.setText(account->profile_error.value_or("Profile saved."));
-      parts.feedback.setVisible(true);
-    }
-    if (!initialized) reload();
-    if (account) {
-      if (!presence_initialized) {
-        if (const auto current = account->presences.find(by.address); current != account->presences.end()) {
-          const auto choices = Policy::presences();
-          const auto selected = std::ranges::find(choices, current->second.state,
-              [](const auto& choice) { return choice.second; });
-          if (selected != choices.end()) parts.availability.read(selected - choices.begin());
-          parts.status.parts.box.setText(current->second.status.value_or(""));
-          presence_initialized = true;
-        }
-      }
-      if (const auto current = account->profiles.find(by.address); current != account->profiles.end())
-        loaded.details.banner = current->second.details.banner;
-    }
-    const auto current = answer();
-    parts.submit.setEnabled(initialized && !pending && current != loaded &&
-        (current.details.pronouns.empty() || !parts.language.text().empty()));
-    parts.name.setDisabled(pending); parts.language.setDisabled(pending);
-    parts.pronouns.setDisabled(pending); parts.biography.setDisabled(pending);
-    parts.remove_banner.setEnabled(loaded.details.banner.has_value());
-    parts.banner.setEnabled(!pending);
-    parts.remove_banner.setEnabled(!pending && loaded.details.banner.has_value());
+  std::uint32_t round = 0;
+  std::optional<user_profile> profile;
+  friend bool operator==(const profile_form_seed& a, const profile_form_seed& b) {
+    return a.by == b.by && a.round == b.round;
   }
 };
+using account_page_read = std::optional<account_page_facts>;
+template <class Policy>
+auto profile_fields(const palette& colours, const profile_form_seed& seed) {
+  namespace c = skiff::compose;
+  auto feedback = c::shown_for<account_page_read>([](const account_page_read& now) {
+    return now && now->profile_said.has_value();
+  }, c::text_for<account_page_read>([](const account_page_read& now) {
+    return now ? now->profile_said.value_or("") : std::string{};
+  }, c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.dim)))));
+  auto submit = c::spec_for<profile_draft>([](const profile_draft& draft) {
+    const auto changed = draft.first ? with_profile_edit(*draft.first, draft.edit) : user_profile{};
+    return scene::Spec{.fillX = true, .height = 36.0f,
+        .disabled = !draft.first || changed == *draft.first || (!changed.details.pronouns.empty() && draft.edit.language.empty())};
+  }, c::asking_for<profile_draft>([by = seed.by](const profile_draft& draft) {
+    return request::save_profile{by, draft.edit};
+  }, button_for<scene::NoAction>(colours.widgets, "Save profile", {})));
+  return c::local<profile_draft>(
+      c::spec_for<account_page_read>([](const account_page_read& now) {
+        return scene::Spec{.disabled = now && now->profile_saving};
+      }, c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          model_field<&profile_edit::name>(colours, "Display name", "Your name"),
+          model_field<&profile_edit::language>(colours, "Pronouns language", "en"),
+          model_area<&profile_edit::pronouns>(colours, "Pronouns", "One set per line", 3),
+          model_area<&profile_edit::biography>(colours, "About you", "Your biography", 6),
+          c::visible(Policy::banners, c::styled({.fillX = true, .height = 36.0f},
+              button_for<sends<request::pick_profile_banner>>(colours.widgets, "Choose banner…", {seed.by}))),
+          c::visible(Policy::banners, c::spec_for<account_page_read>([](const account_page_read& now) {
+            return scene::Spec{.fillX = true, .height = 36.0f,
+                .disabled = !now || !now->profile || !now->profile->details.banner};
+          }, button_for<sends<request::remove_profile_banner>>(colours.widgets, "Remove banner", {seed.by}))),
+          std::move(submit), std::move(feedback))),
+      profile_draft{seed.profile ? profile_edit_of(*seed.profile) : profile_edit{}, seed.profile});
+}
+struct presence_draft {
+  std::size_t choice = 0;
+  std::string status;
+};
+struct presence_form_seed {
+  account_id by;
+  std::optional<mux::presence> presence;
+  friend bool operator==(const presence_form_seed& a, const presence_form_seed& b) {
+    return a.by == b.by && a.presence.has_value() == b.presence.has_value();
+  }
+};
+struct set_presence_choice {
+  std::size_t index = 0;
+  void operator()(presence_draft& draft) const { draft.choice = index; }
+};
+struct pick_presence_choice {
+  using Answer = decltype(skiff::model::over<presence_draft>(set_presence_choice{}));
+  Answer operator()(std::size_t index) const { return skiff::model::over<presence_draft>(set_presence_choice{index}); }
+};
+template <class Policy>
+auto presence_fields(const palette& colours, const presence_form_seed& seed) {
+  namespace c = skiff::compose;
+  const auto choices = Policy::presences();
+  const auto selected = seed.presence ? std::ranges::find(choices, seed.presence->state,
+      [](const auto& choice) { return choice.second; }) : choices.end();
+  const auto index = selected == choices.end() ? std::size_t{0} : static_cast<std::size_t>(selected - choices.begin());
+  return c::local<presence_draft>(c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::projected<presence_draft>([](const presence_draft& draft) { return draft.choice; },
+          make_choice_menu(colours, "Presence", choices | std::views::transform([](const auto& one) { return one.first; }) |
+              std::ranges::to<std::vector>(), index, pick_presence_choice{})),
+      model_field<&presence_draft::status>(colours, "Status", "What you are doing"),
+      c::asking_for<presence_draft>([by = seed.by](const presence_draft& draft) {
+        const auto choices = Policy::presences();
+        return request::save_presence{by, {choices.at(draft.choice).second,
+            draft.status.empty() ? std::nullopt : std::optional(draft.status)}};
+      }, c::styled({.fillX = true, .height = 36.0f}, button_for<scene::NoAction>(colours.widgets, "Set presence", {})))),
+      presence_draft{index, seed.presence ? seed.presence->status.value_or("") : std::string{}});
+}
+template <class Policy>
+auto profile_page(const palette& colours, const account_page_facts& first) {
+  namespace c = skiff::compose;
+  using content = decltype(profile_fields<Policy>(colours, profile_form_seed{}));
+  using presence_content = decltype(presence_fields<Policy>(colours, presence_form_seed{}));
+  return c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      nodes::Text("Profile", 20.0f, colours.text, true),
+      c::projected<account_page_read>([](const account_page_read& now) {
+        return now ? std::optional(profile_form_seed{now->by, now->profile_round, now->profile}) : std::nullopt;
+      }, c::mount_now<content, profile_form_seed>([&colours](const profile_form_seed& seed) {
+        return std::tuple{profile_fields<Policy>(colours, seed)};
+      }, profile_form_seed{first.by, first.profile_round, first.profile}, {.fillX = true, .autoSize = scene::axes::kY})),
+      c::projected<account_page_read>([](const account_page_read& now) {
+        return now ? std::optional(presence_form_seed{now->by, now->presence}) : std::nullopt;
+      }, c::mount_now<presence_content, presence_form_seed>([&colours](const presence_form_seed& seed) {
+        return std::tuple{presence_fields<Policy>(colours, seed)};
+      }, presence_form_seed{first.by, first.presence}, {.fillX = true, .autoSize = scene::axes::kY})));
+}
 
 // A section's title on a settings page, as Gajim sets them: small, bold, dim.
 inline nodes::Text section_title(const palette& colours, std::string text) {

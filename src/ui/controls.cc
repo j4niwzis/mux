@@ -1151,52 +1151,6 @@ struct spaces_choices : skiff::compose::Stacked {
 };
 
 
-// What is written answers or edits, as tdesktop's FieldHeader shows it:
-// its icon in the left column (historyReplySkip wide), then two lines --
-// "Reply to <name>" or "Edit message" in the accent, semibold, over a line
-// of the message -- and ✕ on the right to go back to a plain one. One bar
-// for every field that answers: the chat's composer, a thread's;
-// Cancel is what its ✕ does there.
-template <class Cancel>
-struct context_bar : skiff::compose::Stacked {
-  static constexpr float kHeight = 49.0f;  // historyReplyHeight
-  static constexpr float kSkip = 51.0f;    // historyReplySkip
-  struct lines_column : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text title;
-      nodes::Text line;
-    } parts;
-    explicit lines_column(const palette& colours)
-        : Stacked(skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle})),
-          parts{.title = skiff::compose::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.accent, true))),
-                .line = skiff::compose::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.text)))} {}
-  };
-  using cancel_button = icon_button<Cancel>;
-  struct parts_t {
-    nodes::Icon mark;  // in the left column
-    lines_column lines;
-    cancel_button cancel;
-  } parts;
-  context_bar(const palette& colours, Cancel cancel)
-      : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .height = kHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}})),
-        parts{.mark = skiff::compose::styled({.fillY = true, .width = kSkip - 8.0f}, nodes::Icon(IconShape{}, colours.accent)),
-              .lines = lines_column(colours),
-              .cancel = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, cancel_button(colours, icon::close{}, std::move(cancel)))} {
-    this->setVisible(false);
-  }
-  // What is answered or edited, as it is read; or nothing, hidden.
-  void read(const std::optional<compose_context>& said) { this->show(said); }
-  // What is answered or edited, shown; or nothing, hidden.
-  void show(std::optional<compose_context> said) {
-    this->setVisible(said.has_value());
-    parts.mark.setShape(said ? shape_of(said->mark) : IconShape{});
-    parts.lines.parts.title.setText(said ? said->title : std::string());
-    parts.lines.parts.line.setText(said ? said->line : std::string());
-    this->markDamaged();
-  }
-};
-
-
 // The head of a page, its buttons the struct ones (a callback as its ←).
 template <class Back, class Close>
 auto page_header(const palette& colours, std::string name, Back back, Close close, bool has_back, bool has_close) {
@@ -1213,24 +1167,6 @@ auto page_header(const palette& colours, std::string name, Back back, Close clos
 template <class Back, class Close>
 using page_header_t = decltype(legacy::page_header(std::declval<const palette&>(), std::string{}, Back{}, Close{}, false, false));
 
-// A count on an accent badge over the top of a round button: the @ and the
-// heart's, and the down arrow's.
-struct count_badge : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text count;
-  } parts;
-  explicit count_badge(const palette& colours)
-      : Stacked(skiff::compose::justified(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopCentre,
-                                                                      .y = -10.0f,
-                                                                      .height = 18.0f,
-                                                                      .autoSize = scene::axes::kX,
-                                                                      .minWidth = 20.0f,
-                                                                      .padding = {1.0f, 5.0f, 1.0f, 5.0f},
-                                                                      .cornerRadius = 9.0f,
-                                                                      .background = colours.accent}),
-                                          nodes::justify::middle{})),
-        parts{.count = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 11.0f, colours.on_accent, true))} {}
-};
 
 
 

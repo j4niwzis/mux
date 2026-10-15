@@ -214,6 +214,8 @@ struct shown_root {
   skiff::model::Tracked<chat_shown> chat;
   // What the chat's field writes: an answer, an edit, or a plain message.
   skiff::model::Tracked<chat_compose> composing;
+  // And a thread's field.
+  skiff::model::Tracked<thread_compose> thread_composing;
   // Each plugin's layer's: a call, for one.
   layers_shown_t layers;
   skiff::model::Tracked<selection_shown> selection;

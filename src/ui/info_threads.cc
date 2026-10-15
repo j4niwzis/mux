@@ -88,6 +88,7 @@ struct in_thread {
   using send = sends<request::thread_send>;
   static constexpr std::string_view placeholder = "Reply in thread\u2026";
   using reads_chat = std::false_type;
+  using composing = thread_compose;
 };
 // Threads, as Element's panel has them: in place of the chat's info, the
 // room's threads, or one opened -- its root and answers as the chat's own

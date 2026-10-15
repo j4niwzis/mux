@@ -93,13 +93,13 @@ struct services {
     if (!showing->look<mux::ui::chat_shown>()->thread_answer)
       return;
     mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) { now.thread_answer.reset(); });
-    mux::ui::show_composer_context(root().main().thread_line(), std::nullopt);
+    mux::ui::show(*showing, mux::ui::thread_compose{});
   }
   // A message of the thread open answered there, as tdesktop's "Reply to
   // <name>" over the field.
   void answer_in_thread(std::string id, mux::ui::compose_context said) const {
     mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) { now.thread_answer = std::move(id); });
-    mux::ui::show_composer_context(root().main().thread_line(), std::move(said));
+    mux::ui::show(*showing, mux::ui::thread_compose{std::move(said)});
   }
   // The stretch of a chat's messages in view and a page around it -- or,
   // while a message is jumped to, a few around that: what is loaded on the

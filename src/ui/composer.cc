@@ -51,19 +51,6 @@ inline void prepend_quote(auto& field, const scene::ClipboardFragment& selected)
   field.insertFragment(quoted_fragment(selected));
 }
 
-// A round button over the bottom right corner of the messages, on the
-// panels' colour: the @ and the heart, "↓", the way back.
-[[nodiscard]] inline scene::Spec corner_button(const palette& colours) {
-  return {.place = scene::anchor::kBottomRight,
-                  .x = -18.0f,
-                  .y = -12.0f,
-                  .width = 42.0f,
-                  .height = 42.0f,
-                  .cornerRadius = 21.0f,
-                  .background = colours.sidebar,
-                  .hoverBackground = colours.chosen,
-                  .border = scene::Border{colours.band, 1.0f}};
-}
 
 // An edge between two columns, dragged across: the pointer a resize cursor
 // over it, and each move of a drag answered with what its act makes of
@@ -624,6 +611,11 @@ struct chat_compose {
   // Changed whole, as one part.
   using ModelOpaque = void;
 };
+// What a thread's field answers, as what is shown holds it: the bar over it.
+struct thread_compose {
+  std::optional<compose_context> said;
+  using ModelOpaque = void;
+};
 
 // Where what is written goes, as a composer is told it: what its ✕, its
 // Enter, its paperclip, its emoji and its arrow do, and what its empty field
@@ -638,19 +630,8 @@ struct in_chat {
   using send = sends<::mux::ui::request::send_typed>;
   static constexpr std::string_view placeholder = "Write a message…";
   using reads_chat = std::true_type;
+  using composing = chat_compose;
 };
-
-// A round button in the stack over the list's corner: up or not, at its
-// place in the stack.
-inline void place_in_corner(auto& button, bool up, int slot) {
-  if (up != button.visible())
-    button.setVisible(up);
-  const float y = -12.0f - 52.0f * static_cast<float>(slot);
-  if (button.fState.fY != y) {
-    button.fState.apply({.y = y});
-    button.invalidateLayout();
-  }
-}
 
 // A bar over the field that says something and offers two ways on: the
 // explanation wraps above two equally sized buttons, so both stay visible
@@ -752,17 +733,12 @@ template <class Compute, class Part> auto read_from_chat(std::true_type, Compute
   return skiff::compose::projected<conversation>(std::move(compute), std::move(part));
 }
 template <class Compute, class Part> auto read_from_chat(std::false_type, Compute, Part part) { return part; }
-// What is written answers or edits something: as what is shown says, where
-// the composer has a part of it (composing); else as it is told.
+// What is written answers or edits something: as what is shown says (its
+// composing part).
 template <class Where, class Cancel>
-  requires requires { typename Where::composing; }
 auto context_shown(const palette& colours, Cancel cancel) {
   return context_bar<typename Where::composing>(colours, [](const typename Where::composing& now) { return now.said; },
                                                 std::move(cancel));
-}
-// A thread's: told what it answers by its panel, which holds that in no model yet.
-template <class Where, class Cancel> auto context_shown(const palette& colours, Cancel cancel) {
-  return skiff::compose::visible(false, legacy::context_bar<Cancel>(colours, std::move(cancel)));
 }
 // The chat's own composer: in the chat chosen, as what is shown says it --
 // the scope it reads the chat in moved to it.
@@ -886,11 +862,6 @@ inline void put_mention(auto& bar, std::size_t from, const std::string& name, co
 }
 // Whether what is written answers or edits something.
 [[nodiscard]] inline bool composer_answering(const auto& bar) { return composer_context(bar).visible(); }
-// A thread's composer, told what is answered in it (its panel holds it).
-inline void show_composer_context(auto& bar, std::optional<compose_context> said) {
-  composer_context(bar).show(std::move(said));
-  bar.invalidateLayout();
-}
 inline void set_composer_text(auto& bar, std::string text) { composer_field(bar).setText(std::move(text)); }
 // What is written from `from` to its end replaced by `text`, the caret after
 // it: a suggestion picked over what was typed for it.
@@ -907,60 +878,6 @@ inline void set_formatted(auto& bar, std::string text, const std::vector<mux::st
       std::views::transform(runs, [](const mux::styled_run& one) { return field_quotes::span{one.first, one.last, one.style}; })));
 }
 inline void clear_composer(auto& bar) { composer_field(bar).setText({}); }
-
-// A count on its badge: shown as said.
-inline void show_count(auto& badge, std::size_t count) {
-  const std::string said = std::to_string(count);
-  if (badge.parts.count.text() != said)
-    badge.parts.count.setText(said);
-}
-
-// Telegram's @ and heart over "↓": how many mentions of the user, or
-// reactions to theirs, are not yet seen; pressed, the oldest is gone to;
-// pressed with the other button, all of them listed.
-inline auto mark_button(const palette& colours, mark_kind_t which, std::string glyph) {
-  namespace c = skiff::compose;
-  return c::visible(false, c::onRightPress(::mux::ui::request::list_marks{which},
-      c::onClick(::mux::ui::request::jump_to_mark{which},
-                 c::column(c::vbox(0.0f, corner_button(colours)),
-                           c::styled({.place = scene::anchor::kCentre}, nodes::Text(std::move(glyph), 18.0f, colours.text, true)),
-                           legacy::count_badge(colours)))));
-}
-using mark_button_t = decltype(mark_button(std::declval<const palette&>(), mark_kind_t{}, std::string()));
-// How many, and which place up the stack it takes: 0 at the bottom.
-inline void show_mark(auto& button, std::size_t count, int slot) {
-  show_count(std::get<1>(button.fParts), count);
-  place_in_corner(button, count > 0, slot);
-}
-
-// "↓": back to the newest, with how many came while one read above them: a
-// round plate with a chevron down, and over its top the count, on a badge
-// in the accent.
-inline auto jump_button(const palette& colours) {
-  namespace c = skiff::compose;
-  return c::onClick(::mux::ui::request::jump_to_end{},
-                    c::column(c::vbox(0.0f, corner_button(colours)),
-                              c::styled({.fill = true}, nodes::Icon(shape_of(icon::down{}), colours.text)),
-                              c::visible(false, legacy::count_badge(colours))));
-}
-using jump_button_t = decltype(jump_button(std::declval<const palette&>()));
-inline void set_unseen(auto& button, int count) {
-  auto& badge = std::get<1>(button.fParts);
-  show_count(badge, static_cast<std::size_t>(std::max(count, 0)));
-  badge.setVisible(count > 0);
-  button.invalidateLayout();
-}
-
-// Back to the chat a jump came from -- a link or a reply into another chat
-// -- over "↓", as Telegram's: the chat as it was left. Up or not at a place
-// in the stack of buttons over the list's corner (place_in_corner).
-inline auto back_button(const palette& colours) {
-  namespace c = skiff::compose;
-  return c::visible(false, c::onClick(::mux::ui::request::return_to_chat{},
-                                      c::column(c::vbox(0.0f, corner_button(colours)),
-                                                c::styled({.fill = true}, nodes::Icon(shape_of(icon::back{}), colours.text)))));
-}
-using back_button_t = decltype(back_button(std::declval<const palette&>()));
 
 }  // namespace mux::ui
 

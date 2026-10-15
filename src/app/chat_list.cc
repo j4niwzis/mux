@@ -156,6 +156,8 @@ class chat_list_part {
       asked(request::cancel_compose{});
     else if (stepping)
       this->step(one.key == keys::kUp || one.shift, chat, list, asked);
+    else if ((one.key == keys::kPageUp || one.key == keys::kPageDown) && !any)
+      asked(request::page_messages{one.key == keys::kPageUp});
     else if (one.key == keys::kEnd && one.control)
       asked(request::jump_to_end{});
     else if (one.key == keys::kEscape && !any) {

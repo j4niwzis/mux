@@ -120,6 +120,16 @@ class jumps_part {
     aim_ = {.end = true, .number = ++number_};
     this->tell();
   }
+  // A page of the messages up or down, most of what is in view: PageUp and
+  // PageDown.
+  void apply(const request::page_messages& one) { this->page(one.up); }
+  void page(bool up) {
+    if (!this->chosen())
+      return;
+    going_.reset();
+    aim_ = {.number = ++number_, .page = up ? -1 : 1};
+    this->tell();
+  }
   // A jump in this chat about to go: the message it went from, else the
   // newest the reader sees, to come back to. As tdesktop's doneJumpFrom:
   // a way back to where it goes is done with first (skipReplyReturn).

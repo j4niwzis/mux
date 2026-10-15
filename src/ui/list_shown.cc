@@ -175,6 +175,10 @@ struct big_bars {
 };
 // Out of the forum open, to its row in the list, lit (Alt+Left).
 struct leave_forum {};
+// A page of the messages up or down (PageUp, PageDown).
+struct page_messages {
+  bool up = true;
+};
 // Into the forum gone to by Alt+Up or Alt+Down (Alt+Right).
 struct open_pointed {};
 // A swipe across the chats screen on a phone's window: right, or left.

@@ -320,9 +320,10 @@ struct screen_keys {
     namespace keys = scene::keys;
     const bool control = press.modifiers.template has<scene::modifier::control>();
     static constexpr std::array kTheirs{keys::kEscape, keys::kUp, keys::kDown, keys::kTab, keys::kEnd, keys::kF, keys::kK, keys::kC, keys::kDelete,
-                                        keys::k1, keys::k2, keys::k3, keys::k4, keys::k5, keys::k6, keys::k7, keys::k8, keys::k9};
-    if (!std::ranges::contains(kTheirs, press.key) || (!control && press.key != keys::kEscape && press.key != keys::kUp &&
-                                                      press.key != keys::kDown && press.key != keys::kDelete))
+                                        keys::kPageUp, keys::kPageDown, keys::k1, keys::k2, keys::k3, keys::k4, keys::k5, keys::k6, keys::k7,
+                                        keys::k8, keys::k9};
+    static constexpr std::array kBare{keys::kEscape, keys::kUp, keys::kDown, keys::kDelete, keys::kPageUp, keys::kPageDown};
+    if (!std::ranges::contains(kTheirs, press.key) || (!control && !std::ranges::contains(kBare, press.key)))
       return std::nullopt;
     return request::screen_key{press.key, control, press.modifiers.template has<scene::modifier::shift>(),
                                press.modifiers.template has<scene::modifier::alt>()};

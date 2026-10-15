@@ -825,7 +825,8 @@ inline void panels_changed(window& root) {
 // The sticker pictures the window shows, for the program to ask for: the
 // emoji panel's pages in view, what a message's menu unrolled, the custom
 // emoji the list over the composer shows and those in the fields.
-[[nodiscard]] inline std::vector<emote_picture> emoji_pictures_shown(window& root, const suggestions_shown& listed) {
+[[nodiscard]] inline std::vector<emote_picture> emoji_pictures_shown(window& root, const suggestions_shown& listed,
+                                                                     const chat_draft& chat, const thread_draft& thread) {
   std::vector<emote_picture> shown;
   if (auto* up = layer_of<layer::emoji>(root).shown())
     emote_pictures_in(popup_card(*up), popup_card(*up).bounds(), shown);
@@ -833,12 +834,13 @@ inline void panels_changed(window& root) {
     emote_pictures_in(card_of(*menu), card_of(*menu).bounds(), shown);
   shown.append_range(listed.items | std::views::filter([](const suggestion& one) { return !one.picture.empty(); }) |
                      std::views::transform([](const suggestion& one) { return emote_picture{one.picture, emote_kind::emoji}; }));
-  const auto inserted = [&](const auto& field) {
-    shown.append_range(field.atoms() | std::views::filter([](const auto& atom) { return atom.picture.has_value(); }) |
-                       std::views::transform([](const auto& atom) { return emote_picture{atom.target, emote_kind::emoji}; }));
+  // Those put in what is being written: the drafts' pictures.
+  const auto inserted = [&](const composer_doc& draft) {
+    shown.append_range(draft.atoms | std::views::filter(&widgets::TextAtom::picture) |
+                       std::views::transform([](const widgets::TextAtom& atom) { return emote_picture{atom.target, emote_kind::emoji}; }));
   };
-  inserted(composer_field(chat_line_of(root)));
-  inserted(composer_field(thread_line_of(root)));
+  inserted(chat.now);
+  inserted(thread.now);
   return shown;
 }
 

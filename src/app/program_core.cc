@@ -583,7 +583,8 @@ void app::before_frame() {
   // The emoji panel's stickers in view, asked for as they change -- as it
   // opens, as it scrolls, as its tab or its search changes -- and not only
   // when something else refreshed the window.
-  if (auto shown = mux::ui::emoji_pictures_shown(root(), *showing.look<mux::ui::suggestions_shown>()); shown != shared.ui.panel_pictures_shown) {
+  if (auto shown = mux::ui::emoji_pictures_shown(root(), *showing.look<mux::ui::suggestions_shown>(), *showing.look<mux::ui::chat_draft>(),
+                                                *showing.look<mux::ui::thread_draft>()); shown != shared.ui.panel_pictures_shown) {
     shared.ui.panel_pictures_shown = std::move(shown);
     shared.ui.pictures_due = true;
   }

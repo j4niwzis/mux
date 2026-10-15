@@ -3,6 +3,8 @@
 import std;
 import mux.core;
 import mux.ui;
+import splice;
+import skiff.scene;
 import gtest;
 
 #include "gtest/gtest-macros.h"
@@ -96,4 +98,26 @@ TEST(ChatList, HtmlPreviewKeepsMentionPillsAndDiscardsOtherLinks) {
   mux::ui::conversation_view draft;
   draft.draft = "replaced";
   EXPECT_TRUE(mux::ui::preview_of(room, draft, {}).mentions.empty());
+}
+
+TEST(ChatList, RowKeepsListSemanticsArrowCursorAndChoiceRequest) {
+  mux::ui::ui_shared shared;
+  mux::ui::palette colours;
+  const mux::ui::ui_needs needs{.colours = &colours, .shared = &shared};
+  auto room = chat("semantics");
+  mux::ui::conversation_view view;
+  view.name = "Room";
+  view.chosen = true;
+  auto row = mux::ui::conversation_row(needs, room, view, {});
+  const auto semantics = row.semantics();
+  EXPECT_EQ(semantics.fLabel, "Room");
+  EXPECT_TRUE(semantics.fSelected);
+  EXPECT_TRUE(spl::visit([](auto role) {
+    return std::same_as<decltype(role), skiff::scene::semantic_role::list_item>;
+  }, semantics.fRole));
+  EXPECT_EQ(semantics.fActions.size(), 2u);
+  EXPECT_TRUE(spl::visit([](auto cursor) {
+    return std::same_as<decltype(cursor), skiff::scene::cursor::arrow>;
+  }, row.fState.cursorShape()));
+  EXPECT_EQ(row.onPress().which, room.id);
 }

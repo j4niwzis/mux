@@ -133,12 +133,47 @@ passphrases(const state&) {
   return {};
 }
 
+namespace tool {
+struct devtools_text {
+  std::string title, text;
+  friend bool operator==(const devtools_text&, const devtools_text&) = default;
+};
+struct devtools_entry {
+  std::string type, key, json;
+  friend bool operator==(const devtools_entry&, const devtools_entry&) = default;
+};
+struct devtools_state {
+  std::vector<devtools_entry> entries;
+  friend bool operator==(const devtools_state&, const devtools_state&) = default;
+};
+struct send_custom_form {
+  friend bool operator==(send_custom_form, send_custom_form) = default;
+};
+struct uia_step {
+  std::string what, url;
+  friend bool operator==(const uia_step&, const uia_step&) = default;
+};
+}  // namespace tool
+namespace request {
+// One of its own dialogs closed: what it shows let go.
+template <class Facts>
+struct close_tool {};
+}  // namespace request
+namespace tool {
+// What Esc on each asks for.
+inline request::close_tool<devtools_text> closing_of(std::type_identity<devtools_text>) { return {}; }
+inline request::close_tool<devtools_state> closing_of(std::type_identity<devtools_state>) { return {}; }
+inline request::close_tool<send_custom_form> closing_of(std::type_identity<send_custom_form>) { return {}; }
+inline request::close_tool<uia_step> closing_of(std::type_identity<uia_step>) { return {}; }
+}  // namespace tool
+
 constexpr request_list<request::setup_cross_signing, request::restore_cross_signing, request::reset_identity,
                        request::sign_out_unverified, request::reset_backup, request::delete_backup, request::export_room_keys,
                        request::import_room_keys, request::verify_session, request::sign_out_sessions, request::rename_session,
                        request::refresh_sessions, request::verify_them, request::explore_state,
                        request::open_send_custom, request::send_custom, request::save_room_pack, request::change_room, request::continue_uia,
-                       request::cancel_uia>
+                       request::cancel_uia, request::close_tool<tool::devtools_text>, request::close_tool<tool::devtools_state>,
+                       request::close_tool<tool::send_custom_form>, request::close_tool<tool::uia_step>>
 requests_of(const state&) {
   return {};
 }

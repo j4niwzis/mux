@@ -606,7 +606,6 @@ struct selection_span {
   bool selected = true;
 };
 struct selection_cancel {};
-struct close_dialog {};
 struct menu_forward {};
 struct close_forward {};
 struct forward_to {

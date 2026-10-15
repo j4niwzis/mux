@@ -36,12 +36,11 @@ inline std::optional<std::string> message_link(const state&, const conversation&
     return std::nullopt;
   return message_link_to(chat, event);
 }
-// Its own dialog: the developer tools, as Element's.
-namespace tool {
-struct devtools {};
-struct uia {};  // a step of interactive auth, done in the browser
-}  // namespace tool
-constexpr dialog_list<tool::devtools, tool::uia> dialogs(const state&) { return {}; }
+// Its own dialogs, each by what it shows, as the program shows it: the
+// developer tools, as Element's -- some JSON to read and copy, a room's
+// state, an event of any type sent -- and a step of interactive auth done
+// in the browser.
+constexpr dialog_list<tool::devtools_text, tool::devtools_state, tool::send_custom_form, tool::uia_step> dialogs(const state&) { return {}; }
 // Its own account pages: its encryption, and its sessions under
 // cross-signing and the key backup.
 namespace settings {

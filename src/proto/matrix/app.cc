@@ -129,17 +129,20 @@ void program_told(App& app, const sign_in_page& page) {
 template <class App>
 void program_told(App& app, const uia_in_browser& asked) {
   app.take(mux::ui::request::open_url{asked.url});
-  app.root().template open_dialog<uia_page>(asked.what, asked.url);
+  mux::ui::show(app.showing, std::optional(tool::uia_step{asked.what, asked.url}));
 }
 // What the developer tools asked, shown.
 template <class App>
 void program_told(App& app, const devtools_text& shown) {
-  app.root().template open_dialog<devtools_page>(shown.title, shown.text);
+  mux::ui::show(app.showing, std::optional(tool::devtools_text{shown.title, shown.text}));
 }
 // The room's state, for the developer tools.
 template <class App>
 void program_told(App& app, const state_listed& listed) {
-  app.root().template open_dialog<devtools_page>(listed.entries);
+  mux::ui::show(app.showing, std::optional(tool::devtools_state{listed.entries | std::views::transform([](const state_entry& one) {
+                                                              return tool::devtools_entry{one.type, one.key, one.json};
+                                                            }) |
+                                                            std::ranges::to<std::vector>()}));
 }
 // Only the room and account that requested the read may receive it.
 template <class App>
@@ -317,9 +320,8 @@ void program_asked(App& app, const explore_state&) {
 }
 template <class App>
 void program_asked(App& app, const open_send_custom&) {
-  using page = devtools_page;
   mux::ui::show<mux::ui::room_settings_facts>(app.showing, std::nullopt);
-  app.root().template open_dialog<page>(typename page::send_form_t{});
+  mux::ui::show(app.showing, std::optional(tool::send_custom_form{}));
 }
 template <class App>
 void program_asked(App& app, const send_custom& one) {
@@ -341,13 +343,18 @@ void program_asked(App& app, const refresh_sessions&) {
 // or let go; the box closed either way.
 template <class App>
 void program_asked(App& app, const continue_uia&) {
-  app.root().close_dialog();
+  mux::ui::show<tool::uia_step>(app.showing, std::nullopt);
   app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::continue_uia(*app.net, App::id_of(account)); });
 }
 template <class App>
 void program_asked(App& app, const cancel_uia&) {
-  app.root().close_dialog();
+  mux::ui::show<tool::uia_step>(app.showing, std::nullopt);
   app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::cancel_uia(*app.net, App::id_of(account)); });
+}
+// Its own dialogs closed: what each shows let go.
+template <class App, class Facts>
+void program_asked(App& app, const close_tool<Facts>&) {
+  mux::ui::show<Facts>(app.showing, std::nullopt);
 }
 }  // namespace mux::proto::matrix::request
 

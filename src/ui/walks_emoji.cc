@@ -8,6 +8,6 @@ module mux.ui;
 import std;
 import skiff.scene;
 
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::emoji_popup>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::emoji_popup>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::emoji_popup_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::emoji_popup_t>();
 }

@@ -118,6 +118,28 @@ consteval auto dialogs_shown_of(plugin_list<Features...>) {
   return type_tag<composition::aggregate_list<skiff::model::Tracked<std::optional<dialog_facts_t<Features>>>...>>{};
 }
 using dialogs_shown_t = typename decltype(dialogs_shown_of(dialog_plugins{}))::type;
+// The dialogs protocols have of their own (dialogs(state): a list of what
+// each shows -- Matrix's developer tools, for one): each its facts' part of
+// what is shown, as a plugin's; its content made by its dialog_content,
+// found by the facts' namespace; closed by close_shown of its facts.
+template <class List>
+struct tool_facts_of_list;
+template <class... Ds>
+struct tool_facts_of_list<proto::dialog_list<Ds...>> {
+  using type = type_list<Ds...>;
+};
+template <class>
+struct protocol_tool_facts;
+template <class... Tags>
+struct protocol_tool_facts<protocol_list<Tags...>> {
+  using type = typename joined<type_list<>, typename tool_facts_of_list<decltype(proto::dialogs_of(::mux::state_of<Tags>{}))>::type...>::type;
+};
+using tool_facts_list = typename protocol_tool_facts<protocols>::type;
+template <class... Facts>
+consteval auto tools_shown_of(type_list<Facts...>) {
+  return type_tag<composition::aggregate_list<skiff::model::Tracked<std::optional<Facts>>...>>{};
+}
+using tools_shown_t = typename decltype(tools_shown_of(tool_facts_list{}))::type;
 // And the layers they put over the window (contract::window_layers): what is
 // shown of each -- a call -- held the same way.
 using layer_plugins = composition::providers<contract::window_layers, enabled_plugins>;
@@ -143,6 +165,8 @@ struct shown_root {
   skiff::model::Tracked<std::optional<notice_facts>> notice;
   // Each plugin's dialog's: who reacted to a message, for one.
   dialogs_shown_t dialogs;
+  // Each protocol's own dialogs'.
+  tools_shown_t tools;
   skiff::model::Tracked<std::optional<history_facts>> history;
   skiff::model::Tracked<std::optional<forward_facts>> forwarding;
   skiff::model::Tracked<std::optional<wallpaper_facts>> wallpaper;
@@ -404,10 +428,11 @@ auto layer_for(const Needs &needs) {
 
 // What the layers' keys ask for: a dialog closed, the plugins' each by its
 // facts.
-template <class... Features>
-consteval auto window_answers_of(plugin_list<Features...>) {
-  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_dialog, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer,
-                               ::mux::ui::request::close_shown<dialog_facts_t<Features>>...>>{};
+template <class... Features, class... Tools>
+consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) {
+  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::close_drawer,
+                               ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
+                               ::mux::ui::request::close_shown<Tools>...>>{};
 }
 // What Esc on a dialog or a layer asks for, by its facts' type: a plugin's
 // its close_shown; the window's own each its request. A dialog of the
@@ -462,34 +487,9 @@ struct window : skiff::compose::Specced {
   // the field takes for it, given to it (it keeps the focus: a button takes
   // none).
   using text_menu = decltype(make_text_menu(std::declval<const palette&>(), std::vector<text_menu_item>{}));
-  // The dialogs protocols have of their own (dialogs(state), made by their
-  // dialog_type, found by ADL where the window is made): one of them up at
-  // a time, in one dialog of the window's.
-  template <class List>
-  struct dialog_nodes;
-  template <class... Ds>
-  struct dialog_nodes<proto::dialog_list<Ds...>> {
-    using type = type_list<typename decltype(dialog_type(Ds{}))::type...>;
-  };
-  template <class>
-  struct protocol_dialog_nodes;
-  template <class... Tags>
-  struct protocol_dialog_nodes<protocol_list<Tags...>> {
-    using type = typename joined<type_list<>, typename dialog_nodes<decltype(proto::dialogs_of(::mux::state_of<Tags>{}))>::type...>::type;
-  };
-  // Never empty: a text, where no protocol has a dialog.
-  using tool_t = typename variant_of_types<
-      typename joined<type_list<nodes::Text>, typename protocol_dialog_nodes<protocols>::type>::type>::type;
-  // The dialog's content, a node: the protocol's dialog in it, as the room
-  // settings hold their page.
-  struct tool_holder : skiff::compose::Holding<tool_t> {
-    using skiff::compose::Holding<tool_t>::Holding;
-    // The dialog it is shown in.
-    [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{560.0f, 560.0f}}; }
-  };
   struct layers : skiff::compose::Specced {
     // What its handlers ask for, returned.
-    using Answer = typename decltype(window_answers_of(dialog_plugins{}))::type;    using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
+    using Answer = typename decltype(window_answers_of(dialog_plugins{}, tool_facts_list{}))::type;    using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
                                        shown_frame<widgets::SlideOver<with_drawer, panel_type>, accounts_panel, ui_needs>>;
     // A dialog of Content, bound to its Facts' part of what is shown.
     template <class Content, class Facts>
@@ -537,10 +537,6 @@ struct window : skiff::compose::Specced {
     }
     // A passphrase is answered, never let go of.
     static std::optional<escaped> escape(shown_in<passphrase_box_t, passphrase_facts>&) { return std::nullopt; }
-    // A protocol's own dialog.
-    static std::optional<escaped> escape(widgets::Dialog<tool_holder>& dialog) {
-      return dialog.shown() ? std::optional<escaped>(escaped{::mux::ui::request::close_dialog{}}) : std::nullopt;
-    }
     // A layer up -- the emoji, a message's menu, a picture: closed, as its
     // facts ask.
     template <class Content, class Facts>
@@ -617,6 +613,12 @@ struct window : skiff::compose::Specced {
       }
     };
     using dialogs_t = plugin_dialogs<dialog_plugins>;
+    // The protocols' dialogs, each made by its dialog_content from its facts.
+    template <class Facts>
+    using tool_content_t = decltype(dialog_content(std::declval<const ui_needs&>(), std::declval<const Facts&>()));
+    template <class... Facts>
+    static auto tool_nodes_of(type_list<Facts...>) -> std::tuple<std::optional<shown_in<tool_content_t<Facts>, Facts>>...>;
+    using tool_nodes_t = decltype(tool_nodes_of(tool_facts_list{}));
     // The plugins' layers, each its node from its extend().
     template <class List>
     struct plugin_layers;
@@ -669,8 +671,8 @@ struct window : skiff::compose::Specced {
       shown_in<wallpaper_box, wallpaper_facts> wallpaper;
       // A server's public rooms, searched.
       shown_in<explore_box, explore_facts> explore;
-      // A protocol's own dialog: Matrix's developer tools, for one.
-      widgets::Dialog<tool_holder> tools;
+      // The protocols' own dialogs: Matrix's developer tools, for one.
+      tool_nodes_t tools;
       shown_in<send_box_t, send_facts> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
@@ -857,6 +859,7 @@ struct window : skiff::compose::Specced {
       frame.base().setSheetColour(n.colours->sidebar);
       // The plugins' dialogs, made in their slots.
       dialogs_t::build(parts.dialogs, n);
+      std::apply([&](auto&... slot) { (slot.emplace(std::in_place, &n), ...); }, parts.tools);
       // Each dialog as what it shows declares it.
       (look_as_its_content(over, *n.colours), ...);
       }(parts);
@@ -1135,12 +1138,6 @@ struct window : skiff::compose::Specced {
         up->parts.note.setText("An image could not be uploaded: " + picture.body);
     }
   }
-  // A protocol's own dialog up (Node, one of its dialogs), made from args.
-  template <class Node, class... Args>
-  void open_dialog(Args&&... args) {
-    layer().tools.open(std::in_place_type<Node>, *needs_.colours, std::forward<Args>(args)...);
-  }
-  void close_dialog() { layer().tools.close(); }
 
   // Its layers, each filling the window, as the default layout places them:
   // nothing placed by hand.

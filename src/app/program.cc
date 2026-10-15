@@ -527,7 +527,6 @@ struct app : kept_settings {
     if (now && std::exchange(refresh_waiting_, false))
       this->refresh();
   }
-  void apply(const request::close_dialog&);
   void apply(const request::copy_text& one);
   void apply(const request::text_key& one);
   void apply(const request::text_formatting& one);

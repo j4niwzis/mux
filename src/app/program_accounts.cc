@@ -89,7 +89,6 @@ void app::apply(const request::text_key& one) {
 void app::apply(const request::text_formatting& one) { root().text_formatting(one.open); }
 
 // The developer tools, for the chat being read.
-void app::apply(const request::close_dialog&) { root().close_dialog(); }
 
 void app::apply(const request::not_implemented& one) { shared.not_implemented(one.what); }
 

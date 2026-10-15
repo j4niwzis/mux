@@ -46,11 +46,6 @@ export namespace mux::ui {
   return scene::clipboardFragment(std::move(display), std::move(atoms));
 }
 
-inline void prepend_quote(auto& field, const scene::ClipboardFragment& selected) {
-  field.select(0, 0);
-  field.insertFragment(quoted_fragment(selected));
-}
-
 
 // An edge between two columns, dragged across: the pointer a resize cursor
 // over it, and each move of a drag answered with what its act makes of
@@ -88,12 +83,6 @@ struct resize_info_to {
     out += out.ends_with('\n') ? "```" : "\n```";
   return out;
 }
-
-// What Enter in the message field does: asks for its text to be sent.
-struct submit_message {
-  using Answer = ::mux::ui::request::submit_message;
-  Answer operator()(std::string_view text) const { return ::mux::ui::request::submit_message{with_blocks_closed(text)}; }
-};
 
 // Where a message is written, across the bottom of a chat as in Telegram
 // Quotes in the field, as Telegram's: a paragraph starting "> " -- a "> "
@@ -567,17 +556,171 @@ struct field_quotes {
   }
 };
 
+// ---- what is written, as the program keeps it ------------------------------------
+// The draft of a field: its text, its pills and pictures, its runs and where
+// the caret is -- skiff-widgets' document, of the message's runs. The
+// program keeps the chat's and the thread's (chat_draft, thread_draft); the
+// field shows them, and tells each edit (draft_told) as a request carrying
+// the whole document, Enter as its send. What the program does to what is
+// written -- a link put on, a name picked, a quote, an emoji -- it does to
+// the draft with the functions below, the field's own way of editing.
+using composer_doc = widgets::TextDocument<run_style_t>;
+// Text typed at a run's end goes into it as the field's quotes say.
+struct composer_grows {
+  [[nodiscard]] bool operator()(const run_style_t& format) const { return widgets::growsBy(field_quotes{}, format); }
+};
+struct chat_draft {
+  composer_doc now;
+  using ModelOpaque = void;
+  friend bool operator==(const chat_draft&, const chat_draft&) = default;
+};
+struct thread_draft {
+  composer_doc now;
+  using ModelOpaque = void;
+  friend bool operator==(const thread_draft&, const thread_draft&) = default;
+};
+namespace request {
+// The field edited: the draft as it is now.
+struct chat_draft_edited {
+  composer_doc now;
+};
+struct thread_draft_edited {
+  composer_doc now;
+};
+}  // namespace request
+// What a field bound to its draft tells: each edit, as `Edited`; Enter, as
+// `Sent` -- what its arrow asks too.
+template <class Edited, class Sent>
+struct draft_told {
+  static constexpr bool kEveryDocument = true;
+  using Answer = spl::variant<Edited, Sent>;
+  Answer operator()(widgets::DocumentEdited, const composer_doc& now) const { return Edited{now}; }
+  Answer operator()(widgets::DocumentSubmitted, const composer_doc&) const { return Sent{}; }
+};
+
+// What is written, as it is sent and kept: each pill as it reads plain, a
+// code block it opens closed at its end (as the field showed it).
+[[nodiscard]] inline std::string composer_plain(const composer_doc& doc) {
+  return with_blocks_closed(widgets::document::plain(doc));
+}
+// Whether nothing is written.
+[[nodiscard]] inline bool composer_empty(const composer_doc& doc) { return doc.text.empty(); }
+// What is written, as a draft is kept between chats: plain, as it reads.
+[[nodiscard]] inline std::string draft_text(const composer_doc& doc) { return widgets::document::plain(doc); }
+// Who is mentioned in it: its pills, as they are now.
+[[nodiscard]] inline std::vector<mention> composer_mentions(const composer_doc& doc) {
+  return doc.atoms | std::views::filter([](const widgets::TextAtom& one) { return !one.picture; }) |
+         std::views::transform([](const widgets::TextAtom& one) { return mention{one.plain, one.target}; }) |
+         std::ranges::to<std::vector>();
+}
+// How what is written is formatted, by offsets in its plain text: its runs,
+// and each custom emoji's picture as a run of its own.
+[[nodiscard]] inline std::vector<mux::styled_run> composer_styles(const composer_doc& doc) {
+  auto runs = widgets::document::plainSpans(doc) |
+              std::views::transform([](const field_quotes::span& one) { return mux::styled_run{one.first, one.last, one.format}; }) |
+              std::ranges::to<std::vector>();
+  runs.append_range(doc.atoms | std::views::filter(&widgets::TextAtom::picture) | std::views::transform([&](const widgets::TextAtom& atom) {
+                      const std::size_t first = widgets::document::plainOffset(doc, atom.first);
+                      return mux::styled_run{first, first + atom.plain.size(), run_style::custom_emoji{atom.target}};
+                    }));
+  return runs;
+}
+// What is selected, and the link on it where it has one: what Ctrl+K's box
+// starts with.
+[[nodiscard]] inline std::pair<std::string, std::string> composer_link_asked(const composer_doc& doc) {
+  const std::size_t low = doc.low(), high = doc.high();
+  const auto link = std::ranges::find_if(doc.spans, [&](const field_quotes::span& one) {
+    return one.first <= low && one.last >= high &&
+           spl::visit(spl::overloaded{[](const run_style::link&) { return true; }, [](const auto&) { return false; }}, one.format);
+  });
+  std::string url = link == doc.spans.end()
+                        ? std::string()
+                        : spl::visit(spl::overloaded{[](const run_style::link& one) { return one.url; }, [](const auto&) { return std::string(); }},
+                                     link->format);
+  return {widgets::document::selected(doc), std::move(url)};
+}
+// A link put on what was selected, as tdesktop's EditLinkBox: its text as
+// given (what was selected replaced where it differs), the URL with a scheme
+// -- https where it has none; with no URL, the links there taken off.
+inline void put_link(composer_doc& doc, std::string text, std::string url) {
+  const std::size_t low = doc.low();
+  std::size_t high = doc.high();
+  if (text.empty())
+    text = url;
+  if (text.empty())
+    return;
+  if (std::string_view(doc.text).substr(low, high - low) != text) {
+    widgets::document::insert(doc, text, composer_grows{});
+    high = low + text.size();
+  }
+  if (!url.empty() && !url.contains("://") && !url.starts_with("mailto:"))
+    url = "https://" + url;
+  const auto link = [](const field_quotes::span& one) {
+    return spl::visit(spl::overloaded{[](const run_style::link&) { return true; }, [](const auto&) { return false; }}, one.format);
+  };
+  auto spans = field_quotes::without(doc.spans, low, high, link);
+  if (!url.empty())
+    spans.push_back({low, high, run_style::link{std::move(url)}});
+  widgets::document::setSpans(doc, std::move(spans));
+  widgets::document::select(doc, high, high);
+}
+// A mention picked from the list, over the @ and what was typed of it (from
+// `from` on): a pill, as the message will show it, and a space. Taken apart
+// with Backspace: its user's id, not the name it is sent by.
+inline void put_mention(composer_doc& doc, std::size_t from, const std::string& name, const std::string& user) {
+  widgets::document::select(doc, from, doc.text.size());
+  widgets::document::insertAtom(doc, "  " + name, user, name, false, user, composer_grows{});
+  widgets::document::insert(doc, " ", composer_grows{});
+}
+// What is written from `from` to its end replaced by `text`, the caret after
+// it: a suggestion picked over what was typed for it.
+inline void put_over_end(composer_doc& doc, std::size_t from, std::string_view text) {
+  widgets::document::select(doc, from, doc.text.size());
+  widgets::document::insert(doc, text, composer_grows{});
+}
+// A custom emoji over what is written from `from` on: its picture in the
+// line, sent as its shortcode.
+inline void put_picture_over_end(composer_doc& doc, std::size_t from, std::string picture, std::string glyph) {
+  widgets::document::select(doc, from, doc.text.size());
+  widgets::document::insertAtom(doc, "\u2003", std::move(picture), std::move(glyph), true, {}, composer_grows{});
+}
+// An emoji put in at the caret: its text, or -- a custom one -- its picture
+// in the line, as the message will show it, sent as its shortcode.
+inline void put_emoji(composer_doc& doc, const std::string& text, const std::string& picture) {
+  if (picture.empty())
+    widgets::document::insert(doc, text, composer_grows{});
+  else
+    widgets::document::insertAtom(doc, "\u2003", picture, text, true, {}, composer_grows{});
+}
+// What was selected in a message, quoted at the start of what is written.
+inline void prepend_quote(composer_doc& doc, const scene::ClipboardFragment& selected) {
+  widgets::document::select(doc, 0, 0);
+  widgets::document::insertFragment(doc, quoted_fragment(selected), composer_grows{});
+}
+// A draft of this text and its runs, as a message edited had them.
+[[nodiscard]] inline composer_doc formatted_draft(std::string text, const std::vector<mux::styled_run>& runs) {
+  auto doc = widgets::document::of<run_style_t>(std::move(text));
+  widgets::document::setSpans(doc, runs | std::views::transform([](const mux::styled_run& one) {
+                                     return field_quotes::span{one.first, one.last, one.style};
+                                   }) | std::ranges::to<std::vector>());
+  return doc;
+}
+// A draft of plain text, the caret at its end.
+[[nodiscard]] inline composer_doc plain_draft(std::string text) { return widgets::document::of<run_style_t>(std::move(text)); }
+
 // Where a message is written: the paperclip, the field growing with what is
 // written in it -- quotes and custom emoji shown as they will be sent -- the
 // emoji, the arrow. The chat's composer and a thread's; what each button
 // does is said by where it is. What is typed looks as it will be sent: the
 // messages' size, as in tdesktop, whose field takes the message font; the
 // arrow in the accent.
-template <class Submit, class Attach, class Emoji, class Send>
-auto message_input(const palette& colours, std::string placeholder, Submit submit, Attach attach_it, Emoji emoji_it, Send send_it) {
+template <class Draft, class Told, class Attach, class Emoji, class Send>
+auto message_input(const palette& colours, std::string placeholder, Attach attach_it, Emoji emoji_it, Send send_it) {
   namespace c = skiff::compose;
-  auto field = widgets::TextArea<Submit, message_pictures, field_quotes>(colours.widgets, std::move(placeholder), std::move(submit));
-  field.setFontSize(13.0f);
+  auto text = widgets::TextArea<Told, message_pictures, field_quotes>(colours.widgets, std::move(placeholder), Told{});
+  text.setFontSize(13.0f);
+  // What it shows: the draft, as the program keeps it.
+  auto field = c::projected<Draft>([](const Draft& now) { return now.now; }, std::move(text));
   return c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}}),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Attach>(colours, icon::clip{}, std::move(attach_it))),
                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field)),
@@ -624,7 +767,8 @@ struct thread_compose {
 // chat. The chat's own; a thread's is its panel's.
 struct in_chat {
   using cancel = sends<::mux::ui::request::cancel_compose>;
-  using submit = submit_message;
+  using draft = chat_draft;
+  using told = draft_told<request::chat_draft_edited, ::mux::ui::request::send_typed>;
   using attach = sends<::mux::ui::request::attach_files>;
   using emoji = sends<::mux::ui::request::toggle_emoji>;
   using send = sends<::mux::ui::request::send_typed>;
@@ -759,8 +903,8 @@ template <class Column> auto in_chosen_chat(std::false_type, Column column) { re
 // Element's notice and the way to where it goes on. The chat's, and a
 // thread's: one composer, told where it writes.
 template <class Where = in_chat>
-auto composer_bar(const ui_needs& n, typename Where::cancel cancel = {}, typename Where::submit submit = {},
-                  typename Where::attach attach = {}, typename Where::emoji emoji = {}, typename Where::send send = {}) {
+auto composer_bar(const ui_needs& n, typename Where::cancel cancel = {}, typename Where::attach attach = {},
+                  typename Where::emoji emoji = {}, typename Where::send send = {}) {
   namespace c = skiff::compose;
   using reads = typename Where::reads_chat;
   const palette& colours = *n.colours;
@@ -776,8 +920,8 @@ auto composer_bar(const ui_needs& n, typename Where::cancel cancel = {}, typenam
                               c::visible(false, unsent_bar(colours))),
                 context_shown<Where>(colours, std::move(cancel)),
                 shown_by_chat(reads{}, [shared](const conversation& chat) { return may_post_in(*shared, chat); },
-                              message_input(colours, std::string(Where::placeholder), std::move(submit), std::move(attach),
-                                            std::move(emoji), std::move(send))),
+                              message_input<typename Where::draft, typename Where::told>(
+                                  colours, std::string(Where::placeholder), std::move(attach), std::move(emoji), std::move(send))),
                 shown_by_chat(reads{},
                               [shared](const conversation& chat) { return !may_post_in(*shared, chat) && !replaced_chat(*shared, chat); },
                               c::visible(false, no_post_line(colours))),
@@ -790,94 +934,6 @@ template <class Where = in_chat> using composer_bar_t = decltype(composer_bar<Wh
 inline auto& composer_context(auto& bar) { return std::get<3>(bar.fParts); }
 inline auto& composer_input(auto& bar) { return std::get<4>(bar.fParts); }
 inline auto& composer_field(auto& bar) { return input_field(composer_input(bar)); }
-// What is in the field, as it holds it: a mention picked, the room its
-// pill's picture takes and the name.
-[[nodiscard]] inline const std::string& composer_text(const auto& bar) { return composer_field(bar).text(); }
-// What is written, as it is sent and kept: each mention by its name.
-[[nodiscard]] inline std::string composer_plain(const auto& bar) { return composer_field(bar).plainText(); }
-// Who is mentioned in it: its pills, as they are now.
-[[nodiscard]] inline std::vector<mention> composer_mentions(const auto& bar) {
-  return std::ranges::to<std::vector<mention>>(std::views::transform(
-      std::views::filter(composer_field(bar).atoms(), [](const auto& one) { return !one.picture; }),
-      [](const auto& one) { return mention{one.plain, one.target}; }));
-}
-// How what is written is formatted, by offsets in its plain text: sent with it.
-[[nodiscard]] inline std::vector<mux::styled_run> composer_styles(const auto& bar) {
-  const auto& field = composer_field(bar);
-  auto runs = std::ranges::to<std::vector<mux::styled_run>>(std::views::transform(
-      field.plainSpans(), [](const auto& one) { return mux::styled_run{one.first, one.last, one.format}; }));
-  std::ptrdiff_t shift = 0;
-  for (const auto& atom : field.atoms()) {
-    const auto first = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(atom.first) + shift);
-    if (atom.picture)
-      runs.push_back({first, first + atom.plain.size(), run_style::custom_emoji{atom.target}});
-    shift += static_cast<std::ptrdiff_t>(atom.plain.size()) - static_cast<std::ptrdiff_t>(atom.last - atom.first);
-  }
-  return runs;
-}
-// What is selected, and the link on it where it has one: what Ctrl+K's box
-// starts with.
-[[nodiscard]] inline std::pair<std::string, std::string> composer_link_asked(const auto& bar) {
-  const auto& field = composer_field(bar);
-  const auto [low, high] = field.selectionRange();
-  std::string url;
-  for (const auto& one : field.spans())
-    if (one.first <= low && one.last >= high)
-      spl::visit(spl::overloaded{[&](const run_style::link& link) { url = link.url; }, [](const auto&) {}}, one.format);
-  return {field.text().substr(low, high - low), std::move(url)};
-}
-// A link put on what was selected, as tdesktop's EditLinkBox: its text as
-// given (what was selected replaced where it differs), the URL with a scheme
-// -- https where it has none; with no URL, the links there taken off.
-inline void put_link(auto& bar, std::string text, std::string url) {
-  auto& field = composer_field(bar);
-  auto [low, high] = field.selectionRange();
-  if (text.empty())
-    text = url;
-  if (text.empty())
-    return;
-  if (std::string_view(field.text()).substr(low, high - low) != text) {
-    field.insertText(text);
-    high = low + text.size();
-  }
-  if (!url.empty() && !url.contains("://") && !url.starts_with("mailto:"))
-    url = "https://" + url;
-  const auto link = [](const auto& one) {
-    return spl::visit(spl::overloaded{[](const run_style::link&) { return true; }, [](const auto&) { return false; }}, one.format);
-  };
-  auto spans = field_quotes::without(field.spans(), low, high, link);
-  if (!url.empty())
-    spans.push_back({low, high, run_style::link{std::move(url)}});
-  field.setSpans(std::move(spans));
-  field.select(high, high);
-}
-// A mention picked from the list, over the @ and what was typed of it (from
-// `from` on): a pill, as the message will show it, and a space.
-inline void put_mention(auto& bar, std::size_t from, const std::string& name, const std::string& user) {
-  auto& field = composer_field(bar);
-  field.select(from, field.text().size());
-  // Taken apart with Backspace: its user's id, not the name it is sent by.
-  field.insertAtom("  " + name, user, name, false, user);
-  field.insertText(" ");
-}
-// Whether what is written answers or edits something.
-[[nodiscard]] inline bool composer_answering(const auto& bar) { return composer_context(bar).visible(); }
-inline void set_composer_text(auto& bar, std::string text) { composer_field(bar).setText(std::move(text)); }
-// What is written from `from` to its end replaced by `text`, the caret after
-// it: a suggestion picked over what was typed for it.
-inline void put_over_end(auto& bar, std::size_t from, const std::string& text) {
-  auto& field = composer_field(bar);
-  field.select(from, field.text().size());
-  field.insertText(text);
-}
-// Text and its runs, as a message edited had them.
-inline void set_formatted(auto& bar, std::string text, const std::vector<mux::styled_run>& runs) {
-  auto& field = composer_field(bar);
-  field.setText(std::move(text));
-  field.setSpans(std::ranges::to<std::vector<field_quotes::span>>(
-      std::views::transform(runs, [](const mux::styled_run& one) { return field_quotes::span{one.first, one.last, one.style}; })));
-}
-inline void clear_composer(auto& bar) { composer_field(bar).setText({}); }
 
 }  // namespace mux::ui
 

@@ -108,13 +108,13 @@ void part_apply(menu_part& self, const request::menu_quote_reply&) {
   part_apply(self, request::menu_reply{});
   if (plain.empty()) return;
   const auto fragment = selected.value_or(skiff::scene::clipboardFragment(plain, {}));
-  // Into the field that answers it: the thread's, where it is answered there.
-  auto& screen = self.s_->root();
+  // Into what answers it: the thread's draft, where it is answered there.
+  const auto quote = [&](mux::ui::composer_doc& now) { mux::ui::prepend_quote(now, fragment); };
   if (self.s_->showing->look<mux::ui::chat_shown>()->thread_answer == self.target_.id) {
-    mux::ui::prepend_quote(mux::ui::composer_field(mux::ui::thread_line_of(screen)), fragment);
+    self.s_->edit_thread_writing(quote);
     return;
   }
-  mux::ui::prepend_quote(mux::ui::composer_field(mux::ui::chat_line_of(screen)), fragment);
+  self.s_->edit_chat_writing(quote);
 }
 
 void part_apply(menu_part& self, const request::menu_reply&) {

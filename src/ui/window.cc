@@ -231,6 +231,10 @@ struct shown_root {
   // Each plugin's layer's: a call, for one.
   layers_shown_t layers;
   skiff::model::Tracked<selection_shown> selection;
+  // What is written in the chat's field and the thread's, as the program
+  // keeps it.
+  skiff::model::Tracked<chat_draft> chat_writing;
+  skiff::model::Tracked<thread_draft> thread_writing;
   skiff::model::Tracked<search_found> found;
   skiff::model::Tracked<std::optional<marks_facts>> marks;
   skiff::model::Tracked<std::optional<leave_space_facts>> leaving;

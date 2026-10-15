@@ -638,7 +638,7 @@ void app::before_frame() {
 
 void app::closing() {
   if (const auto& chosen = shared.chosen())
-    drafts.keep(*chosen, mux::ui::composer_plain(mux::ui::chat_line_of(root())));
+    drafts.keep(*chosen, mux::ui::draft_text(shared.chat_writing()));
   store.flush_reads(true);
   net->shutdown();
 }

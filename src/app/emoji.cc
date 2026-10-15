@@ -76,21 +76,23 @@ void part_apply(emoji_part& self, const request::favourite_emoji& one) {
 
 void part_apply(emoji_part& self, const request::insert_emoji& one) {
   auto& screen = self.s_->root();
-  // A custom emoji: its picture in the line, as the message will show it,
-  // sent as its shortcode.
-  const auto put = [&](auto& field) {
-    if (one.picture.empty())
-      field.insertText(one.text);
-    else
-      field.insertAtom("\u2003", one.picture, one.text, true);
-    // Under a finger the panel stands where the keyboard would: focused,
-    // the field brought the keyboard up over the panel at each emoji.
+  // Put in the draft of the field it is for; that field given the keys --
+  // not under a finger, where the panel stands where the keyboard would:
+  // focused, the field brought the keyboard up over the panel at each emoji.
+  const auto focus = [&](auto& field) {
     if (!self.s_->by_touch)
       self.s_->scene->focus(field);
   };
-  spl::visit(spl::overloaded{[&](request::writing::chat) { put(mux::ui::composer_field(mux::ui::chat_line_of(screen))); },
-                                   [&](request::writing::thread) { put(mux::ui::composer_field(mux::ui::thread_line_of(screen))); }},
-                self.into_);
+  const auto put = [&](mux::ui::composer_doc& now) { mux::ui::put_emoji(now, one.text, one.picture); };
+  spl::visit(spl::overloaded{[&](request::writing::chat) {
+                               self.s_->edit_chat_writing(put);
+                               focus(mux::ui::composer_field(mux::ui::chat_line_of(screen)));
+                             },
+                             [&](request::writing::thread) {
+                               self.s_->edit_thread_writing(put);
+                               focus(mux::ui::composer_field(mux::ui::thread_line_of(screen)));
+                             }},
+             self.into_);
 }
 
 void open_at(emoji_part& self, float right, float top) {

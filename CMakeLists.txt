@@ -251,7 +251,7 @@ cme_declare_port(NAME skiff PROVIDES skiff
   VERSION 0.1.0)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 10c7b31cf0ad83941cb4fce6aa83301007c73eed
+  GIT_TAG 1e3e6fa0cdf32085e921302c565a52002bfcb27c
   VERSION 0.1.0)
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on

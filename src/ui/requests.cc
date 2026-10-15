@@ -245,9 +245,6 @@ struct load_older {
   mux::conversation_id in;
   std::string from;
 };
-struct submit_message {
-  std::string text;
-};
 struct send_typed {};
 struct resize_sidebar {
   float x = 0.0f;

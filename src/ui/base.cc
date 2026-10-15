@@ -428,7 +428,6 @@ void look_as_its_content(const Node&, const palette&) {}
 //   void close_notice()
 //   void resize_sidebar(float x)     -- the chat list's edge dragged to x
 //   void resize_info(float x)        -- the chat info's edge dragged to x
-//   void submit_message(std::string text)  -- Enter in the message field
 //   void send_typed()                -- the send arrow: what is in the field
 //   void toggle_info()               -- the chosen chat's info, beside it
 //   void message_person(const conversation_id&)  -- a member's direct chat

@@ -55,17 +55,18 @@ class threads_part {
   // answer to what is answered there, where something is -- and the field
   // emptied.
   void apply(const request::thread_send&) {
-    auto& screen = s_->root();
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
-    const std::string text = mux::ui::composer_plain(mux::ui::thread_line_of(screen));
+    const std::string text = mux::ui::composer_plain(s_->thread_writing());
     if (!shown.thread || text.empty())
       return;
-    request::send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(mux::ui::thread_line_of(screen))};
-    mux::ui::clear_composer(mux::ui::thread_line_of(screen));
+    request::send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(s_->thread_writing())};
+    s_->write_thread({});
     s_->stop_thread_answer();
     this->apply(asked);
   }
   void apply(const request::thread_answer_cancel&) { s_->stop_thread_answer(); }
+  // The thread's field edited: what is written, kept.
+  void apply(const request::thread_draft_edited& one) { s_->write_thread(one.now); }
 
   // The panel as the chat is: the thread open -- an answer being written
   // let go where it changes -- or the room's threads, each root once, the

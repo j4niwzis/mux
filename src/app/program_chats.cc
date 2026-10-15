@@ -46,13 +46,12 @@ void app::apply(const request::choose& one) {
   }
   // What was being written where the reader was: kept as its draft; and
   // the chat opened's own put back in the field.
-  auto& screen = root();
   search.chat_chosen(one.which);
   if (shared.chosen() && *shared.chosen() != one.which) {
-    drafts.keep(*shared.chosen(), mux::ui::composer_plain(mux::ui::chat_line_of(screen)));
-    mux::ui::set_composer_text(mux::ui::chat_line_of(screen), shared.draft_of(one.which));
+    drafts.keep(*shared.chosen(), mux::ui::draft_text(shared.chat_writing()));
+    shared.write_chat(mux::ui::plain_draft(shared.draft_of(one.which)));
   } else if (!shared.chosen()) {
-    mux::ui::set_composer_text(mux::ui::chat_line_of(screen), shared.draft_of(one.which));
+    shared.write_chat(mux::ui::plain_draft(shared.draft_of(one.which)));
   }
   model->touch(one.which);
   paging.restore_reads(one.which);
@@ -71,11 +70,10 @@ void app::apply(const request::choose& one) {
 }
 
 void app::apply(const request::close_chat&) {
-  auto& screen = root();
   if (!shared.chosen())
     return;
-  drafts.keep(*shared.chosen(), mux::ui::composer_plain(mux::ui::chat_line_of(screen)));
-  mux::ui::set_composer_text(mux::ui::chat_line_of(screen), {});
+  drafts.keep(*shared.chosen(), mux::ui::draft_text(shared.chat_writing()));
+  shared.write_chat({});
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) {
     now.chosen.reset();
     now.info_open = false;

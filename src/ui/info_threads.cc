@@ -76,13 +76,10 @@ inline auto thread_row(const palette& colours, const thread_root& one) {
 // The chat's own composer, writing into the thread: its close lets go of
 // the answer, Enter and the arrow send there, its paperclip and emoji too --
 // each the program's to do.
-struct thread_typed {
-  using Answer = request::thread_send;
-  request::thread_send operator()(std::string_view) const { return {}; }
-};
 struct in_thread {
   using cancel = sends<request::thread_answer_cancel>;
-  using submit = thread_typed;
+  using draft = thread_draft;
+  using told = draft_told<request::thread_draft_edited, request::thread_send>;
   using attach = sends<request::attach_in_thread>;
   using emoji = sends<request::toggle_thread_emoji>;
   using send = sends<request::thread_send>;

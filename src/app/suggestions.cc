@@ -34,10 +34,9 @@ class suggestions_part {
   // at least, for a ':'). The same asked again keeps its list and what is
   // lit; one closed stays closed.
   void show() {
-    auto& screen = s_->root();
     const auto& chosen = s_->showing->look<mux::ui::chat_shown>()->chosen;
     const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
-    const std::optional<asked_t> now = chat ? asked_in(mux::ui::composer_text(mux::ui::chat_line_of(screen)), *chat) : std::nullopt;
+    const std::optional<asked_t> now = chat ? asked_in(s_->chat_writing().text, *chat) : std::nullopt;
     if (now == asked_)
       return;
     asked_ = now;
@@ -67,24 +66,23 @@ class suggestions_part {
     if (at >= items_.size() || !asked_)
       return;
     const mux::ui::suggestion picked = items_[at];
-    auto& line = mux::ui::chat_line_of(s_->root());
-    const std::string& text = mux::ui::composer_text(line);
-    spl::visit(spl::overloaded{[&](const mention_asked&) {
-                                 if (const auto sign = text.rfind('@'); sign != std::string::npos)
-                                   mux::ui::put_mention(line, sign, picked.title, picked.id);
-                               },
-                               [&](const emoji_asked&) {
-                                 const auto colon = text.rfind(':');
-                                 if (colon == std::string::npos)
-                                   return;
-                                 if (picked.picture.empty()) {
-                                   mux::ui::put_over_end(line, colon, picked.glyph);
-                                 } else {
-                                   mux::ui::composer_field(line).select(colon, text.size());
-                                   mux::ui::composer_field(line).insertAtom(" ", picked.picture, picked.glyph, true);
-                                 }
-                               }},
-               asked_->kind);
+    s_->edit_chat_writing([&](mux::ui::composer_doc& now) {
+      const std::string& text = now.text;
+      spl::visit(spl::overloaded{[&](const mention_asked&) {
+                                   if (const auto sign = text.rfind('@'); sign != std::string::npos)
+                                     mux::ui::put_mention(now, sign, picked.title, picked.id);
+                                 },
+                                 [&](const emoji_asked&) {
+                                   const auto colon = text.rfind(':');
+                                   if (colon == std::string::npos)
+                                     return;
+                                   if (picked.picture.empty())
+                                     mux::ui::put_over_end(now, colon, picked.glyph);
+                                   else
+                                     mux::ui::put_picture_over_end(now, colon, picked.picture, picked.glyph);
+                                 }},
+                 asked_->kind);
+    });
     items_.clear();
     this->put();
   }

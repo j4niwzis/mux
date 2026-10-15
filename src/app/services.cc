@@ -98,6 +98,25 @@ struct services {
     const auto found = drafts.find(id);
     return found == drafts.end() ? std::string() : found->second;
   }
+  // What is written in the chat's field and the thread's, as the program
+  // keeps it -- the fields show it; and changed, as the program changes it
+  // (a link put on, a name picked, a quote) or a field told it was edited.
+  [[nodiscard]] const mux::ui::composer_doc& chat_writing() { return showing->look<mux::ui::chat_draft>()->now; }
+  [[nodiscard]] const mux::ui::composer_doc& thread_writing() { return showing->look<mux::ui::thread_draft>()->now; }
+  void write_chat(mux::ui::composer_doc now) { mux::ui::show(*showing, mux::ui::chat_draft{std::move(now)}); }
+  void write_thread(mux::ui::composer_doc now) { mux::ui::show(*showing, mux::ui::thread_draft{std::move(now)}); }
+  template <class Change>
+  void edit_chat_writing(Change change) {
+    auto now = this->chat_writing();
+    change(now);
+    this->write_chat(std::move(now));
+  }
+  template <class Change>
+  void edit_thread_writing(Change change) {
+    auto now = this->thread_writing();
+    change(now);
+    this->write_thread(std::move(now));
+  }
   // An answer being written in the thread open let go: the field's bar over
   // it too.
   void stop_thread_answer() const {

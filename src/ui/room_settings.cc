@@ -207,7 +207,7 @@ inline auto room_settings_view(const ui_needs& n, const room_settings_facts& fac
                                         client_page<settings_tab::general>(room_general_page(colours, facts, presentation.page_header)),
                                         client_page<settings_tab::notifications>(notifications_page(colours, facts)),
                                         client_page<settings_tab::looks>(looks_page(colours, facts)),
-                                        c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_pages_of(colours, facts))))))))));
+                                        c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_pages_of(colours, facts)))))))))));
 }
 using room_settings_view_t = decltype(room_settings_view(std::declval<const ui_needs&>(), std::declval<const room_settings_facts&>()));
 // The settings, with the room they are for.

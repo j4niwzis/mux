@@ -100,7 +100,7 @@ inline auto forward_view(const palette& colours, const std::vector<forward_targe
                                 c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                                 [colours = &colours](const forward_target& one) {
                                   return forward_row(*colours, one);
-                                })))))),
+                                }))))),
       forward_draft{});
 }
 inline auto forward_view(const ui_needs& n, const forward_facts& facts) {

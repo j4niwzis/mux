@@ -112,6 +112,10 @@ struct muc_room {
   std::vector<muc_field> fields;
   std::vector<muc_person> people;
   std::vector<muc_affiliation> affiliations;
+  // A configuration on its way to the server; and what was wrong with the
+  // last, as it said -- the fields kept as they were sent, to be put right.
+  bool saving = false;
+  std::optional<std::string> failure;
 };
 
 struct state {

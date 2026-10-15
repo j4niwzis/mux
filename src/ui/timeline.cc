@@ -354,6 +354,12 @@ struct timeline_rows {
     const auto at = std::ranges::find(std::views::iota(std::size_t{0}, all.size()), id, [&](std::size_t i) { return all.at(i).id; });
     return *at < all.size() ? std::optional<std::size_t>(*at) : std::nullopt;
   }
+  // Come while the reader was away from the end, counted on the way down:
+  // another's message the chat shows, not one's own nor an event it hides.
+  static bool counts(const chats_model& now, const Told& told, std::size_t i) {
+    const message& said = seen_of(now, told).at(i);
+    return !said.outgoing && (!said.service || told.filter.shows(said.event_kind));
+  }
   // The rooms each message names, worked out once for it: whether one has
   // come since is what makes its row again.
   [[nodiscard]] static const named_rooms& rooms_of(const conversation& in, const message& said, const model* now) {

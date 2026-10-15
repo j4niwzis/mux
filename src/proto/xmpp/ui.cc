@@ -637,7 +637,7 @@ inline std::vector<std::string> permission_rows(const muc_room& room) {
       return occupant.first + " (Role: " + occupant.second + ")";
     });
     if (!person.occupants.empty())
-      text += " · " + occupants | std::views::join_with(std::string_view(", ")) | std::ranges::to<std::string>();
+      text += " · " + (occupants | std::views::join_with(std::string_view(", ")) | std::ranges::to<std::string>());
     return text;
   }) | std::ranges::to<std::vector<std::string>>();
 }

@@ -38,8 +38,8 @@ template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::forward_box>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::forward_box>();
 }
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::send_box>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::send_box>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::send_box_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::send_box_t>();
 }
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::notice_box_t>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::notice_box_t>();

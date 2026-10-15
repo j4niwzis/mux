@@ -666,7 +666,7 @@ struct window : skiff::compose::Specced {
       shown_in<explore_box, explore_facts> explore;
       // A protocol's own dialog: Matrix's developer tools, for one.
       widgets::Dialog<tool_holder> tools;
-      shown_in<send_box, send_facts> sending;
+      shown_in<send_box_t, send_facts> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
       shown_in<passphrase_box_t, passphrase_facts> passphrase;
@@ -830,7 +830,7 @@ struct window : skiff::compose::Specced {
                 .wallpaper =
                     shown_made<wallpaper_box, wallpaper_facts>(n),
                 .explore = shown_made<explore_box, explore_facts>(n),
-                .sending = shown_made<send_box, send_facts>(n),
+                .sending = shown_made<send_box_t, send_facts>(n),
                 .passphrase =
                     shown_made<passphrase_box_t, passphrase_facts>(n),
                 .verifying =
@@ -983,7 +983,6 @@ struct window : skiff::compose::Specced {
     parts.now->over_chats([](auto&... over) { (layers::drop_of(over), ...); });
   }
 
-  [[nodiscard]] send_box* send_box_up() { return layer().sending.shown(); }
   [[nodiscard]] settings_view_t* settings_up() { return layer().settings.shown(); }
   // A selectable text's menu, where the pointer was pressed, kept in the
   // window; and gone.

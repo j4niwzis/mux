@@ -238,7 +238,10 @@ struct message_person {
 struct attach_files {};
 struct settings_files {};
 struct close_send_box {};
-struct send_files {};
+// The files in the send box sent, with the caption written there.
+struct send_files {
+  std::string caption;
+};
 struct open_picture {
   std::string source;
   std::string sender, name, when;

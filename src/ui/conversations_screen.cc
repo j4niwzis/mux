@@ -824,7 +824,6 @@ struct conversations_screen : skiff::compose::Stacked {
   // messages marked; none, the head back.
   void show_selection(const std::set<std::string>& ids) {
     header.setVisible(ids.empty() && !search.visible());
-    parts.threads.parts.answers.set_selected(ids);
     this->fState.relayoutQuietly();
   }
   // The search bar in place of the head, or the head back.
@@ -838,7 +837,7 @@ struct conversations_screen : skiff::compose::Stacked {
   }
   // The chat's messages: the list in its area (chat_area), told by the
   // program; read here for the pinned bar and the page keys.
-  [[nodiscard]] auto& messages() { return std::get<1>(chat.area.fParts).list(); }
+  [[nodiscard]] auto& messages() { return std::get<1>(chat.area.fParts).list().list(); }
   // The chat last shown: its thread let go where another is.
   std::optional<conversation_id> shown_chat;
   // The chat's wallpaper, as its levels say, behind its messages: not

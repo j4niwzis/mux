@@ -244,7 +244,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin 215600c014141954f04ebeb1e5fa85e4811b8272)
+set(mux_skiff_pin 0726476fb4b1d4d3f10aace7dbd4dd6d63aba7d0)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
@@ -427,7 +427,6 @@ if(MUX_UI)
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_chats.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_side.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_column.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_bubbles.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_composer.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_info.cc>
     $<$<NOT:$<CONFIG:Release>>:src/ui/walks_accounts.cc>

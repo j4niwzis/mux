@@ -45,29 +45,17 @@ using namespace ::mux::ui;
   out.replies_to = one.to.empty() ? std::nullopt : std::optional(one.to);
   return out;
 }
-using reaction_row_answer = std::variant<menu_facts, request::open_url,
-    std::tuple<std::optional<request::reply_to>, request::close_shown<shown>>>;
 
 inline auto reaction_event_row(const ui_needs& n, const conversation& in, const entry& one,
                         bool first, bool last, const model* known) {
   namespace c = skiff::compose;
-  auto bubble = legacy::message_bubble(spl::remapped<typename legacy::message_bubble::needs>(n),
-                                        in, reaction_message_of(in, one), first, last, known);
-  auto row = c::onClick(std::tuple{one.event.empty() ? std::optional<request::reply_to>{}
+  // Its menu its row's own: what is not held under an id of its own offers
+  // nothing that would be aimed at it.
+  auto bubble = message_alone(n, in, reaction_message_of(in, one), first, last, known);
+  return c::onClick(std::tuple{one.event.empty() ? std::optional<request::reply_to>{}
         : std::optional(request::reply_to{one.event, std::format("{} reacted {}", one.name, one.key)}), request::close_shown<shown>{}},
       c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
           .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .hoverBackground = n.colours->chosen}), std::move(bubble)), "Reply to reaction");
-  return c::onPointer<reaction_row_answer>([in_id = in.id, known](auto& row, const scene::pointer::down& press,
-                                                                scene::PointerReply& reply) -> std::optional<reaction_row_answer> {
-    if (press.button != 3) return std::nullopt;
-    const auto& bubble = std::get<0>(row.fParts);
-    const auto* chat = known ? known->find(in_id) : nullptr;
-    auto facts = facts_of_bubble(bubble, chat, press.x, press.y);
-    // Legacy cached reactions without an event ID cannot be targeted.
-    if (facts.id.empty()) { facts.can.react = false; facts.deletable = false; }
-    reply.handle();
-    return reaction_row_answer{std::move(facts)};
-  }, std::move(row));
 }
 inline auto panel(const ui_needs& n, const shown& facts) {
   namespace c = skiff::compose;

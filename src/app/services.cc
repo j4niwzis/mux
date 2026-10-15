@@ -237,11 +237,12 @@ struct services {
         },
         *up);
   }
-  // The chat Manage is for: a space, where its settings are open -- what is
+  // The chat Manage is for -- a space, where its settings are open: what is
   // chosen there goes to it -- else the chat chosen.
-  std::optional<mux::conversation_id> manage_target;
   [[nodiscard]] std::optional<mux::conversation_id> managed() const {
-    return manage_target && root().manage_up() ? manage_target : root().main().chosen;
+    if (const auto& open = *showing->look<std::optional<mux::ui::room_settings_facts>>())
+      return open->chat;
+    return root().main().chosen;
   }
   // Features belong to the selected account. An unsupported feature never
   // borrows another account's protocol or credentials.

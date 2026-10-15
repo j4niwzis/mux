@@ -20,13 +20,12 @@ namespace mux::proto::xmpp::app_detail {
 // and the page shown again from it.
 template <class App, class Change>
 void change_room(App& app, const mux::conversation_id& in, Change change) {
-  if (auto* panel = app.root().manage_up(); panel && panel->facts.chat == in)
-    spl::visit(spl::overloaded{[&](muc_room& room) {
-                                 change(room);
-                                 panel->show_again();
-                               },
-                               [](auto&) {}},
-               panel->facts.theirs);
+  const auto& open = *app.showing.template look<std::optional<mux::ui::room_settings_facts>>();
+  if (!open || open->chat != in)
+    return;
+  auto now = *open;
+  spl::visit(spl::overloaded{[&](muc_room& room) { change(room); }, [](auto&) {}}, now.theirs);
+  mux::ui::show(app.showing, std::optional(std::move(now)));
 }
 // What the server asks, in the form that shows it -- XMPP's -- and in no other.
 template <class Form>
@@ -68,9 +67,10 @@ template <class App>
 void program_told(App& app, const muc_settings_loaded& loaded) {
   const auto chosen = app.shared.managed();
   if (!chosen || chosen->account != loaded.account || chosen->id != loaded.room) return;
-  if (auto* panel = app.root().manage_up()) {
-    panel->facts.theirs = loaded.settings;
-    panel->show_again();
+  if (const auto& open = *app.showing.template look<std::optional<mux::ui::room_settings_facts>>()) {
+    auto now = *open;
+    now.theirs = loaded.settings;
+    mux::ui::show(app.showing, std::optional(std::move(now)));
   }
 }
 template <class App>

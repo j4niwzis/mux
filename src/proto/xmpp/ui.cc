@@ -341,8 +341,9 @@ namespace mux::proto::xmpp::manage_detail {
 using namespace ::mux::ui;
 inline const muc_room& settings_of(const room_settings_facts& facts) {
   static const muc_room empty;
-  const auto* room = facts.theirs.template get_if<muc_room>();
-  return room ? *room : empty;
+  return spl::visit(spl::overloaded{[](const muc_room& room) -> const muc_room& { return room; },
+                                    [](const auto&) -> const muc_room& { return empty; }},
+                    facts.theirs);
 }
 inline std::vector<std::string> lines_of(std::string_view text) {
   if (text.empty()) return {};
@@ -682,39 +683,57 @@ inline auto config_row(const palette& colours, const muc_room& room, const muc_f
 // and instructions, each field, Refresh and Save -- Save while all is valid
 // and something changed, and not while a save is on its way; what was wrong
 // with the last, the server's word, under them.
-inline auto configuration_page(const palette& colours, const room_settings_facts& facts) {
+// The settings as the program says, and the room's part of them: what a
+// page is made from -- without what a save on its way says, which the
+// pages read as it moves.
+using facts_t = std::optional<room_settings_facts>;
+[[nodiscard]] inline muc_room settled(muc_room room) {
+  room.saving = false;
+  room.failure.reset();
+  return room;
+}
+[[nodiscard]] inline const muc_room& room_of(const facts_t& facts) {
+  static const muc_room none;
+  return facts ? settings_of(*facts) : none;
+}
+inline auto configuration_page(const palette& colours, const muc_room& room) {
   namespace c = skiff::compose;
-  const muc_room& room = settings_of(facts);
-  const bool saving = room.saving;
-  const auto changed_and_valid = [room, saving](const muc_form& form) {
-    return !saving && std::ranges::none_of(room.fields, [&](const muc_field& f) { return trouble_of(form, room, f).has_value(); }) &&
+  const auto changed_and_valid = [room](const muc_form& form) {
+    return std::ranges::none_of(room.fields, [&](const muc_field& f) { return trouble_of(form, room, f).has_value(); }) &&
            std::ranges::any_of(room.fields, [&](const muc_field& f) { return modified(form, room, f); });
   };
+  const auto saving = [](const facts_t& facts) { return room_of(facts).saving; };
   return c::local<muc_form>(muc_form_events{},
       c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {12.0f, 12.0f, 18.0f, 12.0f}}),
           c::visible(!room.title.empty(), wrapped(nodes::Text(room.title, 16.0f, colours.text, true))),
           wrapped(nodes::Text(room.configuring ? std::ranges::to<std::string>(std::views::join_with(room.instructions, std::string_view("\n")))
                                                : "You need Owner permission to change the configuration.",
                               13.0f, colours.dim)),
-          c::styled({.width = 100.0f, .height = 32.0f, .alignSelf = scene::align::kStart, .disabled = saving},
-                    button_for<sends<request::refresh_muc>>(colours.widgets, "Refresh", {})),
-          c::visible(room.configuring,
-              c::spec_for<muc_form>([changed_and_valid](const muc_form& form) {
-                return scene::Spec{.width = 100.0f, .height = 32.0f, .alignSelf = scene::align::kStart, .disabled = !changed_and_valid(form)};
+          // Neither while a save is on its way.
+          c::spec_for<facts_t>([saving](const facts_t& facts) { return scene::Spec{.disabled = saving(facts)}; },
+              c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  c::styled({.width = 100.0f, .height = 32.0f, .alignSelf = scene::align::kStart},
+                            button_for<sends<request::refresh_muc>>(colours.widgets, "Refresh", {})),
+                  c::visible(room.configuring,
+                      c::spec_for<muc_form>([changed_and_valid](const muc_form& form) {
+                        return scene::Spec{.width = 100.0f, .height = 32.0f, .alignSelf = scene::align::kStart, .disabled = !changed_and_valid(form)};
+                      },
+                          c::asking_for<muc_form>([room](const muc_form& form) {
+                            return request::configure_muc{room.fields | std::views::transform([&](const muc_field& f) { return answer_of(form, room, f); }) |
+                                                          std::ranges::to<std::vector>()};
+                          },
+                              widgets::Button<scene::NoAction>(colours.widgets, "Save", {})))))),
+          c::shown_for<facts_t>([](const facts_t& facts) { return room_of(facts).saving || room_of(facts).failure.has_value(); },
+              c::text_for<facts_t>([](const facts_t& facts) {
+                return room_of(facts).saving ? std::string("Saving\u2026") : room_of(facts).failure.value_or("");
               },
-                  c::asking_for<muc_form>([room](const muc_form& form) {
-                    return request::configure_muc{room.fields | std::views::transform([&](const muc_field& f) { return answer_of(form, room, f); }) |
-                                                  std::ranges::to<std::vector>()};
-                  },
-                      widgets::Button<scene::NoAction>(colours.widgets, "Save", {})))),
-          c::visible(saving || room.failure.has_value(),
-                     wrapped(nodes::Text(saving ? std::string("Saving…") : room.failure.value_or(""), 13.0f, colours.dim))),
+                  wrapped(nodes::Text("", 13.0f, colours.dim)))),
           c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   room.fields | std::views::transform([&](const muc_field& f) { return config_row(colours, room, f); }) |
                       std::ranges::to<std::vector>())),
       form_of(room));
 }
-using configuration_page_t = decltype(configuration_page(std::declval<const palette&>(), std::declval<const room_settings_facts&>()));
+using configuration_page_t = decltype(configuration_page(std::declval<const palette&>(), std::declval<const muc_room&>()));
 
 // The room: its subject, one's nickname in it -- or, not in it, joining it
 // again with a password where it asks one -- and its settings fetched again.
@@ -722,9 +741,15 @@ struct room_form {
   std::string topic, nick, password;
   friend bool operator==(const room_form&, const room_form&) = default;
 };
-inline auto room_page(const palette& colours, const room_settings_facts& facts) {
+// What the room page is made from: the room, and its subject.
+struct room_basis {
+  muc_room room;
+  std::string topic;
+  friend bool operator==(const room_basis&, const room_basis&) = default;
+};
+inline auto room_page(const palette& colours, const room_basis& basis) {
   namespace c = skiff::compose;
-  const muc_room& room = settings_of(facts);
+  const muc_room& room = basis.room;
   const scene::Spec button{.height = 32.0f, .alignSelf = scene::align::kStart};
   return c::local<room_form>(
       c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
@@ -740,9 +765,9 @@ inline auto room_page(const palette& colours, const room_settings_facts& facts) 
           c::visible(!room.joined, c::asking_for<room_form>([](const room_form& form) { return request::rejoin_muc{form.nick, form.password}; },
                                                             c::styled(button, widgets::Button<scene::NoAction>(colours.widgets, "Join room", {})))),
           c::styled(button, button_for<sends<request::refresh_muc>>(colours.widgets, "Refresh room settings", {}))),
-      room_form{facts.topic, room.nick, {}});
+      room_form{basis.topic, room.nick, {}});
 }
-using room_page_t = decltype(room_page(std::declval<const palette&>(), std::declval<const room_settings_facts&>()));
+using room_page_t = decltype(room_page(std::declval<const palette&>(), std::declval<const room_basis&>()));
 
 // Affiliation belongs to a bare account; role belongs to a joined occupant.
 // Merge the two lists without inventing duplicate accounts, while keeping
@@ -781,9 +806,15 @@ struct roles_form {
   std::string user, rank, reason, confirm;
   friend bool operator==(const roles_form&, const roles_form&) = default;
 };
-inline auto roles_page(const palette& colours, const room_settings_facts& facts) {
+// And the roles page: the room, and its address.
+struct roles_basis {
+  muc_room room;
+  std::string id;
+  friend bool operator==(const roles_basis&, const roles_basis&) = default;
+};
+inline auto roles_page(const palette& colours, const roles_basis& basis) {
   namespace c = skiff::compose;
-  const muc_room& room = settings_of(facts);
+  const muc_room& room = basis.room;
   const bool owner = room.affiliation == "owner";
   return c::local<roles_form>(
       c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
@@ -805,18 +836,22 @@ inline auto roles_page(const palette& colours, const room_settings_facts& facts)
           c::visible(owner, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               wrapped(nodes::Text("Destroy room permanently (owner only). Type the room address to confirm.", 13.0f, colours.error)),
               model_field<&roles_form::reason>(colours, "Reason", "Optional reason"),
-              model_field<&roles_form::confirm>(colours, "Confirm room address", facts.id),
-              c::asking_for<roles_form>([room = facts.id](const roles_form& form) {
+              model_field<&roles_form::confirm>(colours, "Confirm room address", basis.id),
+              c::asking_for<roles_form>([room = basis.id](const roles_form& form) {
                 return form.confirm == room ? std::optional(request::destroy_muc{form.reason}) : std::nullopt;
               },
                   c::styled({.height = 32.0f, .alignSelf = scene::align::kStart},
                             widgets::Button<scene::NoAction>(colours.widgets, "Destroy room", {})))))));
 }
-using roles_page_t = decltype(roles_page(std::declval<const palette&>(), std::declval<const room_settings_facts&>()));
+using roles_page_t = decltype(roles_page(std::declval<const palette&>(), std::declval<const roles_basis&>()));
+// A page made from what the room is, again where that changes.
+template <class Page, class Basis, class Of, class Make>
+auto made_from(const palette& colours, Of of, Make make) {
+  namespace c = skiff::compose;
+  return c::projected<facts_t>([of](const facts_t& facts) { return facts ? std::optional<Basis>(of(*facts)) : std::nullopt; },
+      c::mount<Page, Basis>([at = &colours, make](const Basis& basis) { return std::tuple{make(*at, basis)}; },
+                            {.fillX = true, .autoSize = scene::axes::kY}));
 }
-export namespace mux::proto::xmpp {
-namespace manage { struct room {}; struct configuration {}; struct roles {}; }
-constexpr ui::manage_tab_list<manage::room, manage::configuration, manage::roles> manage_tabs(const state&) { return {}; }
 }
 export namespace mux::proto::xmpp::manage {
 inline bool tab_visible(room, const ui::room_settings_facts& facts) { return facts.group; }
@@ -828,14 +863,22 @@ constexpr std::string_view tab_title(roles) { return "Roles & Permissions"; }
 inline ui::icon_t tab_icon(room) { return ui::icon::people{}; }
 inline ui::icon_t tab_icon(configuration) { return ui::icon::gear{}; }
 inline ui::icon_t tab_icon(roles) { return ui::icon::people{}; }
-template <class Box> constexpr type_tag<manage_detail::room_page_t> page_type(room, type_tag<Box>) { return {}; }
-template <class Box> constexpr type_tag<manage_detail::configuration_page_t> page_type(configuration, type_tag<Box>) { return {}; }
-template <class Box> constexpr type_tag<manage_detail::roles_page_t> page_type(roles, type_tag<Box>) { return {}; }
-template <class Box> auto make_manage_page(room, Box* box, const ui::room_settings_facts& facts) { return manage_detail::room_page(*box->colours_, facts); }
-template <class Box> auto make_manage_page(configuration, Box* box, const ui::room_settings_facts& facts) {
-  return manage_detail::configuration_page(*box->colours_, facts);
+// Each tab's page, made again from the room as the server says it.
+inline auto make_manage_page(room, const ui::palette& colours, const ui::room_settings_facts&) {
+  using namespace manage_detail;
+  return made_from<room_page_t, room_basis>(colours, [](const ui::room_settings_facts& facts) { return room_basis{settled(settings_of(facts)), facts.topic}; },
+                                            [](const ui::palette& at, const room_basis& basis) { return room_page(at, basis); });
 }
-template <class Box> auto make_manage_page(roles, Box* box, const ui::room_settings_facts& facts) { return manage_detail::roles_page(*box->colours_, facts); }
+inline auto make_manage_page(configuration, const ui::palette& colours, const ui::room_settings_facts&) {
+  using namespace manage_detail;
+  return made_from<configuration_page_t, muc_room>(colours, [](const ui::room_settings_facts& facts) { return settled(settings_of(facts)); },
+                                                   [](const ui::palette& at, const muc_room& room) { return configuration_page(at, room); });
+}
+inline auto make_manage_page(roles, const ui::palette& colours, const ui::room_settings_facts&) {
+  using namespace manage_detail;
+  return made_from<roles_page_t, roles_basis>(colours, [](const ui::room_settings_facts& facts) { return roles_basis{settled(settings_of(facts)), facts.id}; },
+                                              [](const ui::palette& at, const roles_basis& basis) { return roles_page(at, basis); });
+}
 }
 
 export namespace mux::proto::xmpp::settings {

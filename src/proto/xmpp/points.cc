@@ -94,4 +94,12 @@ inline std::string local_part(const state&, std::string_view address) {
 // An xmpp: URI (RFC 5122).
 inline std::optional<std::string> share_link(const state&, std::string_view address) { return "xmpp:" + std::string(address); }
 
+// A room's settings (Manage): its tabs beside the client's.
+namespace manage {
+struct room {};
+struct configuration {};
+struct roles {};
+}  // namespace manage
+constexpr manage_tab_list<manage::room, manage::configuration, manage::roles> manage_tabs(const state&) { return {}; }
+
 }  // namespace mux::proto::xmpp

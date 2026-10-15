@@ -337,7 +337,7 @@ void app::take_page_input() {
   if (auto* up = root().settings_up())
     now[0] = spl::visit([](auto& page) { return bound_part_of(page); }, up->page());
   if (auto* managing = root().manage_up())
-    now[1] = spl::visit([](auto& page) { return bound_part_of(page); }, managing->page());
+    now[1] = managing->fState.fId;
   if (auto* panel = root().open_panel())
     now[2] = spl::visit([](auto& accounts) { return spl::visit([](auto& page) { return bound_part_of(page); }, accounts.detail); },
                         *panel);
@@ -502,6 +502,7 @@ void app::before_frame() {
     jumps.clear_returns();
   jumps.go_on(taker{this});
   chat_view.show();
+  manage.show();
   suggestions.show();
   threads.show();
   pictures.viewer_tick();

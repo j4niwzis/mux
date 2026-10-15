@@ -730,7 +730,7 @@ struct window : skiff::compose::Specced {
       // The mentions or the reactions not yet seen, listed.
       shown_in<marks_box, marks_facts> marks;
       // A room's management.
-      shown_in<room_settings, room_settings_facts> manage;
+      shown_in<room_settings_t, room_settings_facts> manage;
       // Where a message is forwarded to.
       shown_in<forward_box, forward_facts> forwarding;
       // Element's Start chat, and its Create a room.
@@ -893,7 +893,7 @@ struct window : skiff::compose::Specced {
                     shown_made<leave_space_box_t, leave_space_facts>(n),
                 .marks = shown_made<marks_box, marks_facts>(n),
                 .manage =
-                    shown_made<room_settings, room_settings_facts>(n),
+                    shown_made<room_settings_t, room_settings_facts>(n),
                 .forwarding =
                     shown_made<forward_box, forward_facts>(n),
                 .new_chat =
@@ -1023,7 +1023,9 @@ struct window : skiff::compose::Specced {
   [[nodiscard]] skia::SkPoint last_press() const { return parts.now->last_press; }
   // A message's menu up: the right press was its.
   [[nodiscard]] bool context_menu_up() { return layer().menu.shown() != nullptr; }
-  [[nodiscard]] room_settings* manage_up() { return layer().manage.shown(); }
+  // The room's settings, where they are up: for the bindings to walk them
+  // whole once they come up.
+  [[nodiscard]] room_settings_t* manage_up() { return layer().manage.shown(); }
 
   void close_drawer_now() { layer().frame.base().closeNow(); }
   [[nodiscard]] bool drawer_open() { return layer().frame.base().isOpen(); }

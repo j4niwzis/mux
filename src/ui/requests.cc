@@ -115,6 +115,8 @@ namespace request {
 struct apply_style {};
 struct configure_theme { config::theme_t theme; std::optional<config::custom_theme> custom; };
 struct set_developer_tools { bool enabled; };
+// And turned the other way.
+struct flip_developer_tools {};
 // One of the chosen account's pages asked for.
 struct account_page {
   account_page_t page = ::mux::ui::account_page::connection{};

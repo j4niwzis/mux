@@ -85,6 +85,9 @@ struct side_shown {
   bool side_on = false, top_on = false;
   std::optional<std::string> forum;
   bool no_chats = false;
+  // The chats' list up: not while messages found are in its place, and not
+  // empty while the server's search is shown -- that taking the room.
+  bool chats_on = true;
   // An icon being dragged: the side bar shown to drop on, whatever it holds.
   bool dragging = false;
   // Whose spaces the bars hold: what a space's menu asks with.
@@ -172,6 +175,12 @@ struct big_bars {
 };
 // Out of the forum open, to its row in the list, lit (Alt+Left).
 struct leave_forum {};
+// Into the forum gone to by Alt+Up or Alt+Down (Alt+Right).
+struct open_pointed {};
+// A swipe across the chats screen on a phone's window: right, or left.
+struct screen_swipe {
+  bool right = true;
+};
 // A key pressed on the chats screen that nothing under the keys took: what
 // it does is the program's to say, from what it holds.
 struct screen_key {

@@ -34,10 +34,10 @@ class suggestions_part {
   // at least, for a ':'). The same asked again keeps its list and what is
   // lit; one closed stays closed.
   void show() {
-    auto& screen = s_->root().main();
+    auto& screen = s_->root();
     const auto& chosen = s_->showing->look<mux::ui::chat_shown>()->chosen;
     const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
-    const std::optional<asked_t> now = chat ? asked_in(mux::ui::composer_text(screen.line), *chat) : std::nullopt;
+    const std::optional<asked_t> now = chat ? asked_in(mux::ui::composer_text(screen.chat_line()), *chat) : std::nullopt;
     if (now == asked_)
       return;
     asked_ = now;
@@ -67,7 +67,7 @@ class suggestions_part {
     if (at >= items_.size() || !asked_)
       return;
     const mux::ui::suggestion picked = items_[at];
-    auto& line = s_->root().main().line;
+    auto& line = s_->root().chat_line();
     const std::string& text = mux::ui::composer_text(line);
     spl::visit(spl::overloaded{[&](const mention_asked&) {
                                  if (const auto sign = text.rfind('@'); sign != std::string::npos)

@@ -69,8 +69,6 @@ void app::woken() {
                                    now->loading = false;
                                  });
                                  // The own server's, for what the chat list searched.
-                                 if (shared.listed() == std::optional(listed.by) && listed.server.empty() && !listed.space)
-                                   root().main().found_rooms_elsewhere(listed.query, listed.rooms);
                                  if (listed.server.empty() && !listed.space)
                                    chat_list.found_rooms(listed.query, listed.rooms);
                                },
@@ -118,8 +116,6 @@ void app::woken() {
                                      });
                                    }
                                  });
-                                 if (shared.listed() == std::optional(found.by))
-                                   root().main().found_people_elsewhere(found.query, found.people);
                                  chat_list.found_people(found.query, found.people);
                                },
                                // A room looked up: its card filled, while it
@@ -289,7 +285,7 @@ void app::woken() {
     }
   // An answer gone to, scrolled to once its thread's panel has it.
   if (thread_target_) {
-    auto& screen = root().main();
+    auto& screen = root();
     if (!shared.thread_open() || jumps.aim_in_thread(*thread_target_))
       thread_target_.reset();
   }
@@ -421,8 +417,6 @@ void app::show_chats_now() {
   // The chat chosen, as what is shown has it, read first.
   this->refresh_shown();
   press_target_now() = {&this->state, this};
-  root().main().wants_ = &wants;
-  root().main().last_model = &*model;
   // What is kept read first, where it moved since: the screen reads each
   // chat's settings from it as it is shown.
   window_binding.refresh(root(), this->state);
@@ -444,12 +438,12 @@ void app::take_wants() {
 }
 
 void app::refresh_shown() {
+  root().show_drawer(*model, shared.listed());
   // The looks as their choices show them: what the window last read of
   // what is kept, for the chat chosen.
   looks.read();
   const auto shown = showing.look<mux::ui::chat_shown>();
-  const auto& screen = root().main();
-  if (shown->forum && shared.listed() && !screen.is_forum({*shared.listed(), *shown->forum}))
+  if (shown->forum && shared.listed() && !chat_list.is_forum({*shared.listed(), *shown->forum}))
     mux::ui::change_shown<mux::ui::chat_shown>(showing, [](auto& now) { now.forum.reset(); });
   shared.read_shown_now();
   if (std::exchange(shared.menu_focus_due, false))
@@ -553,7 +547,7 @@ void app::before_frame() {
   // Not under a finger: there the keys' focus is the text input started,
   // and a phone's keyboard up over the chat until it is put away.
   if (scene.focusedId() == 0 && !shared.by_touch && shared.chosen() && !root().open_panel() && !root().settings_up())
-    scene.focus(mux::ui::composer_field(root().main().line));
+    scene.focus(mux::ui::composer_field(root().chat_line()));
   // The emoji panel's stickers in view, asked for as they change -- as it
   // opens, as it scrolls, as its tab or its search changes -- and not only
   // when something else refreshed the window.
@@ -612,7 +606,7 @@ void app::before_frame() {
 
 void app::closing() {
   if (const auto& chosen = shared.chosen())
-    drafts.keep(*chosen, mux::ui::composer_plain(root().main().line));
+    drafts.keep(*chosen, mux::ui::composer_plain(root().chat_line()));
   store.flush_reads(true);
   net->shutdown();
 }
@@ -686,7 +680,9 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   shared.emoji.favourite_stickers = this->recent().favourite_stickers;
   shared.emoji.favourite_emoji = this->recent().favourite_emoji;
   if (saved.last_account)
-    this->root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
+    mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) {
+      now.current = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
+    });
   // Read the loaded appearance just as a later settings change does.
   // Writing the window's defaults here replaced the saved blur and backdrop.
   this->show_looks();

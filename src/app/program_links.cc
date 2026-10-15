@@ -28,9 +28,8 @@ void app::open_chat(const mux::conversation_id& which, const std::optional<std::
     this->go_to_message(which, *event, std::nullopt);
     return;
   }
-  auto& screen = root().main();
+  auto& screen = root();
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.current = which.account; });
-  screen.wanted.reset();
   this->change_part<recently_used>([&](recently_used& now) { now.last_account = which.account.address; });
   this->apply(request::choose{which});
 }
@@ -41,7 +40,7 @@ void app::open_chat(const mux::conversation_id& which, const std::optional<std::
 // reacted to; and the view jumps, to the part a quote marks where it has one.
 void app::go_to_message(const mux::conversation_id& in, std::string id, std::optional<std::string> fragment,
                         std::optional<std::string> from) {
-  auto& screen = root().main();
+  auto& screen = root();
   // Where it goes from, to come back to: this chat, where it goes to
   // another; else the place in this one.
   const bool here = shared.chosen() && *shared.chosen() == in;
@@ -63,7 +62,7 @@ void app::go_to_message(const mux::conversation_id& in, std::string id, std::opt
 }
 
 void app::follow(const mux::logic::link_t& where) {
-  auto& screen = root().main();
+  auto& screen = root();
   // A link in the chat belongs to its account, even when another account
   // is selected in the sidebar. Without a chat, use that selection.
   const auto by = shared.chosen() ? std::optional(shared.chosen()->account) : shared.listed();
@@ -94,7 +93,7 @@ void app::follow(const mux::logic::link_t& where) {
 void app::go_to_linked(const mux::conversation_id& in, const std::string& event) {
   const mux::conversation* chat = model->find(in);
   if (chat && mux::ui::held_message(*chat, event)) {
-    auto& screen = root().main();
+    auto& screen = root();
     if (!(shared.chosen() && *shared.chosen() == in)) {
       jumps.note_chat_return();
       this->open_chat(in, std::nullopt);
@@ -116,7 +115,7 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
                                                                                           : std::nullopt;
   if (!thread)
     return false;
-  auto& screen = root().main();
+  auto& screen = root();
   jumps.stop();
   if (shared.thread_open() != thread) {
     shared.open_thread(*thread);
@@ -131,7 +130,6 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
 }
 
 void app::apply(const request::resize_sidebar& one) {
-  root().main().resize_sidebar(one.x);
   chat_list.resize_side(one.x);
 }
 
@@ -154,7 +152,7 @@ void app::apply(const request::jump_to_message& one) {
   if (const auto& chosen = shared.chosen())
     if (const mux::conversation* chat = model->find(*chosen))
       if (const mux::message* said = mux::ui::held_message(*chat, one.id)) {
-        auto& screen = root().main();
+        auto& screen = root();
         const std::optional<std::string> thread = said->thread ? said->thread
                                                   : shared.thread_open() == said->id ? std::optional<std::string>(said->id)
                                                                                       : std::nullopt;

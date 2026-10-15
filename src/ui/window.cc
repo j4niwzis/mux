@@ -388,36 +388,6 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
   auto onPress() { return skiff::bind::own(skiff::model::setTo(std::optional<Facts>{})); }
 };
 
-// The chat screen, its chat the one what is shown says is chosen.
-template <class Screen>
-struct shown_screen : Screen {
-  using Screen::Screen;
-  using Screen::onKey;
-  using Screen::onPointer;
-  using Screen::onText;
-  using Screen::onSemantic;
-  void read(const chat_shown& now) {
-    this->chosen = now.chosen;
-    // The account the program asked for; where it asked for none, the one
-    // the screen falls back on as it shows the chats (the first) is kept.
-    if (now.current)
-      this->current = now.current;
-    if (this->info_open != now.info_open)
-      this->set_info_open(now.info_open);
-    if (this->threads_open != now.threads_open || this->thread_root != now.thread)
-      this->set_threads(now.threads_open, now.thread);
-    this->thread_answering = now.thread_answer.has_value();
-    // A forum opened or left as the program says it, where that changed:
-    // one the screen let go itself -- its space gone -- stays gone.
-    if (std::exchange(forum_read, now.forum) != now.forum && this->forum_open != now.forum) {
-      if (now.forum)
-        this->open_forum(*now.forum);
-      else
-        this->close_forum();
-    }
-  }
-  std::optional<std::string> forum_read;
-};
 
 // The drawer, out while what is shown says so; pushed back -- the scrim
 // pressed, a swipe, Esc -- that part set so.
@@ -561,7 +531,7 @@ struct window : skiff::compose::Specced {
   window& operator=(window&&) = delete;
 
   using panel_type = spl::variant<accounts_panel>;
-  using screen_node = skiff::bind::Bound<chat_shown, shown_screen<conversations_screen>>;
+  using screen_node = chats_screen_t;
   using drawer_node = shown_drawer<screen_node, drawer_panel>;
   using with_drawer = skiff::bind::Bound<drawer_shown, drawer_node>;
 
@@ -966,7 +936,7 @@ struct window : skiff::compose::Specced {
     this->markDamaged();
   }
 
-  [[nodiscard]] conversations_screen& main() { return layer().frame.base().base(); }
+  [[nodiscard]] chats_screen_t& main() { return layer().frame.base().base(); }
   // What is kept, as the window's binding last read it.
   const kept_root* kept_ = nullptr;
   // Read by the window's binding as what is kept moves, and by the chats
@@ -978,9 +948,8 @@ struct window : skiff::compose::Specced {
   // What is kept read: by its root, whatever the model's reactions.
   void refresh_kept(const kept_root& root) {
     kept_ = &root;
-    this->show_drawer();
   }
-  void refresh(const chats_model&) { this->show_drawer(); }
+  void refresh(const chats_model&) {}
   // What the runtime binding walks call it by (outside a release build):
   // its refresh is overloaded, which they cannot pick by themselves -- the
   // window was never read there, and the drawer, the panels' look and the
@@ -988,14 +957,12 @@ struct window : skiff::compose::Specced {
   skiff::bind::Refreshes<2> fRefreshes = skiff::bind::refreshes(
       skiff::bind::refreshFrom<window, chats_model>(),
       skiff::bind::refreshFromRoot<window, kept_root, &window::refresh_kept>());
-  // The drawer: the accounts saved, with what the chats say of each.
-  void show_drawer() {
-    auto& screen = this->main();
-    if (kept_ == nullptr || screen.last_model == nullptr)
+  // The drawer: the accounts saved, with what the chats say of each, the
+  // account listed marked (app: refresh_shown).
+  void show_drawer(const model& now, const std::optional<account_id>& listed) {
+    if (kept_ == nullptr)
       return;
-    const auto& current = screen.current;
-    layer().frame.base().content().show(kept_->accounts.values(), *screen.last_model,
-                                        current ? std::string_view(current->address) : std::string_view());
+    layer().frame.base().content().show(kept_->accounts.values(), now, listed ? std::string_view(listed->address) : std::string_view());
   }
   // The panels' paint changed (app: looks): repainted, and the screen's ease
   // ticked.
@@ -1045,10 +1012,6 @@ struct window : skiff::compose::Specced {
   // The emoji panel gone: the field back where it was.
   void emoji_closed() {
     needs_.shared->set_docked_panel_height(0.0f);  // the field back at the bottom
-    // Told here, not only by its id: the screen made at the start was moved
-    // into the window since, and the panel gone left an empty space under
-    // the field where nothing ticked it.
-    main().follow_docked();
   }
   [[nodiscard]] bool emoji_open() { return layer().emoji.shown() != nullptr; }
   // The sticker pictures the panel shows, for the program to ask for.
@@ -1073,9 +1036,8 @@ struct window : skiff::compose::Specced {
         if (atom.picture)
           shown.push_back({atom.target, emote_kind::emoji});
     };
-    inserted(composer_field(screen.line));
-    if (screen.thread_open())
-      inserted(composer_field(screen.thread_line()));
+    inserted(composer_field(chat_line_of(screen)));
+    inserted(composer_field(thread_line_of(screen)));
     return shown;
   }
   // The menu's card, where one is up: what takes the keys while it is.

@@ -32,13 +32,11 @@ class manage_part {
 
   // The room's management: made from what the model knows of it now.
   void apply(const request::open_manage&) {
-    s_->root().main().close_space_menu_soon();  // the chat menu its Settings came from
     if (const auto chosen = s_->chosen())
       this->manage_chat(*chosen);
   }
   // A space's settings: Manage, for it.
   void apply(const request::manage_space& one) {
-    s_->root().main().close_space_menu_soon();
     const auto by = s_->listed();
     if (!by)
       return;
@@ -80,7 +78,7 @@ class manage_part {
     mux::ui::change_shown<mux::ui::chat_shown>(*s_->showing, [](mux::ui::chat_shown& now) { now.forum.reset(); });
   }
   void apply(const request::manage_forum&) {
-    if (const auto& open = s_->root().main().forum_open)
+    if (const auto& open = s_->showing->look<mux::ui::chat_shown>()->forum)
       this->apply(request::manage_space{*open});
   }
   // A tab picked: up, and on a narrow window in the tab list's place.

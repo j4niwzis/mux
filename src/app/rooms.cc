@@ -146,7 +146,6 @@ class rooms_part {
   }
   // A space's rooms and spaces, in Explore: asked of its account.
   void apply(const request::explore_space& one) {
-    s_->root().main().close_space_menu_soon();
     const auto& facts = s_->showing->root().explore.fValue;
     const auto by = facts ? facts->by : s_->listed();
     if (!by || s_->demo())

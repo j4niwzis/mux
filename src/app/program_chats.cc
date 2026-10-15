@@ -37,22 +37,22 @@ void app::apply(const request::choose& one) {
     return;
   }
   // Chosen, by a press or a key: no forum left lit as gone to.
-  root().main().pointed.reset();
+  chat_list.point(std::nullopt);
   // A space shown as a forum: its rooms listed in it, as tdesktop opens a
   // forum's topics -- no chat opened.
-  if (root().main().is_forum(one.which)) {
+  if (chat_list.is_forum(one.which)) {
     mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.forum = one.which.id; });
     return;
   }
   // What was being written where the reader was: kept as its draft; and
   // the chat opened's own put back in the field.
-  auto& screen = root().main();
+  auto& screen = root();
   search.chat_chosen(one.which);
   if (shared.chosen() && *shared.chosen() != one.which) {
-    drafts.keep(*shared.chosen(), mux::ui::composer_plain(screen.line));
-    mux::ui::set_composer_text(screen.line, shared.draft_of(one.which));
+    drafts.keep(*shared.chosen(), mux::ui::composer_plain(screen.chat_line()));
+    mux::ui::set_composer_text(screen.chat_line(), shared.draft_of(one.which));
   } else if (!shared.chosen()) {
-    mux::ui::set_composer_text(screen.line, shared.draft_of(one.which));
+    mux::ui::set_composer_text(screen.chat_line(), shared.draft_of(one.which));
   }
   model->touch(one.which);
   paging.restore_reads(one.which);
@@ -71,11 +71,11 @@ void app::apply(const request::choose& one) {
 }
 
 void app::apply(const request::close_chat&) {
-  auto& screen = root().main();
+  auto& screen = root();
   if (!shared.chosen())
     return;
-  drafts.keep(*shared.chosen(), mux::ui::composer_plain(screen.line));
-  mux::ui::set_composer_text(screen.line, {});
+  drafts.keep(*shared.chosen(), mux::ui::composer_plain(screen.chat_line()));
+  mux::ui::set_composer_text(screen.chat_line(), {});
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) {
     now.chosen.reset();
     now.info_open = false;
@@ -163,7 +163,7 @@ void app::apply(const request::toggle_info&) {
 // To the newest: where the chat is a window away from it, back to the
 // newest from the disk first -- live again -- then to its end.
 void app::apply(const request::jump_to_end&) {
-  auto& screen = root().main();
+  auto& screen = root();
   // The chat live again first -- its newest from the disk, what was shown
   // before the jump among them -- then back where a jump in it came from,
   // where there is one: found there, not fetched as a window of its own,

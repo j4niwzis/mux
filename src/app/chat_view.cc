@@ -30,7 +30,7 @@ class chat_view_part {
   // What the bands say now: each written where it changed.
   void show() {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
-    const auto& screen = s_->root().main();
+    const auto& screen = s_->root();
     const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
     auto head = mux::ui::chat_head_of(s_->ui, chat, *s_->model);
     head.back = s_->single();
@@ -49,7 +49,7 @@ class chat_view_part {
     this->put(mux::ui::connection_shown{notice(shown.current), chat_band ? notice(chat->id.account) : std::string()});
     // The info, while it is open: nothing of it worked out while it is shut.
     if (shown.info_open && chat)
-      this->show_info(*chat, screen.muted.contains(chat->id));
+      this->show_info(*chat, s_->kept->own_of<&mux::app::chat_choices::muted>(chat->id));
   }
   // The info's members near the end of those made: the next few.
   void apply(const request::info_more&) {

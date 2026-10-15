@@ -215,7 +215,7 @@ class pictures_part {
       fetches_.asked(*source);
       s_->net->fetch_avatar(of, *source, key);
     };
-    auto& screen = s_->root().main();
+    auto& screen = s_->root();
     // The images of the pack being edited, by the account of the chat in view.
     if (s_->listed()) {
       if (const auto& packs = *s_->showing->look<std::optional<mux::ui::packs_facts>>())
@@ -347,7 +347,7 @@ class pictures_part {
             // Never for an encrypted room: the preview is fetched through the
             // homeserver (/preview_url), which would be handed every link
             // said in it -- as Element does not by default.
-            if (const auto link = s_->root().main().previews_off.contains(one.id) || one.encrypted
+            if (const auto link = !s_->kept->reads().previews_shown(one.id) || one.encrypted
                                       ? std::nullopt
                                       : mux::ui::first_link_of(said)) {
               if (const auto found = s_->model->previews.find(*link); found != s_->model->previews.end()) {

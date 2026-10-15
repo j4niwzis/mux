@@ -47,16 +47,21 @@ class chat_list_part {
                    : now.accounts().empty() ? std::nullopt
                                             : std::optional<mux::account_id>(now.accounts().keyAt(0));
     list.forum = chat.forum;
-    const inputs seen{now.chats().revision(), k_->state.revision(), list, chat.chosen, chat.forum, s_->drafts_revision};
+    const inputs seen{now.chats().revision(), k_->state.revision(), list, chat.chosen, chat.forum, s_->drafts_revision,
+                      s_->showing->look<mux::ui::found_shown>()->count.has_value(), s_->showing->look<mux::ui::elsewhere_shown>()->found.has_value()};
     if (seen_ == seen)
       return;
     seen_ = seen;
     const kept_view kept = this->read_kept(list.account);
     this->keep_folder(now, kept, list);
     this->put(list);
-    this->put(this->side_of(now, kept, list, chat));
     auto listing = std::make_shared<mux::ui::chat_listing>(this->listing_of(now, kept, list, chat));
     order_ = listing->chats | std::views::transform(&mux::ui::listed_chat::id) | std::ranges::to<std::vector>();
+    auto side = this->side_of(now, kept, list, chat);
+    const bool elsewhere = s_->showing->look<mux::ui::elsewhere_shown>()->found.has_value();
+    side.no_chats = !now.accounts().empty() && listing->chats.empty() && !elsewhere;
+    side.chats_on = !s_->showing->look<mux::ui::found_shown>()->count.has_value() && (!listing->chats.empty() || !elsewhere);
+    this->put(std::move(side));
     this->put(mux::ui::listing_shown{++revision_, std::move(listing), list.account, now.accounts().keys() | std::ranges::to<std::vector>(),
                                      k_->state.root().looks.fValue.theme});
     this->search_elsewhere(now, list);
@@ -131,7 +136,7 @@ class chat_list_part {
       asked(request::reply_step{true});
     else if (one.key == keys::kDown && one.control)
       asked(request::reply_step{false});
-    else if (one.key == keys::kUp && !any && mux::ui::composer_text(s_->root().main().line).empty())
+    else if (one.key == keys::kUp && !any && mux::ui::composer_text(s_->root().chat_line()).empty())
       asked(request::edit_last{});
     else if (one.key == keys::kC && one.control && selected)
       asked(request::selection_copy{});
@@ -208,6 +213,12 @@ class chat_list_part {
       now.info_width = std::clamp(across - x, 260.0f, std::max(260.0f, across - now.side_width - 300.0f));
     });
   }
+  // Whether a chat is shown as a forum: a space the user shows so, or a
+  // forum of its protocol's own.
+  [[nodiscard]] bool is_forum(const mux::conversation_id& id) const {
+    const mux::conversation* one = s_->model->find(id);
+    return one != nullptr && this->shown_as_forum(this->read_kept(s_->listed()), *one);
+  }
   // Every chat listed, in order: what Ctrl+Tab and Alt+Up go through.
   [[nodiscard]] const std::vector<mux::conversation_id>& order() const { return order_; }
 
@@ -220,6 +231,7 @@ class chat_list_part {
     std::optional<mux::conversation_id> chosen;
     std::optional<std::string> forum;
     std::uint64_t drafts = 0;
+    bool found = false, elsewhere = false;
     friend bool operator==(const inputs&, const inputs&) = default;
   };
   // What is kept that the list reads: the chats in other accounts' lists and

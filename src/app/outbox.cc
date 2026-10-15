@@ -45,18 +45,18 @@ class outbox_part {
     // from before the first edit, where one edit steps to another.
     std::string before = spl::visit(
         spl::overloaded{[](const compose::edit& e) { return e.before; },
-                           [&](const auto&) { return mux::ui::composer_plain(s_->root().main().line); }},
+                           [&](const auto&) { return mux::ui::composer_plain(s_->root().chat_line()); }},
         this->composing());
     const std::string edited = id;
     std::string line = text;
     std::ranges::replace(line, '\n', ' ');
     this->compose(compose::edit{std::move(id), std::move(before)}, mux::ui::compose_context{mux::ui::icon::pencil{}, "Edit message", std::move(line)});
-    mux::ui::set_composer_text(s_->root().main().line, text);
+    mux::ui::set_composer_text(s_->root().chat_line(), text);
     // Its formatting back, where its HTML has only runs.
     if (const auto& chosen = s_->chosen(); chosen && !text.empty())
       if (const message* said = this->message_of(*chosen, edited); said && said->body.html)
         if (auto runs = mux::ui::editable_runs(*said->body.html))
-          mux::ui::set_formatted(s_->root().main().line, std::move(runs->first), runs->second);
+          mux::ui::set_formatted(s_->root().chat_line(), std::move(runs->first), runs->second);
   }
   // A picture whose caption may be edited (not a video's, whose own is its
   // file): as Element edits one.
@@ -84,12 +84,12 @@ class outbox_part {
   }
   // Ctrl+K: the link box, with what is selected and the link on it.
   void apply(const request::ask_link&) {
-    auto [text, url] = mux::ui::composer_link_asked(s_->root().main().line);
+    auto [text, url] = mux::ui::composer_link_asked(s_->root().chat_line());
     mux::ui::show(*s_->showing, std::optional(mux::ui::link_facts{std::move(text), std::move(url)}));
   }
   void apply(const request::set_link& one) {
     mux::ui::show<mux::ui::link_facts>(*s_->showing, std::nullopt);
-    mux::ui::put_link(s_->root().main().line, one.text, one.url);
+    mux::ui::put_link(s_->root().chat_line(), one.text, one.url);
   }
   void apply(const request::close_link&) { mux::ui::show<mux::ui::link_facts>(*s_->showing, std::nullopt); }
   // Up in an empty input: the last message sent here edited.
@@ -107,7 +107,7 @@ class outbox_part {
   // it; Ctrl+Down the one below, and past the newest the answer let go. The
   // one answered is scrolled to and flashed, as tdesktop does.
   void apply(const request::reply_step& one) {
-    auto& screen = s_->root().main();
+    auto& screen = s_->root();
     const conversation* chat = s_->chosen() ? s_->model->find(*s_->chosen()) : nullptr;
     if (!chat)
       return;
@@ -198,7 +198,7 @@ class outbox_part {
   // An edit let go: the field back to what was written before it, not the
   // edited message's text left in it to be sent as a new one.
   void apply(const request::cancel_compose&) {
-    spl::visit(spl::overloaded{[&](const compose::edit& e) { mux::ui::set_composer_text(s_->root().main().line, e.before); },
+    spl::visit(spl::overloaded{[&](const compose::edit& e) { mux::ui::set_composer_text(s_->root().chat_line(), e.before); },
                                      [](const auto&) {}},
                   this->composing());
     this->compose(compose::plain{}, std::nullopt);
@@ -207,13 +207,13 @@ class outbox_part {
   // before the first was handled -- the field emptied by it -- send once.
   template <class Asked>
   void apply(const request::submit_message& one, const Asked& asked) {
-    if (mux::ui::composer_plain(s_->root().main().line).empty())
+    if (mux::ui::composer_plain(s_->root().chat_line()).empty())
       return;
     this->send(one.text, asked);
   }
   template <class Asked>
   void apply(const request::send_typed&, const Asked& asked) {
-    this->send(mux::ui::composer_plain(s_->root().main().line), asked);
+    this->send(mux::ui::composer_plain(s_->root().chat_line()), asked);
   }
 
   // Files: chosen with the paperclip, or dropped; the send box closed, or
@@ -243,7 +243,7 @@ class outbox_part {
     if (!chosen || to_send_.empty())
       return;
     std::string caption = one.caption;
-    auto& screen = s_->root().main();
+    auto& screen = s_->root();
     // Into a thread: its root and its latest, and what is answered in it.
     std::optional<mux::thread_place> thread;
     std::optional<std::string> reply_to;
@@ -349,7 +349,7 @@ class outbox_part {
     // Dropped while the thread's field has the keys: into the thread, as
     // its paperclip sends.
     if (dropped && to_send_.empty())
-      files_thread_ = s_->root().main().writing_in_thread() ? s_->thread_open() : std::nullopt;
+      files_thread_ = s_->thread_open() && mux::ui::composer_field(s_->root().thread_line()).focused() ? s_->thread_open() : std::nullopt;
     for (const std::string& path : paths) {
       auto bytes_read = mux::platform::files::read(path);
       if (!bytes_read)
@@ -417,13 +417,13 @@ class outbox_part {
     // A text sent: the ways back from jumps let go, as tdesktop's
     // sendTextWithTags clears its reply returns -- whatever comes of it.
     s_->returns_due = true;
-    auto& screen = s_->root().main();
+    auto& screen = s_->root();
     if (!s_->chosen() || !logic::sendable(text))
       return;
     const conversation_id to = *s_->chosen();
     // A command of its protocol's own: asked, not sent.
     if (this->asked_as_command(to, text, asked)) {
-      mux::ui::set_composer_text(screen.line, {});
+      mux::ui::set_composer_text(screen.chat_line(), {});
       return;
     }
     // What is sent goes at the chat's end: the chat back to its newest
@@ -431,9 +431,9 @@ class outbox_part {
     s_->go_live(to);
     s_->newest_due = true;
     // Who was picked from the @ list for it, its pills: sent as mentions.
-    auto mentions = mux::ui::composer_mentions(screen.line);
+    auto mentions = mux::ui::composer_mentions(screen.chat_line());
     // How it is formatted: its runs, as the field has them.
-    auto styles = mux::ui::composer_styles(screen.line);
+    auto styles = mux::ui::composer_styles(screen.chat_line());
     spl::visit(spl::overloaded{[&](const compose::plain&) {
                             if (s_->demo())
                               s_->ask->send(to, std::move(text));
@@ -459,7 +459,7 @@ class outbox_part {
                           }},
                this->composing());
     this->compose(compose::plain{}, std::nullopt);
-    mux::ui::clear_composer(screen.line);
+    mux::ui::clear_composer(screen.chat_line());
     drafts_->keep(to, std::string());
   }
 

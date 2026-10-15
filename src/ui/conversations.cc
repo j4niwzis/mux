@@ -4,4 +4,3 @@ export module mux.ui:conversations;
 
 export import :conversations_side;
 export import :conversations_screen;
-export import :conversations_show;

@@ -21,7 +21,7 @@ class search_part {
   explicit search_part(services& shared) : s_(&shared) {}
 
   void apply(const request::open_search&) {
-    auto& screen = s_->root().main();
+    auto& screen = s_->root();
     if (!s_->chosen())
       return;
     if (!searching_ || searching_->in != *s_->chosen())
@@ -31,7 +31,6 @@ class search_part {
   }
   void apply(const request::close_search&) {
     searching_.reset();
-    s_->root().main().show_search_results({}, std::nullopt);
     mux::ui::show(*s_->showing, mux::ui::found_shown{});
     mux::ui::show(*s_->showing, mux::ui::search_found{});
   }
@@ -78,7 +77,6 @@ class search_part {
   void chat_chosen(const conversation_id& which) {
     if (searching_ && searching_->in != which) {
       searching_.reset();
-      s_->root().main().show_search_results({}, std::nullopt);
     mux::ui::show(*s_->showing, mux::ui::found_shown{});
       mux::ui::show(*s_->showing, mux::ui::search_found{});
     }
@@ -118,7 +116,6 @@ class search_part {
     const std::size_t count = rows.size();
     const auto counted = searching_->query.empty() ? std::nullopt : std::optional<std::size_t>(count);
     mux::ui::show(*s_->showing, mux::ui::found_shown{counted, rows});
-    s_->root().main().show_search_results(std::move(rows), counted);
   }
   // The found at `at` gone to, what was asked marked in it; the count set.
   void show_at() {
@@ -131,7 +128,7 @@ class search_part {
   void step(bool older) {
     if (!searching_)
       return;
-    auto& screen = s_->root().main();
+    auto& screen = s_->root();
     (void)screen;
     searching_->at = logic::stepped(searching_->at, searching_->found.size(), older);
     this->show_at();

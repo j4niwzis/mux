@@ -276,268 +276,33 @@ struct chat_part {
                                their_head = 6, area = 7, suggestions = 8, banner = 9, their_view = 10, line = 11;
 };
 
-struct conversations_screen : skiff::compose::Stacked {
-  // What its keys and its swipes ask for.
-  using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::selection_copy, ::mux::ui::request::selection_delete, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of, ::mux::ui::request::suggestion_step, ::mux::ui::request::suggestion_pick, ::mux::ui::request::suggestion_close, ::mux::ui::request::thread_answer_cancel>;
-  // What it was handed, for the rows it makes.
-  ui_needs needs_;
-  std::optional<conversation_id> chosen;
-  // The account whose chats are listed.
-  std::optional<account_id> current;
-  // Which room events a chat shows, kind by kind, as the program's settings
-  // say: set by the program before it shows the model; a chat not in it
-  // shows them all.
-  std::map<conversation_id, room_event_filter> event_filters;
-  // Whether a chat's view has a message: said, or a room event its filter
-  // shows -- what the reader can see, and so answer.
-  [[nodiscard]] bool shown_in(const conversation_id& chat, const message& said) const {
-    if (!said.service)
-      return true;
-    const auto found = event_filters.find(chat);
-    return found == event_filters.end() || found->second.shows(said.event_kind);
-  }
-  // Chats listed in another account's list than their own: each
-  // account's, the chats moved out of their own, and the strip each shows
-  // where it is listed elsewhere -- none where it is off. As the program
-  // keeps them.
-  std::map<account_id, std::vector<conversation_id>> listed_in;
-  std::set<conversation_id> moved_out;
-  std::map<conversation_id, skia::SkColor> strips;
-  // The chats that show who has read up to where, as faces.
-  std::set<conversation_id> receipts_in;
-  // The chats that show no link previews.
-  std::set<conversation_id> previews_off;
-  // The account to list once the model has it: the one shown last, kept.
-  // Taken the first time it is there; dropped when an account is chosen.
-  std::optional<account_id> wanted;
-  bool info_open = false;
-  // How wide the chat list and the chat's info are: their own, whatever the
-  // window's size, until their edges are dragged.
-  float side_width = 300.0f;
-  float info_width = kInfoWidth;
-
-  // The folder whose chats are listed.
-  folder_t folder = folder::all{};
-  // The folders the tabs were made for, and the one chosen then.
-  std::vector<std::pair<std::string, folder_t>> shown_folders;
-  folder_t shown_folder = folder::all{};
-  // Each list keeps its own offset; a short space list must not make Home
-  // follow its end when Home's longer contents are restored.
-  using list_place = std::tuple<std::optional<account_id>, folder_t, std::optional<std::string>>;
-  std::optional<list_place> listed_place;
-  std::vector<std::pair<list_place, float>> list_positions;
-  std::optional<float> restoring_list_at;
-  void restore_list_position() {
-    const list_place next{current, folder, forum_open};
-    if (listed_place && *listed_place == next)
-      return;
-    if (listed_place) {
-      const auto saved = std::ranges::find(list_positions, *listed_place, &std::pair<list_place, float>::first);
-      if (saved != list_positions.end())
-        saved->second = list.current();
-      else
-        list_positions.emplace_back(*listed_place, list.current());
-    }
-    listed_place = next;
-    const auto saved = std::ranges::find(list_positions, next, &std::pair<list_place, float>::first);
-    restoring_list_at = saved == list_positions.end() ? 0.0f : saved->second;
-    list.setCurrent(*restoring_list_at);
-  }
-
-  // The space bars, as the program says: at all, the top one, and where
-  // each item is put; and what they were made for, not made again unchanged.
-  bool spaces_on = true;
-  bool top_bar_on = true;
-  // The spaces shown as forums, and the one open in the list -- its rooms
-  // listed, as tdesktop lists a forum's topics.
-  std::set<conversation_id> forums;
-  // Spaces whose rooms Home leaves out, each as it chose.
-  std::set<conversation_id> hidden_from_home;
-  std::optional<std::string> forum_open;
-  // A forum gone to by Alt+Up or Alt+Down: lit as chosen, not yet opened --
-  // Alt+Right opens it, as Alt+Left leaves one open.
-  std::optional<conversation_id> pointed;
-  // A chat shown as a forum: a space the user shows so, or a forum of its
-  // protocol's own (proto::native_forum).
-  [[nodiscard]] bool shown_as_forum(const conversation& one) const {
-    return one.space && (forums.contains(one.id) || proto::native_forum(protocol_state_of(*needs_.shared, one.id.account), one));
-  }
-  [[nodiscard]] bool is_forum(const conversation_id& id) const {
-    const conversation* one = last_model ? last_model->find(id) : nullptr;
-    return one && this->shown_as_forum(*one);
-  }
-  // Home without what spaces hold, but direct messages -- and without those
-  // too, where that is chosen as well.
-  bool home_hides_spaced = false;
-  bool home_hides_direct = false;
-  // The messages a search in the chat found, in the chats' place while it is
-  // asked; none, the chats again.
-  void show_search_results(std::vector<search_result> results, std::optional<std::size_t> count) {
-    auto& rows = std::get<0>(std::get<0>(side.found.fChildren).fChildren);
-    rows.clear();
-    rows.reserve(results.size());
-    for (const search_result& one : results)
-      rows.emplace_back(*needs_.colours, one);
-    const bool on = count.has_value();
-    side.found_title.setText(!count ? std::string() : *count == 0 ? std::string("No messages found")
-                                    : *count == 1                ? std::string("1 message found")
-                                                                 : std::format("{} messages found", *count));
-    side.found_title.setVisible(on);
-    side.found.setVisible(on);
-    side.list.setVisible(!on);
-    side.found.scrollToStart();
-    side.invalidateLayout();
-    side.markDamaged();
-  }
-  // The server's answers for what is searched, where nothing joined matched
-  // it: kept while they are for what is typed now.
-  void found_rooms_elsewhere(const std::string& query, const std::vector<directory_room>& rooms) {
-    if (query.empty() || query != asked_elsewhere)
-      return;
-    rooms_elsewhere = rooms;
-    rooms_came = true;
-    this->show_elsewhere();
-  }
-  void found_people_elsewhere(const std::string& query, const std::vector<found_person>& people) {
-    if (query.empty() || query != asked_elsewhere)
-      return;
-    people_elsewhere = people;
-    people_came = true;
-    for (const found_person& one : people)
-      if (one.avatar && !one.avatar->empty())
-        listed_avatars().emplace_back(one.id, *one.avatar);
-    this->show_elsewhere();
-  }
-  void show_elsewhere() {
-    auto rooms = rooms_elsewhere;
-    if (current && last_model)
-      std::erase_if(rooms, [&](const auto& room) { return last_model->find(conversation_id{*current, room.id}); });
-    if (const auto address = room_address_for(current, asked_elsewhere))
-      if (std::ranges::none_of(rooms, [&](const auto& room) { return room.id == *address || room.alias == *address; }) &&
-          (!last_model || !last_model->find(conversation_id{*current, *address})))
-        rooms.insert(rooms.begin(), directory_room{.id = *address, .name = "Join room by address", .alias = *address});
-    std::get<0>(side.elsewhere.fChildren).read(std::optional(server_search_facts{
-        std::move(rooms), people_elsewhere, current, !rooms_came || !people_came}));
-    side.elsewhere.scrollToStart();
-    side.elsewhere.invalidateLayout();
-    side.invalidateLayout();
-    side.markDamaged();
-  }
-  void open_forum(std::string room) {
-    forum_open = std::move(room);
-    this->slide_list(1.0f);
-    if (last_model)
-      this->show(*last_model, false);
-  }
-  void close_forum() {
-    forum_open.reset();
-    this->slide_list(-1.0f);
-    if (last_model)
-      this->show(*last_model, false);
-  }
-  // The list sliding in as what it lists changes -- another space, a forum
-  // opened or left: from the side it comes from, faded in; only drawn
-  // moved, nothing laid out again for it.
-  skiff::paint::Tween list_in{1.0f, 200.0f, skiff::paint::movement::subtle{}};
-  // How many of the chats listed are made into rows: the first few
-  // screens, more as the reader scrolls near the last made. A space of
-  // hundreds of chats was hundreds of rows made in the frame it was chosen
-  // in -- the slide waited on them.
-  static constexpr std::size_t kChatsFirst = 40, kChatsStep = 40;
-  // The chats listed made into rows: from chats_from to chats_made, those
-  // a screen above the view to two below it, in steps of kChatsStep -- as
-  // Qt's list view with uniform rows, the rest stand-ins of their height
-  // (the flow's padding above and below), not rows reconciled at every
-  // refresh. Made rows grew without end as the list was scrolled down.
-  std::size_t chats_from = 0;
-  std::size_t chats_made = kChatsFirst;
-  std::size_t chats_listed = 0;
-  // Every chat listed, in order; and where each one's row begins, from
-  // their heights, known without making them -- one more: where the last
-  // ends.
-  std::vector<conversation_id> order;
-  std::vector<float> tops;
-  // The chats to make for where the list is now.
-  [[nodiscard]] std::pair<std::size_t, std::size_t> chats_window() const {
-    const std::size_t count = order.size();
-    if (tops.size() != count + 1 || count == 0)
-      return {0, std::min(kChatsFirst, count)};
-    const float view = std::max(list.bounds().height(), 400.0f);
-    const float at = restoring_list_at.value_or(list.current());
-    const auto index_at = [&](float y) {
-      const auto past = std::ranges::upper_bound(tops, y);
-      return std::min(count, static_cast<std::size_t>(std::max<std::ptrdiff_t>(0, past - tops.begin() - 1)));
-    };
-    std::size_t from = index_at(at - view);
-    from -= from % kChatsStep;
-    std::size_t to = index_at(at + 2.0f * view) + 1;
-    to += (kChatsStep - to % kChatsStep) % kChatsStep;
-    return {from, std::min(count, std::max(to, from + kChatsFirst))};
-  }
-  // What the list shows, as the model had it at the last show: read again
-  // from the model, not kept up by hand.
-  chat_listing listing;
-  [[nodiscard]] chat_listing listing_of(const model& now) const;
-  // The rows for where the list is now, from the listing.
-  void show_rows(const model& now);
-  float list_from = 1.0f;
-  // Begun two frames on: the frame the list is made in -- its rows made,
-  // laid out, their avatars scaled -- took its time out of the slide's
-  // first frames, and the slide jumped, then went on.
-  int slide_wait = 0;
-  void slide_list(float from) {
-    chats_from = 0;
-    chats_made = kChatsFirst;
-    list_from = from;
-    list_in.jump(0.0f);
-    slide_wait = 2;
-    this->place_list();
-    scene::work::mark(fState.fId);
-  }
-  // Slid only, not faded: a faded list played each row back through a layer
-  // of its own, at every frame of the slide -- it crawled.
-  void place_list() {
-    const float value = list_in.value();
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&side.list, &side.forum_head})
-      each->apply({.shiftX = (1.0f - value) * 32.0f * list_from});
-  }
-  std::vector<config::space_placed> space_places;
-  std::vector<std::string> shown_bars;
-  // A phone's way (the user's, #13548): a window narrow and taller than it is
-  // wide shows one thing at a time, all of it across -- the chats, a chat,
-  // or its info or threads -- not side by side; and how wide it is.
-  bool single = false;
-  float single_width = 0.0f;
-  // Where a swipe across the chat began, single: left to right, back to
-  // the chats.
-  std::optional<skia::SkPoint> swipe_from;
-  // The row a swipe across the chats began on: right to left, muted or not,
-  // as Telegram's quick action.
-  std::optional<conversation_id> swipe_row;
-  // The spaces along the top bigger, for a finger: a long press on them.
-  bool big_spaces = false;
-  // Single, the one shown -- the chats (0), the chat (1), its info or
-  // threads (2) -- and it sliding in as it changes, as a phone's: from the
-  // right going in, from the left coming back (the user's, #13662).
-  int pane_shown = -1;
-  float pane_from = 0.0f;
-  skiff::paint::Tween pane_in{1.0f, 240.0f, skiff::paint::movement::sweeping{}};
-  void place_pane() {
-    const float shift = single ? (1.0f - pane_in.value()) * single_width * pane_from : 0.0f;
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&side, &chat, &info, &parts.threads})
-      each->apply({.shiftX = shift});
-  }
-  struct pick_folder {
-    conversations_screen* screen;
-    void operator()(const folder_t& which) const { screen->choose_folder(which); }
-  };
-  // Up and Down through the list over the field, Enter or Tab picks, Esc
-  // closes it -- the program's (suggestions_shown): what the key asks, where
-  // the list is up. Modified arrows are the screen's reply and chat keys.
-  [[nodiscard]] std::optional<Answer> suggestion_keys(const scene::key::down& press) const {
+// The chats screen: the side (its chats), the chat, and its info or its
+// threads beside it -- or, on a phone's window (the user's, #13548), one at a
+// time, all of it across, sliding in as the one up changes (#13662). What is
+// up, how wide, and what its keys and swipes do, as the program says
+// (screen_shown); it keeps nothing.
+//
+// The keys caught before the field takes them, where the program says they
+// are live: Ctrl+C and Delete on the messages selected; Up, Down, Enter,
+// Tab and Esc on the list over the field; Alt+Right into the forum gone to,
+// Alt+Left out of the one open.
+using capture_answer = std::variant<request::selection_copy, request::selection_delete, request::suggestion_step, request::suggestion_pick,
+                                    request::suggestion_close, request::open_pointed, request::leave_forum>;
+struct capture_keys {
+  std::optional<capture_answer> operator()(const screen_shown& now, const scene::key::down& press) const {
     namespace keys = scene::keys;
-    if (!std::get<chat_part::suggestions>(chat.fParts).visible() || press.modifiers.template has<scene::modifier::control>() ||
-        press.modifiers.template has<scene::modifier::alt>())
+    const bool control = press.modifiers.template has<scene::modifier::control>();
+    const bool shift = press.modifiers.template has<scene::modifier::shift>();
+    const bool alt = press.modifiers.template has<scene::modifier::alt>();
+    if (now.selecting && press.key == keys::kC && control && !shift && !alt)
+      return request::selection_copy{};
+    if (now.selecting && press.key == keys::kDelete && !control && !shift && !alt)
+      return request::selection_delete{};
+    if (alt && press.key == keys::kRight && now.pointing)
+      return request::open_pointed{};
+    if (alt && press.key == keys::kLeft && now.in_forum)
+      return request::leave_forum{};
+    if (!now.suggesting || control || alt)
       return std::nullopt;
     if (press.key == keys::kUp || press.key == keys::kDown)
       return request::suggestion_step{press.key == keys::kDown};
@@ -547,383 +312,67 @@ struct conversations_screen : skiff::compose::Stacked {
       return request::suggestion_close{};
     return std::nullopt;
   }
-  // The keys, while the list is up: Up and Down through it, Enter picks,
-  // Esc closes it -- before the input reads Enter as sending.
-  std::optional<Answer> onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
-    namespace keys = scene::keys;
-    // Selection shortcuts precede the composer and its suggestion lists.
-    if (std::get<chat_part::selection>(chat.fParts).visible()) {
-      const bool control = press.modifiers.template has<scene::modifier::control>();
-      const bool other = press.modifiers.template has<scene::modifier::shift>() || press.modifiers.template has<scene::modifier::alt>();
-      if (press.key == keys::kC && control && !other) {
-        reply.handle();
-        return request::selection_copy{};
-      }
-      if (press.key == keys::kDelete && !control && !other) {
-        reply.handle();
-        return request::selection_delete{};
-      }
-    }
-    // Alt+Right: into the forum gone to; Alt+Left: out of the one open, to
-    // its row. Taken before the field: it moves its caret on Left and Right
-    // whatever the modifiers, and took Alt+Left from under this.
-    if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kRight && pointed) {
-      reply.handle();
-      return ::mux::ui::request::choose{*std::exchange(pointed, std::nullopt)};
-    }
-    if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kLeft && forum_open && current) {
-      pointed = conversation_id{*current, *forum_open};
-      this->close_forum();
-      reply.handle();
-      return std::nullopt;
-    }
-    auto asked = this->suggestion_keys(press);
-    if (asked)
-      reply.handle();
-    return asked;
-  }
-  void choose_folder(const folder_t& which) {
-    if (which != folder)
-      this->slide_list(1.0f);
-    folder = which;
-    if (last_model)
-      this->show(*last_model, false);
-  }
-
-  // The chat list: the drawer's button and the name, then the chats.
-  // The side: its space bars' view and its column, picking folders here.
-  using icons_t = space_icons<pick_folder>;
-  using top_view = ui::top_view<pick_folder>;
-  using side_column = ui::side_column<pick_folder>;
-  // The chat: its header, its messages, and where one writes; or, with no
-  // account at all, what to do about it.
-  using side_edge = decltype(drag_edge(std::declval<const palette&>(), resize_sidebar_to{}));
-  using info_edge_t = decltype(drag_edge(std::declval<const palette&>(), resize_info_to{}, false));
-  struct parts_t {
-    side_column side;
-    side_edge edge;
-    chat_column_t chat;
-    info_edge_t info_edge;
-    info_panel_t info;
-    // Threads, in the info's place while they are open.
-    threads_panel_t threads;
-  } parts;
-  // Its parts by their names, for what reads them: the screen is never moved.
-  side_column& side = parts.side;
-  side_edge& edge = parts.edge;
-  chat_column_t& chat = parts.chat;
-  info_edge_t& info_edge = parts.info_edge;
-  info_panel_t& info = parts.info;
-
-  // The old names, for what is kept in the parts.
-  nodes::ScrollContainer<chat_rows>& list = side.list;
-  nodes::Text& no_chats = side.no_chats;
-  chat_header_t& header = std::get<chat_part::header>(chat.fParts);
-  // The keys of a chat, as tdesktop's -- what the input leaves to it:
-  // Ctrl+F finds in it; Up in an empty input edits the last message sent;
-  // Ctrl+Up answers the last message, and each Ctrl+Up after it the one
-  // above, Ctrl+Down back down; Ctrl+C copies what is selected in the
-  // messages; Esc lets an answer or an edit go.
-  using Node::onKey;
-  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply);
-  // Messages selected: the threads' answers marked too, where they still
-  // are the old rows (none, now: the marks are the model's).
-  void show_selection(const std::set<std::string>&) {}
-  // The chat's search field, for the focus.
-  [[nodiscard]] auto& search_field() { return std::get<0>(std::get<chat_part::search>(chat.fParts).fParts); }
-  // The chat's messages: the list in its area (chat_area), told by the
-  // program; read here for the pinned bar and the page keys.
-  [[nodiscard]] auto& messages() { return std::get<1>(std::get<chat_part::area>(chat.fParts).fParts).list().list(); }
-  // The chat last shown: its thread let go where another is.
-  std::optional<conversation_id> shown_chat;
-  composer_bar_t<>& line = std::get<chat_part::line>(chat.fParts);
-
-  // Its child references and handlers point into this screen. Construct it
-  // in its final place; moving it would leave them pointing at the old one.
-  conversations_screen(const conversations_screen&) = delete;
-  conversations_screen& operator=(const conversations_screen&) = delete;
-  conversations_screen(conversations_screen&&) = delete;
-  conversations_screen& operator=(conversations_screen&&) = delete;
-
-  conversations_screen(const ui_needs &n)
-      : Stacked(skiff::compose::hbox(0.0f, {.fill = true})), needs_(n),
-        parts{.side = side_column(*n.colours),
-              .edge = drag_edge(*n.colours, resize_sidebar_to{}),
-              .chat = chat_column(n),
-              .info_edge =
-                  drag_edge(*n.colours, resize_info_to{}, false),
-              .info = info_panel(n),
-              .threads = threads_panel(n)} {
-    needs_.shared->docked_panel_watcher = fState.fId;
-    // The edges take a pixel between the columns, their line, and are
-    // wider than that over them to be caught.
-    edge.apply({.fillY = true, .width = 7.0f, .margin = {0.0f, -3.0f, 0.0f, -3.0f}});
-    info_edge.apply({.fillY = true, .width = 7.0f, .margin = {0.0f, -3.0f, 0.0f, -3.0f}});
-    info.apply({.fillY = true, .width = info_width});
-    this->show_info();
-  }
-
-  // The space bars of the account shown: Home, Direct messages, and its
-  // spaces, each in the bars it is put in -- none said, the side one --
-  // in the order put there, the rest after them as the model has them.
-  void show_space_bars(const model& now);
-
-  // The space menu closed by any press off it, wherever on the screen: at
-  // once, where the press is not on it; one on it chooses first.
-  using Node::onPointer;
-  void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply);
-  // The swipe let go: far enough to the right, and more across than down --
-  // out of the chat, to the chats.
-  std::optional<Answer> onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply);
-  // Single, a step back: from the threads or the info to the chat, from
-  // the chat to the chats -- a swipe across, or Esc.
-  Answer step_back() {
-    if (threads_open)
-      return ::mux::ui::request::toggle_threads{};
-    else if (info_open)
-      return ::mux::ui::request::toggle_info{};
-    else
-      return ::mux::ui::request::close_chat{};
-  }
-  // Esc too.
-  bool close_space_menu() {
-    if (!side.menu_up())
-      return false;
-    side.close_menu();
-    return true;
-  }
-  // The menu the program acted on, closed at the next frame.
-  void close_space_menu_soon() { side.close_menu_soon(); }
-
-  // The chat list as wide as `x`, where its edge was dragged to.
-  void resize_sidebar(float x) {
-    side_width = x - fState.contentBox().fLeft;
-    side.wanted = side_width;
-    side.invalidateLayout();
-  }
-
-  // The chat's info as wide as from `x` to the window's right.
-  void resize_info(float x) {
-    info_width = std::clamp(fState.contentBox().fRight - x, 260.0f,
-                            std::max(260.0f, fState.contentBox().width() - side_width - 300.0f));
-    info.apply({.width = info_width});
-    parts.threads.apply({.width = info_width});
-  }
-
-  // The chat's info beside it where it is open and a chat is chosen -- or
-  // its threads in the info's place, where they are.
-  void show_info() {
-    const bool shown = (info_open || threads_open) && chosen.has_value();
-    info.setVisible(shown && !threads_open);
-    parts.threads.setVisible(shown && threads_open);
-    info_edge.setVisible(shown && !single);
-    side.wanted = side_width;
-    // Single: the chats with none chosen; the chat; or its info in its place.
-    side.whole = single;
-    side.setVisible(!single || !chosen.has_value());
-    edge.setVisible(!single);
-    chat.setVisible(!single || (chosen.has_value() && !shown));
-    const float across = single ? single_width : info_width;
-    info.apply({.width = across});
-    parts.threads.apply({.width = across});
-    const int now_pane = !single ? -1 : !chosen.has_value() ? 0 : shown ? 2 : 1;
-    if (single && pane_shown >= 0 && now_pane != pane_shown) {
-      pane_from = now_pane > pane_shown ? 1.0f : -1.0f;
-      pane_in.jump(0.0f);
-      pane_in.setTarget(1.0f);
-      scene::work::mark(fState.fId);
-    }
-    pane_shown = now_pane;
-    this->place_pane();
-  }
-  // Single or not as the window is now: looked at as it is laid out.
-  void layoutChildren() {
-    // Its id as it is now, for the docked panel to tell it by.
-    needs_.shared->docked_panel_watcher = fState.fId;
-    const skia::SkRect box = fState.contentBox();
-    const bool now = box.width() < 600.0f && box.height() > box.width();
-    if (now != single || (now && box.width() != single_width)) {
-      single = now;
-      single_width = box.width();
-      this->show_info();
-    }
-    this->nodes::Stack::layoutChildren();
-  }
-  bool threads_open = false;
-  // The chosen chat's background, as the program resolves it.
-  config::wallpaper_t wallpaper = config::wallpaper::theme{};
-  // The threads' panel open or shut, and the thread open in it: an answer
-  // being written let go where the thread changes.
-  // The thread open in it, as the program says; and whether an answer is
-  // being written there.
-  std::optional<std::string> thread_root;
-  bool thread_answering = false;
-  void set_threads(bool on, std::optional<std::string> root) {
-    threads_open = on;
-    thread_root = std::move(root);
-    this->show_info();
-  }
-  // The thread open, where the panel shows one.
-  [[nodiscard]] std::optional<std::string> thread_open() const { return threads_open ? thread_root : std::nullopt; }
-  // The thread's field.
-  [[nodiscard]] auto& thread_line() { return std::get<kThreadLine>(parts.threads.fParts); }
-  [[nodiscard]] const auto& thread_line() const { return std::get<kThreadLine>(parts.threads.fParts); }
-  // What is written goes into the thread open: its field has the keys.
-  [[nodiscard]] bool writing_in_thread() const { return thread_open() && composer_field(thread_line()).focused(); }
-
-  void toggle_info() { this->set_info_open(!info_open); }
-  void set_info_open(bool on) {
-    info_open = on;
-    this->show_info();
-  }
-
-  // The model as it is now: the current account's chats, newest first, and
-  // the chosen one.
-  // The chats muted, as the program keeps them.
-  std::set<conversation_id> muted;
-  // What is left written in each chat, as the program keeps it.
-  std::map<conversation_id, std::string> drafts;
-  [[nodiscard]] std::string draft_of(const conversation_id& id) const {
-    const auto found = drafts.find(id);
-    return found == drafts.end() ? std::string() : found->second;
-  }
-  // Frames wanted while a jump goes on: it is carried out a step a frame --
-  // made, paged back to, fetched around, aimed at -- and skiff draws the next
-  // frame only for what is still settling. And while the list slides in --
-  // another space, a forum -- and the panels ease to a chat's opacity: only
-  // ticked (wantsTick), they moved a step at a frame something else asked
-  // for, and the slide went by in jerks unless the mouse moved.
-  [[nodiscard]] bool settling() const {
-    return slide_wait > 0 || list_in.moving() ||
-           needs_.paint->ease.t.moving() || pane_in.moving();
-  }
-  // What was searched for last, and the model last shown: typing into the
-  // search filters the list again.
-  std::string searched;
-  // What the server was last asked for where nothing joined matched, and
-  // what came of it.
-  std::string asked_elsewhere;
-  std::vector<directory_room> rooms_elsewhere;
-  std::vector<found_person> people_elsewhere;
-  bool rooms_came = false;
-  bool people_came = false;
-  const model* last_model = nullptr;
-  // What it wants of the program, as its state comes to want it.
-  wants_model* wants_ = nullptr;
-
-  bool was_typing = false;
-  std::string typed_last;
-  // Ticked while something moves: the list sliding in, the panels' ease,
-  // the docked panel's height. What the list does is its own.
-  [[nodiscard]] bool wantsTick() const {
-    return slide_wait > 0 || list_in.moving() || pane_in.moving() ||
-           needs_.paint->ease.t.moving();
-  }
-  void update(double now_ms);
-
-  // The screen as the model is: the list, and the chat shown -- or, where
-  // only what the list lists changed (another space, a forum, the search),
-  // the list alone: the chat's messages were reconciled again for nothing.
-  void show(const model& now, bool with_chat = true);
-  // Read by the window's binding: what the settings say of the chats --
-  // which are muted, which shown as forums or out of Home -- and how the
-  // spaces show; the screen shown again where any of it moved.
-  // What is kept, as the window's binding last read it: what each chat's
-  // settings come to is read from it, with the chats, at every show.
-  const kept_root* kept_ = nullptr;
-  // Each chat's settings as they come to now -- its own, its space's, its
-  // account's, every chat's: which room events it shows (in an encrypted
-  // room, who joins and who is invited always: each is given the room's
-  // key, and the server could put anyone there -- the one thing to see
-  // before writing), whether it shows receipts and link previews, how far
-  // a jump's search pages back.
-  void read_chat_settings(const model& now) {
-    if (kept_ == nullptr)
-      return;
-    const auto space = space_above_of(now.accounts());
-    const chat_settings reads{kept_, &space};
-    const auto all = [&] {
-      return now.accounts().values() | std::views::transform([](const account& one) { return one.conversations.values(); }) | std::views::join;
-    };
-    event_filters = all() | std::views::transform([&](const conversation& one) {
-                      room_event_filter filter = reads.room_event_filter_of(one.id);
-                      if (one.encrypted)
-                        std::ranges::for_each(std::array{room_event_t{room_event::joins{}}, room_event_t{room_event::invites{}}},
-                                              [&](const room_event_t& kind) { filter.shown[kind.index()] = true; });
-                      return std::pair{one.id, filter};
-                    }) |
-                    std::ranges::to<std::map>();
-    receipts_in = all() | std::views::filter([&](const conversation& one) { return reads.receipts_shown(one.id); }) |
-                  std::views::transform(&conversation::id) | std::ranges::to<std::set>();
-    previews_off = all() | std::views::filter([&](const conversation& one) { return !reads.previews_shown(one.id); }) |
-                   std::views::transform(&conversation::id) | std::ranges::to<std::set>();
-  }
-  template <class Reactions>
-  void refresh(const skiff::model::Model<kept_root, Reactions>& kept) {
-    this->refresh_kept(kept.root());
-  }
-  // What is kept read: by its root, whatever the model's reactions.
-  void refresh_kept(const kept_root& root) {
-    kept_ = &root;
-    const auto& looks = root.looks.fValue;
-    side.theme_now = looks.theme;
-    const config::account_t* own = current ? account_settings(root, current->address) : nullptr;
-    const auto own_or = [&](const std::optional<bool>& theirs, bool everyone) { return theirs.value_or(everyone); };
-    // The chats listed in other accounts' lists, each with its strip: its
-    // own colour, else its account's; shown as it says, else as its account.
-    const auto& placements = root.placements.fValue;
-    const auto chat_of = [](const config::chat_placement& one) {
-      return conversation_id{{protocol_of(one.account), one.account}, one.conversation};
-    };
-    const auto strip_shown = [&](const config::chat_placement& one) {
-      const config::account_t* theirs = account_settings(root, one.account);
-      return one.strip.value_or(theirs == nullptr || config::strip_of(*theirs));
-    };
-    const auto strip_of = [&](const config::chat_placement& one) {
-      const config::account_t* theirs = account_settings(root, one.account);
-      const config::accent_t colour = one.strip_colour ? config::accent_of(one.strip_colour)
-                                      : theirs != nullptr ? config::colour_of(*theirs)
-                                                          : config::default_colour_of(one.account);
-      return std::pair{chat_of(one), colour_of(colour, looks.theme)};
-    };
-    auto listed_now = std::ranges::fold_left(placements, std::map<account_id, std::vector<conversation_id>>{},
-                                             [&](auto by_list, const config::chat_placement& one) {
-                                               by_list[account_id{protocol_of(one.listed_in), one.listed_in}].push_back(chat_of(one));
-                                               return by_list;
-                                             });
-    auto moved_now = placements | std::views::filter(&config::chat_placement::moved) | std::views::transform(chat_of) |
-                     std::ranges::to<std::set>();
-    // The last placement of a chat says its strip, as it was written last.
-    auto strips_now = placements | std::views::reverse | std::views::filter(strip_shown) | std::views::transform(strip_of) |
-                      std::ranges::to<std::map>();
-    auto now = std::tuple{std::move(listed_now), std::move(moved_now), std::move(strips_now), chats_where<&config::chat_choices::muted>(root), chats_where<&config::chat_choices::forum>(root),
-                          chats_where<&config::chat_choices::hidden_from_home>(root), looks.spaces, looks.top_bar, looks.space_places,
-                          own ? own_or(config::home_hides_of(*own), looks.home_hides_spaced) : looks.home_hides_spaced,
-                          own ? own_or(config::home_direct_of(*own), looks.home_hides_direct) : looks.home_hides_direct};
-    auto was = std::tie(listed_in, moved_out, strips, muted, forums, hidden_from_home, spaces_on, top_bar_on, space_places, home_hides_spaced, home_hides_direct);
-    // The chats' own settings may have moved with anything kept: shown
-    // again whenever the binding reads it.
-    was = std::move(now);
-    if (last_model)
-      this->show(*last_model);
-  }
-  // Read by the chats binding: the screen shown again from the model it was
-  // last given, as the chats move.
-  void refresh(const chats_model&) {
-    if (last_model)
-      this->show(*last_model);
-  }
-  // What the runtime binding walks call it by (outside a release build):
-  // its refresh, made where it is made, not where a table of it is.
-  skiff::bind::Refreshes<2> fRefreshes = skiff::bind::refreshes(
-      skiff::bind::refreshFrom<conversations_screen, chats_model>(),
-      skiff::bind::refreshFromRoot<conversations_screen, kept_root, &conversations_screen::refresh_kept>());
-
-  // What the chat's protocol says over the composer (proto::composer_banners):
-  // Matrix's warning where the other is not verified, for one. Its banners
-  // share a dismissible bar in the first's tone.
-  void show_conversation(const model& now);
 };
+// The rest, on their way up, nothing under the keys having taken them:
+// those the screen has a use for, asked of the program (screen_key).
+struct screen_keys {
+  std::optional<request::screen_key> operator()(const scene::key::down& press) const {
+    namespace keys = scene::keys;
+    const bool control = press.modifiers.template has<scene::modifier::control>();
+    static constexpr std::array kTheirs{keys::kEscape, keys::kUp, keys::kDown, keys::kTab, keys::kEnd, keys::kF, keys::kK, keys::kC, keys::kDelete,
+                                        keys::k1, keys::k2, keys::k3, keys::k4, keys::k5, keys::k6, keys::k7, keys::k8, keys::k9};
+    if (!std::ranges::contains(kTheirs, press.key) || (!control && press.key != keys::kEscape && press.key != keys::kUp &&
+                                                      press.key != keys::kDown && press.key != keys::kDelete))
+      return std::nullopt;
+    return request::screen_key{press.key, control, press.modifiers.template has<scene::modifier::shift>(),
+                               press.modifiers.template has<scene::modifier::alt>()};
+  }
+};
+// A swipe across it, on a phone's window: right, a step back (or the
+// drawer out, from the chats); the program's to say.
+struct screen_swiped {
+  std::optional<request::screen_swipe> operator()(bool towards_left) const { return request::screen_swipe{!towards_left}; }
+};
+// The info's or the threads' column: as wide as the program says, all of
+// the window across on a phone's.
+[[nodiscard]] inline scene::Spec beside_width(const screen_shown& now) {
+  return now.single ? scene::Spec{.width = 1.0f, .relativeSize = scene::axes::kBoth}
+                    : scene::Spec{.width = now.info_width, .relativeSize = scene::axes::kY};
+}
+inline auto chats_screen(const ui_needs& n) {
+  namespace c = skiff::compose;
+  const palette& colours = *n.colours;
+  const auto up = [](bool screen_shown::*flag) { return [flag](const screen_shown& now) { return now.*flag; }; };
+  const scene::Spec edge{.fillY = true, .width = 7.0f, .margin = {0.0f, -3.0f, 0.0f, -3.0f}};
+  return c::keys_for<screen_shown, scene::phase::capture>([](const screen_shown& now) { return now; }, capture_keys{},
+      c::onKeys(screen_keys{},
+          c::flicked(90.0f, screen_swiped{},
+              c::slid_for<screen_shown>([](const screen_shown& now) { return c::Paned{now.single, static_cast<int>(now.pane.index())}; },
+                  c::row(c::hbox(0.0f, {.fill = true}),
+                      c::shown_for<screen_shown>(up(&screen_shown::side_up),
+                          c::column(c::vbox(0.0f, {.fillY = true, .autoSize = scene::axes::kX}), side_column(n))),
+                      c::shown_for<screen_shown>(up(&screen_shown::side_edge), c::styled(edge, drag_edge(colours, resize_sidebar_to{}))),
+                      c::shown_for<screen_shown>(up(&screen_shown::chat_up),
+                          c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX}), chat_column(n))),
+                      c::shown_for<screen_shown>(up(&screen_shown::beside_edge), c::styled(edge, drag_edge(colours, resize_info_to{}, false))),
+                      c::shown_for<screen_shown>(up(&screen_shown::info_up),
+                          c::spec_for<screen_shown>(beside_width, c::column(c::vbox(0.0f, {.fillY = true}), info_panel(n)))),
+                      c::shown_for<screen_shown>(up(&screen_shown::threads_up),
+                          c::spec_for<screen_shown>(beside_width, c::column(c::vbox(0.0f, {.fillY = true}), threads_panel(n)))))))));
+}
+using chats_screen_t = decltype(chats_screen(std::declval<const ui_needs&>()));
+// Its parts, where the program reaches them: the chat's column, its field,
+// the threads' field, the chat's search field.
+// (keys_for, onKeys, flicked and slid_for each derive from the row under
+// them: its parts are the screen's.)
+[[nodiscard]] inline auto& chat_column_of(chats_screen_t& screen) { return std::get<0>(std::get<2>(screen.fParts).fParts); }
+[[nodiscard]] inline auto& chat_line_of(chats_screen_t& screen) { return std::get<chat_part::line>(chat_column_of(screen).fParts); }
+[[nodiscard]] inline auto& thread_line_of(chats_screen_t& screen) {
+  return std::get<kThreadLine>(std::get<0>(std::get<5>(screen.fParts).fParts).fParts);
+}
+[[nodiscard]] inline auto& search_field_of(chats_screen_t& screen) {
+  return std::get<0>(std::get<chat_part::search>(chat_column_of(screen).fParts).fParts);
+}
 
 }  // namespace mux::ui
 
@@ -933,9 +382,7 @@ struct conversations_screen : skiff::compose::Stacked {
 // of everything under it, there -- the chats screen's took this unit past
 // ten minutes. Their tables are made once, each in a walks unit of this
 // module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::conversations_screen> = true;  // walks_chats.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::conversations_screen::side_column> = true;  // walks_side.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen::side_column>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::chats_screen_t> = true;  // walks_chats.cc
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::chats_screen_t>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::chat_column_t> = true;  // walks_column.cc
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::chat_column_t>() noexcept;

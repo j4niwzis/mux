@@ -109,12 +109,12 @@ void part_apply(menu_part& self, const request::menu_quote_reply&) {
   if (plain.empty()) return;
   const auto fragment = selected.value_or(skiff::scene::clipboardFragment(plain, {}));
   // Into the field that answers it: the thread's, where it is answered there.
-  auto& screen = self.s_->root().main();
+  auto& screen = self.s_->root();
   if (self.s_->showing->look<mux::ui::chat_shown>()->thread_answer == self.target_.id) {
     mux::ui::prepend_quote(mux::ui::composer_field(screen.thread_line()), fragment);
     return;
   }
-  mux::ui::prepend_quote(mux::ui::composer_field(screen.line), fragment);
+  mux::ui::prepend_quote(mux::ui::composer_field(screen.chat_line()), fragment);
 }
 
 void part_apply(menu_part& self, const request::menu_reply&) {
@@ -172,7 +172,7 @@ void part_apply(menu_part& self, const request::menu_copy_image&) {
 
 void part_apply(menu_part& self, const request::menu_thread&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  auto& screen = self.s_->root().main();
+  auto& screen = self.s_->root();
   if (!s_->chosen())
     return;
   self.s_->open_thread(self.target_.id);
@@ -437,7 +437,6 @@ void show_selection(menu_part& self) {
   // a press on one selects it or lets it go.
   if (self.s_->showing->look<mux::ui::message_marks>()->selected != self.selected_)
     mux::ui::change_shown<mux::ui::message_marks>(*self.s_->showing, [&](mux::ui::message_marks& marks) { marks.selected = self.selected_; });
-  self.s_->root().main().show_selection(self.selected_);
 }
 
 }  // namespace mux::app

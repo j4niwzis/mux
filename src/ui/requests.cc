@@ -111,6 +111,22 @@ using account_page_t = typename variant_of_types<typename joined<
     type_list<account_page::connection, account_page::privacy, account_page::notifications, account_page::chats,
               account_page::proxy, account_page::appearance>,
     typename protocol_account_pages<protocols>::type>::type>::type;
+// What a protocol keeps of an account while its pages are open, as its
+// account_parts(state) lists them: one of them all, or none.
+template <class List>
+struct account_part_types;
+template <class... Parts>
+struct account_part_types<proto::account_part_list<Parts...>> {
+  using type = type_list<Parts...>;
+};
+template <class>
+struct protocol_account_parts;
+template <class... Tags>
+struct protocol_account_parts<protocol_list<Tags...>> {
+  using type = typename joined<type_list<proto::no_account_part>,
+                               typename account_part_types<decltype(proto::account_parts_of(::mux::state_of<Tags>{}))>::type...>::type;
+};
+using account_part_t = typename variant_of_types<typename protocol_account_parts<protocols>::type>::type;
 namespace request {
 struct apply_style {};
 struct configure_theme { config::theme_t theme; std::optional<config::custom_theme> custom; };

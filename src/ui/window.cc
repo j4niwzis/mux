@@ -253,6 +253,8 @@ struct shown_root {
   skiff::model::Tracked<proxy_notice> proxy_error;
   skiff::model::Tracked<local_seal> seal;
   skiff::model::Tracked<std::optional<room_settings_facts>> manage;
+  // The chosen account's page, as the program shows it: what its pages read.
+  skiff::model::Tracked<std::optional<account_page_facts>> account_page;
   skiff::model::Tracked<std::optional<send_facts>> sending;
   skiff::model::Tracked<std::optional<verification_view>> verifying;
   skiff::model::Tracked<std::optional<passphrase_facts>> passphrase;

@@ -175,6 +175,74 @@ struct room_settings_facts {
   bool narrow = false, navigation = false;
   manage_part_t manage;
 };
+// An account's pages, as the program shows them: the account as saved and
+// its protocol's state; the page up; what its protocol keeps while they are
+// open; and its own profile and presence as the model has them -- with what
+// the Profile page needs of a save: whether one is on its way, what came of
+// it, and a round that moves where its drafts are to be made again (the
+// profile first heard, a save gone through).
+struct account_page_facts {
+  account_id by;
+  config::account_t account;
+  protocol_state_t state;
+  account_page_t page;
+  account_part_t kept;
+  std::optional<user_profile> profile;
+  std::optional<mux::presence> presence;
+  std::uint64_t profile_result = 0;  // the model's count of answers, as last read
+  std::uint32_t profile_round = 0;
+  bool profile_saving = false;
+  std::optional<std::string> profile_said;
+};
+// The facts read again from the model: its profile and presence; an answer
+// come in says what came of a save, and one that went through makes the
+// drafts again, as does the profile first heard.
+inline void read_account_model(account_page_facts& facts, const model& now) {
+  const account* known = now.accounts().find(facts.by);
+  if (known == nullptr)
+    return;
+  const auto profile = known->profiles.find(facts.by.address);
+  std::optional<user_profile> heard = profile == known->profiles.end() ? std::nullopt : std::optional(profile->second);
+  if (heard && !facts.profile)
+    ++facts.profile_round;
+  if (known->profile_result != facts.profile_result) {
+    facts.profile_result = known->profile_result;
+    facts.profile_said = known->profile_error.value_or("Profile saved.");
+    if (std::exchange(facts.profile_saving, false) && !known->profile_error)
+      ++facts.profile_round;
+  }
+  facts.profile = std::move(heard);
+  const auto presence = known->presences.find(facts.by.address);
+  facts.presence = presence == known->presences.end() ? std::nullopt : std::optional(presence->second);
+}
+// What a protocol keeps of an account while its pages are open, fresh: its
+// first part, or none.
+template <class List>
+struct first_account_part {
+  using type = proto::no_account_part;
+};
+template <class First, class... Rest>
+struct first_account_part<proto::account_part_list<First, Rest...>> {
+  using type = First;
+};
+template <class Tag>
+using first_account_part_t = typename first_account_part<decltype(proto::account_parts_of(state_of<Tag>{}))>::type;
+// The facts of an account's page as it opens: what its protocol keeps of it
+// fresh, the model's answers so far already read.
+[[nodiscard]] inline account_page_facts account_page_opened(const config::account_t& one, protocol_state_t state,
+                                                             account_page_t page, const model& now) {
+  const std::string& address = config::address_of(one);
+  account_page_facts facts{.by = account_id{protocol_of(address), address}, .account = one, .state = std::move(state), .page = std::move(page)};
+  spl::visit([&](auto tag) { facts.kept = account_part_t(std::in_place_type<first_account_part_t<decltype(tag)>>); }, facts.by.speaks);
+  if (const account* known = now.accounts().find(facts.by))
+    facts.profile_result = known->profile_result;
+  read_account_model(facts, now);
+  return facts;
+}
+// A protocol's own account page, made over these facts: page_view(page,
+// colours, facts), as its UI module overloads it.
+template <class Page>
+using account_page_view_t = decltype(page_view(Page{}, std::declval<const palette&>(), std::declval<const account_page_facts&>()));
 namespace request {
 // A tab of the settings picked; and their ← (an editor open closed first,
 // then the page, to the tab list on a narrow window).

@@ -45,13 +45,16 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::flip_only_verified&) {
-    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
       auto* kept = mux::config::only_verified_in(account);
       if (kept == nullptr)
         return;
       *kept = !kept->value_or(false);
-      // Shown on its page, where the page shown is one that shows it.
-      panel.tell_shown([&](auto& page) -> decltype(void(page.show_only_verified(true))) { page.show_only_verified(**kept); });
+      // Shown on its page, as the account its facts hold.
+      mux::ui::change_shown<std::optional<mux::ui::account_page_facts>>(*s_->showing, [&](auto& open) {
+        if (open && open->by.address == mux::config::address_of(account))
+          open->account = account;
+      });
       // Told to that account, running, where its client can: its sessions'
       // keys go so from now.
       s_->net->set_only_verified(kept_settings::id_of(account), **kept);

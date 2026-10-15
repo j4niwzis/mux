@@ -191,6 +191,15 @@ struct managed_member {
 };
 struct managed_account_data { std::string type, json; };
 struct managed_state_event { std::string type, key, json, content_json; };
+// One of the account's sessions (Matrix's devices), as Element lists them:
+// its ID, its name, and where and when it was last seen.
+struct session_info {
+  std::string id;
+  std::string name;
+  std::optional<std::string> ip;
+  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> last_seen;
+  friend bool operator==(const session_info&, const session_info&) = default;
+};
 struct room_management {
   std::vector<std::string> local_aliases;
   std::optional<bool> directory;

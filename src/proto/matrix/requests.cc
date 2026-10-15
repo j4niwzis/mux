@@ -12,6 +12,21 @@ import mux.proto;
 
 export namespace mux::proto::matrix {
 
+// What a press on the account's pages asks: the program changes what it
+// keeps of the account (account_state) and, where it is a write, asks the
+// server.
+namespace account_change {
+// A session's name, to be edited or let be; and saved.
+struct rename { std::string device; bool open = true; };
+struct save_name { std::string device, name; };
+// Sessions signed out: these, or all but this one; and again with the
+// password the server asked for.
+struct sign_out { std::vector<std::string> devices; };
+struct sign_out_others {};
+struct sign_out_again { std::string password; };
+}  // namespace account_change
+using account_change_t = spl::variant<account_change::rename, account_change::save_name, account_change::sign_out,
+                                      account_change::sign_out_others, account_change::sign_out_again>;
 namespace request {
 // A pack created or edited from the room's settings.
 struct save_room_pack { mux::emote_pack pack; };
@@ -40,15 +55,10 @@ struct verify_session {
 // again; or let go.
 struct continue_uia {};
 struct cancel_uia {};
-struct sign_out_sessions {
-  std::vector<std::string> devices;
-  std::string password;
-};
-struct rename_session {
-  std::string device;
-  std::string name;
-};
 struct refresh_sessions {};
+struct change_account {
+  account_change_t change;
+};
 // The developer tools: the room's state explored, an event of any type sent.
 struct explore_state {};
 struct open_send_custom {};
@@ -169,7 +179,7 @@ inline request::close_tool<uia_step> closing_of(std::type_identity<uia_step>) { 
 
 constexpr request_list<request::setup_cross_signing, request::restore_cross_signing, request::reset_identity,
                        request::sign_out_unverified, request::reset_backup, request::delete_backup, request::export_room_keys,
-                       request::import_room_keys, request::verify_session, request::sign_out_sessions, request::rename_session,
+                       request::import_room_keys, request::verify_session, request::change_account,
                        request::refresh_sessions, request::verify_them, request::explore_state,
                        request::open_send_custom, request::send_custom, request::save_room_pack, request::change_room, request::continue_uia,
                        request::cancel_uia, request::close_tool<tool::devtools_text>, request::close_tool<tool::devtools_state>,

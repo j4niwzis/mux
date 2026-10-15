@@ -888,5 +888,8 @@ struct profile_policy {
 };
 constexpr std::string_view page_title(profile) { return "Profile"; }
 inline ui::icon_t page_icon(profile) { return ui::icon::info{}; }
-constexpr type_tag<ui::profile_editor<profile_policy>> page_type(profile) { return {}; }
+inline auto page_view(profile, const ui::palette& colours, const ui::account_page_facts& first) {
+  return ui::profile_page<profile_policy>(colours, first);
+}
+inline ui::request::refresh_profile asked_as_it_opens(profile, const account_id& by) { return {by}; }
 }

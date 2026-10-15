@@ -49,6 +49,25 @@ struct encryption {};
 struct sessions {};
 }  // namespace settings
 constexpr account_page_list<settings::profile, settings::encryption, settings::sessions> account_pages(const state&) { return {}; }
+// What it keeps of an account while they are open: its sessions as the
+// server listed them (none yet: not heard), this one's among them; whether
+// this session has the cross-signing keys and the room keys are backed up;
+// the session being renamed; the sessions being signed out, and what the
+// server refused -- whether it wants the password for them.
+struct account_security {
+  bool cross_signing = false, backup = false;
+};
+struct account_state {
+  std::optional<std::vector<session_info>> sessions;
+  std::string current;
+  std::optional<account_security> security;
+  std::optional<std::string> renaming;
+  std::vector<std::string> signing;
+  bool signing_out = false;
+  std::string refused;
+  bool needs_password = false;
+};
+constexpr account_part_list<account_state> account_parts(const state&) { return {}; }
 
 // A direct chat is a room: whom it is with, the member who is not the account.
 inline std::string direct_contact(const state&, const conversation& one) {

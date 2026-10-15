@@ -78,15 +78,6 @@ struct pack_picture_uploaded {
   pack_picture picture;
   bool done = false;
 };
-// One of the account's sessions (Matrix's devices), as Element lists them:
-// its ID, its name, and where and when it was last seen.
-struct session_info {
-  std::string id;
-  std::string name;
-  std::optional<std::string> ip;
-  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> last_seen;
-  friend bool operator==(const session_info&, const session_info&) = default;
-};
 // The account's sessions, this one's ID among them.
 struct sessions_listed {
   account_id by;

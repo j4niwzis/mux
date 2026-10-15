@@ -8,14 +8,11 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 import skiff.compose;
+import skiff.model;
 import skiff.nodes.flow;
 import skiff.nodes.text;
-import skiff.nodes.scroll;
 import skiff.widgets.button;
-import skiff.widgets.motion;
-import skiff.widgets.sliderbar;
-import skiff.widgets.textarea;
-import skiff.widgets.textbox;
+import skiff.widgets.model;
 import mux.core;
 import mux.config;
 import mux.proto.kept;
@@ -23,18 +20,55 @@ import mux.proto.matrix;
 import mux.proto.matrix.requests;
 import mux.ui.base;
 
-// ---- the account's Sessions page -----------------------------------------------
-namespace mux::proto::matrix::settings_detail {
+// ---- what the pages read --------------------------------------------------------
+// Each page is a function over the account's pages' facts (account_page_facts):
+// the account as saved, its protocol's state, and what Matrix keeps of it
+// while they are open (account_state) -- its sessions as the server listed
+// them, its security, a session being renamed, a sign-out on its way, what
+// the server refused. A press asks the program (request::change_account),
+// which changes what it keeps and asks the server.
+export namespace mux::proto::matrix::settings_detail {
 using namespace ::mux::ui;
 
-// An account's Sessions page, as Element's: this session first, then the
-// others -- each its name, its ID, where and when it was last seen -- each to
-// rename or sign out, and all the others at once. Where the server asks for
-// the password to sign one out, a field for it.
+using facts_t = std::optional<account_page_facts>;
+[[nodiscard]] inline const account_state& kept_of(const facts_t& now) {
+  static const account_state none;
+  return now ? spl::visit(spl::overloaded{[](const account_state& kept) -> const account_state& { return kept; },
+                                          [](const auto&) -> const account_state& { return none; }},
+                          now->kept)
+             : none;
+}
+template <class Change>
+struct asks {
+  using Answer = request::change_account;
+  Change change;
+  Answer operator()() const { return {account_change_t{change}}; }
+};
+template <class Change>
+asks<Change> ask(Change change) { return {std::move(change)}; }
+
+// A row of the client's settings rows that asks something, shown or not as
+// the facts say.
+template <class Act, class Shown>
+auto row_if(const palette& colours, std::string text, Shown shown) {
+  return skiff::compose::shown_for<facts_t>(std::move(shown), row_item(colours, std::move(text), Act{}));
+}
+inline auto note(const palette& colours, std::string text) {
+  return skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::move(text), 13.0f, colours.dim)));
+}
+inline auto button_look(float width) {
+  return scene::Spec{.width = width, .height = 30.0f, .alignSelf = scene::align::kMiddle};
+}
+
+// ---- the account's Sessions page ----------------------------------------------
+// As Element's: this session first, then the others -- each its name, its
+// ID, where and when it was last seen -- each to rename or sign out, and all
+// the others at once. Where the server asks for the password to sign them
+// out, a field for it.
 // A session's ID, when it was last seen, from where: as Element says them.
 // Its time told by mux.ui's seen_at: clang 23 crashed on that format
 // string made first in this module (see app/network.cc).
-[[nodiscard]] inline std::string facts_of(const proto::matrix::session_info& one, bool current) {
+[[nodiscard]] inline std::string facts_of(const session_info& one, bool current) {
   std::string out = one.id;
   if (current)
     out += " · this session";
@@ -45,371 +79,215 @@ using namespace ::mux::ui;
   return out;
 }
 
-struct account_sessions : skiff::compose::Stacked {
-  // The colours it is made in, for the rows it makes later.
-  const palette* colours_ = nullptr;
-  struct sign_out_one {
-    account_sessions* page;
-    std::string device;
-    using Answer = std::optional<request::sign_out_sessions>;
-    Answer operator()() const { return page->sign_out({device}); }
-  };
-  struct sign_out_rest {
-    account_sessions* page;
-    using Answer = std::optional<request::sign_out_sessions>;
-    Answer operator()() const { return page->sign_out(page->others); }
-  };
-  struct verify_one {
-    using Answer = request::verify_session;
-    account_sessions* page;
-    std::string device;
-    request::verify_session operator()() const { return request::verify_session{device}; }
-  };
-  struct start_rename {
-    account_sessions* page;
-    std::size_t row;
-    void operator()() const { page->renaming(row); }
-  };
-  struct save_rename {
-    account_sessions* page;
-    std::size_t row;
-    using Answer = std::optional<request::rename_session>;
-    Answer operator()() const { return page->rename(row); }
-  };
-  struct reload {
-    using Answer = request::refresh_sessions;
-    request::refresh_sessions operator()() { return request::refresh_sessions{}; }
-  };
-  // One session: its name over its ID, when and where it was last seen;
-  // Rename, and Sign out where it is not this one.
-  struct session_row : skiff::compose::Stacked {
-    std::string device;
-    std::string name;
-    struct parts_t {
-      two_lines_t lines;
-      widgets::TextBox<> field;
-      widgets::Button<save_rename> save;
-      widgets::Button<start_rename> rename;
-      std::optional<widgets::Button<verify_one>> verify;
-      std::optional<widgets::Button<sign_out_one>> sign_out;
-    } parts;
-    session_row(account_sessions *page, std::size_t index,
-                const proto::matrix::session_info &one, bool current)
-        : Stacked(
-              skiff::compose::hbox(8.0f, {.fillX = true,
-                                          .height = 60.0f,
-                                          .padding = {0.0f, 12.0f, 0.0f, 12.0f},
-                                          .cornerRadius = 8.0f,
-                                          .background = page->colours_->tile})),
-          device(one.id), name(one.name),
-          parts{.lines =
-                    two_lines(*page->colours_,
-                            one.name.empty() ? std::string("Unnamed session")
-                                             : one.name,
-                            facts_of(one, current), 15.0f, 2.0f, 12.0f),
-                .field = skiff::compose::visible(
-                    false, skiff::compose::styled(
-                               {.height = 32.0f,
-                                .grow = scene::axes::kX,
-                                .alignSelf = scene::align::kMiddle},
-                               widgets::TextBox<>((*page->colours_).widgets,
-                                                  "Session name"))),
-                .save = skiff::compose::visible(
-                    false,
-                    skiff::compose::styled(
-                        {.width = 70.0f,
-                         .height = 30.0f,
-                         .alignSelf = scene::align::kMiddle},
-                        widgets::Button<save_rename>((*page->colours_).widgets,
-                                                     "Save", {page, index}))),
-                .rename = skiff::compose::styled(
-                    {.width = 80.0f,
-                     .height = 30.0f,
-                     .alignSelf = scene::align::kMiddle},
-                    widgets::Button<start_rename>((*page->colours_).widgets,
-                                                  "Rename", {page, index}))} {
-
-      parts.field.setText(one.name);
-
-      if (!current) {
-        parts.verify.emplace((*page->colours_).widgets, "Verify", verify_one{page, one.id});
-        parts.verify->apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
-        parts.sign_out.emplace((*page->colours_).widgets, "Sign out", sign_out_one{page, one.id});
-        parts.sign_out->apply({.width = 86.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
-      }
-    }
-    void show_field(bool on) {
-      parts.lines.setVisible(!on);
-      parts.field.setVisible(on);
-      parts.save.setVisible(on);
-      parts.rename.setVisible(!on);
-      this->invalidateLayout();
-    }
-  };
-  struct password_row : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text label;
-      widgets::TextBox<> field;
-    } parts;
-    explicit password_row(const palette &colours)
-        : Stacked(skiff::compose::vbox(
-              6.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-          parts{.label = nodes::Text(
-                    "Your password, to sign sessions out:", 13.0f, colours.dim),
-                .field = skiff::compose::styled(
-                    {.fillX = true, .height = 34.0f},
-                    widgets::TextBox<>(colours.widgets, "Password"))} {
-      parts.field.setMasked(true);
-    }
-  };
-  // Device verification, as Cinny puts it over the sessions: cross-signing
-  // set up here, or brought back with the recovery key -- the Privacy page's
-  // own rows, the same buttons. Without it, a session verified by emoji is
-  // trusted only by the client that verified it, and nothing is signed.
-  using set_up_row = legacy::row_item<sends<request::setup_cross_signing>>;
-  using restore_row = legacy::row_item<sends<request::restore_cross_signing>>;
-  using reset_row = legacy::row_item<sends<request::reset_identity>>;
-  using reset_backup_row = legacy::row_item<sends<request::reset_backup>>;
-  using delete_backup_row = legacy::row_item<sends<request::delete_backup>>;
-  using sign_out_unverified_row = legacy::row_item<sends<request::sign_out_unverified>>;
-  struct parts_t {
-    nodes::Text verification_title;
-    nodes::Text verification_note;
-    set_up_row set_up;
-    restore_row restore;
-    // Element's last resort: new cross-signing keys, the dialog saying what
-    // it undoes.
-    reset_row reset;
-    // Element's Secure Backup: made anew, or deleted.
-    reset_backup_row reset_backup;
-    delete_backup_row delete_backup;
-    nodes::Text title;
-    nodes::Text note;
-    nodes::Text current_title;
-    std::vector<session_row> current;
-    nodes::Text others_title;
-    std::vector<session_row> rows;
-    // Element's: every session of one's own not verified, signed out.
-    sign_out_unverified_row sign_out_unverified;
-    password_row password;
-    widgets::Button<sign_out_rest> rest;
-    widgets::Button<reload> refresh;
-  } parts;
-  std::vector<std::string> others;
-
-  // Its sessions asked of the server as it opens.
-  account_sessions(const palette &colours, const ui_shared &,
-                   const config::account_t &, const model &)
-      : Stacked(skiff::compose::vbox(
-            8.0f, {.fillX = true, .autoSize = scene::axes::kY})),
-        colours_(&colours),
-        parts{
-            .verification_title = section_title(colours, "DEVICE VERIFICATION"),
-            .verification_note = skiff::compose::styled(
-                {.fillX = true},
-                wrapped(
-                    nodes::Text("To verify device identity and grant access to "
-                                "encrypted messages: cross-signing. "
-                                "Set it up here, or, where another session of "
-                                "yours has it, bring it back with "
-                                "your recovery key.",
-                                13.0f, colours.dim))),
-            .set_up = set_up_row(colours, "Set up cross-signing\u2026", {}),
-            .restore =
-                restore_row(colours, "Restore with the recovery key\u2026", {}),
-            .reset = reset_row(colours, "Reset your identity\u2026", {}),
-            .reset_backup =
-                reset_backup_row(colours, "Reset the key backup", {}),
-            .delete_backup =
-                delete_backup_row(colours, "Delete the key backup", {}),
-            .title =
-                skiff::compose::styled({.margin = {14.0f, 0.0f, 0.0f, 0.0f}},
-                                       section_title(colours, "SESSIONS")),
-            .note = skiff::compose::styled(
-                {.fillX = true}, wrapped(nodes::Text("Loading the sessions…",
-                                                     13.0f, colours.dim))),
-            .current_title = section_title(colours, "CURRENT SESSION"),
-            .others_title = section_title(colours, "OTHER SESSIONS"),
-            .sign_out_unverified = sign_out_unverified_row(
-                colours, "Sign out unverified sessions\u2026", {}),
-            .password = skiff::compose::visible(false, password_row(colours)),
-            .rest = skiff::compose::visible(
-                false, skiff::compose::styled(
-                           {.width = 260.0f,
-                            .height = 34.0f,
-                            .margin = {8.0f, 0.0f, 0.0f, 0.0f}},
-                           widgets::Button<sign_out_rest>(
-                               colours.widgets,
-                               "Sign out of all other sessions", {this}))),
-            .refresh = skiff::compose::styled(
-                {.width = 100.0f, .height = 30.0f},
-                widgets::Button<reload>(colours.widgets, "Refresh", {}))} {
-
-    for (nodes::Text* each : {&parts.current_title, &parts.others_title})
-      each->apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
-
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.current_title, &parts.others_title})
-      each->setVisible(false);
-  }
-  // Its sessions, asked of the server as it opens.
-  [[nodiscard]] static request::refresh_sessions asked_as_it_opens() { return {}; }
-  // Element's Security, under Device verification: whether this session has
-  // the cross-signing keys, and whether room keys are backed up.
-  void show_security(bool cross_signing, bool backup) {
-    parts.verification_note.setText(std::format(
-        "Cross-signing: {}  \u00b7  Key backup: {}\nTo verify device identity and grant access to encrypted messages: "
-        "set it up here, or, where another session of yours has it, bring it back with your recovery key.",
-        cross_signing ? "\u2713 ready on this session" : "\u26A0 not on this session",
-        backup ? "\u2713 on" : "\u26A0 off"));
-    parts.set_up.setVisible(!cross_signing);
-    parts.restore.setVisible(!cross_signing);
-    parts.reset_backup.setVisible(cross_signing);
-    parts.delete_backup.setVisible(backup);
-    this->invalidateLayout();
-  }
-  // The sessions, as the server listed them: this one first, the others by
-  // when they were last seen, the latest first.
-  void show(const std::string& current, std::vector<proto::matrix::session_info> all) {
-    std::ranges::sort(all, std::ranges::greater{}, [](const proto::matrix::session_info& one) {
-      return one.last_seen.value_or(std::chrono::sys_time<std::chrono::milliseconds>{});
-    });
-    parts.current.clear();
-    parts.rows.clear();
-    others.clear();
-    for (const proto::matrix::session_info& one : std::views::filter(all, [&](const proto::matrix::session_info& s) { return s.id == current; }))
-      parts.current.emplace_back(this, 0, one, true);
-    std::size_t index = 0;
-    for (const proto::matrix::session_info& one : std::views::filter(all, [&](const proto::matrix::session_info& s) { return s.id != current; })) {
-      parts.rows.emplace_back(this, ++index, one, false);
-      others.push_back(one.id);
-    }
-    parts.note.setText(all.empty() ? std::string("No sessions.") : std::string());
-    parts.note.setVisible(all.empty());
-    parts.current_title.setVisible(!parts.current.empty());
-    parts.others_title.setVisible(!parts.rows.empty());
-    parts.rest.setVisible(parts.rows.size() > 1);
-    this->invalidateLayout();
-  }
-  // The server said no: why; and the password field, where that is it.
-  void refused(const std::string& why, bool needs_password) {
-    parts.note.setText(why);
-    parts.note.setColour(colours_->error);
-    parts.note.setVisible(true);
-    if (needs_password)
-      parts.password.setVisible(true);
-    this->invalidateLayout();
-  }
-  std::optional<request::sign_out_sessions> sign_out(std::vector<std::string> devices) {
-    std::optional<request::sign_out_sessions> asked;
-    if (devices.empty())
-      return asked;
-    parts.note.setText("Signing out…");
-    parts.note.setColour(colours_->dim);
-    parts.note.setVisible(true);
-    asked = request::sign_out_sessions{std::move(devices), parts.password.parts.field.text()};
-    this->invalidateLayout();
-    return asked;
-  }
-  [[nodiscard]] session_row* row_at(std::size_t index) {
-    if (index == 0)
-      return parts.current.empty() ? nullptr : &parts.current.front();
-    return index <= parts.rows.size() ? &parts.rows[index - 1] : nullptr;
-  }
-  void renaming(std::size_t index) {
-    if (session_row* row = this->row_at(index))
-      row->show_field(true);
-  }
-  std::optional<request::rename_session> rename(std::size_t index) {
-    std::optional<request::rename_session> asked;
-    if (session_row* row = this->row_at(index)) {
-      row->show_field(false);
-      asked = request::rename_session{row->device, row->parts.field.text()};
-    }
-    return asked;
-  }
-  void say(std::string, bool) {}
+// One session as its row is made: made again where it is renamed or saved.
+struct session_key {
+  session_info one;
+  bool current = false;
+  bool renaming = false;
+  friend bool operator==(const session_key&, const session_key&) = default;
 };
-
-// The account's Encryption page, as Element's Cryptography: room keys to
-// verified sessions only; this session, its ID and its key in fours, to be
-// compared with what another session shows; its room keys exported or
-// imported, as Element does them; cross-signing set up, or restored.
-struct encryption_page : skiff::compose::Stacked {
-  using only_verified_row = legacy::switch_row<sends<::mux::ui::request::flip_only_verified>>;
-  using export_row = legacy::row_item<sends<request::export_room_keys>>;
-  using import_row = legacy::row_item<sends<request::import_room_keys>>;
-  using cross_signing_row = legacy::row_item<sends<request::setup_cross_signing>>;
-  using recovery_row = legacy::row_item<sends<request::restore_cross_signing>>;
-  struct parts_t {
-    nodes::Text title;
-    only_verified_row only_verified;
-    nodes::Text session_line;
-    export_row export_keys;
-    import_row import_keys;
-    cross_signing_row cross_signing;
-    recovery_row recovery;
-  } parts;
-
-  encryption_page(const palette &colours, const ui_shared &shared,
-                  const config::account_t &one, const model &now)
-      : Stacked(skiff::compose::vbox(8.0f, {.fill = true})),
-        parts{.title = section_title(colours, "ENCRYPTION"),
-              .only_verified = only_verified_row(
-                  colours,
-                  "Never send encrypted messages to unverified sessions", {}),
-              .session_line = nodes::Text("", 13.0f, colours.dim),
-              .export_keys = export_row(colours, "Export room keys\u2026", {}),
-              .import_keys = import_row(colours, "Import room keys\u2026", {}),
-              .cross_signing =
-                  cross_signing_row(colours, "Set up cross-signing\u2026", {}),
-              .recovery = recovery_row(
-                  colours, "Restore with the recovery key\u2026", {})} {
-    parts.only_verified.parts.toggle.setOnNow(config::only_verified_of(one));
-    const std::string& address = config::address_of(one);
-    this->show_session(protocol_state_of(shared, account_id{protocol_of(address), address}));
-  }
-  void show_only_verified(bool on) { parts.only_verified.parts.toggle.setOn(on); }
-  // This session, as its account's protocol state says it, once known.
-  void show_session(const protocol_state_t& known) {
-    const auto own = spl::visit(
-        spl::overloaded{[](const state& now) {
-                             return now.device_id.empty() ? std::optional<std::pair<std::string, std::string>>()
-                                                          : std::optional(std::pair{now.device_id, now.ed25519});
-                           },
-                           [](const auto&) { return std::optional<std::pair<std::string, std::string>>(); }},
-        known);
-    parts.session_line.setVisible(own.has_value());
-    if (!own)
-      return;
-    const std::string grouped = std::ranges::to<std::string>(std::views::join(std::views::transform(std::views::enumerate(own->second), [](const auto& at) {
-                                  const auto [index, letter] = at;
-                                  return index > 0 && index % 4 == 0 ? std::string{' ', letter} : std::string(1, letter);
-                                })));
-    parts.session_line.setText(std::format("Session ID: {}\nSession key: {}", own->first, grouped));
-  }
-  void say(std::string, bool) {}
+struct name_draft {
+  std::string name;
+  friend bool operator==(const name_draft&, const name_draft&) = default;
 };
+// Its name over its ID, when and where it was last seen; Rename, and, where
+// it is not this one, Verify and Sign out. Being renamed: its name in a
+// field, and Save.
+inline auto session_row(const palette& colours, const session_key& key) {
+  namespace c = skiff::compose;
+  const session_info& one = key.one;
+  return c::local<name_draft>(
+      c::row(c::hbox(8.0f, {.fillX = true, .height = 60.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f,
+                            .background = colours.tile}),
+             c::visible(!key.renaming, c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                 two_lines(colours, one.name.empty() ? std::string("Unnamed session") : one.name, facts_of(one, key.current), 15.0f, 2.0f, 12.0f))),
+             c::visible(key.renaming, c::bound<skiff::model::Field<&name_draft::name>>(
+                 c::styled({.height = 32.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                           widgets::TextField<std::string>(colours.widgets, "Session name")))),
+             c::visible(key.renaming, c::asking_for<name_draft>(
+                 [device = one.id](const name_draft& now) { return request::change_account{account_change::save_name{device, now.name}}; },
+                 c::styled(button_look(70.0f), widgets::Button<scene::NoAction>(colours.widgets, "Save", {})))),
+             c::visible(key.renaming, c::styled(button_look(76.0f),
+                 widgets::Button<asks<account_change::rename>>(colours.widgets, "Cancel", ask(account_change::rename{one.id, false})))),
+             c::visible(!key.renaming, c::styled(button_look(80.0f),
+                 widgets::Button<asks<account_change::rename>>(colours.widgets, "Rename", ask(account_change::rename{one.id, true})))),
+             c::visible(!key.current && !key.renaming, c::styled(button_look(70.0f),
+                 button_for<sends<request::verify_session>>(colours.widgets, "Verify", {request::verify_session{one.id}}))),
+             c::visible(!key.current && !key.renaming, c::styled(button_look(86.0f),
+                 widgets::Button<asks<account_change::sign_out>>(colours.widgets, "Sign out", ask(account_change::sign_out{{one.id}}))))),
+      name_draft{one.name});
+}
+using session_row_t = decltype(session_row(std::declval<const palette&>(), session_key{}));
+
+// The sessions, as the server listed them: this one first, the others by
+// when they were last seen, the latest first.
+struct sessions_key {
+  std::vector<session_key> current, others;
+  friend bool operator==(const sessions_key&, const sessions_key&) = default;
+};
+[[nodiscard]] inline sessions_key sessions_of(const facts_t& now) {
+  const account_state& kept = kept_of(now);
+  auto all = kept.sessions.value_or(std::vector<session_info>{});
+  std::ranges::stable_sort(all, std::ranges::greater{}, [](const session_info& one) {
+    return one.last_seen.value_or(std::chrono::sys_time<std::chrono::milliseconds>{});
+  });
+  const auto key_of = [&](const session_info& one) {
+    return session_key{one, one.id == kept.current, kept.renaming == one.id};
+  };
+  const auto is_current = [&](const session_info& one) { return one.id == kept.current; };
+  return {all | std::views::filter(is_current) | std::views::transform(key_of) | std::ranges::to<std::vector>(),
+          all | std::views::filter(std::not_fn(is_current)) | std::views::transform(key_of) | std::ranges::to<std::vector>()};
+}
+// A list of them under its title, where it has any.
+inline auto session_rows(const palette& colours, std::string title, const std::vector<session_key>& rows) {
+  namespace c = skiff::compose;
+  return c::visible(!rows.empty(), c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {10.0f, 0.0f, 0.0f, 0.0f}}),
+      section_title(colours, std::move(title)),
+      c::many(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              rows | std::views::transform([&](const session_key& one) { return session_row(colours, one); }) | std::ranges::to<std::vector>())));
+}
+inline auto sessions_list(const palette& colours, const sessions_key& key) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                   session_rows(colours, "CURRENT SESSION", key.current),
+                   session_rows(colours, "OTHER SESSIONS", key.others));
+}
+using sessions_list_t = decltype(sessions_list(std::declval<const palette&>(), sessions_key{}));
+
+// Element's Security, under Device verification: whether this session has
+// the cross-signing keys, and whether room keys are backed up.
+[[nodiscard]] inline std::string security_said(const facts_t& now) {
+  constexpr std::string_view what =
+      "To verify device identity and grant access to encrypted messages: cross-signing. Set it up here, or, where another "
+      "session of yours has it, bring it back with your recovery key.";
+  const auto& known = kept_of(now).security;
+  if (!known)
+    return std::string(what);
+  return std::format("Cross-signing: {}  ·  Key backup: {}\n{}",
+                     known->cross_signing ? "✓ ready on this session" : "⚠ not on this session",
+                     known->backup ? "✓ on" : "⚠ off", what);
+}
+[[nodiscard]] inline bool cross_signing(const facts_t& now) {
+  const auto& known = kept_of(now).security;
+  return known && known->cross_signing;
+}
+[[nodiscard]] inline bool backed_up(const facts_t& now) {
+  const auto& known = kept_of(now).security;
+  return known && known->backup;
+}
+// What the page says under its title: loading, none, or signing out; what
+// the server refused is said apart, in the error's colour.
+[[nodiscard]] inline std::string sessions_said(const facts_t& now) {
+  const account_state& kept = kept_of(now);
+  if (kept.signing_out)
+    return "Signing out…";
+  if (!kept.sessions)
+    return "Loading the sessions…";
+  return kept.sessions->empty() ? std::string("No sessions.") : std::string();
+}
+struct password_draft {
+  std::string password;
+  friend bool operator==(const password_draft&, const password_draft&) = default;
+};
+// The password the server asked for to sign them out, and the sign-out
+// asked again with it.
+inline auto password_row(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::local<password_draft>(c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      nodes::Text("Your password, to sign sessions out:", 13.0f, colours.dim),
+      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+             c::bound<skiff::model::Field<&password_draft::password>>(
+                 c::styled({.height = 34.0f, .grow = scene::axes::kX}, widgets::TextField<std::string>(colours.widgets, "Password", true))),
+             c::asking_for<password_draft>(
+                 [](const password_draft& now) { return request::change_account{account_change::sign_out_again{now.password}}; },
+                 c::styled({.width = 96.0f, .height = 34.0f}, widgets::Button<scene::NoAction>(colours.widgets, "Sign out", {}))))));
+}
+
+// Device verification, as Cinny puts it over the sessions: cross-signing set
+// up here, or brought back with the recovery key -- the Privacy page's own
+// rows, the same buttons. Without it, a session verified by emoji is
+// trusted only by the client that verified it, and nothing is signed.
+// Element's last resort under them: new cross-signing keys, the dialog
+// saying what it undoes; and its Secure Backup, made anew or deleted.
+inline auto account_sessions(const palette& colours, const account_page_facts&) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      section_title(colours, "DEVICE VERIFICATION"),
+      c::text_for<facts_t>(security_said, note(colours, "")),
+      row_if<sends<request::setup_cross_signing>>(colours, "Set up cross-signing…", std::not_fn(cross_signing)),
+      row_if<sends<request::restore_cross_signing>>(colours, "Restore with the recovery key…", std::not_fn(cross_signing)),
+      row_item(colours, "Reset your identity…", sends<request::reset_identity>{}),
+      row_if<sends<request::reset_backup>>(colours, "Reset the key backup", cross_signing),
+      row_if<sends<request::delete_backup>>(colours, "Delete the key backup", backed_up),
+      c::styled({.margin = {14.0f, 0.0f, 0.0f, 0.0f}}, section_title(colours, "SESSIONS")),
+      c::shown_for<facts_t>([](const facts_t& now) { return !kept_of(now).refused.empty(); },
+          c::text_for<facts_t>([](const facts_t& now) { return kept_of(now).refused; },
+                               c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.error))))),
+      c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).refused.empty() && !sessions_said(now).empty(); },
+          c::text_for<facts_t>(sessions_said, note(colours, ""))),
+      c::projected<facts_t>([](const facts_t& now) { return now ? std::optional(sessions_of(now)) : std::nullopt; },
+          c::mount<sessions_list_t, sessions_key>([at = &colours](const sessions_key& key) { return std::tuple{sessions_list(*at, key)}; },
+                                                  {.fillX = true, .autoSize = scene::axes::kY})),
+      // Element's: every session of one's own not verified, signed out.
+      row_item(colours, "Sign out unverified sessions…", sends<request::sign_out_unverified>{}),
+      c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).needs_password; }, password_row(colours)),
+      c::shown_for<facts_t>([](const facts_t& now) { return sessions_of(now).others.size() > 1; },
+          c::styled({.width = 260.0f, .height = 34.0f, .margin = {8.0f, 0.0f, 0.0f, 0.0f}},
+                    widgets::Button<asks<account_change::sign_out_others>>(colours.widgets, "Sign out of all other sessions",
+                                                                          ask(account_change::sign_out_others{})))),
+      c::styled({.width = 100.0f, .height = 30.0f},
+                button_for<sends<request::refresh_sessions>>(colours.widgets, "Refresh", {})));
+}
+using account_sessions_t = decltype(account_sessions(std::declval<const palette&>(), std::declval<const account_page_facts&>()));
+
+// ---- the account's Encryption page ----------------------------------------------
+// As Element's Cryptography: room keys to verified sessions only; this
+// session, its ID and its key in fours, to be compared with what another
+// session shows; its room keys exported or imported, as Element does them;
+// cross-signing set up, or restored.
+// This session, as its account's protocol state says it, once known.
+[[nodiscard]] inline std::string session_line(const facts_t& now) {
+  if (!now)
+    return {};
+  return spl::visit(spl::overloaded{[](const state& known) {
+                                      if (known.device_id.empty())
+                                        return std::string();
+                                      const std::string grouped = std::views::enumerate(known.ed25519) |
+                                          std::views::transform([](const auto& at) {
+                                            const auto [index, letter] = at;
+                                            return index > 0 && index % 4 == 0 ? std::string{' ', letter} : std::string(1, letter);
+                                          }) |
+                                          std::views::join | std::ranges::to<std::string>();
+                                      return std::format("Session ID: {}\nSession key: {}", known.device_id, grouped);
+                                    },
+                                    [](const auto&) { return std::string(); }},
+                    now->state);
+}
+inline auto encryption_page(const palette& colours, const account_page_facts&) {
+  namespace c = skiff::compose;
+  using flip = sends<::mux::ui::request::flip_only_verified>;
+  using toggle_t = toggle_for<flip>;
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      section_title(colours, "ENCRYPTION"),
+      c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                       elided(nodes::Text("Never send encrypted messages to unverified sessions", 15.0f, colours.text))),
+             c::applied<facts_t>([](const facts_t& now) { return now && config::only_verified_of(now->account); },
+                                 [](toggle_t& toggle, bool on) { toggle.setOn(on); },
+                                 c::styled({.alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, flip{})))),
+      c::shown_for<facts_t>([](const facts_t& now) { return !session_line(now).empty(); },
+                            c::text_for<facts_t>(session_line, nodes::Text("", 13.0f, colours.dim))),
+      row_item(colours, "Export room keys…", sends<request::export_room_keys>{}),
+      row_item(colours, "Import room keys…", sends<request::import_room_keys>{}),
+      row_item(colours, "Set up cross-signing…", sends<request::setup_cross_signing>{}),
+      row_item(colours, "Restore with the recovery key…", sends<request::restore_cross_signing>{}));
+}
+using encryption_page_t = decltype(encryption_page(std::declval<const palette&>(), std::declval<const account_page_facts&>()));
 
 }  // namespace mux::proto::matrix::settings_detail
 
-export namespace mux::proto::matrix {
-// For the program, which tells it what the client says of the sessions.
-using sessions_page = settings_detail::account_sessions;
-}  // namespace mux::proto::matrix
-
-export namespace mux::proto::matrix::settings {
-constexpr std::string_view page_title(encryption) { return "Encryption"; }
-inline ui::icon_t page_icon(encryption) { return ui::icon::check{}; }
-constexpr type_tag<settings_detail::encryption_page> page_type(encryption) {
-  return {};
-}
-constexpr std::string_view page_title(sessions) { return "Sessions"; }
-inline ui::icon_t page_icon(sessions) { return ui::icon::info{}; }
-constexpr type_tag<settings_detail::account_sessions> page_type(sessions) {
-  return {};
-}
-}  // namespace mux::proto::matrix::settings
-
+// Its pages: their titles, icons, and what each is, made over the facts;
+// and what each asks of the program as it opens.
 export namespace mux::proto::matrix::settings {
 struct profile_policy {
   static constexpr bool banners = true;
@@ -417,5 +295,21 @@ struct profile_policy {
 };
 constexpr std::string_view page_title(profile) { return "Profile"; }
 inline ui::icon_t page_icon(profile) { return ui::icon::info{}; }
-constexpr type_tag<ui::profile_editor<profile_policy>> page_type(profile) { return {}; }
+inline auto page_view(profile, const ui::palette& colours, const ui::account_page_facts& first) {
+  return ui::profile_page<profile_policy>(colours, first);
 }
+inline ui::request::refresh_profile asked_as_it_opens(profile, const account_id& by) { return {by}; }
+
+constexpr std::string_view page_title(encryption) { return "Encryption"; }
+inline ui::icon_t page_icon(encryption) { return ui::icon::check{}; }
+inline auto page_view(encryption, const ui::palette& colours, const ui::account_page_facts& first) {
+  return settings_detail::encryption_page(colours, first);
+}
+
+constexpr std::string_view page_title(sessions) { return "Sessions"; }
+inline ui::icon_t page_icon(sessions) { return ui::icon::info{}; }
+inline auto page_view(sessions, const ui::palette& colours, const ui::account_page_facts& first) {
+  return settings_detail::account_sessions(colours, first);
+}
+inline request::refresh_sessions asked_as_it_opens(sessions, const account_id&) { return {}; }
+}  // namespace mux::proto::matrix::settings

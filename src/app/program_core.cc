@@ -450,6 +450,16 @@ void app::refresh_shown() {
     if (*showing.look<mux::ui::drawer_accounts>() != now)
       mux::ui::show(showing, std::move(now));
   }
+  // The chosen account's page: the account as saved, and what the model
+  // says of its profile and presence.
+  if (const auto& open = *showing.look<std::optional<mux::ui::account_page_facts>>()) {
+    auto now = *open;
+    if (const auto* saved = this->settings_of(now.by.address))
+      now.account = *saved;
+    now.state = mux::ui::protocol_state_of(shared.ui, now.by);
+    mux::ui::read_account_model(now, *model);
+    mux::ui::show(showing, std::optional(std::move(now)));
+  }
   // The looks as their choices show them: what the window last read of
   // what is kept, for the chat chosen.
   looks.read();

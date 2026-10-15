@@ -85,6 +85,12 @@ struct own_messages {};
 // own, in the protocol's UI module (page_title, page_icon, page_type).
 template <class... Pages>
 struct account_page_list {};
+// What a protocol keeps of an account while its pages are open -- what the
+// server said of its sessions, a write on its way, what it refused -- as
+// account_parts(state) lists its types: the pages hold one, or none.
+template <class... Parts>
+struct account_part_list {};
+struct no_account_part {};
 // What a protocol's own UI asks of the program, beside what every
 // protocol's does: its request types, as requests_of(state) lists them --
 // the program's requests made of them all, each done by its overload of
@@ -214,6 +220,8 @@ inline std::optional<std::string> person_link(const auto&, std::string_view) { r
 inline std::string unheard_presence(const auto&) { return {}; }
 // No pages of its own.
 constexpr account_page_list<> account_pages(const auto&) { return {}; }
+// Nothing kept of an account while its pages are open.
+constexpr account_part_list<> account_parts(const auto&) { return {}; }
 // No requests of its own.
 constexpr request_list<> requests_of(const auto&) { return {}; }
 // No dialogs of its own.
@@ -593,6 +601,12 @@ template <class State>
 constexpr auto account_pages_of(const State& state) {
   using defaults::account_pages;
   return account_pages(state);
+}
+// And what it keeps of an account while they are open.
+template <class State>
+constexpr auto account_parts_of(const State& state) {
+  using defaults::account_parts;
+  return account_parts(state);
 }
 
 inline constexpr struct direct_contact_t {

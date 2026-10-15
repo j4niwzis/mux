@@ -714,29 +714,44 @@ void program_told(App& app, const verification_changed& one) {
   mux::ui::show(app.showing, std::optional(ui::verification_view{one.user, one.device, one.step}));
 }
 
-// The account's Sessions page, where it is open for that account.
-template <class App, class Then>
-void on_sessions_page(App& app, const account_id& by, Then then) {
-  using accounts = typename App::accounts;
-  if (auto* up = mux::ui::open_panel(app.root()))
-    spl::visit([&](accounts& panel) {
-                    if (auto* page = panel.template shown_page<sessions_page>();
-                        page && panel.selected == by.address)
-                      then(*page);
-                  },
-                  *up);
+// What Matrix keeps of an account whose pages are open, changed: where
+// they are open for that account.
+template <class App, class Change>
+void change_account_state(App& app, const account_id& by, Change change) {
+  using facts_t = std::optional<mux::ui::account_page_facts>;
+  if (const facts_t& open = *app.showing.template look<facts_t>(); !open || open->by != by)
+    return;
+  mux::ui::change_shown<facts_t>(app.showing, [&](facts_t& open) {
+    spl::visit(spl::overloaded{[&](account_state& kept) { change(kept); }, [](auto&) {}}, open->kept);
+  });
 }
+// The sessions as the server listed them: a sign-out on its way is done.
 template <class App>
 void program_told(App& app, const sessions_listed& listed) {
-  on_sessions_page(app, listed.by, [&](auto& page) { page.show(listed.current, listed.sessions); });
+  change_account_state(app, listed.by, [&](account_state& kept) {
+    kept.sessions = listed.sessions;
+    kept.current = listed.current;
+    kept.signing.clear();
+    kept.signing_out = false;
+    kept.refused.clear();
+    kept.needs_password = false;
+  });
 }
 template <class App>
 void program_told(App& app, const security_state& state) {
-  on_sessions_page(app, state.by, [&](auto& page) { page.show_security(state.cross_signing, state.backup); });
+  change_account_state(app, state.by, [&](account_state& kept) { kept.security = account_security{state.cross_signing, state.backup}; });
 }
+// The server said no: why; and, where it wants the password, the sessions
+// kept to be signed out again with it.
 template <class App>
 void program_told(App& app, const sessions_refused& said) {
-  on_sessions_page(app, said.by, [&](auto& page) { page.refused(said.why, said.needs_password); });
+  change_account_state(app, said.by, [&](account_state& kept) {
+    kept.signing_out = false;
+    kept.refused = said.why;
+    kept.needs_password = said.needs_password;
+    if (!said.needs_password)
+      kept.signing.clear();
+  });
 }
 
 }  // namespace mux::proto::matrix
@@ -799,16 +814,50 @@ void program_asked(App& app, const verify_session& one) {
     app.net->verify_start(App::id_of(account), config::address_of(account), one.device);
   });
 }
+// A press on the account's pages: what Matrix keeps of it changed, and
+// the server asked -- a session renamed, some signed out.
+template <class Net>
+struct account_step {
+  Net& net;
+  const account_id& by;
+  account_state& kept;
+  // Signed out, with the password where the server asked for it.
+  void sign_out(std::vector<std::string> devices, std::string password) {
+    if (devices.empty())
+      return;
+    kept.signing = devices;
+    kept.signing_out = true;
+    kept.refused.clear();
+    ops::sign_out_sessions(net, by, std::move(devices), std::move(password));
+  }
+  void operator()(const account_change::rename& one) {
+    kept.renaming = one.open ? std::optional(one.device) : std::nullopt;
+  }
+  void operator()(const account_change::save_name& one) {
+    kept.renaming.reset();
+    ops::rename_session(net, by, one.device, one.name);
+  }
+  void operator()(const account_change::sign_out& one) { this->sign_out(one.devices, {}); }
+  void operator()(const account_change::sign_out_others&) {
+    this->sign_out(kept.sessions.value_or(std::vector<session_info>{}) |
+                       std::views::filter([&](const session_info& one) { return one.id != kept.current; }) |
+                       std::views::transform(&session_info::id) | std::ranges::to<std::vector>(),
+                   {});
+  }
+  void operator()(const account_change::sign_out_again& one) {
+    kept.needs_password = false;
+    this->sign_out(kept.signing, one.password);
+  }
+};
 template <class App>
-void program_asked(App& app, const sign_out_sessions& one) {
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
-    ops::sign_out_sessions(*app.net, App::id_of(account), one.devices, one.password);
-  });
-}
-template <class App>
-void program_asked(App& app, const rename_session& one) {
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
-    ops::rename_session(*app.net, App::id_of(account), one.device, one.name);
+void program_asked(App& app, const change_account& one) {
+  using facts_t = std::optional<mux::ui::account_page_facts>;
+  const facts_t& open = *app.showing.template look<facts_t>();
+  if (!open || app.shared.demo())
+    return;
+  const account_id by = open->by;
+  change_account_state(app, by, [&](account_state& kept) {
+    spl::visit(account_step<std::remove_reference_t<decltype(*app.net)>>{*app.net, by, kept}, one.change);
   });
 }
 // A room changed as Matrix changes one: the room being managed, by its account.

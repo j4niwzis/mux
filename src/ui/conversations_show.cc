@@ -26,6 +26,7 @@ import mux.ui.messages;
 import :header;
 import :info;
 import :conversations_side;
+import :list_shown;
 import :conversations_screen;
 
 export namespace mux::ui {

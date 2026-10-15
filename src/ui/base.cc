@@ -173,6 +173,7 @@ struct search_result {
   std::string name;
   std::chrono::sys_time<std::chrono::milliseconds> at{};
   std::string snippet;
+  friend bool operator==(const search_result&, const search_result&) = default;
 };
 // What each level holds of the looks, as the program last said: none, as
 // the level over it. For the choices to show what is chosen where.

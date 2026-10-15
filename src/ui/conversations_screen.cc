@@ -34,6 +34,7 @@ import :header;
 import :info;
 
 export import :conversations_side;
+import :list_shown;
 
 export namespace mux::ui {
 

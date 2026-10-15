@@ -270,7 +270,7 @@ class notices_part {
     chime_.play();
   }
   void show_page() {
-    if (auto* up = mux::ui::settings_up(s_->root()))
+    if (s_->settings_open())
       s_->settings_page(mux::ui::settings_page::notifications{s_->kept->notifications()});
   }
 

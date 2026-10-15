@@ -43,17 +43,17 @@ class proxies_part {
     mux::ui::show(*s_->showing, std::optional(mux::ui::settings_facts{mux::ui::settings_page::proxies{k_->proxies(), false}}));
   }
   void apply(const request::settings_proxies&) {
-    if (auto* up = mux::ui::settings_up(s_->root()))
+    if (s_->settings_open())
       s_->settings_page(mux::ui::settings_page::proxies{k_->proxies()});
   }
   void apply(const request::add_proxy&) {
-    if (mux::ui::settings_up(s_->root())) {
+    if (s_->settings_open()) {
       mux::ui::show(*s_->showing, mux::ui::proxy_notice{});
       s_->settings_page(mux::ui::settings_page::proxy{std::nullopt, -1});
     }
   }
   void apply(const request::edit_proxy& one) {
-    if (mux::ui::settings_up(s_->root()) && one.index >= 0 && static_cast<std::size_t>(one.index) < k_->proxies().size()) {
+    if (s_->settings_open() && one.index >= 0 && static_cast<std::size_t>(one.index) < k_->proxies().size()) {
       mux::ui::show(*s_->showing, mux::ui::proxy_notice{});
       s_->settings_page(mux::ui::settings_page::proxy{k_->proxies()[static_cast<std::size_t>(one.index)], one.index});
     }
@@ -61,7 +61,7 @@ class proxies_part {
   // A profile saved: a new one added, or one changed -- and renamed in the
   // accounts that use it, which are connected again through it.
   void apply(const request::save_proxy_profile& request) {
-    if (!mux::ui::settings_up(s_->root())) return;
+    if (!s_->settings_open()) return;
     auto typed = request.profile;
     if (!typed) {
       mux::ui::show(*s_->showing, mux::ui::proxy_notice{typed.error()});
@@ -103,7 +103,7 @@ class proxies_part {
   // otherwise connect straight to their servers, this machine's address
   // shown to them, without a word.
   void apply(const request::delete_proxy_profile& request) {
-    if (!mux::ui::settings_up(s_->root()) || request.index < 0 || static_cast<std::size_t>(request.index) >= k_->proxies().size())
+    if (!s_->settings_open() || request.index < 0 || static_cast<std::size_t>(request.index) >= k_->proxies().size())
       return;
     const std::string name = k_->proxies()[static_cast<std::size_t>(request.index)].name;
     const auto users = std::ranges::to<std::vector<std::string>>(std::views::transform(std::views::filter(k_->accounts().values(), [&](const auto& one) { return mux::config::proxy_of(one) == name; }), [](const auto& one) { return mux::config::address_of(one); }));

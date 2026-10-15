@@ -239,6 +239,8 @@ struct services {
           mux::change_t{mux::change::message_added{.message = std::move(one), .where = mux::placement::in_window{}}});
     refresh_due = true;
   }
+  // Whether the settings are open, as what is shown says.
+  [[nodiscard]] bool settings_open() { return showing->look<std::optional<mux::ui::settings_facts>>()->has_value(); }
   // The demo: no network, and nothing kept.
   [[nodiscard]] bool demo() const { return ask->demo; }
 

@@ -61,21 +61,21 @@ class settings_part {
   void apply(const request::settings_about&) { s_->settings_page(mux::ui::settings_page::about{}); }
   void apply(const request::settings_library& one) { s_->settings_page(mux::ui::settings_page::library{one.name}); }
   void apply(const request::settings_home&) {
-    if (auto* up = mux::ui::settings_up(s_->root()))
+    if (s_->settings_open())
       s_->settings_page(mux::ui::settings_page::home{});
   }
   void apply(const request::settings_animations&) {
-    if (auto* up = mux::ui::settings_up(s_->root()))
+    if (s_->settings_open())
       s_->settings_page(mux::ui::settings_page::animations{});
   }
 
   // Appearance and rendering.
   void apply(const request::settings_appearance&) {
-    if (auto* up = mux::ui::settings_up(s_->root()))
+    if (s_->settings_open())
       s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
   }
   void apply(const request::settings_rendering&) {
-    if (auto* up = mux::ui::settings_up(s_->root()))
+    if (s_->settings_open())
       s_->settings_page(mux::ui::settings_page::rendering{k_->appearance().renderer});
   }
   // Frosted's blur: kept, the backgrounds' frost made again, and shown.
@@ -95,7 +95,7 @@ class settings_part {
   // Storage: how much is kept, halved or doubled within its bounds; and all
   // of it cleared.
   void apply(const request::settings_storage&) {
-    if (mux::ui::settings_up(s_->root())) {
+    if (s_->settings_open()) {
       mux::ui::show(*s_->showing, mux::ui::local_seal{s_->vault->on()});
       s_->settings_page(mux::ui::settings_page::storage{k_->limits(), k_->history(), s_->vault->on()});
     }
@@ -110,7 +110,7 @@ class settings_part {
 
   // Files sent: their metadata cut out, their names made plain.
   void apply(const request::settings_files&) {
-    if (auto* up = mux::ui::settings_up(s_->root()))
+    if (s_->settings_open())
       s_->settings_page(mux::ui::settings_page::files{k_->sending()});
   }
   // Room events, for every chat that has not chosen, nor its account.

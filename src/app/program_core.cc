@@ -265,13 +265,12 @@ void app::woken() {
   // stopped, and said why -- it paged the whole history back for it.
   for (const mux::change_t& one : changes)
     spl::visit(spl::overloaded{[&](const mux::change::event_missing& gone) {
-                                       auto& screen = root().main();
-                                       if (screen.jumping_to == gone.id) {
+                                       if (jumps.going_to() == gone.id) {
                                          // An edit: to the message it edits, which is where it shows.
-                                         if (gone.instead) {
-                                           screen.jump_to(*gone.instead);
+                                         if (const auto& chosen = root().main().chosen; gone.instead && chosen) {
+                                           jumps.go(*chosen, *gone.instead, std::nullopt, false, taker{this});
                                          } else {
-                                           screen.stop_jump();
+                                           jumps.stop();
                                            shared.not_implemented("That message isn't there any more, or can't be seen from this account.");
                                          }
                                        }
@@ -490,6 +489,13 @@ void app::after_event() {
 double app::wake_in() const { return model->typing_wake_in(); }
 
 void app::before_frame() {
+  // What the parts asked of the chat's list, and a jump on its way gone on
+  // with: aimed at once held, fetched or paged back to while it is not.
+  if (auto asked = std::exchange(shared.show_message_due, std::nullopt); asked && root().main().chosen)
+    jumps.go(*root().main().chosen, std::move(asked->id), std::move(asked->fragment), false, taker{this});
+  if (std::exchange(shared.newest_due, false))
+    jumps.to_newest();
+  jumps.go_on(taker{this});
   if (model->expire_typing())
     chats_binding.refresh(root(), model->chats());
   store.flush_reads();
@@ -503,14 +509,14 @@ void app::before_frame() {
   // as in tdesktop: the chat list's counts go down as it is read, not all
   // at once when it is opened or left.
   if (const auto& chosen = root().main().chosen; chosen && !root().open_panel() && !root().settings_up())
-    if (const auto seen = root().main().last_seen(); seen && reading.mark_seen(*chosen, *seen))
+    if (const auto seen = jumps.last_seen(); seen && reading.mark_seen(*chosen, *seen))
       this->refresh();
   // The mentions and reactions for the user whose messages are on screen,
   // seen -- only those, as tdesktop's.
   if (const auto& chosen = root().main().chosen)
     if (const mux::conversation* chat = model->find(*chosen);
         chat && (!chat->unread_mentions.empty() || !chat->unread_reactions.empty()) && !root().open_panel()) {
-      auto shown = root().main().shown_now();
+      auto shown = jumps.shown_now();
       const auto marked = [&](const mux::unread_mark& mark) { return std::ranges::contains(shown, mark.target); };
       if (std::ranges::any_of(chat->unread_mentions, marked) || std::ranges::any_of(chat->unread_reactions, marked)) {
         model->apply(mux::change_t{mux::change::marks_shown{*chosen, std::move(shown)}});

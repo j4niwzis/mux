@@ -239,7 +239,7 @@ class pictures_part {
           // them from the disk, pushed out what is on screen, and read them
           // again.
           std::set<std::string_view> senders;
-          const auto [first, last] = screen.made_indices(one.timeline);
+          const auto [first, last] = s_->list_around(one, 40);
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             senders.insert(one.timeline[i].sender);
           // The thread open in its panel: its root and its answers, which
@@ -313,18 +313,7 @@ class pictures_part {
           for (const std::string& room : std::exchange(screen.rooms_wanted, {}))
             if (pill_rooms.insert(room).second)
               s_->net->preview_room(id, room, {});
-          auto [from, to] = screen.made_indices(one.timeline);
-          if (const auto& target = screen.jump_target()) {
-            const auto found = std::ranges::find(one.timeline, *target, &message::id);
-            if (found == one.timeline.end()) {
-              from = to = 0;
-            } else {
-              constexpr std::size_t kAround = 5;
-              const auto at = static_cast<std::size_t>(found - one.timeline.begin());
-              from = at > kAround ? at - kAround : 0;
-              to = std::min(one.timeline.size(), at + kAround + 1);
-            }
-          }
+          const auto [from, to] = s_->list_around(one, 40);
           // A message's pictures, its link's preview, and what it quotes.
           const auto pictures_of = [&](const message& said) {
             if (said.attachment && is_picture(said.attachment->kind)) {

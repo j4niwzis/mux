@@ -294,7 +294,20 @@ struct timeline_told {
   const bubble_needs* needs = nullptr;
   std::optional<std::string> unread_from;
   double frost = 10.0;
+  // The chat's looks, by their number: the rows made again as they change.
+  std::uint64_t looks = 0;
   friend bool operator==(const timeline_told&, const timeline_told&) = default;
+};
+// What the chat's list is told, and the thread's: the program's, in the
+// shown model, each its own part.
+struct chat_told : timeline_told {};
+struct thread_told : timeline_told {};
+// What the corner over the chat's list shows besides the way down: a way
+// back to where a jump in this chat came from, one to the chat a jump
+// left, and the loader while a jump is on its way.
+struct chat_ways {
+  bool back_here = false, back_to_chat = false, loading = false;
+  friend bool operator==(const chat_ways&, const chat_ways&) = default;
 };
 // Which of the two lists a list's answers are of.
 struct chat_list_tag {};
@@ -431,7 +444,8 @@ struct timeline_rows {
                                 .events_shown = shows(said),
                                 .previews_shown = told.previews,
                                 .unread_start = told.unread_from && said.id == *told.unread_from,
-                                .frost = told.frost};
+                                .frost = told.frost,
+                                .looks = told.looks};
              if (said.replies_to) {
                const message* quoted = held_message(*chat, *said.replies_to);
                facts.quote_said = quoted ? std::optional(quoted->body) : std::nullopt;

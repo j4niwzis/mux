@@ -251,7 +251,7 @@ class marks_part {
       s_->refresh_due = true;
       return;
     }
-    s_->root().main().jump_to(target);
+    s_->show_message_due = services::message_asked{target};
     s_->refresh_due = true;
   }
 

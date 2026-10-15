@@ -438,7 +438,18 @@ void app::take_wants() {
 }
 
 void app::refresh_shown() {
-  mux::ui::show_drawer(root(), state.root().accounts.values(), *model, shared.listed());
+  // The drawer's accounts: the saved ones, with what the chats say of each,
+  // the one listed marked.
+  {
+    const auto listed = shared.listed();
+    mux::ui::drawer_accounts now{state.root().accounts.values() | std::views::transform([&](const mux::config::account_t& one) {
+      const auto [how, failed] = mux::ui::state_of(one, *model);
+      return mux::ui::drawer_account{mux::config::address_of(one), std::string(mux::config::protocol_name(one)), how, failed,
+                                     listed && listed->address == mux::config::address_of(one)};
+    }) | std::ranges::to<std::vector>()};
+    if (*showing.look<mux::ui::drawer_accounts>() != now)
+      mux::ui::show(showing, std::move(now));
+  }
   // The looks as their choices show them: what the window last read of
   // what is kept, for the chat chosen.
   looks.read();

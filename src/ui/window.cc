@@ -221,6 +221,8 @@ struct window_made {
 };
 struct shown_root {
   skiff::model::Tracked<drawer_shown> drawer;
+  // The accounts it lists, as the program says.
+  skiff::model::Tracked<drawer_accounts> drawer_list;
   skiff::model::Tracked<chat_shown> chat;
   // What the chat's field writes: an answer, an edit, or a plain message.
   skiff::model::Tracked<chat_compose> composing;
@@ -412,8 +414,8 @@ struct shown_drawer : widgets::Drawer<Base, Content, widgets::dismiss::pressed> 
   explicit shown_drawer(const ui_needs& needs)
       : widgets::Drawer<Base, Content, widgets::dismiss::pressed>(
             std::piecewise_construct,
-            std::forward_as_tuple(std::in_place, needs),
-            std::forward_as_tuple(needs)) {}
+            std::forward_as_tuple(chats_screen(needs)),
+            std::forward_as_tuple(drawer_view(needs))) {}
   void read(const drawer_shown& now) {
     if (now.out != this->isOpen())
       this->setOpen(now.out);
@@ -604,7 +606,7 @@ struct dialogs_fading {
 
 // ---- the window: its frame, and over it the dialogs and the layers ------------------
 using panel_type = spl::variant<accounts_panel>;
-using drawer_node = shown_drawer<chats_screen_t, drawer_panel>;
+using drawer_node = shown_drawer<chats_screen_t, drawer_view_t>;
 using with_drawer = skiff::bind::Bound<drawer_shown, drawer_node>;
 // The pages slide over the drawer and the chats: Manage accounts comes in
 // over them.
@@ -790,12 +792,6 @@ inline void close_panel(window& root) { frame_of(root).close(); }
 [[nodiscard]] inline bool pages_moving(window& root) { return frame_of(root).settling(); }
 inline void close_drawer_now(window& root) { frame_of(root).base().closeNow(); }
 [[nodiscard]] inline bool drawer_open(window& root) { return frame_of(root).base().isOpen(); }
-// The drawer: the accounts saved, with what the chats say of each, the
-// account listed marked.
-template <class Accounts>
-void show_drawer(window& root, const Accounts& accounts, const model& now, const std::optional<account_id>& listed) {
-  frame_of(root).base().content().show(accounts, now, listed ? std::string_view(listed->address) : std::string_view());
-}
 // What each dialog shut shows, dropped: from the program, between events.
 template <class Part> void drop_of(Part&) {}
 template <a_dialog Part> void drop_of(Part& dialog) { dialog.dropClosed(); }

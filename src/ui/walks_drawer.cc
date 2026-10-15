@@ -8,6 +8,6 @@ module mux.ui;
 import std;
 import skiff.scene;
 
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::drawer_panel>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::drawer_panel>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::drawer_view_t>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::drawer_view_t>();
 }

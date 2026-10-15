@@ -61,7 +61,12 @@ void app::apply(const request::choose& one) {
       chat && !ask.demo && chat->member_count > static_cast<std::int64_t>(chat->members.size()) &&
       members_fetched.insert(one.which).second)
     net->fetch_members(one.which);
+  const bool another = screen.chosen != one.which;
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.chosen = one.which; });
+  // Shown anew: opened at its first unread, quietly, where it has unread;
+  // the ways back from jumps in the one left gone.
+  if (another)
+    jumps.opened(taker{this});
   this->show_chats_now();
 }
 
@@ -75,6 +80,7 @@ void app::apply(const request::close_chat&) {
     now.chosen.reset();
     now.info_open = false;
   });
+  jumps.opened(taker{this});
   this->show_chats_now();
 }
 
@@ -159,14 +165,12 @@ void app::apply(const request::jump_to_end&) {
   // which had only what the server put around it.
   if (screen.chosen)
     this->go_live(*screen.chosen);
-  if (screen.go_back())
-    return;
-  screen.jump_to_end();
+  jumps.to_end(taker{this});
 }
 
 // Back to the chat a jump to another left: as it was left there.
 void app::apply(const request::return_to_chat&) {
-  if (const auto back = root().main().take_chat_return())
+  if (const auto back = jumps.take_chat_return())
     this->apply(request::choose{*back});
 }
 

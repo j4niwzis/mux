@@ -121,9 +121,8 @@ class search_part {
   }
   // The found at `at` gone to, what was asked marked in it; the count set.
   void show_at() {
-    auto& screen = s_->root().main();
     if (searching_->at)
-      screen.jump_to(searching_->found[*searching_->at], searching_->query);
+      s_->show_message_due = services::message_asked{searching_->found[*searching_->at], searching_->query};
     mux::ui::show(*s_->showing, mux::ui::search_found{searching_->at, searching_->found.size(), !searching_->query.empty()});
   }
 

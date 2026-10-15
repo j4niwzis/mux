@@ -241,6 +241,9 @@ struct bubble_facts {
   // How many of the rooms it names have come -- a picture, or found to be
   // there -- since it was made: made again as one does.
   std::size_t rooms_come = 0;
+  // The chat's looks it was made with, by their number: made again as
+  // they change.
+  std::uint64_t looks = 0;
   friend bool operator==(const bubble_facts&, const bubble_facts&) = default;
 };
 

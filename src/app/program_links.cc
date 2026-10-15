@@ -39,13 +39,14 @@ void app::open_chat(const mux::conversation_id& which, const std::optional<std::
 // its messages -- one way for all of them: a chat not open is opened first,
 // the one open is not chosen again; a reaction's own line goes to what it
 // reacted to; and the view jumps, to the part a quote marks where it has one.
-void app::go_to_message(const mux::conversation_id& in, std::string id, std::optional<std::string> fragment) {
+void app::go_to_message(const mux::conversation_id& in, std::string id, std::optional<std::string> fragment,
+                        std::optional<std::string> from) {
   auto& screen = root().main();
   // Where it goes from, to come back to: this chat, where it goes to
   // another; else the place in this one.
   const bool here = screen.chosen && *screen.chosen == in;
   if (!here) {
-    screen.note_chat_return();
+    jumps.note_chat_return();
     this->open_chat(in, std::nullopt);
   }
   if (const mux::conversation* chat = model->find(in))
@@ -56,11 +57,9 @@ void app::go_to_message(const mux::conversation_id& in, std::string id, std::opt
     }
   // As tdesktop's doneJumpFrom: a way back to where it goes is done with,
   // then where it went from is one.
-  if (here) {
-    screen.skip_return(id);
-    screen.note_return();
-  }
-  screen.jump_to(std::move(id), std::move(fragment));
+  if (here)
+    jumps.note_return(id, std::move(from));
+  jumps.go(in, std::move(id), std::move(fragment), false, taker{this});
 }
 
 void app::follow(const mux::logic::link_t& where) {
@@ -97,7 +96,7 @@ void app::go_to_linked(const mux::conversation_id& in, const std::string& event)
   if (chat && mux::ui::held_message(*chat, event)) {
     auto& screen = root().main();
     if (!(screen.chosen && *screen.chosen == in)) {
-      screen.note_chat_return();
+      jumps.note_chat_return();
       this->open_chat(in, std::nullopt);
     }
     if (const mux::conversation* now = model->find(in); now && this->open_in_thread(*now, event))
@@ -118,7 +117,7 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
   if (!thread)
     return false;
   auto& screen = root().main();
-  screen.stop_jump();
+  jumps.stop();
   if (screen.thread_open() != thread) {
     shared.open_thread(*thread);
     if (!shared.demo())
@@ -167,11 +166,8 @@ void app::apply(const request::jump_to_message& one) {
             return;
         }
       }
-  if (const auto& chosen = root().main().chosen) {
-    root().main().return_from = one.from;
-    this->go_to_message(*chosen, one.id, one.fragment);
-    root().main().return_from.reset();
-  }
+  if (const auto& chosen = root().main().chosen)
+    this->go_to_message(*chosen, one.id, one.fragment, one.from);
 }
 
 }  // namespace mux::app

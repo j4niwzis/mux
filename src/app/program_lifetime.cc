@@ -10,6 +10,7 @@ app::app(const mux::ui::palette& theme_colours, const mux::ui::window_look_t& wi
     : shared{.looks = {.window = window}}, colours(theme_colours) {
   shared.paint.looks = &shared.looks;
   shared.paint.colours = &colours;
+  jumps.made_with(mux::ui::bubble_needs{.colours = &colours, .looks = &shared.looks, .shared = &shared.ui});
 }
 app::~app() = default;
 }

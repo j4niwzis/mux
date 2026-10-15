@@ -221,8 +221,6 @@ class history_part {
         }
         for (auto it = kept.rbegin(); it != kept.rend(); ++it)
           s_->model->apply(mux::change_t{mux::change::message_added{.message = std::move(*it), .where = mux::placement::at_start{}}});
-        // The window may ask again: there may be more on the disk.
-        s_->root().main().history_asked.reset();
         s_->refresh_due = true;
       };
     });

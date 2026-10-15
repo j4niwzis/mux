@@ -18,6 +18,7 @@ import mux.app.network;
 import mux.app.requests;
 import mux.app.services;
 import mux.app.drafts;
+import mux.app.jumps;
 import mux.logic.sending;
 import mux.logic.messages;
 import mux.protocols;
@@ -135,14 +136,14 @@ class outbox_part {
         return;
       }
       this->edit(next->id, edited_text(*next));
-      screen.jump_to(next->id);
+      s_->show_message_due = services::message_asked{next->id};
       return;
     }
     // What can be answered: what the view shows -- not what it hides, a room
     // event its filter leaves out.
     std::vector<const message*> answerable;
     for (const message& each : chat->timeline)
-      if (!each.id.empty() && !each.redacted && screen.shown_in(chat->id, each))
+      if (!each.id.empty() && !each.redacted && chat_shows(*s_, *chat, each))
         answerable.push_back(&each);
     if (answerable.empty())
       return;
@@ -166,7 +167,7 @@ class outbox_part {
     this->answer(next->id, title,
                  next->body.plain.empty() ? logic::reply_line(next, next->body.plain)
                                           : mux::ui::quote_line_of(*next, *chat, s_->model));
-    screen.jump_to(next->id);
+    s_->show_message_due = services::message_asked{next->id};
   }
   // Element's unsent bar: what the server did not take here -- sent again,
   // each anew at the end and the one not sent let go; or let go.
@@ -210,7 +211,6 @@ class outbox_part {
       return;
     this->send(one.text, asked);
   }
-  void apply(const request::stop_jump&) { s_->root().main().stop_jump(); }
   template <class Asked>
   void apply(const request::send_typed&, const Asked& asked) {
     this->send(mux::ui::composer_plain(s_->root().main().line), asked);
@@ -300,7 +300,7 @@ class outbox_part {
     }
     s_->close_emoji();
     s_->go_live(*chosen);
-    s_->root().main().jump_to_end();
+    s_->newest_due = true;
     // Sent while answering: the answer, as a sticker or a text would be.
     const std::optional<std::string> reply_to = this->answering();
     s_->net->send_file(*chosen, sent.local, std::move(sent.as.bytes), sent.as.name, sent.as.mimetype,
@@ -328,7 +328,7 @@ class outbox_part {
     if (!s_->root().main().single)
       s_->close_emoji();
     s_->go_live(*chosen);
-    s_->root().main().jump_to_end();
+    s_->newest_due = true;
     // Sent while answering: the answer, as a text would be.
     const std::optional<std::string> reply_to = this->answering();
     s_->net->send_sticker(*chosen, one.sticker, reply_to);
@@ -431,7 +431,7 @@ class outbox_part {
     // What is sent goes at the chat's end: the chat back to its newest
     // first, where it is a window elsewhere, or it would not be shown.
     s_->go_live(to);
-    screen.jump_to_end();
+    s_->newest_due = true;
     // Who was picked from the @ list for it, its pills: sent as mentions.
     auto mentions = mux::ui::composer_mentions(screen.line);
     // How it is formatted: its runs, as the field has them.

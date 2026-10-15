@@ -244,14 +244,14 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin 2ea9d76c41d3b4bf2be145e9ef360d792b06be83)
+set(mux_skiff_pin 0ff250f31dea28f215802f3714d9d4bb5bdafa65)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
   VERSION 0.1.0)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 4b4080340118f23976ac9f3aad33bc308156f42b
+  GIT_TAG 10c7b31cf0ad83941cb4fce6aa83301007c73eed
   VERSION 0.1.0)
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on
@@ -475,7 +475,7 @@ if(MUX_UI)
           src/app/sink.cc ${mux_generated}/proto/accounts.cc src/proto/demo.cc src/app/network.cc src/app/workers.cc src/app/demo.cc
           src/app/store.cc src/app/requests.cc src/app/words.cc src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc
           src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc
-          src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/emoji.cc src/app/accounts.cc
+          src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/jumps.cc src/app/emoji.cc src/app/accounts.cc
           src/app/local_data.cc src/app/marks.cc src/app/history.cc src/proto/app.cc)
   target_sources(mux_app PRIVATE src/app/shown_binding.cc)
   target_compile_definitions(mux_app PUBLIC $<${mux_split}:MUX_SPLIT_ACCOUNTS>)

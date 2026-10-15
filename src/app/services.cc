@@ -71,6 +71,39 @@ struct services {
   // the model has it.
   std::optional<mux::conversation_id> chat_due;
   std::optional<mux::logic::link_t> link_due;
+  // The chat's list as the jumps part has it -- where a jump goes, and the
+  // messages the reader sees, by the rows at the view's top and bottom --
+  // read by the other parts; and what they ask of it: a message brought
+  // into view (a search's find, an edit or an answer stepped to), or the
+  // newest (what was sent): done by the program at the next frame.
+  struct list_now {
+    std::optional<std::string> jump_target, top, bottom;
+  } list;
+  struct message_asked {
+    std::string id;
+    std::optional<std::string> fragment;
+  };
+  std::optional<message_asked> show_message_due;
+  bool newest_due = false;
+  // The stretch of a chat's messages in view and a page around it -- or,
+  // while a message is jumped to, a few around that: what is loaded on the
+  // way is not looked at.
+  [[nodiscard]] std::pair<std::size_t, std::size_t> list_around(const mux::conversation& chat, std::size_t around) const {
+    const auto place = [&](const std::optional<std::string>& id) -> std::optional<std::size_t> {
+      if (!id)
+        return std::nullopt;
+      const auto at = std::ranges::find(chat.timeline, *id, &mux::message::id);
+      return at == chat.timeline.end() ? std::nullopt : std::optional(static_cast<std::size_t>(at - chat.timeline.begin()));
+    };
+    const std::size_t count = chat.timeline.size();
+    if (list.jump_target) {
+      const auto at = place(list.jump_target);
+      return at ? std::pair{*at > 5 ? *at - 5 : 0, std::min(count, *at + 6)} : std::pair<std::size_t, std::size_t>{0, 0};
+    }
+    const std::size_t top = place(list.top).value_or(count > around ? count - around : 0);
+    const std::size_t bottom = place(list.bottom).value_or(count == 0 ? 0 : count - 1);
+    return {top > around ? top - around : 0, std::min(count, bottom + around + 1)};
+  }
   std::optional<mux::logic::link_t> joining;
   // The settings as saved -- an account's privacy, its proxy, by its
   // address -- the program's.

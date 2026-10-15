@@ -294,7 +294,20 @@ struct timeline_told {
   const bubble_needs* needs = nullptr;
   std::optional<std::string> unread_from;
   double frost = 10.0;
+  // The chat's looks, by their number: the rows made again as they change.
+  std::uint64_t looks = 0;
   friend bool operator==(const timeline_told&, const timeline_told&) = default;
+};
+// What the chat's list is told, and the thread's: the program's, in the
+// shown model, each its own part.
+struct chat_told : timeline_told {};
+struct thread_told : timeline_told {};
+// What the corner over the chat's list shows besides the way down: a way
+// back to where a jump in this chat came from, one to the chat a jump
+// left, and the loader while a jump is on its way.
+struct chat_ways {
+  bool back_here = false, back_to_chat = false, loading = false;
+  friend bool operator==(const chat_ways&, const chat_ways&) = default;
 };
 // Which of the two lists a list's answers are of.
 struct chat_list_tag {};
@@ -353,6 +366,12 @@ struct timeline_rows {
     const seen all = seen_of(now, told);
     const auto at = std::ranges::find(std::views::iota(std::size_t{0}, all.size()), id, [&](std::size_t i) { return all.at(i).id; });
     return *at < all.size() ? std::optional<std::size_t>(*at) : std::nullopt;
+  }
+  // Come while the reader was away from the end, counted on the way down:
+  // another's message the chat shows, not one's own nor an event it hides.
+  static bool counts(const chats_model& now, const Told& told, std::size_t i) {
+    const message& said = seen_of(now, told).at(i);
+    return !said.outgoing && (!said.service || told.filter.shows(said.event_kind));
   }
   // The rooms each message names, worked out once for it: whether one has
   // come since is what makes its row again.
@@ -425,7 +444,8 @@ struct timeline_rows {
                                 .events_shown = shows(said),
                                 .previews_shown = told.previews,
                                 .unread_start = told.unread_from && said.id == *told.unread_from,
-                                .frost = told.frost};
+                                .frost = told.frost,
+                                .looks = told.looks};
              if (said.replies_to) {
                const message* quoted = held_message(*chat, *said.replies_to);
                facts.quote_said = quoted ? std::optional(quoted->body) : std::nullopt;

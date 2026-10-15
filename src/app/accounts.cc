@@ -145,7 +145,10 @@ class accounts_part {
     if (!open)
       return;
     if (open->narrow && open->detail_up)
-      this->change_panel([](mux::ui::panel_facts& now) { now.detail_up = false; });
+      this->change_panel([](mux::ui::panel_facts& now) {
+        now.detail_up = false;
+        now.toward = -1.0f;
+      });
     else if (!this->detail_is<mux::ui::panel_detail::none>())
       this->show_detail(mux::ui::panel_detail::none{});
     else
@@ -282,6 +285,9 @@ class accounts_part {
                detail);
     const bool up = spl::visit(spl::overloaded{[](mux::ui::panel_detail::none) { return false; }, [](const auto&) { return true; }}, detail);
     this->change_panel([&](mux::ui::panel_facts& now) {
+      // Back to nothing chosen comes in from the left; anything else, into
+      // something, from the right.
+      now.toward = up ? 1.0f : -1.0f;
       now.detail = std::move(detail);
       now.detail_up = up;
       now.rows = mux::ui::account_rows(k_->accounts().values(), *s_->model, mux::ui::chosen_of(std::optional(now)));

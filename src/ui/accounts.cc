@@ -74,6 +74,9 @@ struct panel_facts {
   bool detail_up = false;
   // The theme its colours are shown in.
   config::theme_t theme;
+  // Which way the last move went: into an account (from the right, 1) or
+  // back (from the left, -1) -- what comes in comes from that side.
+  float toward = 1.0f;
   // Changed whole, as one part.
   using ModelOpaque = void;
 };
@@ -421,6 +424,7 @@ inline auto account_proxy_view(const palette& colours) {
 struct detail_key {
   panel_detail_t detail;
   config::theme_t theme;
+  float toward = 1.0f;
   friend bool operator==(const detail_key& a, const detail_key& b) {
     if (a.detail.index() != b.detail.index())
       return false;
@@ -474,10 +478,12 @@ using detail_page_t = typename variant_of_types<typename joined<
                                     [&](const panel_detail::account& chosen) { return page_made(n, chosen, key.theme); }},
                     key.detail);
 }
-// It, coming in as it changes: across the pane, as tall as what it holds.
+// It, coming in as it changes -- faded in, and slid in from the side the
+// move came from: across the pane, as tall as what it holds.
 inline auto detail_shown(const ui_needs& n, const detail_key& key) {
   namespace c = skiff::compose;
-  return c::appearing(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), detail_made(n, key)));
+  return c::appearing_across(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), detail_made(n, key)),
+                             28.0f * key.toward, 200.0f);
 }
 using detail_shown_t = decltype(detail_shown(std::declval<const ui_needs&>(), detail_key{}));
 // The page column: what the facts say is beside the list, in a scroll view
@@ -486,7 +492,7 @@ inline auto detail_column(const ui_needs& n) {
   namespace c = skiff::compose;
   return c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX, .padding = {24.0f, 28.0f, 24.0f, 28.0f}}),
       c::styled({.fill = true}, nodes::ScrollContainer(c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          c::projected<panel_read>([](const panel_read& now) { return now ? std::optional(detail_key{now->detail, now->theme}) : std::nullopt; },
+          c::projected<panel_read>([](const panel_read& now) { return now ? std::optional(detail_key{now->detail, now->theme, now->toward}) : std::nullopt; },
               c::mount<detail_shown_t, detail_key>(
                   [at = &n](const detail_key& key) { return std::tuple{detail_shown(*at, key)}; },
                   {.fillX = true, .autoSize = scene::axes::kY}))))));
@@ -499,13 +505,15 @@ inline constexpr float kListWidth = 280.0f;
 // coming in as the other goes. Under it, what went wrong saving.
 struct side_key {
   bool account = false;
-  friend bool operator==(const side_key&, const side_key&) = default;
+  float toward = 1.0f;
+  friend bool operator==(const side_key& a, const side_key& b) { return a.account == b.account; }
 };
 inline auto side_made(const palette& colours, const side_key& key) {
   namespace c = skiff::compose;
   using side_t = spl::variant<accounts_side_t, pages_side_t>;
-  return c::appearing(true, c::column(c::vbox(0.0f, {.fill = true}),
-                                      key.account ? side_t(pages_side(colours)) : side_t(accounts_side(colours))), 0.0f);
+  return c::appearing_across(true, c::column(c::vbox(0.0f, {.fill = true}),
+                                             key.account ? side_t(pages_side(colours)) : side_t(accounts_side(colours))),
+                             36.0f * key.toward, 220.0f);
 }
 using side_made_t = decltype(side_made(std::declval<const palette&>(), side_key{}));
 inline auto side_column(const palette& colours) {
@@ -514,7 +522,7 @@ inline auto side_column(const palette& colours) {
     const bool narrow = now && now->narrow;
     return scene::Spec{.fillY = true, .fillX = narrow, .width = narrow ? 0.0f : kListWidth};
   }, c::column(c::vbox(0.0f, {.fillY = true, .background = colours.sidebar}),
-      c::projected<panel_read>([](const panel_read& now) { return side_key{chosen_of(now).has_value()}; },
+      c::projected<panel_read>([](const panel_read& now) { return side_key{chosen_of(now).has_value(), now ? now->toward : 1.0f}; },
           c::mount<side_made_t, side_key>([at = &colours](const side_key& key) { return std::tuple{side_made(*at, key)}; },
                                           {.fillX = true, .grow = scene::axes::kY})),
       c::shown_for<panel_read>([](const panel_read& now) { return now && now->note.has_value(); },

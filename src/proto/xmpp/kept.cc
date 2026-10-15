@@ -99,4 +99,37 @@ inline std::optional<std::string> check(const kept& one) {
   return std::nullopt;
 }
 
+// Raw form data, including a port left as text so a malformed edit can
+// stay in the field while the program reports its validation error.
+struct account_draft {
+  std::string address, password, resource = "mux", host, port;
+  bool plain_without_tls = false, creating = false, advanced = false;
+  std::vector<registration_answer> answers;
+  friend bool operator==(const account_draft&, const account_draft&) = default;
+};
+inline account_draft draft_of(const kept& saved) {
+  return {saved.address, saved.password, saved.resource, saved.host.value_or(""),
+      saved.port ? std::to_string(*saved.port) : std::string{}, saved.plain_without_tls,
+      saved.create.value_or(false), saved.resource != "mux" || saved.host || saved.port || saved.plain_without_tls,
+      saved.answers.value_or(std::vector<registration_answer>{})};
+}
+[[nodiscard]] inline std::expected<kept, std::string> account_from(const account_draft& draft) {
+  kept out{.address = draft.address, .password = draft.password, .resource = draft.resource,
+      .host = draft.host.empty() ? std::nullopt : std::optional(draft.host), .plain_without_tls = draft.plain_without_tls};
+  if (draft.creating) {
+    out.create = true;
+    out.answers = draft.answers;
+    if (out.password.empty()) return std::unexpected("A new account needs a password");
+  }
+  if (!draft.port.empty()) {
+    std::int64_t number = 0;
+    const auto [last, wrong] = std::from_chars(draft.port.data(), draft.port.data() + draft.port.size(), number);
+    if (wrong != std::errc{} || last != draft.port.data() + draft.port.size())
+      return std::unexpected("A port is a number from 1 to 65535");
+    out.port = number;
+  }
+  if (auto wrong = check(out)) return std::unexpected(*wrong);
+  return out;
+}
+
 }  // namespace mux::proto::xmpp

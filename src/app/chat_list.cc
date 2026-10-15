@@ -46,6 +46,7 @@ class chat_list_part {
                    : has(list.account) ? list.account
                    : now.accounts().empty() ? std::nullopt
                                             : std::optional<mux::account_id>(now.accounts().keyAt(0));
+    list.forum = chat.forum;
     const inputs seen{now.chats().revision(), k_->state.revision(), list, chat.chosen, chat.forum, s_->drafts_revision};
     if (seen_ == seen)
       return;
@@ -90,6 +91,78 @@ class chat_list_part {
     };
     const auto& listed = s_->showing->look<mux::ui::list_shown>()->account;
     asked(request::place_spaces{listed ? listed->address : std::string(), bar_of(one.to), one.order, bar_of(one.from), one.item});
+  }
+  // The chats screen's keys, as tdesktop's: Ctrl+1 to Ctrl+9 a folder;
+  // Ctrl+F finds in the chat, Ctrl+K puts a link on what is selected,
+  // Ctrl+Up and Ctrl+Down answer the messages up and down, Up in an empty
+  // field edits the last sent; Ctrl+C and Delete copy and delete what is
+  // selected; Esc lets go of what is up, one thing at a time -- a forum
+  // gone into, a selection, the search, an answer, then the threads or the
+  // info, else the chat; Ctrl+Tab and Alt+Up and Alt+Down go through the
+  // chats listed (a forum gone to, lit, not opened); Ctrl+End to the newest.
+  template <class Asked>
+  void apply(const request::screen_key& one, const Asked& asked) {
+    namespace keys = skiff::scene::keys;
+    const bool any = one.control || one.shift || one.alt;
+    const auto& chat = *s_->showing->look<mux::ui::chat_shown>();
+    const auto& list = *s_->showing->look<mux::ui::list_shown>();
+    const auto& side = *s_->showing->look<mux::ui::side_shown>();
+    static constexpr std::array kFolderKeys{keys::k1, keys::k2, keys::k3, keys::k4, keys::k5, keys::k6, keys::k7, keys::k8, keys::k9};
+    if (const auto digit = std::ranges::find(kFolderKeys, one.key); one.control && digit != kFolderKeys.end()) {
+      if (const auto place = static_cast<std::size_t>(digit - kFolderKeys.begin()); place < side.folders.size())
+        this->apply(request::pick_folder{side.folders[place].folder});
+      return;
+    }
+    if (one.key == keys::kEscape && !any && !chat.chosen && chat.forum) {
+      asked(request::close_forum{});
+      return;
+    }
+    const bool stepping = (one.key == keys::kTab && one.control) || ((one.key == keys::kUp || one.key == keys::kDown) && one.alt);
+    if (!chat.chosen && !(list.pointed && stepping))
+      return;
+    const bool selected = s_->showing->look<mux::ui::selection_shown>()->count > 0;
+    const bool searching = s_->showing->look<mux::ui::search_found>()->open;
+    const bool answering = s_->showing->look<mux::ui::chat_compose>()->said.has_value();
+    if (one.key == keys::kF && one.control)
+      asked(request::open_search{});
+    else if (one.key == keys::kK && one.control)
+      asked(request::ask_link{});
+    else if (one.key == keys::kUp && one.control)
+      asked(request::reply_step{true});
+    else if (one.key == keys::kDown && one.control)
+      asked(request::reply_step{false});
+    else if (one.key == keys::kUp && !any && mux::ui::composer_text(s_->root().main().line).empty())
+      asked(request::edit_last{});
+    else if (one.key == keys::kC && one.control && selected)
+      asked(request::selection_copy{});
+    else if (one.key == keys::kDelete && !any && selected)
+      asked(request::selection_delete{});
+    else if (one.key == keys::kC && one.control) {
+      // What any text shows selected: its own copy of it, as it changed.
+      if (const std::string text = skiff::scene::selectedText(); !text.empty())
+        skiff::scene::setClipboardText(text);
+    } else if (one.key == keys::kEscape && !any && selected)
+      asked(request::selection_cancel{});
+    else if (one.key == keys::kEscape && !any && searching)
+      asked(request::close_search{});
+    else if (one.key == keys::kEscape && !any && chat.thread_answer)
+      asked(request::thread_answer_cancel{});
+    else if (one.key == keys::kEscape && !any && answering)
+      asked(request::cancel_compose{});
+    else if (stepping)
+      this->step(one.key == keys::kUp || one.shift, chat, list, asked);
+    else if (one.key == keys::kEnd && one.control)
+      asked(request::jump_to_end{});
+    else if (one.key == keys::kEscape && !any) {
+      // Nothing else to let go of: the threads or the info shut, else the
+      // chat closed, as tdesktop's Esc closes it.
+      if (chat.threads_open)
+        asked(request::toggle_threads{});
+      else if (chat.info_open)
+        asked(request::toggle_info{});
+      else
+        asked(request::close_chat{});
+    }
   }
   // A forum gone to by Alt+Up or Alt+Down: lit, not opened.
   void point(std::optional<mux::conversation_id> at) {
@@ -539,6 +612,24 @@ class chat_list_part {
     this->put(mux::ui::elsewhere_shown{mux::ui::server_search_facts{std::move(rooms), people_, asked_by_, !rooms_came_ || !people_came_}});
   }
 
+  // To the next chat listed, or the one before -- from the forum gone to,
+  // where one is: a forum gone to, lit, not opened; a chat, opened.
+  template <class Asked>
+  void step(bool back, const mux::ui::chat_shown& chat, const mux::ui::list_shown& list, const Asked& asked) {
+    const auto at = std::ranges::find(order_, list.pointed ? *list.pointed : *chat.chosen);
+    if (at == order_.end())
+      return;
+    const auto index = static_cast<std::size_t>(at - order_.begin());
+    const std::size_t to = back ? (index == 0 ? order_.size() - 1 : index - 1) : (index + 1) % order_.size();
+    const mux::conversation* next = s_->model->find(order_[to]);
+    const kept_view kept = this->read_kept(list.account);
+    if (next && this->shown_as_forum(kept, *next)) {
+      this->point(order_[to]);
+      return;
+    }
+    this->point(std::nullopt);
+    asked(request::choose{order_[to]});
+  }
   // A phone's way (the user's, #13548): a window narrow and taller than it
   // is wide shows one thing at a time -- the chats, a chat, or its info or
   // threads -- not side by side.
@@ -550,6 +641,13 @@ class chat_list_part {
       now.pane = !chat.chosen ? mux::ui::pane_t{mux::ui::pane::list{}}
                  : chat.info_open || chat.threads_open ? mux::ui::pane_t{mux::ui::pane::beside{}}
                                                        : mux::ui::pane_t{mux::ui::pane::chat{}};
+      const bool beside = (chat.info_open || chat.threads_open) && chat.chosen.has_value();
+      now.info_up = beside && !chat.threads_open;
+      now.threads_up = beside && chat.threads_open;
+      now.beside_edge = beside && !now.single;
+      now.side_up = !now.single || !chat.chosen;
+      now.side_edge = !now.single;
+      now.chat_up = !now.single || (chat.chosen && !beside);
     });
   }
   template <class Change>

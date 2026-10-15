@@ -239,7 +239,7 @@ struct message_bubble : skiff::compose::Stacked {
       std::optional<frost_pane> frost;
       std::optional<name_row> name;
       // Forwarded: from whom, in the accent, as Telegram's.
-      std::optional<forward_line> forwarded;
+      std::optional<forward_line_t> forwarded;
       std::optional<quote_row_t> quote;
       std::optional<picture_view> picture;
       // A sticker its protocol draws itself, in the picture's place.
@@ -610,7 +610,7 @@ struct message_bubble : skiff::compose::Stacked {
     // Over the first unread message of a chat opened: tdesktop's bar.
     std::optional<unread_bar_t> unread_bar;
     // Under it, where the chat shows them: who has read up to it.
-    std::optional<readers_row> readers;
+    std::optional<readers_row_t> readers;
   } parts;
   // Whether it has the bar: kept while the chat's first unread is it.
   // Who has read up to it, as shown: while the same, the bubble is kept.
@@ -620,7 +620,7 @@ struct message_bubble : skiff::compose::Stacked {
     readers_shown = std::move(users);
     if (readers_shown.empty())
       return;
-    parts.readers.emplace(*colours_, in, readers_shown);
+    parts.readers.emplace(readers_row(*colours_, in, readers_shown));
     parts.readers->apply({.place = scene::anchor::kBottomRight, .x = -4.0f, .y = kReaders + 1.0f});
     fState.apply({.padding = {fState.fPadding.fTop, fState.fPadding.fRight, fState.fPadding.fBottom + kReaders + 2.0f,
                               fState.fPadding.fLeft}});
@@ -737,8 +737,8 @@ struct message_bubble : skiff::compose::Stacked {
       if (link && !who.empty())
         spans.push_back(nodes::Text::Link{0, who.size(), *link});
       mentioned shown = with_mentions(who, std::move(spans), in, now);
-      body.parts.forwarded.emplace(*colours_, std::move(shown.text), std::move(shown.links), outgoing ? colours_->sent_time : colours_->accent,
-                                   link ? said.forwarded->from : std::string());
+      body.parts.forwarded.emplace(forward_line(*colours_, std::move(shown.text), std::move(shown.links),
+                                                outgoing ? colours_->sent_time : colours_->accent));
     }
     // Something done, not said: a line in the middle, on a plate of its own,
     // with no avatar and no name -- as tdesktop's service messages.

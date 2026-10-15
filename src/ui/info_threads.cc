@@ -298,6 +298,17 @@ struct threads_panel : skiff::compose::Stacked {
   // The window slid as the reader nears an edge of what is made: looked at
   // in the frames there are -- scrolling makes them -- asking for none.
   void update(double) {
+    if (aiming) {
+      auto& bubbles = parts.answers.bubbles();
+      const auto found = std::ranges::find(bubbles, *aiming, &message_bubble::message_id);
+      if (found == bubbles.end())
+        aiming.reset();  // gone meanwhile
+      else if (!found->bounds().isEmpty()) {
+        aiming.reset();
+        this->aim_at(*found);
+      }
+      return;
+    }
     if (!open || !this->visible() || seen_model == nullptr || !seen_chat)
       return;
     const auto& view = parts.answers.parts.timeline;
@@ -309,17 +320,38 @@ struct threads_panel : skiff::compose::Stacked {
   [[nodiscard]] const conversation* chat_of() const { return seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr; }
   // Scrolled to an answer of the thread open, and flashed: a quote of it
   // pressed. False where it is not one of its.
+  // One held but not made -- older than the window -- made around first,
+  // and aimed at once it is laid out (update).
   bool scroll_to(const std::string& id) {
     auto& bubbles = parts.answers.bubbles();
     const auto found = std::ranges::find(bubbles, id, &message_bubble::message_id);
-    if (found == bubbles.end())
+    if (found != bubbles.end() && !found->bounds().isEmpty()) {
+      this->aim_at(*found);
+      return true;
+    }
+    const auto held = std::ranges::find(shown, id, &message::id);
+    if (held == shown.end())
       return false;
-    parts.answers.parts.timeline.scrollTo(found->bounds().fTop - 8.0f);
-    found->flash.jump(1.0f);
-    found->flash.setTarget(0.0f);
-    found->markDamaged();
+    if (found == bubbles.end()) {
+      const auto at = static_cast<std::size_t>(held - shown.begin());
+      (void)set_made(made, shown, at > 40 ? at - 40 : 0, at + 40);
+      if (const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr)
+        this->make_window(*chat, *seen_model);
+    }
+    aiming = id;
+    this->markDamaged();
     return true;
   }
+  // A bubble brought into view and flashed.
+  void aim_at(message_bubble& bubble) {
+    parts.answers.parts.timeline.scrollTo(bubble.bounds().fTop - 8.0f);
+    bubble.flash.jump(1.0f);
+    bubble.flash.setTarget(0.0f);
+    bubble.markDamaged();
+  }
+  // What a quote pressed asks to be brought into view, once it is laid out.
+  std::optional<std::string> aiming;
+  [[nodiscard]] bool settling() const { return aiming.has_value(); }
   // A message of the thread open answered from its menu, as tdesktop's
   // "Reply to <name>" over the field: in the thread, not the chat.
   void answer(std::string id, compose_context said) {

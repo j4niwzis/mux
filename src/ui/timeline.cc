@@ -363,7 +363,7 @@ inline auto chat_area(const ui_needs& n) {
                          auto& down = std::get<3>(corner.fParts);
                          down.setVisible(wanted);
                          auto& badge = std::get<1>(down.fParts);
-                         show_count(badge, unseen);
+                         std::get<0>(badge.fParts).setText(std::to_string(unseen));
                          badge.setVisible(unseen > 0);
                        }));
   auto loading = c::shown_for<chat_ways>([](const chat_ways& now) { return now.loading; },

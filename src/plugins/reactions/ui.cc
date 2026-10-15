@@ -131,8 +131,7 @@ inline auto quick_reaction(const palette& colours, std::string key) {
           .hoverBackground = colours.chosen}), nodes::justify::middle{}),
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(key), 22.0f, colours.text))));
 }
-template <class Expand>
-auto quick_reactions(const palette& colours, Expand expand) {
+inline auto quick_reactions(const palette& colours) {
   namespace c = skiff::compose;
   const std::array<std::string_view, 6> keys{"👍", "❤️", "😂", "😮", "😢", "🙏"};
   auto each = std::ranges::to<std::vector>(std::views::transform(keys, [&](auto key) {
@@ -140,8 +139,10 @@ auto quick_reactions(const palette& colours, Expand expand) {
   }));
   return c::row(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}}),
       c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(each)),
-      c::onPress(std::move(expand), c::styled({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f,
-          .hoverBackground = colours.chosen}, nodes::Icon(shape_of(icon::down{}), colours.text)), "All emoji"));
+      // The arrow, put away once unrolled.
+      c::shown_for<contract::message_menu_state>([](const contract::message_menu_state& now) { return now.unrolled == 0; },
+          c::onClick(contract::menu_unroll<feature>{}, c::styled({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f,
+              .hoverBackground = colours.chosen}, nodes::Icon(shape_of(icon::down{}), colours.text)), "All emoji")));
 }
 
 // What the menu's emoji do: react with it.
@@ -156,22 +157,15 @@ struct react_with {
 
 // Its head, over a message's menu (mux.ui:context_menu): where the account
 // reacts, the quick reactions and the band under them.
-template <class Unroll>
-auto extend(contract::message_menu_top, type_tag<feature>, const palette& colours, const menu_facts& facts,
-            Unroll unroll) {
+inline auto extend(contract::message_menu_top, type_tag<feature>, const palette& colours, const menu_facts& facts) {
   namespace c = skiff::compose;
   return c::visible(facts.can.react,
-      c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), quick_reactions(colours, std::move(unroll)),
+      c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), quick_reactions(colours),
           c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band))));
 }
 // What it unrolls: every emoji, a press reacting with it.
 inline auto unrolled(contract::message_menu_top, type_tag<feature>, const palette& colours, emoji_kept& kept) {
   return emoji_panel(colours, kept, react_with{});
-}
-// Unrolled: its arrow put away.
-template <class Head>
-void unrolled_head(contract::message_menu_top, type_tag<feature>, Head& head) {
-  std::get<1>(std::get<0>(head.fParts).fParts).setVisible(false);
 }
 
 }  // namespace mux::plugins::reactions

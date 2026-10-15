@@ -109,9 +109,6 @@ struct conversations_screen : skiff::compose::Stacked {
   // one above the view (the newest until that is worked out).
   std::size_t pinned_step = 0;
   std::optional<conversation_id> pinned_of;
-  // The messages a bubble was made for: one made for the first time, while
-  // its chat is being read, has just come.
-  std::set<std::string> appeared;
   // Which room events a chat shows, kind by kind, as the program's settings
   // say: set by the program before it shows the model; a chat not in it
   // shows them all.
@@ -135,17 +132,6 @@ struct conversations_screen : skiff::compose::Stacked {
   std::set<conversation_id> receipts_in;
   // The chats that show no link previews.
   std::set<conversation_id> previews_off;
-  // Rooms the bubbles made name and wait on; and those not joined, for the
-  // program to ask their server of (it drains them).
-  std::set<std::string> rooms_waiting;  // their pictures
-  std::set<std::string> rooms_unfound;  // whether they are there
-  std::set<std::string> rooms_wanted;
-  // How far a jump's search pages back in each chat, in events; 0 no limit.
-  std::map<conversation_id, std::int64_t> jump_limits;
-  // How many messages the chat had when the search began paging back.
-  std::optional<std::size_t> jump_base;
-  // The server's window around it did not bring it: paging back instead.
-  bool jump_paging = false;
   // The @ list: the chat's members matching what follows an @ at the end of
   // what is written, as Telegram's; who was picked from it, to be sent as
   // mentions with the message.
@@ -756,7 +742,7 @@ struct conversations_screen : skiff::compose::Stacked {
       typename column_parts_t::nodes_t plugins;
       // Its protocol's own node under the head (make_head_view).
       std::optional<head_view_holder> their_head;
-      timeline_area area;
+      chat_area_t area;
       mention_list mentions;
       emoji_list emojis;
       // Over the composer: what the chat's protocol says there -- Matrix's
@@ -770,7 +756,7 @@ struct conversations_screen : skiff::compose::Stacked {
     // Its parts by their names, for what reads them: it is never moved.
     header_t& header = parts.header;
     search_bar& search = parts.search;
-    timeline_area& area = parts.area;
+    chat_area_t& area = parts.area;
     composer_bar_t<>& line = parts.line;
     empty_state& empty = parts.empty;
     select_hint& hint = parts.hint;
@@ -785,7 +771,7 @@ struct conversations_screen : skiff::compose::Stacked {
               .search = search_bar(n),
               .selection = selection_bar(n),
               .plugins = column_parts_t::made(n),
-              .area = timeline_area(n),
+              .area = chat_area(n),
               .mentions =
                   skiff::compose::visible(false, mention_list(*n.colours)),
               .emojis = skiff::compose::visible(false, emoji_list(*n.colours)),
@@ -838,8 +824,6 @@ struct conversations_screen : skiff::compose::Stacked {
   // messages marked; none, the head back.
   void show_selection(const std::set<std::string>& ids) {
     header.setVisible(ids.empty() && !search.visible());
-    chat.area.set_selected(ids);
-    parts.threads.parts.answers.set_selected(ids);
     this->fState.relayoutQuietly();
   }
   // The search bar in place of the head, or the head back.
@@ -851,17 +835,20 @@ struct conversations_screen : skiff::compose::Stacked {
     }
     this->invalidateLayout();
   }
-  nodes::ScrollContainer<nodes::Flow<std::vector<legacy::message_bubble>>>& timeline = chat.area.parts.timeline;
-  // The chat whose messages are shown, how many, and how many came while
-  // the view was above the newest.
+  // The chat's messages: the list in its area (chat_area), told by the
+  // program; read here for the pinned bar and the page keys.
+  [[nodiscard]] auto& messages() { return std::get<1>(chat.area.fParts).list().list(); }
+  // The chat last shown: its thread let go where another is.
   std::optional<conversation_id> shown_chat;
-  std::string shown_last;
-  // Whether the timeline last shown was cut off from the newest: what then
-  // comes after it is a page of what is older than the newest, not new.
-  bool shown_detached = false;
-  // Where each chat was scrolled to when it was left: it comes back there.
-  std::map<conversation_id, float> scrolled;
-  int unseen = 0;
+  // The chat's wallpaper, as its levels say, behind its messages: not
+  // there where the window's background is behind the whole window, and
+  // else at the window's opacity, as the panels are.
+  void show_wallpaper() {
+    auto& wall = std::get<0>(chat.area.fParts);
+    wall.setVisible(!needs_.looks->window.behind);
+    wall.setOpacity(static_cast<float>(needs_.looks->window.opacity) / 100.0f);
+    show_wallpaper_on(wall, wallpaper, *needs_.colours, *needs_.looks);
+  }
   composer_bar_t<>& line = chat.line;
 
   // Its child references and handlers point into this screen. Construct it
@@ -981,8 +968,6 @@ struct conversations_screen : skiff::compose::Stacked {
   bool threads_open = false;
   // The chosen chat's background, as the program resolves it.
   config::wallpaper_t wallpaper = config::wallpaper::theme{};
-  // And its bubbles' look: the bubbles made again where it changes.
-  config::bubble_look bubbles;
   // The threads' panel open or shut, and the thread open in it: an answer
   // being written let go where the thread changes.
   void set_threads(bool on, std::optional<std::string> root) {
@@ -1025,34 +1010,6 @@ struct conversations_screen : skiff::compose::Stacked {
     const auto found = drafts.find(id);
     return found == drafts.end() ? std::string() : found->second;
   }
-  // Where the chosen chat pages back from, and where it was last asked to:
-  // scrolled to its top, the older messages are asked for, once for each.
-  std::optional<std::string> history_from;
-  std::optional<std::string> history_asked;
-  // When the older were asked: an answer that never comes -- the request
-  // failed, and nothing said so -- let go after a while, and asked again.
-  double history_asked_ms = 0.0;
-  static constexpr double kHistoryPatienceMs = 10000.0;
-  // Asked, and the answer not in yet: the page it brings moves where to
-  // page back from on.
-  [[nodiscard]] bool history_pending() const { return history_asked && history_from && *history_asked == *history_from; }
-  // Something to do at the top: the stretch made to slide up, or older to
-  // ask for -- looked at at every frame while the view is up there. The
-  // scroll that brought it there stopped in a frame whose tick had gone by
-  // here already, and nothing ticked this again: it sat at the top, and
-  // nothing more came.
-  [[nodiscard]] bool older_due() const {
-    if (!chosen || !last_model || jumping_to)
-      return false;
-    const float ahead = std::max(300.0f, timeline.bounds().height() * 1.5f);
-    if (timeline.current() > ahead)
-      return false;
-    if (const conversation* one = last_model->find(*chosen))
-      if (this->made_indices(one->timeline).first > 0)
-        return true;
-    return timeline.current() <= 4.0f && history_from.has_value() && !this->history_pending();
-  }
-
   // Frames wanted while a jump goes on: it is carried out a step a frame --
   // made, paged back to, fetched around, aimed at -- and skiff draws the next
   // frame only for what is still settling. And while the list slides in --
@@ -1060,87 +1017,9 @@ struct conversations_screen : skiff::compose::Stacked {
   // ticked (wantsTick), they moved a step at a frame something else asked
   // for, and the slide went by in jerks unless the mouse moved.
   [[nodiscard]] bool settling() const {
-    return jumping_to.has_value() || aiming.has_value() || slide_wait > 0 || list_in.moving() ||
+    return slide_wait > 0 || list_in.moving() ||
            needs_.paint->ease.t.moving() || pane_in.moving();
   }
-  // Where jumps in a chat came from -- a reply's quote, a link to a
-  // message: "↓" goes back to each in turn, the last first, before it goes
-  // to the newest, as Telegram's. And the chats jumps went out of, to a
-  // message in another: the button over "↓" goes back to the last.
-  std::map<conversation_id, std::vector<std::string>> returns;
-  std::vector<conversation_id> chat_returns;
-  // The ways back that are where a jump goes: done with, as tdesktop's
-  // skipReplyReturn -- from the top, while they are that message.
-  void skip_return(const std::string& id) {
-    if (!chosen)
-      return;
-    if (const auto found = returns.find(*chosen); found != returns.end())
-      while (!found->second.empty() && found->second.back() == id)
-        found->second.pop_back();
-  }
-  // The message pressed for the jump about to go, where one was: come back
-  // to, rather than to where the view is.
-  std::optional<std::string> return_from;
-  // A jump in this chat about to go: the message it went from, else where
-  // the view is, to come back to.
-  void note_return() {
-    if (chosen)
-      if (std::optional<std::string> here = std::exchange(return_from, std::nullopt).or_else([&] { return this->last_seen(); }))
-        returns[*chosen].push_back(std::move(*here));
-  }
-  // A jump to another chat about to go: this one, to come back to.
-  void note_chat_return() {
-    if (chosen)
-      chat_returns.push_back(*chosen);
-  }
-  [[nodiscard]] std::optional<conversation_id> take_chat_return() {
-    if (chat_returns.empty())
-      return std::nullopt;
-    conversation_id back = chat_returns.back();
-    chat_returns.pop_back();
-    return back;
-  }
-  [[nodiscard]] bool has_return() const {
-    if (!chosen)
-      return false;
-    const auto found = returns.find(*chosen);
-    return found != returns.end() && !found->second.empty();
-  }
-  // Back to where the last jump in this chat came from, where there is
-  // one: as any jump, flashed where it lands.
-  bool go_back() {
-    if (!this->has_return())
-      return false;
-    auto& stack = returns[*chosen];
-    std::string id = std::move(stack.back());
-    stack.pop_back();
-    // As a jump there goes: the same way, in the middle and flashed.
-    this->jump_to(std::move(id));
-    return true;
-  }
-  // Back to the newest, and nothing unseen. A jump still on its way, or a
-  // message still aimed at -- one jumped to a moment ago, held in view while
-  // what is above it settles -- let go first: it pulled the view back to
-  // itself, and the button had to be pressed twice.
-  void jump_to_end() {
-    this->stop_jump();
-    aiming.reset();
-    jump_fragment.reset();
-    if (chosen)
-      returns.erase(*chosen);
-    // The stretch at the end made again, even where it reaches the end: one
-    // grown up from there -- the reader high above -- slid on up as the view
-    // left the top, dropped its end to stay within its most, and the glide
-    // stopped short of the newest: pressed twice.
-    if (last_model) {
-      made = made_range{};
-      this->show_conversation(*last_model);
-    }
-    timeline.scrollToEnd();
-    unseen = 0;
-    set_unseen(chat.area.parts.jump, 0);
-  }
-
   // What was searched for last, and the model last shown: typing into the
   // search filters the list again.
   std::string searched;
@@ -1157,157 +1036,6 @@ struct conversations_screen : skiff::compose::Stacked {
 
   bool was_typing = false;
   std::string typed_last;
-  // Which of the chat's messages are made: the timeline's window
-  // (made_range), kept for each chat as it was left.
-  made_range made;
-  std::map<conversation_id, made_range> made_of;
-  [[nodiscard]] std::pair<std::size_t, std::size_t> made_indices(const std::vector<message>& all) const {
-    return mux::ui::made_indices(made, all);
-  }
-  void set_made(const std::vector<message>& all, std::size_t from, std::size_t to) {
-    if (mux::ui::set_made(made, all, from, to))
-      needs_.shared->pictures_due = true;
-  }
-  // A message to bring into view, once it is made and laid out -- flashed,
-  // unless it is where a chat opened, at what it was read up to.
-  std::optional<std::string> jumping_to;
-  // How long a jump waits on a window around its message before paging
-  // back to it, and on anything at all before it is given up.
-  static constexpr double kContextPatienceMs = 4000.0;
-  // The chat the jump is in: one asked with a chat's opening -- a link to
-  // a message there -- is kept when the chat is first shown.
-  std::optional<conversation_id> jump_chat;
-  // The chat's first unread message as it was opened: the bar goes over it,
-  // and the view opens with it at its top.
-  std::optional<std::string> unread_from;
-  // The first unread message among those held: the one after the message
-  // read up to that the reader did not send. Where that marker is not known
-  // yet -- a chat opened before its read marker is loaded, which the server
-  // gives only as a count of unread -- that many messages back from the
-  // newest, as the server counts them: said, not done, and not the reader's.
-  static std::optional<std::string> first_unread_here(const conversation& one, const auto& all) {
-    if (one.unread_here() <= 0)
-      return std::nullopt;
-    if (one.read_up_to) {
-      if (const auto read = std::ranges::find(all, *one.read_up_to, &message::id); read != all.end())
-        for (auto it = std::next(read); it != all.end(); ++it)
-          if (!it->outgoing)
-            return it->id;
-      return std::nullopt;
-    }
-    std::optional<std::string> found;
-    std::int64_t left = one.unread_here();
-    for (auto it = all.rbegin(); it != all.rend() && left > 0; ++it)
-      if (!it->outgoing && !it->service) {
-        found = it->id;
-        --left;
-      }
-    return found;
-  }
-  // Where a chat with unread opens: its first unread held, or else the
-  // message read up to, to be fetched with what is around it.
-  static std::optional<std::string> first_unread(const conversation& one, const auto& all) {
-    if (auto here = first_unread_here(one, all))
-      return here;
-    if (one.unread_here() > 0 && one.read_up_to)
-      return one.read_up_to;
-    return std::nullopt;
-  }
-  bool jump_quiet = false;
-  int jump_tries = 0;
-  // When the jump last got anywhere -- asked for, a window or a page asked,
-  // more of the chat come -- and how much of it was held then: it waits and
-  // is given up by that, in time, not in frames. Ten seconds of frames from
-  // its start gave up on a message a few pages back while they came, and a
-  // window in the background -- drawn seldom -- waited ten times as long.
-  double jump_since_ms = -1.0;
-  std::size_t jump_held = 0;
-  // Frames a jump has been on its way: the loader shows past a few.
-  int jump_age = 0;
-  // A message jumped to and made, aimed at until it stays where it was
-  // aimed: what is above it may still grow as it is made and laid out.
-  std::optional<std::string> aiming;
-  bool aim_quiet = false;
-  int aim_frames = 0;
-  float aimed_at = -1.0f;
-
-  // While a jump is on its way or being aimed: the message jumped to. What is
-  // loaded to reach it is not looked at, and only the pictures right around
-  // it are fetched.
-  [[nodiscard]] const std::optional<std::string>& jump_target() const { return jumping_to ? jumping_to : aiming; }
-
-  // The newest message whose end is on screen in the chat shown: how far it
-  // has been read. None while a jump is on its way, as what is passed on the
-  // way is not read.
-  // Every message wholly or partly on screen now, not while a jump is on its
-  // way: what the user can be said to see.
-  [[nodiscard]] std::vector<std::string> shown_now() {
-    std::vector<std::string> out;
-    if (jumping_to)
-      return out;
-    const skia::SkRect view = timeline.bounds();
-    for (const legacy::message_bubble& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
-      // Laid out as if unscrolled: where it is in the view.
-      const skia::SkRect box = timeline.toView(row.bounds());
-      if (!row.message_id.empty() && !box.isEmpty() && row.visible() && box.fBottom > view.fTop + 8.0f &&
-          box.fTop < view.fBottom - 8.0f)
-        out.push_back(row.message_id);
-    }
-    return out;
-  }
-  [[nodiscard]] std::optional<std::string> last_seen() {
-    if (jumping_to || aiming)
-      return std::nullopt;
-    const skia::SkRect view = timeline.bounds();
-    const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
-      const skia::SkRect box = timeline.toView(it->bounds());
-      if (it->message_id.empty() || box.isEmpty())
-        continue;
-      if (box.fBottom <= view.fBottom + 1.0f && box.fBottom > view.fTop)
-        return it->message_id;
-    }
-    return std::nullopt;
-  }
-  // The window asked around a message, and the page forward asked: not
-  // asked twice.
-  std::optional<std::string> context_asked, newer_asked;
-
-  // The part of the message jumped to that a reply quoted: marked in it,
-  // and aimed at rather than its top.
-  std::optional<std::string> jump_fragment;
-  void jump_to(std::string id, std::optional<std::string> fragment) {
-    this->jump_to(std::move(id));
-    jump_fragment = std::move(fragment);
-  }
-  // Jumps said, where MUX_TRACE_FRAMES is set: asked, and how each goes.
-  static bool trace_jumps() {
-    static const bool on = std::getenv("MUX_TRACE_FRAMES") != nullptr;
-    return on;
-  }
-  void jump_to(std::string id) {
-    jump_fragment.reset();
-    if (trace_jumps())
-      std::cerr << "[jump] to " << id << (chosen && last_model ? "" : " (no chat shown: dropped)") << '\n';
-    if (!chosen || !last_model)
-      return;
-    const conversation* one = last_model->find(*chosen);
-    if (!one)
-      return;
-    // Made, loaded or paged back to at the next frames, as update() finds it.
-    jumping_to = std::move(id);
-    scene::work::mark(fState.fId);  // update() looked at from the next frame, and ticked until it lands
-    jump_chat = chosen;
-    jump_quiet = false;
-    jump_tries = 0;
-    jump_base.reset();
-    jump_paging = false;
-    jump_age = 0;
-    jump_since_ms = -1.0;
-    aiming.reset();
-    context_asked.reset();
-  }
-
   // The pinned bar: of the chat's pins, the one `pinned_step` says -- the
   // newest where none was worked out yet.
   void show_pinned(const conversation* one) {
@@ -1335,18 +1063,18 @@ struct conversations_screen : skiff::compose::Stacked {
   // -- before the first message seen -- else the oldest. A pin not loaded
   // is taken as older than all that is.
   [[nodiscard]] std::size_t pin_above(const conversation& one) {
-    const skia::SkRect view = timeline.bounds();
-    const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    const auto first = std::ranges::find_if(entries, [&](const legacy::message_bubble& row) {
-      const skia::SkRect box = timeline.toView(row.bounds());
-      return !row.message_id.empty() && row.visible() && !box.isEmpty() && box.fBottom > view.fTop + 8.0f;
+    auto& list = this->messages();
+    const skia::SkRect view = list.bounds();
+    const auto& rows = list.rows().fRows;
+    const auto first = std::ranges::find_if(rows, [&](const auto& row) {
+      const skia::SkRect box = list.toView(row.bounds());
+      return !box.isEmpty() && box.fBottom > view.fTop + 8.0f;
     });
     const auto place = [&](const std::string& id) -> std::ptrdiff_t {
       const auto found = std::ranges::find(one.timeline, id, &message::id);
       return found == one.timeline.end() ? -1 : found - one.timeline.begin();
     };
-    const std::ptrdiff_t top = first == entries.end() ? std::numeric_limits<std::ptrdiff_t>::max()
-                                                      : place(first->message_id);
+    const std::ptrdiff_t top = first == rows.end() ? std::numeric_limits<std::ptrdiff_t>::max() : place(first->fKey);
     std::optional<std::size_t> best;
     std::ptrdiff_t best_place = -2;
     for (std::size_t i = 0; i < one.pinned.size(); ++i)
@@ -1366,34 +1094,11 @@ struct conversations_screen : skiff::compose::Stacked {
     friend bool operator==(const pin_inputs&, const pin_inputs&) = default;
   };
   std::optional<pin_inputs> pin_worked_out;
-  // The message jumped to no longer looked for: where the view is, it stays.
-  void stop_jump() {
-    jumping_to.reset();
-    jump_base.reset();
-    jump_paging = false;
-    context_asked.reset();
-    jump_tries = 0;
-  }
-  // Ticked while something is on its way -- a jump, an aim, a glide, rooms
-  // named and not yet come -- and else looked at only as what it watches
-  // changes: the view scrolled, the composer or the search typed into, the
-  // model shown, each of which marks it. It was run at every frame.
-  // Away from the newest: scrolled up, in a window of the history, or with
-  // a way back from a jump to go.
-  [[nodiscard]] bool away() const {
-    const conversation* shown_one = chosen && last_model ? last_model->find(*chosen) : nullptr;
-    return !timeline.atEnd(40.0f) || (shown_one && shown_one->detached) || this->has_return();
-  }
-  // Ticked too while "↓" says otherwise than where the view is: the scroll
-  // that brought the view to the end stopped in a frame whose tick had gone
-  // by here already, and nothing ticked this again -- the arrow stayed.
+  // Ticked while something moves: the list sliding in, the panels' ease,
+  // the docked panel's height. What the list does is its own.
   [[nodiscard]] bool wantsTick() const {
     return slide_wait > 0 || list_in.moving() || pane_in.moving() || needs_.shared->docked_panel_height != docked_applied ||
-           needs_.paint->ease.t.moving() ||
-           this->away() != chat.area.parts.jump.visible() ||
-           this->older_due() || this->history_pending() ||
-           jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||
-           !rooms_waiting.empty() || !rooms_unfound.empty();
+           needs_.paint->ease.t.moving();
   }
   void update(double now_ms);
 
@@ -1433,10 +1138,7 @@ struct conversations_screen : skiff::compose::Stacked {
                   std::views::transform(&conversation::id) | std::ranges::to<std::set>();
     previews_off = all() | std::views::filter([&](const conversation& one) { return !reads.previews_shown(one.id); }) |
                    std::views::transform(&conversation::id) | std::ranges::to<std::set>();
-    jump_limits = all() | std::views::transform([&](const conversation& one) { return std::pair{one.id, reads.jump_search_of(one.id)}; }) |
-                  std::ranges::to<std::map>();
-    // The chosen chat's bubbles and background, as its levels say.
-    bubbles = chosen ? reads.bubbles_of(*chosen) : config::bubble_look{};
+    // The chosen chat's background, as its levels say.
     wallpaper = chosen ? reads.wallpaper_of(*chosen) : config::wallpaper_t{config::wallpaper::theme{}};
   }
   template <class Reactions>

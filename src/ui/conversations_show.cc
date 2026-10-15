@@ -116,8 +116,9 @@ auto conversations_screen::onKey(scene::phase::bubble, const scene::key::down& p
     }
   } else if (press.key == keys::kPageUp || press.key == keys::kPageDown) {
     // A page of the messages, most of what is in view.
-    const float page = timeline.bounds().height() * 0.9f;
-    timeline.scrollTo(std::max(0.0f, timeline.current() + (press.key == keys::kPageUp ? -page : page)));
+    auto& list = this->messages();
+    const float page = list.bounds().height() * 0.9f;
+    list.scrollTo(std::max(0.0f, list.current() + (press.key == keys::kPageUp ? -page : page)));
   } else if (press.key == keys::kEnd && control) {
     asked = ::mux::ui::request::jump_to_end{};
   } else if (press.key == keys::kEscape && !any) {
@@ -359,9 +360,6 @@ void conversations_screen::update(double now_ms) {
     this->place_pane();
     this->markDamaged();
   }
-  // The older asked long ago and not come: asked again.
-  if (this->history_pending() && now_ms - history_asked_ms > kHistoryPatienceMs)
-    history_asked.reset();
   // The info's members near their end, with more: the next few made; or a
   // member opened past those made, theirs worked out.
   if (last_model && chosen && info.visible() && (info.wants_show || info.wants_more()))
@@ -384,19 +382,12 @@ void conversations_screen::update(double now_ms) {
     needs_.paint->panel.opacity = ease.from + (ease.to - ease.from) * ease.t.value();
     this->markDamaged();
   }
-  // A room a bubble names has come -- its picture, or word that it is
-  // there: the bubbles made again.
-  if (last_model &&
-      (std::ranges::any_of(rooms_waiting, [](const std::string& key) { return avatar_images().has(key); }) ||
-       std::ranges::any_of(rooms_unfound, [&](const std::string& key) { return last_model->rooms_found.contains(key); })))
-    this->show_conversation(*last_model);
-  // The pin the bar shows, as the view moves: the one above it. Not while
-  // a jump goes on -- where it lands decides.
-  // Worked out again only where the view, the messages or the pins moved:
-  // it looks each pin up in the whole timeline.
-  if (!jumping_to && !aiming && chosen && last_model)
+  // The pin the bar shows, as the view moves: the one above it. Worked out
+  // again only where the view, the messages or the pins moved: it looks
+  // each pin up in the whole timeline.
+  if (chosen && last_model)
     if (const conversation* one = last_model->find(*chosen); one && !one->pinned.empty()) {
-      const pin_inputs now{*chosen, timeline.current(), one->timeline.size(), one->pinned.size(),
+      const pin_inputs now{*chosen, this->messages().current(), one->timeline.size(), one->pinned.size(),
                            one->timeline.empty() ? std::string() : one->timeline.front().id};
       if (now != pin_worked_out) {
         pin_worked_out = now;
@@ -406,164 +397,6 @@ void conversations_screen::update(double now_ms) {
         }
       }
     }
-  // A message jumped to: made into a bubble where it is loaded, paged back
-  // to where it is not -- page after page, as long as there is history --
-  // and once it is laid out, brought into view and flashed.
-  if (jumping_to && chosen && last_model) {
-    auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    auto it = std::ranges::find(entries, *jumping_to, &legacy::message_bubble::message_id);
-    const conversation* one = last_model->find(*chosen);
-    // Begun, or more of the chat come: the jump got somewhere.
-    if (jump_since_ms < 0.0 || (one && one->timeline.size() != jump_held)) {
-      jump_since_ms = now_ms;
-      jump_held = one ? one->timeline.size() : 0;
-    }
-    // A reply to something done in the room -- a join, a rename -- whose
-    // line is hidden, as the chat's settings say: landed on the nearest
-    // shown after it, else before it, as its place.
-    if (it != entries.end() && !it->visible()) {
-      auto shown = std::find_if(it, entries.end(), [](const legacy::message_bubble& row) { return row.visible(); });
-      if (shown == entries.end()) {
-        const auto back = std::find_if(std::make_reverse_iterator(it), entries.rend(),
-                                       [](const legacy::message_bubble& row) { return row.visible(); });
-        shown = back == entries.rend() ? entries.end() : std::prev(back.base());
-      }
-      if (shown != entries.end()) {
-        jumping_to = shown->message_id;
-        it = shown;
-      }
-    }
-    if (trace_jumps() && jump_tries % 30 == 0)
-      std::cerr << "[jump] " << *jumping_to << (it == entries.end() ? " not made" : it->bounds().isEmpty() ? " made, not laid out" : " laid out")
-                << (one && std::ranges::contains(one->timeline, *jumping_to, &message::id) ? ", held" : ", not held") << '\n';
-    if (it != entries.end() && !it->bounds().isEmpty()) {
-      aiming = std::exchange(jumping_to, std::nullopt);
-      aim_quiet = jump_quiet;
-      aim_frames = 0;
-      aimed_at = -1.0f;
-    } else if (one == nullptr) {
-      jumping_to.reset();
-    } else if (const auto found = std::ranges::find(one->timeline, *jumping_to, &message::id);
-               found != one->timeline.end()) {
-      // Made around it, where it is not made already.
-      const auto at = static_cast<std::size_t>(found - one->timeline.begin());
-      const auto [from, to] = this->made_indices(one->timeline);
-      if (at < from || at >= to) {
-        this->set_made(one->timeline, at > 40 ? at - 40 : 0, at + 40);
-        this->show_conversation(*last_model);
-      } else if (it != entries.end() && it->visible() && !timeline.moving()) {
-        // Made, but not laid out: more than a screen from the view, where
-        // the list lays nothing out. The view stepped a screen toward it,
-        // until it is laid out and aimed at.
-        const auto laid = std::ranges::find_if(entries, [](const legacy::message_bubble& row) { return !row.bounds().isEmpty(); });
-        if (laid != entries.end()) {
-          const bool above = it < laid;
-          const float page = timeline.bounds().height();
-          timeline.setCurrent(std::max(0.0f, timeline.current() + (above ? -page : page)));
-        }
-      }
-    } else if (const message* held = held_message(*one, *jumping_to); held && held->thread) {
-      // Come with the context, but as an answer in a thread: kept with its
-      // thread, never in the timeline -- paged back for, the whole chat was
-      // fetched to the beginning and it was not found. Its thread opened.
-      if (wants_) want(*wants_, ::mux::ui::request::open_thread{*held->thread});
-      this->stop_jump();
-    } else if (proto::offers(protocol_state_of(*needs_.shared, chosen->account), proto::feature::history_context{}) && !jump_paging) {
-      // Not here: a window of the history around it, from the server --
-      // not all of it from here to there. Where that does not bring it,
-      // paged back to, as far as the chat's limit.
-      if (context_asked != jumping_to) {
-        context_asked = jumping_to;
-        jump_since_ms = now_ms;
-        if (wants_) want(*wants_, ::mux::ui::request::load_context{*chosen, *jumping_to});
-      } else if (now_ms - jump_since_ms > kContextPatienceMs) {
-        jump_paging = true;
-        jump_tries = 0;
-      }
-    } else if (history_from && history_asked != history_from) {
-      // Paged back, as far as the chat's limit says: past it, given up.
-      if (!jump_base)
-        jump_base = one->timeline.size();
-      const auto limit = jump_limits.find(*chosen);
-      const std::int64_t most = limit == jump_limits.end() ? 5000 : limit->second;
-      if (most > 0 && static_cast<std::int64_t>(one->timeline.size() - std::min(*jump_base, one->timeline.size())) >= most) {
-        this->stop_jump();
-      } else {
-        history_asked = history_from;
-        history_asked_ms = now_ms;
-        jump_since_ms = now_ms;
-        if (wants_) want(*wants_, ::mux::ui::request::load_older{*chosen, *history_from});
-      }
-    } else if (!history_from && now_ms - jump_since_ms > 2000.0) {
-      jumping_to.reset();  // the beginning, and it was not there
-    }
-  }
-  // A message jumped to, aimed at until it stays: in the middle of the
-  // view, as tdesktop brings one (its top, where it is taller than the
-  // view) -- or, opened at what was read, near the top with the unread
-  // below. Aimed again each frame while what is above it moves it; flashed
-  // once the list is still, where the flash is seen.
-  if (aiming) {
-    auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    const auto it = std::ranges::find(entries, *aiming, &legacy::message_bubble::message_id);
-    if (it == entries.end() || it->bounds().isEmpty() || ++aim_frames > 180) {
-      aiming.reset();
-      jump_fragment.reset();
-    } else {
-      const skia::SkRect view = timeline.bounds();
-      const skia::SkRect box = timeline.toView(it->bounds());
-      const float above = aim_quiet ? (unread_from && *aiming == *unread_from ? 0.0f : 60.0f)
-                          : box.height() < view.height() ? (view.height() - box.height()) * 0.5f
-                                                         : 0.0f;
-      float to = std::max(0.0f, timeline.current() + (box.fTop - view.fTop) - above);
-      // Where a reply quoted a part of it: that part marked, and its line
-      // brought to the view's upper middle -- the right place of a message
-      // taller than the view.
-      if (jump_fragment && !jump_fragment->empty()) {
-        if (aimed_at < 0.0f) it->mark(*jump_fragment);
-        const auto& text = it->parts.body.parts.text;
-        if (const auto at = std::string_view(text.text()).find(*jump_fragment); at != std::string_view::npos) {
-          const float line = timeline.toView(text.bounds()).fTop + text.lineTopOf(at);
-          to = std::max(0.0f, timeline.current() + (line - view.fTop) - view.height() * 0.4f);
-        }
-        // Keep aiming at the quote while layout and scrolling settle.
-        // Dropping it after the first frame aimed subsequent frames at
-        // the message's top, hiding quotes near the end of long messages.
-      }
-      // The first aim: flashed at once, where it is -- not once all above
-      // it has settled, which can be never, and the flash was lost. Far
-      // away -- a window just loaded around it -- put there at once, not
-      // glided to through what was loaded; near, glided to.
-      if (aimed_at < 0.0f) {
-        if (std::abs(to - timeline.current()) > view.height() * 2.0f)
-          timeline.setCurrent(to);
-        else
-          timeline.scrollTo(to);
-        aimed_at = to;
-        if (!aim_quiet) {
-          it->flash.jump(1.0f);
-          it->flash.setTarget(0.0f);
-          it->markDamaged();
-        }
-      } else if (std::abs(to - aimed_at) > 1.0f) {
-        timeline.setCurrent(to);
-        aimed_at = to;
-      } else if (!timeline.moving()) {
-        aiming.reset();
-        jump_fragment.reset();
-      }
-    }
-  }
-  // A jump on its way for more than a few frames -- fetched, or paged back
-  // to -- shows the loader turning in the middle of the list.
-  jump_age = jumping_to ? jump_age + 1 : 0;
-  // No time limit: a jump goes on as long as there is history to page
-  // back through, as far as the chat's own limit (none, where it says 0) --
-  // or until it is stopped by hand, at the loader.
-  // And while the older, asked at the top, are on their way.
-  if (const bool loading = jump_age > 6 || (this->history_pending() && timeline.current() <= 300.0f);
-      loading != chat.area.parts.loading.visible())
-    chat.area.parts.loading.setVisible(loading);
   this->find_mentions();
   this->find_emoji();
   // What is in the composer: typing while there is text in it.
@@ -576,84 +409,9 @@ void conversations_screen::update(double now_ms) {
     searched = side.search.field.text();
     this->show(*last_model, false);
   }
-  // Each message to come back to, as tdesktop lets one go
-  // (checkReplyReturns, at every scroll but its own scroll to a message):
-  // once the view has come down to it -- its top above the view's middle,
-  // or the view at the very end -- or past it, where it is not made and
-  // older than the newest made. The one under it next, if not passed.
-  if (chosen && !jumping_to && !aiming)
-    if (const auto found = returns.find(*chosen); found != returns.end()) {
-      auto& stack = found->second;
-      const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-      const skia::SkRect view = timeline.bounds();
-      const conversation* one = last_model ? last_model->find(*chosen) : nullptr;
-      const auto newest = std::ranges::find_if(entries.rbegin(), entries.rend(),
-                                               [](const legacy::message_bubble& row) { return !row.message_id.empty(); });
-      while (!stack.empty()) {
-        const auto it = std::ranges::find(entries, stack.back(), &legacy::message_bubble::message_id);
-        bool passed = false;
-        if (it != entries.end() && !it->bounds().isEmpty()) {
-          passed = timeline.atEnd(0.5f) || timeline.toView(it->bounds()).fTop < view.centerY();
-        } else if (one && newest != entries.rend()) {
-          const auto at = std::ranges::find(one->timeline, stack.back(), &message::id);
-          const auto last = std::ranges::find(one->timeline, newest->message_id, &message::id);
-          passed = at != one->timeline.end() && last != one->timeline.end() && at < last;
-        }
-        if (!passed)
-          break;
-        stack.pop_back();
-      }
-    }
-  const bool away = this->away();
-  if (away != chat.area.parts.jump.visible())
-    chat.area.parts.jump.setVisible(away);
-  // The @ and the heart, stacked over "↓" where it is up.
-  if (const conversation* here = chosen && last_model ? last_model->find(*chosen) : nullptr) {
-    int slot = chat.area.parts.jump.visible() ? 1 : 0;
-    // Come back to the chat a jump left by hand: that way back is done.
-    while (!chat_returns.empty() && chat_returns.back() == *chosen)
-      chat_returns.pop_back();
-    place_in_corner(chat.area.parts.back, !chat_returns.empty(), slot);
-    if (!chat_returns.empty())
-      ++slot;
-    show_mark(chat.area.parts.mentions, here->unread_mentions.size(), slot);
-    if (!here->unread_mentions.empty())
-      ++slot;
-    show_mark(chat.area.parts.reactions, here->unread_reactions.size(), slot);
-  }
-  if (!away && unseen != 0) {
-    unseen = 0;
-    set_unseen(chat.area.parts.jump, 0);
-  }
-  // Near the top: the stretch made slides up -- the far ones below let
-  // go -- and past all that is loaded, the history is paged back. Near
-  // the bottom, where it is not at the end, it slides down.
-  if (chosen && last_model && !jumping_to && !timeline.glidingToEnd())
-    if (const conversation* one = last_model->find(*chosen)) {
-      auto [from, to] = this->made_indices(one->timeline);
-      // Slid while a screen and a half is still made beyond the view.
-      const float ahead = std::max(300.0f, timeline.bounds().height() * 1.5f);
-      if (timeline.current() <= ahead && from > 0) {
-        from = from > kMadeStep ? from - kMadeStep : 0;
-        to = std::min(to, from + kMostMade);
-        this->set_made(one->timeline, from, to);
-        this->show_conversation(*last_model);
-      } else if (timeline.current() <= 4.0f && from == 0 && history_from && history_asked != history_from) {
-        history_asked = history_from;
-        history_asked_ms = now_ms;
-        if (wants_) want(*wants_, ::mux::ui::request::load_older{*chosen, *history_from});
-      } else if (made.to_end && one->detached && one->future_from && newer_asked != one->future_from &&
-                 timeline.current() >= timeline.extent() - 300.0f) {
-        // At the end of a window: paged forward, toward the newest.
-        newer_asked = one->future_from;
-        if (wants_) want(*wants_, ::mux::ui::request::load_newer{*chosen, *one->future_from});
-      } else if (!made.to_end && timeline.current() >= timeline.extent() - ahead) {
-        to = std::min(one->timeline.size(), to + kMadeStep);
-        from = to > kMostMade && to - from > kMostMade ? to - kMostMade : from;
-        this->set_made(one->timeline, from, to);
-        this->show_conversation(*last_model);
-      }
-    }
+  // The @ and the heart, the way back and "\u2193": the list's corner, as the
+  // program says (chat_ways). Come back to the chat a jump left by hand:
+  // that way back is the program's to let go.
 }
 
 // What the list shows, from the model and what is chosen: the chats of
@@ -1005,11 +763,6 @@ void conversations_screen::show_banners(const conversation* one, const model& no
 
 void conversations_screen::show_conversation(const model& now) {
   this->show_connections(now);
-  // Whether the reader was at the newest: then the view follows it; and
-  // where the view was, for the chat being left.
-  const bool was_at_end = timeline.atEnd(40.0f);
-  const float left_at = timeline.current();
-  auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
   const conversation* one = chosen ? now.find(*chosen) : nullptr;
   header.choose(now, chosen, single);
   this->show_banners(one, now);
@@ -1018,139 +771,19 @@ void conversations_screen::show_conversation(const model& now) {
     pinned_step = std::numeric_limits<std::size_t>::max();
   }
   this->show_pinned(one);
-  history_from = one ? one->history_from : std::nullopt;
   this->show_info();
-  if (!one) {
-    entries.clear();
+  if (!one)
     return;
-  }
-  if (bubbles != needs_.looks->bubbles) {
-    needs_.looks->bubbles = bubbles;
-    entries.clear();
-  }
   // Only while it is open: its members were made at every switch of chat,
   // the panel shut or not. Opened, it is shown then (toggle_info).
   info.choose(now, chosen, muted.contains(one->id));
-  chat.area.show_wallpaper(wallpaper);
-  parts.threads.choose(now, chosen);
-  chat.area.seen_model = &now;
-  chat.area.seen_chat = one->id;
-  const auto& all = one->timeline;
-  // Where each message is in its sender's run: the first has the name,
-  // the last the avatar.
-  // A room's event -- a join, an address set -- is a line of its own and
-  // ends a run: the message after it has its sender's name again. Where
-  // the room's events are hidden, a run goes on past them.
-  const auto filter_found = event_filters.find(one->id);
-  const room_event_filter filter = filter_found == event_filters.end() ? room_event_filter{} : filter_found->second;
-  const auto shows = [&](const message& said) { return !said.service || filter.shows(said.event_kind); };
-  // A chat shown anew: its stretch as it was left, or its newest.
+  this->show_wallpaper();
+  // Another chat shown: its thread let go.
   if (shown_chat != chosen)
     parts.threads.open.reset();
-  if (shown_chat != chosen) {
-    if (shown_chat)
-      made_of[*shown_chat] = made;
-    const auto kept = made_of.find(*chosen);
-    made = kept == made_of.end() ? made_range{} : kept->second;
-  }
-  const auto [first_made, last_made] = this->made_indices(all);
-  this->set_made(all, first_made, last_made);
-  // A bubble comes in moving only as its message comes: one newer than the
-  // newest this chat showed, shown -- not an event the room hides -- and
-  // seen, the reader being at the newest. Anything else made -- a row made
-  // again as it changed, history paged in, a chat opened, rows scrolled
-  // back into what is made -- is there at once. One's own, once the
-  // server has it, is the same message under its new id: not again.
-  const bool same_chat = shown_chat == chosen;
-  const auto newest_before = std::ranges::find(all, shown_last, &message::id);
-  const std::size_t new_from =
-      newest_before == all.end() ? all.size() : static_cast<std::size_t>(newest_before - all.begin()) + 1;
-  const auto arrives = [&](std::size_t i) {
-    const bool acknowledged = all[i].outgoing && spl::visit(spl::overloaded{[](const delivery::sent&) { return true; },
-                                                                       [](const auto&) { return false; }},
-                                                            all[i].delivery);
-    return same_chat && was_at_end && i >= new_from && shows(all[i]) && !acknowledged &&
-           appeared.insert(all[i].id).second;
-  };
-  // The bubbles, as a function of the messages: the timeline's, as a
-  // thread's are made.
-  chat.area.show_messages(*one, all, first_made, last_made, now,
-                          shown_how{.filter = filter,
-                                    .receipts = receipts_in.contains(one->id),
-                                    .previews = !previews_off.contains(one->id) && !one->encrypted,
-                                    .unread_from = unread_from},
-                          arrives, rooms_wanted);
-  rooms_waiting.clear();
-  rooms_unfound.clear();
-  for (const legacy::message_bubble& row : entries) {
-    rooms_waiting.insert(row.rooms_waiting.begin(), row.rooms_waiting.end());
-    rooms_unfound.insert(row.rooms_unknown.begin(), row.rooms_unknown.end());
-  }
-  // The newest is at the bottom: the view follows it where the reader was
-  // there or the chat is new to the view; otherwise what came after the
-  // last one seen is counted on the way down.
-  const std::string last = all.empty() ? std::string() : all.back().id;
-  if (shown_chat != chosen) {
-    // Another chat shown: the ways back from jumps in the one left gone,
-    // as tdesktop clears its reply returns (showHistory).
-    returns.clear();
-    if (shown_chat)
-      scrolled[*shown_chat] = was_at_end ? -1.0f : left_at;
-    const auto kept = scrolled.find(*chosen);
-    // A jump asked for in another chat is let go; one asked with this
-    // chat's opening -- a link to a message in it -- decides where the
-    // view goes: not the unread, nor where it was left, first.
-    if (jumping_to && jump_chat != chosen)
-      jumping_to.reset();
-    unread_from.reset();
-    if (jumping_to) {
-      timeline.scrollToEnd(false);
-    } else if (const std::optional<std::string> first = first_unread(*one, all)) {
-      // Unread in it: opened at its first unread, at the view's top under
-      // tdesktop's bar, and read on from there as it is seen -- where the
-      // message read up to is not here, first what is around it.
-      timeline.scrollToEnd(false);
-      unread_from = first_unread_here(*one, all);
-      jumping_to = *first;
-      jump_chat = chosen;
-      jump_quiet = true;
-      jump_tries = 0;
-      context_asked.reset();
-    } else if (kept == scrolled.end() || kept->second < 0.0f)
-      timeline.scrollToEnd(false);  // a chat opened starts at its newest
-    else
-      timeline.setCurrent(kept->second);
-    unseen = 0;
-  } else if (was_at_end && !jumping_to && !aiming) {
-    // At the newest, it follows what comes -- not while a jump goes
-    // elsewhere: a refresh each time the model changes put the view back
-    // at the end under a jump on its way up, and it never got there.
-    // Glided only to a newer message: rows above made again or grown kept
-    // at the end where they are, at once -- glided, every message slid by
-    // and settled.
-    timeline.scrollToEnd(last != shown_last);
-    unseen = 0;
-  } else if (last != shown_last && !one->detached && !shown_detached) {
-    // A jump far back holds the timeline from there: the pages after it
-    // loaded as the reader goes down are not new, and 30 of them were
-    // counted as new under the button -- nor the page that joins
-    // it to the newest again.
-    // What came after the newest shown before: others' messages the view
-    // shows. Where that one is not here any more -- its id changed as the
-    // server acknowledged it, or it went -- nothing is counted: every
-    // message held was, and a few new ones said 64. Nor the reader's own,
-    // nor a room event the view hides.
-    int after = 0;
-    if (const auto was = std::ranges::find(all, shown_last, &message::id); was != all.end())
-      for (auto it = std::next(was); it != all.end(); ++it)
-        if (!it->outgoing && this->shown_in(*chosen, *it))
-          ++after;
-    unseen += after;
-  }
-  set_unseen(chat.area.parts.jump, unseen);
+  parts.threads.choose(now, chosen);
   shown_chat = chosen;
-  shown_last = last;
-  shown_detached = one->detached;
+  // The messages themselves: the list's, told by the program (chat_told)
+  // and read from the chats model where it keeps them.
 }
-
 }  // namespace mux::ui

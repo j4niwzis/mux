@@ -69,18 +69,12 @@ struct history_facts {
       now.latest_edit_event.empty() && now.versions.empty() ? now.id : now.latest_edit_event));
   return versions;
 }
+// A version of the message, as the chat shows it: its menu that of a
+// version, not edited again.
 auto edit_history_row(const ui_needs& n, const conversation& in, const message& event, const model* known) {
   namespace c = skiff::compose;
-  return c::onPointer<menu_facts>([in_id = in.id, known](auto& row, const scene::pointer::down& press,
-                                                      scene::PointerReply& reply) -> std::optional<menu_facts> {
-    if (press.button != 3) return std::nullopt;
-    auto facts = facts_of_bubble(std::get<0>(row.fParts), known ? known->find(in_id) : nullptr, press.x, press.y);
-    facts.editable = false;
-    facts.history = false;
-    reply.handle();
-    return facts;
-  }, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
-      legacy::message_bubble(spl::remapped<typename legacy::message_bubble::needs>(n), in, event, true, true, known)));
+  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
+                   message_alone(n, in, event, true, true, known, true));
 }
 auto edit_history_panel(const ui_needs& n, const history_facts& facts) {
   namespace c = skiff::compose;
@@ -158,7 +152,7 @@ struct marks_box : skiff::compose::Stacked {
     mark_kind_t kind;
     std::string event;
     struct parts_t {
-      legacy::message_bubble bubble;
+      message_row_t bubble;
       std::optional<badge> reacted;
     } parts;
     row(const ui_needs &n, mark_kind_t which, const conversation &in,
@@ -169,9 +163,7 @@ struct marks_box : skiff::compose::Stacked {
                                         .padding = {4.0f, 12.0f, 8.0f, 12.0f},
                                         .hoverBackground = n.colours->chosen})),
           kind(which), event(one.event),
-          parts{.bubble = legacy::message_bubble(
-                    spl::remapped<typename legacy::message_bubble::needs>(n),
-                    in, one.said, true, true, now)} {
+          parts{.bubble = message_alone(n, in, one.said, true, true, now)} {
       fState.setCursor(scene::cursor::hand{});
       if (one.who)
         parts.reacted.emplace(*n.colours, *one.who, sender_name(in, *one.who), one.key);

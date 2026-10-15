@@ -432,6 +432,10 @@ void show_selection(menu_part& self) {
   const mux::ui::selection_shown shown{chosen.size(), available && ops.forward, deletable};
   if (*self.s_->showing->look<mux::ui::selection_shown>() != shown)
     mux::ui::show(*self.s_->showing, shown);
+  // The messages marked as selected: their rows read it, and while any are,
+  // a press on one selects it or lets it go.
+  if (self.s_->showing->look<mux::ui::message_marks>()->selected != self.selected_)
+    mux::ui::change_shown<mux::ui::message_marks>(*self.s_->showing, [&](mux::ui::message_marks& marks) { marks.selected = self.selected_; });
   self.s_->root().main().show_selection(self.selected_);
 }
 

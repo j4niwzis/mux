@@ -310,10 +310,11 @@ class pictures_part {
           // what was loaded on the way is not looked at.
           // Rooms named in its messages, not joined: their server asked,
           // once, whether they are there and what their picture is.
-          for (const std::string& room : std::exchange(screen.rooms_wanted, {}))
-            if (pill_rooms.insert(room).second)
-              s_->net->preview_room(id, room, {});
           const auto [from, to] = s_->list_around(one, 40);
+          for (const message& said : std::ranges::subrange(one.timeline.begin() + from, one.timeline.begin() + to))
+            for (const std::string& room : mux::ui::rooms_named_in(one, said, s_->model).unknown)
+              if (pill_rooms.insert(room).second)
+                s_->net->preview_room(id, room, {});
           // A message's pictures, its link's preview, and what it quotes.
           const auto pictures_of = [&](const message& said) {
             if (said.attachment && is_picture(said.attachment->kind)) {

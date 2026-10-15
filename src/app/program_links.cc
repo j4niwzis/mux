@@ -125,7 +125,7 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
   }
   this->refresh();
   // Its answers still on their way: scrolled to once they are (woken).
-  if (!screen.parts.threads.scroll_to(id))
+  if (!jumps.aim_in_thread(id))
     thread_target_ = id;
   return true;
 }
@@ -162,7 +162,7 @@ void app::apply(const request::jump_to_message& one) {
               net->load_thread(chat->id, *thread);
             this->refresh();
           }
-          if (screen.parts.threads.scroll_to(one.id))
+          if (jumps.aim_in_thread(one.id))
             return;
         }
       }

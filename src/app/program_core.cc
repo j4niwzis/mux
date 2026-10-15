@@ -287,7 +287,7 @@ void app::woken() {
   // An answer gone to, scrolled to once its thread's panel has it.
   if (thread_target_) {
     auto& screen = root().main();
-    if (!screen.thread_open() || screen.parts.threads.scroll_to(*thread_target_))
+    if (!screen.thread_open() || jumps.aim_in_thread(*thread_target_))
       thread_target_.reset();
   }
 }

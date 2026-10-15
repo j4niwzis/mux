@@ -69,217 +69,6 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
                 chosen);
 }
 
-// A press on what is in a message -- a picture, a file, a reply's quote,
-// its sender -- as a click, wherever the message is shown: the timeline, a
-// thread. The press in the space its bubble is laid out in.
-// What a press in a bubble asks for: the picture or video seen, the file
-// opened, a reaction, a link followed, the thread, the message replied to,
-// the person.
-using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::request::open_video, ::mux::ui::request::open_picture, ::mux::ui::request::play_audio, ::mux::ui::request::react, ::mux::ui::request::open_url,
-                                  ::mux::ui::request::open_thread, ::mux::ui::request::jump_to_message, ::mux::ui::request::open_member_info>;
-[[nodiscard]] std::optional<bubble_press> press_in_bubble(const legacy::message_bubble& one, float x, float y, const conversation* chat) {
-  const struct {
-    float x, y;
-  } press{x, y};
-  // A card of a link to a room or a message: followed.
-  if (const auto url = message_link_at(one.parts.body.parts.blocks, press.x, press.y))
-    return ::mux::ui::request::open_url{*url};
-  // A thread's summary under its root: the thread, beside the chat.
-  if (const auto& thread = one.parts.body.parts.thread; thread && thread->bounds().contains(press.x, press.y)) {
-    return ::mux::ui::request::open_thread{one.message_id};
-  }
-  // A reaction shown as a line: pressed anywhere, to what it is on.
-  if (one.said.service && one.said.replies_to && one.parts.body.bounds().contains(press.x, press.y) &&
-      spl::visit(spl::overloaded{[](room_event::reactions) { return true; },
-                                       [](room_event::unreactions) { return true; }, [](const auto&) { return false; }},
-                 one.said.event_kind)) {
-    return ::mux::ui::request::jump_to_message{*one.said.replies_to, std::nullopt, one.message_id};
-  }
-  // A quoted stretch of a reply's text -- the part of the message it
-  // answers, as "> " quotes it: to that message, the part marked, as
-  // the reply's own quote goes.
-  if (const auto& text = one.parts.body.parts.text;
-      one.said.replies_to && text.visible() && text.bounds().contains(press.x, press.y) && !text.hasSelection()) {
-    // The quote pressed, of those the reply has: its own words marked.
-    if (const auto quote = text.quoteAt(press.x, press.y)) {
-      return ::mux::ui::request::jump_to_message{*one.said.replies_to,
-                               trimmed_fragment(std::string_view(text.text()).substr(quote->first, quote->second - quote->first)),
-                               one.message_id};
-    }
-  }
-  // The reply's header: to the message it answers, as it is -- a part
-  // marked there only by a click on the quoted stretch itself.
-  // Where it is shown: beside a sticker it is moved there from its layout.
-  if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->shownBounds().contains(press.x, press.y)) {
-    // Where the header shows the quote itself, the quoted part marked.
-    if (one.header_quote)
-      return ::mux::ui::request::jump_to_message{*one.said.replies_to, one.header_quote, one.message_id};
-    else
-      return ::mux::ui::request::jump_to_message{*one.said.replies_to, std::nullopt, one.message_id};
-  }
-  // A forward's line: its sender's pill, their page; its words, the
-  // original, where its link is.
-  if (one.parts.body.parts.forwarded && one.said.forwarded &&
-      one.parts.body.parts.forwarded->shownBounds().contains(press.x, press.y)) {
-    if (proto::person_link(state_before(protocol_of(one.said.forwarded->from)), one.said.forwarded->from) &&
-        std::get<1>(one.parts.body.parts.forwarded->fParts).bounds()
-            .makeOffset(one.parts.body.parts.forwarded->fState.fShiftX, one.parts.body.parts.forwarded->fState.fShiftY)
-            .contains(press.x, press.y)) {
-      return ::mux::ui::request::open_member_info{one.said.forwarded->from};
-    }
-    if (!one.said.forwarded->link.empty()) {
-      return ::mux::ui::request::open_url{one.said.forwarded->link};
-    }
-  }
-  // The sender, by their avatar or their name: their page.
-  if ((one.parts.face.visible() && one.parts.face.fState.fAlpha > 0.0f && one.parts.face.bounds().contains(press.x, press.y)) ||
-      (one.parts.body.parts.name && one.parts.body.parts.name->bounds().contains(press.x, press.y))) {
-    return ::mux::ui::request::open_member_info{one.sender};
-  }
-  return std::nullopt;
-}
-
-// What a message's menu offers, for a right press on it wherever it is
-// shown: the timeline, a thread.
-[[nodiscard]] menu_facts facts_of_bubble(const legacy::message_bubble& one, const conversation* chat, float x, float y) {
-  const struct {
-    float x, y;
-  } press{x, y};
-  menu_facts facts;
-  facts.id = one.message_id;
-  if (chat && !facts.id.empty() && !held_message(*chat, facts.id)) facts.event = one.said;
-  facts.own = one.outgoing;
-  facts.text = one.plain;
-  facts.selection = one.parts.body.parts.text.hasSelection();
-  if (facts.selection) facts.copied_fragment = one.parts.body.parts.text.selectedFragment();
-  facts.copied = facts.copied_fragment ? facts.copied_fragment->text : one.plain;
-  if (one.said.attachment) {
-    facts.media = one.said.attachment->video.value_or(one.said.attachment->source);
-    facts.media_name = one.said.attachment->name;
-    facts.moving = moves(one.said.attachment->kind);
-    if (is_picture(one.said.attachment->kind) || one.said.attachment->video)
-      facts.picture = one.said.attachment->source;
-    facts.captioned = is_picture(one.said.attachment->kind) && !one.said.attachment->video;
-  }
-  if (chat) {
-    const message* held = held_message(*chat, one.message_id);
-    const message& current = held ? *held : one.said;
-    facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
-    const protocol_state_t now = protocol_state_of(*one.shared_, chat->id.account);
-    // What its account does, offered only where anything may be done now.
-    if (proto::available(now))
-      facts.can = ops_of(*one.shared_, chat->id.account);
-    facts.can.react = facts.can.react && proto::may_react(now, *chat, current);
-    facts.pinnable = proto::can_pin(now, one.message_id);
-    // Edited as its protocol's rule allows: any of one's own, or the last.
-    facts.editable = !one.said.service && !one.said.reaction && proto::may_edit(now, *chat, one.said);
-    facts.history = !one.said.versions.empty();
-    // Delete as the protocol allows it -- Matrix: as the room's power levels do.
-    facts.deletable = proto::may_delete(now, *chat, one.outgoing);
-    facts.reaction_events = !current.reaction_events.empty();
-    for (const auto& [key, who] : current.reactions)
-      facts.reaction_count += who.size();
-  }
-  // The message's link, where its protocol has one.
-  if (chat)
-    if (auto link = proto::message_link(protocol_state_of(*one.shared_, chat->id.account), *chat, one.message_id))
-      facts.link = std::move(*link);
-  // The link the press was on: one in the text -- its text asked a menu
-  // of its own with it, which this one is in place of -- or the
-  // preview's.
-  if (auto pressed = skiff::scene::pressedLink())
-    facts.pressed_link = std::move(*pressed);
-  else if (const auto& preview = one.parts.body.parts.preview;
-           preview && preview->fState.fBounds.contains(press.x, press.y))
-    facts.pressed_link = preview->fEvent.url;
-  facts.emoji = copied_emoji_at(facts.pressed_link);
-  // A sticker: what sending it again takes.
-  if (one.said.sticker && one.said.attachment)
-    facts.sticker = emote{.shortcode = one.said.attachment->name,
-                          .url = one.said.attachment->source,
-                          .body = one.said.attachment->name,
-                          .w = one.said.attachment->width > 0 ? std::optional<std::int64_t>(one.said.attachment->width) : std::nullopt,
-                          .h = one.said.attachment->height > 0 ? std::optional<std::int64_t>(one.said.attachment->height) : std::nullopt,
-                          .mimetype = one.said.attachment->mimetype.empty() ? std::nullopt
-                                                                            : std::optional<std::string>(one.said.attachment->mimetype)};
-  // A reaction shown as a line: what it is on, and with what.
-  if (!one.said.reaction_key.empty() && one.said.replies_to)
-    facts.reaction = menu_facts::reaction_facts{*one.said.replies_to, one.said.reaction_key};
-  facts.x = press.x;
-  facts.y = press.y;
-  return facts;
-}
-
-// How a stretch of messages is shown: which room events, whether readers
-// and link previews, and where the unread start.
-struct shown_how {
-  room_event_filter filter;
-  bool receipts = false;
-  bool previews = true;
-  std::optional<std::string> unread_from;
-};
-
-// Which of a list's messages are made into bubbles -- a chat's timeline, a
-// thread's root and answers: a stretch of them, at most a few hundred, that
-// slides with the reader -- more made above as the view nears its top, the
-// far ones below let go -- and is kept by the messages at its ends, so that
-// history coming in above does not move it. A whole long thread made at
-// once -- every bubble wrapped, measured and laid out -- was what made one
-// slow to open, and every change in it slow after.
-// Slid a little at a time, well before the reader reaches its edge: sixty
-// bubbles made in one frame was a frame of jank.
-inline constexpr std::size_t kFirstMade = 80, kMostMade = 240, kMadeStep = 16;
-struct made_range {
-  std::optional<std::string> from, to;
-  bool to_end = true;
-  friend bool operator==(const made_range&, const made_range&) = default;
-};
-[[nodiscard]] inline std::pair<std::size_t, std::size_t> made_indices(const made_range& made, const std::vector<message>& all) {
-  const auto index_of = [&](const std::optional<std::string>& id) -> std::optional<std::size_t> {
-    if (!id)
-      return std::nullopt;
-    const auto it = std::ranges::find(all, *id, &message::id);
-    return it == all.end() ? std::nullopt : std::optional<std::size_t>(static_cast<std::size_t>(it - all.begin()));
-  };
-  std::size_t to = all.size();
-  if (!made.to_end)
-    if (const auto at = index_of(made.to))
-      to = *at + 1;
-  std::size_t from = to > kFirstMade ? to - kFirstMade : 0;
-  if (const auto at = index_of(made.from); at && *at <= to)
-    from = *at;
-  if (to - from > kMostMade)
-    from = to - kMostMade;
-  return {from, to};
-}
-// The stretch from `from` to `to`, kept by its ends: whether it is another.
-[[nodiscard]] inline bool set_made(made_range& made, const std::vector<message>& all, std::size_t from, std::size_t to) {
-  to = std::min(to, all.size());
-  from = std::min(from, to);
-  made_range next{from < all.size() ? std::optional<std::string>(all[from].id) : std::nullopt,
-                  to > 0 ? std::optional<std::string>(all[to - 1].id) : std::nullopt, to == all.size()};
-  const made_range was = std::exchange(made, std::move(next));
-  return was != made;
-}
-// Slid as the view nears an edge of what is made, while a screen and a half
-// is still made beyond it: up, where there is more above; down, where it is
-// not at the end. Whether it moved.
-[[nodiscard]] inline bool slide_made(made_range& made, const std::vector<message>& all, float at, float extent, float view) {
-  auto [from, to] = made_indices(made, all);
-  const float ahead = std::max(300.0f, view * 1.5f);
-  if (at <= ahead && from > 0) {
-    from = from > kMadeStep ? from - kMadeStep : 0;
-    to = std::min(to, from + kMostMade);
-    return set_made(made, all, from, to);
-  }
-  if (!made.to_end && at >= extent - ahead) {
-    to = std::min(all.size(), to + kMadeStep);
-    from = to > kMostMade && to - from > kMostMade ? to - kMostMade : from;
-    return set_made(made, all, from, to);
-  }
-  return false;
-}
-
 // ---- the timeline as a window of its list ------------------------------------------
 // What the timeline is told by the program (the shown model): which chat --
 // or which thread of it, by its root -- how it shows it (its room events,
@@ -296,6 +85,9 @@ struct timeline_told {
   double frost = 10.0;
   // The chat's looks, by their number: the rows made again as they change.
   std::uint64_t looks = 0;
+  // What the program has fetched -- link previews, rooms found to be there:
+  // the window read again as more come, and the rows whose came made again.
+  std::size_t fetched = 0;
   friend bool operator==(const timeline_told&, const timeline_told&) = default;
 };
 // What the chat's list is told, and the thread's: the program's, in the
@@ -307,6 +99,10 @@ struct thread_told : timeline_told {};
 // left, and the loader while a jump is on its way.
 struct chat_ways {
   bool back_here = false, back_to_chat = false, loading = false;
+  // A window of its history away from the newest: the way down wanted.
+  bool detached = false;
+  // The mentions of the user, and reactions to theirs, not seen yet.
+  std::size_t mentions = 0, reactions = 0;
   friend bool operator==(const chat_ways&, const chat_ways&) = default;
 };
 // Which of the two lists a list's answers are of.
@@ -369,7 +165,11 @@ struct timeline_rows {
   }
   // Come while the reader was away from the end, counted on the way down:
   // another's message the chat shows, not one's own nor an event it hides.
+  // A chat a window away from its newest counts nothing: what comes after
+  // its window is a page of what is older than the newest, not new.
   static bool counts(const chats_model& now, const Told& told, std::size_t i) {
+    if (const conversation* chat = chat_of(now, told); chat && chat->detached && !told.thread)
+      return false;
     const message& said = seen_of(now, told).at(i);
     return !said.outgoing && (!said.service || told.filter.shows(said.event_kind));
   }
@@ -479,7 +279,10 @@ struct make_bubble_row {
 // Where in a row the stretch of its text a quote of it pointed at is: what a
 // jump with a quote aims at.
 [[nodiscard]] inline auto& row_text_of(message_row_t& row) {
-  auto& swiped = std::get<0>(row.fParts);
+  // Its parts: held by what takes its presses while rows are selected; the
+  // swiped row in its column; its face and body in that.
+  auto& column = std::get<0>(row.fParts);
+  auto& swiped = std::get<0>(column.fParts);
   auto& inner = std::get<0>(swiped.fParts);
   auto& body = std::get<1>(inner.fParts);
   return part_of<bubble_part::text>(body);
@@ -496,6 +299,9 @@ struct locate_in_row {
 // The messages, as a window of the list the program says: a chat's, or a
 // thread's (Tag tells their answers apart). Want: the part of the shown model
 // it is told by.
+// Rows being selected: a press on one selects it or lets it go, a drag
+// across them a span of them (the list's ListSpan).
+inline constexpr auto selecting = [](const message_marks& marks) { return !marks.selected.empty(); };
 template <class Want, class Tag>
 auto timeline_list() {
   namespace c = skiff::compose;
@@ -504,453 +310,66 @@ auto timeline_list() {
   list.setCopiesOnScroll(false);
   std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY,
                                       .padding = {8.0f, kListSide, 8.0f, kListSide}});
-  return c::bound<Want>(std::move(list));
+  return c::spanned_for<message_marks>(selecting, c::bound<Want>(std::move(list)));
 }
 
-// Selection owns the gesture before any link, photo, or text child sees
-// it. A tap toggles one message; a drag commits the displayed message range.
-struct message_selection_drag {
-  std::string first;
-  float x, y;
-  bool selected;
-  bool moved = false;
-  float last_x = 0.0f, last_y = 0.0f;
+// The loader's cross: the message jumped to no longer looked for.
+struct stop_jump_act {
+  using Answer = ::mux::ui::request::stop_jump;
+  ::mux::ui::request::stop_jump operator()() const { return {}; }
 };
-inline auto selection_row_at(auto& area, float x, float y) {
-  return std::ranges::find_if(area.bubbles(), [&](const auto& row) {
-    return !row.message_id.empty() && !row.said.redacted && area.parts.timeline.toView(row.bounds()).contains(x, y);
-  });
-}
-inline bool selection_down(auto& area, const scene::pointer::down& press, scene::PointerReply& reply) {
-  if (area.selected_ids.empty() || press.button > 1)
-    return false;
-  auto& rows = area.bubbles();
-  const auto row = selection_row_at(area, press.x, press.y);
-  if (row == rows.end())
-    return false;
-  area.selecting = message_selection_drag{row->message_id, press.x, press.y, !area.selected_ids.contains(row->message_id)};
-  reply.capturePointer();
-  reply.handle();
-  return true;
-}
-inline bool selection_move(auto& area, const scene::pointer::move& at, scene::PointerReply& reply) {
-  if (!area.selecting)
-    return false;
-  auto& drag = *area.selecting;
-  drag.moved = drag.moved || std::hypot(at.x - drag.x, at.y - drag.y) > 6.0f;
-  drag.last_x = at.x;
-  drag.last_y = at.y;
-  if constexpr (requires { area.set_selected(area.selected_ids); })
-    area.set_selected(area.selected_ids);
-  reply.handle();
-  return true;
-}
-inline std::optional<request::selection_span> selection_up(auto& area, const scene::pointer::up& at, scene::PointerReply& reply) {
-  const auto drag = std::exchange(area.selecting, std::nullopt);
-  if (!drag)
-    return std::nullopt;
-  reply.releasePointer();
-  reply.handle();
-  auto& rows = area.bubbles();
-  const auto first = std::ranges::find(rows, drag->first, [](const auto& row) { return row.message_id; });
-  const auto last = selection_row_at(area, at.x, at.y);
-  if (first == rows.end() || last == rows.end())
-    return std::nullopt;
-  if (!drag->moved && first != last)
-    return std::nullopt;
-  const auto [begin, end] = std::minmax(first, last);
-  return request::selection_span{
-      std::ranges::to<std::vector>(std::views::transform(
-          std::views::filter(std::ranges::subrange(begin, end + 1), [](const auto& row) { return !row.said.redacted && !row.message_id.empty(); }),
-          [](const auto& row) { return row.message_id; })), drag->selected};
-}
-inline void selection_cancel(auto& area, scene::PointerReply& reply) {
-  if (std::exchange(area.selecting, std::nullopt))
-    reply.releasePointer();
-}
-
-struct timeline_area : skiff::compose::Specced {
-  // What a press on the messages asks for: a message selected or not, one
-  // replied to by a swipe, the menu of one, or what a press in a bubble asks.
-  using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::toggle_selected, ::mux::ui::request::selection_span, ::mux::ui::request::reply_to, menu_facts, bubble_press>;
-  // The loader's cross: the message jumped to no longer looked for.
-  struct stop_jump {
-    using Answer = ::mux::ui::request::stop_jump;
-    ::mux::ui::request::stop_jump operator()() { return ::mux::ui::request::stop_jump{}; }
+// The buttons over the list's bottom right corner, stacked: Telegram's
+// heart and @ -- reactions to the user's and mentions of them not seen
+// yet, pressed the oldest gone to, pressed with the other button all
+// listed -- the way back to the chat a jump left, and "\u2193", back to the
+// newest (or a way back in this chat first), with how many came meanwhile.
+// What shows each is read from what the program says (chat_ways); "\u2193"
+// is told by the list (with_way_down: its fourth part).
+inline auto list_corner(const palette& colours) {
+  namespace c = skiff::compose;
+  const scene::Spec plate{.width = 42.0f, .height = 42.0f, .cornerRadius = 21.0f, .background = colours.sidebar,
+                          .hoverBackground = colours.chosen, .border = scene::Border{colours.band, 1.0f}};
+  const auto mark = [&](mark_kind_t which, std::string glyph, auto count) {
+    return c::shown_for<chat_ways>([count](const chat_ways& now) { return count(now) > 0; },
+        c::onRightPress(request::list_marks{which},
+            c::onClick(request::jump_to_mark{which},
+                c::column(c::vbox(0.0f, plate),
+                          c::styled({.place = scene::anchor::kCentre}, nodes::Text(std::move(glyph), 18.0f, colours.text, true)),
+                          count_badge_for<chat_ways>(colours, count)))));
   };
-  struct parts_t {
-    // Behind the messages: the theme's gradient, Telegram's pattern over it.
-    wallpaper_t wall;
-    nodes::ScrollContainer<nodes::Flow<std::vector<legacy::message_bubble>>> timeline{
-        nodes::Flow<std::vector<legacy::message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
-    jump_button_t jump;
-    back_button_t back;
-    mark_button_t mentions;
-    mark_button_t reactions;
-    // While a message jumped to is being fetched: turning in the middle,
-    // its cross stopping the search.
-    widgets::RadialLoader<stop_jump> loading;
-  } parts;
-  // What it was handed down, for the bubbles it makes.
-  ui_needs needs_;
-  timeline_area(const ui_needs &n)
-      : Specced({}),
-        parts{.jump = skiff::compose::visible(false,
-                                              jump_button(*n.colours)),
-              .back = back_button(*n.colours),
-              .mentions =
-                  mark_button(*n.colours, mark_kind::mention{}, "@"),
-              .reactions = mark_button(
-                  *n.colours, mark_kind::reaction{}, "\u2665"),
-              .loading = skiff::compose::visible(
-                  false, skiff::compose::styled(
-                             {.place = scene::anchor::kCentre},
-                             widgets::RadialLoader<stop_jump>(44.0f, {})))},
-        needs_(n) {
-    parts.wall.apply({.fill = true});
-    this->show_wallpaper(config::wallpaper::theme{});
-    parts.timeline.apply({.fill = true});
-    // Over the wallpaper's gradient, which stays where it is: a scroll step
-    // repainted, not copied.
-    parts.timeline.setCopiesOnScroll(false);
-    // The room around the messages is inside what scrolls, so the bar is at
-    // the window's edge.
-    std::get<0>(parts.timeline.fChildren).apply(
-        {.fillX = true,
-         .autoSize = scene::axes::kY,
-         .padding = {8.0f, legacy::message_bubble::kListSide, 8.0f, legacy::message_bubble::kListSide}});
-  }
-  // The chat's background: the theme's gradient and Telegram's pattern, a
-  // plain colour (what is behind showing), or a picture.
-  // Not here where it is behind the whole window: the window's shows
-  // through. Else at the window's opacity, as the panels are.
-  void show_wallpaper(const config::wallpaper_t& chosen) {
-    parts.wall.setVisible(!needs_.looks->window.behind);
-    parts.wall.setOpacity(static_cast<float>(needs_.looks->window.opacity) / 100.0f);
-    show_wallpaper_on(parts.wall, chosen, *needs_.colours, *needs_.looks);
-  }
-  // The bubbles in the list, as they are made.
-  [[nodiscard]] std::vector<legacy::message_bubble>& bubbles() {
-    return std::get<0>(std::get<0>(parts.timeline.fChildren).fChildren);
-  }
-  // The bubbles, as a function of the messages from first to last of
-  // all -- a chat's timeline, or a thread's root and answers: those that
-  // show the same are kept, with a selection in them, and only the new are
-  // made. Where each is in its sender's run (the first has the name, the
-  // last the avatar), who has read up to it, what its quote says now.
-  // Arrives(i): whether the bubble of all[i] comes in moving.
-  template <class Arrives>
-  void show_messages(const conversation& one, const std::vector<message>& all, std::size_t first_made, std::size_t last_made,
-                     const model& now, const shown_how& how, Arrives arrives, std::set<std::string>& rooms_wanted) {
-    auto& entries = this->bubbles();
-    const auto shows = [&](const message& said) { return !said.service || how.filter.shows(said.event_kind); };
-    const auto neighbour = [&](std::size_t i, bool forward) -> std::optional<std::size_t> {
-      for (std::size_t j = i;;) {
-        if (forward ? j + 1 >= all.size() : j == 0)
-          return std::nullopt;
-        j = forward ? j + 1 : j - 1;
-        if (shows(all[j]))
-          return j;
-      }
-    };
-    const auto same = [&](std::size_t i, std::optional<std::size_t> j) {
-      return j && !all[i].service && !all[*j].service && all[*j].sender == all[i].sender &&
-             all[*j].outgoing == all[i].outgoing;
-    };
-    // Who has read up to where, where the chat shows it: each other person
-    // on the message their receipt points at -- or, pointing at what is not
-    // shown or not here, the nearest shown before it, by its time.
-    std::map<std::string, std::vector<std::string>> readers;
-    if (how.receipts) {
-      std::map<std::string, std::size_t> place;
-      for (std::size_t i = 0; i < all.size(); ++i)
-        place.emplace(all[i].id, i);
-      for (const auto& [user, event] : one.read_by) {
-        if (user == one.id.account.address)
-          continue;
-        std::optional<std::size_t> at;
-        if (const auto found = place.find(event); found != place.end())
-          at = found->second;
-        else if (const auto when = one.receipt_times.find(user); when != one.receipt_times.end())
-          for (std::size_t j = all.size(); j-- > 0;)
-            if (all[j].at <= when->second) {
-              at = j;
-              break;
-            }
-        while (at && !shows(all[*at]))
-          at = *at == 0 ? std::nullopt : std::optional<std::size_t>(*at - 1);
-        if (at)
-          readers[all[*at].id].push_back(user);
-      }
-    }
-    const auto readers_of = [&](std::size_t i) {
-      const auto found = readers.find(all[i].id);
-      return found == readers.end() ? std::vector<std::string>{} : found->second;
-    };
-    const auto first_of_run = [&](std::size_t i) { return !same(i, neighbour(i, false)); };
-    const auto last_of_run = [&](std::size_t i) { return !same(i, neighbour(i, true)); };
-    // What the message a bubble replies to says now, where it is held: a
-    // bubble quoting it is made again as it changes -- edited, deleted --
-    // not left quoting what it said once.
-    const auto quote_body = [&](std::size_t i) -> std::optional<decltype(message::body)> {
-      if (!all[i].replies_to)
-        return std::nullopt;
-      if (const message* said = held_message(one, *all[i].replies_to))
-        return said->body;
-      return std::nullopt;
-    };
-    // The bubbles, as a function of the messages: those that show the same
-    // are kept -- with a selection in them -- and only the new are made.
-    if (nodes::reconcile(
-            entries, std::views::iota(first_made, last_made),
-            [&](std::size_t i) { return all[i].id; }, [](const legacy::message_bubble& row) { return row.message_id; },
-            [&](std::size_t i) {
-              legacy::message_bubble made(spl::remapped<typename legacy::message_bubble::needs>(needs_), one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
-                                  how.previews);
-              made.quote_said = quote_body(i);
-              if (how.unread_from && all[i].id == *how.unread_from)
-                made.mark_unread_start();
-              made.show_readers(one, readers_of(i));
-              rooms_wanted.insert(made.rooms_unknown.begin(), made.rooms_unknown.end());
-              if (arrives(i))
-                made.appear();
-              return made;
-            },
-            [&](const legacy::message_bubble& row, std::size_t i) {
-              const bool quote_known = !all[i].replies_to || one.quoted.contains(*all[i].replies_to) ||
-                                       std::ranges::find(all, *all[i].replies_to, &message::id) != all.end();
-              const auto link = first_link_of(all[i]);
-              const bool preview_known = link && now.previews.contains(*link);
-              return row.frost_shown == needs_.looks->window.frost &&
-                     row.said == all[i] && row.quote_said == quote_body(i) && row.first == first_of_run(i) &&
-                     row.last == last_of_run(i) &&
-                     row.quote_known == quote_known && row.events_shown == shows(all[i]) && row.unread_start == (how.unread_from && all[i].id == *how.unread_from) &&
-                     row.preview_known == preview_known && row.readers_shown == readers_of(i) &&
-                     row.previews_shown == how.previews && !row.rooms_came(now);
-            }))
-      // Laid out again; painted where rows came, went or moved -- a hidden
-      // one coming moves nothing, and paints nothing.
-      std::get<0>(parts.timeline.fChildren).fState.relayoutQuietly();
-  }
-  // A message swiped left: watched from above, before the list's scrolling
-  // and a text's selecting see the pointer. A press that moves left at once,
-  // and more across than up or down, takes the pointer and moves the
-  // message; let go past its mark, it is answered; either way it goes back.
-  std::optional<std::string> swiping;
-  bool swipe_armed = false;
-  float swipe_x = 0.0f, swipe_y = 0.0f;
-  std::chrono::steady_clock::time_point swipe_pressed{};
-  legacy::message_bubble* swiped() {
-    if (!swiping)
-      return nullptr;
-    auto& entries = this->bubbles();
-    const auto it = std::ranges::find(entries, *swiping, &legacy::message_bubble::message_id);
-    return it == entries.end() ? nullptr : &*it;
-  }
-  void swipe_down(const scene::pointer::down& press) {
-    swipe_armed = press.button <= 1;
-    swipe_x = press.x;
-    swipe_y = press.y;
-    swipe_pressed = std::chrono::steady_clock::now();
-  }
-  void swipe_move(const scene::pointer::move& at, scene::PointerReply& reply) {
-    if (legacy::message_bubble* one = this->swiped()) {
-      one->swipe.jump(std::clamp(at.x - swipe_x, -120.0f, 0.0f));
-      one->markDamaged();
-      reply.handle();
-      return;
-    }
-    if (!swipe_armed)
-      return;
-    // Something holds the pointer already -- a text being selected: this
-    // drag is its, not a swipe.
-    if (reply.fCaptured) {
-      swipe_armed = false;
-      return;
-    }
-    const float dx = at.x - swipe_x, dy = at.y - swipe_y;
-    if (std::abs(dx) < 8.0f && std::abs(dy) < 8.0f)
-      return;
-    swipe_armed = false;
-    if (dx >= 0.0f || std::abs(dx) < 2.0f * std::abs(dy) ||
-        std::chrono::steady_clock::now() - swipe_pressed > std::chrono::milliseconds(250))
-      return;
-    for (legacy::message_bubble& one : this->bubbles())
-      // The rows are laid out as if unscrolled: the press, where they are.
-      if (parts.timeline.toView(one.bounds()).contains(swipe_x, swipe_y) && !one.message_id.empty()) {
-        swiping = one.message_id;
-        one.swipe.jump(std::clamp(dx, -120.0f, 0.0f));
-        reply.capturePointer();
-        reply.suppressHover();
-        reply.handle();
-        return;
-      }
-  }
-  std::optional<Answer> swipe_up(scene::PointerReply& reply) {
-    swipe_armed = false;
-    legacy::message_bubble* one = this->swiped();
-    if (!one)
-      return std::nullopt;
-    const bool replied = one->swipe.value() <= -legacy::message_bubble::kSwipeToReply;
-    std::optional<Answer> asked;
-    if (replied)
-      asked = ::mux::ui::request::reply_to{one->message_id, one->plain};
-    one->swipe.setTarget(0.0f);
-    scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
-    swiping.reset();
-    reply.releasePointer();
-    reply.handle();
-    return asked;
-  }
-  void swipe_cancel(scene::PointerReply& reply) {
-    swipe_armed = false;
-    if (legacy::message_bubble* one = this->swiped()) {
-      one->swipe.setTarget(0.0f);
-      scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
-      swiping.reset();
-      reply.releasePointer();
-    }
-  }
-
-  // The swipe is followed on the way down (capture) and at the list itself
-  // (target): the same for both, one overload each.
-  std::optional<message_selection_drag> selecting;
-  void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply) {
-    if (!selection_down(*this, press, reply)) swipe_down(press);
-  }
-  void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
-    if (!selection_down(*this, press, reply)) swipe_down(press);
-  }
-  void onPointer(scene::phase::capture, const scene::pointer::move& at, scene::PointerReply& reply) {
-    if (!selection_move(*this, at, reply)) swipe_move(at, reply);
-  }
-  void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
-    if (!selection_move(*this, at, reply)) swipe_move(at, reply);
-  }
-  std::optional<Answer> onPointer(scene::phase::capture, const scene::pointer::up& at, scene::PointerReply& reply) {
-    if (selecting) {
-      auto chosen = selection_up(*this, at, reply);
-      return chosen ? std::optional<Answer>{*chosen} : std::nullopt;
-    }
-    return swipe_up(reply);
-  }
-  std::optional<Answer> onPointer(scene::phase::target, const scene::pointer::up& at, scene::PointerReply& reply) {
-    if (selecting) {
-      auto chosen = selection_up(*this, at, reply);
-      return chosen ? std::optional<Answer>{*chosen} : std::nullopt;
-    }
-    return swipe_up(reply);
-  }
-  void onPointer(scene::phase::capture, const scene::pointer::cancel&, scene::PointerReply& reply) {
-    selection_cancel(*this, reply);
-    swipe_cancel(reply);
-  }
-  void onPointer(scene::phase::target, const scene::pointer::cancel&, scene::PointerReply& reply) {
-    selection_cancel(*this, reply);
-    swipe_cancel(reply);
-  }
-
-  // Who has read a message: those whose receipt is for it or for one after
-  // it, by their names in the chat -- its sender and the user aside.
-  const model* seen_model = nullptr;
-  std::optional<conversation_id> seen_chat;
-  std::vector<seen_reader> seen_by(const std::string& id, const std::string& sender) const {
-    std::vector<seen_reader> out;
-    const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
-    if (!chat)
-      return out;
-    std::map<std::string, std::size_t> at;
-    for (std::size_t i = 0; i < chat->timeline.size(); ++i)
-      at.emplace(chat->timeline[i].id, i);
-    const auto mine = at.find(id);
-    if (mine == at.end())
-      return out;
-    const auto when = chat->timeline[mine->second].at;
-    for (const auto& [user, event] : chat->read_by) {
-      if (user == sender || user == chat->id.account.address)
-        continue;
-      // Read up to a message here at or after it; else, the receipt pointing
-      // at what is not among these -- a reaction, a state event -- read at
-      // or after it was sent.
-      const auto read = chat->receipt_times.find(user);
-      const auto read_at = read == chat->receipt_times.end() ? std::nullopt : std::optional(read->second);
-      if (const auto theirs = at.find(event); theirs != at.end()) {
-        if (theirs->second >= mine->second)
-          out.push_back({user, sender_name(*chat, user), read_at});
-      } else if (read_at && *read_at >= when) {
-        out.push_back({user, sender_name(*chat, user), read_at});
-      }
-    }
-    std::ranges::sort(out, {}, &seen_reader::name);
-    return out;
-  }
-
-  // A right press on a message: its menu, where it was pressed.
-  using Node::onPointer;
-  // A press on what is in a message -- a picture, a file, a reply's quote,
-  // its sender -- as a click: it comes here from what was pressed when that
-  // did not take it, at once or, in a list that scrolls, on the release.
-  [[nodiscard]] const conversation* seen_chat_of() const { return seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr; }
-  // Messages selected: while there are, a press on a message selects it or
-  // lets it go, rather than doing what a press there does.
-  std::set<std::string> selected_ids;
-  void set_selected(const std::set<std::string>& ids) {
-    selected_ids = ids;
-    auto preview = selected_ids;
-    if (selecting && selecting->moved) {
-      auto& rows = this->bubbles();
-      const auto first = std::ranges::find(rows, selecting->first, &legacy::message_bubble::message_id);
-      const auto last = selection_row_at(*this, selecting->last_x, selecting->last_y);
-      if (first != rows.end() && last != rows.end()) {
-        const auto [begin, end] = std::minmax(first, last);
-        std::ranges::for_each(std::ranges::subrange(begin, end + 1), [&](const auto& row) {
-          if (row.said.redacted || row.message_id.empty())
-            return;
-          if (!selecting->selected)
-            preview.erase(row.message_id);
-          else if (preview.size() < 100)
-            preview.insert(row.message_id);
-        });
-      }
-    }
-    std::ranges::for_each(this->bubbles(), [&](auto& one) { one.select(preview.contains(one.message_id)); });
-  }
-  std::optional<Answer> onClick(float x, float y) {
-    // In the space the rows are laid out in: the list draws them scrolled.
-    const struct {
-      float x, y;
-    } press{x, y - parts.timeline.contentsShift()};
-    const auto& bubbles = this->bubbles();
-    // Selecting: the message pressed selected, or not.
-    if (!selected_ids.empty()) {
-      const auto pressed = std::ranges::find_if(bubbles, [&](const legacy::message_bubble& one) {
-        return one.bounds().contains(press.x, press.y) && !one.message_id.empty();
-      });
-      if (pressed == std::ranges::end(bubbles))
-        return std::nullopt;
-      return ::mux::ui::request::toggle_selected{pressed->message_id};
-    }
-    // Else what the press asks for in the bubble it is in.
-    for (const legacy::message_bubble& one : bubbles)
-      if (auto asked = press_in_bubble(one, press.x, press.y, seen_chat_of()))
-        return Answer{*asked};
-    return std::nullopt;
-  }
-  std::optional<Answer> onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
-    if (press.button != 3)
-      return std::nullopt;  // the main button's presses come as clicks, above
-    // Whichever message's row the press is in -- its text, its bubble or the
-    // room beside it. What Copy takes is what is selected in it, if anything
-    // is, and all of it if not.
-    for (const legacy::message_bubble& one : this->bubbles())
-      if (parts.timeline.toView(one.bounds()).contains(press.x, press.y)) {
-        menu_facts facts = facts_of_bubble(one, seen_chat_of(), press.x, press.y);
-        facts.seen = this->seen_by(one.message_id, one.sender);
-        reply.handle();
-        return Answer{std::move(facts)};
-      }
-    return std::nullopt;
-  }
-};
+  return c::column(c::vbox(10.0f, {.place = scene::anchor::kBottomRight, .x = -18.0f, .y = -12.0f, .autoSize = scene::axes::kBoth}),
+                   mark(mark_kind::reaction{}, "\u2665", [](const chat_ways& now) { return now.reactions; }),
+                   mark(mark_kind::mention{}, "@", [](const chat_ways& now) { return now.mentions; }),
+                   c::shown_for<chat_ways>([](const chat_ways& now) { return now.back_to_chat; },
+                       c::onClick(request::return_to_chat{},
+                                  c::column(c::vbox(0.0f, plate), c::styled({.fill = true}, nodes::Icon(shape_of(icon::back{}), colours.text))))),
+                   c::visible(false, c::onClick(request::jump_to_end{},
+                                                c::column(c::vbox(0.0f, plate),
+                                                          c::styled({.fill = true}, nodes::Icon(shape_of(icon::down{}), colours.text)),
+                                                          c::visible(false, count_badge(colours))))));
+}
+// The chat's messages over its wallpaper -- the theme's gradient and
+// Telegram's pattern, a colour, a picture -- with the corner over them, and
+// the loader turning in the middle while a jump is on its way. The list is
+// told by the program and answers it (timeline_list); the wallpaper is put
+// by what shows the chat (show_wallpaper_on, its first part).
+inline auto chat_area(const ui_needs& n) {
+  namespace c = skiff::compose;
+  wallpaper_t wall;
+  wall.apply({.place = scene::anchor::kTopLeft, .fill = true});
+  auto list = c::projected<chat_ways>([](const chat_ways& now) { return now.back_here || now.detached; },
+      c::with_way_down(c::vbox(0.0f, {.fill = true}), timeline_list<chat_told, chat_list_tag>(), list_corner(*n.colours),
+                       [](auto& corner, bool wanted, std::size_t unseen) {
+                         auto& down = std::get<3>(corner.fParts);
+                         down.setVisible(wanted);
+                         auto& badge = std::get<1>(down.fParts);
+                         show_count(badge, unseen);
+                         badge.setVisible(unseen > 0);
+                       }));
+  auto loading = c::shown_for<chat_ways>([](const chat_ways& now) { return now.loading; },
+      c::styled({.place = scene::anchor::kCentre}, widgets::RadialLoader<stop_jump_act>(44.0f, {})));
+  return c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), std::move(wall), std::move(list), std::move(loading));
+}
+using chat_area_t = decltype(chat_area(std::declval<const ui_needs&>()));
 
 }  // namespace mux::ui

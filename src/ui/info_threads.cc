@@ -45,12 +45,8 @@ struct threads_panel : skiff::compose::Stacked {
   threads_panel& operator=(threads_panel&&) = delete;
 
   std::optional<std::string> open;  // the thread open, else the list
-  std::vector<message> shown;       // what the open thread is made of now: its root and answers
-  // Which of them are made into bubbles: a window, as the chat's is
-  // (made_range), sliding as the reader scrolls.
-  made_range made;
   // The thread shown, and its chat's revision then: shown again only where
-  // either moved -- not at every change of every chat.
+  // either moved.
   std::optional<std::string> seen_open;
   skiff::model::Revision seen_revision = 0;
   bool seen_list = false;
@@ -166,10 +162,11 @@ struct threads_panel : skiff::compose::Stacked {
     nodes::Box<> divider;
     nodes::Text empty;
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 2.0f, .wrap = false}, {})};
-    // The thread open: the chat's own timeline, its root and answers in it
-    // -- one renderer for both: runs, readers, quotes, presses,
-    // menus, swipes, pictures, all as the chat has them.
-    timeline_area answers;
+    // The thread open: its root and answers as the chat's own list has its
+    // messages -- the same rows, runs, readers, quotes, presses, menus,
+    // swipes -- told by the program (thread_told) which thread, and where
+    // to aim, and answering it what it did.
+    decltype(timeline_list<thread_told, thread_list_tag>()) answers;
     composer_bar_t<in_thread> line;
   } parts;
   threads_panel(const ui_needs &n)
@@ -182,18 +179,13 @@ struct threads_panel : skiff::compose::Stacked {
               .empty = skiff::compose::styled(
                   {.margin = {16.0f, 16.0f, 0.0f, 16.0f}},
                   nodes::Text("No threads here yet.", 13.0f, n.colours->dim)),
-              .answers = timeline_area(n),
+              .answers = timeline_list<thread_told, thread_list_tag>(),
               .line = composer_bar<in_thread>(n, {this}, {this}, {},
                                                        {}, {this})} {
 
     for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
       list->apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}});
-    // The chat's buttons over its timeline are the chat's: not here.
-    for (scene::Node* button : std::initializer_list<scene::Node*>{&parts.answers.parts.jump, &parts.answers.parts.back,
-                                                                   &parts.answers.parts.mentions, &parts.answers.parts.reactions,
-                                                                   &parts.answers.parts.loading})
-      button->setVisible(false);
     this->setVisible(false);
   }
   // Brought up to date with the chat: its threads listed, or the one open
@@ -234,10 +226,6 @@ struct threads_panel : skiff::compose::Stacked {
       this->show(*one, now_);
   }
   void show(const conversation& chat, const model* now) {
-    if (seen_open != open) {
-      made = made_range{};  // another thread: from its newest
-      aiming.reset();
-    }
     seen_model = now;
     seen_chat = chat.id;
     seen_revision = revision_of(*now, chat.id);
@@ -272,103 +260,10 @@ struct threads_panel : skiff::compose::Stacked {
         rows.emplace_back(*colours_, chat, *one);
       parts.empty.setVisible(roots.empty());
       parts.list.invalidateLayout();
-      shown.clear();
       return;
     }
     parts.empty.setVisible(false);
-    // Taken again only as its chat changed (refresh's chat_moved).
-    const std::size_t had = shown.size();
-    shown.clear();
-    if (const message* root = root_of(*open))
-      shown.push_back(*root);
-    if (const auto found = chat.threads.find(*open); found != chat.threads.end())
-      shown.insert(shown.end(), found->second.begin(), found->second.end());
-    this->make_window(chat, *now);
-    if (shown.size() > had && made.to_end)
-      parts.answers.parts.timeline.scrollToEnd(false);
   }
-  // The window's bubbles made, as the chat makes its own.
-  void make_window(const conversation& chat, const model& now) {
-    const auto [from, to] = made_indices(made, shown);
-    (void)set_made(made, shown, from, to);
-    parts.answers.seen_model = &now;
-    parts.answers.seen_chat = chat.id;
-    std::set<std::string> rooms;
-    parts.answers.show_messages(chat, shown, from, to, now, shown_how{}, [](std::size_t) { return false; }, rooms);
-    parts.answers.invalidateLayout();
-  }
-  // The window slid as the reader nears an edge of what is made: looked at
-  // in the frames there are -- scrolling makes them -- asking for none.
-  void update(double) {
-    if (!open || !this->visible() || seen_model == nullptr || !seen_chat) {
-      aiming.reset();
-      return;
-    }
-    if (aiming) {
-      auto& bubbles = parts.answers.bubbles();
-      const auto found = std::ranges::find(bubbles, *aiming, &legacy::message_bubble::message_id);
-      auto& view = parts.answers.parts.timeline;
-      if (found == bubbles.end()) {
-        aiming.reset();  // gone meanwhile
-      } else if (!found->bounds().isEmpty()) {
-        aiming.reset();
-        this->aim_at(*found);
-      } else if (!view.moving()) {
-        // Made, but not laid out: more than a screen from the view, where
-        // the list lays nothing out. The view stepped a screen toward it,
-        // as the chat steps, until it is laid out and aimed at.
-        const auto laid = std::ranges::find_if(bubbles, [](const legacy::message_bubble& row) { return !row.bounds().isEmpty(); });
-        // A new window may not have had its first layout yet. Keep the
-        // target pending until that layout supplies a row to step from.
-        if (laid != bubbles.end()) {
-          const float page = view.bounds().height();
-          view.setCurrent(std::max(0.0f, view.current() + (found < laid ? -page : page)));
-          this->markDamaged();
-        }
-      }
-      return;
-    }
-    const auto& view = parts.answers.parts.timeline;
-    if (!slide_made(made, shown, view.current(), view.extent(), view.bounds().height()))
-      return;
-    if (const conversation* chat = seen_model->find(*seen_chat))
-      this->make_window(*chat, *seen_model);
-  }
-  [[nodiscard]] const conversation* chat_of() const { return seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr; }
-  // Scrolled to an answer of the thread open, and flashed: a quote of it
-  // pressed. False where it is not one of its.
-  // One held but not made -- older than the window -- made around first,
-  // and aimed at once it is laid out (update).
-  bool scroll_to(const std::string& id) {
-    auto& bubbles = parts.answers.bubbles();
-    const auto found = std::ranges::find(bubbles, id, &legacy::message_bubble::message_id);
-    if (found != bubbles.end() && !found->bounds().isEmpty()) {
-      this->aim_at(*found);
-      return true;
-    }
-    const auto held = std::ranges::find(shown, id, &message::id);
-    if (held == shown.end())
-      return false;
-    if (found == bubbles.end()) {
-      const auto at = static_cast<std::size_t>(held - shown.begin());
-      (void)set_made(made, shown, at > 40 ? at - 40 : 0, at + 40);
-      if (const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr)
-        this->make_window(*chat, *seen_model);
-    }
-    aiming = id;
-    this->markDamaged();
-    return true;
-  }
-  // A bubble brought into view and flashed.
-  void aim_at(legacy::message_bubble& bubble) {
-    parts.answers.parts.timeline.scrollTo(bubble.bounds().fTop - 8.0f);
-    bubble.flash.jump(1.0f);
-    bubble.flash.setTarget(0.0f);
-    bubble.markDamaged();
-  }
-  // What a quote pressed asks to be brought into view, once it is laid out.
-  std::optional<std::string> aiming;
-  [[nodiscard]] bool settling() const { return this->visible() && open.has_value() && aiming.has_value(); }
   // A message of the thread open answered from its menu, as tdesktop's
   // "Reply to <name>" over the field: in the thread, not the chat.
   void answer(std::string id, compose_context said) {

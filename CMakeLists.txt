@@ -23,11 +23,14 @@ endif()
 
 project(mux VERSION 0.1 LANGUAGES C CXX)
 
-# clang 23.1.4 at least: before it, clang with libstdc++'s std module found
-# no operator| for a range adaptor closure another imported module had made
-# first, and every pipe had to be written in the call form (CODE_STYLE.md).
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 23.1.4)
-  message(FATAL_ERROR "mux needs clang 23.1.4 or later; this is ${CMAKE_CXX_COMPILER_VERSION}")
+# With libstdc++, clang 23.1.4 at least: before it, clang with libstdc++'s
+# std module found no operator| for a range adaptor closure another imported
+# module had made first, and every pipe had to be written in the call form
+# (CODE_STYLE.md). libc++ never had the trouble.
+include(CheckCXXSymbolExists)
+check_cxx_symbol_exists(__GLIBCXX__ "version" mux_libstdcxx)
+if(mux_libstdcxx AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 23.1.4)
+  message(FATAL_ERROR "mux with libstdc++ needs clang 23.1.4 or later; this is ${CMAKE_CXX_COMPILER_VERSION}")
 endif()
 
 # Keep direct requests distinct from requests made by the libraries themselves.

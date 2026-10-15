@@ -8,7 +8,7 @@ skiff-widgets) are written. A change that does not follow this is not done.
 - C++26, **modules only**: every unit is a module interface, partition or
   implementation unit. No headers of our own; a library's headers only in a
   global module fragment, where a library has no module.
-- clang 23.1.4 or later (CMake checks). Build with libc++ or libstdc++; both are supported.
+- clang 23; with libstdc++, 23.1.4 or later (CMake checks). Build with libc++ or libstdc++; both are supported.
 - Where the toolchain has a bug, work around it in the code and say why in a
   comment, with the reduced case if there is one. Known ones:
   - (Gone with clang 23.1.4.) Before it, clang with libstdc++'s std module

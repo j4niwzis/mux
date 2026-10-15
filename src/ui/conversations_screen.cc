@@ -369,13 +369,3 @@ inline auto chats_screen(const ui_needs& n) {
 using chats_screen_t = decltype(chats_screen(std::declval<const ui_needs&>()));
 }  // namespace mux::ui
 
-// Outside a release build each child is walked through its table, and a
-// stack lays itself out through its own (Stack::layoutChildren): so a unit
-// that lays out or walks one of these would make its table, and the walks
-// of everything under it, there -- the chats screen's took this unit past
-// ten minutes. Their tables are made once, each in a walks unit of this
-// module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::chats_screen_t> = true;  // walks_chats.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::chats_screen_t>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::chat_column_t> = true;  // walks_column.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::chat_column_t>() noexcept;

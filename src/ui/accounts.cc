@@ -557,11 +557,3 @@ using accounts_panel = decltype(accounts_view(std::declval<const ui_needs&>()));
 
 }  // namespace mux::ui
 
-// Outside a release build each child is walked through its table, and a
-// stack lays itself out through its own: these tables, and the walks of
-// everything under them, are made once, in their walks units -- not in
-// every unit that lays one out or walks it.
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::accounts_panel> = true;  // walks_accounts.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::accounts_panel>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::detail_shown_t> = true;  // walks_account_pages.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::detail_shown_t>() noexcept;

@@ -433,22 +433,6 @@ if(MUX_UI)
   # (kOpsElsewhere, beside each type), outside a release build: erased walks
   # only. A release build walks statically and uses none of them.
   target_sources(mux_modules PRIVATE
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_window.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_chats.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_side.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_side_menus.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_side_rows.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_column.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_composer.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_info.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_accounts.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_account_pages.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_drawer.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_settings.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_manage.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_boxes.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_popups.cc>
-    $<$<NOT:$<CONFIG:Release>>:src/ui/walks_emoji.cc>)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries} ${mux_plugin_libraries})
   if(ANDROID)

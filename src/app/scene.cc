@@ -32,7 +32,6 @@ static_assert(std::same_as<decltype(routing_carry(std::declval<mux::app::window_
 
 template class skiff::scene::Scene<mux::app::window_type>;
 #ifdef SKIFF_ERASED_WALKS
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::app::window_type>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::app::window_type>();
 }
 #endif

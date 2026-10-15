@@ -131,11 +131,3 @@ inline dialog_look content_look(std::type_identity<Content>, std::type_identity<
 }
 }  // namespace mux::ui
 
-// Outside a release build each child is walked through its table, and a
-// stack lays itself out through its own (Stack::layoutChildren): so a unit
-// that lays out or walks one of these would make its table, and the walks
-// of everything under it, there -- the chats screen's took this unit past
-// ten minutes. Their tables are made once, each in a walks unit of this
-// module (src/ui/walks_*.cc); here, and wherever they are walked, a call.
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::explore_box> = true;  // walks_boxes.cc
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::explore_box>() noexcept;

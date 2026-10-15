@@ -63,19 +63,8 @@ using window_type = mux::ui::window;
 // scene. In a named module, members defined in a class are not implicitly
 // inline, so this keeps them all out of the other units.
 extern template class skiff::scene::Scene<mux::app::window_type>;
-// Outside a release build, the window's own table -- and with it the
-// tables of every node below it -- made with the scene alone (scene.cc):
-// every unit that refreshes the window, or delivers a press to it, takes
-// the window through its table, and made the whole tree's tables again.
-#ifdef SKIFF_ERASED_WALKS
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::app::window_type> = true;
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::app::window_type>() noexcept;
-#endif
-// Outside a release build every node's table is made where the window is
-// constructed (scene.cc): a stack takes its parts' tables as it is made.
-// They were also made in walks_*.cc, each unit importing all of mux.ui and
-// making again the tables of what it shares with the others -- the same
-// work two or three times over, in a build of one thread.
+// Outside a release build each node's table is made where the combinator
+// that made it was called: no unit makes the tables of the tree under it.
 
 export namespace mux::app {
 // Inline storage with lifetime defined beside Scene's explicit instantiation.

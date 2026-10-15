@@ -837,8 +837,8 @@ struct side_column : skiff::compose::Stacked {
     if (!one && press.button == 3 && list.visible())
       for (const auto& kept : std::get<0>(list.fChildren).fRows)
         if (const auto& row = kept.fRow; list.toView(row.bounds()).contains(press.x, press.y)) {
-          parts.row_menu.emplace(*colours_, row.id, row.parts.lines.parts.top.parts.name.text(),
-                                 current_account ? *current_account : row.id.account, accounts_known, theme_now);
+          parts.row_menu.emplace(*colours_, kept.fKey, kept.fView.name,
+                                 current_account ? *current_account : kept.fKey.account, accounts_known, theme_now);
           this->place_menu(*parts.row_menu, press.x, press.y, 320.0f, 260.0f);
           reply.handle();
           return;

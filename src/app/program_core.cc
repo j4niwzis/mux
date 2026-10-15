@@ -452,7 +452,7 @@ void app::refresh_shown() {
   {
     const auto listed = shared.listed();
     mux::ui::drawer_accounts now{state.root().accounts.values() | std::views::transform([&](const mux::config::account_t& one) {
-      const auto [how, failed] = mux::ui::state_of(one, *model);
+      const auto [how, failed] = mux::ui::connection_state_of(one, *model);
       return mux::ui::drawer_account{mux::config::address_of(one), std::string(mux::config::protocol_name(one)), how, failed,
                                      listed && listed->address == mux::config::address_of(one)};
     }) | std::ranges::to<std::vector>()};

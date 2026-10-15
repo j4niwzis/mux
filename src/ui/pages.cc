@@ -183,7 +183,7 @@ struct room_settings_facts {
 // profile first heard, a save gone through).
 // What the model says of a saved account, in a few words, and whether that
 // is a failure.
-[[nodiscard]] inline std::pair<std::string, bool> state_of(const config::account_t& one, const model& now) {
+[[nodiscard]] inline std::pair<std::string, bool> connection_state_of(const config::account_t& one, const model& now) {
   const std::string& address = config::address_of(one);
   if (!config::enabled_of(one))
     return {"off", false};
@@ -223,7 +223,7 @@ struct account_page_facts {
 // come in says what came of a save, and one that went through makes the
 // drafts again, as does the profile first heard.
 inline void read_account_model(account_page_facts& facts, const model& now) {
-  const auto [how, failed] = state_of(facts.account, now);
+  const auto [how, failed] = connection_state_of(facts.account, now);
   facts.how = std::format("{} · {}", config::protocol_name(facts.account), how);
   facts.failed = failed;
   const account* known = now.accounts().find(facts.by);

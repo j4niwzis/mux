@@ -41,7 +41,7 @@ struct account_row {
 template <std::ranges::input_range Saved>
 [[nodiscard]] std::vector<account_row> account_rows(const Saved& saved, const model& now, const std::optional<std::string>& chosen) {
   return saved | std::views::transform([&](const config::account_t& one) {
-           const auto [how, failed] = state_of(one, now);
+           const auto [how, failed] = connection_state_of(one, now);
            const std::string& address = config::address_of(one);
            return account_row{address, std::format("{} · {}", config::protocol_name(one), how), failed, chosen == address};
          }) |

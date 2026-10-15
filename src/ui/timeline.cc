@@ -276,23 +276,16 @@ struct make_bubble_row {
   }
 };
 // Where in a row the stretch of its text a quote of it pointed at is: what a
-// jump with a quote aims at.
-[[nodiscard]] inline auto& row_text_of(message_row_t& row) {
-  // Its parts: held by what takes its presses while rows are selected; the
-  // swiped row in its column; its face and body in that.
-  auto& column = std::get<0>(row.fParts);
-  auto& swiped = std::get<0>(column.fParts);
-  auto& inner = std::get<0>(swiped.fParts);
-  auto& body = std::get<1>(inner.fParts);
-  return part_of<bubble_part::text>(body);
-}
+// jump with a quote aims at -- its words found by their mark.
 struct locate_in_row {
   std::optional<float> operator()(const message_row_t& row, const std::string& fragment) const {
-    auto& text = row_text_of(const_cast<message_row_t&>(row));
-    const auto at = std::string_view(text.text()).find(fragment);
+    const bubble_words_t* text = words_in(const_cast<message_row_t&>(row));
+    if (!text)
+      return std::nullopt;
+    const auto at = std::string_view(text->text()).find(fragment);
     if (fragment.empty() || at == std::string_view::npos)
       return std::nullopt;
-    return text.bounds().fTop - row.bounds().fTop + text.lineTopOf(at);
+    return text->bounds().fTop - row.bounds().fTop + text->lineTopOf(at);
   }
 };
 // The messages, as a window of the list the program says: a chat's, or a

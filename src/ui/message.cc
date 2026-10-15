@@ -321,6 +321,30 @@ inline constexpr std::size_t frost = 0, name = 1, forwarded = 2, quote = 3, pict
 }
 template <std::size_t Part> [[nodiscard]] auto& part_of(auto& body) { return std::get<Part>(body.fParts); }
 
+
+// Words of a message, as its text and its pieces show them: wrapped,
+// selectable, its links and quotes in their colours.
+inline auto message_words(const palette& colours, const text_piece& words, skia::SkColor colour, skia::SkColor quote) {
+  auto text = wrapped(nodes::BasicText<message_pictures>(words.text, 13.0f, colour));
+  text.setSelectable(true);
+  text.setSelectionColour((colours.accent & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
+  text.setLinks(words.links, colours.accent);
+  text.setStyles(words.styles, quote);
+  text.setShrinksToLines(true);
+  return text;
+}
+// The bubble's words, marked where they are made: found by their mark where
+// what holds them asks of them -- its rules, its menu, a jump to a quote.
+struct bubble_words {};
+using bubble_words_t = skiff::compose::Marked<bubble_words, decltype(skiff::compose::styled({}, message_words(std::declval<const palette&>(),
+                                                                                               std::declval<const text_piece&>(), 0u, 0u)))>;
+[[nodiscard]] inline bubble_words_t* words_in(auto& node) { return skiff::scene::findNode<bubble_words_t>(node); }
+// A link's preview, marked with its address: what a menu over it copies.
+struct previewed_link {
+  std::string url;
+};
+using previewed_link_t = skiff::compose::Marked<previewed_link, page_preview_t>;
+
 // The bubble's own rules, as tdesktop lays one out: the time beside the
 // text's last line wherever the two fit at the bubble's widest -- the bubble
 // widened to them where it is narrower -- and on a line of its own only
@@ -355,7 +379,7 @@ struct bubble_rules {
     widest_of(part_of<bubble_part::name>(body));
     widest_of(part_of<bubble_part::forwarded>(body));
     widest_of(part_of<bubble_part::quote>(body));
-    const float sticker = std::max(picture->bounds().width(), picture->fState.fWidth);
+    const float sticker = std::max(picture->bounds().width(), skiff::compose::state_of(*picture).fWidth);
     // countCurrentSize: beside where the sticker and the least of what goes
     // beside it fit -- msgReplyPadding.left() + msgMinWidth / 2.
     constexpr float kLeastBeside = 10.0f + 190.0f / 2.0f;
@@ -365,13 +389,13 @@ struct bubble_rules {
     const bool side = beside_now(body, state);
     if (auto& picture = part_of<bubble_part::picture>(body); side && picture)
       state.beside_room = std::max(0.0f, body.fState.fLastConstraint.width() -
-                                             std::max(picture->bounds().width(), picture->fState.fWidth) - kBesideGap);
+                                             std::max(picture->bounds().width(), skiff::compose::state_of(*picture).fWidth) - kBesideGap);
     const auto flow = [&](auto& part) {
       if (!part)
         return;
-      part->fState.setOutOfFlow(side);
+      skiff::compose::state_of(*part).setOutOfFlow(side);
       if (!side)
-        part->fState.shiftTo(0.0f, 0.0f);
+        skiff::compose::state_of(*part).shiftTo(0.0f, 0.0f);
     };
     flow(part_of<bubble_part::name>(body));
     flow(part_of<bubble_part::forwarded>(body));
@@ -423,7 +447,7 @@ struct bubble_rules {
         return;
       const skia::SkRect at = part->bounds();
       const float x = state.beside_left ? sticker.fLeft - kBesideGap - at.width() : sticker.fRight + kBesideGap;
-      part->fState.shiftTo(x - at.fLeft, sticker.fTop + y - at.fTop);
+      skiff::compose::state_of(*part).shiftTo(x - at.fLeft, sticker.fTop + y - at.fTop);
       y += at.height() + after;
     };
     put(part_of<bubble_part::name>(body), 4.0f);
@@ -454,8 +478,11 @@ struct bubble_rules {
     // Nothing left of the text -- all of it the quote the header shows -- or
     // a text that ends in a quote, and nothing under it: the time on a line
     // of its own, as Telegram's.
-    const std::string& words = text.text();
-    const bool ends_quoted = !words.empty() && std::ranges::any_of(text.styles(), [&](const auto& one) {
+    // Its words, by their mark: none found where they are hidden.
+    bubble_words_t* said = words_in(body);
+    static const std::string kNothing;
+    const std::string& words = said ? said->text() : kNothing;
+    const bool ends_quoted = said && !words.empty() && std::ranges::any_of(said->styles(), [&](const auto& one) {
       return one.quote && one.first < words.size() && words.size() <= one.last;
     });
     if (text.visible() && (words.empty() || ends_quoted) && !trailer) {
@@ -485,7 +512,7 @@ struct bubble_rules {
     if (last.isEmpty())
       return;
     state.time_placed = true;
-    const float last_width = trailer ? trailer->width : text.lastLineWidth();
+    const float last_width = trailer ? trailer->width : said ? said->lastLineWidth() : 0.0f;
     // The widest the text can be here: the bubble's widest, or what the row
     // gives it where that is less -- a phone's window.
     const float given = body.fState.fLastConstraint.width() - 2.0f * kBubblePadX;
@@ -511,23 +538,18 @@ struct bubble_rules {
   }
 };
 
+// The bubble: its parts in their places, which its rules name -- the one
+// box of the bubble, its parts each held.
+template <class... Parts> skiff::compose::Box<Parts...> bubble_box(skiff::compose::Look look, Parts... parts) {
+  look.fHorizontal = false;
+  return skiff::compose::Box<Parts...>(std::move(look), std::move(parts)...);
+}
 // The bubble's colour as its chat's look has it: solid, or at its opacity --
 // over what is behind it, frosted where it is so.
 [[nodiscard]] inline skia::SkColor plate_of(const palette& colours, const config::bubble_look& look, bool mine) {
   const skia::SkColor solid = mine ? colours.out_bubble : colours.bubble;
   return spl::visit(spl::overloaded{[&](config::bubbles::solid) { return solid; }, [&](const auto&) { return at_opacity(solid, look.opacity); }},
                     look.kind);
-}
-// Words of a message, as its text and its pieces show them: wrapped,
-// selectable, its links and quotes in their colours.
-inline auto message_words(const palette& colours, const text_piece& words, skia::SkColor colour, skia::SkColor quote) {
-  auto text = wrapped(nodes::BasicText<message_pictures>(words.text, 13.0f, colour));
-  text.setSelectable(true);
-  text.setSelectionColour((colours.accent & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
-  text.setLinks(words.links, colours.accent);
-  text.setStyles(words.styles, quote);
-  text.setShrinksToLines(true);
-  return text;
 }
 // The stretch of a text a quote of it pointed at, marked while its message
 // is flashed: over the text's own styles, kept as it was made.
@@ -767,25 +789,28 @@ inline auto message_body(const bubble_needs& n, const conversation& in, const bu
   const std::vector<text_piece> pieces = pieces_of(shown.text, shown.links, shown.styles, shown.cards, shown.disclosures);
   auto words = c::styled({.maxWidth = kBubbleMaxWidth}, message_words(colours, pieces.front(), colours.text, quote_colour));
   words.setVisible(text_shown && !pieces.front().text.empty());
+  // What the time's first guess is made from, before the words are held.
+  const bool words_shown = words.visible();
+  const std::string words_said = words.text();
   std::vector<message_piece> blocks;
   for (std::size_t i = 1; i + 1 < pieces.size(); i += 2) {
     if (pieces[i].disclosure)
-      blocks.emplace_back(std::in_place_type<disclosure_piece_t>, disclosure_piece(colours, shown, pieces[i + 1], now, quote_colour));
+      blocks.emplace_back(std::in_place_type<disclosure_piece_m>, disclosure_piece(colours, shown, pieces[i + 1], now, quote_colour));
     else if (pieces[i].card)
-      blocks.emplace_back(std::in_place_type<link_piece_t>, link_piece(colours, *pieces[i].card, pieces[i + 1], now, quote_colour));
+      blocks.emplace_back(std::in_place_type<link_piece_m>, link_piece(colours, *pieces[i].card, pieces[i + 1], now, quote_colour));
     else
-      blocks.emplace_back(std::in_place_type<code_piece_t>, code_piece(colours, pieces[i], pieces[i + 1], quote_colour, quote_colour, colours.text));
+      blocks.emplace_back(std::in_place_type<code_piece_m>, code_piece(colours, pieces[i], pieces[i + 1], quote_colour, quote_colour, colours.text));
   }
   auto text = c::onClickAt(quote_pressed{said.id, said.replies_to},
                            c::applied<message_marks>([id = said.id](const message_marks& marks) {
                              return marks.flashed == id ? marks.fragment : std::nullopt;
                            },
-                           marks_fragment{pieces.front().styles, quote_colour}, std::move(words)));
+                           marks_fragment{pieces.front().styles, quote_colour}, bubble_words_t(std::move(words))));
   // The first link's preview, where it has come.
-  std::optional<page_preview_t> preview;
+  std::optional<previewed_link_t> preview;
   if (const auto link = first_link_of(said); link && now && f.previews_shown)
     if (const auto found = now->previews.find(*link); found != now->previews.end())
-      preview.emplace(page_preview(colours, found->second, *link));
+      preview.emplace(previewed_link_t(page_preview(colours, found->second, *link), previewed_link{*link}));
   // What it answers, in the timeline, in a thread or fetched aside: pressed,
   // that message -- the part the header shows marked there.
   std::optional<decltype(c::onClick(request::jump_to_message{}, quote_row(colours, 0, "", "")))> quote;
@@ -900,9 +925,9 @@ inline auto message_body(const bubble_needs& n, const conversation& in, const bu
   auto time = c::visible(time_shown, c::styled(time_spec, nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim)));
   auto inline_time = c::visible(false, c::styled({.place = scene::anchor::kBottomRight, .y = kTimeLower},
                                                  nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim)));
-  if (skia::SkFont* font = skiff::paint::defaultFont(); font && text.visible() && !text.text().empty() && !rules.sticker) {
+  if (skia::SkFont* font = skiff::paint::defaultFont(); font && words_shown && !words_said.empty() && !rules.sticker) {
     const skiff::paint::Painter p(nullptr, *font);
-    if (const auto wrapped_lines = p.wrap(text.text(), kBubbleMaxWidth, 13.0f, false); !wrapped_lines.empty()) {
+    if (const auto wrapped_lines = p.wrap(words_said, kBubbleMaxWidth, 13.0f, false); !wrapped_lines.empty()) {
       const float needs = p.measure(wrapped_lines.back(), 13.0f, false) + p.measure(when, 11.0f) + 10.0f;
       if (needs <= kBubbleMaxWidth) {
         time.setVisible(false);
@@ -914,7 +939,7 @@ inline auto message_body(const bubble_needs& n, const conversation& in, const bu
   }
   return c::arranged<bubble_rules>(
       std::move(rules),
-      c::column(c::vbox(2.0f, spec), std::move(frost), std::move(name), std::move(forwarded), std::move(quote), std::move(picture),
+      bubble_box(c::vbox(2.0f, spec), std::move(frost), std::move(name), std::move(forwarded), std::move(quote), std::move(picture),
                 std::move(their_sticker), std::move(album), std::move(file), std::move(text), std::move(blocks), std::move(preview),
                 trailers_t::built(trailer_facts{colours, looks, said, in, said.id}), std::move(thread), std::move(lines),
                 std::move(their_view), std::move(time), std::move(inline_time)));
@@ -959,8 +984,7 @@ struct row_menu {
   message said;
   bool version = false;
   std::optional<menu_facts> operator()(auto& row, float x, float y) const {
-    auto& body = std::get<1>(std::get<0>(std::get<0>(row.fParts).fParts).fParts);
-    const auto& text = part_of<bubble_part::text>(body);
+    const bubble_words_t* text = words_in(row);
     const conversation* chat = needs.now ? needs.now->find(in) : nullptr;
     menu_facts facts;
     facts.id = said.id;
@@ -968,9 +992,9 @@ struct row_menu {
       facts.event = said;
     facts.own = said.outgoing;
     facts.text = said.body.plain;
-    facts.selection = text.hasSelection();
+    facts.selection = text && text->hasSelection();
     if (facts.selection)
-      facts.copied_fragment = text.selectedFragment();
+      facts.copied_fragment = text->selectedFragment();
     facts.copied = facts.copied_fragment ? facts.copied_fragment->text : said.body.plain;
     if (const auto& kept = said.attachment) {
       facts.media = kept->video.value_or(kept->source);
@@ -1008,8 +1032,8 @@ struct row_menu {
     // where the pointer is on it.
     if (auto pressed = skiff::scene::pressedLink())
       facts.pressed_link = std::move(*pressed);
-    else if (const auto& preview = part_of<bubble_part::preview>(body); preview && preview->hovered())
-      facts.pressed_link = preview->fEvent.url;
+    else if (const previewed_link_t* preview = skiff::scene::findNode<previewed_link_t>(row); preview && preview->bounds().contains(x, y))
+      facts.pressed_link = preview->fTag.url;
     facts.emoji = copied_emoji_at(facts.pressed_link);
     // A sticker: what sending it again takes.
     if (said.sticker && said.attachment)

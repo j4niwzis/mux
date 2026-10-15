@@ -75,17 +75,24 @@ inline auto time_pill(std::string when) {
 // own proportions once it has come, never another's; rounded, the blurred
 // preview from its blurhash until it comes, a loader turning meanwhile.
 // Pressed: what `open` asks -- it in the viewer.
+// A message's picture, marked: what its proportions are read from.
+struct message_picture {};
+using picture_image_t = nodes::Image<from_moving_thumbnail>;
 inline auto picture_view(const palette& colours, std::string source, int width, int height, picture_look look, media_open open) {
   namespace c = skiff::compose;
   auto preview = c::visible(look.thumbnail, c::styled({.fill = true, .cornerRadius = 10.0f}, nodes::Image<from_previews>({source})));
-  auto picture = c::visible(look.thumbnail, c::styled({.fill = true, .cornerRadius = 10.0f},
-                                                      nodes::Image<from_moving_thumbnail>({source, look.sticker})));
+  auto picture = c::Marked<message_picture, picture_image_t>(c::visible(look.thumbnail, c::styled({.fill = true, .cornerRadius = 10.0f},
+                                                      nodes::Image<from_moving_thumbnail>({source, look.sticker}))));
   auto loader = c::visible(false, c::styled({.place = scene::anchor::kCentre}, widgets::RadialLoader<>{}));
   std::optional<decltype(video_marks(0))> video;
   if (look.video_ms)
     video.emplace(video_marks(*look.video_ms));
-  // The picture's own proportions: its picture's, where it has come.
-  const auto ratio = [](auto& box) { return std::get<0>(std::get<1>(box.fParts).fParts).ratio(); };
+  // The picture's own proportions: its picture's, where it has come --
+  // found by its mark; none where it is not shown.
+  const auto ratio = [](auto& box) {
+    const auto* image = skiff::scene::findNode<skiff::compose::Marked<message_picture, picture_image_t>>(box);
+    return image ? image->ratio() : decltype(image->ratio()){};
+  };
   return c::onClick(std::move(open),
       c::fitted({.width = static_cast<float>(width), .height = static_cast<float>(height),
                  .most = look.sticker ? kStickerMost : kPictureMost, .least = look.sticker ? 0.0f : kPictureLeast, .cell = look.cell},

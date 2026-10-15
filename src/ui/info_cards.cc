@@ -95,9 +95,9 @@ using profile_cover_t = decltype(profile_cover(std::declval<const palette&>(), "
 // Measure a fitting card at its available width without losing the scroll
 // anchor's previous position. Both user and room cards use this viewport.
 inline float card_part_height(auto& node, const skia::SkRect& parent) {
-  const auto previous = node.fState.fLastConstraint;
+  const auto previous = skiff::compose::state_of(node).fLastConstraint;
   scene::layout(node, skia::SkRect::MakeXYWH(previous.fLeft, previous.fTop, parent.width(), 0.0f));
-  return node.bounds().height() + node.fState.fMargin.totalY();
+  return node.bounds().height() + skiff::compose::state_of(node).fMargin.totalY();
 }
 // Keep a short card compact; for a long one, size the scroll viewport to the
 // room the dialog gives the card rather than the content's unbounded height.
@@ -111,6 +111,12 @@ template <class Top, class Scroll, class Join, class Decline>
 float card_rest_height(std::tuple<Top, Scroll, Join, Decline>& parts, const skia::SkRect& parent) {
   auto& decline = std::get<3>(parts);
   return card_part_height(std::get<2>(parts), parent) + (decline.visible() ? card_part_height(decline, parent) : 0.0f);
+}
+// A card: its head, its details scrolling, what it offers under them -- in
+// their places, which card_fit names.
+template <class... Parts> skiff::compose::Box<Parts...> card_box(skiff::compose::Look look, Parts... parts) {
+  look.fHorizontal = false;
+  return skiff::compose::Box<Parts...>(std::move(look), std::move(parts)...);
 }
 struct card_fit {
   struct State {};
@@ -216,7 +222,7 @@ inline auto person_card(const palette& colours, const ui_shared& shared,
   namespace c = skiff::compose;
   using close_act = sends<::mux::ui::request::close_person_info>;
   auto details = person_card_details(colours, shared, account, key, facts);
-  return c::arranged<card_fit>({}, c::column(
+  return c::arranged<card_fit>({}, card_box(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
       page_header<no_back, close_act>(colours, "User info", {}, {}, false, true),
       c::styled({.fillX = true}, nodes::ScrollContainer<decltype(details)>(std::move(details)))));
@@ -298,7 +304,7 @@ inline auto room_card(const palette& colours, const std::string& asked, const ro
   using decline_act = sends<::mux::ui::request::decline_room_card>;
   auto details = room_card_details(colours, asked, known);
   const scene::Spec tile_spec{.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}};
-  return c::arranged<card_fit>({}, c::column(
+  return c::arranged<card_fit>({}, card_box(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
       page_header<no_back, close_act>(colours, known.invite ? "Invite" : "Room info", {}, {}, false, true),
       c::styled({.fillX = true}, nodes::ScrollContainer<decltype(details)>(std::move(details))),

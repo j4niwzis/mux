@@ -519,6 +519,12 @@ using code_piece_t = decltype(code_piece(std::declval<const palette&>(), std::de
 
 // A card and the words after it are one composed part of the message,
 // interleaved with code blocks rather than appended below them.
+// A link's card in a message, marked with its address: what a press over it
+// is a link to.
+struct linked_card {
+  std::string url;
+};
+using link_card_marked = skiff::compose::Marked<linked_card, link_card_t>;
 inline auto link_piece(const palette& colours, const mentioned_card& card, const text_piece& words,
                        const model* now, skia::SkColor quote) {
   auto after = nodes::BasicText<message_pictures>(words.text, 13.0f, colours.text);
@@ -529,7 +535,8 @@ inline auto link_piece(const palette& colours, const mentioned_card& card, const
   after.setStyles(words.styles, quote);
   after.setShrinksToLines(true);
   return skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
-      card_of(colours, card.url, card.where, now), skiff::compose::visible(!words.text.empty(), std::move(after)));
+      link_card_marked(card_of(colours, card.url, card.where, now), linked_card{card.url}),
+      skiff::compose::visible(!words.text.empty(), std::move(after)));
 }
 using link_piece_t = decltype(link_piece(std::declval<const palette&>(), std::declval<const mentioned_card&>(),
     std::declval<const text_piece&>(), nullptr, skia::SkColor{}));
@@ -669,15 +676,23 @@ inline auto disclosure_piece(const palette& colours, const mentioned& shown,
 }
 using disclosure_piece_t = decltype(disclosure_piece(std::declval<const palette&>(),
     std::declval<const mentioned&>(), std::declval<const text_piece&>(), nullptr, skia::SkColor{}));
-using message_piece = spl::variant<code_piece_t, link_piece_t, disclosure_piece_t>;
+// Each kind of piece marked by its kind: outside a release build all three
+// are held alike, and one variant needs them told apart.
+struct code_kind {};
+struct link_kind {};
+struct disclosure_kind {};
+using code_piece_m = skiff::compose::Marked<code_kind, code_piece_t>;
+using link_piece_m = skiff::compose::Marked<link_kind, link_piece_t>;
+using disclosure_piece_m = skiff::compose::Marked<disclosure_kind, disclosure_piece_t>;
+using message_piece = spl::variant<code_piece_m, link_piece_m, disclosure_piece_m>;
 
 [[nodiscard]] inline std::optional<std::string> message_link_at(const std::vector<message_piece>& pieces, float x, float y) {
   for (const auto& piece : pieces) {
-    const auto url = spl::visit(spl::overloaded{[](const code_piece_t&) -> std::optional<std::string> { return std::nullopt; },
-        [](const disclosure_piece_t&) -> std::optional<std::string> { return std::nullopt; },
-        [&](const link_piece_t& link) -> std::optional<std::string> {
-          const auto& card = std::get<0>(link.fParts);
-          return card.bounds().contains(x, y) ? std::optional{card.fEvent.url} : std::nullopt;
+    const auto url = spl::visit(spl::overloaded{[](const code_piece_m&) -> std::optional<std::string> { return std::nullopt; },
+        [](const disclosure_piece_m&) -> std::optional<std::string> { return std::nullopt; },
+        [&](const link_piece_m& link) -> std::optional<std::string> {
+          const link_card_marked* card = skiff::scene::findNode<link_card_marked>(const_cast<link_piece_m&>(link));
+          return card && card->bounds().contains(x, y) ? std::optional{card->fTag.url} : std::nullopt;
         }}, piece);
     if (url)
       return url;

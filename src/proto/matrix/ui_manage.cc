@@ -372,7 +372,7 @@ struct general_actions {
     }
   };
 };
-inline auto access_menu(manage_box* box) {
+template <class Box = manage_box> inline auto access_menu(Box* box) {
     const auto& facts = box->shown->facts;
     const auto version = integer(rules_of(facts.theirs).version).value_or(12);
     std::vector<join_rule_t> rules{join_rule::invite{}};
@@ -487,7 +487,7 @@ inline auto address_badge(const palette& colours, std::string label) {
       .padding = {4.0f, 8.0f, 4.0f, 8.0f}, .cornerRadius = colours.widgets.fCorner,
       .background = colours.chosen}), nodes::Text(std::move(label), 12.0f, colours.accent));
 }
-inline auto published_address_row(manage_box* box, const std::string& alias) {
+template <class Box = manage_box> inline auto published_address_row(Box* box, const std::string& alias) {
   namespace c = skiff::compose; using act = general_actions::address_action;
   const auto& colours = *box->shown->colours_;
   auto label = nodes::Text(alias, 14.0f, colours.text);
@@ -499,7 +499,7 @@ inline auto published_address_row(manage_box* box, const std::string& alias) {
       c::visible(may(box->shown->facts, power_need::change_address{}), action(colours,
           box->shown->facts.alias == alias ? "Unset Main" : "Set Main", act{box, alias, act::kind::main}, !box->kept.pending)));
 }
-inline auto local_address_row(manage_box* box, const std::string& alias, bool published) {
+template <class Box = manage_box> inline auto local_address_row(Box* box, const std::string& alias, bool published) {
   namespace c = skiff::compose;
   const auto& colours = *box->shown->colours_; const auto& kept = box->kept;
   auto checkbox = widgets::internal::Toggle<select_address, widgets::internal::CheckboxLook>(colours.widgets, {box, alias});
@@ -523,7 +523,7 @@ struct remove_child {
   using Answer = std::optional<request::change_room>;
   Answer operator()() const { return editable(box, power_need::change_settings{}) ? submit(box, room_change::remove_child{room}) : std::nullopt; }
 };
-inline auto space_children(manage_box* box, const room_settings_facts& facts) {
+template <class Box = manage_box> inline auto space_children(Box* box, const room_settings_facts& facts) {
   namespace c = skiff::compose;
   const auto rooms = std::ranges::to<std::vector<std::string>>(std::views::transform(facts.addable, &room_settings_facts::named_room::id));
   const auto names = std::ranges::to<std::vector<std::string>>(std::views::transform(facts.addable, &room_settings_facts::named_room::name));
@@ -554,7 +554,7 @@ template <class Draft> auto local_address_input(const palette& colours, std::str
       c::styled({.shrink = scene::axes::kX, .maxWidth = 160.0f, .alignSelf = scene::align::kMiddle},
           elided(nodes::Text(std::move(server), 12.0f, colours.dim))));
 }
-inline auto general_page(manage_box* box, const room_settings_facts& facts) {
+template <class Box = manage_box> inline auto general_page(Box* box, const room_settings_facts& facts) {
   namespace c = skiff::compose; using acts = general_actions; using draft = general_draft;
   const auto& colours = *box->shown->colours_; const auto& kept = box->kept;
   auto topic_input = multiline_input(colours, kept.profile && kept.profile->topic ? *kept.profile->topic : facts.topic, "");
@@ -680,7 +680,7 @@ struct choose_member_power {
     return submit(box, room_change::set_power{user, values[index]});
   }
 };
-inline auto managed_member_row(manage_box* box, const managed_member& member) {
+template <class Box = manage_box> inline auto managed_member_row(Box* box, const managed_member& member) {
   namespace c = skiff::compose;
   const auto& rules = rules_of(box->shown->facts.theirs); const auto& kept = box->kept;
   const auto level = level_of(rules, member.id);
@@ -693,7 +693,7 @@ inline auto managed_member_row(manage_box* box, const managed_member& member) {
       c::styled({.relativeSize = scene::axes::kNone, .disabled = !editable(box, power_need::change_permissions{}) || level == kCreatorPower || (level >= box->shown->facts.mine && member.id != box->shown->facts.chat.account.address)},
           compact_choice(*box->shown->colours_, "", std::move(names), selected, choose_member_power{box, member.id, std::move(values)})));
 }
-inline auto member_rows(manage_box* box, const member_listing& listing) {
+template <class Box = manage_box> inline auto member_rows(Box* box, const member_listing& listing) {
   namespace c = skiff::compose;
   return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -701,7 +701,7 @@ inline auto member_rows(manage_box* box, const member_listing& listing) {
             return managed_member_row(box, member);
           }))), c::visible(listing.rows.empty(), explained(*box->shown->colours_, listing.empty)));
 }
-inline auto members_page(manage_box* box, const room_settings_facts& facts) {
+template <class Box = manage_box> inline auto members_page(Box* box, const room_settings_facts& facts) {
   namespace c = skiff::compose; using draft = member_draft;
   const auto& kept = box->kept;
   auto listing = [box](const draft& now) {
@@ -872,7 +872,7 @@ inline auto power_chip(const palette& colours, std::string name, skia::SkColor c
       c::styled({.width = 14.0f, .height = 14.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::dot{colour}), colour)),
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(name), 14.0f, colours.text)));
 }
-inline auto power_chips(manage_box* box) {
+template <class Box = manage_box> inline auto power_chips(Box* box) {
   namespace c = skiff::compose;
   const auto& rules = rules_of(box->shown->facts.theirs); const auto& kept = box->kept;
   auto chips = c::many(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::ranges::to<std::vector>(
@@ -882,7 +882,7 @@ inline auto power_chips(manage_box* box) {
   chips.fStack.wrap = true;
   return chips;
 }
-inline auto permission_row(manage_box* box, const permission_item& item) {
+template <class Box = manage_box> inline auto permission_row(Box* box, const permission_item& item) {
   const auto& rules = rules_of(box->shown->facts.theirs);
   const auto& kept = box->kept;
   const auto& draft = kept.permissions ? *kept.permissions : rules.needs;
@@ -899,7 +899,7 @@ inline auto permission_row(manage_box* box, const permission_item& item) {
       skiff::compose::styled({.relativeSize = scene::axes::kNone, .disabled = !editable(box, power_need::change_permissions{}) || required(rules.needs, item.location) > box->shown->facts.mine},
           compact_choice(*box->shown->colours_, "", names, selected, permission_actions::choose{box, item.location, std::move(values)})));
 }
-inline auto permission_section(manage_box* box, const permission_group& group) {
+template <class Box = manage_box> inline auto permission_section(Box* box, const permission_group& group) {
   namespace c = skiff::compose;
   auto rows = c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .cornerRadius = std::max(10.0f, box->shown->colours_->widgets.fCorner),
                                    .background = box->shown->colours_->tile}), std::ranges::to<std::vector>(
@@ -936,7 +936,7 @@ struct remove_custom_permission {
     return {};
   }
 };
-inline auto custom_permissions(manage_box* box) {
+template <class Box = manage_box> inline auto custom_permissions(Box* box) {
   namespace c = skiff::compose; using draft = power_draft;
   const auto& colours = *box->shown->colours_; const auto& kept = box->kept;
   const auto& needs = kept.permissions ? *kept.permissions : rules_of(box->shown->facts.theirs).needs;
@@ -995,7 +995,7 @@ struct apply_tags {
     return submit(box, room_change::set_tags{std::move(tags)});
   }
 };
-inline auto power_form_view(manage_box* box) {
+template <class Box = manage_box> inline auto power_form_view(Box* box) {
   namespace c = skiff::compose; using draft = power_draft;
   const auto& colours = *box->shown->colours_; const auto& kept = box->kept;
   return c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -1008,7 +1008,7 @@ inline auto power_form_view(manage_box* box) {
                       action(colours, "Save", sends<save_power>{}, !kept.pending),
                       action(colours, "Cancel", edit_section{box, editor::power, false})));
 }
-inline auto permissions_page(manage_box* box, const room_settings_facts& facts) {
+template <class Box = manage_box> inline auto permissions_page(Box* box, const room_settings_facts& facts) {
   namespace c = skiff::compose; using draft = power_draft; using acts = permission_actions;
   const auto& colours = *box->shown->colours_; const auto& kept = box->kept; const auto& rules = rules_of(facts.theirs);
   const auto permission = rules.needs.events.find("in.cinny.room.power_level_tags");
@@ -1077,7 +1077,7 @@ struct pack_events {
   }
 };
 inline void preserve_draft(const pack_draft& draft) { draft.box->kept.pack_name = draft.name; }
-inline auto packs_page(manage_box* box, const room_settings_facts& facts) {
+template <class Box = manage_box> inline auto packs_page(Box* box, const room_settings_facts& facts) {
   namespace c = skiff::compose; using draft = pack_draft;
   const auto& colours = *box->shown->colours_; const auto& kept = box->kept;
   const auto& rules = rules_of(facts.theirs);
@@ -1157,7 +1157,7 @@ template <class Act> auto state_list_row(const palette& colours, std::string lab
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(detail), 12.0f, colours.dim)),
       c::visible(kind == state_row_kind::key, c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::right{}), colours.dim)))));
 }
-inline auto state_event_list(manage_box* box) {
+template <class Box = manage_box> inline auto state_event_list(Box* box) {
   namespace c = skiff::compose;
   const auto& colours = *box->shown->colours_; const auto& kept = box->kept;
   const auto groups = grouped_state_events(kept.data);
@@ -1217,7 +1217,7 @@ inline void preserve_draft(const developer_draft& draft) {
   kept.state_type = draft.state_type; kept.state_key = draft.state_key;
   kept.state_json = draft.state_content ? draft.state_content->text() : draft.state_json;
 }
-inline auto developer_page(manage_box* box, const room_settings_facts& facts) {
+template <class Box = manage_box> inline auto developer_page(Box* box, const room_settings_facts& facts) {
   namespace c = skiff::compose; using draft = developer_draft;
   const auto& kept = box->kept; const auto& colours = *box->shown->colours_;
   auto content = multiline_input(colours, kept.account_json.empty() ? "{}" : kept.account_json, "{}", 240.0f);
@@ -1322,106 +1322,78 @@ inline ui::icon_t tab_icon(members) { return ui::icon::person{}; }
 inline ui::icon_t tab_icon(roles) { return ui::icon::lock{}; }
 inline ui::icon_t tab_icon(packs) { return ui::icon::smile{}; }
 inline ui::icon_t tab_icon(advanced) { return ui::icon::terminal{}; }
-// The answers cross the page boundary as types; concrete trees are made once
-// in this module in Debug builds, and remain statically composed in Release.
-using general_page_t = decltype(manage_detail::general_page(std::declval<manage_detail::manage_box*>(), std::declval<const ui::room_settings_facts&>()));
-using members_page_t = decltype(manage_detail::members_page(std::declval<manage_detail::manage_box*>(), std::declval<const ui::room_settings_facts&>()));
-using permissions_page_t = decltype(manage_detail::permissions_page(std::declval<manage_detail::manage_box*>(), std::declval<const ui::room_settings_facts&>()));
-using packs_page_t = decltype(manage_detail::packs_page(std::declval<manage_detail::manage_box*>(), std::declval<const ui::room_settings_facts&>()));
-using developer_page_t = decltype(manage_detail::developer_page(std::declval<manage_detail::manage_box*>(), std::declval<const ui::room_settings_facts&>()));
-using manage_out = skiff::compose::Union<skiff::compose::Union<skiff::compose::Union<skiff::compose::Union<skiff::compose::Union<skiff::model::Types<>, skiff::compose::OutOf<general_page_t>>, skiff::compose::OutOf<members_page_t>>, skiff::compose::OutOf<permissions_page_t>>, skiff::compose::OutOf<packs_page_t>>, skiff::compose::OutOf<developer_page_t>>;
+// Requests which can leave these pages. Keep this contract independent of
+// the concrete page trees, whose types are deduced only where they are made.
+using manage_out = skiff::model::Types<request::change_room, request::save_room_pack,
+    request::open_send_custom, ui::request::open_url, ui::request::pick_room_avatar,
+    ui::request::open_room_packs, ui::request::set_developer_tools, ui::request::copy_text,
+    ui::request::open_member_info>;
 using erased_page = skiff::compose::Erased<manage_out>;
-erased_page manage_page_erased(room, manage_detail::manage_box* box, const ui::room_settings_facts& facts) {
-  return erased_page(manage_detail::general_page(box, facts));
-}
+erased_page manage_page_erased(room, manage_detail::manage_box*, const ui::room_settings_facts&);
+bool place_general(manage_detail::manage_box&, erased_page&);
+bool preserve_general(erased_page&);
 template <class Box> auto make_manage_page(room tab, Box* box, const ui::room_settings_facts& facts) {
   if constexpr (skiff::scene::kErasedWalks) return manage_page_erased(tab, &box->template part<state>(), facts);
   else return manage_detail::general_page(&box->template part<state>(), facts);
 }
 template <class Box> constexpr auto page_type(room, type_tag<Box>) {
   if constexpr (skiff::scene::kErasedWalks) return type_tag<erased_page>{};
-  else return type_tag<general_page_t>{};
+  else return type_tag<decltype(manage_detail::general_page(&std::declval<Box*>()->template part<state>(), std::declval<const ui::room_settings_facts&>()))>{};
 }
-erased_page manage_page_erased(members, manage_detail::manage_box* box, const ui::room_settings_facts& facts) {
-  return erased_page(manage_detail::members_page(box, facts));
-}
+erased_page manage_page_erased(members, manage_detail::manage_box*, const ui::room_settings_facts&);
+bool place_members(manage_detail::manage_box&, erased_page&);
+bool preserve_members(erased_page&);
 template <class Box> auto make_manage_page(members tab, Box* box, const ui::room_settings_facts& facts) {
   if constexpr (skiff::scene::kErasedWalks) return manage_page_erased(tab, &box->template part<state>(), facts);
   else return manage_detail::members_page(&box->template part<state>(), facts);
 }
 template <class Box> constexpr auto page_type(members, type_tag<Box>) {
   if constexpr (skiff::scene::kErasedWalks) return type_tag<erased_page>{};
-  else return type_tag<members_page_t>{};
+  else return type_tag<decltype(manage_detail::members_page(&std::declval<Box*>()->template part<state>(), std::declval<const ui::room_settings_facts&>()))>{};
 }
-erased_page manage_page_erased(roles, manage_detail::manage_box* box, const ui::room_settings_facts& facts) {
-  return erased_page(manage_detail::permissions_page(box, facts));
-}
+erased_page manage_page_erased(roles, manage_detail::manage_box*, const ui::room_settings_facts&);
+bool place_permissions(manage_detail::manage_box&, erased_page&);
+bool preserve_permissions(erased_page&);
 template <class Box> auto make_manage_page(roles tab, Box* box, const ui::room_settings_facts& facts) {
   if constexpr (skiff::scene::kErasedWalks) return manage_page_erased(tab, &box->template part<state>(), facts);
   else return manage_detail::permissions_page(&box->template part<state>(), facts);
 }
 template <class Box> constexpr auto page_type(roles, type_tag<Box>) {
   if constexpr (skiff::scene::kErasedWalks) return type_tag<erased_page>{};
-  else return type_tag<permissions_page_t>{};
+  else return type_tag<decltype(manage_detail::permissions_page(&std::declval<Box*>()->template part<state>(), std::declval<const ui::room_settings_facts&>()))>{};
 }
-erased_page manage_page_erased(packs, manage_detail::manage_box* box, const ui::room_settings_facts& facts) {
-  return erased_page(manage_detail::packs_page(box, facts));
-}
+erased_page manage_page_erased(packs, manage_detail::manage_box*, const ui::room_settings_facts&);
+bool place_packs(manage_detail::manage_box&, erased_page&);
+bool preserve_packs(erased_page&);
 template <class Box> auto make_manage_page(packs tab, Box* box, const ui::room_settings_facts& facts) {
   if constexpr (skiff::scene::kErasedWalks) return manage_page_erased(tab, &box->template part<state>(), facts);
   else return manage_detail::packs_page(&box->template part<state>(), facts);
 }
 template <class Box> constexpr auto page_type(packs, type_tag<Box>) {
   if constexpr (skiff::scene::kErasedWalks) return type_tag<erased_page>{};
-  else return type_tag<packs_page_t>{};
+  else return type_tag<decltype(manage_detail::packs_page(&std::declval<Box*>()->template part<state>(), std::declval<const ui::room_settings_facts&>()))>{};
 }
-erased_page manage_page_erased(advanced, manage_detail::manage_box* box, const ui::room_settings_facts& facts) {
-  return erased_page(manage_detail::developer_page(box, facts));
-}
+erased_page manage_page_erased(advanced, manage_detail::manage_box*, const ui::room_settings_facts&);
+bool place_developer(manage_detail::manage_box&, erased_page&);
+bool preserve_developer(erased_page&);
 template <class Box> auto make_manage_page(advanced tab, Box* box, const ui::room_settings_facts& facts) {
   if constexpr (skiff::scene::kErasedWalks) return manage_page_erased(tab, &box->template part<state>(), facts);
   else return manage_detail::developer_page(&box->template part<state>(), facts);
 }
 template <class Box> constexpr auto page_type(advanced, type_tag<Box>) {
   if constexpr (skiff::scene::kErasedWalks) return type_tag<erased_page>{};
-  else return type_tag<developer_page_t>{};
+  else return type_tag<decltype(manage_detail::developer_page(&std::declval<Box*>()->template part<state>(), std::declval<const ui::room_settings_facts&>()))>{};
 }
 }
 
 export namespace mux::proto::matrix::manage_detail {
 inline void manage_page_placed(manage_box& box, auto&) { box.draft = std::monostate{}; }
-inline void manage_page_placed(manage_box& box, manage::general_page_t& page) {
-  box.draft = &page.fModel.root();
-}
-inline void manage_page_placed(manage_box& box, manage::members_page_t& page) {
-  box.draft = &page.fModel.root();
-}
-inline void manage_page_placed(manage_box& box, manage::permissions_page_t& page) {
-  box.draft = &page.fModel.root();
-}
-inline void manage_page_placed(manage_box& box, manage::packs_page_t& page) {
-  box.draft = &page.fModel.root();
-}
-inline void manage_page_placed(manage_box& box, manage::developer_page_t& page) {
-  box.draft = &page.fModel.root();
-}
-void manage_page_placed(manage_box& box, manage::erased_page& page) {
-  box.draft = std::monostate{};
-  if (auto* shown = page.shown().get<manage::general_page_t>()) manage_page_placed(box, *shown);
-  if (auto* shown = page.shown().get<manage::members_page_t>()) manage_page_placed(box, *shown);
-  if (auto* shown = page.shown().get<manage::permissions_page_t>()) manage_page_placed(box, *shown);
-  if (auto* shown = page.shown().get<manage::packs_page_t>()) manage_page_placed(box, *shown);
-  if (auto* shown = page.shown().get<manage::developer_page_t>()) manage_page_placed(box, *shown);
-}
+template <class Page>
+  requires requires(manage_box& box, Page& page) { box.draft = &page.fModel.root(); }
+inline void manage_page_placed(manage_box& box, Page& page) { box.draft = &page.fModel.root(); }
+void manage_page_placed(manage_box&, manage::erased_page&);
 }
 
 export namespace mux::ui {
-void preserve_manage_input(proto::matrix::manage::erased_page& page) {
-  namespace manage = proto::matrix::manage;
-  if (auto* shown = page.shown().get<manage::general_page_t>()) proto::matrix::manage_detail::preserve_manage_page(*shown);
-  if (auto* shown = page.shown().get<manage::members_page_t>()) proto::matrix::manage_detail::preserve_manage_page(*shown);
-  if (auto* shown = page.shown().get<manage::permissions_page_t>()) proto::matrix::manage_detail::preserve_manage_page(*shown);
-  if (auto* shown = page.shown().get<manage::packs_page_t>()) proto::matrix::manage_detail::preserve_manage_page(*shown);
-  if (auto* shown = page.shown().get<manage::developer_page_t>()) proto::matrix::manage_detail::preserve_manage_page(*shown);
-}
+void preserve_manage_input(proto::matrix::manage::erased_page&);
 }

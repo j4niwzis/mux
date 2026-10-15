@@ -235,30 +235,13 @@ inline auto theme_row(const palette& colours) {
 }
 // The themes move sideways in narrow pages; each card binds its own edit.
 inline auto theme_field(const palette& colours) {
-  return legacy::side_scroll<decltype(theme_row(colours))>(theme_row(colours));
+  return skiff::compose::side_scroll(theme_row(colours));
 }
 // Telegram's accents, the theme's own first: bound to the accent the model
 // holds. Their shades are the theme's: the page is made again with it.
 inline auto accent_view(const config::theme_t &theme) {
   using field = skiff::model::Field<&config::look_settings::accent>;
-  auto circles =
-      legacy::accent_circles<pick<config::accent_t>>::accents_of(true) |
-      std::views::transform([&](const config::accent_t &accent) {
-        const auto shade = colour_of(accent, theme);
-        return skiff::compose::spec_for<field>(
-            [accent, shade](const config::accent_t &now) -> scene::Spec {
-              const bool chosen = accent == now;
-              return {.border = scene::Border{chosen ? shade : 0u,
-                                              chosen ? 2.0f : 0.0f}};
-            },
-            legacy::accent_circle<pick<config::accent_t>>({}, accent, theme));
-      }) |
-      std::ranges::to<std::vector>();
-  return skiff::compose::many(
-      skiff::compose::hbox(4.0f, {.fillX = true,
-                                  .autoSize = scene::axes::kY,
-                                  .margin = {4.0f, 16.0f, 8.0f, 16.0f}}),
-      std::move(circles));
+  return accent_circles_for<field>(pick<config::accent_t>{}, theme, true, [](const config::accent_t& now) { return now; });
 }
 // Values and labels are projected by the model combinators; sliders own
 // their input conversion in skiff.widgets.model.

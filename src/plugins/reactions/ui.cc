@@ -49,7 +49,7 @@ inline auto reaction_chip(const palette& colours, const looks_shown& looks,
         // Overlap faces with one another, never with the reaction label.
         return c::styled({.margin = {0.0f, 0.0f, 0.0f, index == 0 ? 0.0f : -6.0f},
                           .border = scene::Border{own ? colours.accent : colours.tile, 1.5f}},
-                         legacy::avatar_mark(avatar_of::person{}, person.first, person.second, 20.0f));
+                         avatar_mark(avatar_of::person{}, person.first, person.second, 20.0f));
       }));
   const auto tint = at_opacity(own ? colours.accent : colours.tile,
       element_opacity_of(looks.bubbles, &config::element_opacity::reactions));
@@ -110,10 +110,9 @@ std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>
 // Reactions, in a message's menu: how many, and who, listed.
 inline auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&,
             const menu_facts& facts) {
-  using row = legacy::row_item<sends<show>>;
   return skiff::compose::visible(
       !facts.id.empty() && (facts.can.react || facts.reaction_count > 0),
-      row(colours,
+      row_item(colours,
           facts.reaction_count == 0   ? std::string("Reactions")
           : facts.reaction_count == 1 ? std::string("1 reaction")
                                       : std::format("{} reactions", facts.reaction_count),

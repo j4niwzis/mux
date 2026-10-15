@@ -156,10 +156,9 @@ inline auto extend(contract::media_pages, type_tag<feature>, const ui_needs& nee
 // A sticker's menu: made a favourite, or no longer one.
 inline auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept& kept,
             const menu_facts& facts) {
-  using row = legacy::row_item<sends<favourite>>;
   return skiff::compose::visible(
       facts.sticker.has_value(),
-      row(colours, facts.sticker && kept.is_favourite(facts.sticker->url) ? "Remove from Favourites" : "Add to Favourites",
+      row_item(colours, facts.sticker && kept.is_favourite(facts.sticker->url) ? "Remove from Favourites" : "Add to Favourites",
           sends<favourite>{favourite{facts.sticker.value_or(emote{})}}, icon::check{}, std::nullopt, menu_row_look));
 }
 

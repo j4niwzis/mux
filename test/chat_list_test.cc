@@ -101,8 +101,8 @@ TEST(ChatList, HtmlPreviewKeepsMentionPillsAndDiscardsOtherLinks) {
 }
 
 TEST(ChatList, RowKeepsListSemanticsArrowCursorAndChoiceRequest) {
-  mux::ui::ui_shared shared;
-  mux::ui::palette colours;
+  mux::ui::ui_shared shared{};
+  mux::ui::palette colours{};
   const mux::ui::ui_needs needs{.colours = &colours, .shared = &shared};
   auto room = chat("semantics");
   mux::ui::conversation_view view;

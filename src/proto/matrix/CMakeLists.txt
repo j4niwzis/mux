@@ -9,5 +9,6 @@ mux_protocol(matrix ORDER 20
   UI_IMPL manage_general.cc manage_members.cc manage_permissions.cc
           manage_packs.cc manage_developer.cc
   APP    demo.cc app.cc
-  SPLIT  app/accounts_sync.cc app/accounts_requests.cc app/accounts_events.cc app/accounts_media.cc
+  SPLIT  app/accounts_sync.cc app/accounts_requests.cc app/accounts_requests_more.cc app/accounts_requests_send.cc
+         app/accounts_events.cc app/accounts_media.cc
   POINTS mux.proto.matrix mux.proto.matrix.requests)

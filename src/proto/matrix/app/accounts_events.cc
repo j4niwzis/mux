@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // The Matrix account as the program runs it: the members defined in its
-// events partition, instantiated here alone -- one of four units the account
+// events partition, instantiated here alone -- one of six units the account
 // is built in, in parallel (see network.cc).
 // Part of mux.app.network, where the account is declared extern.
 module mux.app.network;

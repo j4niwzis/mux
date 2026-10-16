@@ -492,7 +492,7 @@ using detail_shown_t = decltype(detail_shown(std::declval<const ui_needs&>(), de
 // -- a page taller than the window scrolls.
 inline auto detail_column(const ui_needs& n) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(detail_column, c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX, .padding = {24.0f, 28.0f, 24.0f, 28.0f}}),
+  return SKIFF_NAMED(detail_column, c::column(c::vbox(0.0f, {.fill = true, .padding = {24.0f, 28.0f, 24.0f, 28.0f}}),
       c::styled({.fill = true}, nodes::ScrollContainer(c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           c::projected<panel_read>([](const panel_read& now) { return now ? std::optional(detail_key{now->detail, now->theme, now->toward}) : std::nullopt; },
               c::mount<detail_shown_t, detail_key>(

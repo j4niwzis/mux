@@ -570,14 +570,16 @@ struct marks_fragment {
 struct quote_pressed {
   std::string message_id;
   std::optional<std::string> replies_to;
-  std::optional<request::jump_to_message> operator()(auto& text, float x, float y) const {
-    if (!replies_to || text.hasSelection())
+  // Its words, found by their mark under what is pressed.
+  std::optional<request::jump_to_message> operator()(auto& pressed, float x, float y) const {
+    const bubble_words_t* text = words_in(pressed);
+    if (!replies_to || !text || text->hasSelection())
       return std::nullopt;
-    const auto quote = text.quoteAt(x, y);
+    const auto quote = text->quoteAt(x, y);
     if (!quote)
       return std::nullopt;
     return request::jump_to_message{
-        *replies_to, trimmed_fragment(std::string_view(text.text()).substr(quote->first, quote->second - quote->first)), message_id};
+        *replies_to, trimmed_fragment(std::string_view(text->text()).substr(quote->first, quote->second - quote->first)), message_id};
   }
 };
 // A forward's line pressed off its sender's pill: the original, where it

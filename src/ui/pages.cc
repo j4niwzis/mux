@@ -346,6 +346,12 @@ struct leave_draft {
   std::set<std::string> chosen;
 };
 struct flip_leave_room { std::string room; };
+// A room's switch pressed: it flipped among those to leave.
+struct flip_leave_toggle {
+  using Answer = flip_leave_room;
+  std::string room;
+  flip_leave_room operator()() const { return {room}; }
+};
 struct submit_leave_space {};
 struct leave_events {
   leave_space_facts facts;
@@ -368,9 +374,11 @@ struct leave_events {
 inline auto leave_room_row(const palette& colours, const room_settings_facts::named_room& room) {
   return skiff::compose::row(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
       skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(room.name, 14.0f, colours.text))),
-      skiff::compose::onClick(flip_leave_room{room.id}, skiff::compose::projected<skiff::model::Field<&leave_draft::chosen>>(
+      // On while the room is among those to leave; pressed, flipped there.
+      skiff::compose::named(room.name, {}, skiff::compose::applied<skiff::model::Field<&leave_draft::chosen>>(
           [id = room.id](const auto& chosen) { return chosen.contains(id); },
-          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::ToggleField<bool>(colours.widgets))), room.name));
+          [](widgets::Toggle<flip_leave_toggle>& toggle, bool on) { toggle.setOn(on); },
+          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::Toggle<flip_leave_toggle>(colours.widgets, {room.id})))));
 }
 inline auto leave_space_box(const palette& colours, const leave_space_facts& facts) {
   using choice = skiff::model::Field<&leave_draft::choice>;

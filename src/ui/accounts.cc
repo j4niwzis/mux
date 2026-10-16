@@ -217,9 +217,9 @@ auto account_switch(const palette& colours, std::string text, On on, Allowed all
     return scene::Spec{.alpha = may ? 1.0f : 0.4f, .disabled = !may};
   }, c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(text, 15.0f, colours.text))),
-            c::applied<page_read>([on](const page_read& now) { return now && on(now->account); },
+            c::named(text, {}, c::applied<page_read>([on](const page_read& now) { return now && on(now->account); },
                                   [](toggle_t& toggle, bool now) { toggle.setOn(now); },
-                                  c::named(text, {}, c::styled({.alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, Flip{}))))));
+                                  c::styled({.alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, Flip{}))))));
 }
 inline constexpr auto always = [](const config::account_t&) { return true; };
 

@@ -423,7 +423,7 @@ class chat_list_part {
       auto ranked = all | std::views::enumerate | std::views::filter([&](const auto& one) { return in_bar(std::get<1>(one), bar); }) | std::views::transform([&](const auto& one) {
                       const auto& [i, each] = one;
                       const auto at = std::ranges::find_if(mine, [&](const auto& p) { return p.item == each.item && p.bar == bar; });
-                      return std::pair{at == mine.end() ? mine.size() + static_cast<std::size_t>(i) : static_cast<std::size_t>(at - mine.begin()), &each};
+                      return std::pair<std::size_t, const entry*>{at == mine.end() ? mine.size() + static_cast<std::size_t>(i) : static_cast<std::size_t>(at - mine.begin()), &each};
                     }) | std::ranges::to<std::vector>();
       std::ranges::stable_sort(ranked, {}, &std::pair<std::size_t, const entry*>::first);
       return ranked | std::views::values | std::ranges::to<std::vector>();
@@ -566,7 +566,7 @@ class chat_list_part {
       made.unread = std::ranges::fold_left(topics | std::views::transform([&](const mux::conversation* topic) { return topic->unread_here(this->events_of(kept, *topic)); }),
                                            std::int64_t{0}, std::plus{});
       made.highlights = std::ranges::fold_left(topics | std::views::transform(&mux::conversation::highlights), decltype(made.highlights){0}, std::plus{});
-      const auto newest_in = [&](const mux::conversation* topic) { return mux::ui::newest(*topic, this->events_of(kept, *topic)); };
+      const auto newest_in = [&](const mux::conversation* topic) { return mux::newest(*topic, this->events_of(kept, *topic)); };
       auto with_one = topics | std::views::filter([&](const mux::conversation* topic) { return newest_in(topic) != nullptr; });
       if (const auto best = std::ranges::max_element(with_one, {}, [&](const mux::conversation* topic) { return newest_in(topic)->at; });
           best != std::ranges::end(with_one)) {

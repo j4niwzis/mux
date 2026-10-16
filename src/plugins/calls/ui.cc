@@ -133,8 +133,13 @@ inline auto call_avatar(const call_view& view, float size) {
   round_avatar(avatar, size, avatar_of::chat{});
   return skiff::compose::styled({.alignSelf = scene::align::kMiddle}, std::move(avatar));
 }
-inline auto call_status(const palette& colours, const call_view& view, float size) {
-  return skiff::compose::text_of<call_shown>(call_words{}, nodes::Text(said_of(view), size, colours.dim));
+// How it is going, read as it goes: wrapped or cut short as where it is
+// shown asks -- said of the text itself, before it is read.
+inline auto call_status(const palette& colours, const call_view& view, float size, bool wrap = false, bool elide = false) {
+  auto text = nodes::Text(said_of(view), size, colours.dim);
+  text.setWrapped(wrap);
+  text.setElided(elide);
+  return skiff::compose::text_of<call_shown>(call_words{}, std::move(text));
 }
 // The call in its chat, beneath the header.
 inline auto call_panel(const palette& colours, const call_view& view) {
@@ -155,7 +160,7 @@ inline auto call_screen(const palette& colours, const call_view& view) {
       skiff::compose::styled({.fillX = true, .height = 1.0f, .grow = scene::axes::kY}, nodes::Box<>(skia::SkColor{0})),
       call_avatar(view, 128.0f),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(view.who, 24.0f, colours.text, true))),
-      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, wrapped(call_status(colours, view, 15.0f))),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, call_status(colours, view, 15.0f, true)),
       skiff::compose::styled({.fillX = true, .height = 1.0f, .grow = scene::axes::kY}, nodes::Box<>(skia::SkColor{0})),
       call_buttons(colours, 64.0f, view)));
 }
@@ -171,7 +176,7 @@ inline auto call_bar(const palette& colours, const call_view& view) {
       skiff::compose::column(
           skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
           skiff::compose::styled({.fillX = true}, elided(nodes::Text(view.who, 15.0f, colours.text, true))),
-          skiff::compose::styled({.fillX = true}, elided(call_status(colours, view, 13.0f)))),
+          skiff::compose::styled({.fillX = true}, call_status(colours, view, 13.0f, false, true))),
       call_buttons(colours, 40.0f, view));
 }
 namespace call_ui {

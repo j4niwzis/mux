@@ -393,9 +393,9 @@ inline auto leave_space_box(const palette& colours, const leave_space_facts& fac
           skiff::compose::styled({.width = 130.0f, .height = 36.0f}, primary(widgets::SendButton<submit_leave_space>(colours.widgets, "Leave space", {}))))));
 }
 using leave_space_box_t = decltype(leave_space_box(std::declval<const palette&>(), std::declval<const leave_space_facts&>()));
-inline dialog_look content_look(std::type_identity<leave_space_box_t>) { return {.size = dialog_size::fitting{440.0f}}; }
+inline dialog_look content_look(std::type_identity<leave_space_facts>) { return {.size = dialog_size::fitting{440.0f}}; }
 template <class Needs>
-auto make_content(std::type_identity<leave_space_box_t>, const Needs& needs, const leave_space_facts& facts) {
+auto make_content(const Needs& needs, const leave_space_facts& facts) {
   return leave_space_box(*needs.colours, facts);
 }
 

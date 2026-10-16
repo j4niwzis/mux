@@ -200,14 +200,14 @@ inline auto dialog_content(const ui::ui_needs& n, const devtools_text& facts) { 
 inline auto dialog_content(const ui::ui_needs& n, const devtools_state& facts) { return tools_detail::devtools_state_view(*n.colours, facts); }
 inline auto dialog_content(const ui::ui_needs& n, const send_custom_form& facts) { return tools_detail::send_custom_view(*n.colours, facts); }
 inline auto dialog_content(const ui::ui_needs& n, const uia_step& facts) { return tools_detail::uia_view(*n.colours, facts); }
-template <class Content, class Needs, class Facts>
+template <class Needs, class Facts>
   requires requires(const Needs& n, const Facts& f) { dialog_content(n, f); }
-auto make_content(std::type_identity<Content>, const Needs& n, const Facts& facts) {
+auto make_content(const Needs& n, const Facts& facts) {
   return dialog_content(n, facts);
 }
-template <class Content, class Facts>
+template <class Facts>
   requires requires(const ui::ui_needs& n, const Facts& f) { dialog_content(n, f); }
-ui::dialog_look content_look(std::type_identity<Content>, std::type_identity<Facts>) {
+ui::dialog_look content_look(std::type_identity<Facts>) {
   return {};
 }
 }  // namespace mux::proto::matrix::tool

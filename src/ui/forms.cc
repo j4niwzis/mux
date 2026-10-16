@@ -98,14 +98,11 @@ inline auto link_box(const palette& colours, const link_facts& facts) {
 }
 using link_box_t = decltype(link_box(std::declval<const palette&>(), std::declval<const link_facts&>()));
 // Keep the local draft and focused fields while the same link is shown.
-inline bool content_persistent(std::type_identity<link_box_t>) { return true; }
-inline bool content_matches(const link_box_t& up, const link_facts& facts) {
-  const auto& original = up.fModel.root().original;
-  return original.text == facts.text && original.url == facts.url;
-}
-inline dialog_look content_look(std::type_identity<link_box_t>) { return {.size = dialog_size::fitting{400.0f}}; }
+inline bool content_persistent(std::type_identity<link_facts>) { return true; }
+inline bool content_matches(const link_facts& was, const link_facts& now) { return was.text == now.text && was.url == now.url; }
+inline dialog_look content_look(std::type_identity<link_facts>) { return {.size = dialog_size::fitting{400.0f}}; }
 template <class Needs>
-auto make_content(std::type_identity<link_box_t>, const Needs& needs, const link_facts& facts) {
+auto make_content(const Needs& needs, const link_facts& facts) {
   return link_box(*needs.colours, facts);
 }
 
@@ -182,13 +179,13 @@ inline auto passphrase_box(const palette& colours) {
               primary(widgets::SendButton<request::give_passphrase>(colours.widgets, "", {}))))));
 }
 using passphrase_box_t = decltype(passphrase_box(std::declval<const palette&>()));
-inline dialog_look content_look(std::type_identity<passphrase_box_t>) { return {.size = dialog_size::fitting{420.0f}}; }
-inline bool content_persistent(std::type_identity<passphrase_box_t>) { return true; }
-inline bool content_dismissable(std::type_identity<passphrase_box_t>, const passphrase_facts& facts) {
+inline dialog_look content_look(std::type_identity<passphrase_facts>) { return {.size = dialog_size::fitting{420.0f}}; }
+inline bool content_persistent(std::type_identity<passphrase_facts>) { return true; }
+inline bool content_dismissable(std::type_identity<passphrase_facts>, const passphrase_facts& facts) {
   return spl::visit(spl::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, facts.why);
 }
 template <class Needs>
-auto make_content(std::type_identity<passphrase_box_t>, const Needs& needs, const passphrase_facts&) {
+auto make_content(const Needs& needs, const passphrase_facts&) {
   return passphrase_box(*needs.colours);
 }
 

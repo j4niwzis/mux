@@ -88,11 +88,10 @@ auto edit_history_panel(const ui_needs& n, const history_facts& facts) {
       page_header<no_back, sends<request::close_edit_history>>(*n.colours, "Edit History", {}, {}, false, true), std::move(list));
 }
 using edit_history_box = decltype(edit_history_panel(std::declval<const ui_needs&>(), std::declval<const history_facts&>()));
-auto make_content(std::type_identity<edit_history_box>, const ui_needs& n, const history_facts& facts) {
+auto make_content(const ui_needs& n, const history_facts& facts) {
   return edit_history_panel(n, facts);
 }
-template <class Content>
-inline dialog_look content_look(std::type_identity<Content>, std::type_identity<history_facts>) {
+inline dialog_look content_look(std::type_identity<history_facts>) {
   return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 560.0f}};
 }
 
@@ -181,11 +180,11 @@ inline auto marks_panel(const ui_needs& n, const marks_facts& facts) {
 }
 using marks_box_t = decltype(marks_panel(std::declval<const ui_needs&>(), std::declval<const marks_facts&>()));
 using marks_box = marks_box_t;
-inline dialog_look content_look(std::type_identity<marks_box_t>) {
+inline dialog_look content_look(std::type_identity<marks_facts>) {
   return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 520.0f}};
 }
 template <class Needs>
-auto make_content(std::type_identity<marks_box_t>, const Needs& needs, const marks_facts& facts) {
+auto make_content(const Needs& needs, const marks_facts& facts) {
   return marks_panel(needs, facts);
 }
 

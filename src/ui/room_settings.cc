@@ -210,18 +210,14 @@ inline auto room_settings_view(const ui_needs& n, const room_settings_facts& fac
                                         c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_pages_of(colours, facts)))))))))));
 }
 using room_settings_view_t = decltype(room_settings_view(std::declval<const ui_needs&>(), std::declval<const room_settings_facts&>()));
-// The settings, with the room they are for.
-struct room_settings_t : room_settings_view_t {
-  conversation_id room;
-  room_settings_t(room_settings_view_t view, conversation_id of) : room_settings_view_t(std::move(view)), room(std::move(of)) {}
-};
-inline dialog_look content_look(std::type_identity<room_settings_t>) { return {.size = dialog_size::fixed{802.0f, 684.0f}}; }
+using room_settings_t = room_settings_view_t;
+inline dialog_look content_look(std::type_identity<room_settings_facts>) { return {.size = dialog_size::fixed{802.0f, 684.0f}}; }
 template <class Needs>
-room_settings_t make_content(std::type_identity<room_settings_t>, const Needs& needs, const room_settings_facts& facts) {
-  return room_settings_t(room_settings_view(needs, facts), facts.chat);
+auto make_content(const Needs& needs, const room_settings_facts& facts) {
+  return room_settings_view(needs, facts);
 }
-constexpr bool content_persistent(std::type_identity<room_settings_t>) { return true; }
-inline bool content_matches(const room_settings_t& up, const room_settings_facts& facts) { return up.room == facts.chat; }
+// The same room's settings stand while they are up.
+inline bool content_matches(const room_settings_facts& was, const room_settings_facts& now) { return was.chat == now.chat; }
 
 }  // namespace mux::ui
 

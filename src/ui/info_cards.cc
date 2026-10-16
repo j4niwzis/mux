@@ -233,11 +233,11 @@ inline auto person_card(const ui_needs& n, const person_shown& shown) {
 using person_card_t = decltype(person_card(std::declval<const ui_needs&>(), std::declval<const person_shown&>()));
 // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
 // it shows, a 24th of the window down within 20 and 40.
-inline dialog_look content_look(std::type_identity<person_card_t>) {
+inline dialog_look content_look(std::type_identity<person_shown>) {
   return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}};
 }
 template <class Needs>
-auto make_content(std::type_identity<person_card_t>, const Needs& needs, const person_shown& shown) {
+auto make_content(const Needs& needs, const person_shown& shown) {
   return person_card(needs, shown);
 }
 
@@ -318,11 +318,11 @@ inline auto room_card(const ui_needs& n, const room_card_facts& facts) {
   return room_card(*n.colours, facts.asked, facts.known);
 }
 using room_card_t = decltype(room_card(std::declval<const ui_needs&>(), std::declval<const room_card_facts&>()));
-inline dialog_look content_look(std::type_identity<room_card_t>) {
+inline dialog_look content_look(std::type_identity<room_card_facts>) {
   return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}};
 }
 template <class Needs>
-auto make_content(std::type_identity<room_card_t>, const Needs& needs, const room_card_facts& facts) {
+auto make_content(const Needs& needs, const room_card_facts& facts) {
   return room_card(needs, facts);
 }
 

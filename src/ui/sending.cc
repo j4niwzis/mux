@@ -100,9 +100,9 @@ inline auto send_box(const ui_needs& n, const send_facts& facts) {
 }
 using send_box_t = decltype(send_box(std::declval<const ui_needs&>(), std::declval<const send_facts&>()));
 // Sized as it is opened, by the files it is opened with.
-inline dialog_look content_look(std::type_identity<send_box_t>) { return {}; }
+inline dialog_look content_look(std::type_identity<send_facts>) { return {}; }
 template <class Needs>
-auto make_content(std::type_identity<send_box_t>, const Needs& needs, const send_facts& facts) {
+auto make_content(const Needs& needs, const send_facts& facts) {
   return send_box(needs, facts);
 }
 

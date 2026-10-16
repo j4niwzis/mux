@@ -77,9 +77,9 @@ inline auto notice_box(const palette& colours, const notice_facts& facts) {
               primary(widgets::SendButton<request::close_notice>(colours.widgets, facts.delete_selection ? "Cancel" : "OK", {})))));
 }
 using notice_box_t = decltype(notice_box(std::declval<const palette&>(), std::declval<const notice_facts&>()));
-inline dialog_look content_look(std::type_identity<notice_box_t>) { return {.size = dialog_size::fitting{440.0f}}; }
+inline dialog_look content_look(std::type_identity<notice_facts>) { return {.size = dialog_size::fitting{440.0f}}; }
 template <class Needs>
-auto make_content(std::type_identity<notice_box_t>, const Needs& needs, const notice_facts& facts) {
+auto make_content(const Needs& needs, const notice_facts& facts) {
   return notice_box(*needs.colours, facts);
 }
 

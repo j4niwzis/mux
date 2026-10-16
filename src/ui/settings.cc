@@ -117,10 +117,10 @@ inline auto settings_view(const ui_needs& needs) {
 }
 using settings_view_t = decltype(settings_view(std::declval<const ui_needs&>()));
 // The window's dialog of it: made from what is shown, then told it as it changes.
-inline settings_view_t make_content(std::type_identity<settings_view_t>, const ui_needs& needs, const settings_facts&) {
+inline settings_view_t make_content(const ui_needs& needs, const settings_facts&) {
   return settings_view(needs);
 }
-[[nodiscard]] inline dialog_look content_look(std::type_identity<settings_view_t>) {
+[[nodiscard]] inline dialog_look content_look(std::type_identity<settings_facts>) {
   return {.size = dialog_size::fixed{440.0f, 520.0f}};
 }
 

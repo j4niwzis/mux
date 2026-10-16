@@ -685,15 +685,26 @@ struct toggle_thread_emoji {
   float right = 0.0f;
   float top = 0.0f;
 };
+}  // namespace request
 // Which field the program gives the keys to, and each time it does: a count
 // it raises -- the field asked reads it and takes the keys (focused_by); the
 // others read 0. One target at a time, so only one field asks.
 namespace keys {
-struct none {};
-struct chat {};
-struct thread {};
-struct search {};
-struct menu {};
+struct none {
+  friend bool operator==(none, none) = default;
+};
+struct chat {
+  friend bool operator==(chat, chat) = default;
+};
+struct thread {
+  friend bool operator==(thread, thread) = default;
+};
+struct search {
+  friend bool operator==(search, search) = default;
+};
+struct menu {
+  friend bool operator==(menu, menu) = default;
+};
 }  // namespace keys
 using keys_target = spl::variant<keys::none, keys::chat, keys::thread, keys::search, keys::menu>;
 struct keys_asked {
@@ -708,6 +719,7 @@ template <class Target> struct keys_on {
     return spl::visit(spl::overloaded{[&](Target) { return now.count; }, [](const auto&) { return std::uint64_t{0}; }}, now.which);
   }
 };
+namespace request {
 // Which field the emoji picker writes in: the chat's, or the thread's.
 namespace writing {
 struct chat {};

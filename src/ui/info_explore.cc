@@ -121,12 +121,10 @@ auto explore_view(const palette& colours, const explore_facts& facts) {
                more ? facts.listing->next : std::nullopt})))), explore_draft{facts.query, facts.server});
 }
 using explore_box = decltype(explore_view(std::declval<const palette&>(), std::declval<const explore_facts&>()));
-template <class Content>
-auto make_content(std::type_identity<Content>, const ui_needs& needs, const explore_facts& facts) {
+inline auto make_content(const ui_needs& needs, const explore_facts& facts) {
   return explore_view(*needs.colours, facts);
 }
-template <class Content>
-inline dialog_look content_look(std::type_identity<Content>, std::type_identity<explore_facts>) {
+inline dialog_look content_look(std::type_identity<explore_facts>) {
   return {.size = dialog_size::fixed{640.0f, 560.0f}};
 }
 }  // namespace mux::ui

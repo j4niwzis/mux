@@ -69,11 +69,10 @@ inline auto panel(const ui_needs& n, const shown& facts) {
       dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
 }
 using box = decltype(panel(std::declval<const ui_needs&>(), std::declval<const shown&>()));
-inline auto make_content(std::type_identity<box>, const ui_needs& n, const shown& facts) {
+inline auto make_content(const ui_needs& n, const shown& facts) {
   return panel(n, facts);
 }
-template <class Content>
-inline dialog_look content_look(std::type_identity<Content>, std::type_identity<shown>) {
+inline dialog_look content_look(std::type_identity<shown>) {
   return {.sheet = sheet::chat{}, .size = dialog_size::fixed{392.0f, 420.0f}};
 }
 

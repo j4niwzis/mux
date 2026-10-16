@@ -108,11 +108,11 @@ inline auto forward_view(const ui_needs& n, const forward_facts& facts) {
 }
 using forward_box_t = decltype(forward_view(std::declval<const ui_needs&>(), std::declval<const forward_facts&>()));
 using forward_box = forward_box_t;
-inline dialog_look content_look(std::type_identity<forward_box_t>) {
+inline dialog_look content_look(std::type_identity<forward_facts>) {
   return {.size = dialog_size::fixed{400.0f, 520.0f}};
 }
 template <class Needs>
-auto make_content(std::type_identity<forward_box_t>, const Needs& needs, const forward_facts& facts) {
+auto make_content(const Needs& needs, const forward_facts& facts) {
   return forward_view(needs, facts);
 }
 
@@ -215,13 +215,13 @@ inline auto start_chat_view(const palette& colours, const new_chat_facts& facts)
 }
 using start_chat_box_t = decltype(start_chat_view(std::declval<const palette&>(), std::declval<const new_chat_facts&>()));
 using start_chat_box = start_chat_box_t;
-inline bool content_persistent(std::type_identity<start_chat_box_t>) { return true; }
-inline bool content_matches(const start_chat_box_t& up, const new_chat_facts& facts) {
-  return up.fHandlers.by == facts.by && up.fHandlers.inviting == facts.inviting;
+inline bool content_persistent(std::type_identity<new_chat_facts>) { return true; }
+inline bool content_matches(const new_chat_facts& was, const new_chat_facts& now) {
+  return was.by == now.by && was.inviting == now.inviting;
 }
-inline dialog_look content_look(std::type_identity<start_chat_box_t>) { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
+inline dialog_look content_look(std::type_identity<new_chat_facts>) { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
 template <class Needs>
-auto make_content(std::type_identity<start_chat_box_t>, const Needs& needs, const new_chat_facts& facts) {
+auto make_content(const Needs& needs, const new_chat_facts& facts) {
   return start_chat_view(*needs.colours, facts);
 }
 
@@ -320,9 +320,9 @@ inline auto create_room_view(const palette& colours, const new_room_facts& facts
 }
 using create_room_box_t = decltype(create_room_view(std::declval<const palette&>(), std::declval<const new_room_facts&>()));
 using create_room_box = create_room_box_t;
-inline dialog_look content_look(std::type_identity<create_room_box_t>) { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
+inline dialog_look content_look(std::type_identity<new_room_facts>) { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
 template <class Needs>
-auto make_content(std::type_identity<create_room_box_t>, const Needs& needs, const new_room_facts& facts) {
+auto make_content(const Needs& needs, const new_room_facts& facts) {
   return create_room_view(*needs.colours, facts);
 }
 }  // namespace mux::ui

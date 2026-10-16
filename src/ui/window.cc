@@ -353,60 +353,70 @@ template <class Facts>
 struct facts_emptied {
   static auto answer() { return skiff::bind::own(skiff::model::setTo(std::optional<Facts>{})); }
 };
-// How a dialog of Content looks, by its content and, where it says one, its
-// facts' type.
+template <std::size_t N> struct rank : rank<N - 1> {};
+template <> struct rank<0> {};
+// What a dialog is, said by its facts' type -- distinct for every dialog,
+// where its content's type may not be (outside a release build every
+// content is held alike): how it looks, whether it may be dismissed, whether
+// what is up still stands, how it is made.
+// How it looks: as its facts say; else as its content says of itself; else
+// as a dialog does.
 template <class Content, class Facts>
-  requires requires { content_look(std::type_identity<Content>{}, std::type_identity<Facts>{}); }
-[[nodiscard]] dialog_look dialog_look_of(std::type_identity<Content>, std::type_identity<Facts>) {
-  return content_look(std::type_identity<Content>{}, std::type_identity<Facts>{});
+  requires requires { content_look(std::type_identity<Facts>{}); }
+[[nodiscard]] dialog_look dialog_look_of(std::type_identity<Content>, std::type_identity<Facts>, rank<2>) {
+  return content_look(std::type_identity<Facts>{});
 }
 template <class Content, class Facts>
-[[nodiscard]] dialog_look dialog_look_of(std::type_identity<Content>, std::type_identity<Facts>) {
-  return content_look(std::type_identity<Content>{});
+  requires requires { Content::look_of_dialog(); }
+[[nodiscard]] dialog_look dialog_look_of(std::type_identity<Content>, std::type_identity<Facts>, rank<1>) {
+  return Content::look_of_dialog();
 }
-// Whether a press off it or Esc dismisses it, where what it shows says so of
-// these facts; else as its look says.
+template <class Content, class Facts>
+[[nodiscard]] dialog_look dialog_look_of(std::type_identity<Content>, std::type_identity<Facts>, rank<0>) {
+  return {};
+}
+// Whether a press off it or Esc dismisses it, where these facts say so (or
+// what it shows does, of them); else as its look says.
 template <class Content, class Facts>
   requires requires(const Facts& facts) { Content::dismissable(facts); }
 [[nodiscard]] std::optional<bool> dismissable_of(std::type_identity<Content>, const Facts& facts) {
   return Content::dismissable(facts);
 }
 template <class Content, class Facts>
-  requires requires(const Facts& facts) { content_dismissable(std::type_identity<Content>{}, facts); }
+  requires requires(const Facts& facts) { content_dismissable(std::type_identity<Facts>{}, facts); }
 [[nodiscard]] std::optional<bool> dismissable_of(std::type_identity<Content>, const Facts& facts) {
-  return content_dismissable(std::type_identity<Content>{}, facts);
+  return content_dismissable(std::type_identity<Facts>{}, facts);
 }
 template <class Content, class Facts>
 [[nodiscard]] std::optional<bool> dismissable_of(std::type_identity<Content>, const Facts&) {
   return std::nullopt;
 }
 // Whether what is up still stands for the facts as they are now, from the
-// most it says of itself down: the same room (content_matches); made once
-// while it is up (content_persistent); a page that reads its facts itself,
-// told them; else not -- made again.
-template <std::size_t N> struct rank : rank<N - 1> {};
-template <> struct rank<0> {};
+// most it says of itself down: made from facts that match these
+// (content_matches: the same room); made once while it is up
+// (content_persistent); a page that reads its facts itself, told them; else
+// not -- made again.
 template <class Content, class Facts>
-  requires requires(const Content& up, const Facts& facts) { content_matches(up, facts); }
-[[nodiscard]] bool content_stands(Content& up, const Facts& facts, rank<3>) {
-  return content_matches(up, facts);
+  requires requires(const Facts& was, const Facts& now) { content_matches(was, now); }
+[[nodiscard]] bool content_stands(Content&, const Facts& was, const Facts& now, rank<3>) {
+  return content_matches(was, now);
 }
 template <class Content, class Facts>
-  requires requires { content_persistent(std::type_identity<Content>{}); }
-[[nodiscard]] bool content_stands(Content&, const Facts&, rank<2>) {
-  return content_persistent(std::type_identity<Content>{});
+  requires requires { content_persistent(std::type_identity<Facts>{}); }
+[[nodiscard]] bool content_stands(Content&, const Facts&, const Facts&, rank<2>) {
+  return content_persistent(std::type_identity<Facts>{});
 }
 template <class Content, class Facts>
   requires requires(Content& up, const Facts& facts) { up.read(facts); }
-[[nodiscard]] bool content_stands(Content& up, const Facts& facts, rank<1>) {
-  up.read(facts);
+[[nodiscard]] bool content_stands(Content& up, const Facts&, const Facts& now, rank<1>) {
+  up.read(now);
   return true;
 }
 template <class Content, class Facts>
-[[nodiscard]] bool content_stands(Content&, const Facts&, rank<0>) {
+[[nodiscard]] bool content_stands(Content&, const Facts&, const Facts&, rank<0>) {
   return false;
 }
-// What it is made of: as make_content makes it for these facts -- told them
+// What it is made of: as make_content makes it of these facts -- told them
 // where it reads them itself -- or from what the program handed the window
 // and the facts.
 template <class Content, class Facts>
@@ -417,9 +427,9 @@ void told(Content& made, const Facts& facts) {
 template <class Content, class Facts>
 void told(Content&, const Facts&) {}
 template <class Content, class Needs, class Facts>
-  requires requires(const Needs& needs, const Facts& facts) { make_content(std::type_identity<Content>{}, needs, facts); }
+  requires requires(const Needs& needs, const Facts& facts) { make_content(needs, facts); }
 [[nodiscard]] Content content_made(std::type_identity<Content>, const Needs& needs, const Facts& facts) {
-  Content made = make_content(std::type_identity<Content>{}, needs, facts);
+  Content made = make_content(needs, facts);
   told(made, facts);
   return made;
 }
@@ -437,11 +447,11 @@ struct dialog_made {
   const ui_needs* needs = nullptr;
   void put(dialog_of<Content, Facts>& dialog, const Facts& facts) const {
     if (!dialog.shown())
-      look_as_its_content(dialog, *needs->colours, dialog_look_of(std::type_identity<Content>{}, std::type_identity<Facts>{}));
+      look_as_its_content(dialog, *needs->colours, dialog_look_of(std::type_identity<Content>{}, std::type_identity<Facts>{}, rank<2>{}));
     if (const auto dismissable = dismissable_of(std::type_identity<Content>{}, facts))
       dialog.setDismissable(*dismissable);
   }
-  [[nodiscard]] bool stands(Content& up, const Facts& facts) const { return content_stands(up, facts, rank<3>{}); }
+  [[nodiscard]] bool stands(Content& up, const Facts& was, const Facts& now) const { return content_stands(up, was, now, rank<3>{}); }
   [[nodiscard]] Content make(const Facts& facts) const { return content_made(std::type_identity<Content>{}, *needs, facts); }
 };
 
@@ -461,7 +471,7 @@ struct panel_made {
   const ui_needs* needs = nullptr;
   template <class Container>
   void put(Container&, const panel_facts&) const {}
-  [[nodiscard]] bool stands(Panels&, const panel_facts&) const { return true; }
+  [[nodiscard]] bool stands(Panels&, const panel_facts&, const panel_facts&) const { return true; }
   [[nodiscard]] Panels make(const panel_facts&) const { return Panels(std::in_place_type<accounts_panel>, accounts_view(*needs)); }
 };
 

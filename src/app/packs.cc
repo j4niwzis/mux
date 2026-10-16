@@ -27,6 +27,11 @@ struct packs_part {
   services* s_;
   std::optional<mux::account_id> account_;
   bool picking_ = false;
+  // The dialogs opened, each counting its drafts' openings from a number of
+  // its own: an image uploaded for a dialog closed and opened again is not
+  // the new one's draft's, though the account and the room are the same.
+  std::uint64_t dialogs_ = 0;
+  [[nodiscard]] std::uint64_t first_opening() { return ++dialogs_ << 32; }
 };
 
 void part_apply(packs_part& self, const request::open_packs&);
@@ -50,7 +55,8 @@ bool took_files(packs_part& self, const std::vector<std::string>& paths, bool dr
 void part_apply(packs_part& self, const request::open_packs&) {
   self.account_ = self.s_->account_offering(mux::proto::feature::sticker_packs{});
   mux::ui::show(*self.s_->showing,
-                std::optional(mux::ui::packs_facts{.account = self.account_, .room = std::nullopt, .editable = true, .note = "Loading\u2026"}));
+                std::optional(mux::ui::packs_facts{.account = self.account_, .room = std::nullopt, .editable = true,
+                                                   .opened = self.first_opening(), .note = "Loading\u2026"}));
   if (self.account_ && !self.s_->demo())
     self.s_->net->list_packs(*self.account_, std::nullopt);
 }
@@ -63,7 +69,7 @@ void part_apply(packs_part& self, const request::open_room_packs& one) {
   self.account_ = chat->id.account;
   mux::ui::show(*self.s_->showing, std::optional(mux::ui::packs_facts{
       .account = chat->id.account, .room = chat->id.id, .editable = mux::proto::chat_rights(mux::ui::protocol_state_of(self.s_->ui, chat->id.account), *chat).edit_packs,
-      .key = one.key, .note = "Loading\u2026"}));
+      .key = one.key, .opened = self.first_opening(), .note = "Loading\u2026"}));
   if (!self.s_->demo())
     self.s_->net->list_packs(*self.account_, chat->id.id);
 }

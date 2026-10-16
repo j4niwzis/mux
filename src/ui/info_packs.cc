@@ -312,12 +312,12 @@ inline auto packs_box(const ui_needs& n, const packs_facts& first) {
 using packs_box_t = decltype(packs_box(std::declval<const ui_needs&>(), std::declval<const packs_facts&>()));
 // The dialog it is shown in; made once while it is up -- for the room it
 // is for, the rest read as the facts move.
-inline dialog_look content_look(std::type_identity<packs_box_t>) { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
+inline dialog_look content_look(std::type_identity<packs_facts>) { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
 template <class Needs>
-auto make_content(std::type_identity<packs_box_t>, const Needs& needs, const packs_facts& facts) {
+auto make_content(const Needs& needs, const packs_facts& facts) {
   return packs_box(needs, facts);
 }
-constexpr bool content_persistent(std::type_identity<packs_box_t>) { return true; }
+constexpr bool content_persistent(std::type_identity<packs_facts>) { return true; }
 
 }  // namespace mux::ui
 

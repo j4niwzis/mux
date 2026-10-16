@@ -366,9 +366,9 @@ inline auto wallpaper_box(const ui_needs& n, const wallpaper_facts& facts) {
 }
 using wallpaper_box_t = decltype(wallpaper_box(std::declval<const ui_needs&>(), std::declval<const wallpaper_facts&>()));
 // The dialog it is shown in.
-inline dialog_look content_look(std::type_identity<wallpaper_box_t>) { return {.size = dialog_size::fitting{380.0f}}; }
+inline dialog_look content_look(std::type_identity<wallpaper_facts>) { return {.size = dialog_size::fitting{380.0f}}; }
 template <class Needs>
-auto make_content(std::type_identity<wallpaper_box_t>, const Needs& needs, const wallpaper_facts& facts) {
+auto make_content(const Needs& needs, const wallpaper_facts& facts) {
   return wallpaper_box(needs, facts);
 }
 

@@ -49,7 +49,7 @@ inline bool operator<(const folder_t& a, const folder_t& b) {
 }
 }
 
-auto server_search_arguments(const palette& colours, const server_search_facts& facts) {
+auto server_search_arguments(const auto& colours, const server_search_facts& facts) {
   namespace c = skiff::compose;
   auto rooms = facts.rooms | std::views::take(30) | std::views::transform([&](const auto& room) {
     return directory_room_row(colours, room, std::string(), facts.by);
@@ -67,11 +67,11 @@ auto server_search_arguments(const palette& colours, const server_search_facts& 
       c::visible(facts.waiting || (facts.rooms.empty() && facts.people.empty()), c::styled(caption,
           wrapped(nodes::Text(facts.waiting ? "Searching the server…" : "No rooms or people found.", 13.0f, colours.dim))))};
 }
-using server_search_content_t = decltype(std::apply([](auto&&... parts) {
+template <class P> using server_search_content_t = decltype(std::apply([](auto&&... parts) {
   return skiff::compose::Box(std::forward<decltype(parts)>(parts)...);
-}, server_search_arguments(std::declval<const palette&>(), std::declval<const server_search_facts&>())));
-auto server_search_list(const palette& colours) {
-  return skiff::compose::mount<server_search_content_t, server_search_facts>(
+}, server_search_arguments(std::declval<P>(), std::declval<const server_search_facts&>())));
+auto server_search_list(const auto& colours) {
+  return skiff::compose::mount<server_search_content_t<decltype(colours)>, server_search_facts>(
       [colours = &colours](const auto& facts) { return server_search_arguments(*colours, facts); },
       {.fillX = true, .autoSize = scene::axes::kY});
 }
@@ -171,7 +171,7 @@ struct pick_side_folder {
 };
 
 template <class Pick>
-auto side_space_icon(const palette& colours, const config::space_item_t& item,
+auto side_space_icon(const auto& colours, const config::space_item_t& item,
                      folder_t which, std::string key, std::string name,
                      bool chosen, float size, Pick pick) {
   namespace c = skiff::compose;
@@ -196,7 +196,7 @@ auto side_space_icon(const palette& colours, const config::space_item_t& item,
 }
 
 template <class Pick>
-auto side_folder_tab(const palette& colours, std::string name, folder_t which,
+auto side_folder_tab(const auto& colours, std::string name, folder_t which,
                      bool chosen, Pick pick) {
   namespace c = skiff::compose;
   auto label = elided(nodes::Text(name, 13.0f, chosen ? colours.accent : colours.dim, true));
@@ -214,7 +214,7 @@ auto side_folder_tab(const palette& colours, std::string name, folder_t which,
           std::move(name))));
 }
 
-inline auto side_found_row(const palette& colours, const search_result& one) {
+auto side_found_row(const auto& colours, const search_result& one) {
   namespace c = skiff::compose;
   return c::with_cursor(scene::cursor::arrow{}, c::onClick(request::search_pick{one.index},
       c::row(c::hbox(10.0f, {.fillX = true, .height = 56.0f,
@@ -229,7 +229,7 @@ inline auto side_found_row(const palette& colours, const search_result& one) {
       std::format("{}: {}", one.name, one.snippet)));
 }
 
-inline auto side_forum_head(const palette& colours) {
+auto side_forum_head(const auto& colours) {
   namespace c = skiff::compose;
   return c::shown_for<side_shown>([](const side_shown& now) { return now.forum.has_value(); },
       c::row(c::hbox(8.0f, {.fillX = true, .height = 40.0f,
@@ -247,7 +247,7 @@ struct side_search_typed {
   using Answer = request::list_search;
   Answer operator()(std::string_view text) const { return {std::string(text)}; }
 };
-inline auto side_search_field(const palette& colours) {
+auto side_search_field(const auto& colours) {
   namespace c = skiff::compose;
   auto field = widgets::TextArea<side_search_typed>(colours.widgets, "Search", {});
   field.setSingleLine(true);
@@ -330,7 +330,7 @@ struct strip_colour_act {
   }
 };
 
-inline auto side_popup_look(const palette& colours, float width) {
+auto side_popup_look(const auto& colours, float width) {
   return skiff::compose::vbox(4.0f,
       {.width = width, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 8.0f, 8.0f},
        .cornerRadius = 10.0f, .background = colours.popup(),
@@ -338,11 +338,11 @@ inline auto side_popup_look(const palette& colours, float width) {
        .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
 }
 template <class Act>
-auto side_menu_button(const palette& colours, std::string label, Act act) {
+auto side_menu_button(const auto& colours, std::string label, Act act) {
   return skiff::compose::styled({.fillX = true, .height = 30.0f},
       button_for<side_menu_pick<Act>>(colours.widgets, std::move(label), side_menu_pick<Act>{std::move(act)}));
 }
-inline auto side_chat_menu(const palette& colours, const conversation_id& id, std::string name,
+auto side_chat_menu(const auto& colours, const conversation_id& id, std::string name,
                            const account_id& listing, const std::vector<account_id>& accounts,
                            const config::theme_t& theme) {
   namespace c = skiff::compose;
@@ -371,7 +371,7 @@ inline auto side_chat_menu(const palette& colours, const conversation_id& id, st
       [](const config::space_item::space& space) { return space.room; },
       [](const auto&) { return std::string(); }}, item);
 }
-inline auto side_space_menu(const palette& colours, const std::string& account,
+auto side_space_menu(const auto& colours, const std::string& account,
                             const config::space_item_t& item, std::string name) {
   namespace c = skiff::compose;
   const auto room = side_space_room(item);
@@ -388,11 +388,6 @@ inline auto side_space_menu(const palette& colours, const std::string& account,
       side_menu_button(colours, "Hide", set_bars_act{account, item, false, false}));
 }
 
-using side_space_menu_t = decltype(side_space_menu(std::declval<const palette&>(),
-    std::declval<const std::string&>(), std::declval<const config::space_item_t&>(), std::string{}));
-using side_chat_menu_t = decltype(side_chat_menu(std::declval<const palette&>(),
-    std::declval<const conversation_id&>(), std::string{}, std::declval<const account_id&>(),
-    std::declval<const std::vector<account_id>&>(), std::declval<const config::theme_t&>()));
 } // namespace mux::ui
 
 
@@ -444,7 +439,7 @@ using side_space_rows_raw =
                     std::invoke_result_t<side_space_row_make<Pick>, const config::space_item_t&, const side_space_view&, bool>,
                     side_space_row_make<Pick>, skiff::compose::Box<>>;
 template <class Lane, class Pick>
-auto side_spaces_for(const palette& colours, Pick pick, bool horizontal) {
+auto side_spaces_for(const auto& colours, Pick pick, bool horizontal) {
   namespace c = skiff::compose;
   using make = side_space_row_make<Pick>;
   using rows = side_space_rows_raw<Pick>;
@@ -466,7 +461,7 @@ template <class Pick> struct side_folder_row_make {
   }
 };
 template <class Pick>
-auto side_folders_for(const palette& colours, Pick pick) {
+auto side_folders_for(const auto& colours, Pick pick) {
   namespace c = skiff::compose;
   using make = side_folder_row_make<Pick>;
   using row = std::invoke_result_t<make, const std::pair<folder_t, side_folder_view>&>;
@@ -499,7 +494,7 @@ inline constexpr auto make_side_chat_row = [](const side_chat_item& item) {
 };
 // The chats' view that scrolls, by its mark.
 struct side_chats_view {};
-inline auto side_chats_for(const ui_needs& needs) {
+auto side_chats_for(const auto& needs) {
   namespace c = skiff::compose;
   using row = std::invoke_result_t<decltype(make_side_chat_row), const side_chat_item&>;
   using rows = nodes::MemoRows<conversation_id, side_chat_view, row, std::remove_cv_t<decltype(make_side_chat_row)>>;
@@ -535,7 +530,7 @@ struct side_found_row_make {
     return side_found_row(*colours, search_result{one.index, one.sender, one.name, one.at, one.snippet});
   }
 };
-inline auto side_found_for(const palette& colours) {
+auto side_found_for(const auto& colours) {
   namespace c = skiff::compose;
   using row = std::invoke_result_t<side_found_row_make, const std::pair<std::size_t, side_found_view>&>;
   using rows = nodes::MemoRows<std::size_t, side_found_view, row, side_found_row_make>;
@@ -546,7 +541,7 @@ inline auto side_found_for(const palette& colours) {
       c::projected<found_shown>([](const found_shown& now) { return now; },
           c::restarted_scroll<found_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(contents))))));
 }
-inline auto side_server_for(const palette& colours) {
+auto side_server_for(const auto& colours) {
   namespace c = skiff::compose;
   auto contents = c::projected<elsewhere_shown>([](const elsewhere_shown& now) { return now.found; }, server_search_list(colours));
   return c::shown_for<elsewhere_shown>([](const elsewhere_shown& now) { return now.found.has_value(); },
@@ -554,9 +549,6 @@ inline auto side_server_for(const palette& colours) {
           c::restarted_scroll<elsewhere_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(contents))))));
 }
 
-using side_chat_list_t = decltype(side_chats_for(std::declval<const ui_needs&>()));
-using side_found_list_t = decltype(side_found_for(std::declval<const palette&>()));
-using side_server_list_t = decltype(side_server_for(std::declval<const palette&>()));
 } // namespace mux::ui
 
 
@@ -564,7 +556,7 @@ export namespace mux::ui {
 
 inline constexpr float kMinSidebar = 240.0f;
 
-inline auto side_space_popup(const palette& colours) {
+auto side_space_popup(const auto& colours) {
   namespace c = skiff::compose;
   using facts = side_space_menu_facts;
   using field = skiff::model::Field<&side_menu_state::space>;
@@ -579,7 +571,7 @@ inline auto side_space_popup(const palette& colours) {
     return now ? std::optional(now->at) : std::nullopt;
   }, std::move(box));
 }
-inline auto side_chat_popup(const palette& colours) {
+auto side_chat_popup(const auto& colours) {
   namespace c = skiff::compose;
   using facts = side_chat_menu_facts;
   using field = skiff::model::Field<&side_menu_state::chat>;
@@ -599,27 +591,26 @@ struct side_pick_folder {
   using Answer = request::pick_folder;
   Answer operator()(const folder_t& folder) const { return {folder}; }
 };
-using side_space_rows_t = decltype(side_spaces_for<space_bar_rows>(std::declval<const palette&>(), side_pick_folder{}, true));
+template <class P> using side_space_rows_t = decltype(side_spaces_for<space_bar_rows>(std::declval<P>(), side_pick_folder{}, true));
 // The views the lanes scroll in.
-using space_bar_view_t = decltype(skiff::compose::SideScroll(std::declval<side_space_rows_t>(), true));
-using space_list_view_t = decltype(nodes::ScrollContainer(std::declval<side_space_rows_t>()));
+template <class P> using space_bar_view_t = decltype(skiff::compose::SideScroll(std::declval<side_space_rows_t<P>>(), true));
+template <class P> using space_list_view_t = decltype(nodes::ScrollContainer(std::declval<side_space_rows_t<P>>()));
 // The folder bar, where it is shown: in the head, or under the search field
 // where the bars are big.
-inline auto side_space_bar(const palette& colours, bool big) {
+auto side_space_bar(const auto& colours, bool big) {
   namespace c = skiff::compose;
   return c::shown_for<side_shown>([big](const side_shown& now) { return (now.top_on || now.dragging) && now.big == big; },
       c::styled(big ? scene::Spec{.fillX = true, .height = 58.0f, .margin = {0.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 8.0f, .masking = true}
                     : scene::Spec{.height = 34.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f,
                                   .masking = true},
-          c::LaneMark<space_bar_view, space_bar_view_t>(c::SideScroll(side_spaces_for<space_bar_rows>(colours, side_pick_folder{}, true), true))));
+          c::LaneMark<space_bar_view, space_bar_view_t<decltype(colours)>>(c::SideScroll(side_spaces_for<space_bar_rows>(colours, side_pick_folder{}, true), true))));
 }
-using side_folder_rows_t = decltype(side_folders_for(std::declval<const palette&>(), side_pick_folder{}));
 } // namespace mux::ui
 
 
 export namespace mux::ui {
 
-inline auto side_header_for(const palette& colours) {
+auto side_header_for(const auto& colours) {
   namespace c = skiff::compose;
   auto top = side_space_bar(colours, false);
   auto head = c::row(c::hbox(10.0f, {.fillX = true, .height = 52.0f,
@@ -630,12 +621,12 @@ inline auto side_header_for(const palette& colours) {
           icon_button(colours, icon::compass{}, sends<request::open_explore>{})));
   return head;
 }
-inline auto side_body_for(const ui_needs& needs) {
+auto side_body_for(const auto& needs) {
   namespace c = skiff::compose;
   const auto& colours = *needs.colours;
   auto side = c::shown_for<side_shown>([](const side_shown& now) { return now.side_on || now.dragging; },
       c::styled({.fillY = true, .width = 56.0f},
-          c::LaneMark<space_list_view, space_list_view_t>(
+          c::LaneMark<space_list_view, space_list_view_t<decltype(colours)>>(
               nodes::ScrollContainer(side_spaces_for<space_list_rows>(colours, side_pick_folder{}, false)))));
   auto chats = c::shown_for<side_shown>([](const side_shown& now) { return now.chats_on; },
       c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), side_chats_for(needs)));
@@ -654,19 +645,17 @@ inline auto side_body_for(const ui_needs& needs) {
   auto body = c::row(c::hbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), std::move(side), std::move(rest));
   return body;
 }
-using side_header_t = decltype(side_header_for(std::declval<const palette&>()));
-using side_body_t = decltype(side_body_for(std::declval<const ui_needs&>()));
 } // namespace mux::ui
 
 
 export namespace mux::ui {
 // The lanes of the drag between the bars, as the reorder finds them shown.
-struct side_lanes {
+template <class P> struct side_lanes {
   template <class Found> auto operator()(const Found& found) const {
     namespace c = skiff::compose;
-    using bar_view = c::LaneMark<space_bar_view, space_bar_view_t>;
+    using bar_view = c::LaneMark<space_bar_view, space_bar_view_t<P>>;
     using bar_rows = c::LaneMark<space_bar_rows, side_space_rows_raw<side_pick_folder>>;
-    using list_view = c::LaneMark<space_list_view, space_list_view_t>;
+    using list_view = c::LaneMark<space_list_view, space_list_view_t<P>>;
     using list_rows = c::LaneMark<space_list_rows, side_space_rows_raw<side_pick_folder>>;
     using bar_lane = decltype(c::ReorderLane{std::declval<bar_view&>(), std::declval<bar_rows&>(), skia::SkRect{}, 4.0f});
     using list_lane = decltype(c::ReorderLane{std::declval<list_view&>(), std::declval<list_rows&>(), skia::SkRect{}, 8.0f});
@@ -679,7 +668,7 @@ struct side_lanes {
                       side && down ? std::optional(list_lane{*side, *down, side->bounds(), 8.0f}) : std::optional<list_lane>()};
   }
 };
-inline auto side_column(const ui_needs& needs) {
+auto side_column(const auto& needs) {
   namespace c = skiff::compose;
   const auto& colours = *needs.colours;
   auto head = side_header_for(colours);
@@ -692,13 +681,24 @@ inline auto side_column(const ui_needs& needs) {
   auto surface = c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar}),
       std::move(head), connection_bar_for<connection_shown>(colours, &connection_shown::list), std::move(body), std::move(popups));
   auto reorder = c::reorder_bars<config::space_item_t, side_space_view>(std::move(surface),
-      side_space_row_make<side_pick_folder>{&colours, {}}, side_lanes{}, colours.chosen);
+      side_space_row_make<side_pick_folder>{&colours, {}}, side_lanes<decltype(colours)>{}, colours.chosen);
   return c::projected<screen_shown>([](const screen_shown& now) {
     return c::WidthLimit{.wanted = now.side_width, .whole = now.single};
   }, c::clamped_width({}, c::local<side_menu_state>(side_menu_events{}, std::move(reorder))));
 }
 
-using side_column_t = decltype(side_column(std::declval<const ui_needs&>()));
 
+
+// The column as the screen holds it: outside a release build made once, in
+// its own unit (conversations_side_made.cc), and held; in one, made where it
+// is put, its type kept.
+skiff::compose::Held side_column_held(const ui_needs& needs);
+template <bool Erase = skiff::scene::kErasedCombinators>
+auto side_column_of(const auto& needs) {
+  if constexpr (Erase)
+    return side_column_held(needs);
+  else
+    return side_column(needs);
+}
 } // namespace mux::ui
 

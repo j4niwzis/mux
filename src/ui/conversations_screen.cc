@@ -356,7 +356,7 @@ inline auto chats_screen(const ui_needs& n) {
               c::slid_for<screen_shown>([](const screen_shown& now) { return c::Paned{now.single, static_cast<int>(now.pane.index())}; },
                   c::row(c::hbox(0.0f, {.fill = true}),
                       c::shown_for<screen_shown>(up(&screen_shown::side_up),
-                          c::column(c::vbox(0.0f, {.fillY = true, .autoSize = scene::axes::kX}), side_column(n))),
+                          c::column(c::vbox(0.0f, {.fillY = true, .autoSize = scene::axes::kX}), side_column_of(n))),
                       c::shown_for<screen_shown>(up(&screen_shown::side_edge), c::styled(edge, drag_edge(colours, resize_sidebar_to{}))),
                       c::shown_for<screen_shown>(up(&screen_shown::chat_up),
                           c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX}), chat_column(n))),

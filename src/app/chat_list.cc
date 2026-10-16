@@ -578,7 +578,7 @@ class chat_list_part {
     }
     // Invites first, as Element lists them; then by their newest.
     std::ranges::sort(chats, std::ranges::greater{}, [&](const mux::conversation* one) {
-      const mux::message* last = mux::ui::newest(*one, this->events_of(kept, *one));
+      const mux::message* last = mux::newest(*one, this->events_of(kept, *one));
       return std::pair{one->invite.has_value(), last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{}};
     });
     // The chat open -- or, where Alt+Up or Alt+Down went to a forum, that.

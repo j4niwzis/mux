@@ -149,7 +149,8 @@ inline auto info_panel(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const auto listed = [](const info_shown& now) { return now.head.group; };
-  return SKIFF_NAMED(info_panel, c::column(c::vbox(0.0f, {.background = colours.sidebar, .masking = true}),
+  // Filling the column the screen sizes for it, as the threads' panel does.
+  return SKIFF_NAMED(info_panel, c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar, .masking = true}),
       c::styled({.fillX = true, .grow = scene::axes::kY},
           c::fetching_for<info_shown, conversation_id>([](const info_shown& now) {
             return c::Fetched<conversation_id>{now.heading.room, now.members.size(), now.more};

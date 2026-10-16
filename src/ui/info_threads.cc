@@ -97,7 +97,9 @@ inline auto threads_panel(const ui_needs& n) {
   const palette& colours = *n.colours;
   const auto listing = [](const threads_shown& now) { return now.listing; };
   const auto open = [](const threads_shown& now) { return !now.listing; };
-  return SKIFF_NAMED(threads_panel, c::column(c::vbox(0.0f, {.fillY = true, .background = colours.sidebar}),
+  // Filling the column the screen sizes for it: as tall alone, it was 0
+  // wide, its rows' text with no room at all.
+  return SKIFF_NAMED(threads_panel, c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar}),
       c::row(c::hbox(8.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}}),
              c::shown_for<threads_shown>(open, c::styled({.alignSelf = scene::align::kMiddle},
                                                          icon_button(colours, icon::back{}, sends<request::close_thread>{}))),

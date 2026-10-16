@@ -194,12 +194,10 @@ template <class Which, class View>
 [[nodiscard]] auto call_layer(const ui_needs& needs, Which which, View view,
                               scene::Spec spec, bool floats = false) {
   using Content = decltype(call_content(view, *needs.colours, call_view{}));
-  return SKIFF_NAMED(call_content, skiff::compose::derived<call_shown>(which, skiff::compose::mount<Content, call_view>(
+  return skiff::compose::derived<call_shown>(which, skiff::compose::mount<Content, call_view>(
       [colours = needs.colours, view](const call_view& facts) {
         return std::tuple{call_content(view, *colours, facts)};
-      }, spec, floats)))};
-      }, spec, floats)))};
-      }, spec, floats)));
+      }, spec, floats));
 }
 
 // Its layers, over the window: the card, where the call rings or is in

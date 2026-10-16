@@ -879,7 +879,7 @@ template <class Compute, class Part> auto shown_by_chat(std::true_type, Compute 
 }
 template <class Compute, class Part> auto shown_by_chat(std::false_type, Compute, Part part) { return part; }
 template <class Compute, class Part> auto read_from_chat(std::true_type, Compute compute, Part part) {
-  return SKIFF_NAMED(read_from_chat, skiff::compose::projected<conversation>(std::move(compute), std::move(part)))(compute), std::move(part)));
+  return SKIFF_NAMED(read_from_chat, skiff::compose::projected<conversation>(std::move(compute), std::move(part)));
 }
 template <class Compute, class Part> auto read_from_chat(std::false_type, Compute, Part part) { return part; }
 // What is written answers or edits something: as what is shown says (its
@@ -899,7 +899,7 @@ template <class Column> auto in_chosen_chat(std::true_type, Column column) {
       },
       c::scoped<conversation>(c::handlers(), std::move(column), account_id{}, std::string())));
 }
-template <class Column> auto in_chosen_chat(std::false_type, Column column) { return column; }
+template <class Column> auto in_chosen_chat(std::false_type, Column column) { return SKIFF_NAMED(in_chosen_chat, column); }
 
 // Desktop: a line over it, the bars over the field -- who knocks, what was
 // not sent, what is answered or edited -- the paperclip on the left, the

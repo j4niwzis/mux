@@ -119,10 +119,10 @@ inline skiff::compose::Look page_look() {
 auto settings_section_heading(const auto& colours, std::string title) { return nodes::Text(std::move(title), 12.0f, colours.text); }
 template <class... Children>
 auto settings_surface(const auto& colours, skia::SkColor background, scene::Margin padding, float gap, Children... children) {
-  return SKIFF_NAMED(settings_section_heading, skiff::compose::column(skiff::compose::vbox(gap, {.fillX = true, .autoSize = scene::axes::kY, .padding = padding,
+  return SKIFF_NAMED(settings_surface, skiff::compose::column(skiff::compose::vbox(gap, {.fillX = true, .autoSize = scene::axes::kY, .padding = padding,
                                                            .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = background,
                                                            .masking = true}),
-                                std::move(children)...))       std::move(children)...));
+                                std::move(children)...));
 }
 template <class... Children> auto card(const auto& colours, Children... children) {
   return settings_surface(colours, colours.tile, {12.0f, 12.0f, 12.0f, 12.0f}, 16.0f, std::move(children)...);

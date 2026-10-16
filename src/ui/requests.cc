@@ -934,41 +934,4 @@ struct card_action {
 };
 }  // namespace request
 
-// What the window wants of the program as its state comes to want it, not
-// at any press: older history as the view nears the top, newer at the end
-// of a window, the context around a jump, a thread's answers, typing as the
-// field fills or empties, rooms elsewhere as a search finds nothing here.
-// Parts of a model of their own, set by the screen; a reaction to each makes
-// the program's work of it -- the program sets it back once it is done.
-struct window_wants {
-  skiff::model::Tracked<std::optional<request::load_older>> older;
-  skiff::model::Tracked<std::optional<request::load_newer>> newer;
-  skiff::model::Tracked<std::optional<request::load_context>> context;
-  skiff::model::Tracked<std::optional<request::open_thread>> thread;
-  skiff::model::Tracked<std::optional<request::typing>> typing;
-  skiff::model::Tracked<std::optional<request::search_elsewhere>> elsewhere;
-};
-using window_want_t = std::variant<request::load_older, request::load_newer, request::load_context, request::open_thread, request::typing,
-                                   request::search_elsewhere>;
-struct window_wanting {
-  // Request payloads can contain optionals too; only a window request is
-  // an effect, never one of its fields (such as the search account).
-  template <class R>
-    requires std::constructible_from<window_want_t, R>
-  std::optional<R> on(skiff::model::Changed<std::optional<R>>, const std::optional<R>& now) const {
-    return now;
-  }
-};
-using wants_model = skiff::model::Model<window_wants, window_wanting, window_want_t>;
-// What the window comes to want, set: the program told by the reaction.
-template <class R>
-void want(wants_model& wants, R wanted) {
-  (void)wants.apply(skiff::model::edit(skiff::model::placeOf<std::optional<R>, window_wants>(), skiff::model::setTo(std::optional<R>(std::move(wanted)))));
-}
-// Done with: set back, so that the same want comes again as a change.
-template <class R>
-void wanted_done(wants_model& wants) {
-  (void)wants.apply(skiff::model::edit(skiff::model::placeOf<std::optional<R>, window_wants>(), skiff::model::setTo(std::optional<R>())));
-}
-
 }  // namespace mux::ui

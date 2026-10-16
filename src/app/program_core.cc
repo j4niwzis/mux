@@ -360,38 +360,40 @@ void app::show_looks() {
 // connector started or stopped; and the page up shown the model again.
 void app::settle_model() {
   notices.sync_choices();
-  for (const auto& effect : this->take_effects())
-    std::visit(spl::overloaded{[&](const write_kept&) { (void)this->write(); },
-                               [&](const looks_changed&) { this->show_looks(); },
-                               [&](const motion_chosen&) { skiff::paint::motionLevel() = motion_of(this->appearance().motion); },
-                               [&](const deleted_shown&) {
-                                 model->show_deleted = this->history().show_deleted;
-                                 shared.refresh_due = true;
-                               },
-                               [&](const restyle_wanted&) {
-                                 skiff::scene::forgetStyles();
-                                 shared.rebuild_due = true;
-                               },
-                               [&](const opacity_chosen&) {
-                                 auto& look = shared.looks.window;
-                                 look.chosen = this->appearance().window_opacity;
-                                 if (look.see_through) {
-                                   look.opacity = look.chosen;
-                                   skiff::scene::forgetStyles();
-                                   shared.rebuild_due = true;
-                                 }
-                               },
-                               [&](const limits_changed&) {
-                                 settings.apply_limits();
-                                 model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), shared.chosen());
-                               },
-                               [&](const push_wanted& wanted) {
-                                 if (wanted.on)
-                                   notices.start_push();
-                                 else
-                                   notices.stop_push();
-                               }},
-               effect);
+  const auto due = this->take_due();
+  if (due.write)
+    (void)this->write();
+  if (due.looks)
+    this->show_looks();
+  if (due.motion)
+    skiff::paint::motionLevel() = motion_of(this->appearance().motion);
+  if (due.deleted) {
+    model->show_deleted = this->history().show_deleted;
+    shared.refresh_due = true;
+  }
+  if (due.restyle) {
+    skiff::scene::forgetStyles();
+    shared.rebuild_due = true;
+  }
+  if (due.opacity) {
+    auto& look = shared.looks.window;
+    look.chosen = this->appearance().window_opacity;
+    if (look.see_through) {
+      look.opacity = look.chosen;
+      skiff::scene::forgetStyles();
+      shared.rebuild_due = true;
+    }
+  }
+  if (due.limits) {
+    settings.apply_limits();
+    model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), shared.chosen());
+  }
+  if (due.push) {
+    if (*due.push)
+      notices.start_push();
+    else
+      notices.stop_push();
+  }
   window_binding.refresh(root(), this->state);
   this->refresh_shown();
   chats_binding.refresh(root(), model->chats());
@@ -408,19 +410,6 @@ void app::show_chats_now() {
   window_binding.refresh(root(), this->state);
   chats_binding.invalidate();
   chats_binding.refresh(root(), model->chats());
-}
-
-// What the window came to want -- the reactions to its wants, as effects:
-// each done, and the want set back, so that the same comes again as a
-// change.
-void app::take_wants() {
-  for (const auto& wanted : wants.outbox().drain())
-    std::visit(
-        [this](const auto& each) {
-          this->route(each);
-          mux::ui::wanted_done<std::remove_cvref_t<decltype(each)>>(wants);
-        },
-        wanted);
 }
 
 // Whether the accounts page is up, and whether it or the settings are, over
@@ -467,7 +456,6 @@ void app::refresh_shown() {
 // window and done at once, the handler that asked having returned: a press
 // acts before the next event, not a frame later.
 void app::after_event() {
-  this->take_wants();
   // The nodes pressed that answer with what they ask for: each delivered
   // along the path the scene routed it on, its event sent at once up the
   // scopes it is in; what nothing in the window takes, to the program.
@@ -540,7 +528,6 @@ void app::before_frame() {
   // What the model's widgets did: edits of the model, before the frame.
   this->take_page_input();
   // What the screen came to want as it was updated: done.
-  this->take_wants();
   // What has been on screen in the chat shown is read, as far as it goes,
   // as in tdesktop: the chat list's counts go down as it is read, not all
   // at once when it is opened or left.

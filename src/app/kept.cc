@@ -62,7 +62,39 @@ struct motion_chosen {
 };
 // A chat's choices changed or gone, or what notifies: the file is written
 // again. UnifiedPush turned on or off: its connector with it.
+// What the reactions asked for since the program last looked: each a
+// mark, however many changes asked for it -- the file written once, the
+// window restyled once -- done by the program after the event (settle_model).
+struct kept_due {
+  bool write = false;
+  bool looks = false;
+  bool restyle = false;
+  bool motion = false;
+  bool deleted = false;
+  bool opacity = false;
+  bool limits = false;
+  std::optional<bool> push;
+};
 struct kept_reactions {
+  // Where what they ask for is marked: the kept settings' own (kept_settings::due).
+  kept_due* due = nullptr;
+  // What they ask for, taken -- routed by the model to the reactions' own
+  // on(request), as a request no scope takes is: marked, to be done once.
+  skiff::model::Nothing on(const write_kept&) const { return mark(&kept_due::write); }
+  skiff::model::Nothing on(const looks_changed&) const { return mark(&kept_due::looks); }
+  skiff::model::Nothing on(const restyle_wanted&) const { return mark(&kept_due::restyle); }
+  skiff::model::Nothing on(const motion_chosen&) const { return mark(&kept_due::motion); }
+  skiff::model::Nothing on(const deleted_shown&) const { return mark(&kept_due::deleted); }
+  skiff::model::Nothing on(const opacity_chosen&) const { return mark(&kept_due::opacity); }
+  skiff::model::Nothing on(const limits_changed&) const { return mark(&kept_due::limits); }
+  skiff::model::Nothing on(const push_wanted& wanted) const {
+    due->push = wanted.on;
+    return {};
+  }
+  skiff::model::Nothing mark(bool kept_due::*what) const {
+    due->*what = true;
+    return {};
+  }
   [[nodiscard]] write_kept on(skiff::model::Changed<chat_choices>, const chat_choices&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<std::vector<mux::config::proxy_settings>>, const auto&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<std::vector<mux::config::chat_placement>>, const auto&) const { return {}; }
@@ -157,7 +189,10 @@ struct kept_settings {
   }
   // What each chat -- or space -- chose for itself, by the chat: only those
   // that chose something.
-  kept_model state;
+  // Where the reactions mark what they ask for: before the model, which
+  // points at it.
+  kept_due due;
+  kept_model state{kept_root{}, kept_reactions{&due}};
   // The space each chat is in -- the first found holding it -- set by the
   // program from the model at each refresh: a space's own choices are its
   // rooms', where they have none, nearest first, through spaces in spaces.
@@ -227,7 +262,7 @@ struct kept_settings {
                                          skiff::model::setTo(Part(std::move(now)))));
   }
   // What the model's reactions asked for, to be done by the program.
-  [[nodiscard]] std::vector<kept_model::Effect> take_effects() { return state.outbox().drain(); }
+  [[nodiscard]] kept_due take_due() { return std::exchange(due, {}); }
   void set_notifications(mux::config::notification_settings now) {
     (void)state.apply(skiff::model::edit(skiff::model::placeOf<mux::config::notification_settings, kept_root>(), skiff::model::setTo(std::move(now))));
   }
@@ -480,7 +515,7 @@ struct kept_settings {
     root.proxies.fValue = proxies_read;
     root.placements.fValue = placements_read;
     root.recent.fValue = recent_read;
-    this->state = kept_model(std::move(root));
+    this->state = kept_model(std::move(root), kept_reactions{&due});
   }
   [[nodiscard]] mux::config::file file() const {
     // Copied: the file is made of a contiguous list of them.

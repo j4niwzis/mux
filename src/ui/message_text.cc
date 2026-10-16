@@ -37,7 +37,7 @@ export namespace mux::ui {
 // Rooms not joined here whose server said they are there (model::
 // rooms_found) are shown as pills; one not said to be is plain text.
 struct mentioned;
-[[nodiscard]] inline std::optional<std::string> take_opening_quote(mentioned& shown);
+[[nodiscard]] std::optional<std::string> take_opening_quote(mentioned& shown);
 // A room event said before its people were pills -- kept so, read back
 // from the disk -- with who did it as a person: its line starts with their
 // name in the chat. A Matrix one's: a person's link is a matrix.to one.
@@ -72,7 +72,7 @@ struct mentioned {
   std::vector<html_disclosure> disclosures;
   std::vector<nodes::Text::Styled> styles;
 };
-[[nodiscard]] inline mentioned with_mentions(std::string text, std::vector<nodes::Text::Link> links,
+[[nodiscard]] mentioned with_mentions(std::string text, std::vector<nodes::Text::Link> links,
                                              const conversation& in, const model* now,
                                              std::vector<nodes::Text::Styled> styles = {},
                                              std::vector<html_disclosure> disclosures = {}) {
@@ -277,7 +277,7 @@ struct mentioned {
 
 // A text with every run of spaces, tabs and newlines one space, and none at
 // either end: how a quote and what it quotes are compared.
-[[nodiscard]] inline std::string squeezed(std::string_view given) {
+[[nodiscard]] std::string squeezed(std::string_view given) {
   // Without the room a pill's avatar takes in the text (two en spaces).
   std::string text(given);
   for (std::size_t at = text.find("\u2002"); at != std::string::npos; at = text.find("\u2002", at))
@@ -293,7 +293,7 @@ struct mentioned {
 // text -- with the spaces after it -- its links and styles moved back with
 // what is left; what it said, trimmed. Nothing where the text does not
 // open with a quote, or has another.
-[[nodiscard]] inline std::optional<std::string> take_opening_quote(mentioned& shown) {
+[[nodiscard]] std::optional<std::string> take_opening_quote(mentioned& shown) {
   if (!shown.disclosures.empty())
     return std::nullopt;  // Disclosure contents must stay in their own sections.
   std::size_t end = 0;
@@ -336,7 +336,7 @@ struct mentioned {
 // A message's text as a quote's one line shows it: its HTML read, and its
 // mentions -- people, rooms -- by their names, as in the message itself,
 // not the raw addresses; without the room a pill's avatar takes.
-[[nodiscard]] inline std::string quote_line_of(const message& said, const conversation& in, const model* now) {
+[[nodiscard]] std::string quote_line_of(const message& said, const conversation& in, const model* now) {
   mentioned shown;
   if (said.body.html) {
     auto read = read_html(*said.body.html);
@@ -686,7 +686,7 @@ using link_piece_m = skiff::compose::Marked<link_kind, link_piece_t>;
 using disclosure_piece_m = skiff::compose::Marked<disclosure_kind, disclosure_piece_t>;
 using message_piece = spl::variant<code_piece_m, link_piece_m, disclosure_piece_m>;
 
-[[nodiscard]] inline std::optional<std::string> message_link_at(const std::vector<message_piece>& pieces, float x, float y) {
+[[nodiscard]] std::optional<std::string> message_link_at(const std::vector<message_piece>& pieces, float x, float y) {
   for (const auto& piece : pieces) {
     const auto url = spl::visit(spl::overloaded{[](const code_piece_m&) -> std::optional<std::string> { return std::nullopt; },
         [](const disclosure_piece_m&) -> std::optional<std::string> { return std::nullopt; },
@@ -710,7 +710,7 @@ struct open_person {
   std::optional<std::string> id;
   Answer operator()() const { return id ? Answer(request::open_member_info{*id}) : std::nullopt; }
 };
-inline auto forward_line(const palette& colours, std::string who, std::vector<nodes::Text::Link> links, skia::SkColor colour,
+auto forward_line(const palette& colours, std::string who, std::vector<nodes::Text::Link> links, skia::SkColor colour,
                          std::optional<std::string> person = std::nullopt) {
   namespace c = skiff::compose;
   // Wrapped, as a message text is: one on a single line draws its words
@@ -730,7 +730,7 @@ using forward_line_t = decltype(forward_line(std::declval<const palette&>(), std
 // the row's right under it, three at most and the rest counted.
 inline constexpr float kReaderFace = 14.0f;  // Element's read receipt avatar
 inline constexpr std::size_t kReadersShown = 3;
-inline auto readers_row(const palette& colours, const conversation& in, const std::vector<std::string>& users) {
+auto readers_row(const palette& colours, const conversation& in, const std::vector<std::string>& users) {
   namespace c = skiff::compose;
   return c::row(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),
       c::many(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),

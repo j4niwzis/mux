@@ -32,7 +32,7 @@ export namespace mux::ui {
 
 // A chat's background shown on a wallpaper: the theme's gradient and
 // Telegram's pattern, a plain colour (what is behind showing), or a picture.
-inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chosen, const palette& colours, const looks_shown& looks) {
+void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chosen, const palette& colours, const looks_shown& looks) {
   // Frosted's blur, as chosen: 0 to 100 for none to about five pixels.
   wall.setBlur(static_cast<float>(looks.window.frost) / 100.0f);
   // And each look's and element's own, where it frosts: made once for a size.

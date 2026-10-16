@@ -29,7 +29,7 @@ export namespace mux::ui {
 
 // What became of a message, said to the left of its time as tdesktop says
 // "edited": removed (kept, as the settings say), or edited.
-[[nodiscard]] inline std::string mark_of(const message& said) {
+[[nodiscard]] std::string mark_of(const message& said) {
   return said.redacted ? std::string("removed ") : said.edited ? std::string("edited ") : std::string();
 }
 
@@ -54,7 +54,7 @@ inline auto link_card(const palette& colours, std::string where, std::string ava
 using link_card_t = decltype(link_card(std::declval<const palette&>(), "", "", "", "", ""));
 
 // The first link a message's text has: what its preview is of.
-[[nodiscard]] inline std::optional<std::string> first_link_of(const message& said) {
+[[nodiscard]] std::optional<std::string> first_link_of(const message& said) {
   if (said.service)
     return std::nullopt;
   const auto spans = said.body.html ? read_html(*said.body.html).spans : link_spans_in(said.body.plain);
@@ -67,7 +67,7 @@ using link_card_t = decltype(link_card(std::declval<const palette&>(), "", "", "
 
 // A quoted stretch as a fragment to mark: its spaces at either end cut, and
 // nothing where it is all spaces.
-[[nodiscard]] inline std::optional<std::string> trimmed_fragment(std::string_view said) {
+[[nodiscard]] std::optional<std::string> trimmed_fragment(std::string_view said) {
   const auto space = [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
   while (!said.empty() && space(said.back()))
     said.remove_suffix(1);
@@ -81,7 +81,7 @@ using link_card_t = decltype(link_card(std::declval<const palette&>(), "", "", "
 // What a reply quoted of the message it answers, where it quoted some: the
 // first quote in its own text -- its HTML's blockquote, or its plain lines
 // after "> " -- and not the fallback that repeats who was answered.
-[[nodiscard]] inline std::optional<std::string> quoted_fragment(const message& said) {
+[[nodiscard]] std::optional<std::string> quoted_fragment(const message& said) {
   std::string out;
   if (said.body.html) {
     const auto read = read_html(*said.body.html);
@@ -119,7 +119,7 @@ using link_card_t = decltype(link_card(std::declval<const palette&>(), "", "", "
 // A preview's line about its page, as Telegram shows one: its whitespace --
 // the page's own lines, a menu's items one under another -- run together,
 // and cut at a word near 200 bytes.
-[[nodiscard]] inline std::string preview_line(std::string_view said) {
+[[nodiscard]] std::string preview_line(std::string_view said) {
   std::string out;
   bool gap = false;
   for (const char c : said) {
@@ -150,7 +150,7 @@ using link_card_t = decltype(link_card(std::declval<const palette&>(), "", "", "
 // picture on the right.
 // Pressed -- it is a link -- the link is followed; lit under the pointer,
 // as a link is. Its link: the press's request's (fEvent.url).
-inline auto page_preview(const palette& colours, const link_preview& shown, std::string where) {
+auto page_preview(const palette& colours, const link_preview& shown, std::string where) {
   namespace c = skiff::compose;
   std::optional<nodes::Image<from_avatars>> picture;
   if (shown.image)

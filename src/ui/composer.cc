@@ -605,7 +605,7 @@ struct draft_told {
 // Whether nothing is written.
 [[nodiscard]] inline bool composer_empty(const composer_doc& doc) { return doc.text.empty(); }
 // What is written, as a draft is kept between chats: plain, as it reads.
-[[nodiscard]] inline std::string draft_text(const composer_doc& doc) { return widgets::document::plain(doc); }
+[[nodiscard]] std::string draft_text(const composer_doc& doc) { return widgets::document::plain(doc); }
 // Who is mentioned in it: its pills, as they are now.
 [[nodiscard]] inline std::vector<mention> composer_mentions(const composer_doc& doc) {
   return doc.atoms | std::views::filter([](const widgets::TextAtom& one) { return !one.picture; }) | std::views::transform([](const widgets::TextAtom& one) { return mention{one.plain, one.target}; }) | std::ranges::to<std::vector>();
@@ -637,7 +637,7 @@ struct draft_told {
 // A link put on what was selected, as tdesktop's EditLinkBox: its text as
 // given (what was selected replaced where it differs), the URL with a scheme
 // -- https where it has none; with no URL, the links there taken off.
-inline void put_link(composer_doc& doc, std::string text, std::string url) {
+void put_link(composer_doc& doc, std::string text, std::string url) {
   const std::size_t low = doc.low();
   std::size_t high = doc.high();
   if (text.empty())
@@ -662,14 +662,14 @@ inline void put_link(composer_doc& doc, std::string text, std::string url) {
 // A mention picked from the list, over the @ and what was typed of it (from
 // `from` on): a pill, as the message will show it, and a space. Taken apart
 // with Backspace: its user's id, not the name it is sent by.
-inline void put_mention(composer_doc& doc, std::size_t from, const std::string& name, const std::string& user) {
+void put_mention(composer_doc& doc, std::size_t from, const std::string& name, const std::string& user) {
   widgets::document::select(doc, from, doc.text.size());
   widgets::document::insertAtom(doc, "  " + name, user, name, false, user, composer_grows{});
   widgets::document::insert(doc, " ", composer_grows{});
 }
 // What is written from `from` to its end replaced by `text`, the caret after
 // it: a suggestion picked over what was typed for it.
-inline void put_over_end(composer_doc& doc, std::size_t from, std::string_view text) {
+void put_over_end(composer_doc& doc, std::size_t from, std::string_view text) {
   widgets::document::select(doc, from, doc.text.size());
   widgets::document::insert(doc, text, composer_grows{});
 }
@@ -681,14 +681,14 @@ inline void put_picture_over_end(composer_doc& doc, std::size_t from, std::strin
 }
 // An emoji put in at the caret: its text, or -- a custom one -- its picture
 // in the line, as the message will show it, sent as its shortcode.
-inline void put_emoji(composer_doc& doc, const std::string& text, const std::string& picture) {
+void put_emoji(composer_doc& doc, const std::string& text, const std::string& picture) {
   if (picture.empty())
     widgets::document::insert(doc, text, composer_grows{});
   else
     widgets::document::insertAtom(doc, "\u2003", picture, text, true, {}, composer_grows{});
 }
 // What was selected in a message, quoted at the start of what is written.
-inline void prepend_quote(composer_doc& doc, const scene::ClipboardFragment& selected) {
+void prepend_quote(composer_doc& doc, const scene::ClipboardFragment& selected) {
   widgets::document::select(doc, 0, 0);
   widgets::document::insertFragment(doc, quoted_fragment(selected), composer_grows{});
 }
@@ -717,7 +717,7 @@ template <class Toggle> struct emoji_beside {
 };
 // Which field a draft's input is, for the keys.
 inline keys::chat keys_target_of(std::type_identity<chat_draft>) { return {}; }
-inline keys::thread keys_target_of(std::type_identity<thread_draft>) { return {}; }
+keys::thread keys_target_of(std::type_identity<thread_draft>) { return {}; }
 template <class Draft, class Told, class Attach, class Emoji, class Send>
 auto message_input(const palette& colours, std::string placeholder, Attach attach_it, Emoji emoji_it, Send send_it) {
   namespace c = skiff::compose;
@@ -810,7 +810,7 @@ inline auto replaced_room_bar(const palette& colours) {
 // Where the reader may not post: a row as high as the input's, its line in
 // the middle -- padded inside it, not by a margin the bar's height leaves
 // out.
-inline auto no_post_line(const palette& colours) {
+auto no_post_line(const palette& colours) {
   namespace c = skiff::compose;
   return c::row(c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f,
                                             .padding = {18.0f, 12.0f, 18.0f, 12.0f}}),
@@ -852,12 +852,12 @@ inline auto knock_bar(const palette& colours, const knock_facts& one) {
 using knock_bar_t = decltype(knock_bar(std::declval<const palette&>(), std::declval<const knock_facts&>()));
 // Element's bar over the field while messages here were not sent
 // (RoomStatusBar's): a warning, and "Delete all" and "Retry all".
-inline auto unsent_bar(const palette& colours) {
+auto unsent_bar(const palette& colours) {
   return two_choice_bar(colours, "Some of your messages have not been sent", colours.error, "Delete all",
                         sends<::mux::ui::request::discard_unsent>{}, "Resend all", sends<::mux::ui::request::retry_unsent>{});
 }
 // What the chat says of writing in it.
-[[nodiscard]] inline bool any_unsent(const conversation& chat) {
+[[nodiscard]] bool any_unsent(const conversation& chat) {
   return std::ranges::any_of(chat.timeline, [](const message& said) {
     return said.outgoing &&
            spl::visit(spl::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }}, said.delivery);
@@ -866,7 +866,7 @@ inline auto unsent_bar(const palette& colours) {
 [[nodiscard]] inline bool replaced_chat(const ui_shared& shared, const conversation& chat) {
   return proto::successor_of(protocol_state_of(shared, chat.id.account), chat).has_value();
 }
-[[nodiscard]] inline bool may_post_in(const ui_shared& shared, const conversation& chat) {
+[[nodiscard]] bool may_post_in(const ui_shared& shared, const conversation& chat) {
   return proto::chat_rights(protocol_state_of(shared, chat.id.account), chat).post && !replaced_chat(shared, chat);
 }
 

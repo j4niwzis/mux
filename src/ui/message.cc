@@ -33,10 +33,10 @@ export import :message_text;
 
 export namespace mux::ui {
 
-[[nodiscard]] inline skia::SkColor quote_tint(skia::SkColor colour, float alpha) {
+[[nodiscard]] skia::SkColor quote_tint(skia::SkColor colour, float alpha) {
   return (colour & 0x00FFFFFFu) | (static_cast<skia::SkColor>(std::lround(alpha * 255.0f)) << 24);
 }
-[[nodiscard]] inline auto quote_row(const palette& colours, skia::SkColor colour,
+[[nodiscard]] auto quote_row(const palette& colours, skia::SkColor colour,
                                     std::string who, std::string said,
                                     std::optional<std::string> picture = std::nullopt,
                                     bool quoted = false, bool sticker = false) {
@@ -109,7 +109,7 @@ constexpr auto message_views_for(const State& state) {
 // The sender's name over their run, in their colour, and after it their
 // role in the room, dim, as Telegram shows "admin": the name cut where it
 // passes `widest`, the role's room kept.
-inline auto sender_line(const palette& colours, std::string who, skia::SkColor colour, std::string role, float widest) {
+auto sender_line(const palette& colours, std::string who, skia::SkColor colour, std::string role, float widest) {
   auto name = elided(nodes::Text(std::move(who), 13.0f, colour, true));
   name.setMaxWidth(widest);
   const bool has_role = !role.empty();
@@ -120,7 +120,7 @@ inline auto sender_line(const palette& colours, std::string who, skia::SkColor c
 // tdesktop's bar over the first unread: its words in the middle of a band
 // the width of the chat, over the row.
 inline constexpr float kUnreadBarHeight = 26.0f;
-inline auto unread_bar(const palette& colours) {
+auto unread_bar(const palette& colours) {
   return skiff::compose::column(
       skiff::compose::justified(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .y = -(kUnreadBarHeight + 4.0f), .fillX = true,
                                                             .height = kUnreadBarHeight, .background = colours.sidebar}),
@@ -285,7 +285,7 @@ struct named_rooms {
 
 // A message's text as it is shown: its HTML read, its mentions as pills --
 // a reaction shown as a line, its emoji's.
-[[nodiscard]] inline mentioned shown_text_of(const conversation& in, const message& said, const model* now) {
+[[nodiscard]] mentioned shown_text_of(const conversation& in, const message& said, const model* now) {
   mux::body readable = said.body;
   if (!said.reaction_key.empty() && said.service) {
     std::optional<std::string> label;
@@ -308,7 +308,7 @@ struct named_rooms {
   }
   return with_mentions(readable.plain, link_spans_in(readable.plain), in, now);
 }
-[[nodiscard]] inline named_rooms rooms_named_in(const conversation& in, const message& said, const model* now) {
+[[nodiscard]] named_rooms rooms_named_in(const conversation& in, const message& said, const model* now) {
   mentioned shown = shown_text_of(in, with_actor(in, said), now);
   return {std::move(shown.waiting), std::move(shown.unknown)};
 }
@@ -324,7 +324,7 @@ template <std::size_t Part> [[nodiscard]] auto& part_of(auto& body) { return std
 
 // Words of a message, as its text and its pieces show them: wrapped,
 // selectable, its links and quotes in their colours.
-inline auto message_words(const palette& colours, const text_piece& words, skia::SkColor colour, skia::SkColor quote) {
+auto message_words(const palette& colours, const text_piece& words, skia::SkColor colour, skia::SkColor quote) {
   auto text = wrapped(nodes::BasicText<message_pictures>(words.text, 13.0f, colour));
   text.setSelectable(true);
   text.setSelectionColour((colours.accent & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
@@ -338,7 +338,7 @@ inline auto message_words(const palette& colours, const text_piece& words, skia:
 struct bubble_words {};
 using bubble_words_t = skiff::compose::Marked<bubble_words, decltype(skiff::compose::styled({}, message_words(std::declval<const palette&>(),
                                                                                                std::declval<const text_piece&>(), 0u, 0u)))>;
-[[nodiscard]] inline bubble_words_t* words_in(auto& node) { return skiff::scene::findNode<bubble_words_t>(node); }
+[[nodiscard]] bubble_words_t* words_in(auto& node) { return skiff::scene::findNode<bubble_words_t>(node); }
 // A link's preview, marked with its address: what a menu over it copies.
 struct previewed_link {
   std::string url;
@@ -546,7 +546,7 @@ template <class... Parts> skiff::compose::Box<Parts...> bubble_box(skiff::compos
 }
 // The bubble's colour as its chat's look has it: solid, or at its opacity --
 // over what is behind it, frosted where it is so.
-[[nodiscard]] inline skia::SkColor plate_of(const palette& colours, const config::bubble_look& look, bool mine) {
+[[nodiscard]] skia::SkColor plate_of(const palette& colours, const config::bubble_look& look, bool mine) {
   const skia::SkColor solid = mine ? colours.out_bubble : colours.bubble;
   return spl::visit(spl::overloaded{[&](config::bubbles::solid) { return solid; }, [&](const auto&) { return at_opacity(solid, look.opacity); }},
                     look.kind);
@@ -608,7 +608,7 @@ struct swipe_shown {
 // The bubble: a column of the name, the forward, the quote, the picture or
 // file or album, the text and its pieces, the preview, the reactions, the
 // thread's summary, the protocol's lines and node, the time.
-inline auto message_body(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model* now) {
+auto message_body(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model* now) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const looks_shown& looks = *n.looks;
@@ -1084,7 +1084,7 @@ struct reaction_line_press {
 // swipe shows, the unread bar over it, who has read it under it. Swiped
 // left, it is answered; washed while it is selected, flashed where a jump
 // went to it; coming in moving where it has just come (arrives).
-inline auto message_row(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model* now, bool arrives) {
+auto message_row(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model* now, bool arrives) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const looks_shown& looks = *n.looks;
@@ -1154,7 +1154,7 @@ using message_row_t = decltype(message_row(std::declval<const bubble_needs&>(), 
                                            std::declval<const bubble_facts&>(), nullptr, false));
 // A message shown alone, as the chat shows it -- in a list of mentions, an
 // edit history, who reacted: its row, first and last of its run as said.
-inline message_row_t message_alone(const ui_needs& n, const conversation& in, const message& said, bool first, bool last,
+message_row_t message_alone(const ui_needs& n, const conversation& in, const message& said, bool first, bool last,
                                    const model* now, bool version = false) {
   return message_row(bubble_needs{.colours = n.colours, .looks = n.looks, .shared = n.shared, .now = now}, in,
                      bubble_facts{.said = said, .first = first, .last = last, .version = version}, now, false);

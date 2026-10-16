@@ -48,7 +48,7 @@ struct picture_look {
 inline constexpr float kPictureMost = 430.0f, kPictureLeast = 100.0f, kStickerMost = 256.0f;
 // Over a video's thumbnail, as Telegram's: a dark disc with the play mark in
 // the middle, and its length on a dark pill at the top left.
-inline auto video_marks(std::int64_t ms) {
+auto video_marks(std::int64_t ms) {
   namespace c = skiff::compose;
   const skia::SkColor shade = skia::colorSetARGB(0x54, 0, 0, 0), white = skia::colorSetARGB(255, 255, 255, 255);
   return c::column(c::vbox(0.0f, {.fill = true}),
@@ -62,7 +62,7 @@ inline auto video_marks(std::int64_t ms) {
                                    nodes::Text(std::format("{}:{:02}", ms / 60000, (ms / 1000) % 60), 11.0f, white))));
 }
 // The time on a dark pill over a picture's corner.
-inline auto time_pill(std::string when) {
+auto time_pill(std::string when) {
   namespace c = skiff::compose;
   const bool shown = !when.empty();
   return c::visible(shown, c::column(c::vbox(0.0f, {.place = scene::anchor::kBottomRight, .autoSize = scene::axes::kBoth,
@@ -130,7 +130,7 @@ inline constexpr float kAlbumWidth = 360.0f, kAlbumGap = 2.0f;
     per_row.push_back(2);
   return per_row;
 }
-inline auto album_view(const palette& colours, const std::vector<attachment>& items, std::vector<media_open> opens) {
+auto album_view(const palette& colours, const std::vector<attachment>& items, std::vector<media_open> opens) {
   namespace c = skiff::compose;
   // A row as many() makes it: held outside a release build.
   using row_t = decltype(c::many(c::Look{}, std::vector<picture_view_t>{}));
@@ -174,7 +174,7 @@ using album_view_t = decltype(album_view(std::declval<const palette&>(), {}, {})
 // (audio_shown); while it plays, the program is asked to look again a few
 // times a second (request::audio_tick).
 inline constexpr float kFileIcon = 44.0f;  // tdesktop's msgFileSize
-[[nodiscard]] inline std::string size_text(std::int64_t bytes) {
+[[nodiscard]] std::string size_text(std::int64_t bytes) {
   if (bytes <= 0)
     return "File";
   if (bytes < 1024)
@@ -185,7 +185,7 @@ inline constexpr float kFileIcon = 44.0f;  // tdesktop's msgFileSize
 }
 using file_open = std::variant<request::open_file, request::play_audio>;
 // The row itself, pressed or not: a file waiting to be sent is the same row.
-inline auto file_row(const palette& colours, std::string source, std::string name, std::int64_t bytes, bool sound) {
+auto file_row(const palette& colours, std::string source, std::string name, std::int64_t bytes, bool sound) {
   namespace c = skiff::compose;
   const auto plays = [source, sound](const audio_shown& now) { return sound && now.source == source; };
   const auto line = [plays, size = size_text(bytes)](const audio_shown& now) {
@@ -214,7 +214,7 @@ inline auto file_row(const palette& colours, std::string source, std::string nam
                                           c::every<request::audio_tick>(200.0))));
 }
 using file_row_t = decltype(file_row(std::declval<const palette&>(), std::string(), std::string(), 0, false));
-inline auto file_view(const palette& colours, std::string source, std::string name, std::int64_t bytes, bool sound, file_open open) {
+auto file_view(const palette& colours, std::string source, std::string name, std::int64_t bytes, bool sound, file_open open) {
   std::string label = name;
   return skiff::compose::onClick(std::move(open), file_row(colours, std::move(source), std::move(name), bytes, sound), std::move(label));
 }

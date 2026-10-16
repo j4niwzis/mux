@@ -254,8 +254,10 @@ inline auto chat_column(const ui_needs& n) {
   const auto open = [](const chat_shown& now) { return now.chosen.has_value(); };
   // On a phone's window, standing over the panel docked under its field.
   return SKIFF_NAMED(chat_column, c::spec_for<screen_shown>([](const screen_shown& now) { return scene::Spec{.padding = {0.0f, 0.0f, now.docked, 0.0f}}; },
-      c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX,
-                                  .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat}),
+      // Filling the column the screen grows it in: a grow said here, across
+      // that column, meant nothing -- it was 0 wide, and what it showed
+      // (No accounts yet, its button) stood outside it, taking no press.
+      c::column(c::vbox(0.0f, {.fill = true, .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat}),
       chat_header_for(*n.colours),
       connection_bar_for<connection_shown>(*n.colours, &connection_shown::chat),
       search_bar_for(*n.colours),

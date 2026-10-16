@@ -110,8 +110,11 @@ class avatar_cache {
   // or the one before is never let go, over the budget if need be: what is
   // on screen stays.
   std::size_t budget = 32u << 20;
-  // The pictures on screen waiting for one of these: woken as one comes.
+  // The pictures on screen waiting for one of these: woken as one comes --
+  // and, where another store's pictures are drawn from it too (the
+  // viewer's), those waiting there.
   skiff::scene::Waiters waiting;
+  skiff::scene::Waiters* also = nullptr;
   void clear() {
     images_.clear();
     sources_.clear();
@@ -133,6 +136,8 @@ class avatar_cache {
       images_.erase(found);
     }
     waiting.wake();
+    if (also)
+      also->wake();
     return true;
   }
   [[nodiscard]] bool accepts_source(std::string_view key, std::string_view source) const {
@@ -173,6 +178,8 @@ class avatar_cache {
       order_.pop_back();
     }
     waiting.wake();
+    if (also)
+      also->wake();
   }
 
   // The frame being drawn, counted by the window: what was used in it and

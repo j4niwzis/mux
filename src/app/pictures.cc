@@ -465,6 +465,7 @@ class pictures_part {
       const double now = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
       if (player_->advance(now) && player_->picture()) {
         mux::ui::video_frames().insert_or_assign(played_, player_->picture());
+        mux::ui::viewer_waiters().wake();
         ++frame_;
       }
       this->put(mux::ui::video_shown{played_, !player_->paused(), player_->position(), player_->length(), frame_});

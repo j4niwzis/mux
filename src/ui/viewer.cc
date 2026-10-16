@@ -112,6 +112,18 @@ struct video_shown {
   static std::map<std::string, skia::Sp<skia::SkImage>, std::less<>> frames;
   return frames;
 }
+// The viewer's picture, woken as a frame of its video comes, or its whole
+// picture, or its thumbnail: drawn again then, by itself.
+[[nodiscard]] inline skiff::scene::Waiters& viewer_waiters() {
+  static skiff::scene::Waiters waiting;
+  static const bool told = [] {
+    whole_pictures().also = &waiting;
+    thumbnails().also = &waiting;
+    return true;
+  }();
+  (void)told;
+  return waiting;
+}
 // The picture shown: a video's frame where it plays, else the whole
 // picture where it has come, else its thumbnail.
 struct viewer_picture {
@@ -122,6 +134,8 @@ struct viewer_picture {
     const skia::Sp<skia::SkImage>* one = whole_pictures().find(source);
     return one && *one ? one : thumbnails().find(source);
   }
+  // Woken as a frame of its video comes, or its picture.
+  skiff::scene::Waiters& waiters() const { return viewer_waiters(); }
 };
 [[nodiscard]] inline std::string clock_of_seconds(double seconds) {
   const auto whole = static_cast<std::int64_t>(seconds);
@@ -174,9 +188,7 @@ inline auto picture_viewer(const ui_needs& n, const viewer_facts& facts) {
               c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
                   c::zoomable_for<viewer_view, viewer_tag>([](const viewer_view& now) { return skiff::compose::ZoomView{now.zoom, now.x, now.y}; },
                       48.0f, request::close_picture{}, request::toggle_video{},
-                      c::applied<video_shown>([](const video_shown& now) { return now.frame; },
-                          [](nodes::Image<viewer_picture>& picture, std::uint64_t) { picture.markDamaged(); },
-                          nodes::Image<viewer_picture>({facts.source, facts.video})),
+                      nodes::Image<viewer_picture>({facts.source, facts.video}),
                       {.fill = true, .masking = true}),
                   std::move(loader), std::move(menu)),
               c::shown_for<video_shown>([](const video_shown& now) { return now.length > 0.0; },

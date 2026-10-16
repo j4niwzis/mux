@@ -49,7 +49,7 @@ class chat_view_part {
     this->put(mux::ui::connection_shown{notice(shown.current), chat_band ? notice(chat->id.account) : std::string()});
     // The info, while it is open: nothing of it worked out while it is shut.
     if (shown.info_open && chat)
-      this->show_info(*chat, s_->kept->own_of<&mux::app::chat_choices::muted>(chat->id));
+      this->show_info(*chat, s_->kept->own_of<&mux::config::chat_choices::muted>(chat->id));
   }
   // The info's members near the end of those made: the next few.
   void apply(const request::info_more&) {

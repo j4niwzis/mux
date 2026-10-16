@@ -82,14 +82,30 @@ inline press_target& press_target_now() {
 }  // namespace mux::app
 
 // What the window's routing starts with, found by its root's type: so in
-// the window's own namespace, where that lookup looks -- the window is
-// mux::ui's and names nothing of mux::app's.
-export namespace mux::ui {
-inline auto startCarry(::mux::app::window_type&) {
-  const ::mux::app::press_target& now = ::mux::app::press_target_now();
+// a namespace that lookup looks in. In a release build that is the
+// window's own, mux::ui, named by the composed type; outside one the
+// window is a skiff::compose::Held and names nothing of mux's, so there it
+// is Held's namespace -- for the window alone, not any other held root.
+namespace mux::app {
+inline auto window_carry() {
+  const press_target& now = press_target_now();
   return skiff::bind::carryFrom(now.model, now.sink);
 }
+}  // namespace mux::app
+export namespace mux::ui {
+template <class Root>
+  requires(!skiff::scene::kErasedCombinators && std::same_as<Root, ::mux::app::window_type>)
+auto startCarry(Root&) {
+  return ::mux::app::window_carry();
+}
 }  // namespace mux::ui
+export namespace skiff::compose {
+template <class Root>
+  requires(skiff::scene::kErasedCombinators && std::same_as<Root, ::mux::app::window_type>)
+auto startCarry(Root&) {
+  return ::mux::app::window_carry();
+}
+}  // namespace skiff::compose
 
 export namespace mux::app {
 

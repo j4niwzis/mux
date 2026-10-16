@@ -449,11 +449,11 @@ auto side_spaces_for(const auto& colours, Pick pick, bool horizontal) {
       ? c::hbox(4.0f, {.fillY = true, .autoSize = scene::axes::kX})
       : c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 6.0f, 8.0f, 6.0f}})),
       {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
-  return SKIFF_NAMED(side_spaces_for, c::projected<side_shown>([horizontal](const side_shown& now) {
+  return c::projected<side_shown>([horizontal](const side_shown& now) {
     return ((horizontal ? now.top_bar : now.side_bar)) | std::views::transform([&](const auto& entry) {
       return std::pair{entry.item, side_space_view{entry.folder, now.account, entry.key, entry.name, entry.chosen, entry.size}};
     }) | std::ranges::to<std::vector>();
-  }, c::LaneMark<Lane, rows>(std::move(line))));
+  }, c::LaneMark<Lane, rows>(std::move(line)));
 }
 template <class Pick> struct side_folder_row_make {
   const palette* colours;

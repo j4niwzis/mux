@@ -36,7 +36,7 @@ struct part {
                    }) | std::ranges::to<std::vector>();
     // Those whose reaction came without its event -- read back from the
     // history -- listed too, at the message's time.
-    std::ranges::for_each(said->reactions, [&](const auto& reacted) {
+    for (const auto& reacted : said->reactions) {
       const auto& [key, who] = reacted;
       entries.append_range(who | std::views::filter([&](const std::string& user) {
                              return std::ranges::none_of(events, [&](const auto& event) { return event.key == key && event.who == user; });
@@ -44,7 +44,7 @@ struct part {
                              return entry{std::string(), user, ui::sender_name(*chat, user), key, said->at,
                                           user == chat->id.account.address, one.message};
                            }));
-    });
+    }
     const auto& current = *s_->showing->look<std::optional<shown>>();
     if (current && current->in == chat->id && current->event != one.message)
       pages_.push_back(*current);

@@ -1511,7 +1511,7 @@ class account {
               }
             },
             [&](tern::pep_node::profile) {
-              std::ranges::for_each(event.items->items, [&](const auto& item) {
+              for (const auto& item : event.items->items) {
                 spl::visit(spl::overloaded{
                     [&](const tern::bookmarks::published& p) {
                       if (!p.profile) return;
@@ -1519,7 +1519,7 @@ class account {
                       sink_(change::profile_found{id_, bare(*got.from), profile.name, profile.avatar, profile.details});
                     },
                     [&](const tern::bookmarks::retracted&) { sink_(change::profile_found{id_, bare(*got.from), {}, {}, profile_details{}}); }}, item.data());
-              });
+              }
             }, [](tern::pep_node::other) {}}, tern::pep_node_of(event.items->node));
       }, [](const auto&) {}}, child.data());
   }

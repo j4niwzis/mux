@@ -64,9 +64,9 @@ inline std::vector<std::string> pack_rooms(const loom::client::state& all, const
           [&](const loom::ev::m_space_parent_content_t& parent) { if (!parent.via.empty()) add(event.first.second); },
           [](const auto&) {}}, event.second.content.data());
     }
-    std::ranges::for_each(all.joined, [&](const auto& candidate) {
+    for (const auto& candidate : all.joined) {
       if (!candidate.second.state.is_space())
-        return;
+        continue;
       const bool parent = std::ranges::any_of(candidate.second.state.events, [&](const auto& event) {
         return event.first.second == current && spl::visit(spl::overloaded{
             [](const loom::ev::m_space_child_content_t& child) { return !child.via.empty(); },
@@ -74,7 +74,7 @@ inline std::vector<std::string> pack_rooms(const loom::client::state& all, const
       });
       if (parent)
         add(candidate.first);
-    });
+    }
   }
   return rooms;
 }

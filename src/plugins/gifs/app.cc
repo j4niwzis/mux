@@ -45,10 +45,10 @@ struct part {
     std::ranges::sort(kept, std::greater{});
     auto paths = kept | std::views::values | std::ranges::to<std::vector>();
     auto* scene = s_->scene;
-    std::ranges::for_each(paths, [&](const std::string& path) {
+    for (const std::string& path : paths) {
       const std::string key = "gif:" + path;
       if (ui::animations().has(key) || ui::whole_pictures().has(key) || !decoding_.insert(key).second)
-        return;
+        continue;
       s_->work->run([path, key, scene]() -> app::workers::done_t {
         std::string bytes = platform::files::read(path).value_or(std::string());
         auto frames = skia::decodeFrames(bytes.data(), bytes.size());
@@ -60,7 +60,7 @@ struct part {
           scene->state().markDamaged();
         };
       });
-    });
+    }
     ui::change_shown<std::optional<ui::emoji_facts>>(*s_->showing, [&](auto& now) {
       if (now)
         std::get<shown>(now->pages).paths = std::move(paths);

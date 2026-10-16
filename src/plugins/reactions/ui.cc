@@ -92,7 +92,7 @@ std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>
   if (std::ranges::none_of(said.reactions, [](const auto& one) { return !one.second.empty(); }))
     return std::nullopt;
   auto made = reaction_row_of();
-  std::ranges::for_each(said.reactions | std::views::filter([](const auto& one) { return !one.second.empty(); }), [&](const auto& one) {
+  for (const auto& one : said.reactions | std::views::filter([](const auto& one) { return !one.second.empty(); })) {
     const auto& [key, who] = one;
     const auto shortcode = std::ranges::find_if(said.reaction_events, [&](const auto& event) {
       return event.key == key && event.shortcode.has_value();
@@ -101,7 +101,7 @@ std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>
         facts.colours, facts.looks, facts.message_id, key, who.size(), who.contains(said.in.account.address), facts.in.emotes,
         who | std::views::transform([&](const std::string& person) { return std::pair{person, sender_name(facts.in, person)}; }) | std::ranges::to<std::vector>(),
         shortcode == said.reaction_events.end() ? std::nullopt : shortcode->shortcode));
-  });
+  }
   return made;
 }
 

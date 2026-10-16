@@ -553,9 +553,9 @@ class chat_list_part {
     };
     // A forum's row, as tdesktop's: the newest of its topics, their unread
     // summed -- not the space's own.
-    std::ranges::for_each(chats, [&](const mux::conversation*& one) {
+    for (const mux::conversation*& one : chats) {
       if (!this->shown_as_forum(kept, *one))
-        return;
+        continue;
       mux::conversation made = *one;
       made.timeline.clear();
       made.read_up_to.reset();
@@ -575,7 +575,7 @@ class chat_list_part {
         made.members = (*best)->members;
       }
       one = &out.forums.insert_or_assign(one->id, std::move(made)).first->second;
-    });
+    }
     // Invites first, as Element lists them; then by their newest.
     std::ranges::sort(chats, std::ranges::greater{}, [&](const mux::conversation* one) {
       const mux::message* last = mux::ui::newest(*one, this->events_of(kept, *one));

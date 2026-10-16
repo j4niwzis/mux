@@ -308,8 +308,8 @@ void account<Sink>::fetch_room_settings(std::string room) {
       out.data.members = mapped | std::views::filter([](const auto& member) { return member.has_value(); }) | std::views::transform([](const auto& member) { return *member; }) | std::ranges::to<std::vector<proto::matrix::managed_member>>();
     } else failure(members);
     if (const auto kept = state_.joined.find(room); kept != state_.joined.end()) {
-      out.data.state_events = kept->second.state.events | std::views::transform([](const auto& entry) { return proto::matrix::managed_state_event{entry.first.first, entry.first.second, knot::to_pretty_json_string(entry.second), spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, entry.second.content.data())}; }) | std::ranges::to<std::vector<proto::matrix::managed_state_event>>();
-      out.data.account_data = kept->second.account_data | std::views::transform([](const auto& entry) { return proto::matrix::managed_account_data{entry.first, spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, entry.second.content.data())}; }) | std::ranges::to<std::vector<proto::matrix::managed_account_data>>();
+      out.data.state_events = kept->second.state.events | std::views::transform([](const auto& entry) { return proto::matrix::managed_state_event{entry.first.first, entry.first.second, knot::to_pretty_json_string(entry.second), knot::to_pretty_json_string(entry.second.content)}; }) | std::ranges::to<std::vector<proto::matrix::managed_state_event>>();
+      out.data.account_data = kept->second.account_data | std::views::transform([](const auto& entry) { return proto::matrix::managed_account_data{entry.first, knot::to_pretty_json_string(entry.second.content)}; }) | std::ranges::to<std::vector<proto::matrix::managed_account_data>>();
     }
     sink_(std::move(out));
     this->list_packs(room);
@@ -422,7 +422,7 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
                 const auto event = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = done->event_id});
                 if (event) {
                   saved_state = proto::matrix::managed_state_event{one.type, one.key, knot::to_pretty_json_string(*event),
-                      spl::visit([](const auto& content) { return knot::to_pretty_json_string(content); }, event->content.data())};
+                      knot::to_pretty_json_string(event->content)};
                   if (auto joined = state_.joined.find(room); joined != state_.joined.end())
                     joined->second.state.events.insert_or_assign(std::pair{one.type, one.key}, *event);
                 }

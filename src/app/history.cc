@@ -172,7 +172,7 @@ class history_part {
     // From the server: from the token of the gap before the message paged
     // from, where there is one -- else the one the model has.
     const auto from_server = [this](const mux::conversation_id& in, const std::optional<std::string>& paged_from,
-                                    std::string from) {
+                                    std::optional<std::string> from) {
       if (paged_from) {
         paging_from_.insert_or_assign(in, *paged_from);
         // What the disk has, before the page comes and is kept: whether it
@@ -190,7 +190,12 @@ class history_part {
       // archive is not asked, to time out.
       if (!mux::proto::can_page_back(mux::ui::protocol_state_of(s_->ui, in.account)))
         return;
-      s_->net->load_older(in, std::move(from));
+      // No token to page back from: from before the oldest message held,
+      // where the account can find where that is (a Matrix room's /context).
+      if (from)
+        s_->net->load_older(in, std::move(*from));
+      else if (paged_from)
+        s_->net->load_older_before(in, *paged_from);
     };
     // A window of the history, where gaps were not kept for this chat: the
     // disk may not have what is next to it. From the server.

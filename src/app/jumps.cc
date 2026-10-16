@@ -514,15 +514,18 @@ class jumps_part {
   // after a while where nothing came.
   template <class Asked>
   bool ask_older(const mux::conversation& chat, const Asked& asked) {
-    if (!chat.history_from)
+    // No token, and nothing held to page back from: nothing to ask. No token
+    // but messages held: asked all the same -- the history part pages back
+    // from before the oldest of them, unless it knows the room begins there.
+    if (!chat.history_from && chat.timeline.empty())
       return false;
-    const auto page = std::pair{*chat.history_from, chat.timeline.empty() ? std::string() : chat.timeline.front().id};
+    const auto page = std::pair{chat.history_from.value_or(std::string()), chat.timeline.empty() ? std::string() : chat.timeline.front().id};
     const double now = now_ms();
     if (older_asked_ == page && now - older_asked_ms_ < kHistoryPatienceMs)
       return false;
     older_asked_ = page;
     older_asked_ms_ = now;
-    asked(request::load_older{chat.id, *chat.history_from});
+    asked(request::load_older{chat.id, chat.history_from});
     return true;
   }
   template <class Asked>

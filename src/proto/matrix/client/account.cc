@@ -204,6 +204,10 @@ class account {
   // Older messages of a room, paged back from `from`: before the rest, and
   // where to page back from next -- nothing where the beginning is reached.
   void load_older(std::string room, std::string from);
+  // Older history from before an event, where no token is held for the
+  // room: the token before it asked of the room's /context, then paged back
+  // from there as load_older does.
+  void load_older_before(std::string room, std::string event);
   // A window of a room's history around a message (/context), in place of
   // its timeline; and a window paged forward, to the newest.
   void load_context(std::string room, std::string target);

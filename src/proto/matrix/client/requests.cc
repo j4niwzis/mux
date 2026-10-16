@@ -189,6 +189,20 @@ void account<Sink>::load_older(std::string room, std::string from) {
   });
 }
 
+template <class Sink>
+void account<Sink>::load_older_before(std::string room, std::string event) {
+  this->spawn_guarded([this, room = std::move(room), event = std::move(event)] {
+    if (!api_)
+      return;
+    const auto around = perform(*api_, loom::cs::get_event_context{.room_id = room, .event_id = event, .limit = 0});
+    if (!around || !around->start) {
+      log(id_, "history of {}: no token before {}: {}", room, event, around ? std::string("none given") : around.error().said());
+      return;
+    }
+    this->load_older(room, *around->start);
+  });
+}
+
 // MSC4027 labels, beside the relation: stable and interoperable unstable names.
 struct reaction_shortcode {
   std::string shortcode, unstable;

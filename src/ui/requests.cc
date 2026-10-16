@@ -292,9 +292,13 @@ struct load_newer {
   mux::conversation_id in;
   std::string from;
 };
+// Older history: from the token the chat pages back from, or -- where it
+// has none, though it holds messages (a room quiet since the program
+// started, whose kept timeline lost its token as it was cut short) -- from
+// before the oldest message held, wherever that is found.
 struct load_older {
   mux::conversation_id in;
-  std::string from;
+  std::optional<std::string> from;
 };
 struct send_typed {};
 struct resize_sidebar {

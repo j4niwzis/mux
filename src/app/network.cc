@@ -838,6 +838,21 @@ struct network {
             one.account);
     });
   }
+  // Older history from before a message, where no token is known: asked of
+  // an account that can find where it is (Matrix's /context); others have
+  // a token whenever they hold messages.
+  void load_older_before(const mux::conversation_id& in, std::string event) {
+    loop.post([this, in, event = std::move(event)] {
+      for (auto& one : accounts)
+        spl::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                ask_if_able([&](auto& a) -> decltype(void(a.load_older_before(in.id, event))) { a.load_older_before(in.id, event); },
+                            *account);
+            },
+            one.account);
+    });
+  }
   void load_older(const mux::conversation_id& in, std::string from) {
     loop.post([this, in, from = std::move(from)] {
       for (auto& one : accounts)

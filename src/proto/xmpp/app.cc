@@ -47,21 +47,6 @@ void program_told(App& app, const registration_asked& asked) {
   app.accounts_screen.form_part_told(asked.account.address, registration_form{asked, first_answers(asked)},
                                      "The server asks more to make the account: answer below, then save.");
 }
-// One of the fields it asked, typed into: the answer kept beside the form.
-template <class App>
-void program_asked(App& app, const request::registration_typed& typed) {
-  if (const auto& open = *app.showing.template look<std::optional<mux::ui::account_form_facts>>()) {
-    auto now = *open;
-    spl::visit(spl::overloaded{[&](registration_form& kept) {
-                                 const auto found = std::ranges::find(kept.answers, typed.var, &registration_answer::var);
-                                 if (found != kept.answers.end())
-                                   found->value = typed.value;
-                               },
-                               [](auto&) {}},
-               now.part);
-    mux::ui::show(app.showing, std::optional(std::move(now)));
-  }
-}
 // The account made: kept as one to sign in to from now on.
 template <class App>
 void program_told(App& app, const registered& made) {
@@ -118,5 +103,20 @@ template <class App> void program_asked(App& app, const muc_identity& one) { muc
 template <class App> void program_asked(App& app, const muc_privilege& one) { muc_request(app, one); }
 template <class App> void program_asked(App& app, const destroy_muc& one) { muc_request(app, one); }
 template <class App> void program_asked(App& app, const rejoin_muc& one) { muc_request(app, one); }
+// One of the fields it asked, typed into: the answer kept beside the form.
+template <class App>
+void program_asked(App& app, const registration_typed& typed) {
+  if (const auto& open = *app.showing.template look<std::optional<mux::ui::account_form_facts>>()) {
+    auto now = *open;
+    spl::visit(spl::overloaded{[&](registration_form& kept) {
+                                 const auto found = std::ranges::find(kept.answers, typed.var, &registration_answer::var);
+                                 if (found != kept.answers.end())
+                                   found->value = typed.value;
+                               },
+                               [](auto&) {}},
+               now.part);
+    mux::ui::show(app.showing, std::optional(std::move(now)));
+  }
+}
 
 }  // namespace mux::proto::xmpp::request

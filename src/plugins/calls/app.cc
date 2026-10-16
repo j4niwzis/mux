@@ -357,7 +357,11 @@ class part {
   void show_callable() {
     const mux::conversation* one = callable_for_ ? s_->model->find(*callable_for_) : nullptr;
     const auto count = one ? std::max<std::int64_t>(static_cast<std::int64_t>(one->members.size()), one->member_count) : 0;
-    callable_ = one && ui::ops_of(s_->ui, one->id.account).calls && count <= 2;
+    // Callable where this plugin has its side of the chat's protocol (its
+    // account can be asked for a call's servers): the account's own ops
+    // say nothing of calls, which are the plugin's -- asked of them, no
+    // chat had the button.
+    callable_ = one && mux::app::network::can_ask<ask_servers>(one->id.account.speaks) && count <= 2;
     ui::show(*s_->showing, call_shown{.now = shown_, .callable = callable_});
   }
   std::string own_party_;

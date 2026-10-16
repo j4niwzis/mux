@@ -422,6 +422,13 @@ struct network {
   // its protocol's account can do it (ask_if_able): a plugin's -- a call's
   // signal, the servers it goes through -- as the plugin's side of that
   // protocol says it.
+  // Whether the accounts of a protocol can be asked `Ask` (a plugin's: a
+  // call's servers) -- what a plugin offers where its side of the protocol
+  // is there, decided by the account's type, as ask_if_able does it.
+  template <class Ask>
+  [[nodiscard]] static bool can_ask(const mux::protocol_t& of) {
+    return spl::visit([]<class Tag>(Tag) { return std::invocable<Ask&, account_type_of<mux::config::kept_of<Tag>>&>; }, of);
+  }
   template <class Ask>
   void ask(const mux::account_id& of, Ask ask) {
     loop.post([this, of, ask = std::move(ask)] {

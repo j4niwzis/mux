@@ -201,7 +201,7 @@ inline std::vector<std::string> lines_of(std::string_view text) {
 }
 // A field's label beside its editor: its words, required marked, its
 // description read out as its hint.
-inline auto config_label(const palette& colours, const muc_field& f) {
+auto config_label(const auto& colours, const muc_field& f) {
   namespace c = skiff::compose;
   return c::named(f.label, f.description,
                   c::styled({.width = 120.0f, .alignSelf = scene::align::kMiddle},
@@ -388,7 +388,7 @@ struct jid_line_typed {
 // A checkbox showing whether the form's values for a field say it is on --
 // or an option is among them -- and answering its flip.
 template <class Act>
-auto form_checkbox(const palette& colours, std::string var, std::optional<std::string> option, Act act) {
+auto form_checkbox(const auto& colours, std::string var, std::optional<std::string> option, Act act) {
   namespace c = skiff::compose;
   using box_t = widgets::internal::Toggle<Act, widgets::internal::CheckboxLook>;
   return c::applied<muc_form>(
@@ -423,7 +423,7 @@ struct jid_row_of {
                   c::styled({.height = 36.0f, .grow = scene::axes::kX}, std::move(field)));
   }
 };
-inline auto jid_list(const palette& colours, const muc_field& f) {
+auto jid_list(const auto& colours, const muc_field& f) {
   namespace c = skiff::compose;
   using row_t = std::invoke_result_t<jid_row_of, const std::tuple<std::uint32_t, bool, std::string>&>;
   using rows_t = nodes::MemoRows<std::uint32_t, bool, row_t, jid_row_of>;
@@ -451,26 +451,26 @@ inline auto jid_list(const palette& colours, const muc_field& f) {
                  widgets::Button<sends<jids_removed>>(colours.widgets, "Remove", {{var}}))));
 }
 // What a field is edited with, by its kind; its trouble under it.
-using field_editor_t = spl::variant<nodes::Text, decltype(form_checkbox(std::declval<const palette&>(), "", std::nullopt, field_checked{})),
+template <class P> using field_editor_t = spl::variant<nodes::Text, decltype(form_checkbox(std::declval<P>(), "", std::nullopt, field_checked{})),
                                     choice_menu<field_chosen>,
                                     decltype(skiff::compose::many(skiff::compose::vbox(),
-                                        std::vector<decltype(skiff::compose::row(skiff::compose::hbox(), form_checkbox(std::declval<const palette&>(), "", std::optional<std::string>(), option_flipped{}), nodes::Text("", 13.0f, 0u)))>{})),
-                                    decltype(jid_list(std::declval<const palette&>(), std::declval<const muc_field&>())),
+                                        std::vector<decltype(skiff::compose::row(skiff::compose::hbox(), form_checkbox(std::declval<P>(), "", std::optional<std::string>(), option_flipped{}), nodes::Text("", 13.0f, 0u)))>{})),
+                                    decltype(jid_list(std::declval<P>(), std::declval<const muc_field&>())),
                                     widgets::internal::TextBox<field_typed>, widgets::internal::TextArea<field_typed>>;
-inline field_editor_t field_editor(const palette& colours, const muc_field& f) {
+inline auto field_editor(const auto& colours, const muc_field& f) -> field_editor_t<decltype(colours)> {
   namespace c = skiff::compose;
   const auto text = [&](bool masked) {
     auto box = widgets::internal::TextBox<field_typed>(colours.widgets, "", field_typed{f.var, false});
     box.setText(joined_values(f));
     box.setMasked(masked);
     box.apply({.fillX = true, .height = 36.0f});
-    return field_editor_t(std::in_place_index<5>, std::move(box));
+    return field_editor_t<decltype(colours)>(std::in_place_index<5>, std::move(box));
   };
-  const auto fixed = [&](std::string said) { return field_editor_t(std::in_place_index<0>, wrapped(nodes::Text(std::move(said), 13.0f, colours.text))); };
+  const auto fixed = [&](std::string said) { return field_editor_t<decltype(colours)>(std::in_place_index<0>, wrapped(nodes::Text(std::move(said), 13.0f, colours.text))); };
   return spl::visit(
       spl::overloaded{
           [&](muc_kind::boolean) {
-            return field_editor_t(std::in_place_index<1>,
+            return field_editor_t<decltype(colours)>(std::in_place_index<1>,
                                   form_checkbox(colours, f.var, std::nullopt,
                                                 field_checked{f.var, !f.values.empty() && muc_boolean_of(f.values.front()).value_or(false)}));
           },
@@ -479,12 +479,12 @@ inline field_editor_t field_editor(const palette& colours, const muc_field& f) {
                                                    : static_cast<std::size_t>(std::ranges::find(f.options, f.values.front(),
                                                                                                 &std::pair<std::string, std::string>::second) -
                                                                               f.options.begin());
-            return field_editor_t(std::in_place_index<2>,
+            return field_editor_t<decltype(colours)>(std::in_place_index<2>,
                                   make_choice_menu(colours, "", f.options | std::views::keys | std::ranges::to<std::vector<std::string>>(), selected,
                                                    field_chosen{f.var, f.options | std::views::values | std::ranges::to<std::vector<std::string>>()}));
           },
           [&](muc_kind::list_multi) {
-            return field_editor_t(std::in_place_index<3>,
+            return field_editor_t<decltype(colours)>(std::in_place_index<3>,
                 c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                         f.options | std::views::transform([&](const std::pair<std::string, std::string>& option) {
                           return c::row(c::hbox(8.0f, {.fillX = true, .height = 32.0f}),
@@ -501,16 +501,16 @@ inline field_editor_t field_editor(const palette& colours, const muc_field& f) {
             area.setSingleLine(false);
             area.setMaxLines(5);
             area.apply({.fillX = true});
-            return field_editor_t(std::in_place_index<6>, std::move(area));
+            return field_editor_t<decltype(colours)>(std::in_place_index<6>, std::move(area));
           },
-          [&](muc_kind::jid_multi) { return field_editor_t(std::in_place_index<4>, jid_list(colours, f)); },
+          [&](muc_kind::jid_multi) { return field_editor_t<decltype(colours)>(std::in_place_index<4>, jid_list(colours, f)); },
           [&](muc_kind::fixed) { return fixed(joined_values(f)); }, [&](muc_kind::hidden) { return fixed({}); },
           [&](muc_kind::unsupported) { return fixed("Unsupported configuration field."); }},
       f.kind);
 }
 // A field's row: its label beside its editor, what is wrong with it under
 // that; not there where it is hidden, nor where it does not apply.
-inline auto config_row(const palette& colours, const muc_room& room, const muc_field& f) {
+auto config_row(const auto& colours, const muc_room& room, const muc_field& f) {
   namespace c = skiff::compose;
   const bool labelled = spl::visit(spl::overloaded{[](muc_kind::fixed) { return false; }, [](const auto&) { return true; }}, f.kind);
   const bool hidden = spl::visit(spl::overloaded{[](muc_kind::hidden) { return true; }, [](const auto&) { return false; }}, f.kind);
@@ -540,7 +540,7 @@ using facts_t = std::optional<room_settings_facts>;
   static const muc_room none;
   return facts ? settings_of(*facts) : none;
 }
-inline auto configuration_page(const palette& colours, const muc_room& room) {
+auto configuration_page(const auto& colours, const muc_room& room) {
   namespace c = skiff::compose;
   const auto changed_and_valid = [room](const muc_form& form) {
     return std::ranges::none_of(room.fields, [&](const muc_field& f) { return trouble_of(form, room, f).has_value(); }) &&
@@ -575,7 +575,7 @@ inline auto configuration_page(const palette& colours, const muc_room& room) {
                   room.fields | std::views::transform([&](const muc_field& f) { return config_row(colours, room, f); }) | std::ranges::to<std::vector>())),
       form_of(room));
 }
-using configuration_page_t = decltype(configuration_page(std::declval<const palette&>(), std::declval<const muc_room&>()));
+template <class P> using configuration_page_t = decltype(configuration_page(std::declval<P>(), std::declval<const muc_room&>()));
 
 // The room: its subject, one's nickname in it -- or, not in it, joining it
 // again with a password where it asks one -- and its settings fetched again.
@@ -589,7 +589,7 @@ struct room_basis {
   std::string topic;
   friend bool operator==(const room_basis&, const room_basis&) = default;
 };
-inline auto room_page(const palette& colours, const room_basis& basis) {
+auto room_page(const auto& colours, const room_basis& basis) {
   namespace c = skiff::compose;
   const muc_room& room = basis.room;
   const scene::Spec button{.height = 32.0f, .alignSelf = scene::align::kStart};
@@ -609,7 +609,7 @@ inline auto room_page(const palette& colours, const room_basis& basis) {
           c::styled(button, button_for<sends<request::refresh_muc>>(colours.widgets, "Refresh room settings", {}))),
       room_form{basis.topic, room.nick, {}});
 }
-using room_page_t = decltype(room_page(std::declval<const palette&>(), std::declval<const room_basis&>()));
+template <class P> using room_page_t = decltype(room_page(std::declval<P>(), std::declval<const room_basis&>()));
 
 // Affiliation belongs to a bare account; role belongs to a joined occupant.
 // Merge the two lists without inventing duplicate accounts, while keeping
@@ -654,7 +654,7 @@ struct roles_basis {
   std::string id;
   friend bool operator==(const roles_basis&, const roles_basis&) = default;
 };
-inline auto roles_page(const palette& colours, const roles_basis& basis) {
+auto roles_page(const auto& colours, const roles_basis& basis) {
   namespace c = skiff::compose;
   const muc_room& room = basis.room;
   const bool owner = room.affiliation == "owner";
@@ -684,10 +684,10 @@ inline auto roles_page(const palette& colours, const roles_basis& basis) {
                   c::styled({.height = 32.0f, .alignSelf = scene::align::kStart},
                             widgets::Button<scene::NoAction>(colours.widgets, "Destroy room", {})))))));
 }
-using roles_page_t = decltype(roles_page(std::declval<const palette&>(), std::declval<const roles_basis&>()));
+template <class P> using roles_page_t = decltype(roles_page(std::declval<P>(), std::declval<const roles_basis&>()));
 // A page made from what the room is, again where that changes.
 template <class Page, class Basis, class Of, class Make>
-auto made_from(const palette& colours, Of of, Make make) {
+auto made_from(const auto& colours, Of of, Make make) {
   namespace c = skiff::compose;
   return c::projected<facts_t>([of](const facts_t& facts) { return facts ? std::optional<Basis>(of(*facts)) : std::nullopt; },
       c::mount<Page, Basis>([at = &colours, make](const Basis& basis) { return std::tuple{make(*at, basis)}; },
@@ -705,20 +705,38 @@ inline ui::icon_t tab_icon(room) { return ui::icon::people{}; }
 inline ui::icon_t tab_icon(configuration) { return ui::icon::gear{}; }
 inline ui::icon_t tab_icon(roles) { return ui::icon::people{}; }
 // Each tab's page, made again from the room as the server says it.
-inline auto make_manage_page(room, const ui::palette& colours, const ui::room_settings_facts&) {
+auto page_of(room, const auto& colours, const ui::room_settings_facts&) {
   using namespace manage_detail;
-  return made_from<room_page_t, room_basis>(colours, [](const ui::room_settings_facts& facts) { return room_basis{settled(settings_of(facts)), facts.topic}; },
-                                            [](const ui::palette& at, const room_basis& basis) { return room_page(at, basis); });
+  return made_from<room_page_t<decltype(colours)>, room_basis>(colours, [](const ui::room_settings_facts& facts) { return room_basis{settled(settings_of(facts)), facts.topic}; },
+                                            [](const auto& at, const room_basis& basis) { return room_page(at, basis); });
 }
-inline auto make_manage_page(configuration, const ui::palette& colours, const ui::room_settings_facts&) {
+auto page_of(configuration, const auto& colours, const ui::room_settings_facts&) {
   using namespace manage_detail;
-  return made_from<configuration_page_t, muc_room>(colours, [](const ui::room_settings_facts& facts) { return settled(settings_of(facts)); },
-                                                   [](const ui::palette& at, const muc_room& room) { return configuration_page(at, room); });
+  return made_from<configuration_page_t<decltype(colours)>, muc_room>(colours, [](const ui::room_settings_facts& facts) { return settled(settings_of(facts)); },
+                                                   [](const auto& at, const muc_room& room) { return configuration_page(at, room); });
 }
-inline auto make_manage_page(roles, const ui::palette& colours, const ui::room_settings_facts&) {
+auto page_of(roles, const auto& colours, const ui::room_settings_facts&) {
   using namespace manage_detail;
-  return made_from<roles_page_t, roles_basis>(colours, [](const ui::room_settings_facts& facts) { return roles_basis{settled(settings_of(facts)), facts.id}; },
-                                              [](const ui::palette& at, const roles_basis& basis) { return roles_page(at, basis); });
+  return made_from<roles_page_t<decltype(colours)>, roles_basis>(colours, [](const ui::room_settings_facts& facts) { return roles_basis{settled(settings_of(facts)), facts.id}; },
+                                              [](const auto& at, const roles_basis& basis) { return roles_page(at, basis); });
+}
+// What these pages may ask, whatever their trees: outside a release build
+// each is held erased (made in its own unit, manage_*.cc), so the dialog
+// that holds them is not made again for every change of a page.
+using manage_out = skiff::model::Types<request::refresh_muc, request::configure_muc, request::muc_identity, request::rejoin_muc,
+                                       request::muc_privilege, request::destroy_muc, ::mux::ui::request::room_act>;
+using erased_page = skiff::compose::Erased<manage_out>;
+erased_page manage_page_erased(room, const ui::palette&, const ui::room_settings_facts&);
+erased_page manage_page_erased(configuration, const ui::palette&, const ui::room_settings_facts&);
+erased_page manage_page_erased(roles, const ui::palette&, const ui::room_settings_facts&);
+template <class Tab>
+auto make_manage_page(Tab tab, const ui::palette& colours, const ui::room_settings_facts& facts)
+  requires requires { page_of(tab, colours, facts); }
+{
+  if constexpr (skiff::scene::kErasedWalks)
+    return manage_page_erased(tab, colours, facts);
+  else
+    return page_of(tab, colours, facts);
 }
 }
 

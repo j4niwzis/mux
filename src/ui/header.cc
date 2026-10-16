@@ -319,7 +319,7 @@ inline auto pinned_bar_for(const palette& colours) {
   const auto pin = [](const pinned_shown& now) { return now.pin.value_or(pinned_view{}); };
   return SKIFF_NAMED(pinned_bar_for, c::shown_for<pinned_shown>([](const pinned_shown& now) { return now.pin.has_value(); },
       c::onClick(request::pinned_pressed{},
-          c::row(c::hbox(10.0f, {.fillX = true, .height = kPinnedHeight, .padding = {6.0f, 16.0f, 7.0f, 18.0f},
+          c::row(c::hbox(10.0f, {.fillX = true, .height = kPinnedHeight, .padding = {5.5f, 16.0f, 6.0f, 18.0f},
                                  .background = colours.sidebar, .hoverBackground = colours.chosen}),
                  c::styled({.fillY = true, .width = 2.0f, .cornerRadius = 1.0f}, nodes::Box<>(colours.accent)),
                  c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),

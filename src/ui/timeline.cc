@@ -309,6 +309,10 @@ auto timeline_list() {
   auto list = c::WindowFrom<timeline_rows, chats_model, std::string, bubble_facts, message_row_t, make_bubble_row, locate_in_row, Tag>(
       make_bubble_row{});
   list.setCopiesOnScroll(false);
+  // The window filling the box spanned_for puts it in: a scroll view has no
+  // size of its own, and said none it was laid out 0 by 0 -- its rows made,
+  // every one 0 wide, and the chat empty.
+  list.apply({.fill = true});
   std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY,
                                       .padding = {8.0f, kListSide, 8.0f, kListSide}});
   return SKIFF_NAMED(timeline_list, c::spanned_for<message_marks>(selecting, skiff::bind::Bound<Want, decltype(list)>(std::move(list))));

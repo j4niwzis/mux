@@ -497,7 +497,7 @@ using made_layer = skiff::compose::Mounted<std::invoke_result_t<Make, const Need
 template <class Facts, class Make, class Needs>
 auto layer_made_by(const Needs& needs) {
   return skiff::bind::Bound<std::optional<Facts>, made_layer<Facts, Needs, Make>>(std::in_place, layer_made<Needs, Make>{needs},
-                                                                              scene::Spec{.fill = true}, true);
+                                                                              scene::Spec{.place = scene::anchor::kTopLeft, .fill = true}, true);
 }
 struct make_menu {
   auto operator()(const ui_needs& n, const menu_facts& facts) const { return context_menu(n, facts); }
@@ -518,7 +518,7 @@ template <class Content, class Facts, class Needs>
 auto layer_for(const Needs &needs) {
   return skiff::bind::Bound<std::optional<Facts>,
                             shown_layer<Content, Facts, Needs>>(
-      std::in_place, layer_arguments<Needs>{needs}, scene::Spec{.fill = true},
+      std::in_place, layer_arguments<Needs>{needs}, scene::Spec{.place = scene::anchor::kTopLeft, .fill = true},
       true);
 }
 
@@ -632,7 +632,13 @@ template <class Content, class Facts>
 using shown_in = skiff::bind::Bound<std::optional<Facts>, widgets::Shown<dialog_of<Content, Facts>, Facts, dialog_made<Content, Facts>>>;
 template <class Content, class Facts>
 shown_in<Content, Facts> shown_made(const ui_needs& n) {
-  return shown_in<Content, Facts>(std::in_place, dialog_made<Content, Facts>{&n});
+  // Over everything under it, out of the flow of what it is put in: the
+  // dialogs are put one after another in one column, and each fills it --
+  // in its flow, the second was laid out a window's height below the first,
+  // the third two, and none but the first was ever seen.
+  shown_in<Content, Facts> made(std::in_place, dialog_made<Content, Facts>{&n});
+  made.apply({.place = scene::anchor::kTopLeft});
+  return made;
 }
 // The plugins' dialogs, each its box -- from its extend(), found where the
 // window is instantiated (mux.plugins.ui).
@@ -649,7 +655,7 @@ struct plugin_dialogs<plugin_list<Features...>> {
   template <class Feature>
   using box_t = typename decltype(box_of<Feature>())::type;
   static auto made(const ui_needs& n) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fill = true}), shown_made<box_t<Features>, dialog_facts_t<Features>>(n)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), shown_made<box_t<Features>, dialog_facts_t<Features>>(n)...);
   }
 };
 // The protocols' dialogs, each made by its dialog_content from its facts.
@@ -657,7 +663,7 @@ template <class Facts>
 using tool_content_t = decltype(dialog_content(std::declval<const ui_needs&>(), std::declval<const Facts&>()));
 template <class... Facts>
 auto tool_dialogs(const ui_needs& n, type_list<Facts...>) {
-  return SKIFF_NAMED(tool_dialogs, skiff::compose::column(skiff::compose::vbox(0.0f, {.fill = true}), shown_made<tool_content_t<Facts>, Facts>(n)...));
+  return SKIFF_NAMED(tool_dialogs, skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), shown_made<tool_content_t<Facts>, Facts>(n)...));
 }
 // The plugins' layers, each its node from its extend(), over everything: a
 // call's card -- on a phone the whole window, as Element's phone apps.
@@ -672,7 +678,7 @@ struct plugin_layers<plugin_list<Features...>> {
     return extend(contract::window_layers{}, type_tag<Feature>{}, n);
   }
   static auto made(const ui_needs& n) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fill = true}),
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
                                   skiff::compose::styled({.place = scene::anchor::kTopLeft}, made_of<Features>(n))...);
   }
 };

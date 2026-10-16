@@ -90,6 +90,32 @@ inline video_driver_t video_driver_of(const char* name) {
   return video_driver::other{};
 }
 
+namespace detail {
+// The named views overflows were told in, each as it was laid out: its row
+// and every row below it, down to the next at its depth.
+template <class Root>
+void tell_views_laid_out(Root& root, const std::vector<skiff::scene::Overflow>& told) {
+  const auto rows = skiff::scene::laidOutTree(root);
+  auto views = told | std::views::transform(&skiff::scene::Overflow::view) |
+               std::views::filter([](const std::string& view) { return !view.empty(); }) | std::ranges::to<std::vector>();
+  std::ranges::sort(views);
+  const auto [last, end] = std::ranges::unique(views);
+  views.erase(last, end);
+  for (const std::string& view : views) {
+    const auto at = std::ranges::find_if(rows, [&](const skiff::scene::LaidOutNode& row) { return row.names && row.view == view; });
+    if (at == rows.end())
+      continue;
+    const std::size_t depth = at->depth;
+    std::println(std::cerr, "[layout] {} as laid out:", view);
+    const auto below = std::ranges::subrange(std::next(at), rows.end()) |
+                       std::views::take_while([depth](const skiff::scene::LaidOutNode& row) { return row.depth > depth; });
+    std::println(std::cerr, "{}", skiff::scene::laidOutLine(*at));
+    for (const auto& row : below)
+      std::println(std::cerr, "{}", skiff::scene::laidOutLine(row));
+  }
+}
+}  // namespace detail
+
 template <class App>
 int run(App& app, const options& how, const events::kinds& kinds) {
   // Android's Back comes to the app as a key, instead of Android closing the app.
@@ -569,9 +595,17 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       // What the layout put past the edge of its parent, said where it can
       // be seen: once a node, until it fits again.
       // In the view it was laid out in, where that view was named.
-      for (const auto& one : std::exchange(skiff::scene::overflows(), {}))
+      const auto told = std::exchange(skiff::scene::overflows(), {});
+      for (const auto& one : told)
         std::println(std::cerr, "[layout] {}{}{} sticks out of {} by {:.1f} across, {:.1f} down", one.view, one.view.empty() ? "" : ": ",
                      one.node, one.parent, one.x, one.y);
+      // And the named views they are in, as laid out: a row a node, from
+      // the view down (skiff's laidOutTree). Where the walks are erased
+      // only: in a release build the walk would be made for every type of
+      // the window's tree, for a message no one reads there.
+      if constexpr (skiff::scene::kErasedWalks)
+        if (!told.empty())
+          detail::tell_views_laid_out(scene.root(), told);
       shapes.show(scene.cursor());
       // Scroll views copied rather than repainted, where the frame is kept.
       skiff::scene::blitScrolling() = app.frames().partial_redraw;

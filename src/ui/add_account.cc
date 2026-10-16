@@ -89,7 +89,10 @@ using adding_form_t = decltype(adding_form(std::declval<const ui_needs&>()));
 inline auto add_account_view(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
-  return SKIFF_NAMED(add_account_view, c::column(c::vbox(12.0f, {.fill = true}),
+  // As tall as what it holds: the detail pane scrolls it, and a column as
+  // tall as its pane's content, filled, was 0 high -- the form in it, grown
+  // into what that left, nothing, and everything after the switch outside.
+  return SKIFF_NAMED(add_account_view, c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::projected<add_account_shown>([](const add_account_shown& now) { return now.speaks; },
           c::mount<protocol_switch_t, protocol_t>(
               [at = &colours](const protocol_t& speaks) { return std::tuple{protocol_switch(*at, speaks, protocols{})}; },
@@ -102,7 +105,7 @@ inline auto add_account_view(const ui_needs& n) {
               {.fillX = true, .autoSize = scene::axes::kY})),
       c::projected<add_account_shown>([](const add_account_shown& now) { return now.speaks; },
           c::mount<adding_form_t, protocol_t>([at = &n](const protocol_t&) { return std::tuple{adding_form(*at)}; },
-                                              {.fillX = true, .grow = scene::axes::kY}))));
+                                              {.fillX = true, .autoSize = scene::axes::kY}))));
 }
 using add_account_view_t = decltype(add_account_view(std::declval<const ui_needs&>()));
 

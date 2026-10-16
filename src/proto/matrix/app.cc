@@ -713,9 +713,11 @@ void program_told(App& app, const pack_saved& saved) {
 }
 template <class App>
 void program_told(App& app, const pack_picture_uploaded& uploaded) {
-  // A picture uploaded is the account's, for whichever of its packs is open.
-  app_detail::change_packs(app, uploaded.by, std::nullopt,
-                           [&](mux::ui::packs_facts& now) { mux::ui::pack_picture_uploaded(now, uploaded.picture, uploaded.done); });
+  // A picture uploaded for the opening of the editor it was asked in: the
+  // same account's, the same room's, the same draft's.
+  app_detail::change_packs(app, uploaded.by, std::optional(uploaded.opening.room), [&](mux::ui::packs_facts& now) {
+    mux::ui::pack_picture_uploaded(now, uploaded.picture, uploaded.done, uploaded.opening);
+  });
 }
 // An emoji verification, as it goes: its dialog.
 template <class App>

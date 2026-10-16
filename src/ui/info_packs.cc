@@ -109,7 +109,11 @@ inline void pack_saved(packs_facts& facts, const emote_pack& pack, bool removed,
 }
 // An image uploaded for the pack open: in it, its shortcode from its file's
 // name, unique in it; or why not.
-inline void pack_picture_uploaded(packs_facts& facts, pack_picture one, bool done) {
+inline void pack_picture_uploaded(packs_facts& facts, pack_picture one, bool done, const pack_opening& opening) {
+  // For another opening of the editor -- another pack, or this one opened
+  // again since: not this draft's.
+  if (opening != pack_opening{facts.room, facts.opened})
+    return;
   if (!done) {
     facts.note = "An image could not be uploaded: " + one.body;
     return;

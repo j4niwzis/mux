@@ -170,6 +170,12 @@ bool took_files(packs_part& self, const std::vector<std::string>& paths, bool dr
     return false;
   if (!self.account_ || self.s_->demo())
     return true;
+  // The editor's opening the images are for: an answer for another is not
+  // this draft's.
+  const auto& open = *self.s_->showing->look<std::optional<mux::ui::packs_facts>>();
+  if (!open || !open->draft)
+    return true;
+  const mux::pack_opening opening{open->room, open->opened};
   for (const std::string& path : paths) {
     auto bytes_read = mux::platform::files::read(path);
     if (!bytes_read)
@@ -187,7 +193,7 @@ bool took_files(packs_part& self, const std::vector<std::string>& paths, bool dr
       one.width = image->width();
       one.height = image->height();
     }
-    self.s_->net->upload_pack_picture(*self.account_, std::move(one), std::move(bytes));
+    self.s_->net->upload_pack_picture(*self.account_, std::move(one), std::move(bytes), opening);
   }
   return true;
 }

@@ -578,6 +578,14 @@ struct pack_picture {
   std::int64_t width = 0, height = 0, size = 0;
   friend bool operator==(const pack_picture&, const pack_picture&) = default;
 };
+// Which opening of a pack's editor an image was uploaded for: its room (none:
+// the account's own pack) and the opening's number -- an answer for another
+// opening, or another pack opened meanwhile, is not this draft's.
+struct pack_opening {
+  std::optional<std::string> room;
+  std::uint64_t opened = 0;
+  friend bool operator==(const pack_opening&, const pack_opening&) = default;
+};
 // A pack of custom emoji and stickers, as its protocol keeps it: a chat's
 // (a Matrix room's packs, a Telegram group's set) or the account's own (a
 // Matrix user's pack, Telegram's installed sets), by the key its protocol

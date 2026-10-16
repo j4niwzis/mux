@@ -136,11 +136,12 @@ void account<Sink>::upload_room_avatar(std::string room, std::string bytes, std:
 }
 
 template <class Sink>
-void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes) {
-  this->spawn_guarded([this, picture = std::move(picture), bytes = std::move(bytes)]() mutable {
+void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes, pack_opening opening) {
+  this->spawn_guarded([this, picture = std::move(picture), bytes = std::move(bytes), opening = std::move(opening)]() mutable {
     auto uploaded = upload_content(bytes, picture.body, picture.mimetype);
     picture.url = uploaded.value_or("");
-    sink_(proto::matrix::pack_picture_uploaded{.by = id_, .picture = std::move(picture), .done = uploaded.has_value()});
+    sink_(proto::matrix::pack_picture_uploaded{.by = id_, .picture = std::move(picture), .done = uploaded.has_value(),
+                                               .opening = std::move(opening)});
   });
 }
 

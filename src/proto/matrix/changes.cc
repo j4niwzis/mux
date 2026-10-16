@@ -77,6 +77,8 @@ struct pack_picture_uploaded {
   account_id by;
   pack_picture picture;
   bool done = false;
+  // The editor's opening it was uploaded for.
+  pack_opening opening;
 };
 // The account's sessions, this one's ID among them.
 struct sessions_listed {

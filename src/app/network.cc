@@ -565,13 +565,15 @@ struct network {
             one.account);
     });
   }
-  void upload_pack_picture(const mux::account_id& by, pack_picture picture, std::string bytes) {
-    loop.post([this, by, picture = std::move(picture), bytes = std::move(bytes)] {
+  void upload_pack_picture(const mux::account_id& by, pack_picture picture, std::string bytes, pack_opening opening) {
+    loop.post([this, by, picture = std::move(picture), bytes = std::move(bytes), opening = std::move(opening)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == by)
-                ask_if_able([&](auto& a) -> decltype(void(a.upload_pack_picture(picture, bytes))) { a.upload_pack_picture(picture, bytes); }, *account);
+                ask_if_able([&](auto& a) -> decltype(void(a.upload_pack_picture(picture, bytes, opening))) {
+                  a.upload_pack_picture(picture, bytes, opening);
+                }, *account);
             },
             one.account);
     });

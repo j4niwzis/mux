@@ -7,7 +7,6 @@
 // event of its own.
 module;
 
-#include <cxxabi.h>  // names of the nodes a frame trace says
 
 export module mux.platform.window;
 
@@ -569,9 +568,10 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       const double laid_out = detail::now_ms();
       // What the layout put past the edge of its parent, said where it can
       // be seen: once a node, until it fits again.
+      // In the view it was laid out in, where that view was named.
       for (const auto& one : std::exchange(skiff::scene::overflows(), {}))
-        std::println(std::cerr, "[layout] {} sticks out of {} by {:.1f} across, {:.1f} down", one.node, one.parent,
-                     one.x, one.y);
+        std::println(std::cerr, "[layout] {}{}{} sticks out of {} by {:.1f} across, {:.1f} down", one.view, one.view.empty() ? "" : ": ",
+                     one.node, one.parent, one.x, one.y);
       shapes.show(scene.cursor());
       // Scroll views copied rather than repainted, where the frame is kept.
       skiff::scene::blitScrolling() = app.frames().partial_redraw;
@@ -585,13 +585,9 @@ int run(App& app, const options& how, const events::kinds& kinds) {
                      frame.fDamage.width(), frame.fDamage.height(), frame.fWantsAnotherFrame ? " (another wanted)" : "");
       // What made the frame lay out: the nodes found not laid out, and why.
       if (traced)
-        for (const auto& one : std::exchange(skiff::scene::dirtiers(), {})) {
-          int status = 0;
-          char* name = abi::__cxa_demangle(one.type->name(), nullptr, nullptr, &status);
-          std::cerr << "    laid out because of " << (name ? name : one.type->name()) << " at " << one.bounds.fLeft << ","
-                    << one.bounds.fTop << (one.children ? " (its children changed)" : " (its layout undone)") << "\n";
-          std::free(name);
-        }
+        for (const auto& one : std::exchange(skiff::scene::dirtiers(), {}))
+          std::cerr << "    laid out because of " << one.kind.name << " at " << one.bounds.fLeft << "," << one.bounds.fTop
+                    << (one.children ? " (its children changed)" : " (its layout undone)") << "\n";
       // How many nodes each walk touched since the last frame said: what the
       // frame cost, walk by walk.
       if (traced) {
@@ -606,27 +602,18 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       }
       // And which nodes marked it, by type and where.
       if (traced)
-        for (const auto& one : std::exchange(skiff::scene::damagers(), {})) {
-          int status = 0;
-          char* name = abi::__cxa_demangle(one.type->name(), nullptr, nullptr, &status);
-          std::cerr << "    damaged by " << (name ? name : one.type->name()) << " at " << one.rect.fLeft << ","
-                    << one.rect.fTop << " " << one.rect.width() << "x" << one.rect.height()
+        for (const auto& one : std::exchange(skiff::scene::damagers(), {}))
+          std::cerr << "    damaged by " << one.kind.name << " at " << one.rect.fLeft << "," << one.rect.fTop << " " << one.rect.width()
+                    << "x" << one.rect.height()
                     << (one.moved ? " (moved: laid out elsewhere, or a child gone)" : one.relaid ? " (laid out again)" : " (its look)")
                     << "\n";
-          std::free(name);
-        }
       // And which nodes keep asking for frames, by type: said when that
       // changes. skiff notes them as it asks, where asked to.
       skiff::scene::traceSettling() = traced;
       if (traced) {
         std::string settling;
-        for (const auto& one : std::exchange(skiff::scene::settlers(), {})) {
-          int status = 0;
-          char* name = abi::__cxa_demangle(one.type->name(), nullptr, nullptr, &status);
-          settling += std::string("\n    ") + (name ? name : one.type->name()) +
-                      (one.transform ? " (transform)" : " (settling)");
-          std::free(name);
-        }
+        for (const auto& one : std::exchange(skiff::scene::settlers(), {}))
+          settling += std::format("\n    {}{}", one.kind.name, one.transform ? " (transform)" : " (settling)");
         if (settling != settling_before)
           std::println(std::cerr, "[frame] settling:{}", settling.empty() ? std::string(" nothing") : settling);
         settling_before = std::move(settling);

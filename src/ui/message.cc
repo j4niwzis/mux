@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message -- A message: its bubble, its pictures, files, reactions and mentions.
+module;
+#include "skiff/named.h"
 export module mux.ui.messages:message;
 
 import std;
@@ -113,19 +115,19 @@ auto sender_line(const palette& colours, std::string who, skia::SkColor colour, 
   auto name = elided(nodes::Text(std::move(who), 13.0f, colour, true));
   name.setMaxWidth(widest);
   const bool has_role = !role.empty();
-  return skiff::compose::row(skiff::compose::hbox(10.0f, {.autoSize = scene::axes::kBoth}), std::move(name),
+  return SKIFF_NAMED(sender_line, skiff::compose::row(skiff::compose::hbox(10.0f, {.autoSize = scene::axes::kBoth}), std::move(name),
                              skiff::compose::visible(has_role, skiff::compose::styled({.alignSelf = scene::align::kEnd},
-                                                                                      nodes::Text(std::move(role), 12.0f, colours.dim))));
+                                                                                      nodes::Text(std::move(role), 12.0f, colours.dim)))));
 }
 // tdesktop's bar over the first unread: its words in the middle of a band
 // the width of the chat, over the row.
 inline constexpr float kUnreadBarHeight = 26.0f;
 auto unread_bar(const palette& colours) {
-  return skiff::compose::column(
+  return SKIFF_NAMED(unread_bar, skiff::compose::column(
       skiff::compose::justified(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .y = -(kUnreadBarHeight + 4.0f), .fillX = true,
                                                             .height = kUnreadBarHeight, .background = colours.sidebar}),
                                 nodes::justify::middle{}),
-      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Unread messages", 13.0f, colours.dim, true)));
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Unread messages", 13.0f, colours.dim, true))));
 }
 
 // ---- a message's row ------------------------------------------------------------
@@ -1152,7 +1154,7 @@ auto message_row(const bubble_needs& n, const conversation& in, const bubble_fac
   skiff::compose::state_of(row).setRecorded(!said.attachment && said.album.empty() && !frosted);
   // Not shown where the chat's settings say so: kept, and out of the flow.
   row.setVisible(!said.service || f.events_shown);
-  return c::washed_for<message_marks>(colours.accent, 56.0f, 80.0f,
+  return SKIFF_NAMED(message_row, c::washed_for<message_marks>(colours.accent, 56.0f, 80.0f,
       [id = said.id](const message_marks& marks) {
         return skiff::compose::Wash{.held = marks.previewed ? marks.previewed->contains(id) : marks.selected.contains(id),
                                     .flash = marks.flashed == id ? marks.flash : 0};
@@ -1161,7 +1163,7 @@ auto message_row(const bubble_needs& n, const conversation& in, const bubble_fac
                    // Messages being selected: a press on one is the list's --
                    // it selects it or lets it go, or a drag spans several --
                    // not what is pressed in it.
-                   c::held_off_for<message_marks>([](const message_marks& marks) { return !marks.selected.empty(); }, std::move(row))));
+                   c::held_off_for<message_marks>([](const message_marks& marks) { return !marks.selected.empty(); }, std::move(row)))));
 }
 using message_row_t = decltype(message_row(std::declval<const bubble_needs&>(), std::declval<const conversation&>(),
                                            std::declval<const bubble_facts&>(), nullptr, false));

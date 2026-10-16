@@ -74,6 +74,20 @@ option(MUX_UI "Build the window, and the mux program" ON)
 # time, and the collation found std two ways ("Disagreement of the location
 # of the 'std' module"). One value, set before any of them is read, and
 # there is one set of flags.
+# Without RTTI, where asked: nothing of mux's family uses typeid -- skiff
+# names its nodes without it (scene::NodeKind) -- and what the type names
+# took in the binary goes. The flag decides what a module's interface is,
+# so it is the whole build's, given once, here: std, Boost, every library
+# under mux and mux itself compiled alike (Boost sees it and says
+# BOOST_NO_RTTI itself). Off by default until every library built here has
+# been built without it.
+option(MUX_NO_RTTI "Build everything without RTTI (-fno-rtti)" OFF)
+if(MUX_NO_RTTI AND NOT MSVC)
+  string(APPEND CMAKE_CXX_FLAGS " -fno-rtti")
+elseif(MUX_NO_RTTI)
+  string(APPEND CMAKE_CXX_FLAGS " /GR-")
+endif()
+
 set(MUX_CONSTEXPR_STEPS 300000000 CACHE STRING
   "clang's -fconstexpr-steps for mux and the family of libraries under it")
 foreach(family IN ITEMS ALEF CHEVRON TERN KNOT LOOM SPLICE)
@@ -254,7 +268,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin d2ff299d61b750f5fae46e7330bfd7fe88978ea6)
+set(mux_skiff_pin 9549f96c99329cad5b2bde90e6b21a3b630f564e)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:info -- A chat's info, and a person's.
+module;
+#include "skiff/named.h"
 export module mux.ui:info;
 
 import std;
@@ -48,10 +50,10 @@ export namespace mux::ui {
 // protocol lets it be left.
 inline auto info_tiles(const palette& colours, bool muted, bool leavable) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}}),
+  return SKIFF_NAMED(info_tiles, c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}}),
       c::styled({.grow = scene::axes::kX}, action_tile<sends<request::toggle_mute>>(colours, muted ? "Unmute" : "Mute", icon::bell{})),
       c::styled({.grow = scene::axes::kX}, action_tile<sends<request::open_manage>>(colours, "Manage", icon::sliders{})),
-      c::visible(leavable, c::styled({.grow = scene::axes::kX}, action_tile<sends<request::leave_chat>>(colours, "Leave", icon::leave{}))));
+      c::visible(leavable, c::styled({.grow = scene::axes::kX}, action_tile<sends<request::leave_chat>>(colours, "Leave", icon::leave{})))));
 }
 // What the upper part shows.
 struct info_view {
@@ -83,7 +85,7 @@ inline auto info_head(const palette& colours, const info_view& shown) {
   auto description = wrapped(c::styled({.fillX = true}, nodes::Text(shown.topic, 14.0f, colours.text)));
   description.setSelectable(true);
   description.setLinks(link_spans_in(shown.topic), colours.accent);
-  return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(info_head, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::row(c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}), nodes::justify::end{}),
                    icon_button(colours, icon::close{}, sends<request::toggle_info>{})),
       c::styled({.alignSelf = scene::align::kMiddle}, avatar_button(avatar_of::chat{}, shown.key, shown.name, 96.0f)),
@@ -95,7 +97,7 @@ inline auto info_head(const palette& colours, const info_view& shown) {
                                                  std::move(description), nodes::Text("Description", 12.0f, colours.dim))),
       c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               shown.addresses | std::views::transform([&](const std::string& address) { return id_line(colours, address, "", "Address"); }) | std::ranges::to<std::vector>()),
-      id_line(colours, shown.key, shown.copied));
+      id_line(colours, shown.key, shown.copied)));
 }
 using info_head_t = decltype(info_head(std::declval<const palette&>(), std::declval<const info_view&>()));
 // The members' head: how many, and a way to invite where one may.
@@ -107,11 +109,11 @@ struct info_members_heading {
 };
 inline auto info_members_head(const palette& colours, const info_members_heading& facts) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(10.0f, {.fillX = true, .height = 48.0f, .padding = {6.0f, 10.0f, 6.0f, 16.0f}}),
+  return SKIFF_NAMED(info_members_head, c::row(c::hbox(10.0f, {.fillX = true, .height = 48.0f, .padding = {6.0f, 10.0f, 6.0f, 16.0f}}),
       icon_view(colours, icon::people{}),
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                 nodes::Text(std::format("{} MEMBER{}", facts.count, facts.count == 1 ? "" : "S"), 13.0f, colours.dim, true)),
-      c::visible(facts.invite, icon_button(colours, icon::add_person{}, sends<request::open_room_invite>{{facts.room}})));
+      c::visible(facts.invite, icon_button(colours, icon::add_person{}, sends<request::open_room_invite>{{facts.room}}))));
 }
 using info_members_head_t = decltype(info_members_head(std::declval<const palette&>(), std::declval<const info_members_heading&>()));
 // A member as the list shows them: who, with their role where the chat's
@@ -147,7 +149,7 @@ inline auto info_panel(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const auto listed = [](const info_shown& now) { return now.head.group; };
-  return c::column(c::vbox(0.0f, {.background = colours.sidebar, .masking = true}),
+  return SKIFF_NAMED(info_panel, c::column(c::vbox(0.0f, {.background = colours.sidebar, .masking = true}),
       c::styled({.fillX = true, .grow = scene::axes::kY},
           c::fetching_for<info_shown, conversation_id>([](const info_shown& now) {
             return c::Fetched<conversation_id>{now.heading.room, now.members.size(), now.more};
@@ -167,7 +169,7 @@ inline auto info_panel(const ui_needs& n) {
                         return now.members | std::views::transform([](const info_member& one) { return std::tuple{one.who.id, one}; }) | std::ranges::to<std::vector>();
                       },
                           c::styled({.fillX = true, .autoSize = scene::axes::kY}, info_member_rows_t(info_member_row{&colours}))))))))),
-      c::styled({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f}, nodes::Box<>(colours.band)));
+      c::styled({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f}, nodes::Box<>(colours.band))));
 }
 using info_panel_t = decltype(info_panel(std::declval<const ui_needs&>()));
 // Its width beside the chat.

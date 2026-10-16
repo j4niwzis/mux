@@ -5,6 +5,8 @@
 // combinators: the search a Local's field, the packs projected from it into
 // sections, each cell resting to show its sticker large. And a sticker made a
 // favourite, or no longer one, from its menu.
+module;
+#include "skiff/named.h"
 export module mux.plugin.stickers.ui;
 
 import std;
@@ -85,12 +87,12 @@ inline auto cell(const palette& colours, emoji_kept& kept, const emote& one) {
   namespace c = skiff::compose;
   auto picture = nodes::Image<from_emotes>({one.url, emote_kind::sticker});
   picture.keepBox();  // the cell's size, whatever the sticker
-  return c::resting(kPreviewAfterMs, rests_on{previewed{one.url, ":" + one.shortcode + ":", true, emote_kind::sticker}},
+  return SKIFF_NAMED(cell, c::resting(kPreviewAfterMs, rests_on{previewed{one.url, ":" + one.shortcode + ":", true, emote_kind::sticker}},
       c::onClick(request::send_sticker{one},
           c::column(c::vbox(0.0f, {.width = kCell, .height = kCell, .margin = {2.0f, 2.0f, 2.0f, 2.0f},
                                    .padding = {4.0f, 4.0f, 4.0f, 4.0f}, .cornerRadius = 6.0f,
                                    .hoverBackground = colours.chosen}),
-              c::styled({.fill = true}, std::move(picture)))));
+              c::styled({.fill = true}, std::move(picture))))));
 }
 // A pack's tab: its picture, or its mark; lit while its pack is at the top.
 inline auto tab(const palette& colours, const pack& one) {
@@ -101,10 +103,10 @@ inline auto tab(const palette& colours, const pack& one) {
     image->apply({.width = 24.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle});
     image->keepBox();
   }
-  return c::row(c::justified(c::hbox(0.0f, {.width = 30.0f, .height = 30.0f, .minWidth = 24.0f, .alignSelf = scene::align::kMiddle,
+  return SKIFF_NAMED(tab, c::row(c::justified(c::hbox(0.0f, {.width = 30.0f, .height = 30.0f, .minWidth = 24.0f, .alignSelf = scene::align::kMiddle,
                                             .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.tile}),
                              nodes::justify::middle{}),
-      std::move(image), c::visible(!one.picture, c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(one.mark, 16.0f, colours.text))));
+      std::move(image), c::visible(!one.picture, c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(one.mark, 16.0f, colours.text)))));
 }
 
 // The chat's stickers, as tdesktop's tab: a search at its top; the packs one

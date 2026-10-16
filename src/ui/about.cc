@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:about -- Build identity, licensing and resolved dependencies.
+module;
+#include "skiff/named.h"
 export module mux.ui:about;
 
 import std;
@@ -61,14 +63,14 @@ inline auto about_page(const palette& colours) {
   auto libraries = about_data::primary_libraries | std::views::transform([&](std::string_view id) {
         return library_link(colours, *library_of(id));
       }) | std::ranges::to<std::vector>();
-  return skiff::compose::column(
+  return SKIFF_NAMED(about_page, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "About mux", {}, {}, true, true),
       about_words(colours, std::format("mux {}\n{}\nCommit: {}\nLicense: {}", about_data::version,
                                      build_branch(), build_commit(), about_data::license)),
       settings_link(colours, "GitHub repository", icon::gear{}, request::open_url{std::string(about_data::repository)}),
       about_words(colours, "Libraries"), skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(libraries)),
-      about_words(colours, std::string(about_data::license_text)));
+      about_words(colours, std::string(about_data::license_text))));
 }
 using about_page_t = decltype(about_page(std::declval<const palette&>()));
 inline auto library_page(const palette& colours, std::string_view id) {
@@ -79,7 +81,7 @@ inline auto library_page(const palette& colours, std::string_view id) {
     const auto* info = library_of(dep);
     return library_link(colours, info ? *info : missing);
   }) | std::ranges::to<std::vector>();
-  return skiff::compose::column(
+  return SKIFF_NAMED(library_page, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_about>, sends<request::close_settings>>(colours, std::string(library.name), {}, {}, true, true),
       about_words(colours, std::format("Version: {}\nRevision: {}\nLicense: {}", library.version,
@@ -88,7 +90,7 @@ inline auto library_page(const palette& colours, std::string_view id) {
       about_visible(!dependencies.empty(), about_words(colours, "Dependencies")),
       skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(dependencies)),
       about_words(colours, library.license_text.empty() ? std::format("License: {}\nLicense text was not supplied by the installed package.", library.license)
-                                                     : std::string(library.license_text)));
+                                                     : std::string(library.license_text))));
 }
 using library_page_t = decltype(library_page(std::declval<const palette&>(), std::string_view{}));
 } // namespace mux::ui

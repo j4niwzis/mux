@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui.proto.matrix:sessions -- The account's Sessions and Encryption pages.
+module;
+#include "skiff/named.h"
 export module mux.ui.proto.matrix:sessions;
 
 import std;
@@ -51,10 +53,10 @@ asks<Change> ask(Change change) { return {std::move(change)}; }
 // the facts say.
 template <class Act, class Shown>
 auto row_if(const palette& colours, std::string text, Shown shown) {
-  return skiff::compose::shown_for<facts_t>(std::move(shown), row_item(colours, std::move(text), Act{}));
+  return SKIFF_NAMED(row_if, skiff::compose::shown_for<facts_t>(std::move(shown), row_item(colours, std::move(text), Act{})));
 }
 inline auto note(const palette& colours, std::string text) {
-  return skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::move(text), 13.0f, colours.dim)));
+  return SKIFF_NAMED(note, skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::move(text), 13.0f, colours.dim))));
 }
 inline auto button_look(float width) {
   return scene::Spec{.width = width, .height = 30.0f, .alignSelf = scene::align::kMiddle};
@@ -96,7 +98,7 @@ struct name_draft {
 inline auto session_row(const palette& colours, const session_key& key) {
   namespace c = skiff::compose;
   const session_info& one = key.one;
-  return c::local<name_draft>(
+  return SKIFF_NAMED(session_row, c::local<name_draft>(
       c::row(c::hbox(8.0f, {.fillX = true, .height = 60.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f,
                             .background = colours.tile}),
              c::visible(!key.renaming, c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
@@ -115,7 +117,7 @@ inline auto session_row(const palette& colours, const session_key& key) {
                  button_for<sends<request::verify_session>>(colours.widgets, "Verify", {request::verify_session{one.id}}))),
              c::visible(!key.current && !key.renaming, c::styled(button_look(86.0f),
                  widgets::Button<asks<account_change::sign_out>>(colours.widgets, "Sign out", ask(account_change::sign_out{{one.id}}))))),
-      name_draft{one.name});
+      name_draft{one.name}));
 }
 using session_row_t = decltype(session_row(std::declval<const palette&>(), session_key{}));
 
@@ -148,9 +150,9 @@ inline auto session_rows(const palette& colours, std::string title, const std::v
 }
 inline auto sessions_list(const palette& colours, const sessions_key& key) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(sessions_list, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                    session_rows(colours, "CURRENT SESSION", key.current),
-                   session_rows(colours, "OTHER SESSIONS", key.others));
+                   session_rows(colours, "OTHER SESSIONS", key.others)));
 }
 using sessions_list_t = decltype(sessions_list(std::declval<const palette&>(), sessions_key{}));
 
@@ -193,14 +195,14 @@ struct password_draft {
 // asked again with it.
 inline auto password_row(const palette& colours) {
   namespace c = skiff::compose;
-  return c::local<password_draft>(c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(password_row, c::local<password_draft>(c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       nodes::Text("Your password, to sign sessions out:", 13.0f, colours.dim),
       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
              c::bound<skiff::model::Field<&password_draft::password>>(
                  c::styled({.height = 34.0f, .grow = scene::axes::kX}, widgets::TextField<std::string>(colours.widgets, "Password", true))),
              c::asking_for<password_draft>(
                  [](const password_draft& now) { return request::change_account{account_change::sign_out_again{now.password}}; },
-                 c::styled({.width = 96.0f, .height = 34.0f}, widgets::Button<scene::NoAction>(colours.widgets, "Sign out", {}))))));
+                 c::styled({.width = 96.0f, .height = 34.0f}, widgets::Button<scene::NoAction>(colours.widgets, "Sign out", {})))))));
 }
 
 // Device verification, as Cinny puts it over the sessions: cross-signing set
@@ -211,7 +213,7 @@ inline auto password_row(const palette& colours) {
 // saying what it undoes; and its Secure Backup, made anew or deleted.
 inline auto account_sessions(const palette& colours, const account_page_facts&) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(account_sessions, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       section_title(colours, "DEVICE VERIFICATION"),
       c::text_for<facts_t>(security_said, note(colours, "")),
       row_if<sends<request::setup_cross_signing>>(colours, "Set up cross-signing…", std::not_fn(cross_signing)),
@@ -236,7 +238,7 @@ inline auto account_sessions(const palette& colours, const account_page_facts&) 
                     widgets::Button<asks<account_change::sign_out_others>>(colours.widgets, "Sign out of all other sessions",
                                                                           ask(account_change::sign_out_others{})))),
       c::styled({.width = 100.0f, .height = 30.0f},
-                button_for<sends<request::refresh_sessions>>(colours.widgets, "Refresh", {})));
+                button_for<sends<request::refresh_sessions>>(colours.widgets, "Refresh", {}))));
 }
 using account_sessions_t = decltype(account_sessions(std::declval<const palette&>(), std::declval<const account_page_facts&>()));
 
@@ -265,7 +267,7 @@ inline auto encryption_page(const palette& colours, const account_page_facts&) {
   namespace c = skiff::compose;
   using flip = sends<::mux::ui::request::flip_only_verified>;
   using toggle_t = toggle_for<flip>;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(encryption_page, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       section_title(colours, "ENCRYPTION"),
       c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
@@ -278,7 +280,7 @@ inline auto encryption_page(const palette& colours, const account_page_facts&) {
       row_item(colours, "Export room keys…", sends<request::export_room_keys>{}),
       row_item(colours, "Import room keys…", sends<request::import_room_keys>{}),
       row_item(colours, "Set up cross-signing…", sends<request::setup_cross_signing>{}),
-      row_item(colours, "Restore with the recovery key…", sends<request::restore_cross_signing>{}));
+      row_item(colours, "Restore with the recovery key…", sends<request::restore_cross_signing>{})));
 }
 using encryption_page_t = decltype(encryption_page(std::declval<const palette&>(), std::declval<const account_page_facts&>()));
 

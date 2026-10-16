@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:emoji_panels -- The emoji panel, and what pickers share.
+module;
+#include "skiff/named.h"
 export module mux.ui.base:emoji_panels;
 
 import std;
@@ -242,7 +244,7 @@ auto emoji_cell(const palette& colours, emoji_kept& kept, const Pick& pick, cons
     const skia::SkRect drawn = cell.bounds().makeOffset(shift.x, shift.y);
     return show_tones{{source, {drawn.fLeft - 4.0f, drawn.fTop - kEmojiCell - 12.0f}}};
   }, std::move(picked));
-  return c::resting(kPreviewAfterMs, rests_on{shown}, std::move(toned));
+  return SKIFF_NAMED(emoji_cell, c::resting(kPreviewAfterMs, rests_on{shown}, std::move(toned)));
 }
 // A group's tab: its picture, or its mark; lit while its group is at the top.
 inline auto emoji_tab(const palette& colours, const emoji_group& one) {
@@ -253,10 +255,10 @@ inline auto emoji_tab(const palette& colours, const emoji_group& one) {
     image->apply({.width = 24.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle});
     image->keepBox();
   }
-  return c::row(c::justified(c::hbox(0.0f, {.width = 30.0f, .height = 30.0f, .minWidth = 24.0f, .alignSelf = scene::align::kMiddle,
+  return SKIFF_NAMED(emoji_tab, c::row(c::justified(c::hbox(0.0f, {.width = 30.0f, .height = 30.0f, .minWidth = 24.0f, .alignSelf = scene::align::kMiddle,
                                             .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.tile}),
                              nodes::justify::middle{}),
-      std::move(image), c::visible(!one.picture, c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(one.mark, 16.0f, colours.text))));
+      std::move(image), c::visible(!one.picture, c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(one.mark, 16.0f, colours.text)))));
 }
 
 // Every emoji, as tdesktop's panel lists them (chat_helpers.style): a search

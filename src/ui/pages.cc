@@ -4,6 +4,8 @@
 // headings and editors, a switch's row, a profile's editor. Below the
 // protocols' UI modules; room_settings and accounts, above them, hold the
 // protocols' pages these build.
+module;
+#include "skiff/named.h"
 export module mux.ui.base:pages;
 
 import std;
@@ -372,17 +374,17 @@ struct leave_events {
   }
 };
 inline auto leave_room_row(const palette& colours, const room_settings_facts::named_room& room) {
-  return skiff::compose::row(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
+  return SKIFF_NAMED(leave_room_row, skiff::compose::row(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
       skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(room.name, 14.0f, colours.text))),
       // On while the room is among those to leave; pressed, flipped there.
       skiff::compose::named(room.name, {}, skiff::compose::applied<skiff::model::Field<&leave_draft::chosen>>(
           [id = room.id](const auto& chosen) { return chosen.contains(id); },
           [](widgets::Toggle<flip_leave_toggle>& toggle, bool on) { toggle.setOn(on); },
-          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::Toggle<flip_leave_toggle>(colours.widgets, {room.id})))));
+          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::Toggle<flip_leave_toggle>(colours.widgets, {room.id}))))));
 }
 inline auto leave_space_box(const palette& colours, const leave_space_facts& facts) {
   using choice = skiff::model::Field<&leave_draft::choice>;
-  return skiff::compose::local<leave_draft>(leave_events{facts}, skiff::compose::column(
+  return SKIFF_NAMED(leave_space_box, skiff::compose::local<leave_draft>(leave_events{facts}, skiff::compose::column(
       skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       nodes::Text("Leave " + facts.name, 17.0f, colours.text, true),
       explained(colours, facts.rooms.empty() ? "You are in none of its rooms." : "Would you like to leave the rooms in this space too?"),
@@ -398,7 +400,7 @@ inline auto leave_space_box(const palette& colours, const leave_space_facts& fac
       skiff::compose::row(skiff::compose::justified(
           skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}), nodes::justify::end{}),
           skiff::compose::styled({.width = 130.0f, .height = 36.0f}, widgets::SendButton<request::close_leave_space>(colours.widgets, "Cancel", {})),
-          skiff::compose::styled({.width = 130.0f, .height = 36.0f}, primary(widgets::SendButton<submit_leave_space>(colours.widgets, "Leave space", {}))))));
+          skiff::compose::styled({.width = 130.0f, .height = 36.0f}, primary(widgets::SendButton<submit_leave_space>(colours.widgets, "Leave space", {})))))));
 }
 using leave_space_box_t = decltype(leave_space_box(std::declval<const palette&>(), std::declval<const leave_space_facts&>()));
 inline dialog_look content_look(std::type_identity<leave_space_facts>) { return {.size = dialog_size::fitting{440.0f}}; }
@@ -412,7 +414,7 @@ auto make_content(const Needs& needs, const leave_space_facts& facts) {
 inline auto chat_settings_view(const palette& colours, const conversation_id& chat) {
   using choices = config::chat_choices;
   const choice_level_t level = choice_level::chat{};
-  return skiff::compose::scoped<choices>(
+  return SKIFF_NAMED(chat_settings_view, skiff::compose::scoped<choices>(
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -425,7 +427,7 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
                   show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&choices::previews_direct>>(colours, level))),
           skiff::compose::bound<skiff::model::Field<&choices::typing>>(show_hide_field<typing_setting, std::optional<bool>, skiff::model::Field<&choices::typing>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&choices::jump_search>>(colours, level))),
-      chat);
+      chat));
 }
 
 // A chat's notifications on or off: off is muted -- the chat list's mute,
@@ -449,45 +451,45 @@ inline auto chat_on_field(const palette& colours) {
   namespace c = skiff::compose;
   using choices = config::chat_choices;
   const auto shown = [](const choices& now) { return now.muted ? std::optional<bool>(false) : now.notify.on; };
-  return c::scoped<choices>(c::handlers(), c::row(setting_row(),
+  return SKIFF_NAMED(chat_on_field, c::scoped<choices>(c::handlers(), c::row(setting_row(),
       setting_label(nodes::Text(std::string(notify_on_setting::label), 14.0f, colours.text)),
       setting_button<choices>(colours, "Default", 70.0f,
           [shown](const choices& now) { return !shown(now); }, set_chat_notify{std::nullopt}),
       setting_button<choices>(colours, std::string(notify_on_setting::yes), 70.0f,
           [shown](const choices& now) { return shown(now) == true; }, set_chat_notify{true}),
       setting_button<choices>(colours, std::string(notify_on_setting::no), 70.0f,
-          [shown](const choices& now) { return shown(now) == false; }, set_chat_notify{false})));
+          [shown](const choices& now) { return shown(now) == false; }, set_chat_notify{false}))));
 }
 // A chat's notification rows, bound to its own choices in the model.
 inline auto chat_notify_view(const palette& colours, const conversation_id& chat) {
   using notify = config::notify_choices;
   using skiff::compose::bound;
   const choice_level_t level = choice_level::chat{};
-  return skiff::compose::scoped<config::chat_choices>(
+  return SKIFF_NAMED(chat_notify_view, skiff::compose::scoped<config::chat_choices>(
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           bound<config::chat_choices>(chat_on_field(colours)),
           bound<skiff::model::Field<&notify::mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>, skiff::model::Field<&notify::mentions>>(colours, level)),
           bound<skiff::model::Field<&notify::sound>>(show_hide_field<notify_sound_setting, std::optional<bool>, skiff::model::Field<&notify::sound>>(colours, level))),
-      chat);
+      chat));
 }
 
 // Stable model-bound switches: keep the widget while its saved value changes.
 template <auto Member>
 inline auto space_choice_row(const palette& colours, std::string label, bool allowed = true) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
+  return SKIFF_NAMED(space_choice_row, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
                               .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = !allowed}),
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                 wrapped(nodes::Text(std::move(label), 14.0f, colours.text))),
       c::bound<skiff::model::Field<Member>>(c::styled({.alignSelf = scene::align::kMiddle},
-                                                    widgets::ToggleField<bool>(colours.widgets))));
+                                                    widgets::ToggleField<bool>(colours.widgets)))));
 }
 inline auto room_general_page(const palette& colours, const room_settings_facts& facts, bool has_page_header = false) {
   namespace c = skiff::compose;
   using choices = config::chat_choices;
-  return c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
+  return SKIFF_NAMED(room_general_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
                                 .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       c::visible(!has_page_header, tab_heading(colours, spl::visit([](auto tag) { return std::string(preferences_title(state_of<decltype(tag)>{})); }, facts.speaks))),
       c::visible(!proto::room_event_kinds_of(state_before(facts.speaks)).empty(),
@@ -503,7 +505,7 @@ inline auto room_general_page(const palette& colours, const room_settings_facts&
                   space_choice_row<&choices::hidden_from_home>(colours, "Its rooms not in Home"))), facts.chat)),
       c::visible(facts.leavable, part_heading(colours, "Leave room")),
       c::styled({.width = 130.0f, .height = 32.0f},
-          c::visible(facts.leavable, button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {}))));
+          c::visible(facts.leavable, button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {})))));
 }
 using room_general_page_t = decltype(room_general_page(std::declval<const palette&>(), std::declval<const room_settings_facts&>()));
 
@@ -576,9 +578,9 @@ template <class Act>
 auto switch_row(const palette& colours, std::string text, Act act) {
   namespace c = skiff::compose;
   std::string label = text;
-  return c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+  return SKIFF_NAMED(switch_row, c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(text), 15.0f, colours.text))),
-                c::named(std::move(label), {}, c::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(act)))));
+                c::named(std::move(label), {}, c::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(act))))));
 }
 
 
@@ -610,7 +612,7 @@ auto profile_fields(const palette& colours, const profile_form_seed& seed) {
   }, c::asking_for<profile_draft>([by = seed.by](const profile_draft& draft) {
     return request::save_profile{by, draft.edit};
   }, button_for<scene::NoAction>(colours.widgets, "Save profile", {})));
-  return c::local<profile_draft>(
+  return SKIFF_NAMED(profile_fields, c::local<profile_draft>(
       c::spec_for<account_page_read>([](const account_page_read& now) {
         return scene::Spec{.disabled = now && now->profile_saving};
       }, c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -625,7 +627,7 @@ auto profile_fields(const palette& colours, const profile_form_seed& seed) {
                 .disabled = !now || !now->profile || !now->profile->details.banner};
           }, button_for<sends<request::remove_profile_banner>>(colours.widgets, "Remove banner", {seed.by}))),
           std::move(submit), std::move(feedback))),
-      profile_draft{seed.profile ? profile_edit_of(*seed.profile) : profile_edit{}, seed.profile});
+      profile_draft{seed.profile ? profile_edit_of(*seed.profile) : profile_edit{}, seed.profile}));
 }
 struct presence_draft {
   std::size_t choice = 0;
@@ -653,7 +655,7 @@ auto presence_fields(const palette& colours, const presence_form_seed& seed) {
   const auto selected = seed.presence ? std::ranges::find(choices, seed.presence->state,
       [](const auto& choice) { return choice.second; }) : choices.end();
   const auto index = selected == choices.end() ? std::size_t{0} : static_cast<std::size_t>(selected - choices.begin());
-  return c::local<presence_draft>(c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(presence_fields, c::local<presence_draft>(c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::projected<presence_draft>([](const presence_draft& draft) { return draft.choice; },
           make_choice_menu(colours, "Presence", choices | std::views::transform([](const auto& one) { return one.first; }) | std::ranges::to<std::vector>(), index, pick_presence_choice{})),
       model_field<&presence_draft::status>(colours, "Status", "What you are doing"),
@@ -662,14 +664,14 @@ auto presence_fields(const palette& colours, const presence_form_seed& seed) {
         return request::save_presence{by, {choices.at(draft.choice).second,
             draft.status.empty() ? std::nullopt : std::optional(draft.status)}};
       }, c::styled({.fillX = true, .height = 36.0f}, button_for<scene::NoAction>(colours.widgets, "Set presence", {})))),
-      presence_draft{index, seed.presence ? seed.presence->status.value_or("") : std::string{}});
+      presence_draft{index, seed.presence ? seed.presence->status.value_or("") : std::string{}}));
 }
 template <class Policy>
 auto profile_page(const palette& colours, const account_page_facts& first) {
   namespace c = skiff::compose;
   using content = decltype(profile_fields<Policy>(colours, profile_form_seed{}));
   using presence_content = decltype(presence_fields<Policy>(colours, presence_form_seed{}));
-  return c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(profile_page, c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       nodes::Text("Profile", 20.0f, colours.text, true),
       c::projected<account_page_read>([](const account_page_read& now) {
         return now ? std::optional(profile_form_seed{now->by, now->profile_round, now->profile}) : std::nullopt;
@@ -680,7 +682,7 @@ auto profile_page(const palette& colours, const account_page_facts& first) {
         return now ? std::optional(presence_form_seed{now->by, now->presence}) : std::nullopt;
       }, c::mount_now<presence_content, presence_form_seed>([at = &colours](const presence_form_seed& seed) {
         return std::tuple{presence_fields<Policy>(*at, seed)};
-      }, presence_form_seed{first.by, first.presence}, {.fillX = true, .autoSize = scene::axes::kY})));
+      }, presence_form_seed{first.by, first.presence}, {.fillX = true, .autoSize = scene::axes::kY}))));
 }
 
 // A section's title on a settings page, as Gajim sets them: small, bold, dim.

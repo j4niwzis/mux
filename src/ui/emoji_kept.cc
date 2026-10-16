@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:emoji_kept -- What the emoji and sticker panels keep: the recent and favourite ones, the chat's own, the page open, and a held emote's preview.
+module;
+#include "skiff/named.h"
 export module mux.ui.base:emoji_kept;
 
 import std;
@@ -138,12 +140,12 @@ struct rests_on {
 template <class N>
 auto with_preview(const palette& colours, N page) {
   namespace c = skiff::compose;
-  return c::local<preview_shown>(preview_events{},
+  return SKIFF_NAMED(with_preview, c::local<preview_shown>(preview_events{},
       c::column(c::vbox(0.0f, {.fill = true}),
                 c::styled({.fill = true}, std::move(page)),
                 c::bound<skiff::model::Field<&preview_shown::now>>(c::mount<emote_preview_t, previewed>(
                     [at = &colours](const previewed& one) { return std::tuple{emote_preview(*at, one)}; },
-                    {.place = scene::anchor::kTopLeft, .fill = true}))));
+                    {.place = scene::anchor::kTopLeft, .fill = true})))));
 }
 
 }  // namespace mux::ui

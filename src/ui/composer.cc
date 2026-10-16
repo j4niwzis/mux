@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:composer -- Where a message is written.
+module;
+#include "skiff/named.h"
 export module mux.ui.messages:composer;
 
 import std;
@@ -52,11 +54,11 @@ export namespace mux::ui {
 // where it is. A thin line down its middle, where it has one.
 template <class OnDrag> auto drag_edge(const palette& colours, OnDrag what, bool line = true) {
   namespace c = skiff::compose;
-  return c::onDragAcross(std::move(what),
+  return SKIFF_NAMED(drag_edge, c::onDragAcross(std::move(what),
                          c::with_cursor(scene::cursor::resize_horizontal{},
                                         c::column(c::vbox(), c::visible(line, c::styled({.place = scene::anchor::kTopCentre, .fillY = true,
                                                                                           .width = 1.0f},
-                                                                                         nodes::Box<>(colours.band))))));
+                                                                                         nodes::Box<>(colours.band)))))));
 }
 
 // Where an edge was dragged to, asked of the program.
@@ -728,11 +730,11 @@ auto message_input(const palette& colours, std::string placeholder, Attach attac
   // the program gives them to it.
   using target = decltype(keys_target_of(std::type_identity<Draft>{}));
   auto field = c::focused_by<keys_asked>(keys_on<target>{}, c::projected<Draft>([](const Draft& now) { return now.now; }, std::move(text)));
-  return c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}}),
+  return SKIFF_NAMED(message_input, c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}}),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Attach>(colours, icon::clip{}, std::move(attach_it))),
                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field)),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Emoji>(colours, icon::smile{}, std::move(emoji_it))),
-                c::styled({.alignSelf = scene::align::kEnd}, icon_button<Send>(colours, icon::send{}, std::move(send_it), colours.accent)));
+                c::styled({.alignSelf = scene::align::kEnd}, icon_button<Send>(colours, icon::send{}, std::move(send_it), colours.accent))));
 }
 
 // The chat screen as the program sets it: the account shown, the chat
@@ -787,36 +789,36 @@ template <class First, class Second>
 auto two_choice_bar(const palette& colours, std::string said, skia::SkColor said_colour, std::string first_name, First first,
                     std::string second_name, Second second) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}}),
+  return SKIFF_NAMED(two_choice_bar, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}}),
                    c::styled({.fillX = true}, wrapped(nodes::Text(std::move(said), 13.0f, said_colour))),
                    c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                           c::styled({.height = 36.0f, .grow = scene::axes::kX},
                                     widgets::Button<First>(colours.widgets, std::move(first_name), std::move(first))),
                           c::styled({.height = 36.0f, .grow = scene::axes::kX},
-                                    primary(widgets::Button<Second>(colours.widgets, std::move(second_name), std::move(second))))));
+                                    primary(widgets::Button<Second>(colours.widgets, std::move(second_name), std::move(second)))))));
 }
 
 // Keep the successor action inside the available width, including a narrow
 // pane: the explanation wraps above a separate button.
 inline auto replaced_room_bar(const palette& colours) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
+  return SKIFF_NAMED(replaced_room_bar, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
       .minHeight = 54.0f, .padding = {12.0f, 12.0f, 12.0f, 12.0f}}),
       wrapped(c::styled({.fillX = true},
           nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim))),
       c::styled({.height = 30.0f}, primary(widgets::Button<sends<request::open_replacement>>(
-          colours.widgets, "Join New Room", {}))));
+          colours.widgets, "Join New Room", {})))));
 }
 // Where the reader may not post: a row as high as the input's, its line in
 // the middle -- padded inside it, not by a margin the bar's height leaves
 // out.
 auto no_post_line(const palette& colours) {
   namespace c = skiff::compose;
-  return c::row(c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f,
+  return SKIFF_NAMED(no_post_line, c::row(c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f,
                                             .padding = {18.0f, 12.0f, 18.0f, 12.0f}}),
                              nodes::justify::middle{}),
                 c::styled({.alignSelf = scene::align::kMiddle},
-                          nodes::Text("You don't have permission to post in this chat", 13.0f, colours.dim)));
+                          nodes::Text("You don't have permission to post in this chat", 13.0f, colours.dim))));
 }
 
 // Those asking to join, for those who may let them in: the first of them --
@@ -873,11 +875,11 @@ auto unsent_bar(const palette& colours) {
 // A part of the composer as the chat says: read from the chat, where the
 // composer is the chat's own (reads_chat); else as it is made, hidden.
 template <class Compute, class Part> auto shown_by_chat(std::true_type, Compute compute, Part part) {
-  return skiff::compose::shown_for<conversation>(std::move(compute), std::move(part));
+  return SKIFF_NAMED(shown_by_chat, skiff::compose::shown_for<conversation>(std::move(compute), std::move(part)));
 }
 template <class Compute, class Part> auto shown_by_chat(std::false_type, Compute, Part part) { return part; }
 template <class Compute, class Part> auto read_from_chat(std::true_type, Compute compute, Part part) {
-  return skiff::compose::projected<conversation>(std::move(compute), std::move(part));
+  return SKIFF_NAMED(read_from_chat, skiff::compose::projected<conversation>(std::move(compute), std::move(part)))(compute), std::move(part)));
 }
 template <class Compute, class Part> auto read_from_chat(std::false_type, Compute, Part part) { return part; }
 // What is written answers or edits something: as what is shown says (its
@@ -891,11 +893,11 @@ auto context_shown(const palette& colours, Cancel cancel) {
 // the scope it reads the chat in moved to it.
 template <class Column> auto in_chosen_chat(std::true_type, Column column) {
   namespace c = skiff::compose;
-  return c::rekeyed_by<chat_shown>(
+  return SKIFF_NAMED(in_chosen_chat, c::rekeyed_by<chat_shown>(
       [](const chat_shown& now) {
         return now.chosen ? std::tuple{now.chosen->account, now.chosen->id} : std::tuple{account_id{}, std::string()};
       },
-      c::scoped<conversation>(c::handlers(), std::move(column), account_id{}, std::string()));
+      c::scoped<conversation>(c::handlers(), std::move(column), account_id{}, std::string())));
 }
 template <class Column> auto in_chosen_chat(std::false_type, Column column) { return column; }
 

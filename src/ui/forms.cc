@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:forms -- Form rows, and the account forms.
+module;
+#include "skiff/named.h"
 export module mux.ui.base:forms;
 
 import std;
@@ -27,11 +29,11 @@ template <auto Member, class Caption>
   requires std::derived_from<Caption, scene::Node>
 auto model_field(const palette& colours, Caption caption, std::string placeholder, bool masked = false,
                  scene::Margin margin = {}) {
-  return skiff::compose::column(
+  return SKIFF_NAMED(model_field, skiff::compose::column(
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = margin}),
       std::move(caption),
       skiff::compose::bound<skiff::model::Field<Member>>(skiff::compose::styled(
-          {.fillX = true, .height = 36.0f}, widgets::TextField<std::string>(colours.widgets, std::move(placeholder), masked))));
+          {.fillX = true, .height = 36.0f}, widgets::TextField<std::string>(colours.widgets, std::move(placeholder), masked)))));
 }
 template <auto Member>
 auto model_field(const palette& colours, std::string label, std::string placeholder, bool masked = false,
@@ -43,26 +45,26 @@ auto model_field(const palette& colours, std::string label, std::string placehol
 // new one, up to `lines` shown before it scrolls; its caption over it.
 template <auto Member>
 auto model_area(const palette& colours, std::string label, std::string placeholder, int lines, scene::Margin margin = {}) {
-  return skiff::compose::column(
+  return SKIFF_NAMED(model_area, skiff::compose::column(
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = margin}),
       nodes::Text(std::move(label), 13.0f, colours.dim),
       skiff::compose::bound<skiff::model::Field<Member>>(skiff::compose::styled(
           {.fillX = true, .padding = {6.0f, 10.0f, 6.0f, 10.0f}, .cornerRadius = 6.0f, .background = colours.tile,
            .border = scene::Border{colours.band, 1.0f}},
           widgets::TextAreaField<typename skiff::bind::BoundValueT<skiff::model::Field<Member>>::type>(
-              colours.widgets, std::move(placeholder), lines))));
+              colours.widgets, std::move(placeholder), lines)))));
 }
 // A checkbox of a bool part, its words beside it -- and read out with them:
 // pressed, the part set to the other.
 template <auto Member>
 auto check_field(const palette& colours, std::string label, std::string hint = {}) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(check_field, c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                 c::named(label, std::move(hint),
                          c::bound<skiff::model::Field<Member>>(c::styled({.alignSelf = scene::align::kMiddle},
                              widgets::ToggleField<bool, widgets::internal::CheckboxLook>(colours.widgets)))),
                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                          wrapped(nodes::Text(label, 14.0f, colours.text))));
+                          wrapped(nodes::Text(label, 14.0f, colours.text)))));
 }
 
 // A link put on what is selected in the message field, as tdesktop's
@@ -84,7 +86,7 @@ struct link_events {
   }
 };
 inline auto link_box(const palette& colours, const link_facts& facts) {
-  return skiff::compose::local<link_draft>(link_events{}, skiff::compose::column(
+  return SKIFF_NAMED(link_box, skiff::compose::local<link_draft>(link_events{}, skiff::compose::column(
       skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       skiff::compose::styled({.fillX = true}, nodes::Text(facts.url.empty() ? "Add link" : "Edit link", 17.0f, colours.text, true)),
       model_field<&link_draft::text>(colours, "Text", "Text"),
@@ -94,7 +96,7 @@ inline auto link_box(const palette& colours, const link_facts& facts) {
               widgets::SendButton<request::close_link>(colours.widgets, "Cancel", {})),
           skiff::compose::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX},
               primary(widgets::SendButton<submit_link>(colours.widgets, "Apply", {}))))),
-      link_draft{facts.text, facts.url, facts});
+      link_draft{facts.text, facts.url, facts}));
 }
 using link_box_t = decltype(link_box(std::declval<const palette&>(), std::declval<const link_facts&>()));
 // Keep the local draft and focused fields while the same link is shown.
@@ -150,7 +152,7 @@ inline passphrase_words words_of(const proto::passphrase_for_t& purpose) {
 inline auto passphrase_box(const palette& colours) {
   using purpose = skiff::model::Field<&passphrase_facts::why>;
   using refused = skiff::model::Field<&passphrase_facts::refused>;
-  return skiff::compose::scoped<passphrase_facts>(skiff::compose::handlers(), skiff::compose::column(
+  return SKIFF_NAMED(passphrase_box, skiff::compose::scoped<passphrase_facts>(skiff::compose::handlers(), skiff::compose::column(
       skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       skiff::compose::text_for<purpose>([](const auto& why) { return std::string(words_of(why).title); },
           skiff::compose::styled({.fillX = true}, wrapped(nodes::Text("", 17.0f, colours.text, true)))),
@@ -176,7 +178,7 @@ inline auto passphrase_box(const palette& colours) {
                 request::give_passphrase{facts.why, facts.current, facts.fresh, facts.again, facts.file}};
           },
           skiff::compose::styled({.width = 110.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},
-              primary(widgets::SendButton<request::give_passphrase>(colours.widgets, "", {}))))));
+              primary(widgets::SendButton<request::give_passphrase>(colours.widgets, "", {})))))));
 }
 using passphrase_box_t = decltype(passphrase_box(std::declval<const palette&>()));
 inline dialog_look content_look(std::type_identity<passphrase_facts>) { return {.size = dialog_size::fitting{420.0f}}; }
@@ -203,9 +205,9 @@ template <class T>
 template <auto Member, class T>
 auto choice_field(const palette& colours, std::string label, std::vector<std::pair<std::string, T>> choices) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(choice_field, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                    nodes::Text(std::move(label), 13.0f, colours.dim),
-                   c::bound<skiff::model::Field<Member>>(c::styled({.fillX = true}, themed_tabs<T>(colours, std::move(choices)))));
+                   c::bound<skiff::model::Field<Member>>(c::styled({.fillX = true}, themed_tabs<T>(colours, std::move(choices))))));
 }
 // An account form's end: what it says, as the program says it, and Log in
 // (Save, editing an account) sending its draft -- and, editing, Close.
@@ -214,7 +216,7 @@ auto account_form_end(const palette& colours, bool editing) {
   namespace c = skiff::compose;
   using facts = std::optional<account_form_facts>;
   using close_button = button_for<sends<request::pop_panel>>;
-  return c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(account_form_end, c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::applied<facts>([](const facts& now) { return now ? now->said : form_said{}; },
                         [at = &colours](nodes::Text& message, const form_said& now) {
                           message.setText(now.text);
@@ -225,7 +227,7 @@ auto account_form_end(const palette& colours, bool editing) {
              c::asking_for<Draft>([](const Draft& now) { return request::submit_account{account_draft_t{now}}; },
                                   c::styled({.width = 120.0f, .height = 36.0f},
                                             primary(widgets::Button<scene::NoAction>(colours.widgets, editing ? "Save" : "Log in", {})))),
-             c::visible(editing, c::styled({.width = 120.0f, .height = 36.0f}, close_button(colours.widgets, "Close", {})))));
+             c::visible(editing, c::styled({.width = 120.0f, .height = 36.0f}, close_button(colours.widgets, "Close", {}))))));
 }
 // Enter in any of a form's fields: its draft sent, as Log in sends it.
 template <class Draft>
@@ -236,7 +238,7 @@ struct enter_submits {
 };
 template <class Draft, class N>
 auto submitted_by_enter(N node) {
-  return skiff::compose::keys_for<Draft, scene::phase::bubble>([](const Draft& now) { return now; }, enter_submits<Draft>{}, std::move(node));
+  return SKIFF_NAMED(submitted_by_enter, skiff::compose::keys_for<Draft, scene::phase::bubble>([](const Draft& now) { return now; }, enter_submits<Draft>{}, std::move(node)));
 }
 
 // Text typed into an optional: nothing when the field is empty.
@@ -251,7 +253,7 @@ auto submitted_by_enter(N node) {
 // first, as Back answers.
 template <class Back = sends<request::pop_panel>, class N>
 auto closes_on_escape(N node) {
-  return skiff::compose::onKey(scene::keys::kEscape, Back{}(), std::move(node));
+  return SKIFF_NAMED(closes_on_escape, skiff::compose::onKey(scene::keys::kEscape, Back{}(), std::move(node)));
 }
 
 

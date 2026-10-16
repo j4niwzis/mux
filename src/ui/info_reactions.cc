@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:info_reactions -- The list dialogs: a message's edit history, and the
 // marks not yet seen; what a list dialog is made of.
+module;
+#include "skiff/named.h"
 export module mux.ui:info_reactions;
 
 import std;
@@ -72,8 +74,8 @@ struct history_facts {
 // version, not edited again.
 auto edit_history_row(const ui_needs& n, const conversation& in, const message& event, const model* known) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
-                   message_alone(n, in, event, true, true, known, true));
+  return SKIFF_NAMED(edit_history_row, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
+                   message_alone(n, in, event, true, true, known, true)));
 }
 auto edit_history_panel(const ui_needs& n, const history_facts& facts) {
   namespace c = skiff::compose;
@@ -84,8 +86,8 @@ auto edit_history_panel(const ui_needs& n, const history_facts& facts) {
   }) | std::ranges::to<std::vector>();
   auto list = dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)));
   list.scrollToEnd(false);
-  return c::column(list_dialog(560.0f),
-      page_header<no_back, sends<request::close_edit_history>>(*n.colours, "Edit History", {}, {}, false, true), std::move(list));
+  return SKIFF_NAMED(edit_history_panel, c::column(list_dialog(560.0f),
+      page_header<no_back, sends<request::close_edit_history>>(*n.colours, "Edit History", {}, {}, false, true), std::move(list)));
 }
 using edit_history_box = decltype(edit_history_panel(std::declval<const ui_needs&>(), std::declval<const history_facts&>()));
 auto make_content(const ui_needs& n, const history_facts& facts) {
@@ -119,7 +121,7 @@ struct marks_facts {
 inline auto mark_badge(const palette& colours, const std::string& who,
                        const std::string& name, const std::string& key) {
   namespace c = skiff::compose;
-  return c::row(
+  return SKIFF_NAMED(mark_badge, c::row(
       c::hbox(4.0f, {.place = scene::anchor::kBottomRight,
                      .x = -14.0f,
                      .y = -2.0f,
@@ -129,7 +131,7 @@ inline auto mark_badge(const palette& colours, const std::string& who,
                      .background = colours.sidebar}),
       avatar_mark(avatar_of::person{}, who, name, 20.0f),
       c::styled({.alignSelf = scene::align::kMiddle},
-                nodes::Text(proto::is_media(key) ? std::string(":emoji:") : key, 15.0f, colours.text)));
+                nodes::Text(proto::is_media(key) ? std::string(":emoji:") : key, 15.0f, colours.text))));
 }
 struct go_to_mark_act {
   using Answer = std::tuple<::mux::ui::request::go_to_mark, ::mux::ui::request::close_marks>;
@@ -143,7 +145,7 @@ inline auto mark_row(const ui_needs& n, mark_kind_t which, const conversation& i
                      const mark_entry& one, const model* now) {
   namespace c = skiff::compose;
   const std::string who = one.who.value_or("");
-  return c::onPress(
+  return SKIFF_NAMED(mark_row, c::onPress(
       go_to_mark_act{which, one.event},
       c::column(
           c::vbox(0.0f, {.fillX = true,
@@ -153,7 +155,7 @@ inline auto mark_row(const ui_needs& n, mark_kind_t which, const conversation& i
           message_alone(n, in, one.said, true, true, now),
           c::visible(one.who.has_value(),
                      mark_badge(*n.colours, who, who.empty() ? std::string() : sender_name(in, who), one.key))),
-      "Go to message");
+      "Go to message"));
 }
 // Made from what the list is of; its rows from the chat as the chats
 // hold it now -- none where it is gone.
@@ -168,7 +170,7 @@ inline auto marks_panel(const ui_needs& n, const marks_facts& facts) {
                   : facts.entries | std::views::transform([&](const mark_entry& one) {
                       return mark_row(n, facts.kind, *in, one, facts.now);
                     }) | std::ranges::to<std::vector>();
-  return c::column(
+  return SKIFF_NAMED(marks_panel, c::column(
       list_dialog(520.0f),
       page_header<no_back, close_act>(
           *n.colours,
@@ -176,7 +178,7 @@ inline auto marks_panel(const ui_needs& n, const marks_facts& facts) {
                                      [](mark_kind::reaction) { return std::string("Reactions"); }},
                      facts.kind),
           {}, {}, false, true),
-      dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
+      dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))));
 }
 using marks_box_t = decltype(marks_panel(std::declval<const ui_needs&>(), std::declval<const marks_facts&>()));
 using marks_box = marks_box_t;

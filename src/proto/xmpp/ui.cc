@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui.proto.xmpp -- What XMPP shows of its own in the client's UI: its
 // account form, found by ADL where the panels are made.
+module;
+#include "skiff/named.h"
 export module mux.ui.proto.xmpp;
 
 import std;
@@ -112,10 +114,10 @@ using asked_row_t = decltype(asked_row(std::declval<const palette&>(), std::decl
 inline auto asked_rows(const palette& colours, const registration_asked& asked) {
   namespace c = skiff::compose;
   const std::string said = asked.instructions + (asked.page ? "\nOr make the account on the server's page: " + *asked.page : std::string());
-  return c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(asked_rows, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::visible(!said.empty(), c::styled({.fillX = true}, selectable_text(wrapped(nodes::Text(said, 13.0f, colours.text))))),
       c::many(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              asked.fields | std::views::transform([&](const registration_field& one) { return asked_row(colours, one); }) | std::ranges::to<std::vector>()));
+              asked.fields | std::views::transform([&](const registration_field& one) { return asked_row(colours, one); }) | std::ranges::to<std::vector>())));
 }
 using asked_rows_t = decltype(asked_rows(std::declval<const palette&>(), std::declval<const registration_asked&>()));
 // The registration the program keeps beside the form, where it has one.
@@ -128,9 +130,9 @@ using asked_rows_t = decltype(asked_rows(std::declval<const palette&>(), std::de
 }
 inline auto asked_part(const palette& colours) {
   namespace c = skiff::compose;
-  return c::projected<std::optional<account_form_facts>>(asked_now,
+  return SKIFF_NAMED(asked_part, c::projected<std::optional<account_form_facts>>(asked_now,
       c::mount<asked_rows_t, registration_asked>([at = &colours](const registration_asked& asked) { return std::tuple{asked_rows(*at, asked)}; },
-                                                 {.fillX = true, .autoSize = scene::axes::kY}));
+                                                 {.fillX = true, .autoSize = scene::axes::kY})));
 }
 
 // What "Advanced" folds out: the resource, where to connect, and PLAIN
@@ -138,11 +140,11 @@ inline auto asked_part(const palette& colours) {
 inline auto advanced_fields(const palette& colours) {
   namespace c = skiff::compose;
   using d = account_draft;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+  return SKIFF_NAMED(advanced_fields, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
                    model_field<&d::resource>(colours, "Device name (resource)", "mux"),
                    model_field<&d::host>(colours, "Host", "from the domain's SRV records"),
                    model_field<&d::port>(colours, "Port", "5222"),
-                   check_field<&d::plain_without_tls>(colours, "Allow PLAIN without TLS. Only for a test server on this machine: never over a network."));
+                   check_field<&d::plain_without_tls>(colours, "Allow PLAIN without TLS. Only for a test server on this machine: never over a network.")));
 }
 
 }  // namespace mux::proto::xmpp::form_detail
@@ -162,7 +164,7 @@ inline auto account_form_of(const account_draft& seed, const ui::palette& colour
   namespace c = skiff::compose;
   using namespace ::mux::ui;
   using d = account_draft;
-  return c::local<d>(
+  return SKIFF_NAMED(account_form_of, c::local<d>(
       submitted_by_enter<d>(c::column(
           c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           model_field<&d::address>(colours, "Address (JID)", "user@example.com"),
@@ -173,7 +175,7 @@ inline auto account_form_of(const account_draft& seed, const ui::palette& colour
           check_field<&d::advanced>(colours, "Advanced"),
           c::projected<d>([](const d& now) { return now.advanced; }, widgets::Collapsible(form_detail::advanced_fields(colours))),
           account_form_end<d>(colours, editing))),
-      seed);
+      seed));
 }
 // The answers the program keeps of what the server asked, in the draft
 // sent: each asked field's, typed or as it came -- none for one only read.
@@ -203,9 +205,9 @@ inline std::vector<std::string> lines_of(std::string_view text) {
 // description read out as its hint.
 auto config_label(const auto& colours, const muc_field& f) {
   namespace c = skiff::compose;
-  return c::named(f.label, f.description,
+  return SKIFF_NAMED(config_label, c::named(f.label, f.description,
                   c::styled({.width = 120.0f, .alignSelf = scene::align::kMiddle},
-                            wrapped(nodes::Text(f.label + (f.required ? " *" : ""), 13.0f, colours.text))));
+                            wrapped(nodes::Text(f.label + (f.required ? " *" : ""), 13.0f, colours.text)))));
 }
 
 // The configuration being written: each field's values by its var, and each
@@ -391,7 +393,7 @@ template <class Act>
 auto form_checkbox(const auto& colours, std::string var, std::optional<std::string> option, Act act) {
   namespace c = skiff::compose;
   using box_t = widgets::internal::Toggle<Act, widgets::internal::CheckboxLook>;
-  return c::applied<muc_form>(
+  return SKIFF_NAMED(form_checkbox, c::applied<muc_form>(
       [var, option](const muc_form& form) {
         const auto found = form.values.find(var);
         if (found == form.values.end())
@@ -403,7 +405,7 @@ auto form_checkbox(const auto& colours, std::string var, std::optional<std::stri
         if (on)
           box.setOnNow(*on);
       },
-      c::styled({.alignSelf = scene::align::kMiddle}, box_t(colours.widgets, std::move(act))));
+      c::styled({.alignSelf = scene::align::kMiddle}, box_t(colours.widgets, std::move(act)))));
 }
 // A JID list's rows: each address, picked or not, its field's own; Add, and
 // Remove for those picked. Rows kept by their numbers, made again only as
@@ -428,7 +430,7 @@ auto jid_list(const auto& colours, const muc_field& f) {
   using row_t = std::invoke_result_t<jid_row_of, const std::tuple<std::uint32_t, bool, std::string>&>;
   using rows_t = nodes::MemoRows<std::uint32_t, bool, row_t, jid_row_of>;
   const std::string var = f.var;
-  return c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(jid_list, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::spec_for<muc_form>([var](const muc_form& form) {
         const auto lines = form.jids.find(var);
         const auto count = lines == form.jids.end() ? 0u : lines->second.size();
@@ -448,7 +450,7 @@ auto jid_list(const auto& colours, const muc_field& f) {
                const auto lines = form.jids.find(var);
                return scene::Spec{.height = 32.0f, .disabled = lines == form.jids.end() || std::ranges::none_of(lines->second, &jid_line::picked)};
              },
-                 widgets::Button<sends<jids_removed>>(colours.widgets, "Remove", {{var}}))));
+                 widgets::Button<sends<jids_removed>>(colours.widgets, "Remove", {{var}})))));
 }
 // What a field is edited with, by its kind; its trouble under it.
 template <class P> using field_editor_t = spl::variant<nodes::Text, decltype(form_checkbox(std::declval<P>(), "", std::nullopt, field_checked{})),
@@ -514,14 +516,14 @@ auto config_row(const auto& colours, const muc_room& room, const muc_field& f) {
   namespace c = skiff::compose;
   const bool labelled = spl::visit(spl::overloaded{[](muc_kind::fixed) { return false; }, [](const auto&) { return true; }}, f.kind);
   const bool hidden = spl::visit(spl::overloaded{[](muc_kind::hidden) { return true; }, [](const auto&) { return false; }}, f.kind);
-  return c::shown_for<muc_form>([room, f, hidden](const muc_form& form) { return !hidden && applies(form, room, f); },
+  return SKIFF_NAMED(config_row, c::shown_for<muc_form>([room, f, hidden](const muc_form& form) { return !hidden && applies(form, room, f); },
       c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .maxWidth = 435.0f, .alignSelf = scene::align::kStart}),
              c::visible(labelled, config_label(colours, f)),
              c::column(c::vbox(4.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX}),
                        field_editor(colours, f),
                        c::shown_for<muc_form>([room, f](const muc_form& form) { return trouble_of(form, room, f).has_value(); },
                            c::text_for<muc_form>([room, f](const muc_form& form) { return trouble_of(form, room, f).value_or(""); },
-                                                 wrapped(nodes::Text("", 12.0f, colours.error)))))));
+                                                 wrapped(nodes::Text("", 12.0f, colours.error))))))));
 }
 // The room's configuration, as the server gives it to its owners: its title
 // and instructions, each field, Refresh and Save -- Save while all is valid
@@ -547,7 +549,7 @@ auto configuration_page(const auto& colours, const muc_room& room) {
            std::ranges::any_of(room.fields, [&](const muc_field& f) { return modified(form, room, f); });
   };
   const auto saving = [](const facts_t& facts) { return room_of(facts).saving; };
-  return c::local<muc_form>(muc_form_events{},
+  return SKIFF_NAMED(configuration_page, c::local<muc_form>(muc_form_events{},
       c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {12.0f, 12.0f, 18.0f, 12.0f}}),
           c::visible(!room.title.empty(), wrapped(nodes::Text(room.title, 16.0f, colours.text, true))),
           wrapped(nodes::Text(room.configuring ? room.instructions | std::views::join_with(std::string_view("\n")) | std::ranges::to<std::string>()
@@ -573,7 +575,7 @@ auto configuration_page(const auto& colours, const muc_room& room) {
                   wrapped(nodes::Text("", 13.0f, colours.dim)))),
           c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   room.fields | std::views::transform([&](const muc_field& f) { return config_row(colours, room, f); }) | std::ranges::to<std::vector>())),
-      form_of(room));
+      form_of(room)));
 }
 template <class P> using configuration_page_t = decltype(configuration_page(std::declval<P>(), std::declval<const muc_room&>()));
 
@@ -593,7 +595,7 @@ auto room_page(const auto& colours, const room_basis& basis) {
   namespace c = skiff::compose;
   const muc_room& room = basis.room;
   const scene::Spec button{.height = 32.0f, .alignSelf = scene::align::kStart};
-  return c::local<room_form>(
+  return SKIFF_NAMED(room_page, c::local<room_form>(
       c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
           tab_heading(colours, "Room"),
           wrapped(nodes::Text("Nickname: " + room.nick + " · " + room.affiliation + " · " + room.role, 13.0f, colours.dim)),
@@ -607,7 +609,7 @@ auto room_page(const auto& colours, const room_basis& basis) {
           c::visible(!room.joined, c::asking_for<room_form>([](const room_form& form) { return request::rejoin_muc{form.nick, form.password}; },
                                                             c::styled(button, widgets::Button<scene::NoAction>(colours.widgets, "Join room", {})))),
           c::styled(button, button_for<sends<request::refresh_muc>>(colours.widgets, "Refresh room settings", {}))),
-      room_form{basis.topic, room.nick, {}});
+      room_form{basis.topic, room.nick, {}}));
 }
 template <class P> using room_page_t = decltype(room_page(std::declval<P>(), std::declval<const room_basis&>()));
 
@@ -658,7 +660,7 @@ auto roles_page(const auto& colours, const roles_basis& basis) {
   namespace c = skiff::compose;
   const muc_room& room = basis.room;
   const bool owner = room.affiliation == "owner";
-  return c::local<roles_form>(
+  return SKIFF_NAMED(roles_page, c::local<roles_form>(
       c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
           tab_heading(colours, "Roles & Permissions"),
           wrapped(nodes::Text("Affiliations use a real bare JID: none, member, admin, owner, outcast (ban). Roles use an occupant nickname: visitor, "
@@ -682,16 +684,16 @@ auto roles_page(const auto& colours, const roles_basis& basis) {
                 return form.confirm == room ? std::optional(request::destroy_muc{form.reason}) : std::nullopt;
               },
                   c::styled({.height = 32.0f, .alignSelf = scene::align::kStart},
-                            widgets::Button<scene::NoAction>(colours.widgets, "Destroy room", {})))))));
+                            widgets::Button<scene::NoAction>(colours.widgets, "Destroy room", {}))))))));
 }
 template <class P> using roles_page_t = decltype(roles_page(std::declval<P>(), std::declval<const roles_basis&>()));
 // A page made from what the room is, again where that changes.
 template <class Page, class Basis, class Of, class Make>
 auto made_from(const auto& colours, Of of, Make make) {
   namespace c = skiff::compose;
-  return c::projected<facts_t>([of](const facts_t& facts) { return facts ? std::optional<Basis>(of(*facts)) : std::nullopt; },
+  return SKIFF_NAMED(made_from, c::projected<facts_t>([of](const facts_t& facts) { return facts ? std::optional<Basis>(of(*facts)) : std::nullopt; },
       c::mount<Page, Basis>([at = &colours, make](const Basis& basis) { return std::tuple{make(*at, basis)}; },
-                            {.fillX = true, .autoSize = scene::axes::kY}));
+                            {.fillX = true, .autoSize = scene::axes::kY})));
 }
 }
 export namespace mux::proto::xmpp::manage {

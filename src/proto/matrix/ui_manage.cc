@@ -7,6 +7,8 @@
 // what Matrix keeps of them in its manage_state); a press asks the program
 // (request::manage_room), which keeps the rules; what is typed is the
 // page's own (a Local), made again where the program settles it.
+module;
+#include "skiff/named.h"
 export module mux.ui.proto.matrix:manage;
 
 import std;
@@ -117,10 +119,10 @@ inline skiff::compose::Look page_look() {
 auto settings_section_heading(const auto& colours, std::string title) { return nodes::Text(std::move(title), 12.0f, colours.text); }
 template <class... Children>
 auto settings_surface(const auto& colours, skia::SkColor background, scene::Margin padding, float gap, Children... children) {
-  return skiff::compose::column(skiff::compose::vbox(gap, {.fillX = true, .autoSize = scene::axes::kY, .padding = padding,
+  return SKIFF_NAMED(settings_section_heading, skiff::compose::column(skiff::compose::vbox(gap, {.fillX = true, .autoSize = scene::axes::kY, .padding = padding,
                                                            .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = background,
                                                            .masking = true}),
-                                std::move(children)...);
+                                std::move(children)...))       std::move(children)...));
 }
 template <class... Children> auto card(const auto& colours, Children... children) {
   return settings_surface(colours, colours.tile, {12.0f, 12.0f, 12.0f, 12.0f}, 16.0f, std::move(children)...);
@@ -129,17 +131,17 @@ template <class... Children> auto cutout(const auto& colours, scene::Margin padd
   return settings_surface(colours, colours.background, padding, 4.0f, std::move(children)...);
 }
 template <class... Children> auto section(const auto& colours, std::string title, Children... children) {
-  return skiff::compose::column(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                settings_section_heading(colours, std::move(title)), std::move(children)...);
+  return SKIFF_NAMED(section, skiff::compose::column(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                settings_section_heading(colours, std::move(title)), std::move(children)...));
 }
 template <class Control> auto setting_tile(const auto& colours, std::string title, std::string description, Control control) {
   namespace c = skiff::compose;
   const bool described = !description.empty();
-  return c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(setting_tile, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::column(c::vbox(4.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX}),
           wrapped(nodes::Text(std::move(title), 14.0f, colours.text)),
           c::visible(described, wrapped(nodes::Text(std::move(description), 12.0f, colours.dim)))),
-      c::styled({.alignSelf = scene::align::kMiddle}, std::move(control)));
+      c::styled({.alignSelf = scene::align::kMiddle}, std::move(control))));
 }
 template <class Control> auto tile(const auto& colours, std::string title, std::string description, Control control) {
   return card(colours, setting_tile(colours, std::move(title), std::move(description), std::move(control)));
@@ -161,33 +163,33 @@ auto action_face(const auto& colours, std::string label, action_style style = ac
   namespace c = skiff::compose;
   const auto background = style == action_style::secondary ? colours.chosen : colours.accent;
   const auto ink = style == action_style::secondary ? colours.text : colours.on_accent;
-  return c::row(c::hbox(0.0f, {.height = 32.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle,
+  return SKIFF_NAMED(action_face, c::row(c::hbox(0.0f, {.height = 32.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle,
                                .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .background = background,
                                .hoverBackground = colours.widgets.fSurfaceHover,
                                .border = scene::Border{colours.widgets.fSurfaceActive, style == action_style::secondary ? 1.0f : 0.0f},
                                .alpha = allowed ? 1.0f : 0.38f, .disabled = !allowed}),
-                c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 12.0f, ink)));
+                c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 12.0f, ink))));
 }
 // A button: its words, and whether it does anything now, as said once or
 // read as the facts move.
 template <class Act>
 auto action(const auto& colours, std::string label, Act act, bool allowed = true, action_style style = action_style::secondary) {
   auto spoken = label;
-  return skiff::compose::onPress(std::move(act), action_face(colours, std::move(label), style, allowed), std::move(spoken));
+  return SKIFF_NAMED(action, skiff::compose::onPress(std::move(act), action_face(colours, std::move(label), style, allowed), std::move(spoken)));
 }
 // A button that sends what is typed in its page's draft (Draft) as `make`
 // makes of it.
 template <class Draft, class Make, class Allowed>
 auto action_asking(const auto& colours, std::string label, Make make, Allowed allowed, action_style style = action_style::secondary) {
   namespace c = skiff::compose;
-  return c::spec_for<facts_t>([allowed](const facts_t& now) { return allowed_spec(allowed(now)); },
+  return SKIFF_NAMED(action_asking, c::spec_for<facts_t>([allowed](const facts_t& now) { return allowed_spec(allowed(now)); },
       c::column(c::vbox(0.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
-                c::asking_for<Draft>(std::move(make), action_face(colours, std::move(label), style))));
+                c::asking_for<Draft>(std::move(make), action_face(colours, std::move(label), style)))));
 }
 template <class Act, class Allowed>
 auto action_if(const auto& colours, std::string label, Act act, Allowed allowed, action_style style = action_style::secondary) {
-  return skiff::compose::spec_for<facts_t>([allowed](const facts_t& now) { return allowed_spec(allowed(now)); },
-                                           action(colours, std::move(label), std::move(act), true, style));
+  return SKIFF_NAMED(action_if, skiff::compose::spec_for<facts_t>([allowed](const facts_t& now) { return allowed_spec(allowed(now)); },
+                                           action(colours, std::move(label), std::move(act), true, style)));
 }
 // And one whose words move too.
 template <class Act, class Label, class Allowed>
@@ -195,30 +197,30 @@ auto action_said(const auto& colours, Label label, Act act, Allowed allowed, act
   namespace c = skiff::compose;
   const auto background = style == action_style::secondary ? colours.chosen : colours.accent;
   const auto ink = style == action_style::secondary ? colours.text : colours.on_accent;
-  return c::spec_for<facts_t>([allowed](const facts_t& now) { return allowed_spec(allowed(now)); },
+  return SKIFF_NAMED(action_said, c::spec_for<facts_t>([allowed](const facts_t& now) { return allowed_spec(allowed(now)); },
       c::onPress(std::move(act),
           c::row(c::hbox(0.0f, {.height = 32.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle,
                                 .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .background = background,
                                 .hoverBackground = colours.widgets.fSurfaceHover,
                                 .border = scene::Border{colours.widgets.fSurfaceActive, style == action_style::secondary ? 1.0f : 0.0f}}),
-                 c::text_for<facts_t>(std::move(label), c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 12.0f, ink))))));
+                 c::text_for<facts_t>(std::move(label), c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 12.0f, ink)))))));
 }
 // A switch: on as the facts say, pressed asking `act`.
 template <class Act, class On, class Allowed>
 auto switch_control(const auto& colours, On on, Act act, Allowed allowed) {
   namespace c = skiff::compose;
   using toggle_t = widgets::Toggle<Act>;
-  return c::spec_for<facts_t>([allowed](const facts_t& now) { return scene::Spec{.disabled = !allowed(now)}; },
+  return SKIFF_NAMED(switch_control, c::spec_for<facts_t>([allowed](const facts_t& now) { return scene::Spec{.disabled = !allowed(now)}; },
       c::column(c::vbox(0.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
           c::applied<facts_t>(std::move(on), [](toggle_t& toggle, bool now) { toggle.setOnNow(now); },
-                              c::styled({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, std::move(act))))));
+                              c::styled({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, std::move(act)))))));
 }
 auto choice_head(const auto& colours, std::string value) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(4.0f, {.fillX = true, .height = 24.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f},
+  return SKIFF_NAMED(choice_head, c::row(c::hbox(4.0f, {.fillX = true, .height = 24.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f},
       .cornerRadius = colours.widgets.fCorner, .background = colours.chosen, .hoverBackground = colours.widgets.fSurfaceHover}),
       c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.text)),
-      c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 12.0f, colours.text))));
+      c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 12.0f, colours.text)))));
 }
 // The compact head: the name chosen, nothing beside it.
 struct compact_choice_head {
@@ -245,27 +247,27 @@ auto live_choice(const auto& colours, Now now, Of choose_of) {
   namespace c = skiff::compose;
   using choose_t = std::invoke_result_t<Of&, const Key&>;
   using menu_t = decltype(compact_choice(colours, {}, 0, std::declval<choose_t>()));
-  return c::projected<facts_t>([now](const facts_t& facts) { return facts ? std::optional<Key>(now(facts)) : std::nullopt; },
+  return SKIFF_NAMED(live_choice, c::projected<facts_t>([now](const facts_t& facts) { return facts ? std::optional<Key>(now(facts)) : std::nullopt; },
       c::mount<menu_t, Key>([at = &colours, choose_of](const Key& shown) {
         auto menu = compact_choice(*at, shown.names, shown.selected, choose_of(shown));
         menu.apply(allowed_spec(shown.allowed));
         return std::tuple{std::move(menu)};
       },
-          {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}));
+          {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle})));
 }
 // Rows made from what the facts say, again where that changes.
 template <class Row, class Key, class Of, class Make>
 auto rows_of(Of of, Make make, scene::Spec spec = {.fillX = true, .autoSize = scene::axes::kY}) {
   namespace c = skiff::compose;
-  return c::projected<facts_t>([of](const facts_t& facts) { return facts ? std::optional<Key>(of(facts)) : std::nullopt; },
-                               c::mount<Row, Key>([make](const Key& key) { return std::tuple{make(key)}; }, spec));
+  return SKIFF_NAMED(rows_of, c::projected<facts_t>([of](const facts_t& facts) { return facts ? std::optional<Key>(of(facts)) : std::nullopt; },
+                               c::mount<Row, Key>([make](const Key& key) { return std::tuple{make(key)}; }, spec)));
 }
 // A word under a page's head: saving, loading, or what went wrong.
 template <class Said>
 auto status_line(const auto& colours, Said said) {
   namespace c = skiff::compose;
-  return c::shown_for<facts_t>([said](const facts_t& now) { return !said(now).empty(); },
-                               c::text_for<facts_t>(said, wrapped(nodes::Text("", 12.0f, colours.dim))));
+  return SKIFF_NAMED(status_line, c::shown_for<facts_t>([said](const facts_t& now) { return !said(now).empty(); },
+                               c::text_for<facts_t>(said, wrapped(nodes::Text("", 12.0f, colours.dim)))));
 }
 
 // ---- General: profile, options, addresses, advanced options, Cinny's order ------
@@ -285,7 +287,7 @@ struct profile_basis {
 auto profile_editor(const auto& colours, const profile_basis& basis, const room_settings_facts& first) {
   namespace c = skiff::compose;
   using draft = profile_draft;
-  return c::local<draft>(c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(profile_editor, c::local<draft>(c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::row(c::hbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           c::column(c::vbox(4.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX}),
               settings_section_heading(colours, "Avatar"),
@@ -303,7 +305,7 @@ auto profile_editor(const auto& colours, const profile_basis& basis, const room_
           action_asking<draft>(colours, "Save", [](const draft& now) { return request::manage_room{manage_change::save_profile{now.name, now.topic}}; },
                                may_profile, action_style::success),
           action(colours, "Cancel", ask(manage_change::edit{editor::profile, false})))),
-      draft{basis.name, basis.topic});
+      draft{basis.name, basis.topic}));
 }
 template <class P> using profile_editor_t = decltype(profile_editor(std::declval<P>(), profile_basis{}, std::declval<const room_settings_facts&>()));
 
@@ -356,9 +358,9 @@ struct choose_history {
   }
 };
 auto address_badge(const auto& colours, std::string label) {
-  return skiff::compose::row(skiff::compose::hbox(0.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle,
+  return SKIFF_NAMED(address_badge, skiff::compose::row(skiff::compose::hbox(0.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle,
                                                          .padding = {4.0f, 8.0f, 4.0f, 8.0f}, .cornerRadius = colours.widgets.fCorner, .background = colours.chosen}),
-                             nodes::Text(std::move(label), 12.0f, colours.accent));
+                             nodes::Text(std::move(label), 12.0f, colours.accent)));
 }
 // The addresses published, the main one marked.
 [[nodiscard]] inline std::vector<std::string> published_of(const room_settings_facts& facts) {
@@ -376,7 +378,7 @@ struct published_key {
 auto published_rows(const auto& colours, const published_key& key) {
   namespace c = skiff::compose;
   using act = manage_change::address;
-  return c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.aliases | std::views::transform([&](const std::string& alias) {
+  return SKIFF_NAMED(published_rows, c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.aliases | std::views::transform([&](const std::string& alias) {
     const bool main = key.main == alias;
     auto label = nodes::Text(alias, 14.0f, colours.text);
     label.setBold(main);
@@ -385,7 +387,7 @@ auto published_rows(const auto& colours, const published_key& key) {
             c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(std::move(label))),
             c::visible(main, address_badge(colours, "Main"))),
         c::visible(key.may, action(colours, main ? "Unset Main" : "Set Main", ask(act{alias, manage_change::address_kind::main}), !key.pending)));
-  }) | std::ranges::to<std::vector>());
+  }) | std::ranges::to<std::vector>()));
 }
 template <class P> using published_rows_t = decltype(published_rows(std::declval<P>(), published_key{}));
 struct local_key {
@@ -396,7 +398,7 @@ struct local_key {
 auto local_rows(const auto& colours, const local_key& key) {
   namespace c = skiff::compose;
   using check_t = widgets::internal::Toggle<asks<manage_change::select_address>, widgets::internal::CheckboxLook>;
-  return c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.aliases | std::views::transform([&](const std::string& alias) {
+  return SKIFF_NAMED(local_rows, c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.aliases | std::views::transform([&](const std::string& alias) {
     auto checkbox = check_t(colours.widgets, ask(manage_change::select_address{alias}));
     checkbox.setOnNow(std::ranges::contains(key.selected, alias));
     checkbox.apply({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle, .disabled = key.pending});
@@ -404,7 +406,7 @@ auto local_rows(const auto& colours, const local_key& key) {
         c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                   elided(nodes::Text(alias, 14.0f, colours.text))),
         c::visible(std::ranges::contains(key.published, alias), address_badge(colours, "Published")));
-  }) | std::ranges::to<std::vector>());
+  }) | std::ranges::to<std::vector>()));
 }
 template <class P> using local_rows_t = decltype(local_rows(std::declval<P>(), local_key{}));
 struct address_draft {
@@ -416,24 +418,24 @@ auto local_address_input(const auto& colours, std::string server) {
   auto theme = colours.widgets;
   theme.fCorner = std::max(10.0f, theme.fCorner);
   theme.fSurface = colours.chosen;
-  return c::row(c::hbox(4.0f, {.height = 44.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX,
+  return SKIFF_NAMED(local_address_input, c::row(c::hbox(4.0f, {.height = 44.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX,
       .padding = {0.0f, 8.0f, 0.0f, 8.0f}, .cornerRadius = theme.fCorner, .background = colours.chosen, .masking = true}),
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("#", 12.0f, colours.dim)),
       c::bound<skiff::model::Field<&address_draft::local>>(c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone,
           .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, widgets::TextField<std::string>(theme, "New address"))),
       c::styled({.shrink = scene::axes::kX, .maxWidth = 160.0f, .alignSelf = scene::align::kMiddle},
-          elided(nodes::Text(std::move(server), 12.0f, colours.dim))));
+          elided(nodes::Text(std::move(server), 12.0f, colours.dim)))));
 }
 // A new local address: its field emptied where one is made.
 auto address_maker(const auto& colours, std::string server) {
   namespace c = skiff::compose;
-  return c::local<address_draft>(c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(address_maker, c::local<address_draft>(c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::spec_for<facts_t>([](const facts_t& now) { return scene::Spec{.disabled = kept_of(now).pending}; },
           c::row(c::hbox(0.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX}),
                  local_address_input(colours, std::move(server)))),
       action_asking<address_draft>(colours, "Save", [](const address_draft& now) { return request::manage_room{manage_change::create_address{now.local}}; },
                                    [](const facts_t& now) { return !kept_of(now).pending; }, action_style::success)),
-      address_draft{});
+      address_draft{}));
 }
 template <class P> using address_maker_t = decltype(address_maker(std::declval<P>(), std::string()));
 // A space's rooms: each removed, and the account's others added.
@@ -444,10 +446,10 @@ struct children_key {
 };
 auto children_rows(const auto& colours, const children_key& key) {
   namespace c = skiff::compose;
-  return c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.children | std::views::transform([&](const auto& child) {
+  return SKIFF_NAMED(children_rows, c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.children | std::views::transform([&](const auto& child) {
     return c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::Text(child.second, 14.0f, colours.text),
                   action(colours, "Remove", ask(manage_change::remove_child{child.first}), key.editable));
-  }) | std::ranges::to<std::vector>());
+  }) | std::ranges::to<std::vector>()));
 }
 template <class P> using children_rows_t = decltype(children_rows(std::declval<P>(), children_key{}));
 struct child_key {
@@ -490,11 +492,11 @@ template <class Of>
 auto related_room(const auto& colours, std::string label, Of of) {
   namespace c = skiff::compose;
   using row_t = decltype(action(colours, label, sends<::mux::ui::request::open_url>{}));
-  return c::projected<facts_t>([of](const facts_t& now) { return of(rules_now(now)).transform([](const std::string& room) { return related_key{room}; }); },
+  return SKIFF_NAMED(related_room, c::projected<facts_t>([of](const facts_t& now) { return of(rules_now(now)).transform([](const std::string& room) { return related_key{room}; }); },
       c::mount<row_t, related_key>([at = &colours, label](const related_key& key) {
         return std::tuple{action(*at, label, sends<::mux::ui::request::open_url>{{"https://matrix.to/#/" + key.room}})};
       },
-          {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth}));
+          {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth})));
 }
 struct upgrade_draft {
   std::string version, creators;
@@ -503,7 +505,7 @@ struct upgrade_draft {
 auto upgrade_card(const auto& colours, const std::string& version) {
   namespace c = skiff::compose;
   using draft = upgrade_draft;
-  return c::local<draft>(card(colours,
+  return SKIFF_NAMED(upgrade_card, c::local<draft>(card(colours,
       wrapped(nodes::Text("Upgrading creates a replacement room. Members will need to move to the new room.", 12.0f, colours.dim)),
       model_field<&draft::version>(colours, "Room Version", ""),
       model_field<&draft::creators>(colours, "Additional Creators (version 12 or newer)", "Space-separated Matrix IDs"),
@@ -511,7 +513,7 @@ auto upgrade_card(const auto& colours, const std::string& version) {
           action_asking<draft>(colours, "Upgrade", [](const draft& now) { return request::manage_room{manage_change::upgrade{now.version, now.creators}}; },
                                may_now<power_need::upgrade>{}),
           action(colours, "Cancel", ask(manage_change::cancel_upgrade{})))),
-      draft{version, {}});
+      draft{version, {}}));
 }
 template <class P> using upgrade_card_t = decltype(upgrade_card(std::declval<P>(), std::string()));
 
@@ -526,7 +528,7 @@ auto general_page(const auto& colours, const room_settings_facts& first) {
     return std::ranges::any_of(kept_of(now).selected_aliases, [&](const std::string& alias) { return std::ranges::contains(published, alias); });
   };
   const auto may_address = [](const facts_t& now) { return may(facts_of(now), power_need::change_address{}); };
-  return c::column(page_look(),
+  return SKIFF_NAMED(general_page, c::column(page_look(),
       status_line(colours, [](const facts_t& now) {
         const auto& kept = kept_of(now);
         return kept.pending ? std::string("Saving…") : kept.loading ? std::string("Loading…") : kept.error;
@@ -628,7 +630,7 @@ auto general_page(const auto& colours, const room_settings_facts& first) {
           related_room(colours, "Replacement Room", [](const room_rules& rules) { return rules.replaced_by; }),
           c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).confirming_upgrade; },
               rows_of<upgrade_card_t<decltype(colours)>, std::string>([](const facts_t& now) { return kept_of(now).data.default_version; },
-                  [at = &colours](const std::string& version) { return upgrade_card(*at, version); }))));
+                  [at = &colours](const std::string& version) { return upgrade_card(*at, version); })))));
 }
 
 // ---- Members: Cinny's membership filters and power-first order -----------------
@@ -723,7 +725,7 @@ struct choose_member_power {
 };
 auto member_rows(const auto& colours, const members_basis& basis, const member_listing& listing) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(member_rows, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), listing.rows | std::views::transform([&](const member_line& one) {
         auto values = basis.values;
         auto names = basis.names;
@@ -740,28 +742,28 @@ auto member_rows(const auto& colours, const members_basis& basis, const member_l
                       member_row(colours, mux::member{one.id, one.name, std::nullopt, one.avatar}, one.level_name)),
             std::move(choice));
       }) | std::ranges::to<std::vector>()),
-      c::visible(listing.rows.empty(), wrapped(nodes::Text(listing.empty, 12.0f, colours.dim))));
+      c::visible(listing.rows.empty(), wrapped(nodes::Text(listing.empty, 12.0f, colours.dim)))));
 }
 // The rows for the members as they are: listed as the draft says.
 auto member_listing_view(const auto& colours, const members_basis& basis) {
   namespace c = skiff::compose;
   using rows_t = decltype(member_rows(colours, basis, member_listing{}));
-  return c::derived<member_draft>([basis](const member_draft& now) { return listing_of(basis, now); },
+  return SKIFF_NAMED(member_listing_view, c::derived<member_draft>([basis](const member_draft& now) { return listing_of(basis, now); },
       c::mount<rows_t, member_listing>([at = &colours, basis](const member_listing& listing) { return std::tuple{member_rows(*at, basis, listing)}; },
-                                       {.fillX = true, .autoSize = scene::axes::kY}));
+                                       {.fillX = true, .autoSize = scene::axes::kY})));
 }
 template <class P> using member_listing_view_t = decltype(member_listing_view(std::declval<P>(), members_basis{}));
 auto members_page(const auto& colours, const room_settings_facts&) {
   namespace c = skiff::compose;
   using draft = member_draft;
-  return c::local<draft>(member_events{}, c::column(page_look(),
+  return SKIFF_NAMED(members_page, c::local<draft>(member_events{}, c::column(page_look(),
       status_line(colours, [](const facts_t& now) { return kept_of(now).error; }),
       model_field<&draft::query>(colours, "", "Search"),
       c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::justify::end{}),
           compact_choice(colours, {"Joined", "Invited", "Left", "Kicked", "Banned"}, 0, select_filter{}),
           compact_choice(colours, {"A to Z", "Z to A", "Newest", "Oldest"}, 0, select_order{})),
       rows_of<member_listing_view_t<decltype(colours)>, members_basis>(members_now, [at = &colours](const members_basis& basis) { return member_listing_view(*at, basis); })),
-      draft{});
+      draft{}));
 }
 
 // ---- Permissions: named powers, then Users, Messages, Calls, Moderation,
@@ -866,13 +868,13 @@ struct custom_key {
 };
 auto custom_rows(const auto& colours, const custom_key& key) {
   namespace c = skiff::compose;
-  return c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(custom_rows, c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       std::views::zip(key.events, key.removable) | std::views::transform([&](const auto& one) {
         const auto& [event, removable] = one;
         return c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
             c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, permission_row(colours, permission_item{event, event_permission{event}})),
             action(colours, "Remove", ask(manage_change::remove_custom_permission{event}), removable));
-      }) | std::ranges::to<std::vector>());
+      }) | std::ranges::to<std::vector>()));
 }
 template <class P> using custom_rows_t = decltype(custom_rows(std::declval<P>(), custom_key{}));
 struct custom_draft {
@@ -882,12 +884,12 @@ struct custom_draft {
 auto custom_adder(const auto& colours) {
   namespace c = skiff::compose;
   using draft = custom_draft;
-  return c::local<draft>(c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(custom_adder, c::local<draft>(c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&draft::event>(colours, "Event type", "org.example.event")),
       c::styled({.width = 96.0f, .relativeSize = scene::axes::kNone}, model_field<&draft::level>(colours, "Power level", "50")),
       action_asking<draft>(colours, "Add", [](const draft& now) { return request::manage_room{manage_change::add_custom_permission{now.event, now.level}}; },
                            may_now<power_need::change_permissions>{})),
-      draft{});
+      draft{}));
 }
 template <class P> using custom_adder_t = decltype(custom_adder(std::declval<P>()));
 auto custom_permissions(const auto& colours) {
@@ -923,10 +925,10 @@ auto custom_permissions(const auto& colours) {
 }
 auto power_chip(const auto& colours, std::string name, skia::SkColor colour) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(4.0f, {.height = 24.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .padding = {0.0f, 8.0f, 0.0f, 8.0f},
+  return SKIFF_NAMED(power_chip, c::row(c::hbox(4.0f, {.height = 24.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .padding = {0.0f, 8.0f, 0.0f, 8.0f},
                                .cornerRadius = colours.widgets.fCorner, .background = colours.chosen}),
       c::styled({.width = 14.0f, .height = 14.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::dot{colour}), colour)),
-      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(name), 14.0f, colours.text)));
+      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(name), 14.0f, colours.text))));
 }
 struct chips_key {
   std::vector<std::pair<std::string, skia::SkColor>> chips;
@@ -962,7 +964,7 @@ struct power_basis {
 auto power_form(const auto& colours, const power_basis& basis) {
   namespace c = skiff::compose;
   using draft = power_draft;
-  return c::local<draft>(c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(power_form, c::local<draft>(c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           c::styled({.width = 80.0f, .relativeSize = scene::axes::kNone}, model_field<&draft::color>(colours, "Color", "#91cfdf")),
           c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&draft::name>(colours, "Name", "Bot")),
@@ -974,7 +976,7 @@ auto power_form(const auto& colours, const power_basis& basis) {
           },
               [](const facts_t& now) { return !kept_of(now).pending; }),
           action(colours, "Cancel", ask(manage_change::edit{editor::power, false})))),
-      basis.first);
+      basis.first));
 }
 template <class P> using power_form_t = decltype(power_form(std::declval<P>(), power_basis{}));
 auto power_form_for(const auto& colours) {
@@ -996,7 +998,7 @@ struct levels_key {
 };
 auto level_rows(const auto& colours, const levels_key& key) {
   namespace c = skiff::compose;
-  return c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.levels | std::views::transform([&](const level_line& one) {
+  return SKIFF_NAMED(level_rows, c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.levels | std::views::transform([&](const level_line& one) {
     return card(colours,
         setting_tile(colours, one.name, std::format("({})", one.value),
             c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth}),
@@ -1004,13 +1006,13 @@ auto level_rows(const auto& colours, const levels_key& key) {
                 action(colours, "Edit", ask(manage_change::edit_power{one.value}), !key.pending && !one.deleted))),
         c::shown_for<facts_t>([value = one.value](const facts_t& now) { return kept_of(now).power_form && kept_of(now).editing_power == value; },
                               power_form_for(colours)));
-  }) | std::ranges::to<std::vector>());
+  }) | std::ranges::to<std::vector>()));
 }
 template <class P> using level_rows_t = decltype(level_rows(std::declval<P>(), levels_key{}));
 auto permissions_page(const auto& colours, const room_settings_facts&) {
   namespace c = skiff::compose;
   const auto not_pending = [](const facts_t& now) { return !kept_of(now).pending; };
-  return c::column(page_look(),
+  return SKIFF_NAMED(permissions_page, c::column(page_look(),
       status_line(colours, [](const facts_t& now) { return kept_of(now).pending ? std::string("Saving…") : kept_of(now).error; }),
       c::shown_for<facts_t>([](const facts_t& now) { return !kept_of(now).powers_editor; },
           c::column(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -1058,7 +1060,7 @@ auto permissions_page(const auto& colours, const room_settings_facts&) {
               c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   action_if(colours, "Reset", ask(manage_change::apply_tags{true}), not_pending),
                   action_if(colours, "Apply Changes", ask(manage_change::apply_tags{}), not_pending, action_style::success)))),
-          action(colours, "Permissions", ask(manage_change::edit{editor::powers, false})))));
+          action(colours, "Permissions", ask(manage_change::edit{editor::powers, false}))))));
 }
 
 // ---- Emojis & Stickers: the room's packs -----------------------------------------
@@ -1069,11 +1071,11 @@ struct pack_draft {
 [[nodiscard]] inline bool may_packs(const facts_t& now) { return facts_of(now).mine >= event_need(rules_now(now), "im.ponies.room_emotes"); }
 auto pack_maker(const auto& colours) {
   namespace c = skiff::compose;
-  return c::local<pack_draft>(c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(pack_maker, c::local<pack_draft>(c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&pack_draft::name>(colours, "Name", "Pack name")),
       action_asking<pack_draft>(colours, "Create", [](const pack_draft& now) { return request::manage_room{manage_change::create_pack{now.name}}; },
                                 may_packs)),
-      pack_draft{});
+      pack_draft{}));
 }
 template <class P> using pack_maker_t = decltype(pack_maker(std::declval<P>()));
 struct pack_line {
@@ -1087,15 +1089,15 @@ struct packs_key {
 };
 auto pack_cards(const auto& colours, const packs_key& key) {
   namespace c = skiff::compose;
-  return c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.packs | std::views::transform([&](const pack_line& one) {
+  return SKIFF_NAMED(pack_cards, c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.packs | std::views::transform([&](const pack_line& one) {
     return card(colours, setting_tile(colours, one.name.empty() ? "Unnamed Pack" : one.name, std::format("{} images", one.pictures),
                                       action(colours, "View", sends<::mux::ui::request::open_room_packs>{{one.key}})));
-  }) | std::ranges::to<std::vector>());
+  }) | std::ranges::to<std::vector>()));
 }
 template <class P> using pack_cards_t = decltype(pack_cards(std::declval<P>(), packs_key{}));
 auto packs_page(const auto& colours, const room_settings_facts&) {
   namespace c = skiff::compose;
-  return c::column(page_look(), section(colours, "Room Packs",
+  return SKIFF_NAMED(packs_page, c::column(page_look(), section(colours, "Room Packs",
       c::shown_for<facts_t>(may_packs, card(colours,
           setting_tile(colours, "New Pack", "Add your own emoji and sticker pack to use in room.", c::column()),
           rows_of<pack_maker_t<decltype(colours)>, std::uint32_t>([](const facts_t& now) { return kept_of(now).pack_round; },
@@ -1106,7 +1108,7 @@ auto packs_page(const auto& colours, const room_settings_facts&) {
         }) | std::ranges::to<std::vector>()};
       },
           [at = &colours](const packs_key& key) { return pack_cards(*at, key); }),
-      c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).packs.empty(); }, wrapped(nodes::Text("No packs found.", 12.0f, colours.dim)))));
+      c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).packs.empty(); }, wrapped(nodes::Text("No packs found.", 12.0f, colours.dim))))));
 }
 
 // ---- Developer Tools: the room's state events and account data --------------------
@@ -1114,7 +1116,7 @@ enum class state_row_kind { add, type, key };
 template <class Act>
 auto state_list_row(const auto& colours, std::string label, std::string detail, Act act, state_row_kind kind = state_row_kind::type, bool expanded = false) {
   namespace c = skiff::compose;
-  return c::onClick(std::move(act), c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f},
+  return SKIFF_NAMED(state_list_row, c::onClick(std::move(act), c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f},
                                                           .cornerRadius = colours.widgets.fCorner, .hoverBackground = colours.chosen}),
       c::visible(kind != state_row_kind::key,
           c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle},
@@ -1123,7 +1125,7 @@ auto state_list_row(const auto& colours, std::string label, std::string detail, 
                 elided(nodes::Text(std::move(label), 12.0f, colours.text))),
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(detail), 12.0f, colours.dim)),
       c::visible(kind == state_row_kind::key,
-          c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::right{}), colours.dim)))));
+          c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::right{}), colours.dim))))));
 }
 // The state events, by their types: each type unfolded to its keys.
 struct state_group {
@@ -1149,7 +1151,7 @@ struct state_list_key {
 auto state_event_list(const auto& colours, const state_list_key& key) {
   namespace c = skiff::compose;
   using open = manage_change::state_open;
-  return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(state_event_list, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       setting_tile(colours, "Events", "", nodes::Text(std::format("Total: {}", key.groups.size()), 12.0f, colours.dim)),
       cutout(colours, {}, state_list_row(colours, "Add New", "", ask(open{state_screen::compose, "", ""}), state_row_kind::add),
           c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.groups | std::views::transform([&](const state_group& group) {
@@ -1163,7 +1165,7 @@ auto state_event_list(const auto& colours, const state_list_key& key) {
                       return state_list_row(colours, one.empty() ? "Default" : "\"" + one + "\"", "", ask(open{state_screen::view, group.type, one}),
                                             state_row_kind::key);
                     }) | std::ranges::to<std::vector>()))));
-          }) | std::ranges::to<std::vector>())));
+          }) | std::ranges::to<std::vector>()))));
 }
 template <class P> using state_event_list_t = decltype(state_event_list(std::declval<P>(), state_list_key{}));
 // A state event edited or written: its draft made from the one open.
@@ -1182,7 +1184,7 @@ auto state_editor(const auto& colours, const state_basis& basis) {
   using draft = state_draft;
   const auto not_pending = [](const facts_t& now) { return !kept_of(now).pending; };
   const auto save = [](const draft& now) { return request::manage_room{manage_change::save_state{now.type, now.key, now.json}}; };
-  return c::local<draft>(c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(state_editor, c::local<draft>(c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::visible(!basis.composing, section(colours, "State Event", tile(colours, basis.first.type, basis.first.key,
           c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth}),
               action_asking<draft>(colours, "Save", save, not_pending, action_style::success),
@@ -1193,7 +1195,7 @@ auto state_editor(const auto& colours, const state_basis& basis) {
               action_asking<draft>(colours, "Send", save, not_pending, action_style::success)),
           model_field<&draft::key>(colours, "State Key (Optional)", ""))),
       section(colours, "JSON Content", model_area<&draft::json>(colours, "", "{}", 20))),
-      basis.first);
+      basis.first));
 }
 template <class P> using state_editor_t = decltype(state_editor(std::declval<P>(), state_basis{}));
 // Account data written: its draft made from the one chosen.
@@ -1209,14 +1211,14 @@ struct account_basis {
 auto account_editor(const auto& colours, const account_basis& basis) {
   namespace c = skiff::compose;
   using draft = account_draft;
-  return c::local<draft>(section(colours, "Account Data",
+  return SKIFF_NAMED(account_editor, c::local<draft>(section(colours, "Account Data",
       model_field<&draft::type>(colours, "Type", ""),
       model_area<&draft::json>(colours, "Content", "{}", 12),
       c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           action_asking<draft>(colours, "Save", [](const draft& now) { return request::manage_room{manage_change::save_account_data{now.type, now.json}}; },
                                [](const facts_t& now) { return !kept_of(now).pending; }),
           action(colours, "Cancel", ask(manage_change::edit{editor::account_form, false})))),
-      basis.first);
+      basis.first));
 }
 template <class P> using account_editor_t = decltype(account_editor(std::declval<P>(), account_basis{}));
 struct choose_account_data {
@@ -1227,13 +1229,13 @@ struct choose_account_data {
 auto developer_switch(const auto& colours) {
   namespace c = skiff::compose;
   using toggle_t = widgets::Toggle<sends<::mux::ui::request::flip_developer_tools>>;
-  return c::applied<looks_picked>([](const looks_picked& now) { return now.developer_tools; }, [](toggle_t& toggle, bool on) { toggle.setOnNow(on); },
-                                  c::styled({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, {})));
+  return SKIFF_NAMED(developer_switch, c::applied<looks_picked>([](const looks_picked& now) { return now.developer_tools; }, [](toggle_t& toggle, bool on) { toggle.setOnNow(on); },
+                                  c::styled({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, {}))));
 }
 auto developer_page(const auto& colours, const room_settings_facts& first) {
   namespace c = skiff::compose;
   const auto tools_on = [](const looks_picked& now) { return now.developer_tools; };
-  return c::column(page_look(),
+  return SKIFF_NAMED(developer_page, c::column(page_look(),
       status_line(colours, [](const facts_t& now) { return kept_of(now).pending ? std::string("Saving…") : kept_of(now).error; }),
       c::shown_for<facts_t>([](const facts_t& now) { return !kept_of(now).account_editor && kept_of(now).state_page == state_screen::overview; },
           c::column(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -1290,7 +1292,7 @@ auto developer_page(const auto& colours, const room_settings_facts& first) {
             const auto& kept = kept_of(now);
             return account_basis{kept.account_round, {kept.account_type, kept.account_json.empty() ? std::string("{}") : kept.account_json}};
           },
-              [at = &colours](const account_basis& basis) { return account_editor(*at, basis); })));
+              [at = &colours](const account_basis& basis) { return account_editor(*at, basis); }))));
 }
 }  // namespace mux::proto::matrix::manage_detail
 

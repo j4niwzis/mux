@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:info_new_chats -- Where a message is forwarded to; Start chat; Create a room.
+module;
+#include "skiff/named.h"
 export module mux.ui:info_new_chats;
 
 import std;
@@ -59,7 +61,7 @@ struct forward_draft {
 struct forward_events {};
 inline auto forward_row(const palette& colours, const forward_target& one) {
   namespace c = skiff::compose;
-  return c::onPress(
+  return SKIFF_NAMED(forward_row, c::onPress(
       sends<::mux::ui::request::forward_to>{one.id},
       c::row(c::hbox(12.0f, {.fillX = true,
                              .height = 50.0f,
@@ -68,7 +70,7 @@ inline auto forward_row(const palette& colours, const forward_target& one) {
              avatar_mark(avatar_of::chat{}, one.id.id, one.name, 36.0f),
              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                        elided(nodes::Text(one.name, 15.0f, colours.text)))),
-      one.name);
+      one.name));
 }
 // The chats whose names have what is typed, in any case.
 inline std::vector<forward_target> matching_forward_targets(const std::vector<forward_target>& all, std::string_view text) {
@@ -83,7 +85,7 @@ inline auto forward_view(const palette& colours, const std::vector<forward_targe
   using query = skiff::model::Field<&forward_draft::query>;
   auto field = widgets::TextField<std::string>(colours.widgets, "Search");
   field.setSearchIcon(true);
-  return c::local<forward_draft>(
+  return SKIFF_NAMED(forward_view, c::local<forward_draft>(
       forward_events{},
       c::column(
           c::vbox(0.0f, {.fillX = true, .height = 520.0f}),
@@ -101,7 +103,7 @@ inline auto forward_view(const palette& colours, const std::vector<forward_targe
                                 [colours = &colours](const forward_target& one) {
                                   return forward_row(*colours, one);
                                 }))))),
-      forward_draft{});
+      forward_draft{}));
 }
 inline auto forward_view(const ui_needs& n, const forward_facts& facts) {
   return forward_view(*n.colours, facts.chats);
@@ -121,11 +123,11 @@ auto make_content(const Needs& needs, const forward_facts& facts) {
 template <class Event>
 inline auto person_pick_row(const palette& colours, const found_person& one, Event event) {
   const std::string name = one.name.empty() ? one.id : one.name;
-  return skiff::compose::onClick(std::move(event), skiff::compose::row(
+  return SKIFF_NAMED(person_pick_row, skiff::compose::onClick(std::move(event), skiff::compose::row(
       skiff::compose::hbox(12.0f, {.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
           .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
       avatar_mark(avatar_of::person{}, one.id, name, 36.0f),
-      two_lines(colours, name, one.id, 14.0f, 2.0f)), name);
+      two_lines(colours, name, one.id, 14.0f, 2.0f)), name));
 }
 inline auto found_person_row(const palette& colours, const found_person& one) {
   return person_pick_row(colours, one, request::start_direct{one.id});
@@ -190,7 +192,7 @@ using person_rows_t = decltype(skiff::compose::many(skiff::compose::vbox(),
 inline auto start_chat_view(const palette& colours, const new_chat_facts& facts) {
   namespace c = skiff::compose;
   const auto words = proto::direct_chat_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol_t{}));
-  return c::scoped<new_chat_facts>(start_chat_events{facts.by, facts.inviting}, c::column(
+  return SKIFF_NAMED(start_chat_view, c::scoped<new_chat_facts>(start_chat_events{facts.by, facts.inviting}, c::column(
       c::vbox(8.0f, {.fill = true, .padding = {0.0f, 12.0f, 16.0f, 12.0f}}),
       page_header<no_back, sends<request::close_new_chat>>(colours, facts.inviting ? "Invite to " + facts.room_name : "Start chat", {}, {}, false, true),
       c::styled({.fillX = true}, wrapped(nodes::Text(facts.inviting ? "Choose a contact or enter their full address to invite them to this room." : words.intro, 14.0f, colours.text))),
@@ -211,7 +213,7 @@ inline auto start_chat_view(const palette& colours, const new_chat_facts& facts)
               }, {.fillX = true, .autoSize = scene::axes::kY})))),
       c::visible(!facts.inviting, c::styled({.fillX = true}, wrapped(nodes::Text("You can share your address with someone you haven't chatted with yet.", 13.0f, colours.dim)))),
       c::visible(!facts.inviting, nodes::Text(facts.own_link, 13.0f, colours.accent)),
-      c::visible(!facts.inviting, widgets::SendButton<request::copy_text>(colours.widgets, "Copy link", {facts.own_link}))));
+      c::visible(!facts.inviting, widgets::SendButton<request::copy_text>(colours.widgets, "Copy link", {facts.own_link})))));
 }
 using start_chat_box_t = decltype(start_chat_view(std::declval<const palette&>(), std::declval<const new_chat_facts&>()));
 using start_chat_box = start_chat_box_t;
@@ -266,15 +268,15 @@ struct room_creation_events {
 template <auto Member>
 auto room_form_toggle(const palette& colours, std::string label) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(room_form_toggle, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::styled({.grow = scene::axes::kX}, wrapped(nodes::Text(label, 13.0f, colours.text))),
-      c::bound<skiff::model::Field<Member>>(widgets::ToggleField<bool>(colours.widgets)));
+      c::bound<skiff::model::Field<Member>>(widgets::ToggleField<bool>(colours.widgets))));
 }
 // Radio rows send changes to their bound field; their mark is projected from it.
 inline auto room_access_choice(const palette& colours, std::string label, room_access_t choice) {
   namespace c = skiff::compose;
   using access = skiff::model::Field<&room_draft::access>;
-  return c::spec_for<access>([choice](const auto& selected) { return scene::Spec{.selected = selected == choice}; },
+  return SKIFF_NAMED(room_access_choice, c::spec_for<access>([choice](const auto& selected) { return scene::Spec{.selected = selected == choice}; },
       c::onClick(skiff::bind::own(skiff::model::setTo(choice)),
           c::row(c::hbox(16.0f, {.fillX = true, .height = 46.0f,
                                 .padding = {0.0f, 20.0f, 0.0f, 20.0f},
@@ -284,13 +286,13 @@ inline auto room_access_choice(const palette& colours, std::string label, room_a
               c::styled({.width = 20.0f, .alignSelf = scene::align::kMiddle},
                   c::text_for<access>([choice](const auto& selected) {
                     return selected == choice ? std::string("●") : std::string("○");
-                  }, nodes::Text("", 20.0f, colours.accent)))), label));
+                  }, nodes::Text("", 20.0f, colours.accent)))), label)));
 }
 inline auto create_room_view(const palette& colours, const new_room_facts& facts) {
   namespace c = skiff::compose;
   using access = skiff::model::Field<&room_draft::access>;
   const auto form = proto::room_creation_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol_t{}), facts.own_server);
-  return c::local<room_draft>(room_creation_events{facts, form}, c::column(
+  return SKIFF_NAMED(create_room_view, c::local<room_draft>(room_creation_events{facts, form}, c::column(
       c::vbox(8.0f, {.fill = true, .padding = {0.0f, 22.0f, 18.0f, 22.0f}}),
       page_header<no_back, sends<request::close_new_room>>(colours,
           facts.place ? std::string(facts.place->make_space ? "Create a space in " : "Create a room in ") + facts.place->name : "Create a room", {}, {}, false, true),
@@ -316,7 +318,7 @@ inline auto create_room_view(const palette& colours, const new_room_facts& facts
           c::styled({.width = 128.0f, .height = 34.0f},
               primary(widgets::SendButton<submit_room>(colours.widgets, facts.place && facts.place->make_space ? "Create space" : "Create room", {}))))),
       room_draft{.access = facts.place ? room_access_t(room_access::space{}) : room_access_t(room_access::invited{}),
-                 .encrypted = form.encryption});
+                 .encrypted = form.encryption}));
 }
 using create_room_box_t = decltype(create_room_view(std::declval<const palette&>(), std::declval<const new_room_facts&>()));
 using create_room_box = create_room_box_t;

@@ -2,6 +2,8 @@
 // mux.ui:account_forms -- Each protocol's account form, as the accounts'
 // panels show them: what its account_form_of makes of its draft, from the
 // protocols' UI modules, which sit under this one.
+module;
+#include "skiff/named.h"
 export module mux.ui:account_forms;
 
 import std;
@@ -74,9 +76,9 @@ struct form_seed {
 inline auto account_form_view(const ui_needs& n) {
   namespace c = skiff::compose;
   using facts = std::optional<account_form_facts>;
-  return c::projected<facts>([](const facts& now) { return now ? std::optional(form_seed{now->round, now->seed, now->editing.has_value()}) : std::nullopt; },
+  return SKIFF_NAMED(account_form_view, c::projected<facts>([](const facts& now) { return now ? std::optional(form_seed{now->round, now->seed, now->editing.has_value()}) : std::nullopt; },
                              c::mount<account_form_node, form_seed>([at = n.colours](const form_seed& now) { return std::tuple{form_made(*at, now)}; },
-                                                                    {.fillX = true, .autoSize = scene::axes::kY}));
+                                                                    {.fillX = true, .autoSize = scene::axes::kY})));
 }
 using account_form_view_t = decltype(account_form_view(std::declval<const ui_needs&>()));
 

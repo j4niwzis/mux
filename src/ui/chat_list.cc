@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:chat_list -- A chat in the list.
+module;
+#include "skiff/named.h"
 export module mux.ui:chat_list;
 
 import std;
@@ -181,28 +183,28 @@ inline auto chat_unread(const palette& colours, const conversation_view& view) {
                .size = 12.0f, .height = 21.0f, .padX = 7.0f, .bold = true})));
 }
 inline auto chat_protocol_mark(const palette& colours, const proto::part::badge& mark) {
-  return skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+  return SKIFF_NAMED(chat_protocol_mark, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
       widgets::Pill(mark.text, {.plate = tone_colour(colours, mark.tone), .text = colours.on_accent,
-                                .size = 11.0f, .height = 19.0f, .padX = 6.0f, .bold = true}));
+                                .size = 11.0f, .height = 19.0f, .padX = 6.0f, .bold = true})));
 }
 // Configure the rich-text leaf when it is made, from the resolved preview.
 // It retains only avatar mention pills; other links do not open from a row.
 inline auto chat_preview_text(const palette& colours, const conversation_view& view, const chat_preview& preview) {
   auto text = nodes::BasicText<message_pictures>(preview.text, 13.0f, view.chosen ? colours.selected_text : colours.dim);
   text.setLinks(preview.mentions, colours.accent);
-  return skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(std::move(text)));
+  return SKIFF_NAMED(chat_preview_text, skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(std::move(text))));
 }
 inline auto chat_preview_line(const ui_needs& needs, const conversation& one,
                               const conversation_view& view, const chat_preview& preview) {
   namespace c = skiff::compose;
   const palette& colours = *needs.colours;
-  return c::row(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(chat_preview_line, c::row(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::visible(!preview.sender.empty(), c::styled({.alignSelf = scene::align::kMiddle},
           elided(nodes::Text(preview.sender, 13.0f,
               view.chosen ? colours.selected_text : preview.draft ? colours.error : colours.accent)))),
       chat_preview_text(colours, view, preview),
       view.badges | std::views::transform([&](const auto& mark) { return chat_protocol_mark(colours, mark); }) | std::ranges::to<std::vector>(),
-      protocol_row_of(*needs.shared, one), chat_unread(colours, view));
+      protocol_row_of(*needs.shared, one), chat_unread(colours, view)));
 }
 
 // A chat row is a function of the list's model snapshot. Choosing it sends
@@ -258,7 +260,7 @@ inline constexpr auto make_chat_row = [](const chat_item& item) {
 };
 using chat_rows = nodes::MemoRows<conversation_id, conversation_view, conversation_row_t, std::remove_cv_t<decltype(make_chat_row)>>;
 inline auto make_chat_rows() {
-  return skiff::compose::styled({.fillX = true, .autoSize = scene::axes::kY}, chat_rows(make_chat_row));
+  return SKIFF_NAMED(make_chat_rows, skiff::compose::styled({.fillX = true, .autoSize = scene::axes::kY}, chat_rows(make_chat_row)));
 }
 
 }  // namespace mux::ui

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:window -- The window.
+module;
+#include "skiff/named.h"
 export module mux.ui:window;
 
 import std;
@@ -53,7 +55,7 @@ inline float text_menu_height(const std::vector<text_menu_item>& items) {
 }
 inline auto text_menu_row(const palette& colours, const text_menu_item& item) {
   namespace c = skiff::compose;
-  return c::onClick(item.action,
+  return SKIFF_NAMED(text_menu_row, c::onClick(item.action,
       c::row(c::hbox(12.0f, {.fillX = true, .height = item.separate ? 39.0f : 33.0f,
                             .padding = {item.separate ? 6.0f : 0.0f, 17.0f, 0.0f, 17.0f},
                             .hoverBackground = colours.chosen, .disabled = !item.enabled}),
@@ -61,16 +63,16 @@ inline auto text_menu_row(const palette& colours, const text_menu_item& item) {
                        nodes::Text(item.label, 13.0f, item.enabled ? colours.text : colours.dim)),
              c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(item.shortcut, 12.0f, colours.dim)),
              c::visible(item.separate, c::styled({.place = scene::anchor::kTopLeft, .fillX = true, .height = 1.0f},
-                                                nodes::Box<>(colours.band)))), item.label);
+                                                nodes::Box<>(colours.band)))), item.label));
 }
 inline auto make_text_menu(const palette& colours, const std::vector<text_menu_item>& items) {
   auto rows = skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       items | std::views::transform([&](const auto& item) { return text_menu_row(colours, item); }) | std::ranges::to<std::vector>());
-  return skiff::compose::styled(
+  return SKIFF_NAMED(make_text_menu, skiff::compose::styled(
       {.width = 260.0f, .height = text_menu_height(items), .padding = {6.0f, 0.0f, 6.0f, 0.0f},
        .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
        .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}, .masking = true},
-      nodes::ScrollContainer<decltype(rows)>(std::move(rows)));
+      nodes::ScrollContainer<decltype(rows)>(std::move(rows))));
 }
 inline std::vector<text_menu_item> field_menu_items(const scene::text_menu::of_field& field, bool formatting) {
   const bool selected = field.selection && !field.masked;
@@ -141,9 +143,9 @@ inline text_menu_facts text_menu_at(std::vector<text_menu_item> items, std::opti
 // The menu, where its facts put it.
 inline auto text_menu_layer(const ui_needs& n, const text_menu_facts& facts) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(0.0f, {.fill = true}),
+  return SKIFF_NAMED(text_menu_layer, c::column(c::vbox(0.0f, {.fill = true}),
                    c::styled({.place = scene::anchor::kTopLeft, .x = facts.x, .y = facts.y, .width = facts.width, .height = facts.height},
-                             make_text_menu(*n.colours, facts.items)));
+                             make_text_menu(*n.colours, facts.items))));
 }
 
 // ---- the window -------------------------------------------------------------------
@@ -155,9 +157,9 @@ struct behind_shown {
   friend bool operator==(const behind_shown&, const behind_shown&) = default;
 };
 inline auto behind_of(const ui_needs& n) {
-  return skiff::compose::applied<behind_shown>([](const behind_shown& now) { return now.wallpaper; },
+  return SKIFF_NAMED(behind_of, skiff::compose::applied<behind_shown>([](const behind_shown& now) { return now.wallpaper; },
       [at = &n](wallpaper_t& wall, const config::wallpaper_t& chosen) { show_wallpaper_on(wall, chosen, *at->colours, *at->looks); },
-      wallpaper_t{});
+      wallpaper_t{}));
 }
 using behind_t = decltype(behind_of(std::declval<const ui_needs&>()));
 
@@ -655,7 +657,7 @@ template <class Facts>
 using tool_content_t = decltype(dialog_content(std::declval<const ui_needs&>(), std::declval<const Facts&>()));
 template <class... Facts>
 auto tool_dialogs(const ui_needs& n, type_list<Facts...>) {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fill = true}), shown_made<tool_content_t<Facts>, Facts>(n)...);
+  return SKIFF_NAMED(tool_dialogs, skiff::compose::column(skiff::compose::vbox(0.0f, {.fill = true}), shown_made<tool_content_t<Facts>, Facts>(n)...));
 }
 // The plugins' layers, each its node from its extend(), over everything: a
 // call's card -- on a phone the whole window, as Element's phone apps.
@@ -693,7 +695,7 @@ inline auto window_body(const ui_needs& n) {
   // The files to send: as wide as 440 at most, as high as they are.
   auto sending = shown_made<send_box_t, send_facts>(n);
   sending.setWidthFittingContent(440.0f);
-  return c::column(c::vbox(0.0f, {.fill = true}),
+  return SKIFF_NAMED(window_body, c::column(c::vbox(0.0f, {.fill = true}),
       c::frozen_under(c::vbox(0.0f, {.fill = true}),
       c::column(c::vbox(0.0f, everywhere), c::styled(everywhere, nodes::Box<>(n.colours->background)), std::move(behind), std::move(frame)),
       c::column(c::vbox(0.0f, everywhere),
@@ -728,7 +730,7 @@ inline auto window_body(const ui_needs& n) {
           layer_made_by<menu_facts, make_menu>(n),
           layer_made_by<viewer_facts, make_viewer>(n),
           c::tapped_off(sends<request::close_text_menu>{}, layer_made_by<text_menu_facts, make_text_menu_layer>(n)),
-          plugin_layers<layer_plugins>::made(n)));
+          plugin_layers<layer_plugins>::made(n))));
 }
 using window_body_t = decltype(window_body(std::declval<const ui_needs&>()));
 
@@ -761,12 +763,12 @@ struct pressed_where {
 // look changed so much (a theme: what is made takes its colours then).
 inline auto window_view(const ui_needs& n) {
   namespace c = skiff::compose;
-  return c::keys_for<overlay_shown, scene::phase::capture>([](const overlay_shown& now) { return now; }, escape_key{},
+  return SKIFF_NAMED(window_view, c::keys_for<overlay_shown, scene::phase::capture>([](const overlay_shown& now) { return now; }, escape_key{},
       c::onKeys(copy_key{},
           c::onCapture<window_answer>(pressed_where{},
               c::projected<window_made>([](const window_made& now) { return std::optional(now.count); },
                   c::mount_now<window_body_t, std::uint64_t>([at = &n](std::uint64_t) { return std::tuple{window_body(*at)}; }, std::uint64_t{0},
-                                                             {.fill = true})))));
+                                                             {.fill = true}))))));
 }
 using window = decltype(window_view(std::declval<const ui_needs&>()));
 

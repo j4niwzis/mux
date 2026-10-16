@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:storage -- Settings: storage and files.
+module;
+#include "skiff/named.h"
 export module mux.ui:storage;
 
 import std;
@@ -30,7 +32,7 @@ export namespace mux::ui {
 // model, and what the model holds is what shows.
 template <auto Setting, class T = bool>
 auto setting_switch(const palette& colours, std::string text) {
-  return skiff::compose::row(
+  return SKIFF_NAMED(setting_switch, skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true,
                                    .height = kRowHeight,
                                    .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
@@ -39,7 +41,7 @@ auto setting_switch(const palette& colours, std::string text) {
           elided(nodes::Text(std::move(text), 15.0f, colours.text))),
       skiff::compose::bound<skiff::model::Field<Setting>>(
           skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                 widgets::ToggleField<T>(colours.widgets))));
+                                 widgets::ToggleField<T>(colours.widgets)))));
 }
 inline nodes::Text spaced_title(const palette& colours, std::string text) {
   return skiff::compose::styled({.margin = {10.0f, 0.0f, 4.0f, 20.0f}},
@@ -76,7 +78,7 @@ template <class Which> struct limit_words {
 };
 template <class Which>
 auto limit_stepper(const palette& colours, std::string what, std::string_view unit) {
-  return skiff::compose::row(
+  return SKIFF_NAMED(limit_stepper, skiff::compose::row(
       skiff::compose::hbox(6.0f, {.fillX = true, .height = 50.0f, .padding = {0.0f, 12.0f, 0.0f, 20.0f}}),
       skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                              elided(nodes::Text(std::move(what), 15.0f, colours.text))),
@@ -85,7 +87,7 @@ auto limit_stepper(const palette& colours, std::string what, std::string_view un
       skiff::compose::bound<config::cache_limits>(skiff::compose::styled({.alignSelf = scene::align::kMiddle},
           icon_button(colours, icon::minus{}, limit_press<Which>{false}))),
       skiff::compose::bound<config::cache_limits>(skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-          icon_button(colours, icon::plus{}, limit_press<Which>{true}))));
+          icon_button(colours, icon::plus{}, limit_press<Which>{true})))));
 }
 
 // Settings' Storage page: whether what mux keeps on disk is sealed; how
@@ -97,7 +99,7 @@ auto limit_stepper(const palette& colours, std::string what, std::string_view un
 struct local_seal { bool on = false; };
 inline auto seal_settings_view(const palette& colours) {
   using field = skiff::model::Field<&local_seal::on>;
-  return skiff::compose::column(
+  return SKIFF_NAMED(seal_settings_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::row(skiff::compose::hbox(16.0f, {.fillX = true, .height = kRowHeight,
           .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
@@ -107,13 +109,13 @@ inline auto seal_settings_view(const palette& colours) {
               skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::ToggleField<bool>(colours.widgets)),
               "Encrypt local data"))),
       skiff::compose::shown_if<field>([](bool on) { return on; },
-          settings_link(colours, "Change the passphrase", icon::pencil{}, request::change_passphrase{})));
+          settings_link(colours, "Change the passphrase", icon::pencil{}, request::change_passphrase{}))));
 }
 inline auto storage_settings_view(const palette& colours) {
     namespace limit = config::limit;
     using skiff::compose::bound;
     auto clear = settings_link(colours, "Clear stored messages and pictures", icon::close{}, request::clear_stored{});
-    return skiff::compose::column(
+    return SKIFF_NAMED(storage_settings_view, skiff::compose::column(
         skiff::compose::vbox(0.0f, {.fillX = true,
                                     .autoSize = scene::axes::kY,
                                     .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
@@ -161,13 +163,13 @@ inline auto storage_settings_view(const palette& colours) {
                              "the rest and up to their own size, the "
                              "oldest going first past it. Shown, one stays "
                              "where it was, with all it said and its "
-                             "time, marked removed."));
+                             "time, marked removed.")));
   }
 inline auto storage_page(const palette& colours) {
-  return skiff::compose::column(
+  return SKIFF_NAMED(storage_page, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Storage", {}, {}, true, true),
-      storage_settings_view(colours));
+      storage_settings_view(colours)));
 }
 using storage_page_t = decltype(storage_page(std::declval<const palette&>()));
 
@@ -176,7 +178,7 @@ inline auto notification_settings_view(const palette& colours) {
   auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(
       skiff::compose::styled({.margin = {4.0f, 20.0f, 4.0f, 20.0f}}, themed_tabs<config::notify_backend_t>(colours, 
           {{"System", config::notify_backend::native{}}, {"Built in", config::notify_backend::built_in{}}})));
-  return skiff::compose::column(
+  return SKIFF_NAMED(notification_settings_view, skiff::compose::column(
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), spaced_title(colours, "NOTIFICATIONS"),
       setting_switch<&every::desktop>(colours, "Notifications"),
       setting_switch<&every::mentions_only, std::optional<bool>>(colours, "Only mentions and keywords"),
@@ -192,14 +194,14 @@ inline auto notification_settings_view(const palette& colours) {
       setting_switch<&every::unified_push, std::optional<bool>>(colours, "Wake by UnifiedPush"),
       spaced_note(colours, "Your Matrix servers push to the UnifiedPush distributor on this device (ntfy, NextPush, "
                            "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
-                           "of messages while it runs."));
+                           "of messages while it runs.")));
 }
 inline auto notifications_page(const palette& colours) {
   using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
-  return skiff::compose::column(
+  return SKIFF_NAMED(notifications_page, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Notifications", {}, {}, true, true)),
-      notification_settings_view(colours));
+      notification_settings_view(colours)));
 }
 using notifications_page_t = decltype(notifications_page(std::declval<const palette&>()));
 
@@ -207,20 +209,20 @@ using notifications_page_t = decltype(notifications_page(std::declval<const pale
 // before it is sent.
 inline auto files_settings_view(const palette& colours) {
   using sending = config::sending_settings;
-  return skiff::compose::column(
+  return SKIFF_NAMED(files_settings_view, skiff::compose::column(
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       spaced_title(colours, "PICTURES DROPPED ON THE WINDOW"),
       setting_switch<&sending::strip_metadata>(colours, "Remove metadata"),
       setting_switch<&sending::rename>(colours, "Name them image.<type>"),
       spaced_note(colours, "Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
-                           "It is cut out of the file; the picture itself is sent as it is, not compressed again."));
+                           "It is cut out of the file; the picture itself is sent as it is, not compressed again.")));
 }
 inline auto files_page(const palette& colours) {
   using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
-  return skiff::compose::column(
+  return SKIFF_NAMED(files_page, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Files", {}, {}, true, true)),
-      files_settings_view(colours));
+      files_settings_view(colours)));
 }
 using files_page_t = decltype(files_page(std::declval<const palette&>()));
 

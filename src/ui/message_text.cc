@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message_text -- A message's text as shown: its mentions and quotes, its code, its forward line and readers.
+module;
+#include "skiff/named.h"
 export module mux.ui.messages:message_text;
 
 import std;
@@ -425,7 +427,7 @@ inline auto code_block(const palette& colours, std::string code, std::string lan
   // As wide as its code (and its head), within the bubble: filling a bubble
   // that takes its width from what it holds, neither said a width, and a
   // short block was squeezed to a few letters a line.
-  return c::column(c::vbox(4.0f, {.autoSize = scene::axes::kBoth, .minWidth = 120.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f},
+  return SKIFF_NAMED(code_block, c::column(c::vbox(4.0f, {.autoSize = scene::axes::kBoth, .minWidth = 120.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f},
                                   .padding = {6.0f, 8.0f, 6.0f, 12.0f}, .cornerRadius = 5.0f,
                                   .background = (colour & 0x00FFFFFFu) | (0x1Fu << 24), .masking = true}),
       c::styled({.place = scene::anchor::kTopLeft, .x = -12.0f, .y = -6.0f, .fillY = true, .width = 3.0f}, nodes::Box<>(colour)),
@@ -434,7 +436,7 @@ inline auto code_block(const palette& colours, std::string code, std::string lan
                        elided(nodes::Text(language.empty() ? std::string("Code") : std::move(language), 12.0f, colour, true))),
              // Copy: the block's code, as it is, onto the clipboard.
              c::onClick(request::copy_text{code}, nodes::Text("Copy", 12.0f, colour, true), "Copy code")),
-      std::move(body));
+      std::move(body)));
 }
 using code_block_t = decltype(code_block(std::declval<const palette&>(), std::string(), std::string(), skia::SkColor{}, skia::SkColor{}));
 // A message's text split around code blocks and positioned link cards.
@@ -510,9 +512,9 @@ inline auto code_piece(const palette& colours, const text_piece& code, const tex
   after.setLinks(words.links, colours.accent);
   after.setStyles(words.styles, quote);
   after.setShrinksToLines(true);
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(code_piece, skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
       code_block(colours, code.text, code.language, colour, text),
-      skiff::compose::visible(!words.text.empty(), std::move(after)));
+      skiff::compose::visible(!words.text.empty(), std::move(after))));
 }
 using code_piece_t = decltype(code_piece(std::declval<const palette&>(), std::declval<const text_piece&>(),
     std::declval<const text_piece&>(), skia::SkColor{}, skia::SkColor{}, skia::SkColor{}));
@@ -534,9 +536,9 @@ inline auto link_piece(const palette& colours, const mentioned_card& card, const
   after.setLinks(words.links, colours.accent);
   after.setStyles(words.styles, quote);
   after.setShrinksToLines(true);
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(link_piece, skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
       link_card_marked(card_of(colours, card.url, card.where, now), linked_card{card.url}),
-      skiff::compose::visible(!words.text.empty(), std::move(after)));
+      skiff::compose::visible(!words.text.empty(), std::move(after))));
 }
 using link_piece_t = decltype(link_piece(std::declval<const palette&>(), std::declval<const mentioned_card&>(),
     std::declval<const text_piece&>(), nullptr, skia::SkColor{}));
@@ -573,8 +575,8 @@ inline auto piece_text(const palette& colours, const text_piece& words, skia::Sk
   return node;
 }
 template <class Node> auto disclosure_row(Node node, const std::vector<std::size_t>& ancestors) {
-  return skiff::compose::shown_for<disclosure_state>(disclosure_visible{ancestors},
-      skiff::compose::styled({.margin = {2.0f, 0.0f, 2.0f, 12.0f * static_cast<float>(ancestors.size())}}, std::move(node)));
+  return SKIFF_NAMED(disclosure_row, skiff::compose::shown_for<disclosure_state>(disclosure_visible{ancestors},
+      skiff::compose::styled({.margin = {2.0f, 0.0f, 2.0f, 12.0f * static_cast<float>(ancestors.size())}}, std::move(node))));
 }
 inline auto disclosure_header(const palette& colours, const text_piece& summary, std::size_t index,
                               const std::vector<std::size_t>& ancestors, skia::SkColor quote) {
@@ -669,10 +671,10 @@ inline auto disclosure_piece(const palette& colours, const mentioned& shown,
       for (std::size_t earlier = 0; earlier < i; ++earlier)
         if (initial.open[earlier] && shown.disclosures[earlier].group == shown.disclosures[i].group)
           initial.open[i] = false;
-  return c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(disclosure_piece, c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
       c::local<disclosure_state>(disclosure_events{shown.disclosures},
           c::many(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(rows)), std::move(initial)),
-      c::visible(!after.text.empty(), piece_text(colours, after, colours.text, quote)));
+      c::visible(!after.text.empty(), piece_text(colours, after, colours.text, quote))));
 }
 using disclosure_piece_t = decltype(disclosure_piece(std::declval<const palette&>(),
     std::declval<const mentioned&>(), std::declval<const text_piece&>(), nullptr, skia::SkColor{}));
@@ -720,9 +722,9 @@ auto forward_line(const palette& colours, std::string who, std::vector<nodes::Te
   name.setBold(true);
   name.setShrinksToLines(true);
   name.setLinks(std::move(links), colours.accent);
-  return c::row(c::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(forward_line, c::row(c::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
                 c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Forwarded from", 13.0f, colour, true)),
-                c::onPress(open_person{std::move(person)}, c::styled({.alignSelf = scene::align::kMiddle}, std::move(name)), "Open the sender"));
+                c::onPress(open_person{std::move(person)}, c::styled({.alignSelf = scene::align::kMiddle}, std::move(name)), "Open the sender")));
 }
 using forward_line_t = decltype(forward_line(std::declval<const palette&>(), std::string(), {}, skia::SkColor{}));
 
@@ -732,7 +734,7 @@ inline constexpr float kReaderFace = 14.0f;  // Element's read receipt avatar
 inline constexpr std::size_t kReadersShown = 3;
 auto readers_row(const palette& colours, const conversation& in, const std::vector<std::string>& users) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(readers_row, c::row(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),
       c::many(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),
               users | std::views::take(kReadersShown) | std::views::transform([&](const std::string& user) {
                 return avatar_mark(avatar_of::person{}, user, sender_name(in, user), kReaderFace);
@@ -740,7 +742,7 @@ auto readers_row(const palette& colours, const conversation& in, const std::vect
       c::styled({.alignSelf = scene::align::kMiddle},
                 c::visible(users.size() > kReadersShown,
                            nodes::Text(users.size() > kReadersShown ? std::format("+{}", users.size() - kReadersShown) : std::string(),
-                                       10.0f, colours.dim))));
+                                       10.0f, colours.dim)))));
 }
 using readers_row_t = decltype(readers_row(std::declval<const palette&>(), std::declval<const conversation&>(), {}));
 

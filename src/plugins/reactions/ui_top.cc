@@ -2,6 +2,8 @@
 // mux.plugin.reactions.ui_top -- Who reacted to a message, listed as the
 // events they are: a bubble each, from the window's own messages -- above
 // them (mux.ui.messages), under the window that shows it as a dialog.
+module;
+#include "skiff/named.h"
 export module mux.plugin.reactions.ui_top;
 
 import std;
@@ -52,10 +54,10 @@ inline auto reaction_event_row(const ui_needs& n, const conversation& in, const 
   // Its menu its row's own: what is not held under an id of its own offers
   // nothing that would be aimed at it.
   auto bubble = message_alone(n, in, reaction_message_of(in, one), first, last, known);
-  return c::onClick(std::tuple{one.event.empty() ? std::optional<request::reply_to>{}
+  return SKIFF_NAMED(reaction_event_row, c::onClick(std::tuple{one.event.empty() ? std::optional<request::reply_to>{}
         : std::optional(request::reply_to{one.event, std::format("{} reacted {}", one.name, one.key)}), request::close_shown<shown>{}},
       c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
-          .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .hoverBackground = n.colours->chosen}), std::move(bubble)), "Reply to reaction");
+          .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .hoverBackground = n.colours->chosen}), std::move(bubble)), "Reply to reaction"));
 }
 inline auto panel(const ui_needs& n, const shown& facts) {
   namespace c = skiff::compose;
@@ -64,9 +66,9 @@ inline auto panel(const ui_needs& n, const shown& facts) {
   auto rows = std::views::iota(std::size_t{0}, entries.size()) | std::views::transform([&](std::size_t i) { return reaction_event_row(n, chat, entries[i],
           i == 0 || entries[i - 1].who != entries[i].who,
           i + 1 == entries.size() || entries[i + 1].who != entries[i].who, facts.now); }) | std::ranges::to<std::vector>();
-  return c::column(list_dialog(420.0f),
+  return SKIFF_NAMED(panel, c::column(list_dialog(420.0f),
       page_header<sends<back>, sends<request::close_shown<shown>>>(*n.colours, "Reactions", {}, {}, facts.back, true),
-      dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
+      dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))));
 }
 using box = decltype(panel(std::declval<const ui_needs&>(), std::declval<const shown&>()));
 inline auto make_content(const ui_needs& n, const shown& facts) {

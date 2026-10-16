@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:context_menu -- A message's menu.
+module;
+#include "skiff/named.h"
 export module mux.ui:context_menu;
 
 import std;
@@ -68,23 +70,23 @@ inline auto seen_row(const palette& colours, const std::vector<seen_reader>& rea
   const std::string said = readers.empty() ? std::string("Nobody Viewed")
                            : readers.size() == 1 ? readers.front().name
                                                  : std::to_string(readers.size()) + " Seen";
-  return c::hovering(seen_row_says{},
+  return SKIFF_NAMED(seen_row, c::hovering(seen_row_says{},
       c::row(c::hbox(0.0f, {.fillX = true, .height = kSeenHeight,
                             .padding = {9.0f, kSeenRight + (shown ? faces_width + 8.0f : 0.0f), 7.0f, 44.0f}, .hoverBackground = colours.chosen}),
              c::styled({.place = scene::anchor::kCentreLeft, .x = 15.0f - 44.0f}, icon_mark(colours, icon::check{})),
              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(said, 13.0f, colours.text))),
-             c::many(c::hbox(), std::move(faces))));
+             c::many(c::hbox(), std::move(faces)))));
 }
 // A reader in the list: pressed, the menu closed and their card opened.
 inline auto reader_row(const palette& colours, const seen_reader& one) {
   namespace c = skiff::compose;
-  return c::onClick(std::tuple{request::close_menu{}, request::open_member_info{one.id}},
+  return SKIFF_NAMED(reader_row, c::onClick(std::tuple{request::close_menu{}, request::open_member_info{one.id}},
       c::row(c::hbox(14.0f, {.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = colours.chosen}),
              avatar_mark(avatar_of::person{}, one.id, one.name, 30.0f),
              c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
                        elided(nodes::Text(one.name, 13.0f, colours.text)),
                        elided(nodes::Text(one.at ? clock_of(*one.at) : std::string("seen"), 12.0f, colours.dim)))),
-      one.name);
+      one.name));
 }
 // The readers, scrolling where there are more than fit: at most about
 // seven rows tall.
@@ -92,12 +94,12 @@ inline constexpr float kSeenRow = 44.0f, kSeenMostTall = 320.0f, kSeenListWidth 
 inline auto seen_list(const palette& colours, const std::vector<seen_reader>& readers) {
   namespace c = skiff::compose;
   const float tall = std::min(kSeenMostTall, kSeenRow * static_cast<float>(readers.size()) + 10.0f);
-  return c::hovering(seen_list_says{},
+  return SKIFF_NAMED(seen_list, c::hovering(seen_list_says{},
       c::column(c::vbox(0.0f, {.width = kSeenListWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f}, .cornerRadius = 10.0f,
                                .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .masking = true}),
                 c::styled({.fill = true},
                           nodes::ScrollContainer(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                              readers | std::views::transform([&](const seen_reader& one) { return reader_row(colours, one); }) | std::ranges::to<std::vector>())))));
+                              readers | std::views::transform([&](const seen_reader& one) { return reader_row(colours, one); }) | std::ranges::to<std::vector>()))))));
 }
 
 inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, const std::optional<emote>& emoji) {
@@ -234,7 +236,7 @@ inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts
       item(facts.deletable, "Delete", sends<request::menu_delete>{}, icon::close{}),
       c::styled({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band)),
       seen_row(colours, facts.seen));
-  return c::onClick(scene::Taken{},
+  return SKIFF_NAMED(menu_card, c::onClick(scene::Taken{},
           c::focused_by<keys_asked>(keys_on<keys::menu>{},
           c::moves_focus([](const scene::key::down& press) {
                            return press.key == scene::keys::kEscape ? std::optional(request::close_menu{}) : std::nullopt;
@@ -253,7 +255,7 @@ inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts
                             c::spec_for<contract::message_menu_state>([](const contract::message_menu_state& now) {
                               return scene::Spec{.alpha = now.unrolled ? 0.0f : 1.0f, .disabled = now.unrolled != 0};
                             }, std::move(items)),
-                            menu_tops_t::overs(colours, kept)))))));
+                            menu_tops_t::overs(colours, kept))))))));
 }
 // The menu over the whole window: its card at the pointer, the readers'
 // list beside its row while pointed at; a press off them closes it.
@@ -262,7 +264,7 @@ inline auto context_menu(const ui_needs& n, const menu_facts& facts) {
   const palette& colours = *n.colours;
   const skiff::compose::PopAt at{.from = skia::SkRect::MakeXYWH(facts.x, facts.y, 0.0f, 0.0f)};
   const bool readers = !facts.seen.empty();
-  return c::local<contract::message_menu_state>(menu_events{},
+  return SKIFF_NAMED(context_menu, c::local<contract::message_menu_state>(menu_events{},
       c::onClick(request::close_menu{},
           c::column(c::vbox(0.0f, {.fill = true}),
               c::popped_at<contract::message_menu_state>([at](const contract::message_menu_state&) { return std::optional(at); }, 8.0f,
@@ -272,7 +274,7 @@ inline auto context_menu(const ui_needs& n, const menu_facts& facts) {
                   return std::nullopt;
                 return skiff::compose::PopAt{.from = skia::SkRect::MakeLTRB(now.seen_left, now.seen_top, now.seen_right, now.seen_bottom),
                                              .beside = true, .overlap = 6.0f};
-              }, 8.0f, seen_list(colours, facts.seen)))));
+              }, 8.0f, seen_list(colours, facts.seen))))));
 }
 using context_menu_t = decltype(context_menu(std::declval<const ui_needs&>(), std::declval<const menu_facts&>()));
 

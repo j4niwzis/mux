@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:conversations_screen -- The conversations screen: the list, the chat, its info.
+module;
+#include "skiff/named.h"
 export module mux.ui:conversations_screen;
 
 import std;
@@ -71,10 +73,10 @@ template <class Pick, class Face>
 auto suggestion_row(const palette& colours, Pick pick, Face face, std::string first, std::string second) {
   namespace c = skiff::compose;
   auto label = first;
-  return c::onPress(std::move(pick), c::row(
+  return SKIFF_NAMED(suggestion_row, c::onPress(std::move(pick), c::row(
       c::hbox(10.0f, {.fillX = true, .height = 44.0f, .padding = {0.0f, 14.0f, 0.0f, 14.0f},
                      .hoverBackground = colours.chosen, .selectedBackground = colours.chosen}),
-      std::move(face), two_lines(colours, std::move(first), std::move(second), 14.0f, 1.0f)), std::move(label));
+      std::move(face), two_lines(colours, std::move(first), std::move(second), 14.0f, 1.0f)), std::move(label)));
 }
 // One of the list over the composer, as the program has it: a member (their
 // avatar, their name, their id) or an emoji (its picture or character, its
@@ -108,34 +110,34 @@ using suggestion_face = spl::variant<nodes::Text, nodes::Image<from_emotes>, ava
 // most, the lit one marked; pressed, picked. As the program says.
 inline auto suggestions_for(const palette& colours) {
   namespace c = skiff::compose;
-  return c::shown_for<suggestions_shown>([](const suggestions_shown& now) { return !now.items.empty(); },
+  return SKIFF_NAMED(suggestions_for, c::shown_for<suggestions_shown>([](const suggestions_shown& now) { return !now.items.empty(); },
       c::projected<suggestions_shown>([](const suggestions_shown& now) { return now.items; },
           c::listed<suggestion>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .background = colours.sidebar}),
               [&colours](const suggestion& one) {
                 auto row = suggestion_row(colours, sends<request::suggestion_pick>{{one.at}}, face_of(colours, one), one.title, one.sub);
                 row.apply({.selected = one.lit});
                 return row;
-              })));
+              }))));
 }
 using suggestions_t = decltype(suggestions_for(std::declval<const palette&>()));
 // No account at all: what to do about it.
 inline auto no_accounts_yet(const palette& colours) {
   using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
-  return skiff::compose::column(
+  return SKIFF_NAMED(no_accounts_yet, skiff::compose::column(
       skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {120.0f, 48.0f, 0.0f, 48.0f}}),
       nodes::Text("No accounts yet", 22.0f, colours.text, true),
       skiff::compose::styled({.fillX = true},
                              wrapped(nodes::Text("Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, colours.dim))),
-      skiff::compose::styled({.width = 140.0f, .height = 36.0f}, primary(add_button(colours.widgets, "Add account", {}))));
+      skiff::compose::styled({.width = 140.0f, .height = 36.0f}, primary(add_button(colours.widgets, "Add account", {})))));
 }
 // No chat chosen: the wallpaper, and in its middle a small pill saying what
 // to do, as tdesktop's (its service message look).
 inline auto select_a_chat() {
-  return skiff::compose::column(
+  return SKIFF_NAMED(select_a_chat, skiff::compose::column(
       skiff::compose::justified(skiff::compose::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), nodes::justify::middle{}),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle},
                              widgets::Pill("Select a chat to start messaging",
-                                           {.plate = skia::colorSetARGB(0x66, 0, 0, 0), .size = 13.0f, .height = 26.0f, .padX = 12.0f})));
+                                           {.plate = skia::colorSetARGB(0x66, 0, 0, 0), .size = 13.0f, .height = 26.0f, .padX = 12.0f}))));
 }
 
 // A node of the chat's protocol's own over the composer (a Telegram bot's
@@ -214,12 +216,12 @@ template <class Holder, class Make>
 auto protocol_view_for(const ui_needs& n) {
   namespace c = skiff::compose;
   using made_t = decltype(protocol_view_made<Holder, Make>(std::declval<const chosen_chat_key&>()));
-  return c::bound<chat_shown>(c::with_model<chats_model, chat_shown>(
+  return SKIFF_NAMED(protocol_view_for, c::bound<chat_shown>(c::with_model<chats_model, chat_shown>(
       [shared = n.shared](const chats_model& chats, const chat_shown& now) {
         return now.chosen ? std::optional(chosen_chat_key{*now.chosen, chats.revision(), &chats, shared}) : std::nullopt;
       },
       c::mount<made_t, chosen_chat_key>([](const chosen_chat_key& key) { return std::tuple{protocol_view_made<Holder, Make>(key)}; },
-                                        {.fillX = true, .autoSize = scene::axes::kY})));
+                                        {.fillX = true, .autoSize = scene::axes::kY}))));
 }
 
 // What plugins put in the chat's column under its head
@@ -251,7 +253,7 @@ inline auto chat_column(const ui_needs& n) {
   namespace c = skiff::compose;
   const auto open = [](const chat_shown& now) { return now.chosen.has_value(); };
   // On a phone's window, standing over the panel docked under its field.
-  return c::spec_for<screen_shown>([](const screen_shown& now) { return scene::Spec{.padding = {0.0f, 0.0f, now.docked, 0.0f}}; },
+  return SKIFF_NAMED(chat_column, c::spec_for<screen_shown>([](const screen_shown& now) { return scene::Spec{.padding = {0.0f, 0.0f, now.docked, 0.0f}}; },
       c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX,
                                   .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat}),
       chat_header_for(*n.colours),
@@ -267,7 +269,7 @@ inline auto chat_column(const ui_needs& n) {
       protocol_view_for<composer_view_holder, make_composer_of>(n),
       c::shown_for<chat_shown>(open, composer_bar<>(n)),
       c::shown_for<chats_shown>([](const chats_shown& now) { return now.none; }, no_accounts_yet(*n.colours)),
-      c::shown_for<chats_shown>([](const chats_shown& now) { return !now.none && !now.chosen; }, select_a_chat())));
+      c::shown_for<chats_shown>([](const chats_shown& now) { return !now.none && !now.chosen; }, select_a_chat()))));
 }
 using chat_column_t = decltype(chat_column(std::declval<const ui_needs&>()));
 // Its parts, by where they are in it.
@@ -350,7 +352,7 @@ inline auto chats_screen(const ui_needs& n) {
   const palette& colours = *n.colours;
   const auto up = [](bool screen_shown::*flag) { return [flag](const screen_shown& now) { return now.*flag; }; };
   const scene::Spec edge{.fillY = true, .width = 7.0f, .margin = {0.0f, -3.0f, 0.0f, -3.0f}};
-  return c::keys_for<screen_shown, scene::phase::capture>([](const screen_shown& now) { return now; }, capture_keys{},
+  return SKIFF_NAMED(chats_screen, c::keys_for<screen_shown, scene::phase::capture>([](const screen_shown& now) { return now; }, capture_keys{},
       c::onKeys(screen_keys{},
           c::flicked(90.0f, screen_swiped{},
               c::slid_for<screen_shown>([](const screen_shown& now) { return c::Paned{now.single, static_cast<int>(now.pane.index())}; },
@@ -364,7 +366,7 @@ inline auto chats_screen(const ui_needs& n) {
                       c::shown_for<screen_shown>(up(&screen_shown::info_up),
                           c::spec_for<screen_shown>(beside_width, c::column(c::vbox(0.0f, {.fillY = true}), info_panel(n)))),
                       c::shown_for<screen_shown>(up(&screen_shown::threads_up),
-                          c::spec_for<screen_shown>(beside_width, c::column(c::vbox(0.0f, {.fillY = true}), threads_panel(n)))))))));
+                          c::spec_for<screen_shown>(beside_width, c::column(c::vbox(0.0f, {.fillY = true}), threads_panel(n))))))))));
 }
 using chats_screen_t = decltype(chats_screen(std::declval<const ui_needs&>()));
 }  // namespace mux::ui

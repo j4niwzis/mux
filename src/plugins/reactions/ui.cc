@@ -5,6 +5,8 @@
 // or the faces of up to three who chose it -- tinted where one's own is
 // among them; pressed, one reacts with it too. And who reacted, listed as
 // the events they are, from the message's menu.
+module;
+#include "skiff/named.h"
 export module mux.plugin.reactions.ui;
 
 import std;
@@ -58,14 +60,14 @@ inline auto reaction_chip(const palette& colours, const looks_shown& looks,
     frost->apply({.place = scene::anchor::kTopLeft, .fill = true, .cornerRadius = 13.0f});
     frost->setTint(tint);
   }
-  return c::onClick(request::react{std::move(message), std::move(key)}, c::column(
+  return SKIFF_NAMED(reaction_chip, c::onClick(request::react{std::move(message), std::move(key)}, c::column(
       c::vbox(0.0f, {.height = 26.0f, .autoSize = scene::axes::kX, .minWidth = 26.0f,
                     .cornerRadius = 13.0f, .background = frost ? skia::SkColor{0} : tint}),
       std::move(frost), c::row(c::hbox(4.0f, {.height = 26.0f, .autoSize = scene::axes::kX,
                         .padding = {0.0f, 9.0f, 0.0f, 9.0f}}),
         c::styled({.alignSelf = scene::align::kMiddle}, elided(std::move(label))),
         c::visible(faces, c::many(c::hbox(0.0f, {.height = 20.0f, .autoSize = scene::axes::kX,
-                                               .alignSelf = scene::align::kMiddle}), std::move(avatars))))));
+                                               .alignSelf = scene::align::kMiddle}), std::move(avatars)))))));
 }
 using reaction_chip_t = decltype(reaction_chip(std::declval<const palette&>(), std::declval<const looks_shown&>(),
     std::string{}, std::string{}, std::size_t{}, bool{}, std::declval<const std::vector<emote>&>()));
@@ -73,7 +75,7 @@ using reaction_row = nodes::Flow<std::vector<reaction_chip_t>>;
 inline auto reaction_row_of() {
   auto row = reaction_row({.direction = nodes::direction::horizontal{}, .spacingX = 4.0f, .spacingY = 4.0f}, {});
   row.apply({.autoSize = scene::axes::kBoth, .maxWidth = 430.0f, .margin = {4.0f, 0.0f, 2.0f, 0.0f}});
-  return row;
+  return SKIFF_NAMED(reaction_row_of, row);
 }
 inline auto& reaction_chips(reaction_row& row) { return std::get<0>(row.fChildren); }
 inline const auto& reaction_chips(const reaction_row& row) { return std::get<0>(row.fChildren); }
@@ -123,10 +125,10 @@ inline auto extend(contract::message_menu, type_tag<feature>, const palette& col
 inline auto quick_reaction(const palette& colours, std::string key) {
   namespace c = skiff::compose;
   const auto request = ::mux::ui::request::menu_react{key};
-  return c::onClick(request, c::column(c::justified(
+  return SKIFF_NAMED(quick_reaction, c::onClick(request, c::column(c::justified(
       c::vbox(0.0f, {.width = 36.0f, .height = 32.0f, .cornerRadius = 16.0f,
           .hoverBackground = colours.chosen}), nodes::justify::middle{}),
-      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(key), 22.0f, colours.text))));
+      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(key), 22.0f, colours.text)))));
 }
 inline auto quick_reactions(const palette& colours) {
   namespace c = skiff::compose;
@@ -134,12 +136,12 @@ inline auto quick_reactions(const palette& colours) {
   auto each = keys | std::views::transform([&](auto key) {
     return quick_reaction(colours, std::string(key));
   }) | std::ranges::to<std::vector>();
-  return c::row(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}}),
+  return SKIFF_NAMED(quick_reactions, c::row(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}}),
       c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(each)),
       // The arrow, put away once unrolled.
       c::shown_for<contract::message_menu_state>([](const contract::message_menu_state& now) { return now.unrolled == 0; },
           c::onClick(contract::menu_unroll<feature>{}, c::styled({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f,
-              .hoverBackground = colours.chosen}, nodes::Icon(shape_of(icon::down{}), colours.text)), "All emoji")));
+              .hoverBackground = colours.chosen}, nodes::Icon(shape_of(icon::down{}), colours.text)), "All emoji"))));
 }
 
 // What the menu's emoji do: react with it.

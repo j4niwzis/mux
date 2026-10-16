@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:header -- A chat's head, and finding in it.
+module;
+#include "skiff/named.h"
 export module mux.ui:header;
 
 import std;
@@ -46,10 +48,10 @@ struct connection_shown {
 template <class Want, class Said>
 auto connection_bar_for(const palette& colours, Said said) {
   namespace c = skiff::compose;
-  return c::shown_for<Want>([said](const Want& now) { return !std::invoke(said, now).empty(); },
+  return SKIFF_NAMED(connection_bar_for, c::shown_for<Want>([said](const Want& now) { return !std::invoke(said, now).empty(); },
       c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f},
                                .background = (colours.error & 0x00FFFFFFu) | (0x22u << 24)}),
-                c::text_for<Want>([said](const Want& now) { return std::string(std::invoke(said, now)); }, c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.text))))));
+                c::text_for<Want>([said](const Want& now) { return std::string(std::invoke(said, now)); }, c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.text)))))));
 }
 
 // Something not there yet, said in a box over the window.
@@ -66,7 +68,7 @@ struct notice_facts {
   return skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::move(text), size, colour, bold, true)));
 }
 inline auto notice_box(const palette& colours, const notice_facts& facts) {
-  return skiff::compose::column(
+  return SKIFF_NAMED(notice_box, skiff::compose::column(
       skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       notice_line(facts.heading, 17.0f, colours.text, true), notice_line(facts.text, 14.0f, colours.dim),
       skiff::compose::row(skiff::compose::hbox(8.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kEnd}),
@@ -74,7 +76,7 @@ inline auto notice_box(const palette& colours, const notice_facts& facts) {
               skiff::compose::styled({.width = 90.0f, .height = 34.0f},
                   widgets::SendButton<request::selection_delete_confirm>(colours.widgets, "Delete", {}))),
           skiff::compose::styled({.width = 90.0f, .height = 34.0f},
-              primary(widgets::SendButton<request::close_notice>(colours.widgets, facts.delete_selection ? "Cancel" : "OK", {})))));
+              primary(widgets::SendButton<request::close_notice>(colours.widgets, facts.delete_selection ? "Cancel" : "OK", {}))))));
 }
 using notice_box_t = decltype(notice_box(std::declval<const palette&>(), std::declval<const notice_facts&>()));
 inline dialog_look content_look(std::type_identity<notice_facts>) { return {.size = dialog_size::fitting{440.0f}}; }
@@ -159,7 +161,7 @@ template <class Button>
 // The box, made from the verification as it is now: made again as its
 // step moves on.
 inline auto verification_box_of(const palette& colours, const verification_view& view) {
-  return skiff::compose::column(
+  return SKIFF_NAMED(verification_box_of, skiff::compose::column(
       skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       notice_line("Verify " + view.user, 17.0f, colours.text, true), notice_line(verification_note(view), 14.0f, colours.dim),
       emoji_row(colours, view.step),
@@ -168,7 +170,7 @@ inline auto verification_box_of(const palette& colours, const verification_view&
           button_for<sends<request::verify_cancel_now>>(colours.widgets, step_asks(view.step) ? "Decline" : "Cancel", {})),
       verification_answer(step_compares(view.step), 160.0f, primary(button_for<sends<request::verify_match>>(colours.widgets, "They match", {}))),
       verification_answer(step_compares(view.step), 160.0f, button_for<sends<request::verify_mismatch>>(colours.widgets, "They don't match", {})),
-      verification_answer(step_over(view.step), 90.0f, primary(button_for<sends<request::close_verification>>(colours.widgets, "OK", {}))));
+      verification_answer(step_over(view.step), 90.0f, primary(button_for<sends<request::close_verification>>(colours.widgets, "OK", {})))));
 }
 using verification_box = decltype(verification_box_of(std::declval<const palette&>(), std::declval<const verification_view&>()));
 // The window's dialog of it: as wide as it fits, up to 440; not put away
@@ -268,7 +270,7 @@ inline auto chat_header_for(const palette& colours) {
   namespace c = skiff::compose;
   const auto chat = [](const chat_head_shown& now) { return now.key.has_value(); };
   const scene::Spec middle{.alignSelf = scene::align::kMiddle};
-  return c::shown_for<chat_head_shown>([](const chat_head_shown& now) { return now.key && !now.hidden; },
+  return SKIFF_NAMED(chat_header_for, c::shown_for<chat_head_shown>([](const chat_head_shown& now) { return now.key && !now.hidden; },
     c::column(c::vbox(0.0f, {.fillX = true, .height = kChatHeadHeight, .background = colours.sidebar}),
       c::onClick(request::head_pressed{},
           c::row(c::hbox(12.0f, {.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 16.0f, 0.0f, 22.0f}}),
@@ -288,7 +290,7 @@ inline auto chat_header_for(const palette& colours) {
               c::shown_for<chat_head_shown>(chat, chat_header_buttons::row_of(colours)),
               c::shown_for<chat_head_shown>(chat, c::styled(middle, icon_button(colours, icon::threads{}, sends<request::toggle_threads>{}))),
               c::shown_for<chat_head_shown>(chat, c::styled(middle, icon_button(colours, icon::info{}, sends<request::toggle_info>{}))))),
-      c::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))));
+      c::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)))));
 }
 using chat_header_t = decltype(chat_header_for(std::declval<const palette&>()));
 
@@ -315,7 +317,7 @@ inline constexpr float kPinnedHeight = 46.0f;
 inline auto pinned_bar_for(const palette& colours) {
   namespace c = skiff::compose;
   const auto pin = [](const pinned_shown& now) { return now.pin.value_or(pinned_view{}); };
-  return c::shown_for<pinned_shown>([](const pinned_shown& now) { return now.pin.has_value(); },
+  return SKIFF_NAMED(pinned_bar_for, c::shown_for<pinned_shown>([](const pinned_shown& now) { return now.pin.has_value(); },
       c::onClick(request::pinned_pressed{},
           c::row(c::hbox(10.0f, {.fillX = true, .height = kPinnedHeight, .padding = {6.0f, 16.0f, 7.0f, 18.0f},
                                  .background = colours.sidebar, .hoverBackground = colours.chosen}),
@@ -326,7 +328,7 @@ inline auto pinned_bar_for(const palette& colours) {
                            c::text_for<pinned_shown>([pin](const pinned_shown& now) { return pin(now).line; },
                                c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.dim))))),
                  c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))),
-          "Pinned message"));
+          "Pinned message")));
 }
 
 // What the chat's protocol says over its composer -- Matrix's warning that
@@ -340,7 +342,7 @@ struct banner_shown {
 };
 inline auto composer_banner_for(const palette& colours) {
   namespace c = skiff::compose;
-  return c::shown_for<banner_shown>([](const banner_shown& now) { return !now.text.empty(); },
+  return SKIFF_NAMED(composer_banner_for, c::shown_for<banner_shown>([](const banner_shown& now) { return !now.text.empty(); },
       c::spec_for<banner_shown>([&colours](const banner_shown& now) {
         return scene::Spec{.background = (tone_colour(colours, now.tone) & 0x00FFFFFFu) | (0x22u << 24)};
       },
@@ -353,7 +355,7 @@ inline auto composer_banner_for(const palette& colours) {
                                                .background = colours.accent, .hoverBackground = skiff::paint::lighten(colours.accent, 0.12f)}),
                                 c::text_for<banner_shown>([](const banner_shown& now) { return now.button; },
                                     c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 13.0f, colours.on_accent, true)))))),
-                 c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::close{}, sends<request::banner_close>{})))));
+                 c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::close{}, sends<request::banner_close>{}))))));
 }
 using composer_banner_t = decltype(composer_banner_for(std::declval<const palette&>()));
 
@@ -388,7 +390,7 @@ auto selection_bar(const ui_needs& n) {
                           nodes::Text("", 13.0f, colours.on_accent, true)))),
         accessible);
   };
-  return c::shown_if<selection_shown>(
+  return SKIFF_NAMED(selection_bar, c::shown_if<selection_shown>(
       [](const selection_shown& now) { return now.count > 0; },
       c::onKey(scene::keys::kEscape, ::mux::ui::request::selection_cancel{},
           c::row(c::hbox(8.0f, {.fillX = true, .height = kChatHeadHeight,
@@ -405,7 +407,7 @@ auto selection_bar(const ui_needs& n) {
                                        .focusBackground = colours.chosen}),
                       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Clear", 13.0f, colours.accent, true))),
                   "Clear message selection"),
-              c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)))));
+              c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))))));
 }
 using selection_bar_t = decltype(selection_bar(std::declval<const ui_needs&>()));
 
@@ -459,7 +461,7 @@ inline auto search_bar_for(const palette& colours) {
       return request::search_step{press.key == keys::kDown};
     return std::nullopt;
   };
-  return c::shown_for<search_found>([](const search_found& now) { return now.open; },
+  return SKIFF_NAMED(search_bar_for, c::shown_for<search_found>([](const search_found& now) { return now.open; },
       c::onKeys(keys,
           c::row(c::hbox(4.0f, {.fillX = true, .height = kChatHeadHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
                                 .background = colours.sidebar}),
@@ -474,7 +476,7 @@ inline auto search_bar_for(const palette& colours) {
                  c::styled(middle, icon_button(colours, icon::up{}, search_step{false})),
                  c::styled(middle, icon_button(colours, icon::down{}, search_step{true})),
                  c::styled(middle, icon_button(colours, icon::close{}, sends<request::close_search>{})),
-                 c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)))));
+                 c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))))));
 }
 using search_bar_t = decltype(search_bar_for(std::declval<const palette&>()));
 

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:proxies -- Settings: the home page, animations, proxies.
+module;
+#include "skiff/named.h"
 export module mux.ui:proxies;
 
 import std;
@@ -29,14 +31,14 @@ export namespace mux::ui {
 // sections, and each section a page of the same box.
 template <class Event>
 auto settings_link(const palette& colours, std::string label, icon_t icon, Event event) {
-  return skiff::compose::onClick(std::move(event), skiff::compose::row(
+  return SKIFF_NAMED(settings_link, skiff::compose::onClick(std::move(event), skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
                                   .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
       skiff::compose::styled({.width = 28.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon), colours.dim)),
-      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(label, 15.0f, colours.text)))), label);
+      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(label, 15.0f, colours.text)))), label));
 }
 inline auto settings_home(const palette& colours) {
-  return skiff::compose::column(
+  return SKIFF_NAMED(settings_home, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
           page_header<sends<request::close_settings>, sends<request::close_settings>>(colours, "Settings", {}, {}, false, true)),
@@ -49,26 +51,26 @@ inline auto settings_home(const palette& colours) {
       settings_link(colours, "Storage", icon::clip{}, request::settings_storage{}),
       settings_link(colours, "Files", icon::send{}, request::settings_files{}),
       settings_link(colours, "Proxies", icon::gear{}, request::settings_proxies{}),
-      settings_link(colours, "About", icon::eye{}, request::settings_about{}));
+      settings_link(colours, "About", icon::eye{}, request::settings_about{})));
 }
 using settings_home_t = decltype(settings_home(std::declval<const palette&>()));
 
 inline auto motion_settings_view(const palette& colours) {
   using field = skiff::model::Field<&config::look_settings::motion>;
-  return skiff::compose::column(
+  return SKIFF_NAMED(motion_settings_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       wrapped(skiff::compose::styled({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}},
           note_text(colours, "How much the window moves. Reduced keeps the small movements, such as a section unfolding, and shows panels at once."))),
       skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "Full", config::motion::full{})),
       skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "Reduced", config::motion::reduced{})),
-      skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "None", config::motion::none{})));
+      skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "None", config::motion::none{}))));
 }
 inline auto animations_page(const palette& colours) {
-  return skiff::compose::column(
+  return SKIFF_NAMED(animations_page, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
           page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Animations", {}, {}, true, true)),
-      motion_settings_view(colours));
+      motion_settings_view(colours)));
 }
 using animations_page_t = decltype(animations_page(std::declval<const palette&>()));
 
@@ -80,14 +82,14 @@ inline auto proxies_page(const palette& colours, const std::vector<config::proxy
         return settings_link(colours, std::format("{} ({} {}:{})", profile.name, config::label_of(profile.kind), profile.host, profile.port),
                              icon::dot{proxy_colour(profile.name)}, request::edit_proxy{static_cast<int>(index)});
       }) | std::ranges::to<std::vector>();
-  return skiff::compose::column(
+  return SKIFF_NAMED(proxies_page, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
           page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Proxies", {}, {}, with_back, true)),
       skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)),
       settings_link(colours, "Add proxy", icon::plus{}, request::add_proxy{}),
       skiff::compose::visible(profiles.empty(), wrapped(skiff::compose::styled({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}},
-          note_text(colours, "No proxies yet. Accounts connect directly.")))));
+          note_text(colours, "No proxies yet. Accounts connect directly."))))));
 }
 using proxies_page_t = decltype(proxies_page(std::declval<const palette&>(), std::declval<const std::vector<config::proxy_settings>&>(), true));
 
@@ -131,7 +133,7 @@ inline auto proxy_editor(const palette& colours, const std::optional<config::pro
   if (from) draft = {.index = index, .name = from->name, .kind = from->kind, .host = from->host,
       .port = std::to_string(from->port), .username = from->username.value_or(""),
       .password = from->password.value_or(""), .resolver = from->srv_resolver.value_or("")};
-  return skiff::compose::local<proxy_draft>(proxy_draft_events{}, skiff::compose::column(
+  return SKIFF_NAMED(proxy_editor, skiff::compose::local<proxy_draft>(proxy_draft_events{}, skiff::compose::column(
       skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_proxies>, sends<request::close_settings>>(colours,
           from ? from->name : "New proxy", {}, {}, true, true),
@@ -156,7 +158,7 @@ inline auto proxy_editor(const palette& colours, const std::optional<config::pro
           skiff::compose::visible(from.has_value(), skiff::compose::onClick(delete_proxy_draft{}, skiff::compose::column(
               skiff::compose::vbox(0.0f, {.width = 110.0f, .height = 34.0f, .cornerRadius = 6.0f,
                   .background = colours.tile, .hoverBackground = colours.chosen}),
-              nodes::Text("Delete", 14.0f, colours.text)), "Delete proxy")))), std::move(draft));
+              nodes::Text("Delete", 14.0f, colours.text)), "Delete proxy")))), std::move(draft)));
 }
 using proxy_editor_t = decltype(proxy_editor(std::declval<const palette&>(), std::nullopt, -1));
 

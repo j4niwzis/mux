@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:sending -- Files being sent.
+module;
+#include "skiff/named.h"
 export module mux.ui:sending;
 
 import std;
@@ -82,7 +84,7 @@ inline auto send_box(const ui_needs& n, const send_facts& facts) {
   auto files = all | std::views::filter(std::not_fn(&pending_file::image)) | std::views::transform([&](const pending_file& one) {
                  return file_row(colours, std::string(), one.name, one.size, false);
                }) | std::ranges::to<std::vector>();
-  return c::local<send_draft>(
+  return SKIFF_NAMED(send_box, c::local<send_draft>(
       c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {18.0f, 20.0f, 16.0f, 20.0f}}),
           nodes::Text(send_title_of(all), 17.0f, colours.text, true),
           c::styled({.fillX = true, .height = std::min(send_height_of(all), kMostSendPreviews)},
@@ -96,7 +98,7 @@ inline auto send_box(const ui_needs& n, const send_facts& facts) {
                            widgets::Button<sends<request::close_send_box>>(colours.widgets, "Cancel", {})),
                  c::asking_for<send_draft>([](const send_draft& draft) { return request::send_files{draft.caption}; },
                      c::styled({.width = 96.0f, .height = 36.0f},
-                               primary(widgets::Button<scene::NoAction>(colours.widgets, "Send", {})))))));
+                               primary(widgets::Button<scene::NoAction>(colours.widgets, "Send", {}))))))));
 }
 using send_box_t = decltype(send_box(std::declval<const ui_needs&>(), std::declval<const send_facts&>()));
 // Sized as it is opened, by the files it is opened with.

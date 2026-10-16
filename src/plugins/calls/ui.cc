@@ -5,6 +5,8 @@
 // else, and while it rings here, a card at the top of the window, as
 // Element's call toast -- Decline and Accept while it rings. A call ended
 // stays a moment, saying why.
+module;
+#include "skiff/named.h"
 export module mux.plugin.calls.ui;
 
 import std;
@@ -117,7 +119,7 @@ auto call_button(const palette& colours, float size, skia::SkColor plate, skia::
 inline auto call_buttons(const palette& colours, float size, const call_view& view) {
   const auto white = skia::colorSetARGB(255, 255, 255, 255);
   const bool ringing = rings_here(view), ended = has_ended(view);
-  return skiff::compose::keep_ticking(ended, skiff::compose::row(
+  return SKIFF_NAMED(call_buttons, skiff::compose::keep_ticking(ended, skiff::compose::row(
       skiff::compose::hbox(size / 2.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
       call_button(colours, size, colours.tile, colours.chosen, colours.text,
                   view.muted ? icon_t{icon::microphone_off{}} : icon_t{icon::microphone{}},
@@ -126,12 +128,12 @@ inline auto call_buttons(const palette& colours, float size, const call_view& vi
       call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, hang_up{}, !ringing && !ended, "Hang up"),
       call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, accept_call{}, ringing && view.available, "Accept"),
       call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, start_call{view.in}, ended && view.available, "Call back"),
-      call_button(colours, size, colours.tile, colours.chosen, colours.text, icon::close{}, dismiss_call{}, ended, "Dismiss")));
+      call_button(colours, size, colours.tile, colours.chosen, colours.text, icon::close{}, dismiss_call{}, ended, "Dismiss"))));
 }
 inline auto call_avatar(const call_view& view, float size) {
   auto avatar = widgets::Avatar<from_avatars>(initials_of(view.who), size, picture_of(view.in.id), gradient_of(view.in.id));
   round_avatar(avatar, size, avatar_of::chat{});
-  return skiff::compose::styled({.alignSelf = scene::align::kMiddle}, std::move(avatar));
+  return SKIFF_NAMED(call_avatar, skiff::compose::styled({.alignSelf = scene::align::kMiddle}, std::move(avatar)));
 }
 // How it is going, read as it goes: wrapped or cut short as where it is
 // shown asks -- said of the text itself, before it is read.
@@ -143,18 +145,18 @@ inline auto call_status(const palette& colours, const call_view& view, float siz
 }
 // The call in its chat, beneath the header.
 inline auto call_panel(const palette& colours, const call_view& view) {
-  return skiff::compose::column(
+  return SKIFF_NAMED(call_panel, skiff::compose::column(
       skiff::compose::justified(skiff::compose::vbox(10.0f,
           {.fillX = true, .height = 280.0f, .padding = {20.0f, 16.0f, 20.0f, 16.0f},
            .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f}}), nodes::justify::middle{}),
       call_avatar(view, 88.0f),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(view.who, 18.0f, colours.text, true)),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle, .margin = {0.0f, 0.0f, 8.0f, 0.0f}}, call_status(colours, view, 13.0f)),
-      call_buttons(colours, 52.0f, view));
+      call_buttons(colours, 52.0f, view)));
 }
 // On a phone the call fills the window and takes presses off its controls.
 inline auto call_screen(const palette& colours, const call_view& view) {
-  return skiff::compose::onClick(scene::Taken{}, skiff::compose::column(
+  return SKIFF_NAMED(call_screen, skiff::compose::onClick(scene::Taken{}, skiff::compose::column(
       skiff::compose::vbox(12.0f, {.place = scene::anchor::kTopLeft, .fill = true,
                                  .padding = {24.0f, 24.0f, 48.0f, 24.0f}, .background = colours.sidebar}),
       skiff::compose::styled({.fillX = true, .height = 1.0f, .grow = scene::axes::kY}, nodes::Box<>(skia::SkColor{0})),
@@ -162,11 +164,11 @@ inline auto call_screen(const palette& colours, const call_view& view) {
       skiff::compose::styled({.alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(view.who, 24.0f, colours.text, true))),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle}, call_status(colours, view, 15.0f, true)),
       skiff::compose::styled({.fillX = true, .height = 1.0f, .grow = scene::axes::kY}, nodes::Box<>(skia::SkColor{0})),
-      call_buttons(colours, 64.0f, view)));
+      call_buttons(colours, 64.0f, view))));
 }
 // A compact card above the conversation while the call rings elsewhere.
 inline auto call_bar(const palette& colours, const call_view& view) {
-  return skiff::compose::row(
+  return SKIFF_NAMED(call_bar, skiff::compose::row(
       skiff::compose::hbox(12.0f, {.place = scene::anchor::kTopRight, .x = 12.0f, .y = 12.0f,
                                   .width = 360.0f, .autoSize = scene::axes::kY,
                                   .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .cornerRadius = 12.0f,
@@ -177,7 +179,7 @@ inline auto call_bar(const palette& colours, const call_view& view) {
           skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
           skiff::compose::styled({.fillX = true}, elided(nodes::Text(view.who, 15.0f, colours.text, true))),
           skiff::compose::styled({.fillX = true}, call_status(colours, view, 13.0f, false, true))),
-      call_buttons(colours, 40.0f, view));
+      call_buttons(colours, 40.0f, view)));
 }
 namespace call_ui {
 struct panel {};
@@ -192,19 +194,21 @@ template <class Which, class View>
 [[nodiscard]] auto call_layer(const ui_needs& needs, Which which, View view,
                               scene::Spec spec, bool floats = false) {
   using Content = decltype(call_content(view, *needs.colours, call_view{}));
-  return skiff::compose::derived<call_shown>(which, skiff::compose::mount<Content, call_view>(
+  return SKIFF_NAMED(call_content, skiff::compose::derived<call_shown>(which, skiff::compose::mount<Content, call_view>(
       [colours = needs.colours, view](const call_view& facts) {
         return std::tuple{call_content(view, *colours, facts)};
-      }, spec, floats));
+      }, spec, floats)))};
+      }, spec, floats)))};
+      }, spec, floats)));
 }
 
 // Its layers, over the window: the card, where the call rings or is in
 // another chat; the whole window, on a phone.
 inline auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
+  return SKIFF_NAMED(extend, c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
       call_layer(needs, call_card_of{}, call_ui::card{}, {.fill = true}, true),
-      call_layer(needs, call_screen_of{}, call_ui::screen{}, {.fill = true}, true));
+      call_layer(needs, call_screen_of{}, call_ui::screen{}, {.fill = true}, true)));
 }
 // Its view in its chat, under the head.
 inline auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) {
@@ -213,11 +217,11 @@ inline auto extend(contract::chat_column, type_tag<feature>, const ui_needs& nee
 // Its button in the chat's head: shown where the chat shown can be called,
 // as its part keeps it (call_shown::callable).
 inline auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
-  return skiff::compose::shown_if<call_shown>([](const call_shown& now) { return now.callable; },
+  return SKIFF_NAMED(extend, skiff::compose::shown_if<call_shown>([](const call_shown& now) { return now.callable; },
       // Hidden until what is shown says otherwise: a head made anew is not
       // read before what is shown next moves.
       skiff::compose::visible(false, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                                           icon_button(colours, icon::phone{}, sends<call_chosen>{}))));
+                                                           icon_button(colours, icon::phone{}, sends<call_chosen>{})))));
 }
 
 } // namespace mux::plugins::calls

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:info_common -- What a chat's and a person's info are made of: tiles, member rows, id lines, a person's facts.
+module;
+#include "skiff/named.h"
 export module mux.ui:info_common;
 
 import std;
@@ -32,13 +34,13 @@ export namespace mux::ui {
 // One of the square buttons of a chat's info: its icon over its name.
 template <class Act>
 auto action_tile(const palette& colours, std::string text, icon_t icon, Act what = {}) {
-  return skiff::compose::onPress(std::move(what), skiff::compose::column(
+  return SKIFF_NAMED(action_tile, skiff::compose::onPress(std::move(what), skiff::compose::column(
       skiff::compose::justified(skiff::compose::vbox(0.0f, {.height = 58.0f,
           .padding = {6.0f, 0.0f, 8.0f, 0.0f}, .cornerRadius = 8.0f, .background = colours.tile,
           .hoverBackground = colours.chosen, .focusBackground = colours.chosen}), nodes::justify::space_between{}),
       skiff::compose::styled({.width = 28.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle},
           nodes::Icon(shape_of(icon), colours.text)),
-      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(text, 12.0f, colours.text))), text);
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(text, 12.0f, colours.text))), text));
 }
 template <class Act>
 using action_tile_t = decltype(action_tile(std::declval<const palette&>(), "", icon::none{}, std::declval<Act>()));
@@ -46,13 +48,13 @@ using action_tile_t = decltype(action_tile(std::declval<const palette&>(), "", i
 
 // An icon on its own, not to be pressed.
 inline auto icon_view(const palette& colours, icon_t mark) {
-  return skiff::compose::styled({.width = 28.0f, .height = 36.0f}, nodes::Icon(shape_of(mark), colours.dim));
+  return SKIFF_NAMED(icon_view, skiff::compose::styled({.width = 28.0f, .height = 36.0f}, nodes::Icon(shape_of(mark), colours.dim)));
 }
 using icon_view_t = decltype(icon_view(std::declval<const palette&>(), icon::none{}));
 // A band between sections: just darker than the panel.
 inline auto section_band(const palette& colours) {
-  return skiff::compose::styled({.fillX = true, .height = 6.0f, .margin = {6.0f, 0.0f, 6.0f, 0.0f}},
-                                nodes::Box<>(colours.section));
+  return SKIFF_NAMED(section_band, skiff::compose::styled({.fillX = true, .height = 6.0f, .margin = {6.0f, 0.0f, 6.0f, 0.0f}},
+                                nodes::Box<>(colours.section)));
 }
 
 // A chat's info, beside it, as Telegram Desktop shows it: a big avatar, the
@@ -75,7 +77,7 @@ inline auto id_line(const palette& colours, std::string text, std::string link, 
   namespace c = skiff::compose;
   const bool a_link = !link.empty();
   const std::string copied = a_link ? link : text;
-  return c::local<id_feedback>(id_copy_events{copied},
+  return SKIFF_NAMED(id_line, c::local<id_feedback>(id_copy_events{copied},
       c::onClick(copy_id_line{}, c::column(
           c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
               .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen,
@@ -83,7 +85,7 @@ inline auto id_line(const palette& colours, std::string text, std::string link, 
           wrapped(c::styled({.fillX = true}, nodes::Text(std::move(text), 14.0f, colours.accent, false, true))),
           c::text_for<id_feedback>([label, a_link](const id_feedback& now) {
               return !now.copied ? label : a_link ? label + " · link copied, with its servers" : label + " · copied";
-            }, wrapped(c::styled({.fillX = true}, nodes::Text(label, 13.0f, colours.accent))))), "Copy " + label));
+            }, wrapped(c::styled({.fillX = true}, nodes::Text(label, 13.0f, colours.accent))))), "Copy " + label)));
 }
 using id_line_t = decltype(id_line(std::declval<const palette&>(), "", ""));
 

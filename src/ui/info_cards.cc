@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:info_cards -- A person's card, and a room's not joined.
+module;
+#include "skiff/named.h"
 export module mux.ui:info_cards;
 
 import std;
@@ -38,10 +40,10 @@ struct person_shown {
   person_facts facts;
 };
 auto person_cover(const palette& colours, const std::string& key, const person_facts& facts) {
-  return skiff::compose::row(
+  return SKIFF_NAMED(person_cover, skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
       avatar_button(avatar_of::person{}, key, facts.name, 72.0f),
-      two_lines(colours, facts.name, facts.status, 17.0f, 6.0f, two_line_style{.selectable = true}));
+      two_lines(colours, facts.name, facts.status, 17.0f, 6.0f, two_line_style{.selectable = true})));
 }
 using person_cover_t = decltype(person_cover(std::declval<const palette&>(), "", std::declval<const person_facts&>()));
 
@@ -68,14 +70,14 @@ inline palette profile_text_colours(palette colours, bool banner) {
 }
 inline auto profile_cover_details(const palette& colours, const std::string& key, const person_facts& facts) {
   namespace c = skiff::compose;
-  return c::column(
+  return SKIFF_NAMED(profile_cover_details, c::column(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       person_cover(colours, key, facts),
       c::visible(!facts.profile.pronouns.empty(), c::styled(
           {.fillX = true, .margin = {0.0f, 22.0f, 8.0f, 22.0f}},
           wrapped(nodes::Text(profile_pronouns(facts.profile), 13.0f, colours.dim)))),
       c::visible(!facts.profile.biography.plain.empty() || facts.profile.biography.html.has_value(),
-          profile_biography(colours, facts.profile.biography)));
+          profile_biography(colours, facts.profile.biography))));
 }
 // The banner sits behind the name, pronouns and biography. Its background
 // ends at the section divider, leaving the account ID and actions plain.
@@ -84,11 +86,11 @@ inline auto profile_cover(const palette& colours, const std::string& key, const 
   const bool has_banner = facts.profile.banner.has_value();
   nodes::Image<from_moving_thumbnail> banner(from_moving_thumbnail{facts.profile.banner.value_or("")});
   banner.keepBox();
-  return c::column(
+  return SKIFF_NAMED(profile_cover, c::column(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::visible(has_banner, c::styled({.place = scene::anchor::kTopLeft, .fill = true}, std::move(banner))),
       c::visible(has_banner, c::styled({.place = scene::anchor::kTopLeft, .fill = true}, nodes::Box<>(skia::colorSetARGB(96, 0, 0, 0)))),
-      profile_cover_details(profile_text_colours(colours, has_banner), key, facts));
+      profile_cover_details(profile_text_colours(colours, has_banner), key, facts)));
 }
 using profile_cover_t = decltype(profile_cover(std::declval<const palette&>(), "", std::declval<const person_facts&>()));
 
@@ -195,7 +197,7 @@ inline auto person_card_details(const palette& colours, const ui_shared& shared,
                   return c::styled(tile_spec, action_tile<person_protocol_act>(
                       colours, label, icon::check{}, {{account, key, static_cast<std::size_t>(index)}}));
                 }) | std::ranges::to<std::vector>();
-  return c::column(
+  return SKIFF_NAMED(person_card_details, c::column(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       profile_cover(colours, key, facts),
       section_band(colours),
@@ -214,7 +216,7 @@ inline auto person_card_details(const palette& colours, const ui_shared& shared,
               facts.devices.empty() ? std::string() : std::format("SESSIONS ({})", facts.devices.size()),
               13.0f, colours.dim, true))),
       c::visible(!sessions.empty(), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(sessions))),
-      c::visible(!theirs.empty(), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(theirs))));
+      c::visible(!theirs.empty(), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(theirs)))));
 }
 
 inline auto person_card(const palette& colours, const ui_shared& shared,
@@ -251,10 +253,10 @@ struct room_card_facts {
   room_preview known;
 };
 inline auto room_cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line) {
-  return skiff::compose::row(
+  return SKIFF_NAMED(room_cover, skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
       avatar_mark(avatar_of::chat{}, key, name, 72.0f),
-      two_lines(colours, name, line, 17.0f, 6.0f, two_line_style{.selectable = true}));
+      two_lines(colours, name, line, 17.0f, 6.0f, two_line_style{.selectable = true})));
 }
 using room_cover_t = decltype(room_cover(std::declval<const palette&>(), "", "", ""));
 
@@ -291,12 +293,12 @@ inline auto room_card_details(const palette& colours, const std::string& asked, 
                             : std::string("No description"),
       14.0f, known.topic.empty() ? colours.dim : colours.text);
   about.setSelectable(true);
-  return c::column(
+  return SKIFF_NAMED(room_card_details, c::column(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       room_cover(colours, key, room_card_name(asked, known), room_card_line(asked, known)),
       section_band(colours),
       c::styled({.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}}, wrapped(std::move(about))),
-      id_line(colours, key, ""));
+      id_line(colours, key, "")));
 }
 inline auto room_card(const palette& colours, const std::string& asked, const room_preview& known) {
   namespace c = skiff::compose;

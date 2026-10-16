@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:viewer -- The picture viewer.
+module;
+#include "skiff/named.h"
 export module mux.ui:viewer;
 
 import std;
@@ -50,12 +52,12 @@ inline auto viewer_menu(const palette& colours, const std::string& source, float
                   c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(label, 13.0f, colours.text))),
         label);
   };
-  return c::onClick(viewer_menu_closed{},
+  return SKIFF_NAMED(viewer_menu, c::onClick(viewer_menu_closed{},
       c::column(c::vbox(0.0f, {.fill = true}),
           c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .x = x, .y = y, .width = 200.0f, .autoSize = scene::axes::kY,
                                    .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = colours.sidebar,
                                    .border = scene::Border{colours.band, 1.0f}, .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
-                    item(request::copy_picture{source}, "Copy Image"), item(request::save_picture{source}, "Save As\u2026"))));
+                    item(request::copy_picture{source}, "Copy Image"), item(request::save_picture{source}, "Save As\u2026")))));
 }
 // The viewer's own state, as its parts change it: how far zoomed and moved,
 // and its menu, where a right press on the picture opened it.
@@ -171,7 +173,7 @@ inline auto picture_viewer(const ui_needs& n, const viewer_facts& facts) {
         return std::tuple{viewer_menu(*at, source, where.first, where.second)};
       },
       {.place = scene::anchor::kTopLeft, .fill = true}));
-  return c::local<viewer_view>(viewer_events{},
+  return SKIFF_NAMED(picture_viewer, c::local<viewer_view>(viewer_events{},
       c::onKeys([](const scene::key::down& press) {
                   return press.key == scene::keys::kSpace ? std::optional(request::toggle_video{}) : std::nullopt;
                 },
@@ -197,7 +199,7 @@ inline auto picture_viewer(const ui_needs& n, const viewer_facts& facts) {
                              [](widgets::SliderBar<seek_to>& bar, float share) { bar.setFraction(share); },
                              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, widgets::SliderBar<seek_to>(colours.widgets, seek_to{}))),
                          c::text_for<video_shown>([](const video_shown& now) { return clock_of_seconds(now.at) + " / " + clock_of_seconds(now.length); },
-                             c::styled(middle, nodes::Text("", 13.0f, white))))))));
+                             c::styled(middle, nodes::Text("", 13.0f, white)))))))));
 }
 using picture_viewer_t = decltype(picture_viewer(std::declval<const ui_needs&>(), std::declval<const viewer_facts&>()));
 

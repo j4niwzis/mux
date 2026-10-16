@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:info_explore -- The selected account's directory, or a space's rooms.
+module;
+#include "skiff/named.h"
 export module mux.ui:info_explore;
 import std;
 import splice;
@@ -36,7 +38,7 @@ struct directory_join {
 };
 auto directory_room_row(const palette& colours, const directory_room& one, const std::string& server, std::optional<account_id> by = std::nullopt) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}}),
+  return SKIFF_NAMED(directory_room_row, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}}),
       avatar_mark(avatar_of::chat{}, one.id, one.name.empty() ? one.alias : one.name, 40.0f),
       c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
                               .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
@@ -47,7 +49,7 @@ auto directory_room_row(const palette& colours, const directory_room& one, const
           c::visible(!one.topic.empty(), c::styled({.fillX = true}, elided(nodes::Text(one.topic, 13.0f, colours.text))))),
       c::styled({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle},
           primary(widgets::Button<directory_join>(colours.widgets, one.space ? "Open" : "Join",
-              {one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space, one.name, by}))));
+              {one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space, one.name, by})))));
 }
 using directory_row = decltype(directory_room_row(std::declval<const palette&>(),
     std::declval<const directory_room&>(), std::declval<const std::string&>()));
@@ -96,7 +98,7 @@ auto explore_view(const palette& colours, const explore_facts& facts) {
   const bool more = facts.listing && facts.listing->next && !facts.space;
   const auto status = facts.loading ? std::string("Loading rooms…") :
       !facts.listing ? std::string() : rooms.empty() ? std::string("No rooms found.") : std::format("{} rooms", rooms.size());
-  return c::local<explore_draft>(explore_events{}, c::column(
+  return SKIFF_NAMED(explore_view, c::local<explore_draft>(explore_events{}, c::column(
       c::vbox(0.0f, {.fill = true, .padding = {0.0f, 12.0f, 12.0f, 12.0f}}),
       page_header<no_back, sends<request::close_explore>>(colours, "Explore rooms", {}, {}, false, true),
       c::visible(facts.space.has_value(), c::styled({.fillX = true, .margin = {0.0f, 10.0f, 8.0f, 10.0f}},
@@ -118,7 +120,7 @@ auto explore_view(const palette& colours, const explore_facts& facts) {
           widgets::SendButton<request::search_rooms>(colours.widgets, "Load more",
               {facts.listing ? facts.listing->server : facts.server,
                facts.listing ? facts.listing->query : facts.query,
-               more ? facts.listing->next : std::nullopt})))), explore_draft{facts.query, facts.server});
+               more ? facts.listing->next : std::nullopt})))), explore_draft{facts.query, facts.server}));
 }
 using explore_box = decltype(explore_view(std::declval<const palette&>(), std::declval<const explore_facts&>()));
 inline auto make_content(const ui_needs& needs, const explore_facts& facts) {

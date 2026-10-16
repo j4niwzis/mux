@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui.proto.matrix:form -- Matrix's account form.
+module;
+#include "skiff/named.h"
 export module mux.ui.proto.matrix:form;
 
 import std;
@@ -40,7 +42,7 @@ inline auto account_form_of(const account_draft& seed, const ui::palette& colour
   using namespace ::mux::ui;
   using d = account_draft;
   const auto registers_here = [](const d& now) { return now.creating && !now.in_browser; };
-  return c::local<d>(
+  return SKIFF_NAMED(account_form_of, c::local<d>(
       submitted_by_enter<d>(c::column(
           c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           model_field<&d::user_id>(colours, "User ID", "@user:example.org"),
@@ -56,7 +58,7 @@ inline auto account_form_of(const account_draft& seed, const ui::palette& colour
           c::shown_for<d>(registers_here, choice_field<&d::agrees, bool>(colours, "The server's terms",
                                                                          {{"Not agreed to", false}, {"I agree to the server's terms", true}})),
           account_form_end<d>(colours, editing))),
-      seed);
+      seed));
 }
 
 }  // namespace mux::proto::matrix

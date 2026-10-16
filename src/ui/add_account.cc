@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:add_account -- Adding an account.
+module;
+#include "skiff/named.h"
 export module mux.ui:add_account;
 
 import std;
@@ -44,9 +46,9 @@ struct add_account_shown {
 template <class... Tags>
 auto protocol_switch(const palette& colours, const protocol_t& speaks, protocol_list<Tags...>) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(1.0f, {.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen}),
+  return SKIFF_NAMED(protocol_switch, c::row(c::hbox(1.0f, {.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen}),
                 segment(colours, std::string(protocol_name(config::kept_of<Tags>{})), sends<request::add_account_of>{{protocol_t{Tags{}}}},
-                        speaks.index() == protocol_t{Tags{}}.index())...);
+                        speaks.index() == protocol_t{Tags{}}.index())...));
 }
 using protocol_switch_t = decltype(protocol_switch(std::declval<const palette&>(), protocol_t{}, protocols{}));
 
@@ -62,13 +64,13 @@ inline auto proxy_row(const palette& colours, const proxy_choice& now) {
   const auto one = [&](std::optional<std::string> name) {
     return segment(colours, name.value_or("None"), sends<request::choose_new_proxy>{{name}}, name == now.chosen);
   };
-  return c::row(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(proxy_row, c::row(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                 c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Proxy", 13.0f, colours.dim)),
                 c::many(c::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
                         std::views::iota(std::size_t{0}, now.names.size() + 1) | std::views::transform([&](std::size_t at) {
                           return one(at == 0 ? std::nullopt : std::optional(now.names[at - 1]));
                         }) | std::ranges::to<std::vector>()),
-                segment(colours, "Add proxy…", sends<request::manage_proxies>{}, false));
+                segment(colours, "Add proxy…", sends<request::manage_proxies>{}, false)));
 }
 using proxy_row_t = decltype(proxy_row(std::declval<const palette&>(), proxy_choice{}));
 
@@ -77,7 +79,7 @@ using proxy_row_t = decltype(proxy_row(std::declval<const palette&>(), proxy_cho
 // protocol changes; the form itself as the program's facts say.
 inline auto adding_form(const ui_needs& n) {
   namespace c = skiff::compose;
-  return c::appearing(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), account_form_view(n)), 0.0f);
+  return SKIFF_NAMED(adding_form, c::appearing(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), account_form_view(n)), 0.0f));
 }
 using adding_form_t = decltype(adding_form(std::declval<const ui_needs&>()));
 
@@ -87,7 +89,7 @@ using adding_form_t = decltype(adding_form(std::declval<const ui_needs&>()));
 inline auto add_account_view(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
-  return c::column(c::vbox(12.0f, {.fill = true}),
+  return SKIFF_NAMED(add_account_view, c::column(c::vbox(12.0f, {.fill = true}),
       c::projected<add_account_shown>([](const add_account_shown& now) { return now.speaks; },
           c::mount<protocol_switch_t, protocol_t>(
               [at = &colours](const protocol_t& speaks) { return std::tuple{protocol_switch(*at, speaks, protocols{})}; },
@@ -100,7 +102,7 @@ inline auto add_account_view(const ui_needs& n) {
               {.fillX = true, .autoSize = scene::axes::kY})),
       c::projected<add_account_shown>([](const add_account_shown& now) { return now.speaks; },
           c::mount<adding_form_t, protocol_t>([at = &n](const protocol_t&) { return std::tuple{adding_form(*at)}; },
-                                              {.fillX = true, .grow = scene::axes::kY})));
+                                              {.fillX = true, .grow = scene::axes::kY}))));
 }
 using add_account_view_t = decltype(add_account_view(std::declval<const ui_needs&>()));
 

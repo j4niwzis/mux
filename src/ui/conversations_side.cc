@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:conversations_side -- The chat list's side: its folders and spaces, the space bars, and the column of chats.
+module;
+#include "skiff/named.h"
 export module mux.ui:conversations_side;
 
 import std;
@@ -71,9 +73,9 @@ template <class P> using server_search_content_t = decltype(std::apply([](auto&&
   return skiff::compose::Box(std::forward<decltype(parts)>(parts)...);
 }, server_search_arguments(std::declval<P>(), std::declval<const server_search_facts&>())));
 auto server_search_list(const auto& colours) {
-  return skiff::compose::mount<server_search_content_t<decltype(colours)>, server_search_facts>(
+  return SKIFF_NAMED(server_search_list, skiff::compose::mount<server_search_content_t<decltype(colours)>, server_search_facts>(
       [colours = &colours](const auto& facts) { return server_search_arguments(*colours, facts); },
-      {.fillX = true, .autoSize = scene::axes::kY});
+      {.fillX = true, .autoSize = scene::axes::kY}));
 }
 
 // SPDX-License-Identifier: AGPL-3.0-only
@@ -231,7 +233,7 @@ auto side_found_row(const auto& colours, const search_result& one) {
 
 auto side_forum_head(const auto& colours) {
   namespace c = skiff::compose;
-  return c::shown_for<side_shown>([](const side_shown& now) { return now.forum.has_value(); },
+  return SKIFF_NAMED(side_forum_head, c::shown_for<side_shown>([](const side_shown& now) { return now.forum.has_value(); },
       c::row(c::hbox(8.0f, {.fillX = true, .height = 40.0f,
           .padding = {0.0f, 8.0f, 0.0f, 8.0f}}),
           c::styled({.alignSelf = scene::align::kMiddle},
@@ -240,7 +242,7 @@ auto side_forum_head(const auto& colours) {
               c::text_for<side_shown>([](const side_shown& now) { return now.forum.value_or(""); },
                   elided(nodes::Text("", 15.0f, colours.text, true)))),
           c::styled({.alignSelf = scene::align::kMiddle},
-              icon_button(colours, icon::gear{}, sends<request::manage_forum>{}))));
+              icon_button(colours, icon::gear{}, sends<request::manage_forum>{})))));
 }
 struct side_search_typed {
   static constexpr bool kEveryEdit = true;
@@ -255,9 +257,9 @@ auto side_search_field(const auto& colours) {
   field.apply({.fillX = true, .margin = {2.0f, 14.0f, 0.0f, 14.0f}});
   auto text = c::applied<list_shown>([](const list_shown& now) { return now.search; },
       [](auto& node, const std::string& now) { if (node.text() != now) node.setText(now); }, std::move(field));
-  return c::focus_frame(c::vbox(0.0f, {.fillX = true, .height = 36.0f,
+  return SKIFF_NAMED(side_search_field, c::focus_frame(c::vbox(0.0f, {.fillX = true, .height = 36.0f,
       .margin = {0.0f, 10.0f, 8.0f, 10.0f}, .cornerRadius = 18.0f,
-      .background = colours.tile, .selectedBackground = colours.chosen}), std::move(text));
+      .background = colours.tile, .selectedBackground = colours.chosen}), std::move(text)));
 }
 
 struct set_bars_act {
@@ -339,8 +341,8 @@ auto side_popup_look(const auto& colours, float width) {
 }
 template <class Act>
 auto side_menu_button(const auto& colours, std::string label, Act act) {
-  return skiff::compose::styled({.fillX = true, .height = 30.0f},
-      button_for<side_menu_pick<Act>>(colours.widgets, std::move(label), side_menu_pick<Act>{std::move(act)}));
+  return SKIFF_NAMED(side_menu_button, skiff::compose::styled({.fillX = true, .height = 30.0f},
+      button_for<side_menu_pick<Act>>(colours.widgets, std::move(label), side_menu_pick<Act>{std::move(act)})));
 }
 auto side_chat_menu(const auto& colours, const conversation_id& id, std::string name,
                            const account_id& listing, const std::vector<account_id>& accounts,
@@ -354,7 +356,7 @@ auto side_chat_menu(const auto& colours, const conversation_id& id, std::string 
   auto accents = accents_of(false) | std::views::transform([&](const auto& accent) {
     return accent_circle(strip_colour_act{id, listing}, accent, theme, false);
   }) | std::ranges::to<std::vector>();
-  return c::column(side_popup_look(colours, 320.0f),
+  return SKIFF_NAMED(side_chat_menu, c::column(side_popup_look(colours, 320.0f),
       c::styled({.fillX = true}, elided(nodes::Text(std::move(name), 13.0f, colours.dim, true))),
       side_menu_button(colours, "Chat settings\u2026", chat_settings_act{id}),
       std::move(places),
@@ -364,7 +366,7 @@ auto side_chat_menu(const auto& colours, const conversation_id& id, std::string 
           side_menu_button(colours, "Strip on or off", strip_act{id, listing})),
       c::visible(id.account != listing,
           c::many(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY,
-              .margin = {4.0f, 0.0f, 0.0f, 0.0f}}), std::move(accents))));
+              .margin = {4.0f, 0.0f, 0.0f, 0.0f}}), std::move(accents)))));
 }
 [[nodiscard]] inline std::string side_space_room(const config::space_item_t& item) {
   return spl::visit(spl::overloaded{
@@ -375,7 +377,7 @@ auto side_space_menu(const auto& colours, const std::string& account,
                             const config::space_item_t& item, std::string name) {
   namespace c = skiff::compose;
   const auto room = side_space_room(item);
-  return c::column(side_popup_look(colours, 190.0f),
+  return SKIFF_NAMED(side_space_menu, c::column(side_popup_look(colours, 190.0f),
       c::styled({.fillX = true}, elided(nodes::Text(name, 13.0f, colours.dim, true))),
       c::visible(!room.empty(), side_menu_button(colours, "Explore its rooms\u2026", explore_act{room})),
       c::visible(!room.empty(), side_menu_button(colours, "Space settings\u2026", manage_act{room})),
@@ -385,7 +387,7 @@ auto side_space_menu(const auto& colours, const std::string& account,
       side_menu_button(colours, "Side bar only", set_bars_act{account, item, true, false}),
       side_menu_button(colours, "Top bar only", set_bars_act{account, item, false, true}),
       side_menu_button(colours, "Both bars", set_bars_act{account, item, true, true}),
-      side_menu_button(colours, "Hide", set_bars_act{account, item, false, false}));
+      side_menu_button(colours, "Hide", set_bars_act{account, item, false, false})));
 }
 
 } // namespace mux::ui
@@ -447,11 +449,11 @@ auto side_spaces_for(const auto& colours, Pick pick, bool horizontal) {
       ? c::hbox(4.0f, {.fillY = true, .autoSize = scene::axes::kX})
       : c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 6.0f, 8.0f, 6.0f}})),
       {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
-  return c::projected<side_shown>([horizontal](const side_shown& now) {
+  return SKIFF_NAMED(side_spaces_for, c::projected<side_shown>([horizontal](const side_shown& now) {
     return ((horizontal ? now.top_bar : now.side_bar)) | std::views::transform([&](const auto& entry) {
       return std::pair{entry.item, side_space_view{entry.folder, now.account, entry.key, entry.name, entry.chosen, entry.size}};
     }) | std::ranges::to<std::vector>();
-  }, c::LaneMark<Lane, rows>(std::move(line)));
+  }, c::LaneMark<Lane, rows>(std::move(line))));
 }
 template <class Pick> struct side_folder_row_make {
   const palette* colours;
@@ -470,9 +472,9 @@ auto side_folders_for(const auto& colours, Pick pick) {
   flow.fStack = {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f, .wrap = true};
   auto tabs = rows(make{&colours, std::move(pick)}, std::move(flow), {.autoSize = scene::axes::kBoth});
   tabs.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
-  return c::projected<side_shown>([](const side_shown& now) {
+  return SKIFF_NAMED(side_folders_for, c::projected<side_shown>([](const side_shown& now) {
     return now.folders | std::views::transform([](const side_folder_view& tab) { return std::pair{tab.folder, tab}; }) | std::ranges::to<std::vector>();
-  }, std::move(tabs));
+  }, std::move(tabs)));
 }
 
 struct side_chat_view {
@@ -519,9 +521,9 @@ auto side_chats_for(const auto& needs) {
           return side_chat_item{one.id, {one.view, now.context}, find(one.id), &one, &needs};
         }) | std::ranges::to<std::vector>();
   }, std::move(viewport)));
-  return c::projected<list_shown>([](const list_shown& now) {
+  return SKIFF_NAMED(side_chats_for, c::projected<list_shown>([](const list_shown& now) {
     return side_list_place{now.account, now.folder, now.forum};
-  }, c::remembered_scroll<side_list_place, decltype(viewport)>(std::move(contents)));
+  }, c::remembered_scroll<side_list_place, decltype(viewport)>(std::move(contents))));
 }
 struct side_found_row_make {
   const palette* colours;
@@ -537,16 +539,16 @@ auto side_found_for(const auto& colours) {
   auto contents = c::projected<found_shown>([](const found_shown& now) {
     return now.results | std::views::transform([](const search_result& one) { return std::pair{one.index, side_found_of(one)}; }) | std::ranges::to<std::vector>();
   }, c::styled({.fillX = true, .autoSize = scene::axes::kY}, rows(side_found_row_make{&colours})));
-  return c::shown_for<found_shown>([](const found_shown& now) { return now.count.has_value(); },
+  return SKIFF_NAMED(side_found_for, c::shown_for<found_shown>([](const found_shown& now) { return now.count.has_value(); },
       c::projected<found_shown>([](const found_shown& now) { return now; },
-          c::restarted_scroll<found_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(contents))))));
+          c::restarted_scroll<found_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(contents)))))));
 }
 auto side_server_for(const auto& colours) {
   namespace c = skiff::compose;
   auto contents = c::projected<elsewhere_shown>([](const elsewhere_shown& now) { return now.found; }, server_search_list(colours));
-  return c::shown_for<elsewhere_shown>([](const elsewhere_shown& now) { return now.found.has_value(); },
+  return SKIFF_NAMED(side_server_for, c::shown_for<elsewhere_shown>([](const elsewhere_shown& now) { return now.found.has_value(); },
       c::projected<elsewhere_shown>([](const elsewhere_shown& now) { return now; },
-          c::restarted_scroll<elsewhere_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(contents))))));
+          c::restarted_scroll<elsewhere_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(contents)))))));
 }
 
 } // namespace mux::ui
@@ -567,9 +569,9 @@ auto side_space_popup(const auto& colours) {
         return std::tuple{c::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
             side_space_menu(colours, now.account, now.item, now.name)};
       }, {.autoSize = scene::axes::kBoth}, true));
-  return c::placed_at<field>([](const std::optional<facts>& now) {
+  return SKIFF_NAMED(side_space_popup, c::placed_at<field>([](const std::optional<facts>& now) {
     return now ? std::optional(now->at) : std::nullopt;
-  }, std::move(box));
+  }, std::move(box)));
 }
 auto side_chat_popup(const auto& colours) {
   namespace c = skiff::compose;
@@ -583,9 +585,9 @@ auto side_chat_popup(const auto& colours) {
         return std::tuple{c::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
             side_chat_menu(colours, now.chat, now.name, now.listing, now.accounts, now.theme)};
       }, {.autoSize = scene::axes::kBoth}, true));
-  return c::placed_at<field>([](const std::optional<facts>& now) {
+  return SKIFF_NAMED(side_chat_popup, c::placed_at<field>([](const std::optional<facts>& now) {
     return now ? std::optional(now->at) : std::nullopt;
-  }, std::move(box));
+  }, std::move(box)));
 }
 struct side_pick_folder {
   using Answer = request::pick_folder;
@@ -599,11 +601,11 @@ template <class P> using space_list_view_t = decltype(nodes::ScrollContainer(std
 // where the bars are big.
 auto side_space_bar(const auto& colours, bool big) {
   namespace c = skiff::compose;
-  return c::shown_for<side_shown>([big](const side_shown& now) { return (now.top_on || now.dragging) && now.big == big; },
+  return SKIFF_NAMED(side_space_bar, c::shown_for<side_shown>([big](const side_shown& now) { return (now.top_on || now.dragging) && now.big == big; },
       c::styled(big ? scene::Spec{.fillX = true, .height = 58.0f, .margin = {0.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 8.0f, .masking = true}
                     : scene::Spec{.height = 34.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f,
                                   .masking = true},
-          c::LaneMark<space_bar_view, space_bar_view_t<decltype(colours)>>(c::SideScroll(side_spaces_for<space_bar_rows>(colours, side_pick_folder{}, true), true))));
+          c::LaneMark<space_bar_view, space_bar_view_t<decltype(colours)>>(c::SideScroll(side_spaces_for<space_bar_rows>(colours, side_pick_folder{}, true), true)))));
 }
 } // namespace mux::ui
 
@@ -682,9 +684,9 @@ auto side_column(const auto& needs) {
       std::move(head), connection_bar_for<connection_shown>(colours, &connection_shown::list), std::move(body), std::move(popups));
   auto reorder = c::reorder_bars<config::space_item_t, side_space_view>(std::move(surface),
       side_space_row_make<side_pick_folder>{&colours, {}}, side_lanes<decltype(colours)>{}, colours.chosen);
-  return c::projected<screen_shown>([](const screen_shown& now) {
+  return SKIFF_NAMED(side_column, c::projected<screen_shown>([](const screen_shown& now) {
     return c::WidthLimit{.wanted = now.side_width, .whole = now.single};
-  }, c::clamped_width({}, c::local<side_menu_state>(side_menu_events{}, std::move(reorder))));
+  }, c::clamped_width({}, c::local<side_menu_state>(side_menu_events{}, std::move(reorder)))));
 }
 
 

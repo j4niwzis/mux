@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:settings -- The settings box.
+module;
+#include "skiff/named.h"
 export module mux.ui:settings;
 
 import std;
@@ -111,9 +113,9 @@ inline auto settings_view(const ui_needs& needs) {
   };
   // Where it is scrolled, kept by the program: a page made again (another
   // theme) goes back where it rested.
-  return skiff::compose::kept_scroll<skiff::model::Field<&settings_scroll::at>>(settings_scrolled_to{},
+  return SKIFF_NAMED(settings_view, skiff::compose::kept_scroll<skiff::model::Field<&settings_scroll::at>>(settings_scrolled_to{},
       skiff::compose::page_view<settings_facts, settings_page_node>(
-          std::move(show), same, side, pin, settings_page_node(std::in_place_index<0>, settings_home(*colours)), {.fill = true}));
+          std::move(show), same, side, pin, settings_page_node(std::in_place_index<0>, settings_home(*colours)), {.fill = true})));
 }
 using settings_view_t = decltype(settings_view(std::declval<const ui_needs&>()));
 // The window's dialog of it: made from what is shown, then told it as it changes.

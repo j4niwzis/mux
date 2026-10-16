@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message_media -- What a message carries: its picture, album and file, and its reactions.
+module;
+#include "skiff/named.h"
 export module mux.ui.messages:message_media;
 
 import std;
@@ -51,7 +53,7 @@ inline constexpr float kPictureMost = 430.0f, kPictureLeast = 100.0f, kStickerMo
 auto video_marks(std::int64_t ms) {
   namespace c = skiff::compose;
   const skia::SkColor shade = skia::colorSetARGB(0x54, 0, 0, 0), white = skia::colorSetARGB(255, 255, 255, 255);
-  return c::column(c::vbox(0.0f, {.fill = true}),
+  return SKIFF_NAMED(video_marks, c::column(c::vbox(0.0f, {.fill = true}),
       c::column(c::justified(c::vbox(0.0f, {.place = scene::anchor::kCentre, .width = 44.0f, .height = 44.0f, .cornerRadius = 22.0f,
                                             .background = shade}),
                              nodes::justify::middle{}),
@@ -59,7 +61,7 @@ auto video_marks(std::int64_t ms) {
       c::visible(ms > 0, c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .autoSize = scene::axes::kBoth,
                                                   .margin = {6.0f, 0.0f, 0.0f, 6.0f}, .padding = {2.0f, 8.0f, 2.0f, 8.0f},
                                                   .cornerRadius = 9.0f, .background = shade}),
-                                   nodes::Text(std::format("{}:{:02}", ms / 60000, (ms / 1000) % 60), 11.0f, white))));
+                                   nodes::Text(std::format("{}:{:02}", ms / 60000, (ms / 1000) % 60), 11.0f, white)))));
 }
 // The time on a dark pill over a picture's corner.
 auto time_pill(std::string when) {
@@ -97,10 +99,10 @@ inline auto picture_box(const palette& colours, const std::string& source, pictu
   std::optional<decltype(video_marks(0))> video;
   if (look.video_ms)
     video.emplace(video_marks(*look.video_ms));
-  return c::column(c::vbox(0.0f, {.cornerRadius = 10.0f, .background = look.sticker ? skia::SkColor{0} : colours.tile, .masking = true}),
+  return SKIFF_NAMED(picture_box, c::column(c::vbox(0.0f, {.cornerRadius = 10.0f, .background = look.sticker ? skia::SkColor{0} : colours.tile, .masking = true}),
                    std::move(preview),
                    c::while_coming(c::vbox(0.0f, {.fill = true}), std::move(picture), std::move(loader)),
-                   std::move(video), time_pill(std::move(look.time)));
+                   std::move(video), time_pill(std::move(look.time))));
 }
 // The picture fitted: its own type, for an album to shrink its cells alike.
 using picture_fitted_t =
@@ -111,7 +113,7 @@ inline auto picture_view(const palette& colours, std::string source, int width, 
   const skiff::compose::Fit fit{.width = static_cast<float>(width), .height = static_cast<float>(height),
                                 .most = look.sticker ? kStickerMost : kPictureMost, .least = look.sticker ? 0.0f : kPictureLeast,
                                 .cell = look.cell};
-  return c::onClick(std::move(open), picture_fitted_t(fit, picture_ratio{}, picture_box(colours, source, std::move(look))), label);
+  return SKIFF_NAMED(picture_view, c::onClick(std::move(open), picture_fitted_t(fit, picture_ratio{}, picture_box(colours, source, std::move(look))), label));
 }
 using picture_view_t = decltype(picture_view(std::declval<const palette&>(), std::string(), 0, 0, picture_look{}, media_open{}));
 
@@ -150,7 +152,7 @@ auto album_view(const palette& colours, const std::vector<attachment>& items, st
         }) | std::ranges::to<std::vector>()));
     at += count;
   }
-  return c::shrunk(kAlbumWidth, kAlbumGap,
+  return SKIFF_NAMED(album_view, c::shrunk(kAlbumWidth, kAlbumGap,
       // Its cells, in their order, as the walks see them: each fitted
       // picture's cell shrunk alike.
       [sizes](auto& album, float share) {
@@ -163,7 +165,7 @@ auto album_view(const palette& colours, const std::vector<attachment>& items, st
           cell.invalidateLayout();
         });
       },
-      c::many(c::vbox(kAlbumGap, {.autoSize = scene::axes::kBoth}), std::move(rows)));
+      c::many(c::vbox(kAlbumGap, {.autoSize = scene::axes::kBoth}), std::move(rows))));
 }
 using album_view_t = decltype(album_view(std::declval<const palette&>(), {}, {}));
 
@@ -198,7 +200,7 @@ auto file_row(const palette& colours, std::string source, std::string name, std:
     text.setMaxWidth(360.0f);
     return text;
   };
-  return c::row(c::hbox(11.0f, {.autoSize = scene::axes::kBoth, .minWidth = 268.0f - 24.0f, .padding = {2.0f, 0.0f, 2.0f, 0.0f}}),
+  return SKIFF_NAMED(file_row, c::row(c::hbox(11.0f, {.autoSize = scene::axes::kBoth, .minWidth = 268.0f - 24.0f, .padding = {2.0f, 0.0f, 2.0f, 0.0f}}),
       c::applied<audio_shown>([plays](const audio_shown& now) { return plays(now) && now.playing; },
           [sound](nodes::Icon& disc, bool playing) {
             disc.setShape(shape_of(!sound ? icon_t{icon::clip{}} : playing ? icon_t{icon::pause{}} : icon_t{icon::play{}}));
@@ -211,12 +213,12 @@ auto file_row(const palette& colours, std::string source, std::string name, std:
                 c::text_for<audio_shown>(line, capped(nodes::Text(size_text(bytes), 12.0f, colours.dim)))),
       c::shown_for<audio_shown>([plays](const audio_shown& now) { return plays(now) && now.playing; },
                                 c::styled({.place = scene::anchor::kTopLeft, .width = 0.0f, .height = 0.0f},
-                                          c::every<request::audio_tick>(200.0))));
+                                          c::every<request::audio_tick>(200.0)))));
 }
 using file_row_t = decltype(file_row(std::declval<const palette&>(), std::string(), std::string(), 0, false));
 auto file_view(const palette& colours, std::string source, std::string name, std::int64_t bytes, bool sound, file_open open) {
   std::string label = name;
-  return skiff::compose::onClick(std::move(open), file_row(colours, std::move(source), std::move(name), bytes, sound), std::move(label));
+  return SKIFF_NAMED(file_view, skiff::compose::onClick(std::move(open), file_row(colours, std::move(source), std::move(name), bytes, sound), std::move(label)));
 }
 using file_view_t = decltype(file_view(std::declval<const palette&>(), std::string(), std::string(), 0, false, file_open{}));
 

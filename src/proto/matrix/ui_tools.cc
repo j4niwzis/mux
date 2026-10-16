@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui.proto.matrix:tools -- The developer tools.
+module;
+#include "skiff/named.h"
 export module mux.ui.proto.matrix:tools;
 
 import std;
@@ -77,9 +79,9 @@ inline auto reading_of(const palette& colours, std::string text) {
   namespace c = skiff::compose;
   auto shown = wrapped(nodes::Text(std::move(text), 13.0f, colours.text));
   shown.setSelectable(true);
-  return c::onRightPressAt(copy_reading{},
+  return SKIFF_NAMED(reading_of, c::onRightPressAt(copy_reading{},
       c::styled({.fillX = true, .grow = scene::axes::kY},
-                nodes::ScrollContainer<nodes::Text>(c::styled({.fillX = true, .margin = {6.0f, 16.0f, 12.0f, 16.0f}}, std::move(shown)))));
+                nodes::ScrollContainer<nodes::Text>(c::styled({.fillX = true, .margin = {6.0f, 16.0f, 12.0f, 16.0f}}, std::move(shown))))));
 }
 // The tools' head: back where there is somewhere to go back to, the title
 // -- "Copied" over it a moment -- and close.
@@ -87,21 +89,21 @@ template <class Facts, class Back>
 auto devtools_head(const palette& colours, std::string title, Back back) {
   namespace c = skiff::compose;
   const scene::Spec middle{.alignSelf = scene::align::kMiddle};
-  return c::row(c::hbox(8.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+  return SKIFF_NAMED(devtools_head, c::row(c::hbox(8.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
       std::move(back),
       c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
                 elided(nodes::Text(std::move(title), 16.0f, colours.text, true)),
                 c::fading_for<devtools_said>([](const devtools_said& now) { return now.copied; }, 1200.0,
                     nodes::Text("Copied", 12.0f, colours.accent))),
-      c::styled(middle, icon_button(colours, icon::close{}, sends<request::close_tool<Facts>>{})));
+      c::styled(middle, icon_button(colours, icon::close{}, sends<request::close_tool<Facts>>{}))));
 }
 // The developer tools reading some JSON: copied by a right press on it.
 inline auto devtools_text_view(const palette& colours, const tool::devtools_text& facts) {
   namespace c = skiff::compose;
-  return c::local<devtools_said>(devtools_events{},
+  return SKIFF_NAMED(devtools_text_view, c::local<devtools_said>(devtools_events{},
       c::column(c::vbox(0.0f, {.fillX = true, .height = 560.0f}),
                 devtools_head<tool::devtools_text>(colours, facts.title, c::visible(false, nodes::Box<>(skia::SkColor{0}))),
-                reading_of(colours, facts.text)));
+                reading_of(colours, facts.text))));
 }
 // The developer tools over a room's state: every type and how many events
 // of it; a type's keys; an event's JSON -- back up a level at a time.
@@ -118,7 +120,7 @@ inline auto devtools_state_view(const palette& colours, const tool::devtools_sta
                }) | std::ranges::to<std::vector>();
   using keys_t = decltype(c::many(c::vbox(), std::vector<row_item_t<sends<state_picked>>>{}));
   using event_t = decltype(reading_of(colours, std::string()));
-  return c::local<devtools_said>(devtools_events{},
+  return SKIFF_NAMED(devtools_state_view, c::local<devtools_said>(devtools_events{},
       c::column(c::vbox(0.0f, {.fillX = true, .height = 560.0f}),
           devtools_head<tool::devtools_state>(colours, "Room state",
               c::shown_for<devtools_said>([](const devtools_said& now) { return now.type.has_value(); },
@@ -146,7 +148,7 @@ inline auto devtools_state_view(const palette& colours, const tool::devtools_sta
                 const auto found = std::ranges::find_if(entries, [&](const tool::devtools_entry& one) { return one.type == at.first && one.key == at.second; });
                 return std::tuple{reading_of(colours, found == entries.end() ? std::string() : found->json)};
               },
-                  {.fillX = true, .grow = scene::axes::kY}))));
+                  {.fillX = true, .grow = scene::axes::kY})))));
 }
 // An event of any type sent: its type, a state key for a state event, its
 // content as JSON; Send while it has a type.
@@ -156,7 +158,7 @@ struct custom_draft {
 };
 inline auto send_custom_view(const palette& colours, const tool::send_custom_form&) {
   namespace c = skiff::compose;
-  return c::local<custom_draft>(
+  return SKIFF_NAMED(send_custom_view, c::local<custom_draft>(
       c::column(c::vbox(0.0f, {.fillX = true, .height = 560.0f}),
           devtools_head<tool::send_custom_form>(colours, "Send custom event", c::visible(false, nodes::Box<>(skia::SkColor{0}))),
           c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 12.0f, 12.0f}}),
@@ -173,14 +175,14 @@ inline auto send_custom_view(const palette& colours, const tool::send_custom_for
                   c::asking_for<custom_draft>([](const custom_draft& now) {
                     return request::send_custom{now.type, now.key.empty() ? std::nullopt : std::optional(now.key), now.body};
                   },
-                      primary(widgets::Button<scene::NoAction>(colours.widgets, "Send", {})))))));
+                      primary(widgets::Button<scene::NoAction>(colours.widgets, "Send", {}))))))));
 }
 // A step of interactive auth done in the browser, as Element's: what it is
 // for, its page opened there again where it was closed, and Continue once
 // it is done there -- or Cancel.
 inline auto uia_view(const palette& colours, const tool::uia_step& facts) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+  return SKIFF_NAMED(uia_view, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       nodes::Text(facts.what, 17.0f, colours.text, true),
       c::styled({.fillX = true},
                 wrapped(nodes::Text("Your server asks you to confirm this in your browser: the page is open there. Once you have done what it asks, "
@@ -188,7 +190,7 @@ inline auto uia_view(const palette& colours, const tool::uia_step& facts) {
                                     14.0f, colours.dim))),
       c::styled({.width = 200.0f, .height = 32.0f},
                 widgets::Button<sends<::mux::ui::request::open_url>>(colours.widgets, "Open the page again", {{facts.url}})),
-      dialog_buttons(colours, "Continue", sends<request::cancel_uia>{}, sends<request::continue_uia>{}, 120.0f));
+      dialog_buttons(colours, "Continue", sends<request::cancel_uia>{}, sends<request::continue_uia>{}, 120.0f)));
 }
 
 }  // namespace mux::proto::matrix::tools_detail

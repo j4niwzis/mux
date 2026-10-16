@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message_pieces -- A message's marks, its first link, the fragment a quote marks, and its link's card and page preview.
+module;
+#include "skiff/named.h"
 export module mux.ui.messages:message_pieces;
 
 import std;
@@ -43,13 +45,13 @@ inline auto link_card(const palette& colours, std::string where, std::string ava
     node.setMaxWidth(360.0f);
     return node;
   };
-  return c::onClick(request::open_url{std::move(where)},
+  return SKIFF_NAMED(link_card, c::onClick(request::open_url{std::move(where)},
       c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth, .margin = {4.0f, 0.0f, 2.0f, 0.0f}}),
           c::styled({.width = 3.0f, .height = 36.0f, .cornerRadius = 1.5f}, nodes::Box<>(colours.accent)),
           c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(avatar_of::chat{}, std::move(avatar_id), std::move(avatar_name), 32.0f)),
           c::column(c::vbox(1.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
               line(std::move(title), colours.accent, true), line(std::move(said), colours.dim, false))),
-      "Open linked room or message");
+      "Open linked room or message"));
 }
 using link_card_t = decltype(link_card(std::declval<const palette&>(), "", "", "", "", ""));
 
@@ -155,7 +157,7 @@ auto page_preview(const palette& colours, const link_preview& shown, std::string
   std::optional<nodes::Image<from_avatars>> picture;
   if (shown.image)
     picture.emplace(c::styled({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f}, nodes::Image<from_avatars>(from_avatars{*shown.image})));
-  return c::onClick(request::open_url{std::move(where)},
+  return SKIFF_NAMED(page_preview, c::onClick(request::open_url{std::move(where)},
       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {6.0f, 0.0f, 2.0f, 0.0f},
                             .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f,
                             .background = (colours.accent & 0x00FFFFFFu) | (0x18u << 24),
@@ -167,7 +169,7 @@ auto page_preview(const palette& colours, const link_preview& shown, std::string
                        c::visible(!shown.description.empty(),
                                   c::styled({.fillX = true}, wrapped(nodes::Text(preview_line(shown.description), 13.0f, colours.text))))),
              std::move(picture)),
-      "Open link");
+      "Open link"));
 }
 using page_preview_t = decltype(page_preview(std::declval<const palette&>(), std::declval<const link_preview&>(), std::string()));
 

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:drawer -- The drawer.
+module;
+#include "skiff/named.h"
 export module mux.ui:drawer;
 
 import std;
@@ -47,7 +49,7 @@ inline auto drawer_account_row(const palette& colours, const drawer_account& one
                        two_line_style{.second_ink = one.failed ? colours.error : colours.dim, .show_second = true}),
              c::visible(one.current, c::styled({.alignSelf = scene::align::kMiddle}, icon_mark(colours, icon::check{})))),
       one.address);
-  return row;
+  return SKIFF_NAMED(drawer_account_row, row);
 }
 struct drawer_account_row_of {
   const palette* colours;
@@ -59,7 +61,7 @@ struct drawer_account_row_of {
 inline auto drawer_view(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
-  return c::column(c::vbox(0.0f, {.fill = true}),
+  return SKIFF_NAMED(drawer_view, c::column(c::vbox(0.0f, {.fill = true}),
       c::styled({.margin = {18.0f, 20.0f, 14.0f, 20.0f}}, nodes::Text("mux", 20.0f, colours.text, true)),
       c::projected<drawer_accounts>([](const drawer_accounts& now) { return now.accounts; },
           c::listed<drawer_account>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), drawer_account_row_of{&colours})),
@@ -68,7 +70,7 @@ inline auto drawer_view(const ui_needs& n) {
       row_item(colours, "Start new chat", sends<request::open_new_chat>{}, icon::person{}),
       row_item(colours, "New room", sends<request::open_new_room>{}, icon::people{}),
       row_item(colours, "Settings", sends<request::open_settings>{}, icon::gear{}),
-      row_item(colours, "Quit", sends<request::quit>{}, icon::power{}));
+      row_item(colours, "Quit", sends<request::quit>{}, icon::power{})));
 }
 using drawer_view_t = decltype(drawer_view(std::declval<const ui_needs&>()));
 

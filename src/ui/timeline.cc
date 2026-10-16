@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:timeline -- A chat's messages.
+module;
+#include "skiff/named.h"
 export module mux.ui.messages:timeline;
 
 import std;
@@ -309,7 +311,7 @@ auto timeline_list() {
   list.setCopiesOnScroll(false);
   std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY,
                                       .padding = {8.0f, kListSide, 8.0f, kListSide}});
-  return c::spanned_for<message_marks>(selecting, skiff::bind::Bound<Want, decltype(list)>(std::move(list)));
+  return SKIFF_NAMED(timeline_list, c::spanned_for<message_marks>(selecting, skiff::bind::Bound<Want, decltype(list)>(std::move(list))));
 }
 
 // The loader's cross: the message jumped to no longer looked for.
@@ -336,7 +338,7 @@ inline auto list_corner(const palette& colours) {
                           c::styled({.place = scene::anchor::kCentre}, nodes::Text(std::move(glyph), 18.0f, colours.text, true)),
                           count_badge_for<chat_ways>(colours, count)))));
   };
-  return c::column(c::vbox(10.0f, {.place = scene::anchor::kBottomRight, .x = -18.0f, .y = -12.0f, .autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(list_corner, c::column(c::vbox(10.0f, {.place = scene::anchor::kBottomRight, .x = -18.0f, .y = -12.0f, .autoSize = scene::axes::kBoth}),
                    mark(mark_kind::reaction{}, "\u2665", [](const chat_ways& now) { return now.reactions; }),
                    mark(mark_kind::mention{}, "@", [](const chat_ways& now) { return now.mentions; }),
                    c::shown_for<chat_ways>([](const chat_ways& now) { return now.back_to_chat; },
@@ -346,7 +348,7 @@ inline auto list_corner(const palette& colours) {
                        c::onClick(request::jump_to_end{},
                                   c::column(c::vbox(0.0f, plate),
                                             c::styled({.fill = true}, nodes::Icon(shape_of(icon::down{}), colours.text)),
-                                            count_badge_for<way_down_shown>(colours, [](const way_down_shown& now) { return now.unseen; })))));
+                                            count_badge_for<way_down_shown>(colours, [](const way_down_shown& now) { return now.unseen; }))))));
 }
 // The chat's messages over its wallpaper -- the theme's gradient and
 // Telegram's pattern, a colour, a picture -- with the corner over them, and
@@ -378,7 +380,7 @@ inline auto chat_area(const ui_needs& n) {
                        [](bool wanted, std::size_t unseen) { return request::way_down{wanted, unseen}; }));
   auto loading = c::shown_for<chat_ways>([](const chat_ways& now) { return now.loading; },
       c::styled({.place = scene::anchor::kCentre}, widgets::RadialLoader<stop_jump_act>(44.0f, {})));
-  return c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), std::move(wall), std::move(list), std::move(loading));
+  return SKIFF_NAMED(chat_area, c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), std::move(wall), std::move(list), std::move(loading)));
 }
 using chat_area_t = decltype(chat_area(std::declval<const ui_needs&>()));
 

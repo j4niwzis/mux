@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:emoji_popup -- The emoji popup: its pages -- its emoji, and each a
 // plugin gives it (contract::media_pages) -- and what a pick does.
+module;
+#include "skiff/named.h"
 export module mux.ui:emoji_popup;
 
 import std;
@@ -209,7 +211,7 @@ inline auto emoji_popup(const ui_needs& n, const emoji_facts& facts) {
   // Its own floating backdrop painted: the full-window layer has no fill,
   // and a plate taken for an inner panel's was dropped under live blur.
   skiff::compose::state_of(card).setFloats(true);
-  return c::column(c::vbox(0.0f, {.fill = true}), std::move(card));
+  return SKIFF_NAMED(emoji_popup, c::column(c::vbox(0.0f, {.fill = true}), std::move(card)));
 }
 using emoji_popup_t = decltype(emoji_popup(std::declval<const ui_needs&>(), std::declval<const emoji_facts&>()));
 

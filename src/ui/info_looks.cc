@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:info_looks -- Bubbles' and panels' looks picked, and a chat's background.
+module;
+#include "skiff/named.h"
 export module mux.ui:info_looks;
 
 import std;
@@ -216,8 +218,8 @@ template <class Done>
 inline auto look_slider(const palette& colours, auto fraction, Done done, scene::Spec spec) {
   namespace c = skiff::compose;
   using bar_t = widgets::SliderBar<scene::NoAction, Done>;
-  return c::applied<looks_picked>(std::move(fraction), [](bar_t& bar, float at) { bar.setFraction(at); },
-                                  c::styled(spec, bar_t(colours.widgets, {}, std::move(done))));
+  return SKIFF_NAMED(look_slider, c::applied<looks_picked>(std::move(fraction), [](bar_t& bar, float at) { bar.setFraction(at); },
+                                  c::styled(spec, bar_t(colours.widgets, {}, std::move(done)))));
 }
 // What else is in a chat -- an element's opacity, or its blur where it is
 // drawn frosted -- apart from the bubbles': its line, its way back to
@@ -226,22 +228,22 @@ template <class Which>
 inline auto element_row(const palette& colours, choice_level_t level, std::string_view name, Which which) {
   namespace c = skiff::compose;
   const auto look = [level](const looks_picked& now) { return look_in(now, level, config::look_part::bubbles{}); };
-  return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(element_row, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       label_button_row_for<looks_picked>(colours,
           [look, name, which](const looks_picked& now) { return element_label(look(now), now.window, name, which); },
           "As bubbles", element_given_back<Which>{level, which},
           [look, which](const looks_picked& now) { return element_own(look(now), which); }),
       look_slider(colours, [look, which](const looks_picked& now) { return element_fraction(look(now), now.window, which); },
-                  element_slid<Which>{level, which}, {.margin = {4.0f, 8.0f, 6.0f, 8.0f}}));
+                  element_slid<Which>{level, which}, {.margin = {4.0f, 8.0f, 6.0f, 8.0f}})));
 }
 template <class Which, std::size_t N>
 inline auto element_rows(const palette& colours, choice_level_t level, const std::array<std::string_view, N>& labels,
                          const std::array<std::pair<std::string_view, Which>, N>& elements) {
   namespace c = skiff::compose;
-  return c::many(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(element_rows, c::many(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                  std::views::zip(labels, elements) | std::views::transform([&](const auto& one) {
                    return element_row(colours, level, std::get<0>(one), std::get<1>(one).second);
-                 }) | std::ranges::to<std::vector>());
+                 }) | std::ranges::to<std::vector>()));
 }
 
 // How bubbles -- or the panels -- look, at a level: as the level over it
@@ -339,7 +341,7 @@ using background_menu_t = choice_menu<pick_wallpaper_at>;
 // (its own), Manage's Appearance (a room's) and the background dialog.
 inline auto look_choices(const palette& colours, choice_level_t level) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(look_choices, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::styled({.margin = {0.0f, 10.0f, 0.0f, 10.0f}}, nodes::Text("BACKGROUND", 13.0f, colours.dim, true)),
       c::text_for<looks_picked>([level](const looks_picked& now) { return background_note(now, level); },
           c::styled({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}}, wrapped(nodes::Text("", 13.0f, colours.dim)))),
@@ -350,7 +352,7 @@ inline auto look_choices(const palette& colours, choice_level_t level) {
           },
               {.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 10.0f, 0.0f, 10.0f}})),
       c::styled({.margin = {10.0f, 0.0f, 0.0f, 0.0f}}, bubbles_picker(colours, level, config::look_part::bubbles{})),
-      c::styled({.margin = {10.0f, 0.0f, 0.0f, 0.0f}}, bubbles_picker(colours, level, config::look_part::panels{})));
+      c::styled({.margin = {10.0f, 0.0f, 0.0f, 0.0f}}, bubbles_picker(colours, level, config::look_part::panels{}))));
 }
 using look_choices_t = decltype(look_choices(std::declval<const palette&>(), choice_level_t{}));
 
@@ -360,9 +362,9 @@ struct wallpaper_facts {
 };
 inline auto wallpaper_box(const ui_needs& n, const wallpaper_facts& facts) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}}),
+  return SKIFF_NAMED(wallpaper_box, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}}),
       page_header(*n.colours, "Chat background and looks", no_back{}, sends<request::close_wallpaper>{}, false, true),
-      look_choices(*n.colours, facts.level));
+      look_choices(*n.colours, facts.level)));
 }
 using wallpaper_box_t = decltype(wallpaper_box(std::declval<const ui_needs&>(), std::declval<const wallpaper_facts&>()));
 // The dialog it is shown in.

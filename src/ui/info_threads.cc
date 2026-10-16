@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:info_threads -- A room's threads, in the info's place.
+module;
+#include "skiff/named.h"
 export module mux.ui:info_threads;
 
 import std;
@@ -65,13 +67,13 @@ inline auto thread_row(const palette& colours, const thread_root& one) {
   const auto line = [](std::string text, float size, skia::SkColor colour, bool bold = false) {
     return c::styled({.fillX = true}, elided(nodes::Text(std::move(text), size, colour, bold)));
   };
-  return c::onClick(request::open_thread{one.root},
+  return SKIFF_NAMED(thread_row, c::onClick(request::open_thread{one.root},
       c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 8.0f,
                              .hoverBackground = colours.chosen}),
              c::styled({.alignSelf = scene::align::kStart}, avatar_mark(avatar_of::person{}, one.sender, one.name, 36.0f)),
              c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
                        line(one.name, 13.0f, colours.accent, true), line(one.words, 13.0f, colours.text), line(one.meta, 12.0f, colours.dim))),
-      one.name);
+      one.name));
 }
 // The chat's own composer, writing into the thread: its close lets go of
 // the answer, Enter and the arrow send there, its paperclip and emoji too --
@@ -95,7 +97,7 @@ inline auto threads_panel(const ui_needs& n) {
   const palette& colours = *n.colours;
   const auto listing = [](const threads_shown& now) { return now.listing; };
   const auto open = [](const threads_shown& now) { return !now.listing; };
-  return c::column(c::vbox(0.0f, {.fillY = true, .background = colours.sidebar}),
+  return SKIFF_NAMED(threads_panel, c::column(c::vbox(0.0f, {.fillY = true, .background = colours.sidebar}),
       c::row(c::hbox(8.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}}),
              c::shown_for<threads_shown>(open, c::styled({.alignSelf = scene::align::kMiddle},
                                                          icon_button(colours, icon::back{}, sends<request::close_thread>{}))),
@@ -111,7 +113,7 @@ inline auto threads_panel(const ui_needs& n) {
                   c::listed<thread_root>(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}}),
                                          [&colours](const thread_root& one) { return thread_row(colours, one); }))))),
       c::shown_for<threads_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, timeline_list<thread_told, thread_list_tag>())),
-      c::shown_for<threads_shown>(open, composer_bar<in_thread>(n)));
+      c::shown_for<threads_shown>(open, composer_bar<in_thread>(n))));
 }
 using threads_panel_t = decltype(threads_panel(std::declval<const ui_needs&>()));
 // Its field, where what is written into the thread is.

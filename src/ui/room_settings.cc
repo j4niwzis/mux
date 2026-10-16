@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:room_settings -- A room's settings: the client's pages and its
 // protocol's, as a function over what the program says of them.
+module;
+#include "skiff/named.h"
 export module mux.ui:room_settings;
 
 import std;
@@ -51,7 +53,7 @@ struct tab_up {
 template <class Tab>
 auto manage_tab_row(const palette& colours, Tab tab) {
   namespace c = skiff::compose;
-  return c::spec_for<room_facts_t>([](const room_facts_t& now) { return scene::Spec{.selected = tab_up<Tab>{}(now)}; },
+  return SKIFF_NAMED(manage_tab_row, c::spec_for<room_facts_t>([](const room_facts_t& now) { return scene::Spec{.selected = tab_up<Tab>{}(now)}; },
       c::onPress(sends<request::manage_tab>{{manage_tab_t{tab}}},
           c::row(c::hbox(8.0f, {.fillX = true, .height = 40.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner,
                                 .hoverBackground = colours.background, .selectedBackground = colours.tile}),
@@ -59,7 +61,7 @@ auto manage_tab_row(const palette& colours, Tab tab) {
                  c::applied<room_facts_t>([](const room_facts_t& now) { return tab_up<Tab>{}(now); },
                                           [](nodes::Text& title, bool up) { title.setBold(up); },
                                           c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                                                    elided(nodes::Text(std::string(tab_title(tab)), 14.0f, colours.text)))))));
+                                                    elided(nodes::Text(std::string(tab_title(tab)), 14.0f, colours.text))))))));
 }
 using client_tab_row_t = decltype(manage_tab_row(std::declval<const palette&>(), settings_tab::general{}));
 
@@ -71,8 +73,8 @@ auto protocol_tab_row(const palette& colours, const room_settings_facts& facts) 
 }
 template <class... Tabs>
 auto protocol_tab_rows(manage_tab_list<Tabs...>, const palette& colours, const room_settings_facts& facts) {
-  return skiff::compose::column(skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                protocol_tab_row<Tabs>(colours, facts)...);
+  return SKIFF_NAMED(protocol_tab_rows, skiff::compose::column(skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                protocol_tab_row<Tabs>(colours, facts)...));
 }
 // A protocol's page for a tab, shown while it is up: made by the protocol
 // (make_manage_page, found by ADL with its tab), from the facts as the
@@ -80,13 +82,13 @@ auto protocol_tab_rows(manage_tab_list<Tabs...>, const palette& colours, const r
 template <class Tab>
 auto protocol_page(const palette& colours, const room_settings_facts& facts) {
   namespace c = skiff::compose;
-  return c::shown_for<room_facts_t>(tab_up<Tab>{},
-      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), make_manage_page(Tab{}, colours, facts)));
+  return SKIFF_NAMED(protocol_page, c::shown_for<room_facts_t>(tab_up<Tab>{},
+      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), make_manage_page(Tab{}, colours, facts))));
 }
 template <class... Tabs>
 auto protocol_pages(manage_tab_list<Tabs...>, const palette& colours, const room_settings_facts& facts) {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                protocol_page<Tabs>(colours, facts)...);
+  return SKIFF_NAMED(protocol_pages, skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                protocol_page<Tabs>(colours, facts)...));
 }
 // Each protocol's, one of them for a room: by its index in the protocols'
 // list (two protocols may make the same types).
@@ -122,24 +124,24 @@ inline protocol_pages_t protocol_pages_of(const palette& colours, const room_set
 // The client's pages: Notifications and Appearance (General is pages.cc's).
 inline auto notifications_page(const palette& colours, const room_settings_facts& facts) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
+  return SKIFF_NAMED(notifications_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Notifications"), chat_notify_view(colours, facts.chat),
       c::styled({.fillX = true}, wrapped(nodes::Text(facts.space ? "For every chat in this space, unless the chat chooses again; Default is "
                                                                     "as the space above it, or the account, says."
                                                                   : "Default is as the space it is in, or the account, says.",
-                                                     12.0f, colours.dim))));
+                                                     12.0f, colours.dim)))));
 }
 inline auto looks_page(const palette& colours, const room_settings_facts& facts) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
+  return SKIFF_NAMED(looks_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Appearance"),
       c::scoped<config::chat_choices>(c::handlers(), style_controls(colours), facts.chat),
-      look_choices(colours, choice_level::chat{}));
+      look_choices(colours, choice_level::chat{})));
 }
 template <class Tab, class Page>
 auto client_page(Page page) {
   namespace c = skiff::compose;
-  return c::shown_for<room_facts_t>(tab_up<Tab>{}, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(page)));
+  return SKIFF_NAMED(client_page, c::shown_for<room_facts_t>(tab_up<Tab>{}, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(page))));
 }
 
 // The tab up's title: the protocol's name for General, else the tab's.
@@ -161,7 +163,7 @@ inline auto room_settings_view(const ui_needs& n, const room_settings_facts& fac
   const auto tabs_up = [](const room_facts_t& now) { return !now || !now->narrow || now->navigation; };
   const auto page_up = [](const room_facts_t& now) { return !now || !now->narrow || !now->navigation; };
   const float across = presentation.navigation_width;
-  return c::column(c::vbox(0.0f, {.fill = true, .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = colours.background,
+  return SKIFF_NAMED(room_settings_view, c::column(c::vbox(0.0f, {.fill = true, .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = colours.background,
                                   .masking = true}),
       // Without a head over each page: the dialog's own, its ← on a narrow
       // window's page.
@@ -207,7 +209,7 @@ inline auto room_settings_view(const ui_needs& n, const room_settings_facts& fac
                                         client_page<settings_tab::general>(room_general_page(colours, facts, presentation.page_header)),
                                         client_page<settings_tab::notifications>(notifications_page(colours, facts)),
                                         client_page<settings_tab::looks>(looks_page(colours, facts)),
-                                        c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_pages_of(colours, facts)))))))))));
+                                        c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_pages_of(colours, facts))))))))))));
 }
 using room_settings_view_t = decltype(room_settings_view(std::declval<const ui_needs&>(), std::declval<const room_settings_facts&>()));
 using room_settings_t = room_settings_view_t;

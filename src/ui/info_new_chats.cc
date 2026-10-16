@@ -207,7 +207,7 @@ inline auto start_chat_view(const palette& colours, const new_chat_facts& facts)
       c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(
           c::projected<new_chat_facts>([](const auto& now) { return std::optional(now); },
               c::mount<person_rows_t, new_chat_facts>([colours = &colours](const auto& now) {
-                return std::tuple{c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), person_rows(*colours, now)};
+                return std::tuple{c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), person_rows(*colours, now))};
               }, {.fillX = true, .autoSize = scene::axes::kY})))),
       c::visible(!facts.inviting, c::styled({.fillX = true}, wrapped(nodes::Text("You can share your address with someone you haven't chatted with yet.", 13.0f, colours.dim)))),
       c::visible(!facts.inviting, nodes::Text(facts.own_link, 13.0f, colours.accent)),

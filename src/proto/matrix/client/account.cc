@@ -117,6 +117,23 @@ struct plaintext_refused : std::runtime_error {
 };
 plaintext_refused::~plaintext_refused() = default;
 
+// The account's calls_live_ set while this is: what is told meanwhile is
+// news to a call, and as it was after. A plain struct defined here, not a
+// member of the account template: the inline members of a class nested in
+// it, used where the account is explicitly instantiated, were emitted
+// nowhere, and the link failed on its constructor and destructor -- as it
+// had on placed_as_news below.
+struct calls_live_while {
+  bool& live;
+  bool was;
+  explicit calls_live_while(bool& flag, bool now);
+  ~calls_live_while();
+  calls_live_while(const calls_live_while&) = delete;
+  calls_live_while& operator=(const calls_live_while&) = delete;
+};
+calls_live_while::calls_live_while(bool& flag, bool now) : live(flag), was(flag) { live = was || now; }
+calls_live_while::~calls_live_while() { live = was; }
+
 // Whether an event placed so is news: come at the end, not from history.
 [[nodiscard]] bool placed_as_news(const placement_t& where) {
   return spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
@@ -775,12 +792,6 @@ class account {
   // newest event, and Element sends an invite and its candidates, an answer
   // and its candidates, back to back), or news decrypted once its key came.
   bool calls_live_ = false;
-  struct calls_live_while {
-    bool& live;
-    bool was;
-    explicit calls_live_while(bool& flag, bool now) : live(flag), was(flag) { live = was || now; }
-    ~calls_live_while() { live = was; }
-  };
   // Whether an event placed so is news: come at the end, not from history.
   // (Whether an event so placed is news is placed_as_news(), a plain
   // function, with telling_history_: an inline member of this template

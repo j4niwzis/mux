@@ -146,12 +146,16 @@ class accounts_part {
     const auto& open = *s_->showing->look<std::optional<mux::ui::panel_facts>>();
     if (!open)
       return;
+    // With no account at all, adding one is what the page shows beside the
+    // list of itself (bring_up_to_date), not a step the user took: cleared,
+    // it came straight back, and back took two presses to leave.
+    const bool adding_by_itself = std::ranges::empty(k_->accounts().values()) && this->detail_is<mux::ui::panel_detail::adding>();
     if (open->narrow && open->detail_up)
       this->change_panel([](mux::ui::panel_facts& now) {
         now.detail_up = false;
         now.toward = -1.0f;
       });
-    else if (!this->detail_is<mux::ui::panel_detail::none>())
+    else if (!this->detail_is<mux::ui::panel_detail::none>() && !adding_by_itself)
       this->show_detail(mux::ui::panel_detail::none{});
     else
       this->close();

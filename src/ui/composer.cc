@@ -712,6 +712,7 @@ inline void prepend_quote(composer_doc& doc, const scene::ClipboardFragment& sel
 // The emoji button's answer: the panel toggled, opened beside where the
 // button is laid out.
 template <class Toggle> struct emoji_beside {
+  using Answer = Toggle;
   Toggle operator()(const skia::SkRect& at) const { return {at.fRight, at.fTop}; }
 };
 // Which field a draft's input is, for the keys.

@@ -497,14 +497,19 @@ inline constexpr auto make_side_chat_row = [](const side_chat_item& item) {
   return skiff::compose::onRightPressAt(side_chat_menu_at{id, view.row.name, view.context},
       conversation_row(*needs, *one, view.row, listed->events));
 };
+// The chats' view that scrolls, by its mark.
+struct side_chats_view {};
 inline auto side_chats_for(const ui_needs& needs) {
   namespace c = skiff::compose;
   using row = std::invoke_result_t<decltype(make_side_chat_row), const side_chat_item&>;
   using rows = nodes::MemoRows<conversation_id, side_chat_view, row, std::remove_cv_t<decltype(make_side_chat_row)>>;
   auto line = c::styled({.fillX = true, .autoSize = scene::axes::kY}, rows(make_side_chat_row));
-  auto viewport = c::virtual_rows<side_chat_item>([](const side_chat_item& item) {
+  // The view that scrolls, marked: what keeps each list's offset finds it
+  // under what tells it the list.
+  auto scroll = c::virtual_rows<side_chat_item>([](const side_chat_item& item) {
     return conversation_height(*std::get<2>(item));
   }, c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(line))));
+  c::Marked<side_chats_view, decltype(scroll)> viewport(std::move(scroll));
   auto contents = c::projected<listing_shown>([](const listing_shown& now) {
     return side_chats_told{now.listing, std::make_shared<const side_menu_context>(
         side_menu_context{now.account, now.accounts, now.theme})};
@@ -521,7 +526,7 @@ inline auto side_chats_for(const ui_needs& needs) {
   }, std::move(viewport)));
   return c::projected<list_shown>([](const list_shown& now) {
     return side_list_place{now.account, now.folder, now.forum};
-  }, c::remembered_scroll<side_list_place>(std::move(contents)));
+  }, c::remembered_scroll<side_list_place, decltype(viewport)>(std::move(contents)));
 }
 struct side_found_row_make {
   const palette* colours;

@@ -106,7 +106,19 @@ void tell_views_laid_out(Root& root, const std::vector<skiff::scene::Overflow>& 
     if (at == rows.end())
       continue;
     const std::size_t depth = at->depth;
-    std::println(std::cerr, "[layout] {} as laid out:", view);
+    // What it is in, from the root down: each row above it that is less
+    // deep than the one after it -- where a view's own box came from.
+    const auto above = std::ranges::subrange(rows.begin(), at) | std::views::reverse;
+    std::vector<skiff::scene::LaidOutNode> path;
+    std::size_t under = depth;
+    for (const auto& row : above)
+      if (row.depth < under) {
+        path.push_back(row);
+        under = row.depth;
+      }
+    std::println(std::cerr, "[layout] {} as laid out, in:", view);
+    for (const auto& row : path | std::views::reverse)
+      std::println(std::cerr, "{}", skiff::scene::laidOutLine(row));
     const auto below = std::ranges::subrange(std::next(at), rows.end()) |
                        std::views::take_while([depth](const skiff::scene::LaidOutNode& row) { return row.depth > depth; });
     std::println(std::cerr, "{}", skiff::scene::laidOutLine(*at));

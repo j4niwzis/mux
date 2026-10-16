@@ -15,6 +15,10 @@ struct library_info {
   std::vector<std::string_view> dependencies;
 };
 #include "about.inc"
+// The commit and branch built from: in a unit of their own (about_build.cc),
+// so a new commit recompiles that unit alone.
+std::string_view build_commit();
+std::string_view build_branch();
 
 template <class Node> auto about_visible(bool visible, Node node) { node.setVisible(visible); return node; }
 inline auto about_words(const palette& colours, std::string text) {
@@ -61,7 +65,7 @@ inline auto about_page(const palette& colours) {
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "About mux", {}, {}, true, true),
       about_words(colours, std::format("mux {}\n{}\nCommit: {}\nLicense: {}", about_data::version,
-                                     about_data::branch, about_data::commit, about_data::license)),
+                                     build_branch(), build_commit(), about_data::license)),
       settings_link(colours, "GitHub repository", icon::gear{}, request::open_url{std::string(about_data::repository)}),
       about_words(colours, "Libraries"), skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(libraries)),
       about_words(colours, std::string(about_data::license_text)));

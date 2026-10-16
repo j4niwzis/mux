@@ -131,12 +131,9 @@ def generate(args):
         current.add(name)
         pending.extend(inventory[name]["dependencies"])
     records = [r for r in records if r["name"] in current]
-    commit = git(args.source, "rev-parse", "HEAD") or "Unknown"
-    branch = git(args.source, "describe", "--tags", "--exact-match") or git(args.source, "symbolic-ref", "--short", "HEAD")
-    # CI checkouts are detached: retain the ref that actually selected HEAD.
-    import os
-    branch = branch or os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME") or "Detached HEAD"
-    metadata = {"version": args.version, "commit": commit, "branch": branch,
+    # The commit and branch: not here, but in about-commit.inc, written at
+    # every build (cmake/about_commit.py) -- here they would re-run CMake.
+    metadata = {"version": args.version,
                 "license": "AGPL-3.0-only", "repository": "https://github.com/j4niwzis/mux",
                 "license_text": license_text(args.source)}
     text = "// Generated from this build's resolved dependencies.\nnamespace about_data {\n"

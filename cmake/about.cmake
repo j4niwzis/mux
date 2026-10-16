@@ -8,22 +8,20 @@ file(GLOB mux_about_license_files CONFIGURE_DEPENDS
     "${mux_about_source}/cmake/licenses/ffmpeg/COPYING.*")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${mux_about_source}/cmake/about.py" ${mux_about_license_files})
-# A new commit or branch must refresh the identity even when no CMake file
-# changed. git-path also handles linked worktrees.
-foreach(ref HEAD HEAD_REF)
-  if(ref STREQUAL HEAD_REF)
-    execute_process(COMMAND git symbolic-ref -q HEAD WORKING_DIRECTORY "${mux_about_source}"
-        OUTPUT_VARIABLE ref OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-  endif()
-  if(ref)
-    execute_process(COMMAND git rev-parse --git-path "${ref}" WORKING_DIRECTORY "${mux_about_source}"
-        OUTPUT_VARIABLE path OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-    if(path)
-      cmake_path(ABSOLUTE_PATH path BASE_DIRECTORY "${mux_about_source}" NORMALIZE)
-      set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${path}")
-    endif()
-  endif()
-endforeach()
+# The commit and branch, written at every build into a file of their own --
+# only where they changed -- and read by one implementation unit
+# (src/ui/about_build.cc). Not a configure dependency: a re-run of CMake
+# rewrites every target's module map, and with it rebuilds every module.
+set(mux_about_commit "${mux_about_binary}/generated/about-commit.inc")
+execute_process(COMMAND "${Python3_EXECUTABLE}" "${mux_about_source}/cmake/about_commit.py"
+    --source "${mux_about_source}" --output "${mux_about_commit}" COMMAND_ERROR_IS_FATAL ANY)
+add_custom_target(mux_about_commit
+    COMMAND "${Python3_EXECUTABLE}" "${mux_about_source}/cmake/about_commit.py"
+        --source "${mux_about_source}" --output "${mux_about_commit}"
+    BYPRODUCTS "${mux_about_commit}"
+    COMMENT "The commit mux is built from"
+    VERBATIM)
+add_dependencies(mux_modules mux_about_commit)
 function(mux_about_quote out value)
   string(REPLACE "\\" "\\\\" value "${value}")
   string(REPLACE "\"" "\\\"" value "${value}")

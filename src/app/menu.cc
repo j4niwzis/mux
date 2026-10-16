@@ -172,12 +172,11 @@ void part_apply(menu_part& self, const request::menu_copy_image&) {
 
 void part_apply(menu_part& self, const request::menu_thread&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  auto& screen = self.s_->root();
-  if (!s_->chosen())
+  if (!self.s_->chosen())
     return;
   self.s_->open_thread(self.target_.id);
   if (!self.s_->demo())
-    self.s_->net->load_thread(*s_->chosen(), self.target_.id);
+    self.s_->net->load_thread(*self.s_->chosen(), self.target_.id);
   self.s_->refresh_due = true;
 }
 

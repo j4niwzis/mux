@@ -220,7 +220,7 @@ foreach(pair "en;514bc93ac647211d0f422f63978d1eeec6aa759d0cd8c3e8c5da6cf5a536784
 endforeach()
 target_sources(mux_modules PRIVATE src/emoji_keywords.cc)
 # The models, each made once (extern elsewhere).
-target_sources(mux_modules PRIVATE src/model_chats.cc src/ui/model_shown.cc)
+target_sources(mux_modules PRIVATE src/model_chats.cc src/ui/model_shown.cc src/ui/message_body.cc)
 set_property(SOURCE src/emoji_keywords.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_cldr_dir})
 set_property(SOURCE src/emoji_keywords.cc APPEND PROPERTY OBJECT_DEPENDS "${mux_cldr_dir}/en.xml;${mux_cldr_dir}/ru.xml")
 # The flags that decide which std module a target gets: the same on every

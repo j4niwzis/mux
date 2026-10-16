@@ -608,7 +608,10 @@ struct swipe_shown {
 // The bubble: a column of the name, the forward, the quote, the picture or
 // file or album, the text and its pieces, the preview, the reactions, the
 // thread's summary, the protocol's lines and node, the time.
-auto message_body(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model* now) {
+// Generic in what it is given, so that this interface does not make it: it is
+// made where it is called -- outside a release build only in its own unit
+// (message_body.cc), held there.
+auto message_body(const auto& n, const auto& in, const auto& f, const auto* now) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const looks_shown& looks = *n.looks;
@@ -1079,6 +1082,16 @@ struct reaction_line_press {
 }
 
 
+// The bubble as the row holds it: outside a release build made once, in its
+// own unit, and held; in one, made here, its type kept.
+skiff::compose::Held message_body_held(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model* now);
+template <bool Erase = skiff::scene::kErasedCombinators>
+auto bubble_of(const auto& n, const auto& in, const auto& f, const auto* now) {
+  if constexpr (Erase)
+    return message_body_held(n, in, f, now);
+  else
+    return message_body(n, in, f, now);
+}
 // A message's row: the avatar's room and the bubble -- at the right where it
 // is one's own, in the middle where it is something done -- the arrow a
 // swipe shows, the unread bar over it, who has read it under it. Swiped
@@ -1110,7 +1123,7 @@ auto message_row(const bubble_needs& n, const conversation& in, const bubble_fac
                             c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
                                                                .padding = {f.first ? 8.0f : 1.0f, 0.0f, 1.0f, with_face ? kBubbleAvatar + 8.0f : 0.0f}}),
                                                 justify),
-                                   std::move(face), message_body(n, in, f, now)));
+                                   std::move(face), bubble_of(n, in, f, now)));
   auto mark = c::styled({.place = scene::anchor::kCentreRight, .x = -6.0f, .width = 28.0f, .height = 28.0f, .cornerRadius = 14.0f,
                          .background = colours.tile, .alpha = 0.0f},
                         nodes::Icon(shape_of(icon::back{}), colours.dim));

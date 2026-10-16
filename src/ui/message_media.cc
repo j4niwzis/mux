@@ -132,7 +132,8 @@ inline constexpr float kAlbumWidth = 360.0f, kAlbumGap = 2.0f;
 }
 inline auto album_view(const palette& colours, const std::vector<attachment>& items, std::vector<media_open> opens) {
   namespace c = skiff::compose;
-  using row_t = c::Many<picture_view_t>;
+  // A row as many() makes it: held outside a release build.
+  using row_t = decltype(c::many(c::Look{}, std::vector<picture_view_t>{}));
   std::vector<std::pair<float, float>> sizes;
   std::vector<row_t> rows;
   std::size_t at = 0;

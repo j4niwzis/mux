@@ -136,52 +136,48 @@ using emoji_cell_t = decltype(emoji_cell(std::declval<const palette&>(), {}, {})
 // asked of you (Accept, Decline), waiting on them (Cancel), the 7 emoji to
 // compare (They match, They don't match), over (OK). What shows is what
 // its step says.
-using verification_box_of =
-    skiff::compose::Box<nodes::Text, nodes::Text, nodes::Flow<std::vector<emoji_cell_t>>, button_for<sends<request::verify_accept_now>>,
-                        button_for<sends<request::verify_cancel_now>>, button_for<sends<request::verify_match>>,
-                        button_for<sends<request::verify_mismatch>>, button_for<sends<request::close_verification>>>;
-struct verification_box : verification_box_of {
-  // The dialog it is shown in.
-  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}, .dismissable = false}; }
-  using accept_button = button_for<sends<request::verify_accept_now>>;
-  using decline_button = button_for<sends<request::verify_cancel_now>>;
-  using match_button = button_for<sends<request::verify_match>>;
-  using mismatch_button = button_for<sends<request::verify_mismatch>>;
-  using close_button = button_for<sends<request::close_verification>>;
-  verification_step_t step;
-
-  verification_box(const ui_needs& n, const verification_view& view) : verification_box(*n.colours, view) {}
-  verification_box(const palette& colours, const verification_view& view)
-      : verification_box_of(
-            skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
-            notice_line("Verify " + view.user, 17.0f, colours.text, true), notice_line(note_of(view), 14.0f, colours.dim),
-            emoji_row(colours, view.step),
-            answer(step_asks(view.step), 120.0f, primary(accept_button(colours.widgets, "Accept", {}))),
-            answer(step_waits(view.step), 120.0f, decline_button(colours.widgets, step_asks(view.step) ? "Decline" : "Cancel", {})),
-            answer(step_compares(view.step), 160.0f, primary(match_button(colours.widgets, "They match", {}))),
-            answer(step_compares(view.step), 160.0f, mismatch_button(colours.widgets, "They don't match", {})),
-            answer(step_over(view.step), 90.0f, primary(close_button(colours.widgets, "OK", {})))),
-        step(view.step) {}
-  // A button of it: at the end, as wide as said, there where its step has it.
-  template <class Button>
-  [[nodiscard]] static Button answer(bool shown, float width, Button button) {
-    return skiff::compose::visible(shown, skiff::compose::styled({.width = width, .height = 34.0f, .alignSelf = scene::align::kEnd}, std::move(button)));
-  }
-  [[nodiscard]] static std::string note_of(const verification_view& view) {
-    const std::string device = view.device.empty() ? std::string("one of their devices") : "device " + view.device;
-    return spl::visit(
-        spl::overloaded{
-            [&](verification_step::asked) { return std::format("{} ({}) asks to verify with emoji.", view.user, device); },
-            [&](verification_step::waiting) { return std::format("Waiting for {} ({})\u2026", view.user, device); },
-            [&](const verification_step::compare&) {
-              return std::string("Compare these emoji with the ones on the other screen, in the same order. Only if all of "
-                                 "them match, say so.");
-            },
-            [&](verification_step::done) { return std::format("Verified: {} ({}).", view.user, device); },
-            [&](const verification_step::cancelled& why) { return "Not verified: " + why.reason; }},
-        view.step);
-  }
-};
+// What the verification says, under who it is with: as its step goes.
+[[nodiscard]] inline std::string verification_note(const verification_view& view) {
+  const std::string device = view.device.empty() ? std::string("one of their devices") : "device " + view.device;
+  return spl::visit(
+      spl::overloaded{
+          [&](verification_step::asked) { return std::format("{} ({}) asks to verify with emoji.", view.user, device); },
+          [&](verification_step::waiting) { return std::format("Waiting for {} ({})\u2026", view.user, device); },
+          [&](const verification_step::compare&) {
+            return std::string("Compare these emoji with the ones on the other screen, in the same order. Only if all of "
+                               "them match, say so.");
+          },
+          [&](verification_step::done) { return std::format("Verified: {} ({}).", view.user, device); },
+          [&](const verification_step::cancelled& why) { return "Not verified: " + why.reason; }},
+      view.step);
+}
+// A button of it: at the end, as wide as said, there where its step has it.
+template <class Button>
+[[nodiscard]] auto verification_answer(bool shown, float width, Button button) {
+  return skiff::compose::visible(shown, skiff::compose::styled({.width = width, .height = 34.0f, .alignSelf = scene::align::kEnd}, std::move(button)));
+}
+// The box, made from the verification as it is now: made again as its
+// step moves on.
+inline auto verification_box_of(const palette& colours, const verification_view& view) {
+  return skiff::compose::column(
+      skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+      notice_line("Verify " + view.user, 17.0f, colours.text, true), notice_line(verification_note(view), 14.0f, colours.dim),
+      emoji_row(colours, view.step),
+      verification_answer(step_asks(view.step), 120.0f, primary(button_for<sends<request::verify_accept_now>>(colours.widgets, "Accept", {}))),
+      verification_answer(step_waits(view.step), 120.0f,
+          button_for<sends<request::verify_cancel_now>>(colours.widgets, step_asks(view.step) ? "Decline" : "Cancel", {})),
+      verification_answer(step_compares(view.step), 160.0f, primary(button_for<sends<request::verify_match>>(colours.widgets, "They match", {}))),
+      verification_answer(step_compares(view.step), 160.0f, button_for<sends<request::verify_mismatch>>(colours.widgets, "They don't match", {})),
+      verification_answer(step_over(view.step), 90.0f, primary(button_for<sends<request::close_verification>>(colours.widgets, "OK", {}))));
+}
+using verification_box = decltype(verification_box_of(std::declval<const palette&>(), std::declval<const verification_view&>()));
+// The window's dialog of it: as wide as it fits, up to 440; not put away
+// by a press off it -- the verification says when it is over.
+inline dialog_look content_look(std::type_identity<verification_view>) { return {.size = dialog_size::fitting{440.0f}, .dismissable = false}; }
+template <class Needs>
+auto make_content(const Needs& needs, const verification_view& view) {
+  return verification_box_of(*needs.colours, view);
+}
 
 // What a chat says of itself, over its messages: its avatar, name and who
 // is in it or how they are, a line under it, and the button that opens its

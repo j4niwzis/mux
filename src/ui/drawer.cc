@@ -49,7 +49,7 @@ inline auto drawer_account_row(const palette& colours, const drawer_account& one
                        two_line_style{.second_ink = one.failed ? colours.error : colours.dim, .show_second = true}),
              c::visible(one.current, c::styled({.alignSelf = scene::align::kMiddle}, icon_mark(colours, icon::check{})))),
       one.address);
-  return SKIFF_NAMED(drawer_account_row, row);
+  return row;
 }
 struct drawer_account_row_of {
   const palette* colours;

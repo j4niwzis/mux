@@ -75,7 +75,7 @@ using reaction_row = nodes::Flow<std::vector<reaction_chip_t>>;
 inline auto reaction_row_of() {
   auto row = reaction_row({.direction = nodes::direction::horizontal{}, .spacingX = 4.0f, .spacingY = 4.0f}, {});
   row.apply({.autoSize = scene::axes::kBoth, .maxWidth = 430.0f, .margin = {4.0f, 0.0f, 2.0f, 0.0f}});
-  return SKIFF_NAMED(reaction_row_of, row);
+  return row;
 }
 inline auto& reaction_chips(reaction_row& row) { return std::get<0>(row.fChildren); }
 inline const auto& reaction_chips(const reaction_row& row) { return std::get<0>(row.fChildren); }

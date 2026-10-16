@@ -899,7 +899,7 @@ template <class Column> auto in_chosen_chat(std::true_type, Column column) {
       },
       c::scoped<conversation>(c::handlers(), std::move(column), account_id{}, std::string())));
 }
-template <class Column> auto in_chosen_chat(std::false_type, Column column) { return SKIFF_NAMED(in_chosen_chat, column); }
+template <class Column> auto in_chosen_chat(std::false_type, Column column) { return column; }
 
 // Desktop: a line over it, the bars over the field -- who knocks, what was
 // not sent, what is answered or edited -- the paperclip on the left, the

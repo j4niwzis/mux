@@ -19,7 +19,9 @@ import mux.config;
 import mux.ui.base;
 import mux.plugins.ui;
 import mux.ui.proto;
-import :message;
+import :message_pieces;
+import :message_media;
+import :message_text;
 
 export namespace mux::ui {
 

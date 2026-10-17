@@ -53,7 +53,8 @@ inline constexpr float kPictureMost = 430.0f, kPictureLeast = 100.0f, kStickerMo
 auto video_marks(std::int64_t ms) {
   namespace c = skiff::compose;
   const skia::SkColor shade = skia::colorSetARGB(0x54, 0, 0, 0), white = skia::colorSetARGB(255, 255, 255, 255);
-  return SKIFF_NAMED(video_marks, c::column(c::vbox(0.0f, {.fill = true}),
+  // Over the picture, out of the box's flow, as the preview under it.
+  return SKIFF_NAMED(video_marks, c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
       c::column(c::justified(c::vbox(0.0f, {.place = scene::anchor::kCentre, .width = 44.0f, .height = 44.0f, .cornerRadius = 22.0f,
                                             .background = shade}),
                              nodes::justify::middle{}),
@@ -92,7 +93,11 @@ struct picture_ratio {
 // comes, a loader turning meanwhile, a video's marks, its time.
 inline auto picture_box(const palette& colours, const std::string& source, picture_look look) {
   namespace c = skiff::compose;
-  auto preview = c::visible(look.thumbnail, c::styled({.fill = true, .cornerRadius = 10.0f}, nodes::Image<from_previews>({source})));
+  // Under the picture, not above it in the column: placed over the box, out
+  // of its flow -- in the flow, the picture went under it, past the box's
+  // bottom, cut off by its corners: only the blurred preview was ever seen.
+  auto preview = c::visible(look.thumbnail, c::styled({.place = scene::anchor::kTopLeft, .fill = true, .cornerRadius = 10.0f},
+                                                     nodes::Image<from_previews>({source})));
   auto picture = c::Marked<message_picture, picture_image_t>(c::visible(look.thumbnail, c::styled({.fill = true, .cornerRadius = 10.0f},
                                                       nodes::Image<from_moving_thumbnail>({source, look.sticker}))));
   auto loader = c::visible(false, c::styled({.place = scene::anchor::kCentre}, widgets::RadialLoader<>{}));

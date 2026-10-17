@@ -172,7 +172,10 @@ class part {
   // candidates sent a batch at a time.
   void tick() {
     // The chat shown, where it changed: whether it can be called, shown.
-    if (const auto& chosen = s_->chosen(); chosen != callable_for_) {
+    // Asked again, too, while it is not callable: the chat chosen before the
+    // model held it -- at the start, opened from a link -- was found not
+    // callable once, and never asked again.
+    if (const auto& chosen = s_->chosen(); chosen != callable_for_ || (chosen && !callable_)) {
       callable_for_ = chosen;
       this->show_callable();
     }
@@ -361,8 +364,9 @@ class part {
     // account can be asked for a call's servers): the account's own ops
     // say nothing of calls, which are the plugin's -- asked of them, no
     // chat had the button.
-    callable_ = one && mux::app::network::can_ask<ask_servers>(one->id.account.speaks) && count <= 2;
-    ui::show(*s_->showing, call_shown{.now = shown_, .callable = callable_});
+    const bool now = one && mux::app::network::can_ask<ask_servers>(one->id.account.speaks) && count <= 2;
+    if (std::exchange(callable_, now) != now)
+      ui::show(*s_->showing, call_shown{.now = shown_, .callable = callable_});
   }
   std::string own_party_;
 };

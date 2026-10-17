@@ -349,12 +349,13 @@ inline auto composer_banner_for(const palette& colours) {
           c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {10.0f, 12.0f, 10.0f, 12.0f}}),
                  c::text_for<banner_shown>([](const banner_shown& now) { return now.text; },
                      c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text("", 13.0f, colours.text)))),
+                 // The program's button, its label in its middle -- the hand
+                 // made box had it at its left -- as the banner says it.
                  c::shown_for<banner_shown>([](const banner_shown& now) { return !now.button.empty(); },
-                     c::onClick(request::banner_button{},
-                         c::row(c::hbox(0.0f, {.width = 112.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
-                                               .background = colours.accent, .hoverBackground = skiff::paint::lighten(colours.accent, 0.12f)}),
-                                c::text_for<banner_shown>([](const banner_shown& now) { return now.button; },
-                                    c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 13.0f, colours.on_accent, true)))))),
+                     c::applied<banner_shown>([](const banner_shown& now) { return now.button; },
+                         [](auto& button, const std::string& label) { button.setLabel(label); },
+                         c::styled({.width = 112.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle},
+                                   c::primary(button_for<sends<request::banner_button>>(colours.widgets, "", {}))))),
                  c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::close{}, sends<request::banner_close>{}))))));
 }
 using composer_banner_t = decltype(composer_banner_for(std::declval<const palette&>()));

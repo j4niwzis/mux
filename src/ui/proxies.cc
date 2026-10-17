@@ -151,14 +151,12 @@ inline auto proxy_editor(const palette& colours, const std::optional<config::pro
                                         nodes::Text("", 13.0f, colours.error)))),
       skiff::compose::row(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
           .margin = scene::Margin::horizontal(16.0f)}),
-          skiff::compose::onClick(save_proxy_draft{}, skiff::compose::column(
-              skiff::compose::vbox(0.0f, {.width = 110.0f, .height = 34.0f, .cornerRadius = 6.0f,
-                  .background = colours.accent, .hoverBackground = colours.chosen}),
-              nodes::Text("Save", 14.0f, colours.text)), "Save proxy"),
-          skiff::compose::visible(from.has_value(), skiff::compose::onClick(delete_proxy_draft{}, skiff::compose::column(
-              skiff::compose::vbox(0.0f, {.width = 110.0f, .height = 34.0f, .cornerRadius = 6.0f,
-                  .background = colours.tile, .hoverBackground = colours.chosen}),
-              nodes::Text("Delete", 14.0f, colours.text)), "Delete proxy")))), std::move(draft)));
+          // The program's buttons, their labels in their middle: the hand
+          // made boxes had theirs in their top left corner.
+          skiff::compose::styled({.width = 110.0f, .height = 34.0f},
+              skiff::compose::primary(button_for<sends<save_proxy_draft>>(colours.widgets, "Save", {}))),
+          skiff::compose::visible(from.has_value(), skiff::compose::styled({.width = 110.0f, .height = 34.0f},
+              button_for<sends<delete_proxy_draft>>(colours.widgets, "Delete", {}))))), std::move(draft)));
 }
 using proxy_editor_t = decltype(proxy_editor(std::declval<const palette&>(), std::nullopt, -1));
 

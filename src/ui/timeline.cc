@@ -169,7 +169,10 @@ struct timeline_rows {
   static std::string key(const chats_model& now, const Told& told, std::size_t i) { return seen_of(now, told).at(i).id; }
   static std::optional<std::size_t> index(const chats_model& now, const Told& told, const std::string& id) {
     const seen all = seen_of(now, told);
-    const auto at = std::ranges::find(std::views::iota(std::size_t{0}, all.size()), id, [&](std::size_t i) { return all.at(i).id; });
+    // Each id looked at where it is, not copied: a thread of thousands had
+    // all of them copied at every look.
+    const auto at = std::ranges::find(std::views::iota(std::size_t{0}, all.size()), id,
+                                      [&](std::size_t i) -> const std::string& { return all.at(i).id; });
     return *at < all.size() ? std::optional<std::size_t>(*at) : std::nullopt;
   }
   // Come while the reader was away from the end, counted on the way down:

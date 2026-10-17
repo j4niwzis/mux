@@ -212,7 +212,14 @@ class jumps_part {
   // Its edges and what is seen in it: its answers are all held, fetched as
   // it opens; nothing to ask.
   void apply(const thread_edge&) {}
-  void apply(const thread_seen&) {}
+  // What the thread's panel shows: its pictures asked for as it changes,
+  // those around it only.
+  void apply(const thread_seen& one) {
+    if (const services::thread_list_now now{one.top, one.bottom}; now != s_->thread_list) {
+      s_->thread_list = now;
+      s_->ui.pictures_due = true;
+    }
+  }
   // What the thread's list is told: the thread open, if one is.
   void tell_thread() {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();

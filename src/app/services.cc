@@ -77,6 +77,11 @@ struct services {
   struct list_now {
     std::optional<std::string> jump_target, top, bottom;
   } list;
+  // The thread's list in its panel: the rows at its view's top and bottom.
+  struct thread_list_now {
+    std::optional<std::string> top, bottom;
+    friend bool operator==(const thread_list_now&, const thread_list_now&) = default;
+  } thread_list;
   struct message_asked {
     std::string id;
     std::optional<std::string> fragment;

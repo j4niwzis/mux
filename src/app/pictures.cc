@@ -247,6 +247,9 @@ class pictures_part {
           // The thread open in its panel: its root and its answers, which
           // are kept apart from the timeline -- their people were never
           // asked for, and showed no picture there.
+          // Only those around what its panel shows: a thread of thousands
+          // had every one of them gone through -- each one's text parsed for
+          // its emoji -- at every refresh.
           std::vector<const message*> in_thread;
           if (const auto open = s_->thread_open()) {
             if (const message* root = mux::ui::held_message(one, *open))
@@ -254,6 +257,19 @@ class pictures_part {
             if (const auto found = one.threads.find(*open); found != one.threads.end())
               std::ranges::copy(found->second | std::views::transform([](const message& answer) { return &answer; }),
                                 std::back_inserter(in_thread));
+            const auto place = [&](const std::optional<std::string>& id) -> std::optional<std::size_t> {
+              if (!id)
+                return std::nullopt;
+              const auto at = std::ranges::find(in_thread, *id, &message::id);
+              return at == in_thread.end() ? std::nullopt : std::optional(static_cast<std::size_t>(at - in_thread.begin()));
+            };
+            constexpr std::size_t kAround = 40;
+            const std::size_t count = in_thread.size();
+            const std::size_t top = place(s_->thread_list.top).value_or(count > kAround ? count - kAround : 0);
+            const std::size_t bottom = place(s_->thread_list.bottom).value_or(count == 0 ? 0 : count - 1);
+            const std::size_t from = top > kAround ? top - kAround : 0, to = std::min(count, bottom + kAround + 1);
+            in_thread = std::vector<const message*>(in_thread.begin() + static_cast<std::ptrdiff_t>(std::min(from, to)),
+                                                    in_thread.begin() + static_cast<std::ptrdiff_t>(to));
           }
           senders.insert_range(in_thread | std::views::transform([](const message* said) -> std::string_view { return said->sender; }));
           // Each sender looked up, not every member walked for them.
@@ -380,14 +396,11 @@ class pictures_part {
           // The thread open beside the chat: its answers' pictures, senders
           // and emoji, as the timeline's -- they were never asked for, and
           // its pictures never came.
-          if (const auto thread = s_->thread_open())
-            if (const auto found = one.threads.find(*thread); found != one.threads.end())
-              for (const message& said : found->second) {
-                pictures_of(said);
-                emoji_of(said);
-                if (const auto by = std::ranges::find(one.members, said.sender, &member::id); by != one.members.end())
-                  want(id, by->avatar, by->id);
-              }
+          // Those around what its panel shows (in_thread, its emoji and
+          // senders asked for above): every answer, each sender looked for
+          // among all the members, at every refresh, lagged a big thread.
+          for (const message* said : in_thread)
+            pictures_of(*said);
         }
       }
   }

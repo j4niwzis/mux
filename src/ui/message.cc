@@ -501,7 +501,16 @@ struct bubble_rules {
       return;
     }
     if (!part_of<bubble_part::blocks>(body).empty() || part_of<bubble_part::preview>(body) || (!text.visible() && !trailer)) {
-      state.time_placed = true;  // under it, as it is
+      // Under all of it, on a line of its own: what follows the text -- a
+      // code block, a preview -- is no line to put it beside. Left as the
+      // first guess had it, it stayed beside the text, in the middle of the
+      // bubble, over what came after.
+      if (inline_time.visible() && text.visible()) {
+        inline_time.setVisible(false);
+        time.setVisible(true);
+        body.invalidateLayout();
+      }
+      state.time_placed = true;
       return;
     }
     skia::SkFont* font = skiff::paint::defaultFont();
@@ -932,7 +941,9 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   auto time = c::visible(time_shown, c::styled(time_spec, nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim)));
   auto inline_time = c::visible(false, c::styled({.place = scene::anchor::kBottomRight, .y = kTimeLower},
                                                  nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim)));
-  if (skia::SkFont* font = skiff::paint::defaultFont(); font && words_shown && !words_said.empty() && !rules.sticker) {
+  // Only where the words are what ends the bubble: after a code block or a
+  // preview, the time goes under them.
+  if (skia::SkFont* font = skiff::paint::defaultFont(); font && words_shown && !words_said.empty() && !rules.sticker && pieces.size() == 1 && !preview) {
     const skiff::paint::Painter p(nullptr, *font);
     if (const auto wrapped_lines = p.wrap(words_said, kBubbleMaxWidth, 13.0f, false); !wrapped_lines.empty()) {
       const float needs = p.measure(wrapped_lines.back(), 13.0f, false) + p.measure(when, 11.0f) + 10.0f;

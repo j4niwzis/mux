@@ -99,7 +99,7 @@ class jumps_part {
   // at what it was read up to -- near the top, its unread below it.
   template <class Asked>
   void go(const mux::conversation_id& in, std::string to, std::optional<std::string> fragment, bool quiet, const Asked& asked) {
-    going_ = going_t{.in = in, .to = std::move(to), .fragment = std::move(fragment), .quiet = quiet, .since = now_ms()};
+    going_ = going_t{.in = in, .to = std::move(to), .fragment = std::move(fragment), .quiet = quiet, .since = now_ms(), .began = now_ms()};
     this->go_on(asked);
   }
   // A way back taken, or the newest: "↓".
@@ -322,10 +322,9 @@ class jumps_part {
     this->follow_looks();
     if (this->chosen() && s_->showing->look<mux::ui::chat_told>()->fetched != this->fetched())
       this->tell();
-    if (!going_) {
-      this->show_ways();
+    this->show_ways();
+    if (!going_)
       return;
-    }
     auto& jump = *going_;
     const auto in = this->chosen();
     const mux::conversation* chat = in ? s_->model->find(*in) : nullptr;
@@ -406,6 +405,14 @@ class jumps_part {
     }
   }
   [[nodiscard]] bool going() const { return going_.has_value(); }
+  // When the loader is due: a jump that lands in a frame or two -- Ctrl+Up
+  // to a message in view -- never shows it, as tdesktop's does not; one
+  // still on its way after a while does. The window woken for it then.
+  [[nodiscard]] double loader_wake_in() const {
+    if (!going_ || this->waited())
+      return std::numeric_limits<double>::infinity();
+    return std::max(1.0, going_->began + kLoaderAfterMs - now_ms());
+  }
   [[nodiscard]] std::optional<std::string> going_to() const { return going_ ? std::optional(going_->to) : std::nullopt; }
   // Let go -- by hand, at the loader; or the message is not there.
   void stop() {
@@ -489,6 +496,8 @@ class jumps_part {
   // back to it; and on the older asked, before asking again.
   static constexpr double kContextPatienceMs = 4000.0;
   static constexpr double kHistoryPatienceMs = 10000.0;
+  static constexpr double kLoaderAfterMs = 300.0;
+  [[nodiscard]] bool waited() const { return going_ && now_ms() - going_->began >= kLoaderAfterMs; }
   struct going_t {
     mux::conversation_id in;
     std::string to;
@@ -497,6 +506,8 @@ class jumps_part {
     // When it last got anywhere, and how much of the chat was held then:
     // it waits, and is given up, by that.
     double since = 0.0;
+    // When it was asked: the loader shown only once it has waited a while.
+    double began = 0.0;
     std::size_t held = 0;
     bool context_asked = false, paging = false;
     std::optional<std::size_t> base;
@@ -575,7 +586,7 @@ class jumps_part {
     const mux::conversation* chat = in ? s_->model->find(*in) : nullptr;
     mux::ui::chat_ways now{.back_here = stack != returns_.end() && !stack->second.empty(),
                            .back_to_chat = !chat_returns_.empty(),
-                           .loading = going_.has_value(),
+                           .loading = this->waited(),
                            .detached = chat && chat->detached,
                            .mentions = chat ? chat->unread_mentions.size() : 0,
                            .reactions = chat ? chat->unread_reactions.size() : 0};

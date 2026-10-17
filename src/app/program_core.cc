@@ -486,7 +486,7 @@ void app::after_event() {
   this->refresh_shown();
 }
 
-double app::wake_in() const { return model->typing_wake_in(); }
+double app::wake_in() const { return std::min(model->typing_wake_in(), jumps.loader_wake_in()); }
 
 void app::before_frame() {
   // What the window's nodes answered as they ticked (a page come to rest

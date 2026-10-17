@@ -135,6 +135,12 @@ class pictures_part {
             (emote ? mux::ui::emote_animations(*emote) : mux::ui::animations()).put(key, std::move(frames));
           else if (made && !emote)
             mux::ui::whole_pictures().put(key, std::move(frames.front().image));
+          // A message's picture draws its thumbnail, else the whole of it, or
+          // its frames where it moves -- and waits only where thumbnails come:
+          // the whole come first (opened in the viewer), or its frames, woken
+          // there too, not left a plate until its thumbnail came.
+          if (made && !emote)
+            mux::ui::thumbnails().waiting.wake();
           if (emote && made) {
             if (!moving)
               animated_emotes_.insert({key, *emote});

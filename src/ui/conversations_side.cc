@@ -399,15 +399,21 @@ struct side_space_menu_at {
   std::string account;
   config::space_item_t item;
   std::string name;
-  std::optional<side_space_menu_facts> operator()(const auto&, float x, float y) const {
-    return side_space_menu_facts{account, item, name, {x, y}};
+  // Pressed where it is in its list, scrolled: in the window, its menu's
+  // place -- as far off as the list was scrolled, where taken as it is.
+  std::optional<side_space_menu_facts> operator()(auto& row, float x, float y) const {
+    const auto shift = skiff::scene::work::drawnOffset(skiff::compose::state_of(row).fId);
+    return side_space_menu_facts{account, item, name, {x + shift.x, y + shift.y}};
   }
 };
 struct side_chat_menu_at {
   conversation_id chat;
   std::string name;
   std::shared_ptr<const side_menu_context> context;
-  std::optional<side_chat_menu_facts> operator()(const auto&, float x, float y) const {
+  std::optional<side_chat_menu_facts> operator()(auto& row, float x, float y) const {
+    const auto shift = skiff::scene::work::drawnOffset(skiff::compose::state_of(row).fId);
+    x += shift.x;
+    y += shift.y;
     return side_chat_menu_facts{chat, name,
         context && context->listing ? *context->listing : chat.account,
         context ? context->accounts : std::vector<account_id>{},

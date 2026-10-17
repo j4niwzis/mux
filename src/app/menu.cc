@@ -87,7 +87,13 @@ void part_apply(menu_part& self, const request::message_menu& one) {
   }
   self.s_->emoji.pack_account = chosen ? std::optional(chosen->account) : std::nullopt;
   self.s_->emoji.chat_emotes = chat ? chat->emotes : emote_list{};
-  mux::ui::show(*self.s_->showing, std::optional(one));
+  // At the press, in the window: the row said where it was pressed in its
+  // own space -- the list's, scrolled -- and the menu stood off by as far as
+  // the list was scrolled. The window's own note of the press is where it is.
+  request::message_menu shown = one;
+  shown.x = self.s_->last_press.fX;
+  shown.y = self.s_->last_press.fY;
+  mux::ui::show(*self.s_->showing, std::optional(std::move(shown)));
   // The menu takes the keys, as tdesktop's: the arrows go through it,
   // Enter does what is lit, Esc closes it. Nothing lit until an arrow.
   // Asked for as it is made: the card takes them as it reads that.

@@ -264,8 +264,11 @@ inline auto context_menu(const ui_needs& n, const menu_facts& facts) {
   const palette& colours = *n.colours;
   const skiff::compose::PopAt at{.from = skia::SkRect::MakeXYWH(facts.x, facts.y, 0.0f, 0.0f)};
   const bool readers = !facts.seen.empty();
+  // A press off it closes it -- a right press too: caught here, over the
+  // whole window, a right-click on another message did nothing at all, the
+  // menu left open.
   return SKIFF_NAMED(context_menu, c::local<contract::message_menu_state>(menu_events{},
-      c::onClick(request::close_menu{},
+      c::onRightPress(request::close_menu{}, c::onClick(request::close_menu{},
           c::column(c::vbox(0.0f, {.fill = true}),
               c::popped_at<contract::message_menu_state>([at](const contract::message_menu_state&) { return std::optional(at); }, 8.0f,
                                                          c::styled({}, menu_card(colours, *n.emoji, facts))),
@@ -274,7 +277,7 @@ inline auto context_menu(const ui_needs& n, const menu_facts& facts) {
                   return std::nullopt;
                 return skiff::compose::PopAt{.from = skia::SkRect::MakeLTRB(now.seen_left, now.seen_top, now.seen_right, now.seen_bottom),
                                              .beside = true, .overlap = 6.0f};
-              }, 8.0f, seen_list(colours, facts.seen))))));
+              }, 8.0f, seen_list(colours, facts.seen)))))));
 }
 using context_menu_t = decltype(context_menu(std::declval<const ui_needs&>(), std::declval<const menu_facts&>()));
 

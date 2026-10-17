@@ -369,27 +369,37 @@ void account<Sink>::list_threads(std::string room) {
 
 template <class Sink>
 void account<Sink>::load_thread(std::string room, std::string root) {
-  this->spawn_guarded([this, room = std::move(room), root = std::move(root)] {
-    if (!api_)
+  // Its newest page only, as a chat opens at its newest: the rest as its
+  // panel reaches its top (load_thread_older). Five pages of a hundred
+  // were loaded at once, every answer of a long thread made and kept.
+  thread_back_.erase(root);
+  this->load_thread_older(std::move(room), std::move(root));
+}
+
+template <class Sink>
+void account<Sink>::load_thread_older(std::string room, std::string root) {
+  const auto back = thread_back_.find(root);
+  // All loaded already, or the page on its way.
+  if ((back != thread_back_.end() && !back->second) || !thread_loading_.insert(root).second)
+    return;
+  std::optional<std::string> from = back != thread_back_.end() ? back->second : std::nullopt;
+  this->spawn_guarded([this, room = std::move(room), root, from = std::move(from)] {
+    if (!api_) {
+      thread_loading_.erase(root);
       return;
+    }
     using asked = loom::cs::get_relating_events_with_rel_type;
     const conversation_id in{id_, room};
-    // Up to five pages of a hundred, newest first: each answer a message
-    // in the thread.
-    std::optional<std::string> from;
-    for (int page = 0; page < 5; ++page) {
-      auto got = perform(*api_, asked{.room_id = room, .event_id = root, .rel_type = "m.thread", .from = from, .limit = 100,
-                                      .dir = asked::dir_t{asked::dir_values::b{}}});
-      if (!got) {
-        log(id_, "the thread {}: {}", root, got.error().said());
-        return;
-      }
-      for (const auto& one : got->chunk)
-        this->event(in, one, placement::aside{});
-      if (!got->next_batch)
-        break;
-      from = got->next_batch;
+    auto got = perform(*api_, asked{.room_id = room, .event_id = root, .rel_type = "m.thread", .from = from, .limit = 50,
+                                    .dir = asked::dir_t{asked::dir_values::b{}}});
+    thread_loading_.erase(root);
+    if (!got) {
+      log(id_, "the thread {}: {}", root, got.error().said());
+      return;
     }
+    for (const auto& one : got->chunk)
+      this->event(in, one, placement::aside{});
+    thread_back_.insert_or_assign(root, got->next_batch);
   });
 }
 

@@ -23,6 +23,7 @@ import mux.ui.proto;
 import mux.proto;
 import mux.protocols;
 import mux.kept_root;
+import mux.app.network;
 import mux.app.services;
 import mux.app.requests;
 
@@ -209,9 +210,13 @@ class jumps_part {
       ++marks.flash;
     });
   }
-  // Its edges and what is seen in it: its answers are all held, fetched as
-  // it opens; nothing to ask.
-  void apply(const thread_edge&) {}
+  // At its top, the page of answers before those held, as a chat's history
+  // is asked for at its top: a thread opens at its newest page only.
+  void apply(const thread_edge& one) {
+    const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
+    if (one.older && shown.chosen && shown.thread)
+      s_->net->load_thread_older(*shown.chosen, *shown.thread);
+  }
   // What the thread's panel shows: its pictures asked for as it changes,
   // those around it only.
   void apply(const thread_seen& one) {

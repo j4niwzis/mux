@@ -197,6 +197,10 @@ class account {
   std::uint64_t notification_revision_ = 0;
   bool notifications_busy_ = false;
   std::set<std::string> notification_rooms_;
+  // Each thread's way back, by its root: where its next page of older
+  // answers starts (none where it is all loaded), and those on their way.
+  std::map<std::string, std::optional<std::string>> thread_back_;
+  std::set<std::string> thread_loading_;
   void set_pusher(std::optional<std::string> endpoint);
   // A push come: the long poll cut short, and the sync gone again at once.
   void sync_now();
@@ -256,6 +260,9 @@ class account {
   // each as a message in it; an answer sent in one.
   void list_threads(std::string room);
   void load_thread(std::string room, std::string root);
+  // The page of its answers before those loaded: as the chat's history, as
+  // its panel reaches its top.
+  void load_thread_older(std::string room, std::string root);
   void send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles = {});
   // The user directory searched: people_found for what was asked.
   void search_people(std::string term);

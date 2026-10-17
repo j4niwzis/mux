@@ -514,6 +514,17 @@ struct network {
             },
             one.account);
     });
+  }  // The page of a thread's answers before those loaded.
+  void load_thread_older(const mux::conversation_id& in, std::string root) {
+    loop.post([this, in, root = std::move(root)] {
+      for (auto& one : accounts)
+        spl::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                ask_if_able([&](auto& a) -> decltype(void(a.load_thread_older(in.id, root))) { a.load_thread_older(in.id, root); }, *account);
+            },
+            one.account);
+    });
   }
   void send_in_thread(const mux::conversation_id& in, std::string body, std::string root, std::string latest,
                       std::optional<std::string> reply_to, std::vector<mux::styled_run> styles) {

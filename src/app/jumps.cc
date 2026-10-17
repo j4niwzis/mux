@@ -286,6 +286,12 @@ class jumps_part {
   // view's middle is at it or past it, or the view is at the end -- as
   // tdesktop's checkReplyReturns.
   void apply(const chat_seen& one) {
+    // Other messages in view: their pictures asked for -- the people's, the
+    // thumbnails, the previews -- as they come into view. Asked only as
+    // the window was refreshed, one scrolled or jumped to kept its plate,
+    // grey, until something else refreshed it.
+    if (seen_ != one)
+      s_->ui.pictures_due = true;
     seen_ = one;
     const auto in = this->chosen();
     const mux::conversation* chat = in ? s_->model->find(*in) : nullptr;

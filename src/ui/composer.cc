@@ -54,8 +54,11 @@ export namespace mux::ui {
 // where it is. A thin line down its middle, where it has one.
 template <class OnDrag> auto drag_edge(const palette& colours, OnDrag what, bool line = true) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(drag_edge, c::onDragAcross(std::move(what),
-                         c::with_cursor(scene::cursor::resize_horizontal{},
+  // The cursor on what the pointer is over -- the edge dragged, which takes
+  // it -- not on what is under that: the pointer's cursor is the deepest
+  // said on the way to what it is over, and the column under was not on it.
+  return SKIFF_NAMED(drag_edge, c::with_cursor(scene::cursor::resize_horizontal{},
+                         c::onDragAcross(std::move(what),
                                         c::column(c::vbox(), c::visible(line, c::styled({.place = scene::anchor::kTopCentre, .fillY = true,
                                                                                           .width = 1.0f},
                                                                                          nodes::Box<>(colours.band)))))));

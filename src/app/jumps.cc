@@ -101,6 +101,11 @@ class jumps_part {
   template <class Asked>
   void go(const mux::conversation_id& in, std::string to, std::optional<std::string> fragment, bool quiet, const Asked& asked) {
     going_ = going_t{.in = in, .to = std::move(to), .fragment = std::move(fragment), .quiet = quiet, .since = now_ms(), .began = now_ms()};
+    // Aimed at anew, whatever was aimed at last: the same message jumped to
+    // again -- a quote of the one just above, aimed at before -- was taken
+    // as aimed at already, the list never told, its answer never came, and
+    // the loader turned for ever.
+    aim_.key.reset();
     this->go_on(asked);
   }
   // A way back taken, or the newest: "↓".

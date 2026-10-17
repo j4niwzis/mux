@@ -94,7 +94,9 @@ inline constexpr float kSeenRow = 44.0f, kSeenMostTall = 320.0f, kSeenListWidth 
 inline auto seen_list(const palette& colours, const std::vector<seen_reader>& readers) {
   namespace c = skiff::compose;
   const float tall = std::min(kSeenMostTall, kSeenRow * static_cast<float>(readers.size()) + 10.0f);
-  return SKIFF_NAMED(seen_list, c::hovering(seen_list_says{},
+  // Hovered in a box as big as the list: filling across, as a row's does, it
+  // was popped as wide as the window, at its left edge.
+  return SKIFF_NAMED(seen_list, c::hovering(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), seen_list_says{},
       c::column(c::vbox(0.0f, {.width = kSeenListWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f}, .cornerRadius = 10.0f,
                                .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .masking = true}),
                 c::styled({.fill = true},

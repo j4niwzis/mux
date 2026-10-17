@@ -192,8 +192,10 @@ auto action_if(const auto& colours, std::string label, Act act, Allowed allowed,
                                            action(colours, std::move(label), std::move(act), true, style)));
 }
 // And one whose words move too.
+// Named for what it does (`spoken`): what gives a press its hand cursor, and
+// what a screen reader says -- left unnamed, Expand had the arrow over it.
 template <class Act, class Label, class Allowed>
-auto action_said(const auto& colours, Label label, Act act, Allowed allowed, action_style style = action_style::secondary) {
+auto action_said(const auto& colours, std::string spoken, Label label, Act act, Allowed allowed, action_style style = action_style::secondary) {
   namespace c = skiff::compose;
   const auto background = style == action_style::secondary ? colours.chosen : colours.accent;
   const auto ink = style == action_style::secondary ? colours.text : colours.on_accent;
@@ -203,7 +205,7 @@ auto action_said(const auto& colours, Label label, Act act, Allowed allowed, act
                                 .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .background = background,
                                 .hoverBackground = colours.widgets.fSurfaceHover,
                                 .border = scene::Border{colours.widgets.fSurfaceActive, style == action_style::secondary ? 1.0f : 0.0f}}),
-                 c::text_for<facts_t>(std::move(label), c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 12.0f, ink)))))));
+                 c::text_for<facts_t>(std::move(label), c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 12.0f, ink)))), std::move(spoken))));
 }
 // A switch: on as the facts say, pressed asking `act`.
 template <class Act, class On, class Allowed>
@@ -570,7 +572,7 @@ auto general_page(const auto& colours, const room_settings_facts& first) {
                         c::shown_for<facts_t>([](const facts_t& now) { return facts_of(now).encrypted; },
                                               action(colours, "Enabled", ask(manage_change::encryption{}), true, action_style::success)),
                         c::shown_for<facts_t>([](const facts_t& now) { return !facts_of(now).encrypted; },
-                            action_said(colours, [](const facts_t& now) {
+                            action_said(colours, "Enable encryption", [](const facts_t& now) {
                               return std::string(kept_of(now).confirming_encryption ? "Enable E2E Encryption" : "Enable");
                             },
                                 ask(manage_change::encryption{}), may_now<power_need::encrypt>{}, action_style::primary)))),
@@ -594,7 +596,7 @@ auto general_page(const auto& colours, const room_settings_facts& first) {
                       [at = &colours](const published_key& key) { return published_rows(*at, key); }))),
           card(colours,
               setting_tile(colours, "Local Addresses", "Set local address so users can join through your homeserver.",
-                  action_said(colours, [](const facts_t& now) { return std::string(kept_of(now).local_addresses_expanded ? "Collapse" : "Expand"); },
+                  action_said(colours, "Local addresses", [](const facts_t& now) { return std::string(kept_of(now).local_addresses_expanded ? "Collapse" : "Expand"); },
                               ask(manage_change::expand_addresses{}), [](const facts_t&) { return true; })),
               c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).local_addresses_expanded; },
                   c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -1248,13 +1250,13 @@ auto developer_page(const auto& colours, const room_settings_facts& first) {
                        action(colours, "Compose", sends<request::open_send_custom>{})),
                   card(colours,
                       setting_tile(colours, "Room State", "State events of the room.",
-                          action_said(colours, [](const facts_t& now) { return std::string(kept_of(now).expanded_state ? "Collapse" : "Expand"); },
+                          action_said(colours, "Room state", [](const facts_t& now) { return std::string(kept_of(now).expanded_state ? "Collapse" : "Expand"); },
                                       ask(manage_change::edit{editor::state_events}), [](const facts_t&) { return true; })),
                       c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).expanded_state; },
                           rows_of<state_event_list_t<decltype(colours)>, state_list_key>(state_list_of, [at = &colours](const state_list_key& key) { return state_event_list(*at, key); }))),
                   card(colours,
                       setting_tile(colours, "Account Data", "Private personalization data stored within room.",
-                          action_said(colours, [](const facts_t& now) { return std::string(kept_of(now).expanded_account_data ? "Collapse" : "Expand"); },
+                          action_said(colours, "Account data", [](const facts_t& now) { return std::string(kept_of(now).expanded_account_data ? "Collapse" : "Expand"); },
                                       ask(manage_change::edit{editor::account_data}), [](const facts_t&) { return true; })),
                       c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).expanded_account_data; },
                           c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),

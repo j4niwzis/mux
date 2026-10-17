@@ -77,6 +77,36 @@ struct services {
   struct list_now {
     std::optional<std::string> jump_target, top, bottom;
   } list;
+  // The stretches whose pictures were last asked for -- the chat's and the
+  // thread's, by the ids at their ends: asked again only where what is in
+  // view comes near their ends, not at every row scrolled past.
+  struct asked_span {
+    std::optional<std::string> first, last;
+  };
+  asked_span chat_pictures_span, thread_pictures_span;
+  // Whether what is in view (its top and bottom rows) comes within `margin`
+  // of the span's ends, or out of it, in the messages given: their pictures
+  // to be asked for again.
+  [[nodiscard]] static const std::string& id_in(const mux::message& one) { return one.id; }
+  [[nodiscard]] static const std::string& id_in(const mux::message* one) { return one->id; }
+  [[nodiscard]] static bool nears_end(const auto& messages, const asked_span& span, const std::optional<std::string>& top,
+                                      const std::optional<std::string>& bottom, std::ptrdiff_t margin = 10) {
+    const auto place = [&](const std::optional<std::string>& id) -> std::optional<std::ptrdiff_t> {
+      if (!id)
+        return std::nullopt;
+      const auto at = std::ranges::find_if(messages, [&](const auto& one) { return id_in(one) == *id; });
+      return at == std::ranges::end(messages) ? std::nullopt : std::optional(std::ranges::distance(std::ranges::begin(messages), at));
+    };
+    const std::ptrdiff_t count = std::ranges::distance(messages);
+    // An end not among them -- a thread's root, before its answers -- is
+    // their own end.
+    const auto first = span.first ? place(span.first).value_or(0) : std::optional<std::ptrdiff_t>();
+    const auto last = span.last ? place(span.last).value_or(count - 1) : std::optional<std::ptrdiff_t>();
+    const auto seen_top = place(top), seen_bottom = place(bottom);
+    if (!first || !last || !seen_top || !seen_bottom)
+      return true;
+    return (*first > 0 && *seen_top < *first + margin) || (*last < count - 1 && *seen_bottom > *last - margin);
+  }
   // The thread's list in its panel: the rows at its view's top and bottom.
   struct thread_list_now {
     std::optional<std::string> top, bottom;

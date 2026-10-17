@@ -217,7 +217,15 @@ class jumps_part {
   void apply(const thread_seen& one) {
     if (const services::thread_list_now now{one.top, one.bottom}; now != s_->thread_list) {
       s_->thread_list = now;
-      s_->ui.pictures_due = true;
+      // Asked again only near the ends of what was last asked for: at every
+      // row scrolled past, the messages around were all parsed again for
+      // their emoji, and a long thread lagged.
+      const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
+      const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
+      const auto answers = chat && shown.thread ? chat->threads.find(*shown.thread) : decltype(chat->threads.end()){};
+      if (!chat || !shown.thread || answers == chat->threads.end() ||
+          services::nears_end(answers->second, s_->thread_pictures_span, one.top, one.bottom))
+        s_->ui.pictures_due = true;
     }
   }
   // What the thread's list is told: the thread open, if one is.
@@ -297,10 +305,11 @@ class jumps_part {
     // thumbnails, the previews -- as they come into view. Asked only as
     // the window was refreshed, one scrolled or jumped to kept its plate,
     // grey, until something else refreshed it.
-    if (seen_ != one)
+    const auto in = this->chosen();
+    if (const mux::conversation* shown = in ? s_->model->find(*in) : nullptr;
+        seen_ != one && shown && services::nears_end(shown->timeline, s_->chat_pictures_span, one.top, one.bottom))
       s_->ui.pictures_due = true;
     seen_ = one;
-    const auto in = this->chosen();
     const mux::conversation* chat = in ? s_->model->find(*in) : nullptr;
     if (!chat)
       return;

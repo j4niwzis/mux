@@ -248,6 +248,9 @@ class pictures_part {
           // again.
           std::set<std::string_view> senders;
           const auto [first, last] = s_->list_around(one, 40);
+          s_->chat_pictures_span = last > first && last <= one.timeline.size()
+                                       ? services::asked_span{one.timeline[first].id, one.timeline[last - 1].id}
+                                       : services::asked_span{};
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             senders.insert(one.timeline[i].sender);
           // The thread open in its panel: its root and its answers, which
@@ -276,6 +279,8 @@ class pictures_part {
             const std::size_t from = top > kAround ? top - kAround : 0, to = std::min(count, bottom + kAround + 1);
             in_thread = std::vector<const message*>(in_thread.begin() + static_cast<std::ptrdiff_t>(std::min(from, to)),
                                                     in_thread.begin() + static_cast<std::ptrdiff_t>(to));
+            s_->thread_pictures_span = in_thread.empty() ? services::asked_span{}
+                                                         : services::asked_span{in_thread.front()->id, in_thread.back()->id};
           }
           senders.insert_range(in_thread | std::views::transform([](const message* said) -> std::string_view { return said->sender; }));
           // Each sender looked up, not every member walked for them.

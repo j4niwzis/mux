@@ -364,7 +364,11 @@ class part {
     // account can be asked for a call's servers): the account's own ops
     // say nothing of calls, which are the plugin's -- asked of them, no
     // chat had the button.
-    const bool now = one && mux::app::network::can_ask<ask_servers>(one->id.account.speaks) && count <= 2;
+    // A direct chat, as its protocol says (Matrix's m.direct) -- or a room of
+    // two: counted alone, a direct chat whose members held more than the two
+    // in it (those who left, a bridge's bot) had no button.
+    const bool now = one && mux::app::network::can_ask<ask_servers>(one->id.account.speaks) &&
+                     (mux::one_to_one(one->kind) || count <= 2);
     if (std::exchange(callable_, now) != now)
       ui::show(*s_->showing, call_shown{.now = shown_, .callable = callable_});
   }

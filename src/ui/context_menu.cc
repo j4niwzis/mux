@@ -268,7 +268,7 @@ inline auto context_menu(const ui_needs& n, const menu_facts& facts) {
   // whole window, a right-click on another message did nothing at all, the
   // menu left open.
   return SKIFF_NAMED(context_menu, c::local<contract::message_menu_state>(menu_events{},
-      c::onRightPress(request::close_menu{}, c::onClick(request::close_menu{},
+      c::onRightPress(request::menu_pressed_off{}, c::onClick(request::close_menu{},
           c::column(c::vbox(0.0f, {.fill = true}),
               c::popped_at<contract::message_menu_state>([at](const contract::message_menu_state&) { return std::optional(at); }, 8.0f,
                                                          c::styled({}, menu_card(colours, *n.emoji, facts))),

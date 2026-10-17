@@ -603,6 +603,13 @@ int run(App& app, const options& how, const events::kinds& kinds) {
                                       safe.w * to_points, safe.h * to_points);
       }
       scene.layoutIfNeeded(bounds);
+      // A right press that closed a menu, given again to what is under it
+      // now the menu is gone: another menu opened where it was pressed.
+      if (const auto again = std::exchange(app.shared.press_again, std::nullopt)) {
+        router.pointer(skiff::scene::pointer::down{again->fX, again->fY, sdl::kButtonRight});
+        router.pointer(skiff::scene::pointer::up{again->fX, again->fY, sdl::kButtonRight});
+        app.after_event();
+      }
       const double laid_out = detail::now_ms();
       // What the layout put past the edge of its parent, said where it can
       // be seen: once a node, until it fits again.

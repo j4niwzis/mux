@@ -31,6 +31,7 @@ struct menu_part {
 
 void part_apply(menu_part& self, const request::message_menu& one);
 void part_apply(menu_part& self, const request::close_menu&);
+void part_apply(menu_part& self, const request::menu_pressed_off&);
 void part_apply(menu_part& self, const request::reply_to& one);
 void part_apply(menu_part& self, const request::menu_quote_reply&);
 void part_apply(menu_part& self, const request::menu_reply&);
@@ -101,6 +102,10 @@ void part_apply(menu_part& self, const request::message_menu& one) {
 }
 
 void part_apply(menu_part& self, const request::close_menu&) { mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt); }
+void part_apply(menu_part& self, const request::menu_pressed_off&) {
+  part_apply(self, request::close_menu{});
+  self.s_->press_again = self.s_->last_press;
+}
 
 void part_apply(menu_part& self, const request::reply_to& one) {
   self.target_.id = one.id;

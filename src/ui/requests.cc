@@ -271,6 +271,9 @@ struct menu_react {
 };
 struct menu_save {};
 struct close_menu {};
+// A right press off an open menu: it closed, and the press given again to
+// what is under it -- another message's menu opened there, as a desktop's.
+struct menu_pressed_off {};
 struct menu_reply {};
 struct menu_quote_reply {};
 struct menu_edit {};

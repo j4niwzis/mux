@@ -123,6 +123,9 @@ struct services {
   // Where the pointer was last pressed: where a menu that press asked for
   // goes.
   skia::SkPoint last_press{};
+  // A right press to be given again, once what took it is gone -- a menu
+  // closed by it: the window does, after its next layout.
+  std::optional<skia::SkPoint> press_again;
   // What is left written in each chat, as the program keeps it; and how
   // many times that changed, for what lists the chats to see it moved.
   std::map<conversation_id, std::string> drafts;

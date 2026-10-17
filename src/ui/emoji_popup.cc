@@ -77,7 +77,13 @@ struct emoji_facts {
   bool files = false;     // and files
   // What is shown on each plugin's page, as the program has it.
   pages_shown_t pages;
+  friend bool operator==(const emoji_facts&, const emoji_facts&) = default;
 };
+// Compared, or its layer's mount, unable to tell the same facts, made the
+// whole popup again -- every emoji's cell -- each time they were read, and
+// what it made asked for the next whole walk: the panel at a few frames a
+// second.
+static_assert(std::equality_comparable<emoji_facts>);
 // Whether a page is offered: a plugin's says where (shown_where).
 inline bool page_available(const emoji_facts& facts, const popup_page_t& page) {
   return spl::visit(spl::overloaded{
@@ -156,8 +162,13 @@ struct popup_pages<plugin_list<Features...>> {
     slot.read(shown ? std::optional(true) : std::nullopt);
     return slot;
   }
+  // Their column, there only while one of them is the page: shown with the
+  // emoji's, it grew beside them, and took half the card -- the emoji in the
+  // top half of it, their groups' bar over the field under it.
   static auto pages(const ui_needs& needs, const emoji_facts& facts) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), page_of<Features>(needs, facts)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY,
+                                                              .visible = facts.page != popup_page_t(popup_page::emoji{})}),
+                                  page_of<Features>(needs, facts)...);
   }
   static auto tabs(const palette& colours, const emoji_facts& facts, skiff::compose::Look look) {
     return skiff::compose::row(std::move(look),

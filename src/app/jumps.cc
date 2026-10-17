@@ -209,6 +209,7 @@ class jumps_part {
       marks.fragment.reset();
       ++marks.flash;
     });
+    flash_until_ = now_ms() + kFlashMs;
   }
   // At its top, the page of answers before those held, as a chat's history
   // is asked for at its top: a thread opens at its newest page only.
@@ -282,6 +283,8 @@ class jumps_part {
         marks.fragment = going_->fragment;
         ++marks.flash;
       });
+    if (!going_->quiet)
+      flash_until_ = now_ms() + kFlashMs;
     going_.reset();
     this->show_ways();
   }
@@ -345,6 +348,15 @@ class jumps_part {
   // does not bring it, paged back to -- as far as the chat's limit says.
   template <class Asked>
   void go_on(const Asked& asked) {
+    // Its flash over: what is flashed let go, so that a row made again for
+    // it later -- scrolled back to -- is not flashed again as it is made.
+    if (flash_until_ > 0.0 && now_ms() >= flash_until_) {
+      flash_until_ = 0.0;
+      mux::ui::change_shown<mux::ui::message_marks>(*s_->showing, [](mux::ui::message_marks& marks) {
+        marks.flashed.reset();
+        marks.fragment.reset();
+      });
+    }
     this->tell_thread();
     this->follow_looks();
     if (this->chosen() && s_->showing->look<mux::ui::chat_told>()->fetched != this->fetched())
@@ -524,6 +536,10 @@ class jumps_part {
   static constexpr double kContextPatienceMs = 4000.0;
   static constexpr double kHistoryPatienceMs = 10000.0;
   static constexpr double kLoaderAfterMs = 300.0;
+  // How long a message jumped to stays flashed: its rows made meanwhile --
+  // a far jump's window made again as what is around it comes -- flashed too.
+  static constexpr double kFlashMs = 1500.0;
+  double flash_until_ = 0.0;
   [[nodiscard]] bool waited() const { return going_ && now_ms() - going_->began >= kLoaderAfterMs; }
   struct going_t {
     mux::conversation_id in;

@@ -55,6 +55,7 @@ struct call_shown {
   std::optional<call_view> now;
   // Whether the chat shown can be called: its protocol calls, and it is two.
   bool callable = false;
+  friend bool operator==(const call_shown&, const call_shown&) = default;
 };
 
 // Asked of the program: a call made to a chat, to the one chosen; taken,

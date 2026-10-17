@@ -81,7 +81,7 @@ class part {
       return;
     ended_.reset();
     shown_.reset();
-    ui::show(*s_->showing, call_shown{.now = std::nullopt, .callable = callable_});
+    this->shown(call_shown{.now = std::nullopt, .callable = callable_});
   }
   void apply(const call_chosen&) {
     if (const auto& chosen = s_->chosen())
@@ -183,7 +183,7 @@ class part {
     if (ended_ && std::chrono::steady_clock::now() > ended_->until) {
       ended_.reset();
       shown_.reset();
-      ui::show(*s_->showing, call_shown{.now = std::nullopt, .callable = callable_});
+      this->shown(call_shown{.now = std::nullopt, .callable = callable_});
     }
     if (!current_) {
       if (ended_)
@@ -212,6 +212,16 @@ class part {
   [[nodiscard]] bool in_call() const { return current_.has_value(); }
 
  private:
+  // What is shown of calls, set where it moved -- and the window asked to
+  // read it: set from the part's tick, after this frame's refresh of what
+  // is shown, it waited for something else to refresh the window. In a
+  // quiet direct chat nothing did, and its call button never came.
+  void shown(call_shown now) {
+    if (*s_->showing->look<call_shown>() == now)
+      return;
+    ui::show(*s_->showing, std::move(now));
+    s_->refresh_due = true;
+  }
   using session = mux::calls::media_session<app::wake_window>;
 
   template <class State>
@@ -304,7 +314,7 @@ class part {
     if (ended_)
       this->show_view(ended_->view);
     else
-      ui::show(*s_->showing, call_shown{.now = std::nullopt, .callable = callable_});
+      this->shown(call_shown{.now = std::nullopt, .callable = callable_});
   }
   [[nodiscard]] call_view view_of(const active_call& now) const {
     const mux::conversation* chat = s_->model->find(now.in);
@@ -338,7 +348,7 @@ class part {
     if (shown_ == view)
       return;
     shown_ = view;
-    ui::show(*s_->showing, call_shown{.now = view, .callable = callable_});
+    this->shown(call_shown{.now = view, .callable = callable_});
   }
   [[nodiscard]] static std::string new_call_id() {
     std::random_device entropy;
@@ -370,7 +380,7 @@ class part {
     const bool now = one && mux::app::network::can_ask<ask_servers>(one->id.account.speaks) &&
                      (mux::one_to_one(one->kind) || count <= 2);
     if (std::exchange(callable_, now) != now)
-      ui::show(*s_->showing, call_shown{.now = shown_, .callable = callable_});
+      this->shown(call_shown{.now = shown_, .callable = callable_});
   }
   std::string own_party_;
 };

@@ -114,7 +114,12 @@ inline auto threads_panel(const ui_needs& n) {
               nodes::ScrollContainer(c::projected<threads_shown>([](const threads_shown& now) { return now.roots; },
                   c::listed<thread_root>(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}}),
                                          [&colours](const thread_root& one) { return thread_row(colours, one); }))))),
-      c::shown_for<threads_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, timeline_list<thread_told, thread_list_tag>())),
+      // Across the panel and as tall as what its head and composer leave:
+      // the list fills what it is put in, and said only to grow, it kept
+      // its fill down too -- the panel's whole height, the composer pushed
+      // under the window.
+      c::shown_for<threads_shown>(open, c::styled({.fillX = true, .relativeSize = scene::axes::kX, .grow = scene::axes::kY},
+                                                  timeline_list<thread_told, thread_list_tag>())),
       c::shown_for<threads_shown>(open, composer_bar<in_thread>(n))));
 }
 using threads_panel_t = decltype(threads_panel(std::declval<const ui_needs&>()));

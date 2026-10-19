@@ -325,7 +325,11 @@ auto timeline_list() {
   list.apply({.fill = true});
   std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY,
                                       .padding = {8.0f, kListSide, 8.0f, kListSide}});
-  return SKIFF_NAMED(timeline_list, c::spanned_for<message_marks>(selecting, skiff::bind::Bound<Want, decltype(list)>(std::move(list))));
+  // The selection's wrapper kept concrete -- the name on the list inside it:
+  // named, the wrapper was held through a table outside a release build,
+  // and held so it never took a press on a row (a click in selection mode
+  // selected nothing; a drag neither).
+  return c::spanned_for<message_marks>(selecting, SKIFF_NAMED(timeline_list, skiff::bind::Bound<Want, decltype(list)>(std::move(list))));
 }
 
 // The loader's cross: the message jumped to no longer looked for.

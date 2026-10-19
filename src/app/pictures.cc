@@ -203,6 +203,9 @@ class pictures_part {
   // pictures in the bubbles made.
   void ask() {
     s_->ui.pictures_due = false;
+    // Those the panels drew without their pictures asked again by this
+    // sweep, and by the next frame that draws them so.
+    panel_asked_.clear();
     if (s_->demo())
       return;
     const auto want = [&](const account_id& of, const std::optional<std::string>& source, const std::string& key) {
@@ -814,6 +817,25 @@ class pictures_part {
   }
 
   std::set<std::pair<std::string, emote_kind>> animated_emotes_;
+
+ public:
+  // The emotes the panels and menus drew without their pictures this frame:
+  // each asked for once, not the whole sweep (ask). The sweep goes over
+  // every account's people and rooms and the chat's senders, and it ran at
+  // nearly every frame of a scroll through custom emoji -- what is drawn
+  // without its picture changes as they come into view and as they come:
+  // the emoji panel at a few frames a second. One still missing is asked
+  // again after the next sweep, as the throttle allows.
+  void want_shown(const std::vector<emote_picture>& shown) {
+    if (s_->demo() || !s_->listed())
+      return;
+    for (const emote_picture& picture : shown)
+      if (panel_asked_.insert({picture.source, picture.kind}).second)
+        this->want_emote(*s_->listed(), picture.source, true, picture.kind);
+  }
+
+ private:
+  std::set<std::pair<std::string, emote_kind>> panel_asked_;
 
   void want_whole(const account_id& of, const std::string& source) {
     if (source.empty() || source.starts_with("local:") || mux::ui::animations().has(source) || mux::ui::whole_pictures().has(source) ||

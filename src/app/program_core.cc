@@ -569,13 +569,15 @@ void app::before_frame() {
     keys_asked_free = true;
     shared.ask_keys(mux::ui::keys::chat{});
   }
-  // The emoji panel's stickers in view, asked for as they change -- as it
+  // The emoji panel's pictures in view, asked for as they change -- as it
   // opens, as it scrolls, as its tab or its search changes -- and not only
-  // when something else refreshed the window.
+  // when something else refreshed the window: those not asked yet, not the
+  // whole sweep of every picture the window shows (pictures_due), which
+  // ran at nearly every frame of a scroll through custom emoji.
   if (auto shown = mux::ui::emoji_pictures_wanted(*showing.look<mux::ui::suggestions_shown>(), *showing.look<mux::ui::chat_draft>(),
                                                 *showing.look<mux::ui::thread_draft>()); shown != shared.ui.panel_pictures_shown) {
+    pictures.want_shown(shown);
     shared.ui.panel_pictures_shown = std::move(shown);
-    shared.ui.pictures_due = true;
   }
   const auto style = reads().style_of(shared.listed(), shared.chosen());
   // Text fields save as they are edited; apply when the editor closes or

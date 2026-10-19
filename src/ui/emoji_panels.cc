@@ -36,8 +36,13 @@ export namespace mux::ui {
 // A picker's layout, as tdesktop's emoji and sticker panels share it: the
 // search field at the top, the list scrolling under it, the tabs' footer at
 // the bottom.
+// A panel's column: as tall as its page, the list growing into what the
+// field over it leaves. Sized by what it held -- outside a release build its
+// page's fill went to the holder over it, not to it -- the list took the
+// panel's height under the field, and pushed the footer out of the card:
+// the packs' tabs never seen.
 [[nodiscard]] inline skiff::compose::Look picker_look() {
-  return skiff::compose::vbox(4.0f, {.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
+  return skiff::compose::vbox(4.0f, {.fill = true, .padding = {7.0f, 0.0f, 4.0f, 7.0f}});
 }
 // Group by source and state key, not the displayed title. Old cached and
 // protocol-neutral packs without a source retain their named grouping.

@@ -239,6 +239,9 @@ struct advanced {};
 }  // namespace manage
 constexpr manage_tab_list<manage::room, manage::members, manage::roles, manage::packs, manage::advanced> manage_tabs(const state&) { return {}; }
 constexpr manage::room manage_initial_tab(const state&) { return {}; }
+// The client's General shown under Matrix's own (the room's name, topic,
+// address): one General tab, not two.
+constexpr manage::room manage_general_host(const state&) { return {}; }
 // The developer tools' state events: their list, one shown, one edited, a
 // new one written.
 enum class state_screen { overview, view, edit, compose };

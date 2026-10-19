@@ -65,6 +65,23 @@ auto manage_tab_row(const palette& colours, Tab tab) {
 }
 using client_tab_row_t = decltype(manage_tab_row(std::declval<const palette&>(), settings_tab::general{}));
 
+// The client's General -- the room's events, receipts, previews, typing,
+// Home, leaving -- in a tab of its own, or under the protocol's General
+// where it has one (Matrix's: the room's name, topic and address): one
+// General, not two.
+constexpr bool own_general_tab(settings_tab::general) { return true; }
+template <class Tab> constexpr bool own_general_tab(Tab) { return false; }
+[[nodiscard]] inline bool general_on_its_own(const room_settings_facts& facts) {
+  return spl::visit([](auto tag) { return own_general_tab(general_host_of(state_of<decltype(tag)>{})); }, facts.speaks);
+}
+// Whether the client's General is up: its own tab, or the tab hosting it.
+struct general_up {
+  bool operator()(const room_facts_t& now) const {
+    return now && (tab_up<settings_tab::general>{}(now) ||
+                   spl::visit([&](auto tag) { return tab_up<decltype(general_host_of(state_of<decltype(tag)>{}))>{}(now); }, now->speaks));
+  }
+};
+
 // The protocol's rows, those its room has; a row of each protocol's kind.
 template <class Tab>
 auto protocol_tab_row(const palette& colours, const room_settings_facts& facts) {
@@ -138,10 +155,10 @@ inline auto looks_page(const palette& colours, const room_settings_facts& facts)
       c::scoped<config::chat_choices>(c::handlers(), style_controls(colours), facts.chat),
       look_choices(colours, choice_level::chat{})));
 }
-template <class Tab, class Page>
-auto client_page(Page page) {
+template <class Up, class Page>
+auto client_page(Up up, Page page) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(client_page, c::shown_for<room_facts_t>(tab_up<Tab>{}, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(page))));
+  return SKIFF_NAMED(client_page, c::shown_for<room_facts_t>(up, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(page))));
 }
 
 // The tab up's title: the protocol's name for General, else the tab's.
@@ -188,7 +205,7 @@ inline auto room_settings_view(const ui_needs& n, const room_settings_facts& fac
                              c::shown_for<room_facts_t>([](const room_facts_t& now) { return now && now->narrow && now->navigation; },
                                                         icon_button(colours, icon::close{}, sends<request::close_manage>{}))),
                       c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_rows_of(colours, facts)),
-                      manage_tab_row(colours, settings_tab::general{}),
+                      c::visible(general_on_its_own(facts), manage_tab_row(colours, settings_tab::general{})),
                       manage_tab_row(colours, settings_tab::notifications{}),
                       manage_tab_row(colours, settings_tab::looks{})))),
           // The tab up, under its head where the protocol has one.
@@ -206,10 +223,11 @@ inline auto room_settings_view(const ui_needs& n, const room_settings_facts& fac
                       c::projected<room_facts_t>([](const room_facts_t& now) { return now ? now->tab.index() : std::size_t{0}; },
                           c::restarted_scroll<std::size_t>(nodes::ScrollContainer(
                               c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                        client_page<settings_tab::general>(room_general_page(colours, facts, presentation.page_header)),
-                                        client_page<settings_tab::notifications>(notifications_page(colours, facts)),
-                                        client_page<settings_tab::looks>(looks_page(colours, facts)),
-                                        c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_pages_of(colours, facts))))))))))));
+                                        client_page(tab_up<settings_tab::notifications>{}, notifications_page(colours, facts)),
+                                        client_page(tab_up<settings_tab::looks>{}, looks_page(colours, facts)),
+                                        c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_pages_of(colours, facts)),
+                                        // Under the protocol's page, where its General hosts it.
+                                        client_page(general_up{}, room_general_page(colours, facts, presentation.page_header && general_on_its_own(facts)))))))))))));
 }
 using room_settings_view_t = decltype(room_settings_view(std::declval<const ui_needs&>(), std::declval<const room_settings_facts&>()));
 using room_settings_t = room_settings_view_t;

@@ -302,10 +302,17 @@ template <class Rule, class Variant>
 namespace manage_defaults {
 constexpr settings_tab::general manage_initial_tab(const auto&) { return {}; }
 constexpr std::string_view manage_preferences_title(const auto&) { return "General"; }
+// The tab the client's General is shown in: its own, where the protocol's
+// tabs have no General of their own.
+constexpr settings_tab::general manage_general_host(const auto&) { return {}; }
 }
 template <class State> constexpr auto initial_manage_tab(const State& state) {
   using manage_defaults::manage_initial_tab;
   return manage_initial_tab(state);
+}
+template <class State> constexpr auto general_host_of(const State& state) {
+  using manage_defaults::manage_general_host;
+  return manage_general_host(state);
 }
 template <class State> constexpr auto preferences_title(const State& state) {
   using manage_defaults::manage_preferences_title;

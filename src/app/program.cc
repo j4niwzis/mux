@@ -475,7 +475,11 @@ struct app : kept_settings {
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);
   // The way down, as the chat's list said it: kept, for its corner to read.
-  void apply(const request::way_down& one) { mux::ui::show(showing, mux::ui::way_down_shown{one.wanted, one.unseen}); }
+  // Whether the way down is wanted, as the list says; its count is the
+  // chat's unread, kept before each frame (before_frame).
+  void apply(const request::way_down& one) {
+    mux::ui::change_shown<mux::ui::way_down_shown>(showing, [&](mux::ui::way_down_shown& now) { now.wanted = one.wanted; });
+  }
   void apply(const request::return_to_chat&);
   void go_live(const mux::conversation_id& in);
 

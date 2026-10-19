@@ -99,8 +99,8 @@ struct thread_told : timeline_told {};
 // What the corner over the chat's list shows besides the way down: a way
 // back to where a jump in this chat came from, one to the chat a jump
 // left, and the loader while a jump is on its way.
-// The way down over the chat's list, as the list said it: whether it is
-// wanted, and how many came meanwhile (the program keeps it).
+// The way down over the chat's list: whether it is wanted, as the list
+// says, and the chat's unread, as tdesktop's (the program keeps it).
 struct way_down_shown {
   bool wanted = false;
   std::size_t unseen = 0;

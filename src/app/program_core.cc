@@ -502,6 +502,15 @@ void app::before_frame() {
   if (std::exchange(shared.returns_due, false))
     jumps.clear_returns();
   jumps.go_on(taker{this});
+  // The way down's count, as tdesktop's: the chat's unread, as its row in
+  // the chats says it -- not what came while the list was away from its
+  // end, which a chat opened with its unread above never counted.
+  {
+    const mux::conversation* chat = shared.chosen() ? model->find(*shared.chosen()) : nullptr;
+    const auto unread = chat ? static_cast<std::size_t>(std::max<std::int64_t>(0, chat->unread_here(chat_filter_of(shared, *chat)))) : std::size_t{0};
+    if (showing.look<mux::ui::way_down_shown>()->unseen != unread)
+      mux::ui::change_shown<mux::ui::way_down_shown>(showing, [&](mux::ui::way_down_shown& now) { now.unseen = unread; });
+  }
   chat_view.show();
   chat_list.show();
   manage.show();

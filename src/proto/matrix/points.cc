@@ -357,4 +357,18 @@ inline bool manage_close_editor(advanced, manage_state& kept) {
 inline bool manage_editor_header(advanced, const manage_state& kept) { return kept.state_page != state_screen::overview; }
 }  // namespace manage
 
+// Its own requests, done by program_asked (mux.app.proto.matrix): listed
+// here, where its settings pages' manage_room is seen too -- what a debug
+// build's program serves a request by.
+constexpr request_list<request::setup_cross_signing, request::restore_cross_signing, request::reset_identity,
+                       request::sign_out_unverified, request::reset_backup, request::delete_backup, request::export_room_keys,
+                       request::import_room_keys, request::verify_session, request::change_account,
+                       request::refresh_sessions, request::verify_them, request::explore_state,
+                       request::open_send_custom, request::send_custom, request::save_room_pack, request::change_room, request::manage_room,
+                       request::continue_uia,
+                       request::cancel_uia, request::close_tool<tool::devtools_text>, request::close_tool<tool::devtools_state>,
+                       request::close_tool<tool::send_custom_form>, request::close_tool<tool::uia_step>>
+requests_of(const state&) {
+  return {};
+}
 }  // namespace mux::proto::matrix

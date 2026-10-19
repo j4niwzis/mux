@@ -1009,6 +1009,7 @@ struct row_menu {
     if (chat && !facts.id.empty() && !held_message(*chat, facts.id))
       facts.event = said;
     facts.own = said.outgoing;
+    facts.answerable = answerable(said);
     facts.text = said.body.plain;
     facts.selection = text && text->hasSelection();
     if (facts.selection)

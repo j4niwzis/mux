@@ -136,6 +136,10 @@ void part_apply(menu_part& self, const request::menu_reply&) {
   if (const auto& chosen = self.s_->chosen())
     if (const conversation* chat = self.s_->model->find(*chosen))
       if (const message* it = mux::ui::held_message(*chat, self.target_.id)) {
+        // Deleted, or not on the server: nothing to answer -- a swipe on
+        // one asks all the same.
+        if (!mux::ui::answerable(*it))
+          return;
         said = &*it;
         title = "Reply to " + mux::ui::sender_name(*chat, it->sender);
         // Its mentions by name, as the quote in the bubble shows them.

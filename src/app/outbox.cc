@@ -151,7 +151,7 @@ class outbox_part {
     // event its filter leaves out.
     std::vector<const message*> answerable;
     for (const message& each : chat->timeline)
-      if (!each.id.empty() && !each.redacted && chat_shows(*s_, *chat, each))
+      if (!each.id.empty() && mux::ui::answerable(each) && chat_shows(*s_, *chat, each))
         answerable.push_back(&each);
     if (answerable.empty())
       return;

@@ -62,6 +62,7 @@ struct menu_facts {
   bool history = false;   // edited here before: its edit history can be shown
   proto::account_ops can;  // what its account does: React, Forward, threads...
   bool deletable = false;  // one may take it away: one's own, or another's with the power to
+  bool answerable = true;  // may be replied to: on the server, and not deleted
   bool reaction_events = false;  // reacted to, the reactions being events
   std::size_t reaction_count = 0;  // how many reactions it has, of anyone
   std::string link;  // a link to it, where it has one

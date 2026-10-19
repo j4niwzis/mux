@@ -767,6 +767,15 @@ struct mux_paint : scene::Painting {
   };
 };
 
+// What may be answered: a message the server has -- not one still being
+// sent, or not sent at all -- and not deleted. A reply to either pointed at
+// nothing anyone else has.
+[[nodiscard]] inline bool answerable(const message& one) {
+  return !one.redacted && spl::visit(spl::overloaded{[](const delivery::sending&) { return false; },
+                                                     [](const delivery::failed&) { return false; },
+                                                     [](const auto&) { return true; }},
+                                     one.delivery);
+}
 // A message a chat holds, wherever: its timeline, an answer in one of its
 // threads, or fetched aside for a quote. What a reply quotes, a menu acts
 // on, a reaction goes to -- an answer in a thread among them, which the

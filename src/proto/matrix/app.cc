@@ -895,9 +895,23 @@ void program_asked(App& app, const manage_room& one) {
     return;
   auto now = *open;
   std::optional<app_detail::manage_ask_t> asked;
-  spl::visit(spl::overloaded{[&](manage_state& kept) { asked = spl::visit(app_detail::manage_step{now, kept}, one.change); }, [](auto&) {}},
+  // For now (bug 8, a press on the settings' pages doing nothing): what a
+  // press asked and what it found kept, said where it is seen.
+  bool kept_here = false;
+  spl::visit(spl::overloaded{[&](manage_state& kept) {
+                               kept_here = true;
+                               asked = spl::visit(app_detail::manage_step{now, kept}, one.change);
+                               std::println(std::cerr, "[manage] change #{} on manage_state: expanded_state {}, profile_editor {}",
+                                            one.change.index(), kept.expanded_state, kept.profile_editor);
+                             },
+                             [](auto&) {}},
              now.manage);
+  if (!kept_here)
+    std::println(std::cerr, "[manage] change #{}: the settings keep no manage_state (part #{})", one.change.index(), now.manage.index());
   mux::ui::show(app.showing, std::optional(std::move(now)));
+  std::println(std::cerr, "[manage] shown again: expanded_state now {}",
+               spl::visit(spl::overloaded{[](const manage_state& kept) { return kept.expanded_state; }, [](const auto&) { return false; }},
+                          app.showing.template look<std::optional<mux::ui::room_settings_facts>>()->value().manage));
   if (asked)
     spl::visit(spl::overloaded{[&](room_change_t& change) { program_asked(app, change_room{std::move(change)}); },
                                [&](mux::emote_pack& pack) { program_asked(app, save_room_pack{std::move(pack)}); }},

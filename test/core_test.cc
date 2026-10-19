@@ -410,6 +410,26 @@ TEST(Model, EachEditVersionRetainsTheEventThatWroteIt) {
   EXPECT_EQ(message.latest_edit_event, "$edit2");
 }
 
+// A reaction some clients put on the edit, not on what it edited: its mark
+// is on the message the edit wrote -- the one the timeline shows -- whether
+// the edit was known before the mark came or only after.
+TEST(Model, AReactionOnAnEditMarksTheMessageItEdited) {
+  model kept;
+  kept.apply(change::message_added{said("$original", "first", true)});
+  kept.apply(change::message_edited{with_juliet, "$original", {"second", std::nullopt}, std::nullopt, false, {}, "$edit1"});
+  kept.apply(change::reacted_to_mine{with_juliet, "$reaction1", "$edit1", {}});
+  ASSERT_EQ(kept.find(with_juliet)->unread_reactions.size(), 1u);
+  EXPECT_EQ(kept.find(with_juliet)->unread_reactions[0].target, "$original");
+  // A mark on an edit not known yet: moved once the edit comes.
+  kept.apply(change::reacted_to_mine{with_juliet, "$reaction2", "$edit2", {}});
+  EXPECT_EQ(kept.find(with_juliet)->unread_reactions[1].target, "$edit2");
+  kept.apply(change::message_edited{with_juliet, "$original", {"third", std::nullopt}, std::nullopt, false, {}, "$edit2"});
+  EXPECT_EQ(kept.find(with_juliet)->unread_reactions[1].target, "$original");
+  // What an edit wrote, found by its event.
+  EXPECT_EQ(edited_by(*kept.find(with_juliet), "$edit1"), &kept.find(with_juliet)->timeline.front());
+  EXPECT_EQ(edited_by(*kept.find(with_juliet), "$unknown"), nullptr);
+}
+
 TEST(Model, OptimisticEditEchoAssignsItsIdWithoutInventingAnotherVersion) {
   model kept;
   kept.apply(change::message_added{said("$original", "first")});

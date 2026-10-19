@@ -384,6 +384,10 @@ class jumps_part {
       jump.held = all.size();
       jump.since = now;
     }
+    // Aimed at an edit -- a reaction's mark on it: the message it edited,
+    // once that is here; the edit itself never has a row.
+    if (const mux::message* edited = mux::edited_by(*chat, jump.to); edited && edited->id != jump.to)
+      jump.to = edited->id;
     if (const auto found = std::ranges::find(all, jump.to, &mux::message::id); found != all.end()) {
       // A line the chat's settings hide -- a join, a rename, replied to:
       // landed on the nearest shown after it, else before it.

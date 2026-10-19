@@ -22,6 +22,23 @@ export import mux.plugins.changes;
 
 export namespace mux {
 
+// The message an edit event wrote -- its latest text, or one of its earlier
+// versions -- in the timeline or a thread: what a reaction some clients put
+// on the edit (not on what it edited) is on. None for an empty id.
+[[nodiscard]] inline const message* edited_by(const conversation& where, std::string_view event) {
+  if (event.empty())
+    return nullptr;
+  const auto wrote = [&](const message& one) {
+    return one.latest_edit_event == event || std::ranges::contains(one.versions, event, &message::version::event);
+  };
+  if (const auto found = std::ranges::find_if(where.timeline, wrote); found != where.timeline.end())
+    return &*found;
+  for (const auto& [root, answers] : where.threads)
+    if (const auto found = std::ranges::find_if(answers, wrote); found != answers.end())
+      return &*found;
+  return nullptr;
+}
+
 namespace change {
 
 struct notifications_changed {
@@ -886,6 +903,14 @@ class model {
       kept.edited = true;
       if (!one.event.empty()) kept.latest_edit_event = one.event;
     });
+    // A mark on this edit -- a reaction some clients put on the edit, kept
+    // before the edit was known: on the message it edited from now on.
+    for (auto* marks : {&where.unread_reactions, &where.unread_mentions})
+      std::ranges::transform(*marks, marks->begin(), [&](unread_mark mark) {
+        if (!one.event.empty() && mark.target == one.event)
+          mark.target = one.id;
+        return mark;
+      });
     // And the copy fetched aside for the replies quoting it: what they quote
     // is what it says now.
     if (const auto aside = where.quoted.find(one.id);
@@ -1066,7 +1091,10 @@ class model {
   void on(const change::notice&) {}
   void on(const change::reacted_to_mine& one) {
     this->in_chat(one.in, [&](conversation& where) {
-    keep_mark(where, where.unread_reactions, {one.event, one.target, one.at});
+    // On an edit: on the message it edited, which is what the timeline
+    // shows -- the edit has no row, and a jump to it looked for ever.
+    const message* edited = edited_by(where, one.target);
+    keep_mark(where, where.unread_reactions, {one.event, edited ? edited->id : one.target, one.at});
   });
   }
   void on(const change::marks_shown& one) {

@@ -599,10 +599,13 @@ struct side_pick_folder {
   using Answer = request::pick_folder;
   Answer operator()(const folder_t& folder) const { return {folder}; }
 };
-template <class P> using side_space_rows_t = decltype(side_spaces_for<space_bar_rows>(std::declval<P>(), side_pick_folder{}, true));
-// The views the lanes scroll in.
+// The rows of a lane -- the bar's or the list's, each marked as its own.
+template <class P, class Lane = space_bar_rows>
+using side_space_rows_t = decltype(side_spaces_for<Lane>(std::declval<P>(), side_pick_folder{}, true));
+// The views the lanes scroll in: the list's around its own rows -- made
+// around the bar's, its type was not the one the list is made of.
 template <class P> using space_bar_view_t = decltype(skiff::compose::SideScroll(std::declval<side_space_rows_t<P>>(), true));
-template <class P> using space_list_view_t = decltype(nodes::ScrollContainer(std::declval<side_space_rows_t<P>>()));
+template <class P> using space_list_view_t = decltype(nodes::ScrollContainer(std::declval<side_space_rows_t<P, space_list_rows>>()));
 // The folder bar, where it is shown: in the head, or under the search field
 // where the bars are big.
 auto side_space_bar(const auto& colours, bool big) {

@@ -335,7 +335,7 @@ struct screen_keys {
     if (!std::ranges::contains(kTheirs, press.key) || (!control && !std::ranges::contains(kBare, press.key)))
       return std::nullopt;
     return request::screen_key{press.key, control, press.modifiers.template has<scene::modifier::shift>(),
-                               press.modifiers.template has<scene::modifier::alt>()};
+                               press.modifiers.template has<scene::modifier::alt>(), press.repeat};
   }
 };
 // A swipe across it, on a phone's window: right, a step back (or the

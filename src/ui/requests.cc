@@ -362,6 +362,8 @@ struct open_search {};
 struct edit_last {};
 struct reply_step {
   bool older = true;
+  // Ctrl+Up held: a repeat of the key, not its first press.
+  bool repeat = false;
 };
 struct close_search {};
 struct search_typed {

@@ -133,9 +133,9 @@ class chat_list_part {
     else if (one.key == keys::kK && one.control)
       asked(request::ask_link{});
     else if (one.key == keys::kUp && one.control)
-      asked(request::reply_step{true});
+      asked(request::reply_step{true, one.repeat});
     else if (one.key == keys::kDown && one.control)
-      asked(request::reply_step{false});
+      asked(request::reply_step{false, one.repeat});
     else if (one.key == keys::kUp && !any && mux::ui::composer_empty(s_->chat_writing()))
       asked(request::edit_last{});
     else if (one.key == keys::kC && one.control && selected)

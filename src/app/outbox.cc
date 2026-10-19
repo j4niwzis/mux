@@ -108,6 +108,13 @@ class outbox_part {
   // it; Ctrl+Down the one below, and past the newest the answer let go. The
   // one answered is scrolled to and flashed, as tdesktop does.
   void apply(const request::reply_step& one) {
+    // Held, one step a frame: the message stepped to is scrolled to and
+    // flashed once a frame (show_message_due, taken before it), so a repeat
+    // that comes while the last step's is still due -- a frame slower than
+    // the key's repeat, as one scrolling is -- would step past a message
+    // never shown: every other one seen. The first press always steps.
+    if (one.repeat && s_->show_message_due)
+      return;
     auto& screen = s_->root();
     const conversation* chat = s_->chosen() ? s_->model->find(*s_->chosen()) : nullptr;
     if (!chat)

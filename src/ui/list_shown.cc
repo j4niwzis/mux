@@ -192,6 +192,8 @@ struct screen_swipe {
 struct screen_key {
   skiff::scene::Key key;
   bool control = false, shift = false, alt = false;
+  // Held down: the key's repeat, not its first press.
+  bool repeat = false;
 };
 }  // namespace request
 

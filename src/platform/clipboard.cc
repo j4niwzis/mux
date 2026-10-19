@@ -102,23 +102,29 @@ inline constexpr std::array kPictureKinds{
 class paster {
  public:
   [[nodiscard]] std::vector<std::string> pictures() {
+    // Each kind asked of the system's clipboard as it is now
+    // (SDL_HasClipboardData): the list of what it offers
+    // (SDL_GetClipboardMimeTypes) is SDL's own, kept from what this window
+    // put there or was told of an update -- on X11 it stayed empty for what
+    // another program copied, and a picture copied from a browser or a
+    // screenshot tool was never seen; Ctrl+V pasted nothing.
+    // A picture itself, in one of the kinds read here.
+    for (const picture_kind& kind : kPictureKinds)
+      if (sdl::SDL_HasClipboardData(kind.mime))
+        if (auto made = this->picture_of(kind))
+          return {std::move(*made)};
+    // Files a file manager copied: those that are pictures.
+    if (sdl::SDL_HasClipboardData("text/uri-list")) {
+      std::vector<std::string> files = this->uris();
+      if (!files.empty())
+        return files;
+    }
     std::size_t count = 0;
     char** offered = sdl::SDL_GetClipboardMimeTypes(&count);
     const std::vector<std::string> mimes =
         offered ? std::views::counted(offered, static_cast<std::ptrdiff_t>(count)) | std::views::transform([](const char* one) { return std::string(one); }) | std::ranges::to<std::vector>()
                 : std::vector<std::string>{};
     sdl::SDL_free(offered);
-    // A picture itself, in one of the kinds read here.
-    for (const picture_kind& kind : kPictureKinds)
-      if (std::ranges::contains(mimes, std::string_view(kind.mime)))
-        if (auto made = this->picture_of(kind))
-          return {std::move(*made)};
-    // Files a file manager copied: those that are pictures.
-    if (std::ranges::contains(mimes, std::string_view("text/uri-list"))) {
-      std::vector<std::string> files = this->uris();
-      if (!files.empty())
-        return files;
-    }
     if (!mimes.empty() && std::ranges::none_of(mimes, [](const std::string& one) { return one.starts_with("text/"); }))
       std::println(std::cerr, "[paste] nothing on the clipboard read as a picture; it offers: {}", mimes);
     return {};

@@ -276,10 +276,26 @@ struct app : kept_settings {
   static constexpr bool takes = requires(Part& part, const Request& one) { part_apply(part, one); } ||
                                 requires(Part& part, const Request& one) { part.apply(one); } ||
                                 requires(Part& part, const Request& one, const taker& asked) { part.apply(one, asked); };
+  // Whether a protocol lists a request among its own (requests_of): what
+  // the runtime walks outside a release build serve it by.
+  template <class Request, class... Listed>
+  static consteval bool listed_in(mux::proto::request_list<Listed...>) {
+    return (std::same_as<Request, Listed> || ...);
+  }
+  template <class Request, class... Tags>
+  static consteval bool listed_by_a_protocol(mux::protocol_list<Tags...>) {
+    return (listed_in<Request>(decltype(mux::proto::protocol_requests_of(std::declval<const mux::state_of<Tags>&>())){}) || ...);
+  }
   // A protocol's own request: done as its program glue says (mux.app.proto).
+  // Listed by its protocol too, or outside a release build nothing serves it:
+  // a press on a room's settings page (manage_room) was dropped so, every
+  // Expand and Edit doing nothing.
   template <class Request>
     requires requires(app& self, const Request& one) { program_asked(self, one); }
   void route(const Request& one) {
+    static_assert(listed_by_a_protocol<Request>(mux::protocols{}),
+                  "a request a protocol's program glue takes (program_asked), missing from its requests_of: "
+                  "outside a release build nothing would serve it");
     program_asked(*this, one);
   }
   // The program's parts, in the order a request is offered to them; what

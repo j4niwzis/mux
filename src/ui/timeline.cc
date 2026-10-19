@@ -175,6 +175,13 @@ struct timeline_rows {
                                       [&](std::size_t i) -> const std::string& { return all.at(i).id; });
     return *at < all.size() ? std::optional<std::size_t>(*at) : std::nullopt;
   }
+  // Going on past what is held: a chat a window away from its newest (a
+  // jump far back) -- the rest on the server, its next page asked for at the
+  // list's bottom as history is at its top. Not a thread's answers.
+  static bool goes_on(const chats_model& now, const Told& told) {
+    const conversation* chat = chat_of(now, told);
+    return chat && chat->detached && !told.thread;
+  }
   // Come while the reader was away from the end, counted on the way down:
   // another's message the chat shows, not one's own nor an event it hides.
   // A chat a window away from its newest counts nothing: what comes after

@@ -211,7 +211,11 @@ inline auto emoji_popup(const ui_needs& n, const emoji_facts& facts) {
       c::flicked(90.0f, flick_pages{facts},
           c::column(c::vbox(0.0f, {}),
               c::shown_for<window_shape>(std::not_fn(phone), popup_pages_t::tabs(colours, facts, c::hbox(4.0f, tabs_look))),
-              c::styled({.fillX = true, .grow = scene::axes::kY, .masking = true, .visible = facts.page == popup_page_t(popup_page::emoji{})},
+              // In a column that grows, the panel filling it: styled so, the
+              // panel's own fill took the place of the grow, and it was as tall
+              // as the whole card -- its footer under the card's bottom edge.
+              c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY, .masking = true,
+                                       .visible = facts.page == popup_page_t(popup_page::emoji{})}),
                         emoji_panel(colours, *n.emoji, insert_emoji_into{})),
               popup_pages_t::pages(n, facts),
               c::shown_for<window_shape>(phone,

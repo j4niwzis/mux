@@ -1118,7 +1118,11 @@ enum class state_row_kind { add, type, key };
 template <class Act>
 auto state_list_row(const auto& colours, std::string label, std::string detail, Act act, state_row_kind kind = state_row_kind::type, bool expanded = false) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(state_list_row, c::onClick(std::move(act), c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f},
+  // Pressed, it asks what act makes (onPress): given to onClick, act itself
+  // -- the callable -- was the event sent, which a release build's walk
+  // could not take, and only the debug build's ran.
+  auto spoken = label;
+  return SKIFF_NAMED(state_list_row, c::onPress(std::move(act), c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f},
                                                           .cornerRadius = colours.widgets.fCorner, .hoverBackground = colours.chosen}),
       c::visible(kind != state_row_kind::key,
           c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle},
@@ -1127,7 +1131,7 @@ auto state_list_row(const auto& colours, std::string label, std::string detail, 
                 elided(nodes::Text(std::move(label), 12.0f, colours.text))),
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(detail), 12.0f, colours.dim)),
       c::visible(kind == state_row_kind::key,
-          c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::right{}), colours.dim))))));
+          c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::right{}), colours.dim)))), std::move(spoken)));
 }
 // The state events, by their types: each type unfolded to its keys.
 struct state_group {

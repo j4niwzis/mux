@@ -750,7 +750,9 @@ auto member_rows(const auto& colours, const members_basis& basis, const member_l
 auto member_listing_view(const auto& colours, const members_basis& basis) {
   namespace c = skiff::compose;
   using rows_t = decltype(member_rows(colours, basis, member_listing{}));
-  return SKIFF_NAMED(member_listing_view, c::derived<member_draft>([basis](const member_draft& now) { return listing_of(basis, now); },
+  // Projected from the page's draft (its Local): derived reads the model's
+  // parts only, and no rows were ever made -- the members' page empty.
+  return SKIFF_NAMED(member_listing_view, c::projected<member_draft>([basis](const member_draft& now) { return listing_of(basis, now); },
       c::mount<rows_t, member_listing>([at = &colours, basis](const member_listing& listing) { return std::tuple{member_rows(*at, basis, listing)}; },
                                        {.fillX = true, .autoSize = scene::axes::kY})));
 }

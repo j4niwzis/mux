@@ -23,27 +23,34 @@ env:
   CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/cpm
   # clang 23 is the only one installed: its crashes print named frames.
   LLVM_SYMBOLIZER_PATH: /usr/lib/llvm-23/bin/llvm-symbolizer
+  # This run's stages' builds, each kept for the next.
+  STAGE: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
+# The build in stages, a job each, and every other target -- each test, the
+# terminal client -- a job of its own: no job near GitHub's six hours. Each
+# stage builds its part on the build directory the one before it left in the
+# cache.
 jobs:
-  clang:
-    name: clang ${{ matrix.llvm }}, libc++
+  # Configured, and the libraries every target builds on: the modules.
+  modules:
+    name: modules (clang ${{ matrix.llvm }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    outputs:
+      tests: ${{ steps.tests.outputs.list }}
     strategy:
       fail-fast: false
       matrix:
         llvm: [23]
     steps:
-      # The whole history, so that each file's time can be the time of the
-      # commit that last changed it (below).
+      # The whole history, as the first run of this workflow checked out.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      # The build directory and the fetched sources kept between runs:
-      # restored here, and saved at the end whether the build went through or
-      # not (below) -- actions/cache saves only after a job that passed, and
-      # a run that failed at its link left the next one an older build to
-      # start from, ffmpeg cloned again and all of libav built again.
+      - uses: ./.github/actions/desktop-setup
+        with:
+          llvm: ${{ matrix.llvm }}
+      # The build and the fetched sources the last run kept.
       - uses: actions/cache/restore@v4
         with:
           path: |
@@ -51,108 +58,47 @@ jobs:
             .cache/cpm
           key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}
           restore-keys: build-${{ runner.os }}-clang${{ matrix.llvm }}-
-
-      # ninja decides what to rebuild from the times of files, and a checkout
-      # stamps every file with now. The build restored says what it was built
-      # from -- each file's hash, written after a build that went through --
-      # and a file is new where its hash differs from that, old where not.
-      # (The times of the last commits were not enough: runs end in any
-      # order, and a build saved later than a change could pass it over.)
+      # ninja goes by file times. A source changed since the build restored
+      # was made -- its hash other than the list the build keeps, written
+      # after a build that went through -- gets the time this run began; the
+      # rest, an old one. What changed is kept with the build: every later
+      # stage stamps the same files the same way, so a unit an earlier run
+      # built from an older source is built again there too, and one an
+      # earlier stage of this run built is not.
       - name: file times against the build restored
         run: |
+          mkdir -p build
+          began=$(date +%s)
           git ls-files -z | xargs -0 touch -d "@1000000000"
           if [ -f build/sources.sha1 ]; then
             git ls-files -z | xargs -0 sha1sum | sort > /tmp/sources-now.sha1
-            sort build/sources.sha1 | comm -13 - /tmp/sources-now.sha1 | cut -c43- | while IFS= read -r file; do
-              touch "$file"
-            done
+            sort build/sources.sha1 | comm -13 - /tmp/sources-now.sha1 | cut -c43- > build/changed-sources
           else
-            git ls-files -z | xargs -0 touch
+            git ls-files > build/changed-sources
           fi
-
-      # Clang and libc++, which is where `import std` comes from.
-      - name: clang and libc++
-        run: |
-          sudo apt-get update || true
-          sudo apt-get install -y ninja-build lsb-release software-properties-common gnupg curl
-          curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
-          chmod +x /tmp/llvm.sh
-          sudo /tmp/llvm.sh ${{ matrix.llvm }}
-          sudo apt-get install -y libc++-${{ matrix.llvm }}-dev libc++abi-${{ matrix.llvm }}-dev
-
-      # OpenSSL is built from its port (perl runs its build; the runner has
-      # it). SDL is a window library and needs the headers of the windowing
-      # systems it opens windows on.
-      # Skia is a GN project: cmake-everywhere runs gn to read it.
-      - name: gn
-        run: |
-          curl -sSL -o gn.zip "https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/latest"
-          mkdir -p "$HOME/.local/bin" && unzip -o -j gn.zip gn -d "$HOME/.local/bin"
-          chmod +x "$HOME/.local/bin/gn" && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: windowing headers
-        run: sudo apt-get install -y xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols nasm
-
-      - name: cmake
-        run: |
-          version=4.4.3
-          curl -sSL -o cmake.tar.gz \
-            "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}-linux-x86_64.tar.gz"
-          sudo tar xzf cmake.tar.gz -C /opt
-          echo "/opt/cmake-${version}-linux-x86_64/bin" >> "$GITHUB_PATH"
-
-      # CMake works out where the std module's source is from where the
-      # compiler is, and the compiler a distribution installs is a link in a
-      # directory that says nothing about its toolchain: the answer is
-      # /lib/share/libc++/v1, which no package fills. So both ends are said
-      # outright.
-      - name: where import std is read from
-        run: |
-          sudo mkdir -p /lib/share/libc++
-          sudo ln -sfn /usr/lib/llvm-${{ matrix.llvm }}/share/libc++/v1 /lib/share/libc++/v1
-          sudo ln -sf /usr/lib/llvm-${{ matrix.llvm }}/bin/clang++ /usr/local/bin/clang++
-          test -f /lib/share/libc++/v1/std.cppm
-
-      # Template-heavy units need room beyond the runner's physical memory.
-      # These preinstalled SDKs are unused by this build; removing them leaves
-      # space for both the compiler output and 32 GiB of swap.
-      - name: swap
-        run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
-          sudo swapoff -a || true
-          sudo rm -f /mnt/mux.swap
-          sudo fallocate -l 32G /mnt/mux.swap
-          sudo chmod 600 /mnt/mux.swap
-          sudo mkswap /mnt/mux.swap
-          sudo swapon /mnt/mux.swap
-          free -h
-
-      - name: build
-        id: build
+          echo "$began" > build/run-began
+          tr '\n' '\0' < build/changed-sources | xargs -0 -r touch -d "@$began"
+      - name: configure
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMUX_PROGRAM_JOBS=1 \
             -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
             -DMUX_UI=ON -DMUX_CALLS=ON
-
-
-          # Every unit that fails, not only the first: a run shows them all.
-          cmake --build build --parallel 1 -- -k 0
-
-      # What this build was built from, for the next run to compare with:
-      # only where it went through, so that what failed is built again.
-      - name: what the build was built from
-        run: git ls-files -z | xargs -0 sha1sum > build/sources.sha1
-
-      - name: test
-        run: ctest --test-dir build --output-on-failure
-
-      # A build that failed may have left what it made from other sources than
-      # the list says: the list goes, and the next run builds mux afresh.
-      - name: no list where the build failed
-        if: failure() && steps.build.outcome == 'failure'
-        run: rm -f build/sources.sha1
-
+      # The tests, each with the target that runs it: a job each.
+      - name: the tests
+        id: tests
+        run: |
+          ctest --test-dir build --show-only=json-v1 > /tmp/tests.json
+          python3 - >> "$GITHUB_OUTPUT" <<'EOF'
+          import json, os
+          tests = json.load(open("/tmp/tests.json"))["tests"]
+          out = [{"name": t["name"], "target": os.path.basename(t["command"][0]) if t["command"][0].startswith(os.path.abspath("build")) else ""} for t in tests]
+          print("list=" + json.dumps(out))
+          EOF
+      # Every unit that fails, not only the first: a run shows them all.
+      - name: build the modules
+        id: build
+        run: cmake --build build --parallel 1 --target mux_modules -- -k 0
       # Where the build stopped over the std module: the flags and defines
       # each copy of std, and each copy of a module, was built with -- the
       # difference between them is the answer.
@@ -170,10 +116,174 @@ jobs:
                   for f in flags:
                       print("   ", f[:400])
           EOF
+      # What this build was built from: only where it went through, so
+      # that what failed is built again from scratch by the next run.
+      - name: what the build was built from
+        if: steps.build.outcome == 'success'
+        run: git ls-files -z | xargs -0 sha1sum > build/sources.sha1
+      - name: no list where the build failed
+        if: always() && steps.build.outcome != 'success'
+        run: rm -f build/sources.sha1
+      - name: keep the build
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build
+            .cache/cpm
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-modules
 
-      # What was built kept for the next run, the build gone through or not:
-      # what failed is built again from it, the rest is not.
-      - name: keep the build for the next run
+  # The app's units -- the window's binding among them, hours alone.
+  app:
+    needs: modules
+    name: app (clang ${{ matrix.llvm }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        llvm: [23]
+    steps:
+      # The whole history, as the first run of this workflow checked out.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/desktop-setup
+        with:
+          llvm: ${{ matrix.llvm }}
+      - name: the build the stage before left
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build
+            .cache/cpm
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-modules
+          fail-on-cache-miss: true
+      # The file times the first stage gave: what changed since the run
+      # before, at the time this run began; the rest, old.
+      - name: file times as the first stage gave them
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build/changed-sources | xargs -0 -r touch -d "@$(cat build/run-began)"
+      # Every unit that fails, not only the first: a run shows them all.
+      - name: build the app's units
+        id: build
+        run: cmake --build build --parallel 1 --target mux_app -- -k 0
+      # What this build was built from: only where it went through, so
+      # that what failed is built again from scratch by the next run.
+      - name: what the build was built from
+        if: steps.build.outcome == 'success'
+        run: git ls-files -z | xargs -0 sha1sum > build/sources.sha1
+      - name: no list where the build failed
+        if: always() && steps.build.outcome != 'success'
+        run: rm -f build/sources.sha1
+      - name: keep the build
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build
+            .cache/cpm
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-app
+
+  # The program's module and its first units, one at a time.
+  program:
+    needs: app
+    name: program (clang ${{ matrix.llvm }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        llvm: [23]
+    steps:
+      # The whole history, as the first run of this workflow checked out.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/desktop-setup
+        with:
+          llvm: ${{ matrix.llvm }}
+      - name: the build the stage before left
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build
+            .cache/cpm
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-app
+          fail-on-cache-miss: true
+      # The file times the first stage gave: what changed since the run
+      # before, at the time this run began; the rest, old.
+      - name: file times as the first stage gave them
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build/changed-sources | xargs -0 -r touch -d "@$(cat build/run-began)"
+      # Every unit that fails, not only the first: a run shows them all.
+      - name: build the program's first units
+        id: build
+        run: cmake --build build --parallel 1 --target CMakeFiles/mux.dir/src/app/program.cc.o CMakeFiles/mux.dir/src/main.cc.o CMakeFiles/mux.dir/src/app/program_core.cc.o CMakeFiles/mux.dir/src/app/program_lifetime.cc.o CMakeFiles/mux.dir/src/app/program_media.cc.o -- -k 0
+      # What this build was built from: only where it went through, so
+      # that what failed is built again from scratch by the next run.
+      - name: what the build was built from
+        if: steps.build.outcome == 'success'
+        run: git ls-files -z | xargs -0 sha1sum > build/sources.sha1
+      - name: no list where the build failed
+        if: always() && steps.build.outcome != 'success'
+        run: rm -f build/sources.sha1
+      - name: keep the build
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build
+            .cache/cpm
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-program
+
+  # The program's other units, and mux linked; kept for the next run.
+  link:
+    needs: program
+    name: link (clang ${{ matrix.llvm }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        llvm: [23]
+    steps:
+      # The whole history, as the first run of this workflow checked out.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/desktop-setup
+        with:
+          llvm: ${{ matrix.llvm }}
+      - name: the build the stage before left
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build
+            .cache/cpm
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-program
+          fail-on-cache-miss: true
+      # The file times the first stage gave: what changed since the run
+      # before, at the time this run began; the rest, old.
+      - name: file times as the first stage gave them
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build/changed-sources | xargs -0 -r touch -d "@$(cat build/run-began)"
+      # Every unit that fails, not only the first: a run shows them all.
+      - name: build and link mux
+        id: build
+        run: cmake --build build --parallel 1 --target mux -- -k 0
+      # What this build was built from: only where it went through, so
+      # that what failed is built again from scratch by the next run.
+      - name: what the build was built from
+        if: steps.build.outcome == 'success'
+        run: git ls-files -z | xargs -0 sha1sum > build/sources.sha1
+      - name: no list where the build failed
+        if: always() && steps.build.outcome != 'success'
+        run: rm -f build/sources.sha1
+      - name: keep the build
         if: always()
         uses: actions/cache/save@v4
         with:
@@ -181,8 +291,96 @@ jobs:
             build
             .cache/cpm
           key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}
-      - name: drop the builds this one supersedes
-        if: always()
+
+  # The terminal client.
+  cli:
+    needs: app
+    name: cli (clang ${{ matrix.llvm }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        llvm: [23]
+    steps:
+      # The whole history, as the first run of this workflow checked out.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/desktop-setup
+        with:
+          llvm: ${{ matrix.llvm }}
+      - name: the build the stage before left
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build
+            .cache/cpm
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-app
+          fail-on-cache-miss: true
+      # The file times the first stage gave: what changed since the run
+      # before, at the time this run began; the rest, old.
+      - name: file times as the first stage gave them
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build/changed-sources | xargs -0 -r touch -d "@$(cat build/run-began)"
+      # Every unit that fails, not only the first: a run shows them all.
+      - name: build the terminal client
+        id: build
+        run: cmake --build build --parallel 1 --target mux-cli -- -k 0
+
+  # Each test, built and run: a job each.
+  test:
+    needs: [modules, app]
+    name: test (clang ${{ matrix.llvm }}, ${{ matrix.test.name }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        llvm: [23]
+        test: ${{ fromJSON(needs.modules.outputs.tests) }}
+    steps:
+      # The whole history, as the first run of this workflow checked out.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/desktop-setup
+        with:
+          llvm: ${{ matrix.llvm }}
+      - name: the build the stage before left
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build
+            .cache/cpm
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-app
+          fail-on-cache-miss: true
+      # The file times the first stage gave: what changed since the run
+      # before, at the time this run began; the rest, old.
+      - name: file times as the first stage gave them
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build/changed-sources | xargs -0 -r touch -d "@$(cat build/run-began)"
+      - name: build ${{ matrix.test.name }}
+        id: build
+        if: matrix.test.target != ''
+        run: cmake --build build --parallel 1 --target ${{ matrix.test.target }} -- -k 0
+      - name: test ${{ matrix.test.name }}
+        run: ctest --test-dir build --output-on-failure -R "^${{ matrix.test.name }}$"
+
+  # The stages' builds, and older runs': the last one kept supersedes them --
+  # dropped once every job that builds on them is done.
+  tidy:
+    needs: [link, cli, test]
+    if: always()
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        llvm: [23]
+    steps:
+      - uses: actions/checkout@v4
+      - name: drop the builds the last one kept supersedes
         env:
           GH_TOKEN: ${{ github.token }}
         run: sh tools/prune_caches.sh "build-${{ runner.os }}-clang${{ matrix.llvm }}-" "build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}"

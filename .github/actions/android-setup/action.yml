@@ -1,0 +1,129 @@
+# The machine an Android stage builds on: room and swap, the host's tools,
+# the toolchain for the ABI (built from source once, then cached), Rust's
+# target, and what identifies the build cache. Every stage of android.yml
+# runs this first: each is a job of its own, under GitHub's six hours.
+name: Android build machine
+inputs:
+  abi:
+    required: true
+  full:
+    required: true
+  token:
+    required: true
+outputs:
+  digest:
+    description: What the build cache is keyed by, beside the ABI and the client
+    value: ${{ steps.build-identity.outputs.digest }}
+runs:
+  using: composite
+  steps:
+    - name: Space and swap for template-heavy compilation
+      shell: bash
+      run: |
+        # This workflow builds its own Android toolchain. None of these
+        # preinstalled SDKs participates in the D8-free build.
+        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+        sudo swapoff -a || true
+        sudo rm -f /mnt/mux.swap
+        sudo fallocate -l 32G /mnt/mux.swap
+        sudo chmod 600 /mnt/mux.swap
+        sudo mkswap /mnt/mux.swap
+        sudo swapon /mnt/mux.swap
+        free -h
+        df -h / /mnt
+    - name: Host tools
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build python3 openjdk-17-jdk-headless \
+          aapt zipalign dexdump generate-ninja nasm pkg-config perl \
+          curl lsb-release software-properties-common gnupg
+        curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+        sudo bash /tmp/llvm.sh 23
+        sudo apt-get install -y lld-23 llvm-23 libc++-23-dev libc++abi-23-dev
+        echo /usr/lib/llvm-23/bin >> "$GITHUB_PATH"
+        sudo mkdir -p /lib/share/libc++
+        sudo ln -sfn /usr/lib/llvm-23/share/libc++/v1 /lib/share/libc++/v1
+        version=4.4.3
+        curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}-linux-x86_64.tar.gz" -o /tmp/cmake.tar.gz
+        sudo tar xzf /tmp/cmake.tar.gz -C /opt
+        echo "/opt/cmake-${version}-linux-x86_64/bin" >> "$GITHUB_PATH"
+    - uses: actions/checkout@v4
+      with:
+        repository: j4niwzis/minimal-android-ndk.cpp
+        ref: 517d2f85f613dc07c71b98bad79e424a46e1a4c3
+        path: ndk-tool
+    - name: Toolchain manifest for the ABI
+      id: abi
+      shell: bash
+      env:
+        ABI: ${{ inputs.abi }}
+      run: |
+        python3 tools/android_manifest.py --abi "$ABI" --out android-toolchain.json
+        echo "rust=$(python3 tools/android_manifest.py --abi "$ABI" --field rust)" >> "$GITHUB_OUTPUT"
+        echo "sysroot-triple=$(python3 tools/android_manifest.py --abi "$ABI" --field sysroot-triple)" >> "$GITHUB_OUTPUT"
+    - id: toolchain
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.cache/mux-android-${{ inputs.abi }}
+        key: mux-android-${{ inputs.abi }}-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'android/abis.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
+    - name: Build toolchain and signer from source
+      if: steps.toolchain.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        ABI: ${{ inputs.abi }}
+      run: |
+        cmake -S ndk-tool -B ndk-tool/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_COMPILER=clang++-23 \
+          -DCMAKE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'
+        cmake --build ndk-tool/build -j4
+        ndk-tool/build/minimal-android-ndk \
+          --root "$HOME/.cache/mux-android-$ABI" \
+          --manifest "$PWD/android-toolchain.json" \
+          --clang clang-23 --llvm-bin /usr/lib/llvm-23/bin --jobs 4 \
+          build runtimes toolchain-file framework-res apksigner
+        # toolchain-file builds the headers/stubs/CRT, but does not depend
+        # on the C++ runtimes or compiler-rt. Require the complete sysroot
+        # before caching it or attempting the application's CMake probes.
+        test -f "$HOME/.cache/mux-android-$ABI/sysroot/usr/lib/libc++.modules.json"
+        api=$(python3 -c 'import json; print(json.load(open("android-toolchain.json"))["target"]["api"])')
+        for library in libc++.a libc++abi.a libunwind.a; do
+          test -f "$HOME/.cache/mux-android-$ABI/sysroot/usr/lib/${{ steps.abi.outputs.sysroot-triple }}/$api/$library"
+        done
+        # One time for all of it: a toolchain built again the same -- its
+        # cache evicted -- must not make every object of the build
+        # restored out of date, as its headers' new times did.
+        find "$HOME/.cache/mux-android-$ABI" -exec touch -h -d "@1000000000" {} +
+    - name: Cache the completed toolchain
+      if: steps.toolchain.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.cache/mux-android-${{ inputs.abi }}
+        key: mux-android-${{ inputs.abi }}-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'android/abis.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
+    - name: Drop the toolchains this one replaces
+      if: steps.toolchain.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: sh tools/prune_caches.sh "mux-android-${{ inputs.abi }}-" "${{ steps.toolchain.outputs.cache-primary-key }}"
+    - name: Rust Android target
+      if: inputs.full == 'client'
+      shell: bash
+      run: rustup target add ${{ steps.abi.outputs.rust }}
+    - name: Identify the build cache
+      id: build-identity
+      shell: bash
+      env:
+        PROFILE_HASH: ${{ hashFiles('.github/workflows/android.yml', '.github/actions/android-setup/action.yml', 'android/toolchain-sources.json', 'android/abis.json') }}
+      run: |
+        digest=$({
+          clang++-23 --version
+          rustc -vV
+          cargo --version
+          cmake --version
+          ninja --version
+          dpkg-query -W libc++-23-dev libc++abi-23-dev
+          git -C ndk-tool rev-parse HEAD
+          printf '%s\n' "$PROFILE_HASH"
+        } | sha256sum)
+        echo "digest=${digest%% *}" >> "$GITHUB_OUTPUT"

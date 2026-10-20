@@ -21,126 +21,35 @@ permissions:
 
 env:
   CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/cpm
+  # The full client on a push; by hand, as asked.
+  FULL: ${{ github.event_name == 'push' && 'client' || inputs.full_client && 'client' || 'bridge' }}
+  # This run's stages' builds, each kept for the next.
+  STAGE: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
+# The build in stages, a job each, every one well under GitHub's six hours
+# a job -- in one job, the program's units were still compiling when its six
+# hours ran out. Each stage builds its part on the build directory the one
+# before it left in the cache, and keeps its own for the next.
 jobs:
-  apk:
+  # Configured, and the modules every target builds on (the bridge check has none).
+  modules:
     runs-on: ubuntu-24.04
+    timeout-minutes: 350
     strategy:
       fail-fast: false
       matrix:
         abi: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.abi) || '["arm64-v8a","armeabi-v7a"]') }}
-    timeout-minutes: 360
-    # Here, not at the top: the matrix is a job's.
     env:
       ABI: ${{ matrix.abi }}
-      # The full client on a push; by hand, as asked.
-      FULL: ${{ github.event_name == 'push' && 'client' || inputs.full_client && 'client' || 'bridge' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Space and swap for template-heavy compilation
-        run: |
-          # This workflow builds its own Android toolchain. None of these
-          # preinstalled SDKs participates in the D8-free build.
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
-          sudo swapoff -a || true
-          sudo rm -f /mnt/mux.swap
-          sudo fallocate -l 32G /mnt/mux.swap
-          sudo chmod 600 /mnt/mux.swap
-          sudo mkswap /mnt/mux.swap
-          sudo swapon /mnt/mux.swap
-          free -h
-          df -h / /mnt
-      - name: Host tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build python3 openjdk-17-jdk-headless \
-            aapt zipalign dexdump generate-ninja nasm pkg-config perl \
-            curl lsb-release software-properties-common gnupg
-          curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
-          sudo bash /tmp/llvm.sh 23
-          sudo apt-get install -y lld-23 llvm-23 libc++-23-dev libc++abi-23-dev
-          echo /usr/lib/llvm-23/bin >> "$GITHUB_PATH"
-          sudo mkdir -p /lib/share/libc++
-          sudo ln -sfn /usr/lib/llvm-23/share/libc++/v1 /lib/share/libc++/v1
-          version=4.4.3
-          curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}-linux-x86_64.tar.gz" -o /tmp/cmake.tar.gz
-          sudo tar xzf /tmp/cmake.tar.gz -C /opt
-          echo "/opt/cmake-${version}-linux-x86_64/bin" >> "$GITHUB_PATH"
-
-      - uses: actions/checkout@v4
+      - id: setup
+        uses: ./.github/actions/android-setup
         with:
-          repository: j4niwzis/minimal-android-ndk.cpp
-          ref: 517d2f85f613dc07c71b98bad79e424a46e1a4c3
-          path: ndk-tool
-      - name: Toolchain manifest for the ABI
-        id: abi
-        run: |
-          python3 tools/android_manifest.py --abi "$ABI" --out android-toolchain.json
-          echo "rust=$(python3 tools/android_manifest.py --abi "$ABI" --field rust)" >> "$GITHUB_OUTPUT"
-          echo "sysroot-triple=$(python3 tools/android_manifest.py --abi "$ABI" --field sysroot-triple)" >> "$GITHUB_OUTPUT"
-      - id: toolchain
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/.cache/mux-android-${{ env.ABI }}
-          key: mux-android-${{ env.ABI }}-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'android/abis.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
-      - name: Build toolchain and signer from source
-        if: steps.toolchain.outputs.cache-hit != 'true'
-        run: |
-          cmake -S ndk-tool -B ndk-tool/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER=clang++-23 \
-            -DCMAKE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'
-          cmake --build ndk-tool/build -j4
-          ndk-tool/build/minimal-android-ndk \
-            --root "$HOME/.cache/mux-android-$ABI" \
-            --manifest "$PWD/android-toolchain.json" \
-            --clang clang-23 --llvm-bin /usr/lib/llvm-23/bin --jobs 4 \
-            build runtimes toolchain-file framework-res apksigner
-          # toolchain-file builds the headers/stubs/CRT, but does not depend
-          # on the C++ runtimes or compiler-rt. Require the complete sysroot
-          # before caching it or attempting the application's CMake probes.
-          test -f "$HOME/.cache/mux-android-$ABI/sysroot/usr/lib/libc++.modules.json"
-          api=$(python3 -c 'import json; print(json.load(open("android-toolchain.json"))["target"]["api"])')
-          for library in libc++.a libc++abi.a libunwind.a; do
-            test -f "$HOME/.cache/mux-android-$ABI/sysroot/usr/lib/${{ steps.abi.outputs.sysroot-triple }}/$api/$library"
-          done
-          # One time for all of it: a toolchain built again the same -- its
-          # cache evicted -- must not make every object of the build
-          # restored out of date, as its headers' new times did.
-          find "$HOME/.cache/mux-android-$ABI" -exec touch -h -d "@1000000000" {} +
-      - name: Cache the completed toolchain
-        if: steps.toolchain.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.cache/mux-android-${{ env.ABI }}
-          key: mux-android-${{ env.ABI }}-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'android/abis.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
-      - name: Drop the toolchains this one replaces
-        if: steps.toolchain.outputs.cache-hit != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: sh tools/prune_caches.sh "mux-android-$ABI-" "${{ steps.toolchain.outputs.cache-primary-key }}"
-      - name: Rust Android target
-        if: env.FULL == 'client'
-        run: rustup target add ${{ steps.abi.outputs.rust }}
-
-      # As in check.yml, keep both the build and the fetched sources, and
-      # save them even if compilation fails. Android and desktop outputs
-      # need separate keys; bridge and full-client builds do too.
-      - name: Identify the build cache
-        id: build-identity
-        env:
-          PROFILE_HASH: ${{ hashFiles('.github/workflows/android.yml', 'android/toolchain-sources.json', 'android/abis.json') }}
-        run: |
-          digest=$({
-            clang++-23 --version
-            rustc -vV
-            cargo --version
-            cmake --version
-            ninja --version
-            dpkg-query -W libc++-23-dev libc++abi-23-dev
-            git -C ndk-tool rev-parse HEAD
-            printf '%s\n' "$PROFILE_HASH"
-          } | sha256sum)
-          echo "digest=${digest%% *}" >> "$GITHUB_OUTPUT"
+          abi: ${{ env.ABI }}
+          full: ${{ env.FULL }}
+          token: ${{ github.token }}
+      # The build and the fetched sources the last run kept: its last stage's.
       - name: Restore the build and fetched sources
         id: build-cache
         uses: actions/cache/restore@v4
@@ -150,36 +59,273 @@ jobs:
             .cache/cpm
             ~/.cargo/registry
             ~/.cargo/git
-          # A fresh key lets retries save further progress from a failed build.
-          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.build-identity.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.build-identity.outputs.digest }}-
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-
+      # ninja goes by file times. A source changed since the build restored
+      # was made gets the time this run began; the rest, an old one. What
+      # changed is kept with the build: every later stage stamps the same
+      # files the same way, so a unit built by an earlier run from an older
+      # source is built again there too, and one built by an earlier stage
+      # of this run is not.
       - name: File times against the build restored
         run: |
+          mkdir -p build-android
+          began=$(date +%s)
           git ls-files -z | xargs -0 touch -d "@1000000000"
           if [ -f build-android/sources.sha1 ]; then
             git ls-files -z | xargs -0 sha1sum | sort > /tmp/android-sources-now.sha1
-            sort build-android/sources.sha1 | comm -13 - /tmp/android-sources-now.sha1 | cut -c43- | while IFS= read -r file; do
-              touch "$file"
-            done
+            sort build-android/sources.sha1 | comm -13 - /tmp/android-sources-now.sha1 | cut -c43- > build-android/changed-sources
           else
-            git ls-files -z | xargs -0 touch
+            git ls-files > build-android/changed-sources
           fi
-      - name: Configure and package
-        id: build
-        env:
-          FULL_CLIENT: ${{ env.FULL == 'client' }}
+          echo "$began" > build-android/run-began
+          tr '\n' '\0' < build-android/changed-sources | xargs -0 -r touch -d "@$began"
+      - name: Configure
         run: |
           source=android/smoke
-          if [ "$FULL_CLIENT" = true ]; then source=.; fi
+          if [ "$FULL" = client ]; then source=.; fi
           cmake -S "$source" -B build-android -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$HOME/.cache/mux-android-$ABI/cmake/target.cmake" \
             -DCMAKE_BUILD_TYPE=Release -DMUX_PROGRAM_JOBS=1 \
             -DMUX_CLI=OFF -DMUX_TESTS=OFF -DMUX_VIDEO=OFF -DMUX_CALLS=ON \
             -DCME_BUILD_MACHINE_CXX_COMPILER=clang++-23 \
             -DCME_BUILD_MACHINE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'
-          cmake --build build-android --target mux-apk -j4
+      - name: Build
+        id: build
+        run: |
+          if [ "$FULL" = client ]; then cmake --build build-android --target mux_modules -j4; fi
+      # What this build was built from: only where it went through, so
+      # that what failed is built again from scratch by the next run.
       - name: What the build was built from
+        if: steps.build.outcome == 'success'
         run: git ls-files -z | xargs -0 sha1sum > build-android/sources.sha1
+      - name: No source list where the build failed
+        if: always() && steps.build.outcome != 'success'
+        run: rm -f build-android/sources.sha1
+      - name: Keep the build
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build-android
+            .cache/cpm
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-modules
+
+  # The app's units -- the window's binding among them, hours alone.
+  app:
+    needs: modules
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.abi) || '["arm64-v8a","armeabi-v7a"]') }}
+    env:
+      ABI: ${{ matrix.abi }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: setup
+        uses: ./.github/actions/android-setup
+        with:
+          abi: ${{ env.ABI }}
+          full: ${{ env.FULL }}
+          token: ${{ github.token }}
+      - name: The build the stage before left
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build-android
+            .cache/cpm
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-modules
+          fail-on-cache-miss: true
+      # The file times the first stage gave: what changed since the run
+      # before, at the time this run began; the rest, old.
+      - name: File times as the first stage gave them
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build-android/changed-sources | xargs -0 -r touch -d "@$(cat build-android/run-began)"
+      - name: Build
+        id: build
+        run: |
+          if [ "$FULL" = client ]; then cmake --build build-android --target mux_app -j4; fi
+      # What this build was built from: only where it went through, so
+      # that what failed is built again from scratch by the next run.
+      - name: What the build was built from
+        if: steps.build.outcome == 'success'
+        run: git ls-files -z | xargs -0 sha1sum > build-android/sources.sha1
+      - name: No source list where the build failed
+        if: always() && steps.build.outcome != 'success'
+        run: rm -f build-android/sources.sha1
+      - name: Keep the build
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build-android
+            .cache/cpm
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-app
+
+  # The program's module and its first units, one at a time.
+  program:
+    needs: app
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.abi) || '["arm64-v8a","armeabi-v7a"]') }}
+    env:
+      ABI: ${{ matrix.abi }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: setup
+        uses: ./.github/actions/android-setup
+        with:
+          abi: ${{ env.ABI }}
+          full: ${{ env.FULL }}
+          token: ${{ github.token }}
+      - name: The build the stage before left
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build-android
+            .cache/cpm
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-app
+          fail-on-cache-miss: true
+      # The file times the first stage gave: what changed since the run
+      # before, at the time this run began; the rest, old.
+      - name: File times as the first stage gave them
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build-android/changed-sources | xargs -0 -r touch -d "@$(cat build-android/run-began)"
+      - name: Build
+        id: build
+        run: |
+          if [ "$FULL" = client ]; then cmake --build build-android --target CMakeFiles/mux.dir/src/app/program.cc.o CMakeFiles/mux.dir/src/main.cc.o CMakeFiles/mux.dir/src/app/program_core.cc.o CMakeFiles/mux.dir/src/app/program_lifetime.cc.o CMakeFiles/mux.dir/src/app/program_media.cc.o -j4; fi
+      # What this build was built from: only where it went through, so
+      # that what failed is built again from scratch by the next run.
+      - name: What the build was built from
+        if: steps.build.outcome == 'success'
+        run: git ls-files -z | xargs -0 sha1sum > build-android/sources.sha1
+      - name: No source list where the build failed
+        if: always() && steps.build.outcome != 'success'
+        run: rm -f build-android/sources.sha1
+      - name: Keep the build
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build-android
+            .cache/cpm
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-program
+
+  # The program's other units, and the library linked.
+  link:
+    needs: program
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.abi) || '["arm64-v8a","armeabi-v7a"]') }}
+    env:
+      ABI: ${{ matrix.abi }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: setup
+        uses: ./.github/actions/android-setup
+        with:
+          abi: ${{ env.ABI }}
+          full: ${{ env.FULL }}
+          token: ${{ github.token }}
+      - name: The build the stage before left
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build-android
+            .cache/cpm
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-program
+          fail-on-cache-miss: true
+      # The file times the first stage gave: what changed since the run
+      # before, at the time this run began; the rest, old.
+      - name: File times as the first stage gave them
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build-android/changed-sources | xargs -0 -r touch -d "@$(cat build-android/run-began)"
+      - name: Build
+        id: build
+        run: |
+          if [ "$FULL" = client ]; then cmake --build build-android --target mux -j4; fi
+      # What this build was built from: only where it went through, so
+      # that what failed is built again from scratch by the next run.
+      - name: What the build was built from
+        if: steps.build.outcome == 'success'
+        run: git ls-files -z | xargs -0 sha1sum > build-android/sources.sha1
+      - name: No source list where the build failed
+        if: always() && steps.build.outcome != 'success'
+        run: rm -f build-android/sources.sha1
+      - name: Keep the build
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build-android
+            .cache/cpm
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-link
+
+  # Packaged, checked, and handed out; kept for the next run.
+  apk:
+    needs: link
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.abi) || '["arm64-v8a","armeabi-v7a"]') }}
+    env:
+      ABI: ${{ matrix.abi }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: setup
+        uses: ./.github/actions/android-setup
+        with:
+          abi: ${{ env.ABI }}
+          full: ${{ env.FULL }}
+          token: ${{ github.token }}
+      - name: The build the stage before left
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build-android
+            .cache/cpm
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-link
+          fail-on-cache-miss: true
+      # The file times the first stage gave: what changed since the run
+      # before, at the time this run began; the rest, old.
+      - name: File times as the first stage gave them
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build-android/changed-sources | xargs -0 -r touch -d "@$(cat build-android/run-began)"
+      - name: Build
+        id: build
+        run: |
+          cmake --build build-android --target mux-apk -j4
       - name: Verify package
         run: |
           python3 test/android_apk_test.py
@@ -198,11 +344,16 @@ jobs:
           name: mux-android-${{ env.ABI }}-${{ env.FULL }}-unsigned
           path: build-android/apk/mux-unsigned.apk
           if-no-files-found: error
+      # What this build was built from: only where it went through, so
+      # that what failed is built again from scratch by the next run.
+      - name: What the build was built from
+        if: steps.build.outcome == 'success'
+        run: git ls-files -z | xargs -0 sha1sum > build-android/sources.sha1
       - name: No source list where the build failed
         if: always() && steps.build.outcome != 'success'
         run: rm -f build-android/sources.sha1
-      - name: Keep the build and fetched sources for the next run
-        if: always() && steps.build-cache.outcome == 'success'
+      - name: Keep the build
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: |
@@ -210,9 +361,10 @@ jobs:
             .cache/cpm
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ steps.build-cache.outputs.cache-primary-key }}
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      # The stages' and older runs' builds: this one supersedes them.
       - name: Drop the builds this one supersedes
-        if: always() && steps.build-cache.outcome == 'success'
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: sh tools/prune_caches.sh "build-${{ runner.os }}-android-$ABI-$FULL-" "${{ steps.build-cache.outputs.cache-primary-key }}"
+        run: sh tools/prune_caches.sh "build-${{ runner.os }}-android-$ABI-$FULL-" "build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}"

@@ -1,0 +1,67 @@
+# The machine a desktop stage of check.yml builds on: clang and libc++,
+# gn for Skia, the windowing headers, CMake, where `import std` is read
+# from, and swap. Every stage runs this first: each is a job of its own,
+# under GitHub's six hours.
+name: Desktop build machine
+inputs:
+  llvm:
+    required: true
+runs:
+  using: composite
+  steps:
+    # Clang and libc++, which is where `import std` comes from.
+    - name: clang and libc++
+      shell: bash
+      run: |
+        sudo apt-get update || true
+        sudo apt-get install -y ninja-build lsb-release software-properties-common gnupg curl
+        curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+        chmod +x /tmp/llvm.sh
+        sudo /tmp/llvm.sh ${{ inputs.llvm }}
+        sudo apt-get install -y libc++-${{ inputs.llvm }}-dev libc++abi-${{ inputs.llvm }}-dev
+    # Skia is a GN project: cmake-everywhere runs gn to read it.
+    - name: gn
+      shell: bash
+      run: |
+        curl -sSL -o gn.zip "https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/latest"
+        mkdir -p "$HOME/.local/bin" && unzip -o -j gn.zip gn -d "$HOME/.local/bin"
+        chmod +x "$HOME/.local/bin/gn" && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+    # SDL is a window library and needs the headers of the windowing systems
+    # it opens windows on.
+    - name: windowing headers
+      shell: bash
+      run: sudo apt-get install -y xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols nasm
+    - name: cmake
+      shell: bash
+      run: |
+        version=4.4.3
+        curl -sSL -o cmake.tar.gz \
+          "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}-linux-x86_64.tar.gz"
+        sudo tar xzf cmake.tar.gz -C /opt
+        echo "/opt/cmake-${version}-linux-x86_64/bin" >> "$GITHUB_PATH"
+    # CMake works out where the std module's source is from where the
+    # compiler is, and the compiler a distribution installs is a link in a
+    # directory that says nothing about its toolchain: the answer is
+    # /lib/share/libc++/v1, which no package fills. So both ends are said
+    # outright.
+    - name: where import std is read from
+      shell: bash
+      run: |
+        sudo mkdir -p /lib/share/libc++
+        sudo ln -sfn /usr/lib/llvm-${{ inputs.llvm }}/share/libc++/v1 /lib/share/libc++/v1
+        sudo ln -sf /usr/lib/llvm-${{ inputs.llvm }}/bin/clang++ /usr/local/bin/clang++
+        test -f /lib/share/libc++/v1/std.cppm
+    # Template-heavy units need room beyond the runner's physical memory.
+    # These preinstalled SDKs are unused by this build; removing them leaves
+    # space for both the compiler output and 32 GiB of swap.
+    - name: swap
+      shell: bash
+      run: |
+        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+        sudo swapoff -a || true
+        sudo rm -f /mnt/mux.swap
+        sudo fallocate -l 32G /mnt/mux.swap
+        sudo chmod 600 /mnt/mux.swap
+        sudo mkswap /mnt/mux.swap
+        sudo swapon /mnt/mux.swap
+        free -h

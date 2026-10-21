@@ -56,12 +56,4 @@ runs:
     # space for both the compiler output and 32 GiB of swap.
     - name: swap
       shell: bash
-      run: |
-        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
-        sudo swapoff -a || true
-        sudo rm -f /mnt/mux.swap
-        sudo fallocate -l 32G /mnt/mux.swap
-        sudo chmod 600 /mnt/mux.swap
-        sudo mkswap /mnt/mux.swap
-        sudo swapon /mnt/mux.swap
-        free -h
+      run: bash "$GITHUB_WORKSPACE/.github/scripts/memory.sh"

@@ -19,18 +19,7 @@ runs:
   steps:
     - name: Space and swap for template-heavy compilation
       shell: bash
-      run: |
-        # This workflow builds its own Android toolchain. None of these
-        # preinstalled SDKs participates in the D8-free build.
-        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
-        sudo swapoff -a || true
-        sudo rm -f /mnt/mux.swap
-        sudo fallocate -l 32G /mnt/mux.swap
-        sudo chmod 600 /mnt/mux.swap
-        sudo mkswap /mnt/mux.swap
-        sudo swapon /mnt/mux.swap
-        free -h
-        df -h / /mnt
+      run: bash "$GITHUB_WORKSPACE/.github/scripts/memory.sh"
     - name: Host tools
       shell: bash
       run: |

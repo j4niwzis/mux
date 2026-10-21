@@ -49,22 +49,6 @@ struct tab_up {
            spl::visit(spl::overloaded{[](const Tab&) { return true; }, [](const auto&) { return false; }}, now->tab);
   }
 };
-// A tab's row: its icon and title, marked while it is up; pressed, it is.
-template <class Tab>
-auto manage_tab_row(const palette& colours, Tab tab) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(manage_tab_row, c::spec_for<room_facts_t>([](const room_facts_t& now) { return scene::Spec{.selected = tab_up<Tab>{}(now)}; },
-      c::onPress(sends<request::manage_tab>{{manage_tab_t{tab}}},
-          c::row(c::hbox(8.0f, {.fillX = true, .height = 40.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner,
-                                .hoverBackground = colours.background, .selectedBackground = colours.tile}),
-                 c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, icon_mark(colours, tab_icon(tab))),
-                 c::applied<room_facts_t>([](const room_facts_t& now) { return tab_up<Tab>{}(now); },
-                                          [](nodes::Text& title, bool up) { title.setBold(up); },
-                                          c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                                                    elided(nodes::Text(std::string(tab_title(tab)), 14.0f, colours.text))))))));
-}
-using client_tab_row_t = decltype(manage_tab_row(std::declval<const palette&>(), settings_tab::general{}));
-
 // The client's General -- the room's events, receipts, previews, typing,
 // Home, leaving -- in a tab of its own, or under the protocol's General
 // where it has one (Matrix's: the room's name, topic and address): one
@@ -81,6 +65,26 @@ struct general_up {
                    spl::visit([&](auto tag) { return tab_up<decltype(general_host_of(state_of<decltype(tag)>{}))>{}(now); }, now->speaks));
   }
 };
+// Whether a tab's row is listed: the client's General only where no tab of
+// the protocol's hosts it; every other tab, always.
+constexpr bool tab_listed(const auto&, const room_facts_t&) { return true; }
+inline bool tab_listed(settings_tab::general, const room_facts_t& now) { return !now || general_on_its_own(*now); }
+// A tab's row: its icon and title, marked while it is up; pressed, it is.
+template <class Tab>
+auto manage_tab_row(const palette& colours, Tab tab) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(manage_tab_row, c::spec_for<room_facts_t>([](const room_facts_t& now) { return scene::Spec{.visible = tab_listed(Tab{}, now), .selected = tab_up<Tab>{}(now)}; },
+      c::onPress(sends<request::manage_tab>{{manage_tab_t{tab}}},
+          c::row(c::hbox(8.0f, {.fillX = true, .height = 40.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner,
+                                .hoverBackground = colours.background, .selectedBackground = colours.tile}),
+                 c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, icon_mark(colours, tab_icon(tab))),
+                 c::applied<room_facts_t>([](const room_facts_t& now) { return tab_up<Tab>{}(now); },
+                                          [](nodes::Text& title, bool up) { title.setBold(up); },
+                                          c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                                    elided(nodes::Text(std::string(tab_title(tab)), 14.0f, colours.text))))))));
+}
+using client_tab_row_t = decltype(manage_tab_row(std::declval<const palette&>(), settings_tab::general{}));
+
 
 // The protocol's rows, those its room has; a row of each protocol's kind.
 template <class Tab>
@@ -205,7 +209,7 @@ inline auto room_settings_view(const ui_needs& n, const room_settings_facts& fac
                              c::shown_for<room_facts_t>([](const room_facts_t& now) { return now && now->narrow && now->navigation; },
                                                         icon_button(colours, icon::close{}, sends<request::close_manage>{}))),
                       c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_rows_of(colours, facts)),
-                      c::visible(general_on_its_own(facts), manage_tab_row(colours, settings_tab::general{})),
+                      manage_tab_row(colours, settings_tab::general{}),
                       manage_tab_row(colours, settings_tab::notifications{}),
                       manage_tab_row(colours, settings_tab::looks{})))),
           // The tab up, under its head where the protocol has one.

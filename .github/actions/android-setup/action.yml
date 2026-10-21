@@ -10,6 +10,9 @@ inputs:
     required: true
   token:
     required: true
+  swap:
+    description: The swap file's size in GiB
+    default: '32'
 outputs:
   digest:
     description: What the build cache is keyed by, beside the ABI and the client
@@ -19,7 +22,7 @@ runs:
   steps:
     - name: Space and swap for template-heavy compilation
       shell: bash
-      run: bash "$GITHUB_WORKSPACE/.github/scripts/memory.sh"
+      run: MUX_SWAP_GB="${{ inputs.swap }}" bash "$GITHUB_WORKSPACE/.github/scripts/memory.sh"
     - name: Host tools
       shell: bash
       run: |

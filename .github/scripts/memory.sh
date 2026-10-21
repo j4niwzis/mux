@@ -2,7 +2,7 @@
 # Memory for template-heavy compilation, as every stage of both workflows
 # sets it up (their setup actions run this first): the runner's unused SDKs
 # removed for room, then compressed swap in memory (zram) used first, and a
-# 32 GiB swap file on the disk after it.
+# swap file on the disk after it (32 GiB, or MUX_SWAP_GB).
 #
 # zram: pages swapped out are compressed (zstd, about 3:1 on a compiler's
 # heap) into memory instead of written to the disk -- far faster to swap in
@@ -31,7 +31,8 @@ zram() {
 }
 zram || echo "zram unavailable here: swap on the disk only"
 
-sudo fallocate -l 32G /mnt/mux.swap
+# 32 GiB by default; a stage that needs more (the full-LTO link) says so.
+sudo fallocate -l "${MUX_SWAP_GB:-32}G" /mnt/mux.swap
 sudo chmod 600 /mnt/mux.swap
 sudo mkswap /mnt/mux.swap >/dev/null
 sudo swapon --priority 10 /mnt/mux.swap

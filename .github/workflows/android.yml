@@ -183,7 +183,7 @@ jobs:
             ~/.cargo/git
           key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-app
 
-  # The program's module and its first units, one at a time.
+  # Every object of the program, one at a time: nothing left but the link.
   program:
     needs: app
     runs-on: ubuntu-24.04
@@ -215,7 +215,13 @@ jobs:
       - name: Build
         id: build
         run: |
-          if [ "$FULL" = client ]; then cmake --build build-android --target CMakeFiles/mux.dir/src/app/program.cc.o CMakeFiles/mux.dir/src/main.cc.o CMakeFiles/mux.dir/src/app/program_core.cc.o CMakeFiles/mux.dir/src/app/program_lifetime.cc.o CMakeFiles/mux.dir/src/app/program_media.cc.o -j1; fi
+          # Every object of mux's own, as build.ninja lists them: what is left
+          # to the next stage is the link alone.
+          if [ "$FULL" = client ]; then
+            mapfile -t objects < <(sed -n 's|^build \(CMakeFiles/mux\.dir/[^ :]*\.o\)[ :].*|\1|p' build-android/build.ninja)
+            echo "${#objects[@]} objects"
+            cmake --build build-android --target "${objects[@]}" -j1
+          fi
       # What this build was built from: only where it went through, so
       # that what failed is built again from scratch by the next run.
       - name: What the build was built from
@@ -243,7 +249,8 @@ jobs:
             ~/.cargo/git
           key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-program
 
-  # The program's other units, and the library linked.
+  # The library linked, alone: full LTO optimises the whole program as one
+  # module here, more than the runner holds in memory -- given more swap.
   link:
     needs: program
     runs-on: ubuntu-24.04
@@ -262,6 +269,8 @@ jobs:
           abi: ${{ env.ABI }}
           full: ${{ env.FULL }}
           token: ${{ github.token }}
+          # The whole program optimised as one module (full LTO): more room.
+          swap: '48'
       - name: The build the stage before left
         uses: ./.github/actions/stage-take
         with:

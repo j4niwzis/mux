@@ -90,9 +90,15 @@ jobs:
         run: |
           ctest --test-dir build --show-only=json-v1 > /tmp/tests.json
           python3 - >> "$GITHUB_OUTPUT" <<'EOF'
-          import json, os
+          import json, os, sys
           tests = json.load(open("/tmp/tests.json"))["tests"]
-          out = [{"name": t["name"], "target": os.path.basename(t["command"][0]) if t["command"][0].startswith(os.path.abspath("build")) else ""} for t in tests]
+          # A test ctest has no command for in this configuration (none is
+          # given in its JSON) is nothing a job could run: said, and left out.
+          for t in tests:
+              if not t.get("command"):
+                  print(f"no command, not run: {t['name']}", file=sys.stderr)
+          out = [{"name": t["name"], "target": os.path.basename(t["command"][0]) if t["command"][0].startswith(os.path.abspath("build")) else ""}
+                 for t in tests if t.get("command")]
           print("list=" + json.dumps(out))
           EOF
       # Every unit that fails, not only the first: a run shows them all.

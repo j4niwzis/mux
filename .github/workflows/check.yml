@@ -124,8 +124,17 @@ jobs:
       - name: no list where the build failed
         if: always() && steps.build.outcome != 'success'
         run: rm -f build/sources.sha1
-      - name: keep the build
-        if: always()
+      # Handed to the next stages of this run, where it went through.
+      - name: hand the build on
+        if: success()
+        uses: ./.github/actions/stage-give
+        with:
+          name: build-clang${{ matrix.llvm }}-modules
+          dir: build
+      # Where it failed, kept for the next run to go on from: the cache holds
+      # only this and each run's last stage, not a build per stage.
+      - name: keep the build where it failed
+        if: always() && (steps.build.outcome == 'failure' || steps.build.outcome == 'cancelled')
         uses: actions/cache/save@v4
         with:
           path: |
@@ -152,13 +161,9 @@ jobs:
         with:
           llvm: ${{ matrix.llvm }}
       - name: the build the stage before left
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/stage-take
         with:
-          path: |
-            build
-            .cache/cpm
-          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-modules
-          fail-on-cache-miss: true
+          name: build-clang${{ matrix.llvm }}-modules
       # The file times the first stage gave: what changed since the run
       # before, at the time this run began; the rest, old.
       - name: file times as the first stage gave them
@@ -177,8 +182,17 @@ jobs:
       - name: no list where the build failed
         if: always() && steps.build.outcome != 'success'
         run: rm -f build/sources.sha1
-      - name: keep the build
-        if: always()
+      # Handed to the next stages of this run, where it went through.
+      - name: hand the build on
+        if: success()
+        uses: ./.github/actions/stage-give
+        with:
+          name: build-clang${{ matrix.llvm }}-app
+          dir: build
+      # Where it failed, kept for the next run to go on from: the cache holds
+      # only this and each run's last stage, not a build per stage.
+      - name: keep the build where it failed
+        if: always() && (steps.build.outcome == 'failure' || steps.build.outcome == 'cancelled')
         uses: actions/cache/save@v4
         with:
           path: |
@@ -205,13 +219,9 @@ jobs:
         with:
           llvm: ${{ matrix.llvm }}
       - name: the build the stage before left
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/stage-take
         with:
-          path: |
-            build
-            .cache/cpm
-          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-app
-          fail-on-cache-miss: true
+          name: build-clang${{ matrix.llvm }}-app
       # The file times the first stage gave: what changed since the run
       # before, at the time this run began; the rest, old.
       - name: file times as the first stage gave them
@@ -230,8 +240,17 @@ jobs:
       - name: no list where the build failed
         if: always() && steps.build.outcome != 'success'
         run: rm -f build/sources.sha1
-      - name: keep the build
-        if: always()
+      # Handed to the next stages of this run, where it went through.
+      - name: hand the build on
+        if: success()
+        uses: ./.github/actions/stage-give
+        with:
+          name: build-clang${{ matrix.llvm }}-program
+          dir: build
+      # Where it failed, kept for the next run to go on from: the cache holds
+      # only this and each run's last stage, not a build per stage.
+      - name: keep the build where it failed
+        if: always() && (steps.build.outcome == 'failure' || steps.build.outcome == 'cancelled')
         uses: actions/cache/save@v4
         with:
           path: |
@@ -258,13 +277,9 @@ jobs:
         with:
           llvm: ${{ matrix.llvm }}
       - name: the build the stage before left
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/stage-take
         with:
-          path: |
-            build
-            .cache/cpm
-          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-program
-          fail-on-cache-miss: true
+          name: build-clang${{ matrix.llvm }}-program
       # The file times the first stage gave: what changed since the run
       # before, at the time this run began; the rest, old.
       - name: file times as the first stage gave them
@@ -311,13 +326,9 @@ jobs:
         with:
           llvm: ${{ matrix.llvm }}
       - name: the build the stage before left
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/stage-take
         with:
-          path: |
-            build
-            .cache/cpm
-          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-app
-          fail-on-cache-miss: true
+          name: build-clang${{ matrix.llvm }}-app
       # The file times the first stage gave: what changed since the run
       # before, at the time this run began; the rest, old.
       - name: file times as the first stage gave them
@@ -349,13 +360,9 @@ jobs:
         with:
           llvm: ${{ matrix.llvm }}
       - name: the build the stage before left
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/stage-take
         with:
-          path: |
-            build
-            .cache/cpm
-          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-app
-          fail-on-cache-miss: true
+          name: build-clang${{ matrix.llvm }}-app
       # The file times the first stage gave: what changed since the run
       # before, at the time this run began; the rest, old.
       - name: file times as the first stage gave them

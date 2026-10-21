@@ -29,7 +29,9 @@ env:
 # The build in stages, a job each, every one well under GitHub's six hours
 # a job -- in one job, the program's units were still compiling when its six
 # hours ran out. Each stage builds its part on the build directory the one
-# before it left in the cache, and keeps its own for the next.
+# before it handed on as an artifact of the run (stage-give, stage-take), and
+# hands its own to the next; the cache keeps only what the next run starts
+# from -- the last stage's build, or the build of a stage that failed.
 jobs:
   # Configured, and the modules every target builds on (the bridge check has none).
   modules:
@@ -93,7 +95,7 @@ jobs:
       - name: Build
         id: build
         run: |
-          if [ "$FULL" = client ]; then cmake --build build-android --target mux_modules -j4; fi
+          if [ "$FULL" = client ]; then cmake --build build-android --target mux_modules -j1; fi
       # What this build was built from: only where it went through, so
       # that what failed is built again from scratch by the next run.
       - name: What the build was built from
@@ -102,8 +104,16 @@ jobs:
       - name: No source list where the build failed
         if: always() && steps.build.outcome != 'success'
         run: rm -f build-android/sources.sha1
-      - name: Keep the build
-        if: always()
+      # Handed to the next stage of this run, where it went through.
+      - name: Hand the build on
+        if: success()
+        uses: ./.github/actions/stage-give
+        with:
+          name: build-android-${{ env.ABI }}-modules
+      # Where it failed, kept for the next run to go on from: the cache holds
+      # only this and each run's last stage, not a build per stage.
+      - name: Keep the build where it failed
+        if: always() && (steps.build.outcome == 'failure' || steps.build.outcome == 'cancelled')
         uses: actions/cache/save@v4
         with:
           path: |
@@ -133,15 +143,9 @@ jobs:
           full: ${{ env.FULL }}
           token: ${{ github.token }}
       - name: The build the stage before left
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/stage-take
         with:
-          path: |
-            build-android
-            .cache/cpm
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-modules
-          fail-on-cache-miss: true
+          name: build-android-${{ env.ABI }}-modules
       # The file times the first stage gave: what changed since the run
       # before, at the time this run began; the rest, old.
       - name: File times as the first stage gave them
@@ -151,7 +155,7 @@ jobs:
       - name: Build
         id: build
         run: |
-          if [ "$FULL" = client ]; then cmake --build build-android --target mux_app -j4; fi
+          if [ "$FULL" = client ]; then cmake --build build-android --target mux_app -j1; fi
       # What this build was built from: only where it went through, so
       # that what failed is built again from scratch by the next run.
       - name: What the build was built from
@@ -160,8 +164,16 @@ jobs:
       - name: No source list where the build failed
         if: always() && steps.build.outcome != 'success'
         run: rm -f build-android/sources.sha1
-      - name: Keep the build
-        if: always()
+      # Handed to the next stage of this run, where it went through.
+      - name: Hand the build on
+        if: success()
+        uses: ./.github/actions/stage-give
+        with:
+          name: build-android-${{ env.ABI }}-app
+      # Where it failed, kept for the next run to go on from: the cache holds
+      # only this and each run's last stage, not a build per stage.
+      - name: Keep the build where it failed
+        if: always() && (steps.build.outcome == 'failure' || steps.build.outcome == 'cancelled')
         uses: actions/cache/save@v4
         with:
           path: |
@@ -191,15 +203,9 @@ jobs:
           full: ${{ env.FULL }}
           token: ${{ github.token }}
       - name: The build the stage before left
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/stage-take
         with:
-          path: |
-            build-android
-            .cache/cpm
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-app
-          fail-on-cache-miss: true
+          name: build-android-${{ env.ABI }}-app
       # The file times the first stage gave: what changed since the run
       # before, at the time this run began; the rest, old.
       - name: File times as the first stage gave them
@@ -209,7 +215,7 @@ jobs:
       - name: Build
         id: build
         run: |
-          if [ "$FULL" = client ]; then cmake --build build-android --target CMakeFiles/mux.dir/src/app/program.cc.o CMakeFiles/mux.dir/src/main.cc.o CMakeFiles/mux.dir/src/app/program_core.cc.o CMakeFiles/mux.dir/src/app/program_lifetime.cc.o CMakeFiles/mux.dir/src/app/program_media.cc.o -j4; fi
+          if [ "$FULL" = client ]; then cmake --build build-android --target CMakeFiles/mux.dir/src/app/program.cc.o CMakeFiles/mux.dir/src/main.cc.o CMakeFiles/mux.dir/src/app/program_core.cc.o CMakeFiles/mux.dir/src/app/program_lifetime.cc.o CMakeFiles/mux.dir/src/app/program_media.cc.o -j1; fi
       # What this build was built from: only where it went through, so
       # that what failed is built again from scratch by the next run.
       - name: What the build was built from
@@ -218,8 +224,16 @@ jobs:
       - name: No source list where the build failed
         if: always() && steps.build.outcome != 'success'
         run: rm -f build-android/sources.sha1
-      - name: Keep the build
-        if: always()
+      # Handed to the next stage of this run, where it went through.
+      - name: Hand the build on
+        if: success()
+        uses: ./.github/actions/stage-give
+        with:
+          name: build-android-${{ env.ABI }}-program
+      # Where it failed, kept for the next run to go on from: the cache holds
+      # only this and each run's last stage, not a build per stage.
+      - name: Keep the build where it failed
+        if: always() && (steps.build.outcome == 'failure' || steps.build.outcome == 'cancelled')
         uses: actions/cache/save@v4
         with:
           path: |
@@ -249,15 +263,9 @@ jobs:
           full: ${{ env.FULL }}
           token: ${{ github.token }}
       - name: The build the stage before left
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/stage-take
         with:
-          path: |
-            build-android
-            .cache/cpm
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-program
-          fail-on-cache-miss: true
+          name: build-android-${{ env.ABI }}-program
       # The file times the first stage gave: what changed since the run
       # before, at the time this run began; the rest, old.
       - name: File times as the first stage gave them
@@ -267,7 +275,7 @@ jobs:
       - name: Build
         id: build
         run: |
-          if [ "$FULL" = client ]; then cmake --build build-android --target mux -j4; fi
+          if [ "$FULL" = client ]; then cmake --build build-android --target mux -j1; fi
       # What this build was built from: only where it went through, so
       # that what failed is built again from scratch by the next run.
       - name: What the build was built from
@@ -276,8 +284,16 @@ jobs:
       - name: No source list where the build failed
         if: always() && steps.build.outcome != 'success'
         run: rm -f build-android/sources.sha1
-      - name: Keep the build
-        if: always()
+      # Handed to the next stage of this run, where it went through.
+      - name: Hand the build on
+        if: success()
+        uses: ./.github/actions/stage-give
+        with:
+          name: build-android-${{ env.ABI }}-link
+      # Where it failed, kept for the next run to go on from: the cache holds
+      # only this and each run's last stage, not a build per stage.
+      - name: Keep the build where it failed
+        if: always() && (steps.build.outcome == 'failure' || steps.build.outcome == 'cancelled')
         uses: actions/cache/save@v4
         with:
           path: |
@@ -307,15 +323,9 @@ jobs:
           full: ${{ env.FULL }}
           token: ${{ github.token }}
       - name: The build the stage before left
-        uses: actions/cache/restore@v4
+        uses: ./.github/actions/stage-take
         with:
-          path: |
-            build-android
-            .cache/cpm
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-link
-          fail-on-cache-miss: true
+          name: build-android-${{ env.ABI }}-link
       # The file times the first stage gave: what changed since the run
       # before, at the time this run began; the rest, old.
       - name: File times as the first stage gave them
@@ -325,7 +335,7 @@ jobs:
       - name: Build
         id: build
         run: |
-          cmake --build build-android --target mux-apk -j4
+          cmake --build build-android --target mux-apk -j1
       - name: Verify package
         run: |
           python3 test/android_apk_test.py

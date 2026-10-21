@@ -1,0 +1,34 @@
+# A stage's build handed to the next stage of the same run: the build
+# directory and the fetched sources, as an artifact of the run. Not the
+# cache: a repository's cache holds 10 GB, and a build per stage and ABI
+# was evicted or refused before the next stage could take it ("Failed to
+# restore cache entry" -- the link stage of armeabi-v7a never built).
+name: Hand the build to the next stage
+inputs:
+  name:
+    description: The artifact's name (the stage and ABI)
+    required: true
+  dir:
+    description: The build directory, under the workspace
+    default: build-android
+runs:
+  using: composite
+  steps:
+    # Two archives, each put back where it was: the workspace's, and the
+    # Rust registry's under the home. Tar keeps the file times ninja goes by
+    # (an artifact alone would not).
+    - name: Pack the build
+      shell: bash
+      run: |
+        mkdir -p "${{ inputs.dir }}" .cache/cpm ~/.cargo/registry ~/.cargo/git
+        sudo mkdir -p /mnt/stage-give && sudo chown "$USER" /mnt/stage-give
+        tar -C "$GITHUB_WORKSPACE" -cf - "${{ inputs.dir }}" .cache/cpm | zstd -q -T0 -3 -o /mnt/stage-give/work.tar.zst
+        tar -C "$HOME" -cf - .cargo/registry .cargo/git | zstd -q -T0 -3 -o /mnt/stage-give/cargo.tar.zst
+        ls -la /mnt/stage-give
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.name }}
+        path: /mnt/stage-give
+        compression-level: 0
+        retention-days: 1
+        if-no-files-found: error

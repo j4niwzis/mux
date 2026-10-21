@@ -1,0 +1,22 @@
+# The build the stage before handed on (stage-give), put back where it was.
+name: Take the build from the stage before
+inputs:
+  name:
+    description: The artifact's name (the stage and ABI)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Room for it
+      shell: bash
+      run: sudo mkdir -p /mnt/stage-take && sudo chown "$USER" /mnt/stage-take
+    - uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.name }}
+        path: /mnt/stage-take
+    - name: Unpack the build
+      shell: bash
+      run: |
+        zstd -q -d -c /mnt/stage-take/work.tar.zst | tar -C "$GITHUB_WORKSPACE" -xf -
+        zstd -q -d -c /mnt/stage-take/cargo.tar.zst | tar -C "$HOME" -xf -
+        rm -rf /mnt/stage-take

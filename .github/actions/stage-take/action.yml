@@ -19,4 +19,4 @@ runs:
       run: |
         zstd -q -d -c /mnt/stage-take/work.tar.zst | tar -C "$GITHUB_WORKSPACE" -xf -
         zstd -q -d -c /mnt/stage-take/cargo.tar.zst | tar -C "$HOME" -xf -
-        rm -rf /mnt/stage-take
+        sudo rm -rf /mnt/stage-take

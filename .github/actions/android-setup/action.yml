@@ -106,7 +106,9 @@ runs:
       id: build-identity
       shell: bash
       env:
-        PROFILE_HASH: ${{ hashFiles('.github/workflows/android.yml', '.github/actions/android-setup/action.yml', 'android/toolchain-sources.json', 'android/abis.json') }}
+        # Source changes are rebuilt by CMake and Ninja. Job layout and
+        # artifact handling must not invalidate builds from earlier commits.
+        PROFILE_HASH: ${{ hashFiles('android/toolchain-sources.json', 'android/abis.json') }}
       run: |
         digest=$({
           clang++-23 --version

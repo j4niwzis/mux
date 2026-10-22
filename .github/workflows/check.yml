@@ -80,8 +80,24 @@ jobs:
           tr '\n' '\0' < build/changed-sources | xargs -0 -r touch -d "@$began"
       - name: configure
         run: |
+          export CC=/usr/lib/llvm-${{ matrix.llvm }}/bin/clang
+          # CMake resets its cache when the C compiler changes, losing the
+          # command-line options (including libc++). Reset only configuration
+          # metadata first, keeping objects and fetched sources for reuse.
+          python3 - <<'EOF'
+          import os, pathlib, re, shutil
+          cache = pathlib.Path("build/CMakeCache.txt")
+          if cache.exists():
+              match = re.search(r"^CMAKE_C_COMPILER:[^=]+=(.*)$", cache.read_text(), re.M)
+              if not match or os.path.realpath(match[1]) != os.path.realpath(os.environ["CC"]):
+                  cache.unlink()
+                  for path in pathlib.Path("build/CMakeFiles").glob("[0-9]*"):
+                      if path.is_dir() and re.fullmatch(r"\d+\.\d+.*", path.name):
+                          shutil.rmtree(path)
+                  print("C compiler changed: reset configuration metadata; retained build outputs")
+          EOF
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMUX_PROGRAM_JOBS=1 \
-            -DCMAKE_C_COMPILER=/usr/lib/llvm-${{ matrix.llvm }}/bin/clang \
+            -DCMAKE_C_COMPILER="$CC" \
             -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
             -DMUX_UI=ON -DMUX_CALLS=ON

@@ -31,7 +31,7 @@ zram() {
 }
 zram || echo "zram unavailable here: swap on the disk only"
 
-# 32 GiB by default; a stage that needs more (the full-LTO link) says so.
+# 32 GiB by default; a stage that needs more says so.
 sudo fallocate -l "${MUX_SWAP_GB:-32}G" /mnt/mux.swap
 sudo chmod 600 /mnt/mux.swap
 sudo mkswap /mnt/mux.swap >/dev/null

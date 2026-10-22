@@ -48,16 +48,13 @@ cme_options(sdl3 "SDL_ANDROID_NATIVE_ACTIVITY ON" "SDL_ANDROID_JAR OFF"
 # A system SDL does not carry this fork's entry point or generated bridge.
 set(CME_SYSTEM_SDL3 OFF)
 
-# One library, optimised whole: every object -- mux's and each dependency's,
-# which cmake-everywhere builds with these flags -- is LLVM bitcode, and the
-# link of libmux.so is full LTO over all of it (not CMake's IPO switch, which
-# is ThinLTO for Clang). Symbols hidden unless exported, and what libmux.so
-# exports is android/exports.map.
-string(APPEND CMAKE_C_FLAGS " -flto=full -fvisibility=hidden")
-string(APPEND CMAKE_CXX_FLAGS " -flto=full -fvisibility=hidden -fvisibility-inlines-hidden")
-string(APPEND CMAKE_SHARED_LINKER_FLAGS " -flto=full")
-string(APPEND CMAKE_MODULE_LINKER_FLAGS " -flto=full")
-string(APPEND CMAKE_EXE_LINKER_FLAGS " -flto=full")
+# ThinLTO for mux and the dependencies built by cmake-everywhere.
+# Symbols hidden unless exported; libmux.so exports android/exports.map.
+string(APPEND CMAKE_C_FLAGS " -flto=thin -fvisibility=hidden")
+string(APPEND CMAKE_CXX_FLAGS " -flto=thin -fvisibility=hidden -fvisibility-inlines-hidden")
+string(APPEND CMAKE_SHARED_LINKER_FLAGS " -flto=thin")
+string(APPEND CMAKE_MODULE_LINKER_FLAGS " -flto=thin")
+string(APPEND CMAKE_EXE_LINKER_FLAGS " -flto=thin")
 # The link options of an Android library: 16 KB pages, nothing undefined,
 # only android/exports.map exported, and no symbol table in what is shipped.
 set(MUX_ANDROID_LINK_OPTIONS "LINKER:-z,max-page-size=16384" "LINKER:--no-undefined"

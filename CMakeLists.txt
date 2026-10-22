@@ -556,7 +556,7 @@ foreach(target IN LISTS mux_all_targets)
       # Its archive indexed by the toolchain's ar, which reads bitcode.
       set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
       target_compile_options(${target} PRIVATE
-        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANG_AND_ID:CXX,Clang>>:-flto=full>)
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANG_AND_ID:CXX,Clang>>:-flto=thin>)
     endif()
   endif()
 endforeach()
@@ -576,12 +576,11 @@ if(mux_ipo)
       # compiler's, whose LTO objects mux's linker could not read.
       if(target MATCHES "^mux" AND kind MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$")
         set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-        # Full LTO, not CMake's thin: the whole program optimised as one
-        # module at the link. Given after CMake's own flag, it is the one kept.
+        # Use ThinLTO consistently for compilation and linking.
         if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
           target_compile_options(${target} PRIVATE
-            $<$<AND:$<CONFIG:Release>,$<OR:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<COMPILE_LANG_AND_ID:C,Clang>>>:-flto=full>)
-          target_link_options(${target} PRIVATE $<$<CONFIG:Release>:-flto=full>)
+            $<$<AND:$<CONFIG:Release>,$<OR:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<COMPILE_LANG_AND_ID:C,Clang>>>:-flto=thin>)
+          target_link_options(${target} PRIVATE $<$<CONFIG:Release>:-flto=thin>)
         endif()
       endif()
     endforeach()

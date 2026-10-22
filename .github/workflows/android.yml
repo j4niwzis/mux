@@ -249,8 +249,7 @@ jobs:
             ~/.cargo/git
           key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.setup.outputs.digest }}-${{ env.STAGE }}-program
 
-  # The library linked, alone: full LTO optimises the whole program as one
-  # module here, more than the runner holds in memory -- given more swap.
+  # The library linked, alone, with extra swap for the final link.
   link:
     needs: program
     runs-on: ubuntu-24.04
@@ -269,7 +268,7 @@ jobs:
           abi: ${{ env.ABI }}
           full: ${{ env.FULL }}
           token: ${{ github.token }}
-          # The whole program optimised as one module (full LTO): more room.
+          # More room for the final link.
           swap: '48'
       - name: The build the stage before left
         uses: ./.github/actions/stage-take

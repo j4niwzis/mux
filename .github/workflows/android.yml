@@ -88,7 +88,7 @@ jobs:
           if [ "$FULL" = client ]; then source=.; fi
           cmake -S "$source" -B build-android -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$HOME/.cache/mux-android-$ABI/cmake/target.cmake" \
-            -DCMAKE_BUILD_TYPE=Release -DMUX_PROGRAM_JOBS=1 \
+            -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG=-g0 -DCMAKE_C_FLAGS_DEBUG=-g0 -DMUX_PROGRAM_JOBS=1 \
             -DMUX_CLI=OFF -DMUX_TESTS=OFF -DMUX_VIDEO=OFF -DMUX_CALLS=ON \
             -DCME_BUILD_MACHINE_CXX_COMPILER=clang++-23 \
             -DCME_BUILD_MACHINE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'

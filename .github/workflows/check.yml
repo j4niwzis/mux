@@ -96,7 +96,7 @@ jobs:
                           shutil.rmtree(path)
                   print("C compiler changed: reset configuration metadata; retained build outputs")
           EOF
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMUX_PROGRAM_JOBS=1 \
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG=-g0 -DCMAKE_C_FLAGS_DEBUG=-g0 -DMUX_PROGRAM_JOBS=1 \
             -DCMAKE_C_COMPILER="$CC" \
             -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \

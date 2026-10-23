@@ -616,6 +616,18 @@ struct swipe_shown {
   }
 };
 
+// Keep the action on a container: Text's own pointer handler is for text
+// selection and does not run an onClick inherited around the text itself.
+inline auto message_thread_link(const palette& colours, std::string root, std::string line) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(message_thread_link, c::onClick(request::open_thread{std::move(root)},
+      c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 0.0f, 0.0f, 0.0f},
+                            .hoverBackground = colours.chosen}),
+          c::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(line), 13.0f, colours.accent, true)))),
+      "Open thread"));
+}
+using message_thread_link_t = decltype(message_thread_link(std::declval<const palette&>(), std::string{}, std::string{}));
+
 // The bubble: a column of the name, the forward, the quote, the picture or
 // file or album, the text and its pieces, the preview, the reactions, the
 // thread's summary, the protocol's lines and node, the time.
@@ -886,16 +898,14 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   }
   // A thread's root: how many answers, the latest, as Element shows it under
   // the message; pressed, the thread.
-  std::optional<decltype(c::onClick(request::open_thread{}, nodes::Text("", 13.0f, 0)))> thread;
+  std::optional<message_thread_link_t> thread;
   if (said.threaded && said.threaded->count > 0) {
     const thread_summary& summary = *said.threaded;
     std::string line = std::format("\U0001F4AC {} {}", summary.count, summary.count == 1 ? "reply" : "replies");
     if (!summary.last_text.empty())
       line += std::format(" · {}: {}", sender_name(in, summary.last_sender), summary.last_text);
     std::ranges::replace(line, '\n', ' ');
-    thread.emplace(c::onClick(request::open_thread{said.id},
-                              c::styled({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}}, elided(nodes::Text(std::move(line), 13.0f, colours.accent, true))),
-                              "Open thread"));
+    thread.emplace(message_thread_link(colours, said.id, std::move(line)));
   }
   // What its protocol says under it, and its node of its own.
   auto lines = proto::message_lines(protocol_state_of(*n.shared, in.id.account), in, said) | std::views::transform([&](const proto::part::line& one) {

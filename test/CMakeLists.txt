@@ -104,6 +104,10 @@ if(MUX_UI)
   add_executable(mux-ui-test ui_test.cc)
   target_link_libraries(mux-ui-test PRIVATE mux_modules ${mux_gtest})
   add_test(NAME ui COMMAND mux-ui-test)
+
+  add_executable(mux-interactions-test interactions_test.cc)
+  target_link_libraries(mux-interactions-test PRIVATE mux_modules ${mux_gtest})
+  add_test(NAME interactions COMMAND mux-interactions-test)
 endif()
 
 if(MUX_UI)

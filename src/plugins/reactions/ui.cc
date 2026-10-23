@@ -140,8 +140,8 @@ inline auto quick_reactions(const palette& colours) {
       c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(each)),
       // The arrow, put away once unrolled.
       c::shown_for<contract::message_menu_state>([](const contract::message_menu_state& now) { return now.unrolled == 0; },
-          c::onClick(contract::menu_unroll<feature>{}, c::styled({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f,
-              .hoverBackground = colours.chosen}, nodes::Icon(shape_of(icon::down{}), colours.text)), "All emoji"))));
+          c::styled({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f},
+              icon_button(colours, icon::down{}, sends<contract::menu_unroll<feature>>{}, std::nullopt, "All emoji")))));
 }
 
 // What the menu's emoji do: react with it.

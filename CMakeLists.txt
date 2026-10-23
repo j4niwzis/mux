@@ -39,11 +39,9 @@ macro(mux_find_package mux_requested_package)
   cme_find_package(${mux_requested_package} ${ARGN})
 endmacro()
 
-# A release build is optimised across its units (ThinLTO with clang), where
-# the toolchain can: mux's own targets, set at the end -- not the libraries
-# fetched for it, whose archives the system's ar cannot index as bitcode.
-include(CheckIPOSupported)
-check_ipo_supported(RESULT mux_ipo OUTPUT mux_ipo_said LANGUAGES CXX)
+# Native objects throughout the build: no link-time optimisation.
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
 
 if(NOT COMMAND cme_provider)
   message(FATAL_ERROR
@@ -525,8 +523,8 @@ endif()
 # uintmax_t) and crashes, as proto/matrix/app/accounts_events.cc, pictures.cc and
 # ui_test.cc did in a release build. So every library of modules in the
 # build -- the family's, skiff's, googletest's, whatever is fetched -- gets
-# the same standard and flags as mux's own, LTO included in a release
-# build: one set of flags, one std, each module built once.
+# the same standard and flags as mux's own: one set of flags, one std,
+# each module built once.
 function(mux_targets_under dir out)
   get_property(found DIRECTORY ${dir} PROPERTY BUILDSYSTEM_TARGETS)
   get_property(subdirectories DIRECTORY ${dir} PROPERTY SUBDIRECTORIES)
@@ -545,6 +543,10 @@ foreach(target IN LISTS mux_all_targets)
   # Include mux's libraries and test executables: normalising only fetched
   # module libraries leaves them on a different std BMI from their users.
   get_target_property(kind ${target} TYPE)
+  if(NOT imported AND kind MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$")
+    set_target_properties(${target} PROPERTIES
+      INTERPROCEDURAL_OPTIMIZATION OFF INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
+  endif()
   if(NOT imported AND (module_sets OR
       (target MATCHES "^mux" AND kind MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$")))
     set_target_properties(${target} PROPERTIES
@@ -552,40 +554,8 @@ foreach(target IN LISTS mux_all_targets)
   endif()
   if(module_sets AND NOT imported AND NOT target MATCHES "^mux")
     target_compile_options(${target} PUBLIC ${mux_std_flags})
-    if(mux_ipo AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      # Its archive indexed by the toolchain's ar, which reads bitcode.
-      set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-      target_compile_options(${target} PRIVATE
-        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANG_AND_ID:CXX,Clang>>:-flto=thin>)
-    endif()
   endif()
 endforeach()
-
-# LTO for what is mux's: the targets made here and in test/.
-if(mux_ipo)
-  set(mux_dirs ${CMAKE_CURRENT_SOURCE_DIR})
-  if(MUX_TESTS)
-    list(APPEND mux_dirs ${CMAKE_CURRENT_SOURCE_DIR}/test)
-  endif()
-  foreach(dir IN LISTS mux_dirs)
-    get_property(mux_targets DIRECTORY ${dir} PROPERTY BUILDSYSTEM_TARGETS)
-    foreach(target IN LISTS mux_targets)
-      get_target_property(kind ${target} TYPE)
-      # mux's own only: what a package is built into here (FFmpeg's
-      # libraries, by cme) keeps its own flags -- its C is another
-      # compiler's, whose LTO objects mux's linker could not read.
-      if(target MATCHES "^mux" AND kind MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$")
-        set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-        # Use ThinLTO consistently for compilation and linking.
-        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-          target_compile_options(${target} PRIVATE
-            $<$<AND:$<CONFIG:Release>,$<OR:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<COMPILE_LANG_AND_ID:C,Clang>>>:-flto=thin>)
-          target_link_options(${target} PRIVATE $<$<CONFIG:Release>:-flto=thin>)
-        endif()
-      endif()
-    endforeach()
-  endforeach()
-endif()
 
 if(MUX_UI)
   include(cmake/about.cmake)

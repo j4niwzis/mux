@@ -62,6 +62,15 @@ inline constexpr float kSendGap = 8.0f, kMostSendPreviews = 420.0f;
                                 }),
                                 all.empty() ? 0.0f : static_cast<float>(all.size() - 1) * kSendGap, std::plus{});
 }
+// The pictures' part of the box in a window of `high`: what they need, 420
+// at most, and never more than the window leaves the box -- 90% of it, as
+// the dialog has at most -- under its title, caption and buttons (about 220
+// with their gaps). With a phone's keyboard up, the window is half as high,
+// and pictures as high as before pushed Cancel and Send out of the box.
+inline constexpr float kSendChrome = 220.0f, kLeastSendPreviews = 80.0f;
+[[nodiscard]] inline float send_room_of(float needed, float high) {
+  return std::min({needed, kMostSendPreviews, std::max(kLeastSendPreviews, high * 0.9f - kSendChrome)});
+}
 // What a box of these says it sends.
 [[nodiscard]] inline std::string send_title_of(const std::vector<pending_file>& all) {
   return all.size() == 1 ? std::string(all.front().image ? "Send a photo" : "Send a file")
@@ -87,7 +96,9 @@ inline auto send_box(const ui_needs& n, const send_facts& facts) {
   return SKIFF_NAMED(send_box, c::local<send_draft>(
       c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {18.0f, 20.0f, 16.0f, 20.0f}}),
           nodes::Text(send_title_of(all), 17.0f, colours.text, true),
-          c::styled({.fillX = true, .height = std::min(send_height_of(all), kMostSendPreviews)},
+          c::spec_for<window_shape>([needed = send_height_of(all)](const window_shape& now) {
+            return scene::Spec{.fillX = true, .height = send_room_of(needed, now.height)};
+          },
                     nodes::ScrollContainer(c::column(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}),
                                                      c::many(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}), std::move(pictures)),
                                                      c::many(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}), std::move(files))))),

@@ -228,6 +228,7 @@ class outbox_part {
   void apply(const request::attach_files&) {
     if (!s_->chosen() || !mux::ui::may_send_files(s_->ui, s_->chosen()->account))
       return;
+    this->forget_unless_shown();
     if (to_send_.empty())
       files_thread_.reset();
     s_->system_dialogs->choose_files();
@@ -236,6 +237,7 @@ class outbox_part {
   void apply(const request::attach_in_thread&) {
     if (!s_->chosen() || !mux::ui::may_send_files(s_->ui, s_->chosen()->account))
       return;
+    this->forget_unless_shown();
     if (to_send_.empty())
       files_thread_ = s_->thread_open();
     s_->system_dialogs->choose_files();
@@ -353,6 +355,7 @@ class outbox_part {
       s_->notice("Files", "Files cannot be sent in this chat.");
       return;
     }
+    this->forget_unless_shown();
     // Dropped while the thread's field has the keys: into the thread, as
     // its paperclip sends.
     if (dropped && to_send_.empty())
@@ -398,6 +401,14 @@ class outbox_part {
   }
 
  private:
+  // What waits to be sent is what the send box shows: the box gone some way
+  // other than its Cancel -- a press off it, Back, which only empty its part
+  // of what is shown -- what was in it is let go too. Kept, the next file
+  // chosen was shown with the last ones ("Send 2 photos") and sent with them.
+  void forget_unless_shown() {
+    if (!*s_->showing->look<std::optional<mux::ui::send_facts>>())
+      to_send_.clear();
+  }
   // The thread what is in the send box goes into, where it is one.
   std::optional<std::string> files_thread_;
   // The field's text sent: as a message, an answer, or an edit -- as what is

@@ -117,7 +117,21 @@ class connection {
     // Cut short by abort(): opened afresh, not the stream it left.
     if (std::exchange(aborted_, false))
       stream_.reset();
+    // Idle a while: opened afresh too. A phone's network forgets a quiet
+    // connection -- its NAT's mapping gone, the network changed -- and tells
+    // neither end: a request on it was written into nothing and waited out
+    // its whole timeout, a minute, before it was tried again on a new one.
+    // That was a message "sending" for a minute or more, where every other
+    // client sent at once. A handshake costs far less.
+    if (stream_ && std::chrono::steady_clock::now() - last_done_ > kMostIdle) {
+      log_line(where_.host, std::format("idle {} s: connecting afresh", since_ms(last_done_) / 1000));
+      stream_.reset();
+    }
     const bool reused = stream_.has_value();
+    const struct done_at {
+      connection& of;
+      ~done_at() { of.last_done_ = std::chrono::steady_clock::now(); }
+    } stamped{*this};
     try {
       return once(method, target, body, bearer, timeout, type, progress, accept, headers);
     } catch (const net::failure& failed) {
@@ -149,6 +163,10 @@ class connection {
 
  private:
   bool aborted_ = false;
+  // How long a connection may lie unused and still be trusted; and when it
+  // was last used.
+  static constexpr std::chrono::seconds kMostIdle{20};
+  std::chrono::steady_clock::time_point last_done_{};
   using stream_type = beast::ssl_stream<beast::tcp_stream>;
 
   void open() {

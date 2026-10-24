@@ -548,19 +548,20 @@ class account {
   }
   // A request made and its answer read into its type.
   template <class Endpoint>
+  // `way`: the pool's lane it goes in -- what fills in behind (a gap caught
+  // up on) never takes the connection a message sent waits for.
   std::expected<typename Endpoint::response, failure> perform(auto& over, const Endpoint& endpoint,
-                                                              std::chrono::seconds timeout = std::chrono::seconds(60)) {
+                                                              std::chrono::seconds timeout = std::chrono::seconds(60),
+                                                              http::lane way = http::lane::user) {
     const loom::request asked = endpoint.to_send();
     try {
       const std::optional<std::string_view> bearer =
           asked.authenticated && token_ ? std::optional<std::string_view>(*token_) : std::nullopt;
-      // Outside a release build, the exchange is one function of mux.http's,
-      // not the request templates inlined into every endpoint's perform.
+      // The exchange is one function of mux.http's, not the request
+      // templates inlined into every endpoint's perform; it puts the
+      // request in its lane where it goes through a pool.
       const auto got = [&] {
-        if constexpr (net::kErasedHandlers)
-          return http::exchange(over, asked.method_name(), asked.target, asked.body, bearer, timeout, asked.content_type);
-        else
-          return over.request(asked.method_name(), asked.target, asked.body, bearer, timeout, asked.content_type);
+        return http::exchange(over, asked.method_name(), asked.target, asked.body, bearer, timeout, asked.content_type, way);
       }();
       auto read = loom::read<Endpoint>(got.status, got.body);
       if (!read) {

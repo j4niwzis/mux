@@ -474,12 +474,16 @@ class pool {
 // One exchange, made once, here: what a program calls instead of the
 // request templates where it would rather not have them inlined into each
 // of its callers (outside a release build, a protocol client's endpoints).
+// The lane a request goes in, where it goes through a pool: what the user
+// waits on, or what fills in behind -- one connection's own has none.
 response exchange(pool& over, std::string_view method, std::string_view target, std::string_view body,
-                  std::optional<std::string_view> bearer, std::chrono::seconds timeout, std::string_view type = {}) {
-  return over.request(method, target, body, bearer, timeout, type);
+                  std::optional<std::string_view> bearer, std::chrono::seconds timeout, std::string_view type = {},
+                  lane way = lane::user) {
+  return over.request(method, target, body, bearer, timeout, type, static_cast<const no_progress*>(nullptr), way);
 }
 response exchange(connection& over, std::string_view method, std::string_view target, std::string_view body,
-                  std::optional<std::string_view> bearer, std::chrono::seconds timeout, std::string_view type = {}) {
+                  std::optional<std::string_view> bearer, std::chrono::seconds timeout, std::string_view type = {},
+                  lane = lane::user) {
   return over.request(method, target, body, bearer, timeout, type);
 }
 

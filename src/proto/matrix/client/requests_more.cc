@@ -72,10 +72,15 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
     // At most ten pages of a hundred: a gap longer than that is the
     // history's, paged back to when read.
     for (int page = 0; page < 10 && api_ && token; ++page) {
-      auto got = perform(*api_, loom::cs::get_room_events{.room_id = room,
-                                                          .from = token,
-                                                          .dir = loom::cs::get_room_events::dir_values::b{},
-                                                          .limit = 100});
+      // Behind what the user waits on: after a wake, every room with a gap
+      // asked ten pages of matrix.org at once, each taking seconds, and a
+      // message sent waited a minute for a connection.
+      auto got = perform(*api_,
+                         loom::cs::get_room_events{.room_id = room,
+                                                   .from = token,
+                                                   .dir = loom::cs::get_room_events::dir_values::b{},
+                                                   .limit = 100},
+                         std::chrono::seconds(60), http::lane::background);
       if (!got || got->chunk.empty())
         break;
       bool reached = false;

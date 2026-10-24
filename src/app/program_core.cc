@@ -623,10 +623,17 @@ void app::before_frame() {
   }
 }
 
-void app::closing() {
+// Off to the background, or ending: what is written in the chat open kept
+// as its draft, and the reads not sent yet written -- on a phone, the
+// process may be ended in the background without any other word.
+void app::backgrounded() {
   if (const auto& chosen = shared.chosen())
     drafts.keep(*chosen, mux::ui::draft_text(shared.chat_writing()));
   store.flush_reads(true);
+}
+
+void app::closing() {
+  this->backgrounded();
   net->shutdown();
 }
 

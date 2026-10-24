@@ -438,6 +438,7 @@ struct app : kept_settings {
   void show_looks();
 
   void closing();
+  void backgrounded();
   // Drafts: in the screen, and on disk in one small file, written anew
   // when one changes.
 

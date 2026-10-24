@@ -72,6 +72,8 @@ inline double now_ms() {
 //   before_frame()  between events: what the screens asked for, applied
 //                   where no handler is running
 //   closing()       the window is going away
+//   backgrounded()  off to the background (Android pausing it) or ending:
+//                   what must outlive the process kept now
 //   system_dialogs  the system's dialogs (mux.platform.dialogs), put over
 //                   the window once it is made
 // What shows the windows, as SDL names it: read once, here.
@@ -215,6 +217,21 @@ int run(App& app, const options& how, const events::kinds& kinds) {
     };
     bool typing = false;  // the text input, as last started or stopped
 
+    // Off to the background -- Android pausing the activity -- or ending:
+    // what must outlive the process (the draft being written, the reads not
+    // sent yet) kept at once. Android ends a process in the background
+    // without a word, and SDL blocks its next pump until the activity comes
+    // back, so the loop would see the event only then: it is handled where
+    // SDL queues it, in an event watch -- a C API's callback, given the
+    // app's address as its one void*.
+    struct background_watch {
+      static bool seen(void* self, sdl::SDL_Event* event) {
+        if (event->type == sdl::SDL_EVENT_WILL_ENTER_BACKGROUND || event->type == sdl::SDL_EVENT_TERMINATING)
+          static_cast<App*>(self)->backgrounded();
+        return true;
+      }
+    };
+    sdl::SDL_AddEventWatch(&background_watch::seen, &app);
     bool running = true;
     bool redraw = true;
     bool animating = false;
@@ -1046,6 +1063,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
                      detail::now_ms() - frame_began, phase_ms[0], phase_ms[1], phase_ms[2], phase_ms[3], phase_ms[4],
                      phase_ms[5], phase_ms[6]);
     }
+    sdl::SDL_RemoveEventWatch(&background_watch::seen, &app);
     app.closing();
   }
   sdl::SDL_DestroyWindow(window);

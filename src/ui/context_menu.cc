@@ -113,28 +113,28 @@ inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, 
 }
 // What the menu's own parts do to what it has open: a top unrolled (its
 // place among the plugins' tops), the list of readers pointed at or left.
-template <class List>
-struct menu_events_of;
-template <class... Features>
-struct menu_events_of<plugin_list<Features...>> {
-  // Each's place among them, from 1: found by overloading on its tag.
-  template <class Feature, std::size_t At> struct slot_entry {
-    static constexpr std::size_t at(type_tag<Feature>) { return At; }
-  };
-  template <class Seq> struct slots;
-  template <std::size_t... At> struct slots<std::index_sequence<At...>> : slot_entry<Features, At + 1>... {
-    using slot_entry<Features, At + 1>::at...;
-  };
-  template <class Feature>
-  static constexpr std::size_t slot_of() {
-    return slots<std::index_sequence_for<Features...>>::at(type_tag<Feature>{});
-  }
-  template <class Feature>
+//
+// Each top's unrolling a plain on() of its own, not one template for every
+// feature: a debug build routes a press's answer through a table of the
+// event types a Local's handlers take, found by offering on() a probe that
+// converts to anything (skiff.bind:takes) -- and no conversion deduces a
+// template's Feature. menu_unroll<Feature> was in no table, the arrow's
+// answer went up past the menu unseen, and the emoji never unrolled (the
+// user's: "I can't even open it"). The menu built alone, as a test's root,
+// routes the static way, and did.
+template <class Feature, std::size_t At>
+struct unroll_of {
   auto on(const contract::menu_unroll<Feature>&, const contract::message_menu_state& now) const {
     auto next = now;
-    next.unrolled = slot_of<Feature>();
+    next.unrolled = At;
     return skiff::model::over<contract::message_menu_state>(skiff::model::setTo(std::move(next)));
   }
+};
+template <class Places, class... Features>
+struct menu_events_at;
+template <std::size_t... At, class... Features>
+struct menu_events_at<std::index_sequence<At...>, Features...> : unroll_of<Features, At + 1>... {
+  using unroll_of<Features, At + 1>::on...;
   auto on(const seen_row_hovered& one, const contract::message_menu_state& now) const {
     auto next = now;
     next.seen_row = one.on;
@@ -150,6 +150,23 @@ struct menu_events_of<plugin_list<Features...>> {
     auto next = now;
     next.seen_list = one.on;
     return skiff::model::over<contract::message_menu_state>(skiff::model::setTo(std::move(next)));
+  }
+};
+template <class List>
+struct menu_events_of;
+template <class... Features>
+struct menu_events_of<plugin_list<Features...>> : menu_events_at<std::index_sequence_for<Features...>, Features...> {
+  // Each's place among them, from 1: found by overloading on its tag.
+  template <class Feature, std::size_t At> struct slot_entry {
+    static constexpr std::size_t at(type_tag<Feature>) { return At; }
+  };
+  template <class Seq> struct slots;
+  template <std::size_t... At> struct slots<std::index_sequence<At...>> : slot_entry<Features, At + 1>... {
+    using slot_entry<Features, At + 1>::at...;
+  };
+  template <class Feature>
+  static constexpr std::size_t slot_of() {
+    return slots<std::index_sequence_for<Features...>>::at(type_tag<Feature>{});
   }
 };
 // What plugins put at its top (contract::message_menu_top) -- the quick
@@ -186,6 +203,15 @@ struct menu_tops<plugin_list<Features...>> {
 };
 using menu_tops_t = menu_tops<composition::providers<contract::message_menu_top, enabled_plugins>>;
 using menu_events = menu_events_of<composition::providers<contract::message_menu_top, enabled_plugins>>;
+// Every top's unrolling in the table a debug build routes the menu's
+// answers by (skiff.bind:takes): one missing is an arrow that does nothing.
+template <class... Features>
+consteval bool unrolls_listed(plugin_list<Features...>) {
+  using taken = skiff::bind::takes::OnEvents<menu_events, contract::message_menu_state>;
+  return (skiff::bind::takes::kIn<contract::menu_unroll<Features>, taken> && ...);
+}
+static_assert(unrolls_listed(composition::providers<contract::message_menu_top, enabled_plugins>{}),
+              "a menu top's unrolling is not in the menu's handlers' table: its arrow would do nothing");
 // The rows plugins add to a message's menu (contract::message_menu), after
 // Save As, in the plugins' order.
 template <class List>

@@ -181,6 +181,19 @@ template <class Sink>
 std::optional<std::string> account<Sink>::share_room_key(const std::string& room) {
   if (!api_ || !crypto_)
     return std::nullopt;
+  // How long the room's key took to give, said where it was slow: a message
+  // waits on it before it goes.
+  const auto began = std::chrono::steady_clock::now();
+  const struct slow_said {
+    account& of;
+    const std::string& room;
+    std::chrono::steady_clock::time_point began;
+    ~slow_said() {
+      const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - began).count();
+      if (ms > 2000)
+        log(of.id_, "{}: its key took {} ms to give", room, ms);
+    }
+  } said_slow{*this, room, began};
   auto members = perform(*api_, loom::cs::get_joined_members_by_room{.room_id = room});
   if (!members || !members->joined) {
     log(id_, "{}: its members could not be fetched", room);

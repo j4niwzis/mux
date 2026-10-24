@@ -335,13 +335,23 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
 template <class Sink>
 void account<Sink>::send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body,
                               std::optional<knot::raw> relates_to) {
+  // Each step said in the account's log, with how long it took: a message
+  // left "sending" shows where it stopped -- encrypting, the server's answer,
+  // or never begun (the user's: still "sending" for good).
+  const auto began = std::chrono::steady_clock::now();
+  const auto took = [&] {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - began).count();
+  };
+  log(id_, "send {}: to {}{}", txn, room, this->encrypted_room(room) ? ", encrypted" : "");
   auto sent = this->send_room_event(
       loom::cs::send_message{.room_id = room, .event_type = "m.room.message", .txn_id = txn, .body = std::move(body)},
       std::move(relates_to));
   if (!sent) {
+    log(id_, "send {}: failed after {} ms: {}", txn, took(), sent.error().said());
     sink_(change::delivery_changed{in, txn, delivery::failed{}});
     return;
   }
+  log(id_, "send {}: sent as {} in {} ms", txn, sent->event_id, took());
   sink_(change::message_acknowledged{in, txn, sent->event_id});
 }
 

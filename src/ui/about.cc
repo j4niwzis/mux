@@ -69,6 +69,7 @@ inline auto about_page(const palette& colours) {
       about_words(colours, std::format("mux {}\n{}\nCommit: {}\nLicense: {}", about_data::version,
                                      build_branch(), build_commit(), about_data::license)),
       settings_link(colours, "GitHub repository", icon::gear{}, request::open_url{std::string(about_data::repository)}),
+      settings_link(colours, "Copy log", icon::clip{}, request::copy_log{}),
       about_words(colours, "Libraries"), skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(libraries)),
       about_words(colours, std::string(about_data::license_text))));
 }

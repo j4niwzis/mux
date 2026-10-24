@@ -12,6 +12,8 @@
 #include <thread>
 
 int mux_main(int argc, char** argv);
+// mux.core.ids: a line of the log kept, for Settings, About, Copy log.
+extern "C" void mux_keep_log_line(const char* line);
 namespace {
 // What mux says goes to stderr (log_line, the [paste] and [skiff] lines),
 // and Android throws stderr away: none of it was ever seen. A pipe is put in
@@ -45,6 +47,7 @@ void stderr_to_logcat() {
       for (std::size_t end; (end = pending.find('\n')) != std::string::npos; pending.erase(0, end + 1)) {
         pending[end] = '\0';
         __android_log_write(ANDROID_LOG_INFO, "mux", pending.c_str());
+        mux_keep_log_line(pending.c_str());
       }
       // A line longer than logcat takes: given as it is.
       if (pending.size() > 3000) {

@@ -527,6 +527,7 @@ struct app : kept_settings {
   // A link pressed: to a user, a room or a message, in here -- matrix.to,
   // matrix: and xmpp: links -- and anywhere else, in the browser.
   void apply(const request::open_url& one);
+  void apply(const request::copy_log&);
 
   // A link followed, as where it leads says: a chat opened -- and a message
   // in it jumped to -- a person's page, a word said, or a room joined, and

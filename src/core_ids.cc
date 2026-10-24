@@ -841,13 +841,45 @@ struct account {
 // connecting, where to, logged in, what was loaded -- with when and whose.
 // Lines from the protocols' threads do not run into each other.
 
+// The last lines said, kept for Settings, About, Copy log: a tester with no
+// adb pastes them into a chat. Fed with every line stderr carries -- on
+// Android by the thread that gives stderr to logcat (main_android.cc), so
+// that skiff's and the watchdog's lines are among them; elsewhere by
+// log_line itself. From any thread.
+inline constexpr std::size_t kKeptLogLines = 2000;
+inline std::mutex& kept_log_lock() {
+  static std::mutex lock;
+  return lock;
+}
+inline std::deque<std::string>& kept_log_lines() {
+  static std::deque<std::string> lines;
+  return lines;
+}
+inline void keep_log_line(std::string line) {
+  const std::lock_guard held(kept_log_lock());
+  auto& lines = kept_log_lines();
+  lines.push_back(std::move(line));
+  while (lines.size() > kKeptLogLines)
+    lines.pop_front();
+}
+// What is kept, a line each, oldest first.
+inline std::string kept_log() {
+  const std::lock_guard held(kept_log_lock());
+  return kept_log_lines() | std::views::join_with('\n') | std::ranges::to<std::string>();
+}
 inline void log_line(std::string_view who, std::string_view what) {
   const auto now = std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now());
   // Made whole, then written in one call to the unbuffered stream: lines
   // from several threads do not run into each other.
   const std::string line = std::format("{:%H:%M:%S} [{}] {}\n", now, who, what);
   std::cerr.write(line.data(), static_cast<std::streamsize>(line.size()));
+#if !defined(__ANDROID__)
+  keep_log_line(line.substr(0, line.size() - 1));
+#endif
 }
+// The thread that gives stderr to logcat keeps each line here too: a C name,
+// for main_android.cc, which is not a module's.
+extern "C" void mux_keep_log_line(const char* line) { keep_log_line(line); }
 template <class... Args>
 void log(const account_id& who, std::format_string<Args...> what, Args&&... args) {
   log_line(who.address, std::format(what, std::forward<Args>(args)...));

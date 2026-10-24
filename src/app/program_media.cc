@@ -22,6 +22,15 @@ import mux.logic.links;
 
 namespace mux::app {
 
+// The log kept, on the clipboard: what a tester pastes into a chat where
+// there is no adb to read logcat with.
+void app::apply(const request::copy_log&) {
+  const std::string text = mux::kept_log();
+  skiff::scene::setClipboardText(text);
+  shared.notice("Log copied", std::format("{} lines of mux's log are on the clipboard.",
+                                          std::ranges::count(text, '\n') + (text.empty() ? 0 : 1)));
+}
+
 void app::apply(const request::open_url& one) {
   if (const auto where = mux::logic::link_of(one.url)) {
     this->follow(*where);

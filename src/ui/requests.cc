@@ -288,6 +288,8 @@ struct discard_unsent {};
 struct open_url {
   std::string url;
 };
+// Settings, About: the log kept (mux::kept_log) put on the clipboard.
+struct copy_log {};
 struct load_context {
   mux::conversation_id in;
   std::string target;

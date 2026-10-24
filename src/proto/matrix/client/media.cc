@@ -179,7 +179,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .delivery = delivery::sending{},
                                         .attachment = carried,
                                         .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt}});
-    unsent pending{*this, in, local};
+    unsent<Sink> pending{sink_, in, local};
     // Before the upload: the bytes of a file for an encrypted room never
     // reach the server in the clear (review 4, H2).
     // In an encrypted room, sealed here first: what reaches the server is

@@ -317,7 +317,7 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
         .replies_to = reply_to,
         .outgoing = true,
         .delivery = delivery::sending{}}});
-    unsent pending{*this, in, txn};
+    unsent<Sink> pending{sink_, in, txn};
     if (!api_)
       return;
     loom::client::text_said said{.body = body, .html = html, .reply_to = reply_to};
@@ -420,7 +420,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
                                         .outgoing = true,
                                         .delivery = delivery::sending{},
                                         .thread = root}});
-    unsent pending{*this, in, txn};
+    unsent<Sink> pending{sink_, in, txn};
     if (!api_)
       return;
     const auto content = loom::client::text_message(

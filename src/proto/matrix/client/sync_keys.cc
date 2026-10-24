@@ -619,6 +619,16 @@ auto account<Sink>::own_sessions_now() -> std::optional<std::vector<own_session>
          }) | std::ranges::to<std::vector>();
 }
 
+// What of the sessions the user has been told, kept beside the account: the
+// sessions of this device told they are not verified, and the other
+// sessions told as new logins. Each said once, not at every start -- the
+// notice came up again each time the app was opened, however often it had
+// been read.
+struct sessions_told {
+  std::vector<std::string> unverified_here;
+  std::vector<std::string> others;
+  friend consteval auto json_schema(knot::type<sessions_told>) { return knot::schema<sessions_told>(); }
+};
 template <class Sink>
 void account<Sink>::check_own_sessions() {
   if (!api_ || !crypto_)
@@ -626,18 +636,36 @@ void account<Sink>::check_own_sessions() {
   const auto all = this->own_sessions_now();
   if (!all)
     return;
-  const auto here = std::ranges::find(*all, crypto_->device_id(), &own_session::id);
+  const auto file = std::filesystem::path(this->kept_file()).concat(".sessions-told");
+  sessions_told told;
+  if (const auto opened = how_.vault->read_file(file))
+    if (auto read = knot::try_read<sessions_told>(std::string_view(*opened)))
+      told = std::move(*read);
+  const std::string device = crypto_->device_id();
+  const auto here = std::ranges::find(*all, device, &own_session::id);
   const bool this_one = here != all->end() && here->trusted;
-  const auto others = (*all) | std::views::filter([&](const own_session& one) { return one.id != crypto_->device_id() && !one.trusted; }) | std::views::transform(&own_session::name) | std::ranges::to<std::vector>();
-  if (!this_one)
+  const auto others = (*all) | std::views::filter([&](const own_session& one) {
+                        return one.id != device && !one.trusted && !std::ranges::contains(told.others, one.id);
+                      }) | std::ranges::to<std::vector>();
+  bool changed = false;
+  if (!this_one && !std::ranges::contains(told.unverified_here, device)) {
     sink_(change::notice{id_, "Verify this session",
                          "Verify this session to allow it to read your message history, and so that others can trust "
                          "what it sends: verify it with emoji from another session of yours (Sessions), or restore "
                          "with your recovery key (Sessions, Device verification)."});
-  if (!others.empty())
+    told.unverified_here.push_back(device);
+    changed = true;
+  }
+  if (!others.empty()) {
     sink_(change::notice{id_, "New login. Was this you?",
                          std::format("Not verified: {}. Verify each from Sessions -- or sign it out, if it was not you.",
-                                     others | std::views::join_with(std::string_view(", ")) | std::ranges::to<std::string>())});
+                                     others | std::views::transform(&own_session::name) | std::views::join_with(std::string_view(", ")) |
+                                         std::ranges::to<std::string>())});
+    std::ranges::copy(others | std::views::transform(&own_session::id), std::back_inserter(told.others));
+    changed = true;
+  }
+  if (changed && !how_.vault->write_file(file, knot::to_json_string(told), true))
+    log(id_, "what the sessions were told could not be kept in {}", file.string());
 }
 }  // namespace mux::proto::matrix::client
 

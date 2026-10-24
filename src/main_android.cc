@@ -4,6 +4,7 @@
 #include <SDL3/SDL_nativeactivity.h>
 #include <android/log.h>
 #include <android/native_activity.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <cstdio>
 #include <exception>
@@ -23,6 +24,9 @@ void stderr_to_logcat() {
   int ends[2];
   if (pipe(ends) != 0)
     return;
+  // Room for a burst of lines: a full pipe would hold the writer -- the app
+  // thread itself, as it logs -- until the reader caught up.
+  (void)fcntl(ends[1], F_SETPIPE_SZ, 1 << 20);
   if (dup2(ends[1], STDERR_FILENO) < 0) {
     close(ends[0]);
     close(ends[1]);

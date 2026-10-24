@@ -35,7 +35,13 @@ void app::woken() {
   notices.take_push();
   // What the workers made, put where it goes: on this, the UI's thread.
   work.finish();
-  std::ranges::move(box->take(), std::back_inserter(arriving_));
+  auto taken = box->take();
+  surge_.came += taken.size();
+  // A wake bringing many at once said, with how many wait already.
+  if (taken.size() >= 200)
+    mux::log_line("app", std::format("arriving: {} changes at once, {} waiting before them", taken.size(), arriving_.size()));
+  std::ranges::move(taken, std::back_inserter(arriving_));
+  surge_.deepest = std::max(surge_.deepest, arriving_.size());
   // Off screen, no frame takes it a slice at a time: all of it now, the
   // model kept up and notifications given.
   if (!on_screen)
@@ -57,7 +63,20 @@ void app::take_arriving(std::chrono::milliseconds most) {
   // One batch of edits for all that came: what binds to the chats told
   // once, after.
   model->chats().beginBatch();
+  // One change slow to apply said, by its type's name, as the compiler
+  // spells it in a function's name (no table of names kept by hand).
+  const auto said_slow = [](const mux::change_t& one, double ms) {
+    if (ms >= 30.0)
+      spl::visit([&]<class Change>(const Change&) {
+                   mux::log_line("app", std::format("arriving: one change took {:.0f} ms ({})", ms,
+                                                    std::source_location::current().function_name()));
+                 }, one);
+  };
+  std::optional<std::chrono::steady_clock::time_point> one_began;
   while (!arriving_.empty() && (changes.empty() || !due())) {
+    if (one_began)
+      said_slow(changes.back(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - *one_began).count());
+    one_began = std::chrono::steady_clock::now();
     changes.push_back(std::move(arriving_.front()));
     arriving_.pop_front();
     const mux::change_t& one = changes.back();
@@ -201,7 +220,12 @@ void app::take_arriving(std::chrono::milliseconds most) {
     model->apply(one);
     paging.keep(one);
   }
+  if (one_began)
+    said_slow(changes.back(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - *one_began).count());
+  const auto batch_began = std::chrono::steady_clock::now();
   model->chats().endBatch();
+  if (const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - batch_began).count(); ms >= 30.0)
+    mux::log_line("app", std::format("arriving: the model's end of batch took {:.0f} ms for {} changes", ms, changes.size()));
   // Refresh profile cards after their facts have reached the model.
   const auto refresh_person = [&](const account_id& by, const std::string& user) {
     if (person_open_ && person_open_->first.account == by && person_open_->second == user) {
@@ -255,7 +279,10 @@ void app::take_arriving(std::chrono::milliseconds most) {
   }
   // Messages held to a number in all, least recently read out first.
   model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), shared.chosen());
+  const auto refresh_began = std::chrono::steady_clock::now();
   this->refresh();
+  if (const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - refresh_began).count(); ms >= 30.0)
+    mux::log_line("app", std::format("arriving: the refresh after {} changes took {:.0f} ms", changes.size(), ms));
   // A room the user made: opened once the model has it.
   if (made_room_ && model->find(*made_room_))
     this->open_chat(*std::exchange(made_room_, std::nullopt), std::nullopt);
@@ -303,6 +330,16 @@ void app::take_arriving(std::chrono::milliseconds most) {
     auto& screen = root();
     if (!shared.thread_open() || jumps.aim_in_thread(*thread_target_))
       thread_target_.reset();
+  }
+  // The slice, and the surge it is part of: said whole once the queue is
+  // empty again, where it took more than one slice.
+  ++surge_.slices;
+  surge_.ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - began).count();
+  if (arriving_.empty()) {
+    if (surge_.slices > 1)
+      mux::log_line("app", std::format("arriving: {} changes taken in {} slices, {:.0f} ms in all; {} waited at most", surge_.came,
+                                       surge_.slices, surge_.ms, surge_.deepest));
+    surge_ = {};
   }
 }
 

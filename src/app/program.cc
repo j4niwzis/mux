@@ -405,6 +405,12 @@ struct app : kept_settings {
   // responding.
   std::deque<mux::change_t> arriving_;
   void take_arriving(std::chrono::milliseconds most);
+  // A surge of it, as the log tells it: since the queue was last empty, how
+  // many came, how deep it got, how many slices took it and how long.
+  struct arriving_surge {
+    std::size_t came = 0, deepest = 0, slices = 0;
+    double ms = 0.0;
+  } surge_;
   // A link's message gone to, and a thread's answer to be scrolled to once
   // its panel shows it.
   void go_to_linked(const mux::conversation_id& in, const std::string& event);

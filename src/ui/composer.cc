@@ -116,21 +116,23 @@ struct field_quotes {
     return text.substr(body_at(text, start)).starts_with("```");
   }
   [[nodiscard]] static code_line code_at(std::string_view text, std::size_t start) {
+    // The fences before it, found by their ``` alone: paragraph by
+    // paragraph, a text of a thousand lines was walked whole for each of its
+    // lines as it was laid out.
     bool open = false;
     int open_depth = 0;
-    for (std::size_t at = 0; at < start;) {
-      const std::size_t end = text.find('\n', at);
-      if (end == std::string_view::npos || end >= start)
+    for (std::size_t mark = text.find("```"); mark != std::string_view::npos; mark = text.find("```", mark + 3)) {
+      const std::size_t at = start_of(text, mark);
+      if (at >= start)
         break;
-      if (fence_at(text, at)) {
-        if (!open) {
-          open = true;
-          open_depth = depth(text, at);
-        } else if (depth(text, at) == open_depth) {
-          open = false;
-        }
+      if (body_at(text, at) != mark)
+        continue;
+      if (!open) {
+        open = true;
+        open_depth = depth(text, at);
+      } else if (depth(text, at) == open_depth) {
+        open = false;
       }
-      at = end + 1;
     }
     const bool fence = fence_at(text, start);
     if (open && depth(text, start) != open_depth)

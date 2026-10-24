@@ -440,6 +440,11 @@ struct app : kept_settings {
 
   // What the window asks of the program by its hooks (skiff.platform.window).
   [[nodiscard]] int interface_scale() const { return this->appearance().interface_scale; }
+  // Shaped as a phone's for the window's long press: as the layout chosen
+  // in Settings says, the size where it is automatic.
+  [[nodiscard]] bool phone_shaped(float width, float height) const {
+    return mux::ui::window_shape{width, height, this->appearance().layout}.phone();
+  }
   void touch_changed(bool on) { shared.by_touch = on; }
   [[nodiscard]] std::optional<skia::SkPoint> take_press_again() { return std::exchange(shared.press_again, std::nullopt); }
   // The faces the window draws text with first (skiff.platform.fonts).

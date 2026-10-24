@@ -42,6 +42,7 @@ struct seen_reader {
   std::string id;
   std::string name;
   std::optional<std::chrono::sys_time<std::chrono::milliseconds>> at;
+  friend bool operator==(const seen_reader&, const seen_reader&) = default;
 };
 struct menu_facts {
   std::string id;
@@ -75,10 +76,18 @@ struct menu_facts {
   struct reaction_facts {
     std::string to;
     std::string key;
+    friend bool operator==(const reaction_facts&, const reaction_facts&) = default;
   };
   std::optional<reaction_facts> reaction;
   float x = 0.0f, y = 0.0f;
+  friend bool operator==(const menu_facts&, const menu_facts&) = default;
 };
+// Compared, or the window's layer (skiff.compose's Mounted) makes the menu
+// anew at every refresh -- a press in it is one -- and what the menu has
+// open of its own is lost: the arrow over its quick reactions unrolled the
+// emoji, and the menu made again at once had them rolled up (the user's:
+// "I can't even open it").
+static_assert(std::equality_comparable<menu_facts>);
 namespace request {
 // A message's menu asked for: what it is opened over.
 using message_menu = menu_facts;

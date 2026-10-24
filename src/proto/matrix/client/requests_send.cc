@@ -331,6 +331,45 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
   });
 }
 
+template <class Sink>
+void account<Sink>::send_as(std::string room, std::string body, std::optional<std::string> html, bool emote,
+                            std::optional<std::string> reply_to) {
+  this->spawn_sending([this, room = std::move(room), body = std::move(body), html = std::move(html), emote,
+                       reply_to = std::move(reply_to)] {
+    const std::string txn = this->transaction();
+    const conversation_id in{id_, room};
+    log(id_, "send {}: begun in {}, as a command made it{}", txn, room, emote ? " (an emote)" : "");
+    // Shown as an emote is read back: "* " before it.
+    sink_(change::message_added{message{
+        .in = in,
+        .id = txn,
+        .sender = id_.address,
+        .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
+        .body = {emote ? "* " + body : body, html},
+        .replies_to = reply_to,
+        .outgoing = true,
+        .delivery = delivery::sending{}}});
+    unsent<Sink> pending{sink_, in, txn};
+    if (!api_)
+      return;
+    if (emote) {
+      loom::ev::m_room_message_m_emote_content_t content;
+      content.body = body;
+      if (html) {
+        content.format = "org.matrix.custom.html";
+        content.formatted_body = *html;
+      }
+      if (reply_to)
+        content.m_relates_to.emplace().m_in_reply_to.emplace().event_id = *reply_to;
+      this->send_text(in, room, txn, as_body(content), relates_to_of(content));
+    } else {
+      const auto content = loom::client::text_message(loom::client::text_said{.body = body, .html = html, .reply_to = reply_to});
+      this->send_text(in, room, txn, as_body(content), relates_to_of(content));
+    }
+    pending.settled = true;
+  });
+}
+
 // A text message sent under its transaction ID: acknowledged with the
 // event ID the server gave it, or marked failed.
 template <class Sink>

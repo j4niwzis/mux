@@ -487,6 +487,11 @@ class account {
   // gives it its event id, and the echo in the next sync is the same message.
   void send(std::string room, std::string body, std::optional<std::string> reply_to = std::nullopt,
             std::vector<mention> mentions = {}, std::vector<styled_run> styles = {});
+  // A message as a slash command made it: its body and HTML as they are --
+  // no Markdown read into it -- as a text or an emote (/me), answering one
+  // where it does.
+  void send_as(std::string room, std::string body, std::optional<std::string> html, bool emote,
+               std::optional<std::string> reply_to = std::nullopt);
 
   // What a plugin's Matrix side (mux.plugins.matrix) does through the
   // account: an event of its own sent to a room -- encrypted where the room

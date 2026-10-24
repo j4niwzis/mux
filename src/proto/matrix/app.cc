@@ -13,6 +13,7 @@ import mux.protocols;
 import mux.proto.kept;
 import mux.proto.matrix.changes;
 import mux.proto.matrix.requests;
+import knot;
 import mux.ui;
 import mux.ui.proto.matrix;
 
@@ -94,6 +95,13 @@ void send_custom(Net& net, const conversation_id& in, std::string type, std::opt
 }  // namespace mux::proto::matrix::ops
 
 namespace mux::proto::matrix::app_detail {
+// The user's own member event in a room, as /myroomnick sends it: joined,
+// under a name of its own there.
+struct member_named {
+  std::string membership = "join";
+  std::string displayname;
+  friend consteval auto json_schema(knot::type<member_named>) { return knot::schema<member_named>(); }
+};
 // What the packs dialog shows, changed as `change` says, where it is up.
 template <class App, class Change>
 void change_packs(App& app, const account_id& by, const std::optional<std::optional<std::string>>& room, Change change) {
@@ -878,6 +886,39 @@ void program_asked(App& app, const change_room& one) {
     return;
   app.net->on_account_of(*chosen, [room = chosen->id, change = one.change](auto& account)
                                       -> decltype(void(account.change_room(room, change))) { account.change_room(room, change); });
+}
+// A slash command: done where it was typed -- a message sent as it makes
+// it, a room joined or left, something done to the room or to someone in
+// it -- by the account of that chat.
+template <class App>
+void program_asked(App& app, const slash& one) {
+  if (app.shared.demo())
+    return;
+  const mux::conversation_id to = one.to;
+  spl::visit(spl::overloaded{
+                 [&](const proto::matrix::slash::said& said) {
+                   app.net->on_account_of(to, [room = to.id, said](auto& account)
+                                                  -> decltype(void(account.send_as(room, said.body, said.html, said.emote))) {
+                     account.send_as(room, said.body, said.html, said.emote);
+                   });
+                 },
+                 [&](const proto::matrix::slash::join& join) { app.net->join(to.account, join.room, {}); },
+                 [&](proto::matrix::slash::leave) { app.net->leave(to); },
+                 [&](const proto::matrix::slash::act& act) { app.net->manage(to, act.action); },
+                 [&](const proto::matrix::slash::power& power) {
+                   const proto::matrix::room_change_t change = proto::matrix::room_change::set_power{power.user, power.level};
+                   app.net->on_account_of(to, [room = to.id, change](auto& account)
+                                                  -> decltype(void(account.change_room(room, change))) { account.change_room(room, change); });
+                 },
+                 [&](const proto::matrix::slash::room_name_mine& mine) {
+                   // The user's own member event in the room, its name its own there.
+                   const proto::matrix::room_change_t change = proto::matrix::room_change::set_state_event{
+                       "m.room.member", to.account.address,
+                       knot::to_json_string(app_detail::member_named{.displayname = mine.name})};
+                   app.net->on_account_of(to, [room = to.id, change](auto& account)
+                                                  -> decltype(void(account.change_room(room, change))) { account.change_room(room, change); });
+                 }},
+             one.what);
 }
 template <class App>
 void program_asked(App& app, const save_room_pack& one) {

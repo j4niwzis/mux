@@ -27,7 +27,33 @@ struct sign_out_again { std::string password; };
 }  // namespace account_change
 using account_change_t = spl::variant<account_change::rename, account_change::save_name, account_change::sign_out,
                                       account_change::sign_out_others, account_change::sign_out_again>;
+// A line typed as Element's slash commands read it: what it does, typed
+// once where the line is read (command_of, mux.proto.matrix).
+namespace slash {
+// A message as the command makes it: its body and HTML as they are, a text
+// or an emote (/me, /shrug, /plain, /html, /rainbow, /spoiler...).
+struct said {
+  std::string body;
+  std::optional<std::string> html;
+  bool emote = false;
+};
+struct join { std::string room; };
+struct leave {};
+// Named, described, someone let in or sent out (/roomname, /topic,
+// /invite, /kick, /ban, /unban).
+struct act { mux::room_action_t action; };
+// Someone's power in the room (/op user level, /deop user).
+struct power { std::string user; std::int64_t level = 0; };
+// The user's own name in the room (/myroomnick).
+struct room_name_mine { std::string name; };
+}  // namespace slash
+using slash_t = spl::variant<slash::said, slash::join, slash::leave, slash::act, slash::power, slash::room_name_mine>;
 namespace request {
+// A slash command, for the chat it was typed in.
+struct slash {
+  mux::conversation_id to;
+  slash_t what;
+};
 // A pack created or edited from the room's settings.
 struct save_room_pack { mux::emote_pack pack; };
 // A room changed, as Matrix changes one: the room being managed.

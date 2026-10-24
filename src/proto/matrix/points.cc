@@ -9,6 +9,7 @@ import mux.core;
 import mux.proto;
 import mux.proto.matrix.links;
 import mux.proto.matrix.requests;
+import chevron.escape;
 
 export namespace mux::proto::matrix {
 constexpr bool offers(const state&, feature::server_previews) { return true; }
@@ -360,6 +361,195 @@ inline bool manage_close_editor(advanced, manage_state& kept) {
 inline bool manage_editor_header(advanced, const manage_state& kept) { return kept.state_page != state_screen::overview; }
 }  // namespace manage
 
+// Element's slash commands: the command's word read once into a type
+// (slash_word_of, a table), what follows it into what it does (slash_of,
+// an overload for each). A word not known, or one with nothing it needs
+// after it: not a command -- the line sent as it is.
+namespace slash_word {
+struct me {};
+struct shrug {};
+struct tableflip {};
+struct unflip {};
+struct lenny {};
+struct plain {};
+struct html {};
+struct rainbow {};
+struct rainbowme {};
+struct spoiler {};
+struct join {};
+struct leave {};
+struct invite {};
+struct kick {};
+struct ban {};
+struct unban {};
+struct topic {};
+struct roomname {};
+struct myroomnick {};
+struct op {};
+struct deop {};
+}  // namespace slash_word
+using slash_word_t = spl::variant<slash_word::me, slash_word::shrug, slash_word::tableflip, slash_word::unflip, slash_word::lenny,
+                                  slash_word::plain, slash_word::html, slash_word::rainbow, slash_word::rainbowme, slash_word::spoiler,
+                                  slash_word::join, slash_word::leave, slash_word::invite, slash_word::kick, slash_word::ban,
+                                  slash_word::unban, slash_word::topic, slash_word::roomname, slash_word::myroomnick, slash_word::op,
+                                  slash_word::deop>;
+[[nodiscard]] inline std::optional<slash_word_t> slash_word_of(std::string_view word) {
+  static const std::unordered_map<std::string_view, slash_word_t> known{
+      {"me", slash_word::me{}},           {"shrug", slash_word::shrug{}},       {"tableflip", slash_word::tableflip{}},
+      {"unflip", slash_word::unflip{}},   {"lenny", slash_word::lenny{}},       {"plain", slash_word::plain{}},
+      {"html", slash_word::html{}},       {"rainbow", slash_word::rainbow{}},   {"rainbowme", slash_word::rainbowme{}},
+      {"spoiler", slash_word::spoiler{}}, {"join", slash_word::join{}},         {"j", slash_word::join{}},
+      {"leave", slash_word::leave{}},     {"part", slash_word::leave{}},        {"invite", slash_word::invite{}},
+      {"kick", slash_word::kick{}},       {"remove", slash_word::kick{}},       {"ban", slash_word::ban{}},
+      {"unban", slash_word::unban{}},     {"topic", slash_word::topic{}},       {"roomname", slash_word::roomname{}},
+      {"myroomnick", slash_word::myroomnick{}}, {"op", slash_word::op{}},       {"deop", slash_word::deop{}},
+  };
+  const auto found = known.find(word);
+  return found == known.end() ? std::nullopt : std::optional(found->second);
+}
+// The first word of what follows, and the rest after it.
+[[nodiscard]] inline std::pair<std::string_view, std::string_view> slash_split(std::string_view rest) {
+  const auto space = rest.find(' ');
+  if (space == std::string_view::npos)
+    return {rest, {}};
+  std::string_view after = rest.substr(space + 1);
+  while (after.starts_with(' '))
+    after.remove_prefix(1);
+  return {rest.substr(0, space), after};
+}
+// What follows, sent as a text with a face before it (or after, Element's
+// /lenny), or the face alone.
+[[nodiscard]] inline std::optional<slash_t> slash_face(std::string_view face, std::string_view rest) {
+  return slash::said{rest.empty() ? std::string(face) : std::format("{} {}", face, rest)};
+}
+// Each code point of it in a hue of its own, round the colour wheel along
+// the text, as Element's /rainbow: <font data-mx-color> each.
+[[nodiscard]] inline std::string rainbow_html(std::string_view text) {
+  std::vector<std::string_view> points;
+  for (std::size_t at = 0; at < text.size();) {
+    const auto lead = static_cast<unsigned char>(text[at]);
+    const std::size_t length = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
+    points.push_back(text.substr(at, std::min(length, text.size() - at)));
+    at += length;
+  }
+  std::string out;
+  for (std::size_t i = 0; i < points.size(); ++i) {
+    // Its hue, and the colour of it at full saturation and brightness.
+    const double hue = 360.0 * static_cast<double>(i) / static_cast<double>(std::max<std::size_t>(1, points.size()));
+    const double x = 1.0 - std::abs(std::fmod(hue / 60.0, 2.0) - 1.0);
+    const auto sector = static_cast<int>(hue / 60.0) % 6;
+    const std::array<std::array<double, 3>, 6> rgb{{{1, x, 0}, {x, 1, 0}, {0, 1, x}, {0, x, 1}, {x, 0, 1}, {1, 0, x}}};
+    const auto byte = [](double v) { return static_cast<unsigned>(std::lround(v * 255.0)); };
+    const auto& c = rgb[static_cast<std::size_t>(sector)];
+    out += std::format(R"(<font data-mx-color="#{:02x}{:02x}{:02x}">{}</font>)", byte(c[0]), byte(c[1]), byte(c[2]),
+                       chevron::escaped(points[i]));
+  }
+  return out;
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::me, std::string_view rest) {
+  if (rest.empty())
+    return std::nullopt;
+  return slash::said{std::string(rest), std::nullopt, true};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::shrug, std::string_view rest) { return slash_face("\u00AF\\_(\u30C4)_/\u00AF", rest); }
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::tableflip, std::string_view rest) {
+  return slash_face("(\u256F\u00B0\u25A1\u00B0\uFF09\u256F\uFE35 \u253B\u2501\u253B", rest);
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::unflip, std::string_view rest) {
+  return slash_face("\u252C\u2500\u2500\u252C \u30CE( \u309C-\u309C\u30CE)", rest);
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::lenny, std::string_view rest) {
+  return slash_face("( \u0361\u00B0 \u035C\u0296 \u0361\u00B0)", rest);
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::plain, std::string_view rest) {
+  if (rest.empty())
+    return std::nullopt;
+  return slash::said{std::string(rest)};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::html, std::string_view rest) {
+  if (rest.empty())
+    return std::nullopt;
+  return slash::said{std::string(rest), std::string(rest)};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::rainbow, std::string_view rest) {
+  if (rest.empty())
+    return std::nullopt;
+  return slash::said{std::string(rest), rainbow_html(rest)};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::rainbowme, std::string_view rest) {
+  if (rest.empty())
+    return std::nullopt;
+  return slash::said{std::string(rest), rainbow_html(rest), true};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::spoiler, std::string_view rest) {
+  if (rest.empty())
+    return std::nullopt;
+  return slash::said{std::string(rest), std::format("<span data-mx-spoiler>{}</span>", chevron::escaped(rest))};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::join, std::string_view rest) {
+  const auto [room, after] = slash_split(rest);
+  if (room.empty())
+    return std::nullopt;
+  return slash::join{std::string(room)};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::leave, std::string_view) { return slash::leave{}; }
+// Someone, by their ID: what is done to them in the room.
+template <class Action>
+[[nodiscard]] std::optional<slash_t> slash_to_someone(std::string_view rest) {
+  const auto [user, reason] = slash_split(rest);
+  if (!user.starts_with('@'))
+    return std::nullopt;
+  return slash::act{Action{std::string(user)}};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::invite, std::string_view rest) { return slash_to_someone<mux::room_action::invite>(rest); }
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::kick, std::string_view rest) { return slash_to_someone<mux::room_action::kick>(rest); }
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::ban, std::string_view rest) { return slash_to_someone<mux::room_action::ban>(rest); }
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::unban, std::string_view rest) { return slash_to_someone<mux::room_action::unban>(rest); }
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::topic, std::string_view rest) {
+  if (rest.empty())
+    return std::nullopt;
+  return slash::act{mux::room_action::retopic{std::string(rest)}};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::roomname, std::string_view rest) {
+  if (rest.empty())
+    return std::nullopt;
+  return slash::act{mux::room_action::rename{std::string(rest)}};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::myroomnick, std::string_view rest) {
+  if (rest.empty())
+    return std::nullopt;
+  return slash::room_name_mine{std::string(rest)};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::op, std::string_view rest) {
+  const auto [user, level_text] = slash_split(rest);
+  std::int64_t level = 50;
+  if (!user.starts_with('@') ||
+      (!level_text.empty() && std::from_chars(level_text.data(), level_text.data() + level_text.size(), level).ec != std::errc{}))
+    return std::nullopt;
+  return slash::power{std::string(user), level};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::deop, std::string_view rest) {
+  const auto [user, after] = slash_split(rest);
+  if (!user.starts_with('@'))
+    return std::nullopt;
+  return slash::power{std::string(user), 0};
+}
+// A line typed in a Matrix chat, as a slash command: what it asks done, or
+// nothing -- the line, sent as it is (found by ADL, mux.proto's
+// command_of).
+[[nodiscard]] inline std::optional<request::slash> command_of(const state&, const conversation_id& to, std::string_view text) {
+  if (!text.starts_with('/') || text.starts_with("//"))
+    return std::nullopt;
+  const auto [word, rest] = slash_split(text.substr(1));
+  const auto known = slash_word_of(word);
+  if (!known)
+    return std::nullopt;
+  auto what = spl::visit([&](auto one) { return slash_of(one, rest); }, *known);
+  if (!what)
+    return std::nullopt;
+  return request::slash{to, std::move(*what)};
+}
+
 // Its own requests, done by program_asked (mux.app.proto.matrix): listed
 // here, where its settings pages' manage_room is seen too -- what a debug
 // build's program serves a request by.
@@ -368,6 +558,7 @@ constexpr request_list<request::setup_cross_signing, request::restore_cross_sign
                        request::import_room_keys, request::verify_session, request::change_account,
                        request::refresh_sessions, request::verify_them, request::explore_state,
                        request::open_send_custom, request::send_custom, request::save_room_pack, request::change_room, request::manage_room,
+                       request::slash,
                        request::continue_uia,
                        request::cancel_uia, request::close_tool<tool::devtools_text>, request::close_tool<tool::devtools_state>,
                        request::close_tool<tool::send_custom_form>, request::close_tool<tool::uia_step>>

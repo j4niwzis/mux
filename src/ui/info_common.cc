@@ -103,6 +103,7 @@ struct person_facts {
   // Their sessions, each verified or not, where their keys were listed.
   std::vector<change::device_view> devices;
   profile_details profile;
+  friend bool operator==(const person_facts&, const person_facts&) = default;
 };
 [[nodiscard]] inline person_facts person_of(const ui_shared& shared, const conversation* in, const model& now, const account_id& account,
                                             const std::string& id) {

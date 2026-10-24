@@ -38,7 +38,12 @@ struct person_shown {
   account_id account;
   std::string key;
   person_facts facts;
+  friend bool operator==(const person_shown&, const person_shown&) = default;
 };
+// Compared: shown again as it is -- their devices listed, their trust told,
+// their profile found, unchanged -- the card is not made anew (show), and
+// keeps where it was scrolled.
+static_assert(std::equality_comparable<person_shown>);
 auto person_cover(const palette& colours, const std::string& key, const person_facts& facts) {
   return SKIFF_NAMED(person_cover, skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),

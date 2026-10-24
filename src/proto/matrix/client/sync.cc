@@ -97,9 +97,15 @@ auto account<Sink>::homeserver() -> std::optional<http::url> {
 
 // A sliding sync answer in the shape of a /sync one: what reads and keeps
 // /sync's reads it as it is. A plain function from the one type to the
-// other. Receipts, typing and account data of rooms the answer does not
-// carry are left out: a room comes in with them once it is in the window.
-inline loom::cs::sync::response legacy_of(loom::cs::sliding_sync::response&& got, std::string_view user) {
+// other. Receipts, typing and account data of a room the answer does not
+// carry, but which is known (joined, from before): the room put in with them
+// alone, as /sync puts a room with only its ephemeral events. Left out, a
+// receipt for a message already shown never came -- the server sends it in
+// the extension once nothing else of the room moved, and the room is not in
+// that answer's rooms (the user's: Element showed who read it, mux nobody).
+// Of a room not known, still left out: it comes with them in the window.
+template <class Known>
+loom::cs::sync::response legacy_of(loom::cs::sliding_sync::response&& got, std::string_view user, const Known& known) {
   using response = loom::cs::sync::response;
   using joined_t = response::rooms_t::joined_room_t;
   using invited_t = response::rooms_t::invited_room_t;
@@ -161,6 +167,9 @@ inline loom::cs::sync::response legacy_of(loom::cs::sliding_sync::response&& got
             joined_t::unread_notification_counts_t{.highlight_count = room.highlight_count, .notification_count = room.notification_count};
       join.emplace(id, std::move(one));
     }
+  // Known, and not left or invited to in this very answer: a room still
+  // joined, put in for what the extensions say of it alone.
+  const auto held = [&](const std::string& id) { return known.contains(id) && !leave.contains(id) && !invite.contains(id); };
   if (got.extensions) {
     auto& extensions = *got.extensions;
     if (extensions.account_data) {
@@ -168,13 +177,13 @@ inline loom::cs::sync::response legacy_of(loom::cs::sliding_sync::response&& got
         out.account_data = response::account_data_t{.events = std::move(*extensions.account_data->global)};
       if (extensions.account_data->rooms)
         for (auto& [id, events] : *extensions.account_data->rooms)
-          if (const auto in = join.find(id); in != join.end())
+          if (const auto in = held(id) ? join.try_emplace(id).first : join.find(id); in != join.end())
             in->second.account_data = joined_t::account_data_t{.events = std::move(events)};
     }
     const auto ephemeral = [&](auto& part) {
       if (part && part->rooms)
         for (auto& [id, event] : *part->rooms)
-          if (const auto in = join.find(id); in != join.end()) {
+          if (const auto in = held(id) ? join.try_emplace(id).first : join.find(id); in != join.end()) {
             auto& kept = in->second.ephemeral;
             if (!kept)
               kept.emplace();
@@ -658,7 +667,7 @@ void account<Sink>::run() {
         if (const auto all = slid->lists->find("all"); all != slid->lists->end() && all->second.count &&
                                                        *all->second.count > sliding_range_)
           sliding_range_ = std::min(*all->second.count, sliding_range_ + 200);
-      return legacy_of(std::move(*slid), id_.address);
+      return legacy_of(std::move(*slid), id_.address, state_.joined);
     }();
     if (!got) {
       const failure& why = got.error();

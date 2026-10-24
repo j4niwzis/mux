@@ -438,6 +438,10 @@ struct app : kept_settings {
   void settle_model();
   void show_looks();
 
+  // What the window asks of the program by its hooks (skiff.platform.window).
+  [[nodiscard]] int interface_scale() const { return this->appearance().interface_scale; }
+  void touch_changed(bool on) { shared.by_touch = on; }
+  [[nodiscard]] std::optional<skia::SkPoint> take_press_again() { return std::exchange(shared.press_again, std::nullopt); }
   // The faces the window draws text with first (skiff.platform.fonts).
   using faces = mux::platform::faces;
   void closing();

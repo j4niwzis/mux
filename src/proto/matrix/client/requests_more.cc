@@ -268,14 +268,17 @@ void account<Sink>::forward(std::string from, std::vector<forward_source> events
       // And as MSC4553 marks it, which mux reads first: where it is from and
       // the original's content as it was -- what a client that knows the
       // mark shows.
+      // The original's content whole -- its text and what it carries, a
+      // picture's url and info, an encrypted one's file -- by knot's typed
+      // conversion: the mark alone, a picture forwarded showed nothing in a
+      // client that reads the mark.
       using msc4553 = std::remove_cvref_t<decltype(*content->org_matrix_msc4553_forwarded)>;
       content->org_matrix_msc4553_forwarded = msc4553{
           .event_id = event,
           .room_id = from,
           .sender = got->sender,
           .origin_server_ts = static_cast<std::int64_t>(got->origin_server_ts),
-          .content = typename msc4553::content_t{
-              .body = content->body, .msgtype = content->msgtype, .format = content->format, .formatted_body = content->formatted_body}};
+          .content = knot::convert<typename msc4553::content_t>(*content)};
       // And its fallback, as MSC4553 has it, for a client that knows no
       // forwards: who it is from and a link to the original over the body,
       // and the original quoted under the same in HTML. A file's or a

@@ -121,6 +121,16 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     std::optional<loom::ev::m_room_message_content_t> original;
     if (content.org_matrix_msc4553_forwarded && content.org_matrix_msc4553_forwarded->content)
       original = knot::convert<loom::ev::m_room_message_content_t>(*content.org_matrix_msc4553_forwarded->content);
+    // A mark whose content says nothing of what the message carries -- mux's
+    // own forwards before they put it there -- the message's own picture or
+    // file kept.
+    if (original && !original->url && !original->file) {
+      original->url = content.url;
+      original->file = content.file;
+      original->info = content.info;
+      if (!original->filename)
+        original->filename = content.filename;
+    }
     const loom::ev::m_room_message_content_t& shown = original ? *original : content;
     message made{.in = in,
                  .id = one.event_id,

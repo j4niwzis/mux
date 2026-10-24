@@ -48,6 +48,7 @@ import mux.http;
 import mux.net;
 import loom.cs.pusher;
 import mux.logic.markdown;
+import loom.names;
 import :account;
 import :requests;
 
@@ -275,6 +276,22 @@ void account<Sink>::forward(std::string from, std::vector<forward_source> events
           .origin_server_ts = static_cast<std::int64_t>(got->origin_server_ts),
           .content = typename msc4553::content_t{
               .body = content->body, .msgtype = content->msgtype, .format = content->format, .formatted_body = content->formatted_body}};
+      // And its fallback, as MSC4553 has it, for a client that knows no
+      // forwards: who it is from and a link to the original over the body,
+      // and the original quoted under the same in HTML. A file's or a
+      // picture's body is its name or caption, kept as it is.
+      if (!content->url && !content->file) {
+        const std::string link = std::format("https://matrix.to/#/{}/{}", from, event);
+        const std::string quoted = spl::visit([](auto of) { return of.html_given; }, loom::names::body_format_of(content->format)) &&
+                                           content->formatted_body
+                                       ? *content->formatted_body
+                                       : chevron::escaped(content->body);
+        content->formatted_body = std::format(
+            R"(<strong>Forwarded from <a href="https://matrix.to/#/{0}">{0}</a> - <a href="{1}">view original message</a></strong><br><blockquote>{2}</blockquote>)",
+            chevron::escaped(got->sender), chevron::escaped(link), quoted);
+        content->format = "org.matrix.custom.html";
+        content->body = std::format("Forwarded from {} - view original message: {}\n{}", got->sender, link, content->body);
+      }
       auto done = this->send_room_event(loom::cs::send_message{.room_id = to,
                                                         .event_type = "m.room.message",
                                                         .txn_id = this->transaction(),

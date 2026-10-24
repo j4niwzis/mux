@@ -50,6 +50,11 @@ struct span {
   std::optional<skia::SkColor> colour;
   std::optional<skia::SkColor> background;
 };
+// A heading: bold, and as large as its level is, as Element draws them --
+// the text's own size from <h5> down, smaller at <h6>.
+struct heading {
+  int level = 0;
+};
 // A colour as HTML writes it: #rrggbb, or #rgb; nothing for another word.
 [[nodiscard]] inline std::optional<skia::SkColor> html_colour_of(std::string_view said) {
   if (!said.starts_with('#'))
@@ -67,7 +72,7 @@ struct span {
 }
 }  // namespace text_style
 using text_style_t = spl::variant<text_style::strong, text_style::emphasis, text_style::struck, text_style::code,
-                                  text_style::quote, text_style::underline, text_style::span>;
+                                  text_style::quote, text_style::underline, text_style::span, text_style::heading>;
 [[nodiscard]] inline nodes::Text::Styled styled(text_style::strong, std::size_t a, std::size_t b) {
   return {.first = a, .last = b, .strong = true};
 }
@@ -86,6 +91,10 @@ using text_style_t = spl::variant<text_style::strong, text_style::emphasis, text
 [[nodiscard]] inline nodes::Text::Styled styled(text_style::underline, std::size_t a, std::size_t b) {
   return {.first = a, .last = b, .underline = true};
 }
+[[nodiscard]] inline nodes::Text::Styled styled(text_style::heading one, std::size_t a, std::size_t b) {
+  static constexpr std::array<float, 7> kScales{1.0f, 1.6f, 1.4f, 1.25f, 1.1f, 1.0f, 0.9f};
+  return {.first = a, .last = b, .strong = true, .scale = kScales[static_cast<std::size_t>(std::clamp(one.level, 0, 6))]};
+}
 [[nodiscard]] inline nodes::Text::Styled styled(text_style::span one, std::size_t a, std::size_t b) {
   return {.first = a, .last = b, .spoiler = one.spoiler, .colour = one.colour, .background = one.background};
 }
@@ -99,7 +108,11 @@ struct list_item { std::optional<int> value; };   // <li>
 struct list_open { bool ordered = false; int start = 1; };
 struct list_close {};
 struct paragraph {};
-struct heading_open {};
+// A heading's start: its level, 1 to 6 as <h1>..<h6> -- 0 for what is set
+// apart in bold at the text's own size (<dt>, <caption>).
+struct heading_open {
+  int level = 0;
+};
 struct heading_close {};
 struct cell {};
 struct table_row {};
@@ -151,9 +164,9 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
       {"p", html_tag::paragraph{}}, {"div", html_tag::paragraph{}},
       {"section", html_tag::paragraph{}}, {"article", html_tag::paragraph{}},
       {"header", html_tag::paragraph{}}, {"footer", html_tag::paragraph{}},
-      {"h1", html_tag::heading_open{}}, {"h2", html_tag::heading_open{}},
-      {"h3", html_tag::heading_open{}}, {"h4", html_tag::heading_open{}},
-      {"h5", html_tag::heading_open{}}, {"h6", html_tag::heading_open{}},
+      {"h1", html_tag::heading_open{1}}, {"h2", html_tag::heading_open{2}},
+      {"h3", html_tag::heading_open{3}}, {"h4", html_tag::heading_open{4}},
+      {"h5", html_tag::heading_open{5}}, {"h6", html_tag::heading_open{6}},
       {"ol", html_tag::list_open{true}}, {"ul", html_tag::list_open{}},
       {"dl", html_tag::paragraph{}}, {"dt", html_tag::heading_open{}}, {"dd", html_tag::paragraph{}},
       {"table", html_tag::table_row{}}, {"caption", html_tag::heading_open{}},
@@ -223,7 +236,7 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
                                             });
                                             // Its colours: Matrix's data-mx-color and data-mx-bg-color,
                                             // or a <font>'s color.
-                                            const auto colour_of = [&](std::string_view name) { return html_colour_of(attribute(name)); };
+                                            const auto colour_of = [&](std::string_view name) { return text_style::html_colour_of(attribute(name)); };
                                             spl::visit(spl::overloaded{[&](text_style::span& span) {
                                                                          span.spoiler = spoiler;
                                                                          span.colour = colour_of("data-mx-color");
@@ -401,12 +414,14 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
                             [&](html_tag::block_end) { end_line(); },
                             [&](html_tag::paragraph) { end_line(); },
                             [&](html_tag::table_row) { end_line(); cell_started = false; },
-                            [&](html_tag::heading_open) { end_line(); opened.emplace_back(text_style::strong{}, out.text.size()); },
+                            [&](html_tag::heading_open open) { end_line(); opened.emplace_back(text_style::heading{open.level}, out.text.size()); },
                             [&](html_tag::heading_close) {
                               for (auto it = opened.rbegin(); it != opened.rend(); ++it)
-                                if (spl::visit(spl::overloaded{[](text_style::strong) { return true; }, [](const auto&) { return false; }}, it->first)) {
+                                if (const auto level = spl::visit(spl::overloaded{[](text_style::heading one) { return std::optional(one.level); },
+                                                                                  [](const auto&) { return std::optional<int>(); }},
+                                                                  it->first)) {
                                   if (out.text.size() > it->second)
-                                    out.styles.push_back(styled(text_style::strong{}, it->second, out.text.size()));
+                                    out.styles.push_back(styled(text_style::heading{*level}, it->second, out.text.size()));
                                   opened.erase(std::next(it).base());
                                   break;
                                 }

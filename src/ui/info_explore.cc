@@ -59,8 +59,12 @@ struct explore_listing {
   std::optional<std::string> space;
   std::string query;
   std::optional<std::string> next;
+  friend bool operator==(const explore_listing&, const explore_listing&) = default;
 };
-struct explore_space_shown { std::string room, name; };
+struct explore_space_shown {
+  std::string room, name;
+  friend bool operator==(const explore_space_shown&, const explore_space_shown&) = default;
+};
 struct explore_facts {
   std::string own_server;
   std::optional<explore_listing> listing;
@@ -69,7 +73,10 @@ struct explore_facts {
   std::optional<account_id> by;
   // The outstanding search identifies which replies belong to this view.
   std::string server, query;
+  friend bool operator==(const explore_facts&, const explore_facts&) = default;
 };
+// Compared: written again unchanged, it is not made again (show).
+static_assert(std::equality_comparable<explore_facts>);
 inline bool accepts_listing(const explore_facts& now, const change::directory_listed& listed) {
   return now.by == std::optional(listed.by) &&
       (now.space ? std::optional(now.space->room) : std::nullopt) == listed.space &&

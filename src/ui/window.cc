@@ -328,8 +328,17 @@ struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
 // A part that is always there -- the drawer out or back, the chat chosen --
 // set.
+// Not written where it is what the part holds already: a write moves the
+// part's revision, and what reads it is read again -- a dialog with no rule
+// of its own for what still stands made anew, with what it held (a search
+// typed, how far it was scrolled). change_shown wrote back what it had not
+// changed (Explore at every directory listed, the chat list's searches
+// among them), and the account's page was written at every refresh.
 template <class Part>
 void show(shown_model& showing, Part part) {
+  if constexpr (std::equality_comparable<Part>)
+    if (*showing.look<Part>() == part)
+      return;
   (void)showing.apply(skiff::model::edit(skiff::model::placeOf<Part, shown_root>(), skiff::model::setTo(std::move(part))));
 }
 // Such a part changed from what it is: the rest of it as it was.
@@ -347,6 +356,9 @@ inline void show_looks(shown_model& showing, const looks_shown& looks) {
 // A dialog shown with these facts, or closed: its part of what is shown set.
 template <class Facts>
 void show(shown_model& showing, std::optional<Facts> facts) {
+  if constexpr (std::equality_comparable<Facts>)
+    if (*showing.look<std::optional<Facts>>() == facts)
+      return;
   (void)showing.apply(skiff::model::edit(skiff::model::placeOf<std::optional<Facts>, shown_root>(), skiff::model::setTo(std::move(facts))));
 }
 

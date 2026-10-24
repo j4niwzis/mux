@@ -35,9 +35,21 @@ void app::woken() {
   notices.take_push();
   // What the workers made, put where it goes: on this, the UI's thread.
   work.finish();
-  auto changes = box->take();
-  if (changes.empty())
+  std::ranges::move(box->take(), std::back_inserter(arriving_));
+  // Off screen, no frame takes it a slice at a time: all of it now, the
+  // model kept up and notifications given.
+  if (!on_screen)
+    this->take_arriving(std::chrono::hours(24));  // all of it: not max(), which overflows as nanoseconds
+}
+
+// What arrived taken, oldest first, until `most` has gone by -- one change
+// at least -- and what was taken then seen to as one batch.
+void app::take_arriving(std::chrono::milliseconds most) {
+  if (arriving_.empty())
     return;
+  const auto began = std::chrono::steady_clock::now();
+  const auto due = [&] { return std::chrono::steady_clock::now() - began >= most; };
+  std::vector<mux::change_t> changes;
   // Deletions of what is not held in memory, by chat: looked for on disk on
   // a worker, each chat's file read once for all of its (mark_deleted_on_disk).
   std::map<mux::conversation_id, std::vector<std::string>> deleted_on_disk;
@@ -45,7 +57,10 @@ void app::woken() {
   // One batch of edits for all that came: what binds to the chats told
   // once, after.
   model->chats().beginBatch();
-  for (const auto& one : changes) {
+  while (!arriving_.empty() && (changes.empty() || !due())) {
+    changes.push_back(std::move(arriving_.front()));
+    arriving_.pop_front();
+    const mux::change_t& one = changes.back();
     // What the plugins' parts take of it: a call's signalling.
     this->plugins_take(one);
     // What the program itself does with a change, besides the model: a
@@ -486,9 +501,14 @@ void app::after_event() {
   this->refresh_shown();
 }
 
-double app::wake_in() const { return std::min(model->typing_wake_in(), jumps.loader_wake_in()); }
+// Something arrived and not taken yet: the next frame at once.
+double app::wake_in() const {
+  return arriving_.empty() ? std::min(model->typing_wake_in(), jumps.loader_wake_in()) : 0.0;
+}
 
 void app::before_frame() {
+  // A slice of what the network brought, before the frame shows it.
+  this->take_arriving(kArrivingSlice);
   // What the window's nodes answered as they ticked (a page come to rest
   // scrolled, a timer): delivered as an event's are.
   if (!skiff::scene::hostWork().pressed.empty())

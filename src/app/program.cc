@@ -398,6 +398,13 @@ struct app : kept_settings {
   mux::ui::mux_paint& painting() { return shared.paint; }
 
   void woken();
+  // What the network brought, not applied yet: taken a slice of time a
+  // frame while the window is on screen (take_arriving). Applied at once,
+  // a wake's thousands of events -- every room's gap caught up on -- held
+  // the UI's thread two seconds at a time, and a phone called the app not
+  // responding.
+  std::deque<mux::change_t> arriving_;
+  void take_arriving(std::chrono::milliseconds most);
   // A link's message gone to, and a thread's answer to be scrolled to once
   // its panel shows it.
   void go_to_linked(const mux::conversation_id& in, const std::string& event);
@@ -579,6 +586,8 @@ struct app : kept_settings {
   // for, nothing marked read, no frames. Brought up to date as it comes back.
   bool on_screen = true;
   bool refresh_waiting_ = false;
+  // How long a frame gives to what arrived: the rest waits for the next.
+  static constexpr std::chrono::milliseconds kArrivingSlice{12};
   void shown_changed(bool now) {
     if (now == on_screen)
       return;

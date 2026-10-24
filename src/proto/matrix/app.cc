@@ -897,10 +897,21 @@ void program_asked(App& app, const slash& one) {
   const mux::conversation_id to = one.to;
   spl::visit(spl::overloaded{
                  [&](const proto::matrix::slash::said& said) {
-                   app.net->on_account_of(to, [room = to.id, said](auto& account)
-                                                  -> decltype(void(account.send_as(room, said.body, said.html, said.emote))) {
-                     account.send_as(room, said.body, said.html, said.emote);
+                   // An answer where the field answers a message, as any message sent
+                   // from it is -- and the field let go of it after.
+                   const auto reply_to = spl::visit(spl::overloaded{[](const mux::ui::compose::reply& r) { return std::optional<std::string>(r.id); },
+                                                                    [](const auto&) { return std::optional<std::string>(); }},
+                                                    app.showing.template look<mux::ui::request::chat_compose>()->now);
+                   if (reply_to)
+                     mux::ui::show(app.showing, mux::ui::request::chat_compose{});
+                   app.net->on_account_of(to, [room = to.id, said, reply_to](auto& account)
+                                                  -> decltype(void(account.send_as(room, said.body, said.html, said.emote, reply_to))) {
+                     account.send_as(room, said.body, said.html, said.emote, reply_to);
                    });
+                 },
+                 [&](const proto::matrix::slash::name_mine& mine) {
+                   app.net->on_account_of(to, [name = mine.name](auto& account)
+                                                  -> decltype(void(account.set_display_name(name))) { account.set_display_name(name); });
                  },
                  [&](const proto::matrix::slash::join& join) { app.net->join(to.account, join.room, {}); },
                  [&](proto::matrix::slash::leave) { app.net->leave(to); },

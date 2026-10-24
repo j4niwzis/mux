@@ -492,6 +492,9 @@ class account {
   // where it does.
   void send_as(std::string room, std::string body, std::optional<std::string> html, bool emote,
                std::optional<std::string> reply_to = std::nullopt);
+  // The account's name and nothing else of its profile (/nick): set_profile
+  // writes all of it -- pronouns, biography, banner -- from what it is given.
+  void set_display_name(std::string name);
 
   // What a plugin's Matrix side (mux.plugins.matrix) does through the
   // account: an event of its own sent to a room -- encrypted where the room

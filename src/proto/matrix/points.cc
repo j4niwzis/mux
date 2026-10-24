@@ -385,6 +385,7 @@ struct unban {};
 struct topic {};
 struct roomname {};
 struct myroomnick {};
+struct nick {};
 struct op {};
 struct deop {};
 }  // namespace slash_word
@@ -392,7 +393,7 @@ using slash_word_t = spl::variant<slash_word::me, slash_word::shrug, slash_word:
                                   slash_word::plain, slash_word::html, slash_word::rainbow, slash_word::rainbowme, slash_word::spoiler,
                                   slash_word::join, slash_word::leave, slash_word::invite, slash_word::kick, slash_word::ban,
                                   slash_word::unban, slash_word::topic, slash_word::roomname, slash_word::myroomnick, slash_word::op,
-                                  slash_word::deop>;
+                                  slash_word::deop, slash_word::nick>;
 [[nodiscard]] inline std::optional<slash_word_t> slash_word_of(std::string_view word) {
   static const std::unordered_map<std::string_view, slash_word_t> known{
       {"me", slash_word::me{}},           {"shrug", slash_word::shrug{}},       {"tableflip", slash_word::tableflip{}},
@@ -403,6 +404,7 @@ using slash_word_t = spl::variant<slash_word::me, slash_word::shrug, slash_word:
       {"kick", slash_word::kick{}},       {"remove", slash_word::kick{}},       {"ban", slash_word::ban{}},
       {"unban", slash_word::unban{}},     {"topic", slash_word::topic{}},       {"roomname", slash_word::roomname{}},
       {"myroomnick", slash_word::myroomnick{}}, {"op", slash_word::op{}},       {"deop", slash_word::deop{}},
+      {"nick", slash_word::nick{}},
   };
   const auto found = known.find(word);
   return found == known.end() ? std::nullopt : std::optional(found->second);
@@ -494,12 +496,26 @@ using slash_word_t = spl::variant<slash_word::me, slash_word::shrug, slash_word:
 }
 [[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::leave, std::string_view) { return slash::leave{}; }
 // Someone, by their ID: what is done to them in the room.
+// What is done to them, with the reason given after their ID where the
+// action takes one (/kick, /ban).
+[[nodiscard]] inline mux::room_action_t acted(std::type_identity<mux::room_action::invite>, std::string user, std::string_view) {
+  return mux::room_action::invite{std::move(user)};
+}
+[[nodiscard]] inline mux::room_action_t acted(std::type_identity<mux::room_action::unban>, std::string user, std::string_view) {
+  return mux::room_action::unban{std::move(user)};
+}
+[[nodiscard]] inline mux::room_action_t acted(std::type_identity<mux::room_action::kick>, std::string user, std::string_view reason) {
+  return mux::room_action::kick{std::move(user), reason.empty() ? std::nullopt : std::optional<std::string>(reason)};
+}
+[[nodiscard]] inline mux::room_action_t acted(std::type_identity<mux::room_action::ban>, std::string user, std::string_view reason) {
+  return mux::room_action::ban{std::move(user), reason.empty() ? std::nullopt : std::optional<std::string>(reason)};
+}
 template <class Action>
 [[nodiscard]] std::optional<slash_t> slash_to_someone(std::string_view rest) {
   const auto [user, reason] = slash_split(rest);
   if (!user.starts_with('@'))
     return std::nullopt;
-  return slash::act{Action{std::string(user)}};
+  return slash::act{acted(std::type_identity<Action>{}, std::string(user), reason)};
 }
 [[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::invite, std::string_view rest) { return slash_to_someone<mux::room_action::invite>(rest); }
 [[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::kick, std::string_view rest) { return slash_to_someone<mux::room_action::kick>(rest); }
@@ -519,6 +535,11 @@ template <class Action>
   if (rest.empty())
     return std::nullopt;
   return slash::room_name_mine{std::string(rest)};
+}
+[[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::nick, std::string_view rest) {
+  if (rest.empty())
+    return std::nullopt;
+  return slash::name_mine{std::string(rest)};
 }
 [[nodiscard]] inline std::optional<slash_t> slash_of(slash_word::op, std::string_view rest) {
   const auto [user, level_text] = slash_split(rest);

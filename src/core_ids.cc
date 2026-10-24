@@ -475,11 +475,14 @@ struct retopic {
 struct invite {
   std::string user;
 };
+// Sent out or banned, and why, where a reason is given: the room is told it.
 struct kick {
   std::string user;
+  std::optional<std::string> reason;
 };
 struct ban {
   std::string user;
+  std::optional<std::string> reason;
 };
 struct unban {
   std::string user;

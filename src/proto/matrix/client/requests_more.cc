@@ -469,6 +469,25 @@ void account<Sink>::set_profile(user_profile profile) {
 }
 
 template <class Sink>
+void account<Sink>::set_display_name(std::string name) {
+  this->spawn_guarded([this, name = std::move(name)] {
+    if (!api_) { sink_(change::profile_saved{id_, "The account is offline."}); return; }
+    auto request = profile_wire::put{id_.address, profile_wire::display_name{name}};
+    auto done = perform(*api_, request);
+    // An unrecognised endpoint permits the MSC4133 fallback, as set_profile.
+    if (!done && done.error().server && done.error().server->status == 404 && api_) {
+      request.unstable = true;
+      done = perform(*api_, request);
+    }
+    if (!done) {
+      sink_(change::refused{id_, "Could not change the name: " + done.error().said()});
+      return;
+    }
+    sink_(change::notice{id_, "Name changed", "The account's name is now " + name + "."});
+  });
+}
+
+template <class Sink>
 void account<Sink>::upload_profile_banner(std::string bytes, std::string name, std::string mime) {
   this->spawn_guarded([this, bytes = std::move(bytes), name = std::move(name), mime = std::move(mime)] {
     auto uri = upload_content(bytes, name, mime);

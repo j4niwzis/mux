@@ -265,10 +265,10 @@ void account<Sink>::manage(std::string room, room_action_t action) {
               else sink_(change::refused{id_, "Could not invite " + one.user + ": " + done.error().said()});
             },
             [&](const room_action::kick& one) {
-              told("remove", perform(*api_, loom::cs::kick{.room_id = room, .body = {.user_id = one.user}}));
+              told("remove", perform(*api_, loom::cs::kick{.room_id = room, .body = {.user_id = one.user, .reason = one.reason}}));
             },
             [&](const room_action::ban& one) {
-              told("ban", perform(*api_, loom::cs::ban{.room_id = room, .body = {.user_id = one.user}}));
+              told("ban", perform(*api_, loom::cs::ban{.room_id = room, .body = {.user_id = one.user, .reason = one.reason}}));
             },
             [&](const room_action::unban& one) {
               told("unban", perform(*api_, loom::cs::unban{.room_id = room, .body = {.user_id = one.user}}));

@@ -44,10 +44,11 @@ struct leave {};
 struct act { mux::room_action_t action; };
 // Someone's power in the room (/op user level, /deop user).
 struct power { std::string user; std::int64_t level = 0; };
-// The user's own name in the room (/myroomnick).
+// The user's own name in the room (/myroomnick), and everywhere (/nick).
 struct room_name_mine { std::string name; };
+struct name_mine { std::string name; };
 }  // namespace slash
-using slash_t = spl::variant<slash::said, slash::join, slash::leave, slash::act, slash::power, slash::room_name_mine>;
+using slash_t = spl::variant<slash::said, slash::join, slash::leave, slash::act, slash::power, slash::room_name_mine, slash::name_mine>;
 namespace request {
 // A slash command, for the chat it was typed in.
 struct slash {

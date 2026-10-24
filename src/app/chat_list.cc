@@ -670,7 +670,7 @@ class chat_list_part {
     const auto& shape = *s_->showing->look<mux::ui::window_shape>();
     const auto& chat = *s_->showing->look<mux::ui::chat_shown>();
     this->change_frame([&](mux::ui::screen_shown& now) {
-      now.single = shape.width < 600.0f && shape.height > shape.width;
+      now.single = shape.phone();
       now.pane = !chat.chosen ? mux::ui::pane_t{mux::ui::pane::list{}}
                  : chat.info_open || chat.threads_open ? mux::ui::pane_t{mux::ui::pane::beside{}}
                                                        : mux::ui::pane_t{mux::ui::pane::chat{}};

@@ -221,8 +221,7 @@ class accounts_part {
   }
 
  private:
-  static constexpr float kNarrow = 600.0f;
-  [[nodiscard]] bool narrow() const { return s_->showing->look<mux::ui::window_shape>()->width < kNarrow; }
+  [[nodiscard]] bool narrow() const { return s_->showing->look<mux::ui::window_shape>()->narrow(); }
   // The proxy profiles by their names, as the adding pane lists them.
   [[nodiscard]] std::vector<std::string> proxy_names() const {
     return k_->proxies() | std::views::transform(&mux::config::proxy_settings::name) | std::ranges::to<std::vector>();

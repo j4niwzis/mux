@@ -138,6 +138,25 @@ struct none {
 };
 }  // namespace motion
 using motion_t = spl::variant<motion::full, motion::reduced, motion::none>;
+// How the window is laid out: as its shape says -- one thing at a time where
+// it is narrow and taller than wide, side by side otherwise -- or held to one
+// of the two whatever its shape (the user's: "fix portrait/landscape layout
+// even when the screen isn't portrait/landscape").
+namespace layout {
+struct automatic {
+  static constexpr std::string_view json_value = "automatic";
+  friend bool operator==(automatic, automatic) = default;
+};
+struct portrait {
+  static constexpr std::string_view json_value = "portrait";
+  friend bool operator==(portrait, portrait) = default;
+};
+struct landscape {
+  static constexpr std::string_view json_value = "landscape";
+  friend bool operator==(landscape, landscape) = default;
+};
+}  // namespace layout
+using layout_t = spl::variant<layout::automatic, layout::portrait, layout::landscape>;
 namespace renderer {
 struct opengl {
   static constexpr std::string_view json_value = "opengl";
@@ -182,6 +201,7 @@ using theme_said_t = spl::variant<theme::classic, theme::day, theme::tinted, the
 using accent_said_t = spl::variant<accent::theme_own, accent::blue, accent::green, accent::pink, accent::orange, accent::purple,
                                    accent::red, accent::grey, accent::gold, said::cyan, std::string>;
 using motion_said_t = spl::variant<motion::full, motion::reduced, motion::none, std::string>;
+using layout_said_t = spl::variant<layout::automatic, layout::portrait, layout::landscape, std::string>;
 using renderer_said_t = spl::variant<renderer::opengl, renderer::software, std::string>;
 // Each read: the choice it says, the default where it says none of them,
 // or nothing; an old word, what it meant.
@@ -207,6 +227,13 @@ using renderer_said_t = spl::variant<renderer::opengl, renderer::software, std::
     return motion::full{};
   return spl::visit(spl::overloaded{[](const std::string&) -> motion_t { return motion::full{}; },
                                     [](auto one) -> motion_t { return one; }},
+                    *said);
+}
+[[nodiscard]] inline layout_t layout_of(const std::optional<layout_said_t>& said) {
+  if (!said)
+    return layout::automatic{};
+  return spl::visit(spl::overloaded{[](const std::string&) -> layout_t { return layout::automatic{}; },
+                                    [](auto one) -> layout_t { return one; }},
                     *said);
 }
 [[nodiscard]] inline renderer_t renderer_of(const std::optional<renderer_said_t>& said) {
@@ -292,6 +319,9 @@ using notify_flag_t = spl::variant<notify_flag::desktop, notify_flag::sound>;
 [[nodiscard]] constexpr std::string_view word_of(motion::full) { return "full"; }
 [[nodiscard]] constexpr std::string_view word_of(motion::reduced) { return "reduced"; }
 [[nodiscard]] constexpr std::string_view word_of(motion::none) { return "none"; }
+[[nodiscard]] constexpr std::string_view word_of(layout::automatic) { return "automatic"; }
+[[nodiscard]] constexpr std::string_view word_of(layout::portrait) { return "portrait"; }
+[[nodiscard]] constexpr std::string_view word_of(layout::landscape) { return "landscape"; }
 [[nodiscard]] constexpr std::string_view word_of(renderer::opengl) { return "opengl"; }
 [[nodiscard]] constexpr std::string_view word_of(renderer::software) { return "software"; }
 [[nodiscard]] constexpr std::string_view word_of(proxy_kind::socks5) { return "socks5"; }

@@ -107,9 +107,27 @@ inline auto popup_tab(const palette& colours, popup_page_t page, std::string nam
 // The window's shape, as the program has it from its size: a phone's --
 // narrow and taller than it is wide -- shows one thing at a time and docks
 // its panels over the field, as Telegram's apps do.
+// The layout chosen in Settings holds it to one way whatever the size:
+// portrait is a phone's, landscape side by side. Every place that asks
+// whether the window shows one thing at a time asks this, not the size.
 struct window_shape {
   float width = 0.0f, height = 0.0f;
-  [[nodiscard]] bool phone() const { return width < 600.0f && height > width; }
+  config::layout_t layout = config::layout::automatic{};
+  // One thing at a time, the panels docked over the field.
+  [[nodiscard]] bool phone() const {
+    return spl::visit(spl::overloaded{[&](config::layout::automatic) { return width < 600.0f && height > width; },
+                                      [](config::layout::portrait) { return true; },
+                                      [](config::layout::landscape) { return false; }},
+                      layout);
+  }
+  // A page's list and what it opens one after the other (Manage, Accounts):
+  // a narrow window's, a portrait one's.
+  [[nodiscard]] bool narrow() const {
+    return spl::visit(spl::overloaded{[&](config::layout::automatic) { return width < 600.0f; },
+                                      [](config::layout::portrait) { return true; },
+                                      [](config::layout::landscape) { return false; }},
+                      layout);
+  }
   friend bool operator==(const window_shape&, const window_shape&) = default;
 };
 // Where the popup's card goes: as tdesktop's panel, 345 wide or what the

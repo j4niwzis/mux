@@ -114,7 +114,7 @@ class manage_part {
   // Each frame, where they are up: narrow or not, as the window is.
   void show() {
     const auto& open = *s_->showing->look<std::optional<mux::ui::room_settings_facts>>();
-    const bool narrow = s_->showing->look<mux::ui::window_shape>()->width < kNarrow;
+    const bool narrow = s_->showing->look<mux::ui::window_shape>()->narrow();
     if (open && open->narrow != narrow)
       this->change([&](mux::ui::room_settings_facts& now) {
         // Turned narrow: the tab list first.
@@ -222,12 +222,11 @@ class manage_part {
       facts.tab = mux::ui::initial_manage_tab(mux::state_of<decltype(tag)>{});
       facts.manage = mux::ui::manage_part_t(std::in_place_type<mux::ui::first_manage_part_t<decltype(tag)>>);
     }, facts.speaks);
-    facts.narrow = s_->showing->look<mux::ui::window_shape>()->width < kNarrow;
+    facts.narrow = s_->showing->look<mux::ui::window_shape>()->narrow();
     facts.navigation = facts.narrow;
     mux::ui::show(*s_->showing, std::optional(facts));
   }
   // Narrower than this, the tabs and the page take the window by turns.
-  static constexpr float kNarrow = 600.0f;
   template <class Change>
   void change(Change change) {
     if (const auto& open = *s_->showing->look<std::optional<mux::ui::room_settings_facts>>()) {

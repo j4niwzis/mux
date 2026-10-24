@@ -417,6 +417,7 @@ struct kept_settings {
     const auto accounts_read = mux::config::accounts_of(saved);
     this->foreign_accounts = mux::config::foreign_of(saved);
     looks_read.motion = mux::config::motion_of(saved.motion);
+    looks_read.layout = mux::config::layout_of(saved.layout);
     // The account shown last, shown again once it is in the model: accounts
     // arrive after the first frame, and the first one there is not the one.
     // The emoji picked lately, the stickers sent lately, and the favourites.
@@ -522,6 +523,7 @@ struct kept_settings {
     const auto listed = this->accounts().values() | std::ranges::to<std::vector>();
     auto out = mux::config::file_of(listed, foreign_accounts);
     out.motion = mux::config::said_of<mux::config::motion_said_t>(this->appearance().motion);
+    out.layout = mux::config::said_of<mux::config::layout_said_t>(this->appearance().layout);
     out.last_account = this->recent().last_account;
     if (!this->recent().emoji.empty())
       out.recent_emoji = this->recent().emoji;

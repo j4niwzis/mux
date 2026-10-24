@@ -178,6 +178,7 @@ struct look_settings {
   accent_t accent = accent::theme_own{};
   renderer_t renderer = renderer::opengl{};
   motion_t motion = motion::full{};
+  layout_t layout = layout::automatic{};
   int window_opacity = 100;
   bool wallpaper_behind = false;
   bool live_blur = false;
@@ -246,6 +247,10 @@ struct file {
   // How much the window moves: "none", "reduced" (sections unfold, panels
   // just appear) or "full". Nothing said is full.
   std::optional<motion_said_t> motion;
+  // How the window is laid out: "portrait" (one thing at a time), "landscape"
+  // (side by side) or "automatic", as its shape says. Nothing said is
+  // automatic.
+  std::optional<layout_said_t> layout;
   // The account shown last, by its address: shown again at the next start.
   std::optional<std::string> last_account;
   // The emoji picked lately, newest first.

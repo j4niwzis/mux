@@ -314,6 +314,14 @@ inline auto window_settings_view(const palette& colours) {
   using looks = config::look_settings;
   return SKIFF_NAMED(window_settings_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      spaced_title(colours, "LAYOUT"),
+      skiff::compose::bound<skiff::model::Field<&looks::layout>>(
+          widgets::ChoiceRowField<config::layout_t>(colours.widgets, "Automatic", config::layout::automatic{})),
+      skiff::compose::bound<skiff::model::Field<&looks::layout>>(
+          widgets::ChoiceRowField<config::layout_t>(colours.widgets, "Portrait: one thing at a time", config::layout::portrait{})),
+      skiff::compose::bound<skiff::model::Field<&looks::layout>>(
+          widgets::ChoiceRowField<config::layout_t>(colours.widgets, "Landscape: side by side", config::layout::landscape{})),
+      spaced_note(colours, "Automatic follows the window: one thing at a time where it is narrow and taller than wide."),
       spaced_title(colours, "SPACES"),
       setting_switch<&looks::spaces>(colours, "Space bars"),
       setting_switch<&looks::top_bar>(colours, "The bar after \"mux\""),

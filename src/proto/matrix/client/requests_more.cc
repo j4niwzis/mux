@@ -264,6 +264,17 @@ void account<Sink>::forward(std::string from, std::vector<forward_source> events
                                                            .room_id = from,
                                                            .sender = got->sender,
                                                            .origin_server_ts = static_cast<std::int64_t>(got->origin_server_ts)}});
+      // And as MSC4553 marks it, which mux reads first: where it is from and
+      // the original's content as it was -- what a client that knows the
+      // mark shows.
+      using msc4553 = std::remove_cvref_t<decltype(*content->org_matrix_msc4553_forwarded)>;
+      content->org_matrix_msc4553_forwarded = msc4553{
+          .event_id = event,
+          .room_id = from,
+          .sender = got->sender,
+          .origin_server_ts = static_cast<std::int64_t>(got->origin_server_ts),
+          .content = typename msc4553::content_t{
+              .body = content->body, .msgtype = content->msgtype, .format = content->format, .formatted_body = content->formatted_body}};
       auto done = this->send_room_event(loom::cs::send_message{.room_id = to,
                                                         .event_type = "m.room.message",
                                                         .txn_id = this->transaction(),

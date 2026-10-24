@@ -198,13 +198,9 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                           .name = where.sender,
                           .link = std::format("https://matrix.to/#/{}/{}", where.room_id, where.event_id)};
     };
-    if (content.m_forwarded) {
-      made.forwarded = origin(*content.m_forwarded);
-    } else if (content.com_famedly_app_forwarded) {
-      made.forwarded = origin(*content.com_famedly_app_forwarded);
-    } else if (content.xyz_extera_forward && content.xyz_extera_forward->attribution) {
-      made.forwarded = logic::forward_attribution(*content.xyz_extera_forward->attribution);
-    } else if (content.org_matrix_msc4553_forwarded) {
+    // MSC4553 first, where a message has more than one mark: it carries the
+    // original's content as well as where it is from.
+    if (content.org_matrix_msc4553_forwarded) {
       // Forwarded as MSC4553 marks it: from where it says, and what it said
       // shown as it was -- the message's own body is a fallback that quotes
       // it under "Forwarded from ... view original message" (a client that
@@ -213,6 +209,12 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       made.forwarded = origin(was);
       if (was.content && was.content->body && !made.attachment && made.album.empty())
         made.body = body_of(*was.content->body, was.content->format, was.content->formatted_body);
+    } else if (content.m_forwarded) {
+      made.forwarded = origin(*content.m_forwarded);
+    } else if (content.com_famedly_app_forwarded) {
+      made.forwarded = origin(*content.com_famedly_app_forwarded);
+    } else if (content.xyz_extera_forward && content.xyz_extera_forward->attribution) {
+      made.forwarded = logic::forward_attribution(*content.xyz_extera_forward->attribution);
     }
     // A forwarded media caption can contain an older inline attribution even
     // when the new forward uses MSC2723. Lift it into the bubble's header,

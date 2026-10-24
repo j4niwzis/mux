@@ -56,8 +56,8 @@ jobs:
           path: |
             build
             .cache/cpm
-          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}
-          restore-keys: build-${{ runner.os }}-clang${{ matrix.llvm }}-
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.COMPILER_BUILD }}-${{ github.sha }}
+          restore-keys: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.COMPILER_BUILD }}-
       # ninja goes by file times. A source changed since the build restored
       # was made -- its hash other than the list the build keeps, written
       # after a build that went through -- gets the time this run began; the
@@ -163,7 +163,7 @@ jobs:
           path: |
             build
             .cache/cpm
-          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-modules
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.COMPILER_BUILD }}-${{ env.STAGE }}-modules
 
   # The app's units -- the window's binding among them, hours alone.
   app:
@@ -221,7 +221,7 @@ jobs:
           path: |
             build
             .cache/cpm
-          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-app
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.COMPILER_BUILD }}-${{ env.STAGE }}-app
 
   # The program's module and its first units, one at a time.
   program:
@@ -279,7 +279,7 @@ jobs:
           path: |
             build
             .cache/cpm
-          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.STAGE }}-program
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.COMPILER_BUILD }}-${{ env.STAGE }}-program
 
   # The program's other units, and mux linked; kept for the next run.
   link:
@@ -328,7 +328,7 @@ jobs:
           path: |
             build
             .cache/cpm
-          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ env.COMPILER_BUILD }}-${{ github.sha }}
 
   # The terminal client.
   cli:

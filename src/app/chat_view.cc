@@ -61,10 +61,24 @@ class chat_view_part {
 
   // The pinned bar pressed: to the pin it shows, as any jump -- and, the
   // view gone up to it, the bar on to the one pinned before it.
+  // The pins gone through from there, each press the next before: in the
+  // window the jump opens, the pins not loaded have no place to be found
+  // above it by, and all of them tied -- the bar went back to the first at
+  // every press, however many there were (the user's: "on the second pin
+  // ... shows the first pin, even when there are 14").
   template <class Asked>
   void apply(const request::pinned_pressed&, const Asked& asked) {
-    if (const auto& pin = s_->showing->look<mux::ui::pinned_shown>()->pin)
-      asked(request::jump_to_message{pin->id});
+    const auto& pin = s_->showing->look<mux::ui::pinned_shown>()->pin;
+    const auto& chosen = s_->showing->look<mux::ui::chat_shown>()->chosen;
+    if (!pin)
+      return;
+    if (const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr)
+      if (const auto at = std::ranges::find(chat->pinned, pin->id); at != chat->pinned.end()) {
+        const auto count = chat->pinned.size();
+        const auto index = static_cast<std::size_t>(at - chat->pinned.begin());
+        cycled_ = pin_cycle{chat->id, (index + count - 1) % count, count};
+      }
+    asked(request::jump_to_message{pin->id});
   }
   // The banner's button: its protocol's; its close: let go until it says
   // something else.
@@ -87,9 +101,19 @@ class chat_view_part {
   // The pin the bar shows, as Telegram's: the newest pinned above the view
   // -- before the first message seen -- else the oldest; worked out again
   // as the view moves. A pin not loaded is taken as older than all that is.
+  // Where the bar is in the pins, once it was pressed: which, of how many,
+  // in which chat. Let go of in another chat, or as the pins change.
+  struct pin_cycle {
+    mux::conversation_id in;
+    std::size_t at = 0;
+    std::size_t of = 0;
+  };
+  std::optional<pin_cycle> cycled_;
   std::optional<mux::ui::pinned_view> pin_of(const mux::conversation* chat) {
     if (!chat || chat->pinned.empty())
       return std::nullopt;
+    if (cycled_ && (cycled_->in != chat->id || cycled_->of != chat->pinned.size()))
+      cycled_.reset();
     const auto place = [&](const std::string& id) -> std::ptrdiff_t {
       const auto found = std::ranges::find(chat->timeline, id, &mux::message::id);
       return found == chat->timeline.end() ? -1 : found - chat->timeline.begin();
@@ -99,7 +123,7 @@ class chat_view_part {
     auto above = chat->pinned | std::views::enumerate | std::views::filter([&](const auto& pin) { return place(std::get<1>(pin)) < top; });
     const auto best = std::ranges::max_element(above, {}, [&](const auto& pin) { return place(std::get<1>(pin)); });
     const std::size_t count = chat->pinned.size();
-    const std::size_t at = best == std::ranges::end(above) ? 0 : static_cast<std::size_t>(std::get<0>(*best));
+    const std::size_t at = cycled_ ? cycled_->at : best == std::ranges::end(above) ? 0 : static_cast<std::size_t>(std::get<0>(*best));
     const std::string& id = chat->pinned[at];
     mux::ui::pinned_view shown{id, count == 1 ? std::string("Pinned message") : std::format("Pinned message #{} of {}", at + 1, count),
                                "A message"};

@@ -13,9 +13,10 @@ import mux.core;
 import mux.config;
 import mux.net;
 import mux.media;
+import mux.platform.faces;
 import mux.platform.audio;
-import mux.platform.dialogs;
-import mux.platform.events;
+import skiff.platform.dialogs;
+import skiff.platform.events;
 import mux.platform.notifications;
 import mux.platform.push;
 import mux.platform.system;
@@ -372,7 +373,7 @@ struct app : kept_settings {
   // What wakes the window: as main made it, for the mailbox.
   wake_window wake;
   // The system's dialogs, put over the window as it is made.
-  mux::platform::dialogs::dialogs system_dialogs;
+  skiff::platform::dialogs::dialogs system_dialogs;
   mux::model* model = nullptr;
   network* net = nullptr;
   // A room the user made, to be shown as soon as the model has it.
@@ -437,6 +438,8 @@ struct app : kept_settings {
   void settle_model();
   void show_looks();
 
+  // The faces the window draws text with first (skiff.platform.fonts).
+  using faces = mux::platform::faces;
   void closing();
   void backgrounded();
   // Drafts: in the screen, and on disk in one small file, written anew

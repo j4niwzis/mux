@@ -17,7 +17,7 @@ import mux.kept_root;
 import mux.media;
 import mux.ui;
 import mux.ui.proto;
-import mux.platform.dialogs;
+import skiff.platform.dialogs;
 import mux.app.kept;
 import mux.app.services;
 import mux.app.requests;

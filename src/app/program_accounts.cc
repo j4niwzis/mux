@@ -13,7 +13,7 @@ import mux.logic.room_events;
 import mux.config;
 import mux.net;
 import mux.media;
-import mux.platform.dialogs;
+import skiff.platform.dialogs;
 import mux.platform.files;
 import mux.platform.push;
 import mux.ui;

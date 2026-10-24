@@ -18,7 +18,7 @@ import mux.app.demo;
 import mux.app.store;
 import mux.app.requests;
 import mux.app.words;
-import mux.platform.fonts;
+import skiff.platform.fonts;
 import splice.bytes;
 
 namespace mux::app {
@@ -41,7 +41,7 @@ void app::rebuild_in_theme() {
   }
   mux::ui::use_avatar_rounding(static_cast<float>(this->appearance().chat_avatar_rounding.value_or(100)),
                                static_cast<float>(this->appearance().person_avatar_rounding.value_or(100)));
-  if (!mux::platform::fonts::select_fonts(style.font, style.monospace))
+  if (!skiff::platform::fonts::select_fonts(style.font, style.monospace))
     shared.notice("Fonts", "The selected font could not be loaded. Enter an installed family or a font file path.");
   accounts_screen.forget_login();
   mux::ui::change_shown<mux::ui::window_made>(showing, [](mux::ui::window_made& now) { ++now.count; });

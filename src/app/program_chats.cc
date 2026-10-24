@@ -10,7 +10,7 @@ import mux.core;
 import mux.config;
 import mux.net;
 import mux.media;
-import mux.platform.events;
+import skiff.platform.events;
 import mux.ui;
 import mux.protocols;
 import skiff.paint;
@@ -144,7 +144,7 @@ void app::apply(const request::card_action& one) {
   mux::proto::person_action_asked(mux::ui::protocol_state_of(shared.ui, one.by), one.by, one.who, one.index, taker{this});
 }
 
-void app::apply(const request::quit&) { mux::platform::events::request_quit(); }
+void app::apply(const request::quit&) { skiff::platform::events::request_quit(); }
 
 void app::apply(const request::toggle_info&) {
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) { now.info_open = !now.info_open; });

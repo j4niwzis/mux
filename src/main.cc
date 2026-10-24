@@ -20,8 +20,8 @@ import mux.core;
 import mux.config;
 import mux.net;
 import mux.media;
-import mux.platform.window;
-import mux.platform.events;
+import skiff.platform.window;
+import skiff.platform.events;
 import mux.ui;
 import skiff.paint;
 import skiff.scene;
@@ -42,7 +42,7 @@ using namespace mux::app;
 
 int mux_main(int argc, char** argv) {
   // The window's own kinds of event, registered once, here.
-  const mux::platform::events::kinds kinds;
+  const skiff::platform::events::kinds kinds;
   mailbox_type box{wake_window{kinds.wake}};
   mux::model model;
   // What is kept on disk is read and written through this one: placed and
@@ -145,8 +145,8 @@ int mux_main(int argc, char** argv) {
 
   if (config_note)
     program.shared.notice("The accounts file could not be read", *config_note);
-  const int code = mux::platform::window::run(
-      program, {.software = program.appearance().renderer == mux::config::renderer_t{mux::config::renderer::software{}},
+  const int code = skiff::platform::window::run(
+      program, {.title = "mux", .software = program.appearance().renderer == mux::config::renderer_t{mux::config::renderer::software{}},
                 .transparent = opacity < 100}, kinds);
   // Started only once what is kept was read: never, where the vault stayed locked.
   if (net.thread.joinable())

@@ -18,7 +18,7 @@ import mux.app.kept;
 import mux.app.services;
 import mux.app.requests;
 import mux.platform.files;
-import mux.platform.dialogs;
+import skiff.platform.dialogs;
 import mux.media;
 import skia;
 

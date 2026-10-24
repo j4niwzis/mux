@@ -11,7 +11,7 @@ import splice;
 import skia;
 import mux.core;
 import mux.config;
-import mux.platform.dialogs;
+import skiff.platform.dialogs;
 import mux.platform.video;
 import mux.ui;
 import mux.app.network;

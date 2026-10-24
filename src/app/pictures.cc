@@ -17,8 +17,8 @@ import mux.config;
 import mux.media;
 import mux.platform.audio;
 import mux.platform.video;
-import mux.platform.clipboard;
-import mux.platform.dialogs;
+import skiff.platform.clipboard;
+import skiff.platform.dialogs;
 import mux.platform.system;
 import mux.ui;
 import mux.app.network;
@@ -564,7 +564,7 @@ class pictures_part {
     if (!image)
       return;
     if (std::string png = skia::encodeImage(*image, false); !png.empty())
-      mux::platform::clipboard::copy_picture(std::move(png));
+      skiff::platform::clipboard::copy_picture(std::move(png));
   }
   // A file in a message, pressed: fetched, saved to Downloads, and opened.
   void apply(const request::open_file& one) {

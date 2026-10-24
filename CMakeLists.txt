@@ -275,6 +275,14 @@ cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
   GIT_TAG ec0c5450f17af60d16a4703b6536054cde3889a1
   VERSION 0.1.0)
+# skiff-framework: the window (skiff.platform.window) -- SDL3 makes it and
+# brings its input, Skia draws skiff's scene into it -- as any program of
+# skiff's has it; only that, not skiff.app (the page).
+cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
+  GITHUB_REPOSITORY j4niwzis/skiff-framework
+  GIT_TAG 7270ef3171c6502f650786dc61f02db32384df17
+  VERSION 0.1.0)
+cme_options(skiff-framework "SKIFF_FRAMEWORK_APP OFF" "SKIFF_FRAMEWORK_SITE OFF" "SKIFF_FRAMEWORK_WINDOW ON")
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
@@ -404,6 +412,7 @@ if(MUX_UI)
     endif()
   endforeach()
   mux_find_package(skiff-widgets 0.1.0 REQUIRED)
+  mux_find_package(skiff-framework 0.1.0 REQUIRED)
 
   # The emoji face the window draws emoji with, as tdesktop has its own:
   # Noto Color Emoji, fetched once at a pinned commit and checked, and put
@@ -441,7 +450,7 @@ if(MUX_UI)
           src/kept_root.cc src/ui_base.cc src/ui_messages.cc src/ui/base.cc src/ui/requests.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/list_shown.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations.cc src/ui/forms.cc src/ui/pages.cc src/ui/account_forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/about.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc
           src/proto/ui.cc)
   target_sources(mux_modules PRIVATE ${mux_protocol_ui_impl})
-  target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
+  target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets skiff::window Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries} ${mux_plugin_libraries})
   if(ANDROID)
     add_library(mux SHARED src/main.cc src/main_android.cc)

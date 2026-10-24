@@ -5,7 +5,7 @@ export module mux.app.network:sink;
 import std;
 import mux.core;
 import mux.plugins.types;
-import mux.platform.events;
+import skiff.platform.events;
 
 export namespace mux::app {
 
@@ -13,7 +13,7 @@ export namespace mux::app {
 // registered for it.
 struct wake_window {
   std::uint32_t kind = 0;
-  void operator()() const { mux::platform::events::push(kind); }
+  void operator()() const { skiff::platform::events::push(kind); }
 };
 using mailbox_type = mux::mailbox<wake_window>;
 

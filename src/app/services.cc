@@ -7,7 +7,7 @@ export module mux.app.services;
 
 import std;
 import splice;
-import mux.platform.dialogs;
+import skiff.platform.dialogs;
 import mux.platform.audio;
 import mux.vault;
 import skiff.scene;
@@ -193,7 +193,7 @@ struct services {
   mux::vault::vault* vault = nullptr;
   // Work off the UI's thread.
   workers* work = nullptr;
-  mux::platform::dialogs::dialogs* system_dialogs = nullptr;
+  skiff::platform::dialogs::dialogs* system_dialogs = nullptr;
   // What wakes the window from another thread.
   wake_window* wake = nullptr;
   // What plays voice messages.

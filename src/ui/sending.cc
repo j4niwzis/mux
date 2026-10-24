@@ -114,6 +114,10 @@ inline auto send_box(const ui_needs& n, const send_facts& facts) {
 using send_box_t = decltype(send_box(std::declval<const ui_needs&>(), std::declval<const send_facts&>()));
 // Sized as it is opened, by the files it is opened with.
 inline dialog_look content_look(std::type_identity<send_facts>) { return {}; }
+// Not let go by a press off it: a tap beside the box -- easily made on a
+// phone, where it fills most of the screen -- lost the files chosen and the
+// caption written. Cancel lets it go, or Back (Esc).
+inline bool content_dismissable(std::type_identity<send_facts>, const send_facts&) { return false; }
 template <class Needs>
 auto make_content(const Needs& needs, const send_facts& facts) {
   return send_box(needs, facts);

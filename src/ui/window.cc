@@ -140,10 +140,17 @@ inline text_menu_facts text_menu_at(std::vector<text_menu_item> items, std::opti
           .height = tall,
           .field = std::move(field)};
 }
-// The menu, where its facts put it.
+// The menu, where its facts put it, over a clear backdrop taking every
+// press off it: a press there lets the menu go, as tdesktop's popup menus
+// close, and goes no further. With only the tap off the layer (window body,
+// tapped_off), a press off it reached what was under it: on a phone, a tap
+// held a little long there was a long press -- on a message's text, its
+// Copy menu again -- and the menu could not be got rid of.
 inline auto text_menu_layer(const ui_needs& n, const text_menu_facts& facts) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(text_menu_layer, c::column(c::vbox(0.0f, {.fill = true}),
+                   c::onClick(request::close_text_menu{},
+                              c::styled({.place = scene::anchor::kTopLeft, .fill = true}, nodes::Box<>(skia::colorSetARGB(0, 0, 0, 0)))),
                    c::styled({.place = scene::anchor::kTopLeft, .x = facts.x, .y = facts.y, .width = facts.width, .height = facts.height},
                              make_text_menu(*n.colours, facts.items))));
 }

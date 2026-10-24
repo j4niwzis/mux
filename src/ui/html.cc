@@ -45,7 +45,26 @@ struct underline {}; // <u>, <ins>
 // span all the same, so that its end closes it and not another.
 struct span {
   bool spoiler = false;
+  // Its colours, as <font color>, data-mx-color and data-mx-bg-color say --
+  // read once, from #rrggbb (or #rgb), where it is read.
+  std::optional<skia::SkColor> colour;
+  std::optional<skia::SkColor> background;
 };
+// A colour as HTML writes it: #rrggbb, or #rgb; nothing for another word.
+[[nodiscard]] inline std::optional<skia::SkColor> html_colour_of(std::string_view said) {
+  if (!said.starts_with('#'))
+    return std::nullopt;
+  said.remove_prefix(1);
+  unsigned value = 0;
+  const auto [end, failed] = std::from_chars(said.data(), said.data() + said.size(), value, 16);
+  if (failed != std::errc{} || end != said.data() + said.size())
+    return std::nullopt;
+  if (said.size() == 3)
+    return skia::colorSetARGB(255, ((value >> 8) & 0xf) * 17, ((value >> 4) & 0xf) * 17, (value & 0xf) * 17);
+  if (said.size() == 6)
+    return skia::colorSetARGB(255, (value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff);
+  return std::nullopt;
+}
 }  // namespace text_style
 using text_style_t = spl::variant<text_style::strong, text_style::emphasis, text_style::struck, text_style::code,
                                   text_style::quote, text_style::underline, text_style::span>;
@@ -68,7 +87,7 @@ using text_style_t = spl::variant<text_style::strong, text_style::emphasis, text
   return {.first = a, .last = b, .underline = true};
 }
 [[nodiscard]] inline nodes::Text::Styled styled(text_style::span one, std::size_t a, std::size_t b) {
-  return {.first = a, .last = b, .spoiler = one.spoiler};
+  return {.first = a, .last = b, .spoiler = one.spoiler, .colour = one.colour, .background = one.background};
 }
 // An HTML tag, as read: what it does to the text, told by its type. Its
 // name is looked up once, where it is read (start_of, end_of); what follows works on
@@ -155,6 +174,7 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
       {"u", html_tag::style_open{text_style::underline{}}},
       {"ins", html_tag::style_open{text_style::underline{}}},
       {"span", html_tag::style_open{text_style::span{}}},
+      {"font", html_tag::style_open{text_style::span{}}},
       {"code", html_tag::code_open{}},
       {"pre", html_tag::block_open{}},
       {"blockquote", html_tag::style_open{text_style::quote{}}},
@@ -201,7 +221,16 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
                                             const bool spoiler = std::ranges::any_of(one.attributes, [](const chevron::attribute& each) {
                                               return each.name.local == "data-mx-spoiler";
                                             });
-                                            spl::visit(spl::overloaded{[&](text_style::span& span) { span.spoiler = spoiler; },
+                                            // Its colours: Matrix's data-mx-color and data-mx-bg-color,
+                                            // or a <font>'s color.
+                                            const auto colour_of = [&](std::string_view name) { return html_colour_of(attribute(name)); };
+                                            spl::visit(spl::overloaded{[&](text_style::span& span) {
+                                                                         span.spoiler = spoiler;
+                                                                         span.colour = colour_of("data-mx-color");
+                                                                         if (!span.colour)
+                                                                           span.colour = colour_of("color");
+                                                                         span.background = colour_of("data-mx-bg-color");
+                                                                       },
                                                                        [](const auto&) {}},
                                                        open.style);
                                             return open;
@@ -240,6 +269,7 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
       {"u", html_tag::style_close{text_style::underline{}}},
       {"ins", html_tag::style_close{text_style::underline{}}},
       {"span", html_tag::style_close{text_style::span{}}},
+      {"font", html_tag::style_close{text_style::span{}}},
       {"code", html_tag::style_close{text_style::code{}}},
       {"pre", html_tag::block_close{}},
       {"blockquote", html_tag::style_close{text_style::quote{}}},

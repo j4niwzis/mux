@@ -79,9 +79,10 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
             }
             return true;
           };
+          // Behind what the user waits on: a message sent goes before it.
           const auto got = api_->request("GET", path, {},
                                          token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
-                                         std::chrono::seconds(small ? 15 : 60), {}, &progress);
+                                         std::chrono::seconds(small ? 15 : 60), {}, &progress, http::lane::background);
           if (stopping_ || cancelled || cancelled_.erase(source))
             return;
           if (got.status == 200 && !got.body.empty()) {
@@ -178,6 +179,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .delivery = delivery::sending{},
                                         .attachment = carried,
                                         .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt}});
+    unsent pending{*this, in, local};
     // Before the upload: the bytes of a file for an encrypted room never
     // reach the server in the clear (review 4, H2).
     // In an encrypted room, sealed here first: what reaches the server is
@@ -190,10 +192,8 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     }
     const std::string ciphertext = sealed ? spl::bytes::text_of(sealed->bytes) : std::string();
     const std::string_view uploaded = sealed ? std::string_view(ciphertext) : std::string_view(bytes);
-    if (!api_) {
-      sink_(change::delivery_changed{in, local, delivery::failed{}});
+    if (!api_)
       return;
-    }
     // A video's thumbnail, uploaded first: the message names it. In an
     // encrypted room sealed as the video is -- its first picture is what it
     // shows, and goes to the server no more in the clear than the rest.
@@ -232,10 +232,8 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     } catch (const net::failure& failed) {
       log(id_, "upload of {} failed: {}", name, failed.what());
     }
-    if (!uri) {
-      sink_(change::delivery_changed{in, local, delivery::failed{}});
+    if (!uri)
       return;
-    }
     // The message: a picture or a file, its caption its body; an answer, as
     // any message may be one.
     const loom::client::media_said said{.uri = *uri,
@@ -296,11 +294,10 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                                       .txn_id = local,
                                                       .body = std::move(message)},
                                       std::move(relates_to));
-    if (!sent) {
-      sink_(change::delivery_changed{in, local, delivery::failed{}});
+    if (!sent)
       return;
-    }
     sink_(change::message_acknowledged{in, local, sent->event_id});
+    pending.settled = true;
   });
 }
 

@@ -317,16 +317,16 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
         .replies_to = reply_to,
         .outgoing = true,
         .delivery = delivery::sending{}}});
-    if (!api_) {
-      sink_(change::delivery_changed{in, txn, delivery::failed{}});
+    unsent pending{*this, in, txn};
+    if (!api_)
       return;
-    }
     loom::client::text_said said{.body = body, .html = html, .reply_to = reply_to};
     // Who is mentioned, as Matrix 1.7 says it: what their clients notify by.
     for (const mention& one : mentions)
       said.mentions.push_back(one.user);
     const auto content = loom::client::text_message(said);
     this->send_text(in, room, txn, as_body(content), relates_to_of(content));
+    pending.settled = true;
   });
 }
 
@@ -420,13 +420,13 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
                                         .outgoing = true,
                                         .delivery = delivery::sending{},
                                         .thread = root}});
-    if (!api_) {
-      sink_(change::delivery_changed{in, txn, delivery::failed{}});
+    unsent pending{*this, in, txn};
+    if (!api_)
       return;
-    }
     const auto content = loom::client::text_message(
         loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .thread = root, .thread_latest = latest});
     this->send_text(in, room, txn, as_body(content), relates_to_of(content));
+    pending.settled = true;
   });
 }
 

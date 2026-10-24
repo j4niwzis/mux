@@ -307,10 +307,19 @@ class connection {
   beast::flat_buffer buffer_;
 };
 
+// What a request is for: what the user waits on -- a message sent, a page
+// of history, a setting saved -- or what fills in behind it: avatars,
+// thumbnails, downloads.
+enum class lane : std::uint8_t { user, background };
+
 // Several connections to one host, opened as they are needed, up to
 // `most`: a request takes one that no other request holds, and waits only
 // while all of them are held. What an account asks at once -- history
 // paged back, receipts, messages sent -- goes at once.
+//
+// What fills in behind holds all but one of them at most, and waits behind
+// what the user waits on: a message sent while a room list's avatars come
+// in went, in one line, behind every one of them -- minutes of "sending".
 class pool {
  public:
   pool(net::loop& owner, net::tls& settings, url where, std::optional<net::proxy> via = std::nullopt,
@@ -325,26 +334,40 @@ class pool {
   response request(std::string_view method, std::string_view target, std::string_view body = {},
                    std::optional<std::string_view> bearer = std::nullopt,
                    std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {},
-                   const Progress* progress = nullptr) {
-    connection* free = this->take();
-    while (free == nullptr) {
-      if (std::ranges::find(waiting_, owner_->current()) == waiting_.end())
-        waiting_.push_back(owner_->current());
-      owner_->park();
-      free = this->take();
+                   const Progress* progress = nullptr, lane way = lane::user) {
+    connection* free = this->take(way);
+    if (free == nullptr) {
+      // Counted while it waits: the pool is not let go under it (drain).
+      struct waiting_while {
+        pool& of;
+        explicit waiting_while(pool& on) : of(on) { ++of.waiters_; }
+        ~waiting_while() { --of.waiters_; }
+      } const counted{*this};
+      while (free == nullptr) {
+        if (closed_)
+          throw net::failure("asking " + where_.host + " (the account stopped)", asio::error::operation_aborted);
+        auto& queue = this->queue_of(way);
+        if (std::ranges::find(queue, owner_->current()) == queue.end())
+          queue.push_back(owner_->current());
+        owner_->park();
+        free = this->take(way);
+      }
     }
     // Whatever becomes of the request, the next in line is told a
     // connection is free.
+    ++in_flight_;
+    if (way == lane::background)
+      ++background_;
     struct next_in_line {
       pool& of;
+      lane way;
       ~next_in_line() {
-        if (!of.waiting_.empty()) {
-          const net::loop::handle next = of.waiting_.front();
-          of.waiting_.pop_front();
-          of.owner_->wake(next);
-        }
+        --of.in_flight_;
+        if (way == lane::background)
+          --of.background_;
+        of.wake_next();
       }
-    } const told{*this};
+    } const told{*this, way};
     return free->request(method, target, body, bearer, timeout, type, progress);
   }
 
@@ -353,15 +376,50 @@ class pool {
       one.close();
   }
 
+  // Let go, as its account stops: no request taken from now on, those
+  // waiting failed, those on the wire cut short -- and returned once none
+  // is left. A pool gone under a fiber parked in it, or reading on one of
+  // its connections, left that fiber parked for ever (its message "sending"
+  // for good) or woke it into freed memory.
+  void drain() {
+    closed_ = true;
+    for (auto* queue : {&waiting_user_, &waiting_background_}) {
+      for (const net::loop::handle one : *queue)
+        owner_->wake(one);
+      queue->clear();
+    }
+    for (connection& one : all_)
+      one.abort();
+    while (in_flight_ > 0 || waiters_ > 0)
+      owner_->sleep(std::chrono::milliseconds(20));
+  }
+
  private:
-  // One no request holds, or a new one where there is room for it.
-  connection* take() {
+  // One no request holds, or a new one where there is room for it -- for
+  // what fills in behind, never the last one.
+  connection* take(lane way) {
+    if (closed_)
+      return nullptr;
+    if (way == lane::background && most_ > 1 && background_ + 1 >= most_)
+      return nullptr;
     for (connection& one : all_)
       if (!one.busy())
         return &one;
     if (all_.size() < most_)
       return &all_.emplace_back(*owner_, *tls_, where_, via_);
     return nullptr;
+  }
+  std::deque<net::loop::handle>& queue_of(lane way) {
+    return way == lane::user ? waiting_user_ : waiting_background_;
+  }
+  // A connection free: what the user waits on first.
+  void wake_next() {
+    auto& queue = !waiting_user_.empty() ? waiting_user_ : waiting_background_;
+    if (queue.empty())
+      return;
+    const net::loop::handle next = queue.front();
+    queue.pop_front();
+    owner_->wake(next);
   }
 
   net::loop* owner_;
@@ -370,7 +428,10 @@ class pool {
   std::optional<net::proxy> via_;
   std::size_t most_;
   std::deque<connection> all_;
-  std::deque<net::loop::handle> waiting_;
+  std::deque<net::loop::handle> waiting_user_;
+  std::deque<net::loop::handle> waiting_background_;
+  std::size_t in_flight_ = 0, background_ = 0, waiters_ = 0;
+  bool closed_ = false;
 };
 
 // One exchange, made once, here: what a program calls instead of the

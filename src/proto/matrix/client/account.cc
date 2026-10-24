@@ -684,6 +684,23 @@ class account {
       }
     });
   }
+  // A message shown as being sent: marked not sent where its fiber ends
+  // before the server's answer is told -- by anything at all. Only a
+  // refusal was caught on the way, and anything else that ended the fiber
+  // left the message "sending" for good. Settled once its answer is told.
+  struct unsent {
+    account& by;
+    conversation_id in;
+    std::string local;
+    bool settled = false;
+    unsent(account& of, conversation_id room, std::string txn) : by(of), in(std::move(room)), local(std::move(txn)) {}
+    unsent(const unsent&) = delete;
+    unsent& operator=(const unsent&) = delete;
+    ~unsent() {
+      if (!settled)
+        by.sink_(change::delivery_changed{in, local, delivery::failed{}});
+    }
+  };
   // A fiber that sends: a refusal of it caught here, for every sender alike.
   template <class Body>
   void spawn_sending(Body body) {

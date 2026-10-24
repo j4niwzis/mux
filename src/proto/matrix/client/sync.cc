@@ -206,6 +206,20 @@ void account<Sink>::run() {
   http::pool api(*loop_, *tls_, *base, how_.proxy);
   http::connection syncing(*loop_, *tls_, *base, how_.proxy);  // the long poll has one of its own
   api_ = &api;
+  // However the run ends: the account no longer asks through it, and the
+  // pool is let go only once nothing waits in it or reads on it -- what was
+  // waiting fails, a message being sent among it marked not sent. Left
+  // alone where the run is being unwound (the loop going away): no fiber
+  // may wait then.
+  const struct drained {
+    account& of;
+    http::pool& pool;
+    ~drained() {
+      of.api_ = nullptr;
+      if (std::uncaught_exceptions() == 0)
+        pool.drain();
+    }
+  } draining{*this, api};
 
   // The machine woken from sleep -- a phone's screen turned on again: the
   // long poll it slept in is on a connection that is likely gone, and was

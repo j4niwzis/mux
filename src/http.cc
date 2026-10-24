@@ -170,6 +170,11 @@ class connection {
   using stream_type = beast::ssl_stream<beast::tcp_stream>;
 
   void open() {
+    // A new connection reads from nothing: what the last one left unread --
+    // a long poll cut short mid-answer, a read that failed -- let go. Read
+    // on as the start of this one's answer, it was "bad version" and the
+    // account reconnecting.
+    buffer_.consume(buffer_.size());
     stream_.emplace(owner_->io(), tls_->context());
     if (!::SSL_set_tlsext_host_name(stream_->native_handle(), where_.host.c_str()))
       throw net::failure("naming " + where_.host, error_code(static_cast<int>(::ERR_get_error()),

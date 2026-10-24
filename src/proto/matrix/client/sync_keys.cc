@@ -194,7 +194,12 @@ std::optional<std::string> account<Sink>::share_room_key(const std::string& room
         log(of.id_, "{}: its key took {} ms to give", room, ms);
     }
   } said_slow{*this, room, began};
+  const auto step = [&](std::string_view what) {
+    log(id_, "{}: key: {} after {} ms", room, what,
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - began).count());
+  };
   auto members = perform(*api_, loom::cs::get_joined_members_by_room{.room_id = room});
+  step(members ? "members fetched" : "members not fetched");
   if (!members || !members->joined) {
     log(id_, "{}: its members could not be fetched", room);
     return std::nullopt;
@@ -203,6 +208,7 @@ std::optional<std::string> account<Sink>::share_room_key(const std::string& room
   for (const auto& [user, profile] : *members->joined)
     ask.body.device_keys.emplace(user, std::vector<std::string>{});
   auto got = perform(*api_, ask);
+  step(got ? "devices fetched" : "devices not fetched");
   if (!got) {
     log(id_, "{}: its members' devices could not be fetched: {}", room, got.error().said());
     return std::nullopt;
@@ -233,7 +239,7 @@ std::optional<std::string> account<Sink>::share_room_key(const std::string& room
       claim.body.one_time_keys[one.user][one.device_id] = "signed_curve25519";
   std::map<std::string, std::string> keys_by_curve;
   if (!claim.body.one_time_keys.empty())
-    if (auto claimed = perform(*api_, claim))
+    if (auto claimed = perform(*api_, claim); step(claimed ? "one-time keys claimed" : "one-time keys not claimed"), claimed)
       for (const crypto::recipient& one : plan.to_share)
         if (const auto user = claimed->one_time_keys.find(one.user); user != claimed->one_time_keys.end())
           if (const auto device = user->second.find(one.device_id); device != user->second.end())
@@ -256,9 +262,11 @@ std::optional<std::string> account<Sink>::share_room_key(const std::string& room
   }
   if (messages.empty())
     return plan.session_id;
+  step(std::format("sealed for {} devices", given.size()));
   auto sent = perform(*api_, loom::cs::send_to_device{.event_type = "m.room.encrypted",
                                                       .txn_id = this->transaction(),
                                                       .body = {.messages = std::move(messages)}});
+  step(sent ? "key sent to the devices" : "key not sent to the devices");
   if (!sent) {
     log(id_, "{}: the room's key could not be sent: {}", room, sent.error().said());
     return std::nullopt;

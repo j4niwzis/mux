@@ -174,15 +174,23 @@ struct network {
   }
   void send(const mux::conversation_id& to, std::string text, std::optional<std::string> reply_to = std::nullopt,
             std::vector<mux::mention> mentions = {}, std::vector<mux::styled_run> styles = {}) {
+    // Said at each end of the post: a send that never reached the network's
+    // loop, or found no account there, shows here.
+    mux::log_line(to.account.address, std::format("send to {}: asked ({} bytes)", to.id, text.size()));
     loop.post([this, to, text = std::move(text), reply_to = std::move(reply_to), mentions = std::move(mentions),
                styles = std::move(styles)] {
+      bool found = false;
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
-              if (account->id() == to.account)
+              if (account->id() == to.account) {
+                found = true;
                 account->send(to.id, text, reply_to, mentions, styles);
+              }
             },
             one.account);
+      mux::log_line(to.account.address, found ? std::format("send to {}: on the network's loop", to.id)
+                                              : std::format("send to {}: no such account running", to.id));
     });
   }
   void edit(const mux::conversation_id& in, std::string id, std::string text, std::vector<mux::styled_run> styles = {}) {

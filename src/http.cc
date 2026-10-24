@@ -343,6 +343,20 @@ class pool {
         explicit waiting_while(pool& on) : of(on) { ++of.waiters_; }
         ~waiting_while() { --of.waiters_; }
       } const counted{*this};
+      // A long wait for a connection said: "sending" while every
+      // connection is held shows here.
+      const auto began = std::chrono::steady_clock::now();
+      const struct wait_said {
+        pool& of;
+        lane way;
+        std::chrono::steady_clock::time_point began;
+        ~wait_said() {
+          const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - began).count();
+          if (ms > 1000)
+            log_line(of.where_.host, std::format("waited {} ms for a connection ({} lane; {} in flight, {} of them background)", ms,
+                                                 way == lane::user ? "user" : "background", of.in_flight_, of.background_));
+        }
+      } said{*this, way, began};
       while (free == nullptr) {
         if (closed_)
           throw net::failure("asking " + where_.host + " (the account stopped)", asio::error::operation_aborted);

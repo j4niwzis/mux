@@ -955,7 +955,13 @@ class model {
   template <plugin_change Change>
   void on(const Change&) {}
   void on(const change::message_acknowledged& one) {
+    // An answer that finds no message -- not the one sent, not the server's
+    // copy -- said: a message left "sending" while its answer came.
+    bool chat_found = false, matched = false;
     this->in_chat(one.in, [&](conversation& where) {
+    chat_found = true;
+    matched = message_in(where, one.local_id) || message_in(where, one.id) ||
+              (where.latest && (where.latest->id == one.local_id || where.latest->id == one.id));
     in_latest(where, one.local_id, [&](message& kept) {
       kept.id = one.id;
       kept.delivery = delivery::sent{};
@@ -971,6 +977,9 @@ class model {
       kept->delivery = delivery::sent{};
     }
   });
+    if (!matched)
+      log_line(one.in.account.address, std::format("send {}: acknowledged as {}, but no message here is it{}", one.local_id, one.id,
+                                                   chat_found ? "" : " (no such chat)"));
   }
   void on(const change::delivery_changed& one) {
     this->in_chat(one.in, [&](conversation& where) {

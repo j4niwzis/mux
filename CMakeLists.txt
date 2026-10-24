@@ -460,6 +460,8 @@ if(MUX_UI)
       -Wframe-larger-than=65536 -Werror=frame-larger-than)
     target_sources(mux_modules PRIVATE src/android_runtime.cc)
     target_link_options(mux PRIVATE ${MUX_ANDROID_LINK_OPTIONS})
+    # logcat: mux's stderr given to it (main_android.cc).
+    target_link_libraries(mux PRIVATE log)
     if(MANDK_ROOT)
       target_link_libraries(mux PRIVATE c++ c++abi unwind)
     endif()

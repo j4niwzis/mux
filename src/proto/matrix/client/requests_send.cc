@@ -283,6 +283,7 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
                 mentions = std::move(mentions), styles = std::move(styles)]() mutable {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
+    log(id_, "send {}: begun in {}{}", txn, room, api_ ? "" : " (not connected: it will be marked not sent)");
     // Each mention a link to its person in the Markdown, as Element sends a
     // pill: the body keeps the name as written.
     std::string marked = body;

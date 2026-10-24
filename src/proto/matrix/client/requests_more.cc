@@ -259,6 +259,13 @@ void account<Sink>::forward(std::string from, std::vector<forward_source> events
       }
       content->m_relates_to.reset();
       content->m_new_content.reset();
+      // The original's own forward marks let go: a forward of a forward is
+      // from the message forwarded, not from where that one came. Kept, the
+      // original's Extera attribution went on with this one, and a client
+      // reading it named the first sender, not the one forwarded from.
+      content->m_forwarded.reset();
+      content->com_famedly_app_forwarded.reset();
+      content->xyz_extera_forward.reset();
       // As MSC2723 forwards: the current content, and where it is from
       // beside it -- no words added to it; a client shows the forward its way.
       content->rest = as_body(forwarded_mark{.forwarded = {.event_id = event,

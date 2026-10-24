@@ -482,9 +482,13 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
                               for (auto it = opened.rbegin(); it != opened.rend(); ++it)
                                 if (it->first.index() == close.style.index()) {
                                   const std::size_t from = it->second;
+                                  // As it was opened, not as its end says: a
+                                  // </font> or </span> carries no colour, and
+                                  // made from it every coloured stretch was
+                                  // drawn in the text's own colour.
                                   if (out.text.size() > from)
                                     out.styles.push_back(spl::visit(
-                                        [&](auto kind) { return styled(kind, from, out.text.size()); }, close.style));
+                                        [&](const auto& kind) { return styled(kind, from, out.text.size()); }, it->first));
                                   opened.erase(std::next(it).base());
                                   break;
                                 }

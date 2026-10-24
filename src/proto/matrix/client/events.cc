@@ -112,14 +112,24 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         sink_(change::mentioned{in, *relates->event_id, at});
       return;
     }
+    // Forwarded as MSC4553 marks it: what is shown is the original's content
+    // -- its text, its picture or file -- the message's own a fallback that
+    // quotes it ("Forwarded from ... view original message"); a forwarded
+    // picture carries no url of its own at all. Read into a message's
+    // content by knot's typed conversion; the message's own where it is not
+    // one (nothing in it, or not all a message needs).
+    std::optional<loom::ev::m_room_message_content_t> original;
+    if (content.org_matrix_msc4553_forwarded && content.org_matrix_msc4553_forwarded->content)
+      original = knot::convert<loom::ev::m_room_message_content_t>(*content.org_matrix_msc4553_forwarded->content);
+    const loom::ev::m_room_message_content_t& shown = original ? *original : content;
     message made{.in = in,
                  .id = one.event_id,
                  .sender = one.sender,
                  .at = at,
-                 .body = body_of(content.body, content.format, content.formatted_body),
+                 .body = body_of(shown.body, shown.format, shown.formatted_body),
                  .outgoing = one.sender == id_.address};
     const auto [carries, picture, emote] = spl::visit(
-        [](auto of) { return std::tuple(of.carries, of.picture, of.is_emote); }, msgtype_of(content.msgtype));
+        [](auto of) { return std::tuple(of.carries, of.picture, of.is_emote); }, msgtype_of(shown.msgtype));
     if (emote)
       made.body.plain = "* " + made.body.plain;
     // A picture or a file: where it is kept, its name, what it is; its
@@ -128,27 +138,27 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       mux::attachment carried;
       if (picture)
         carried.kind = attachment_kind::image{};
-      carried.source = content.url.value_or("");
+      carried.source = shown.url.value_or("");
       // Encrypted: its ciphertext's URI, and what opens it kept for when it
       // is downloaded.
-      if (carried.source.empty() && content.file)
-        if (auto sealed = knot::convert<crypto::encrypted_file>(*content.file)) {
+      if (carried.source.empty() && shown.file)
+        if (auto sealed = knot::convert<crypto::encrypted_file>(*shown.file)) {
           carried.source = sealed->url;
           encrypted_media_.insert_or_assign(sealed->url, std::move(*sealed));
         }
-      carried.name = content.filename.value_or(content.body);
-      if (content.info) {
-        carry_info(carried, *content.info);
+      carried.name = shown.filename.value_or(shown.body);
+      if (shown.info) {
+        carry_info(carried, *shown.info);
         // A video: shown by its thumbnail, as a picture, until it can be
         // played here; its own size where the video gives none.
         const bool video = spl::visit(spl::overloaded{[](msgtype::video) { return true; }, [](const auto&) { return false; }},
-                                      msgtype_of(content.msgtype));
-        if (video && content.info->thumbnail_url) {
+                                      msgtype_of(shown.msgtype));
+        if (video && shown.info->thumbnail_url) {
           carried.video = carried.source;
-          carried.source = *content.info->thumbnail_url;
-          carried.duration_ms = content.info->duration.value_or(0);
+          carried.source = *shown.info->thumbnail_url;
+          carried.duration_ms = shown.info->duration.value_or(0);
           carried.kind = attachment_kind::image{};
-          if (const auto& thumb = content.info->thumbnail_info; thumb && (carried.width == 0 || carried.height == 0)) {
+          if (const auto& thumb = shown.info->thumbnail_info; thumb && (carried.width == 0 || carried.height == 0)) {
             carried.width = static_cast<int>(thumb->w.value_or(0));
             carried.height = static_cast<int>(thumb->h.value_or(0));
           }
@@ -157,7 +167,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
           // its plate with the play mark and its length, played when
           // pressed; no picture fetched for it (video == source says so).
           carried.video = carried.source;
-          carried.duration_ms = content.info->duration.value_or(0);
+          carried.duration_ms = shown.info->duration.value_or(0);
           carried.kind = attachment_kind::image{};
         }
       }
@@ -165,16 +175,16 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};
       if (!carried.source.empty()) {
         made.attachment = std::move(carried);
-        if (!content.filename || *content.filename == content.body)
+        if (!shown.filename || *shown.filename == shown.body)
           made.body = {};  // no caption: the body was the file's name
       }
     }
     // A gallery (MSC4274): each of its itemtypes read as a picture or a file
     // alone is, its body the caption.
     if (spl::visit(spl::overloaded{[](msgtype::gallery) { return true; }, [](const auto&) { return false; }},
-                   msgtype_of(content.msgtype)) &&
-        content.itemtypes)
-      for (const auto& item : *content.itemtypes) {
+                   msgtype_of(shown.msgtype)) &&
+        shown.itemtypes)
+      for (const auto& item : *shown.itemtypes) {
         const bool is_picture_item = spl::visit([](auto of) { return of.picture; }, msgtype_of(item.itemtype));
         mux::attachment carried;
         carried.source = item.url.value_or("");
@@ -205,10 +215,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       // shown as it was -- the message's own body is a fallback that quotes
       // it under "Forwarded from ... view original message" (a client that
       // knows no forwards shows that).
-      const auto& was = *content.org_matrix_msc4553_forwarded;
-      made.forwarded = origin(was);
-      if (was.content && was.content->body && !made.attachment && made.album.empty())
-        made.body = body_of(*was.content->body, was.content->format, was.content->formatted_body);
+      made.forwarded = origin(*content.org_matrix_msc4553_forwarded);
     } else if (content.m_forwarded) {
       made.forwarded = origin(*content.m_forwarded);
     } else if (content.com_famedly_app_forwarded) {

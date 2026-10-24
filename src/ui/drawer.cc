@@ -11,6 +11,7 @@ import skiff.scene;
 import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
+import skiff.nodes.scroll;
 import skiff.nodes.text;
 import mux.core;
 import mux.config;
@@ -61,16 +62,21 @@ struct drawer_account_row_of {
 inline auto drawer_view(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
+  // Under its title, all of it scrolled where the window is lower than it
+  // -- a phone's in split screen, 300 high, had Settings and Quit below its
+  // edge.
   return SKIFF_NAMED(drawer_view, c::column(c::vbox(0.0f, {.fill = true}),
       c::styled({.margin = {18.0f, 20.0f, 14.0f, 20.0f}}, nodes::Text("mux", 20.0f, colours.text, true)),
-      c::projected<drawer_accounts>([](const drawer_accounts& now) { return now.accounts; },
-          c::listed<drawer_account>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), drawer_account_row_of{&colours})),
-      c::styled({.margin = {0.0f, 0.0f, 6.0f, 0.0f}}, row_item(colours, "Manage accounts", sends<request::open_accounts>{}, icon::person{})),
-      c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 6.0f, 0.0f}}, nodes::Box<>(colours.chosen)),
-      row_item(colours, "Start new chat", sends<request::open_new_chat>{}, icon::person{}),
-      row_item(colours, "New room", sends<request::open_new_room>{}, icon::people{}),
-      row_item(colours, "Settings", sends<request::open_settings>{}, icon::gear{}),
-      row_item(colours, "Quit", sends<request::quit>{}, icon::power{})));
+      c::styled({.fillX = true, .grow = scene::axes::kY},
+          nodes::ScrollContainer(c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::projected<drawer_accounts>([](const drawer_accounts& now) { return now.accounts; },
+                  c::listed<drawer_account>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), drawer_account_row_of{&colours})),
+              c::styled({.margin = {0.0f, 0.0f, 6.0f, 0.0f}}, row_item(colours, "Manage accounts", sends<request::open_accounts>{}, icon::person{})),
+              c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 6.0f, 0.0f}}, nodes::Box<>(colours.chosen)),
+              row_item(colours, "Start new chat", sends<request::open_new_chat>{}, icon::person{}),
+              row_item(colours, "New room", sends<request::open_new_room>{}, icon::people{}),
+              row_item(colours, "Settings", sends<request::open_settings>{}, icon::gear{}),
+              row_item(colours, "Quit", sends<request::quit>{}, icon::power{}))))));
 }
 using drawer_view_t = decltype(drawer_view(std::declval<const ui_needs&>()));
 

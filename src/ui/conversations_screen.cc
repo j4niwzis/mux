@@ -128,7 +128,9 @@ inline auto no_accounts_yet(const palette& colours) {
       nodes::Text("No accounts yet", 22.0f, colours.text, true),
       skiff::compose::styled({.fillX = true},
                              wrapped(nodes::Text("Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, colours.dim))),
-      skiff::compose::styled({.width = 140.0f, .height = 36.0f}, primary(add_button(colours.widgets, "Add account", {})))));
+      // As wide as the column lets it be, 140 at most: a fixed 140 stuck out
+      // of a phone's narrow column.
+      skiff::compose::styled({.fillX = true, .height = 36.0f, .maxWidth = 140.0f}, primary(add_button(colours.widgets, "Add account", {})))));
 }
 // No chat chosen: the wallpaper, and in its middle a small pill saying what
 // to do, as tdesktop's (its service message look).

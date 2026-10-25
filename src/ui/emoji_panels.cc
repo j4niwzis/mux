@@ -312,13 +312,15 @@ auto emoji_panel(const palette& colours, emoji_kept& kept, Pick pick) {
                             one.items | std::views::transform([&](const emoji_item& each) { return emoji_cell(colours, kept, pick, each); }) | std::ranges::to<std::vector>(),
                             one.pack, kept.pack_account);
       },
-      // Every group made, as the plugins branch's panel makes them: made
-      // near the view only, by heights reckoned before they were made, the
-      // list's extent came out shorter than the real sections and a wheel's
-      // glide was pulled back up to it. What made the panel slow -- every
-      // group made again at each hover -- skiff's Sections no longer does
-      // (the groups compared).
-      footer, [](std::size_t) { return leave_emoji_search{}; });
+      footer, [](std::size_t) { return leave_emoji_search{}; },
+      // Each group's height before it is made: its header, and its emoji in
+      // rows of as many cells as the width takes (cell_section) -- only the
+      // groups near the view made, not every emoji there is.
+      [](const emoji_group& one, float width) {
+        const auto across = std::max<std::size_t>(1, static_cast<std::size_t>(width / kEmojiCell));
+        const std::size_t rows = (one.items.size() + across - 1) / across;
+        return 32.0f + static_cast<float>(rows) * kEmojiCell;
+      });
   using tones_field = skiff::model::Field<&emoji_draft::tones>;
   auto tones = c::placed_at<tones_field>([](const std::optional<tones_shown>& now) { return now.transform([](const tones_shown& one) { return one.at; }); },
       c::projected<tones_field>([](const std::optional<tones_shown>& now) {

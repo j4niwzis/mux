@@ -677,6 +677,17 @@ class pictures_part {
       source = chat->avatar;
       shown = mux::ui::display_name(*chat);
     }
+    // Someone not in the chat -- a forwarded message's sender, whose card was
+    // opened from the forward: their profile, as the account fetched it for
+    // the card, which drew its avatar from it. Looked for only among the
+    // members, the press on that avatar did nothing.
+    if (!source || source->empty())
+      if (const auto* kept = s_->model->accounts().find(chat->id.account))
+        if (const auto found = kept->profiles.find(one.key); found != kept->profiles.end() && found->second.avatar) {
+          source = found->second.avatar;
+          if (found->second.name && !found->second.name->empty())
+            shown = *found->second.name;
+        }
     if (!source || source->empty())
       return;
     this->apply(request::open_picture{*source, shown, "avatar", ""});

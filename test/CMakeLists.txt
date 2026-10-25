@@ -64,6 +64,9 @@ if(MUX_UI)
   add_executable(mux-side-column-test side_column_test.cc)
   target_link_libraries(mux-side-column-test PRIVATE mux_modules ${mux_gtest})
   add_test(NAME side-column COMMAND mux-side-column-test)
+  add_executable(mux-emoji-panel-test emoji_panel_test.cc)
+  target_link_libraries(mux-emoji-panel-test PRIVATE mux_modules ${mux_gtest})
+  add_test(NAME emoji-panel COMMAND mux-emoji-panel-test)
 endif()
 
 # The rest try every protocol side by side, and the plugins with them:

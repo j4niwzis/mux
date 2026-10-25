@@ -147,7 +147,7 @@ int mux_main(int argc, char** argv) {
     program.shared.notice("The accounts file could not be read", *config_note);
   const int code = skiff::platform::window::run(
       program, {.title = "mux", .software = program.appearance().renderer == mux::config::renderer_t{mux::config::renderer::software{}},
-                .transparent = opacity < 100}, kinds);
+                .transparent = opacity < 100, .programs = mux::config::state_path("gpu-programs").string()}, kinds);
   // Started only once what is kept was read: never, where the vault stayed locked.
   if (net.thread.joinable())
     net.thread.join();

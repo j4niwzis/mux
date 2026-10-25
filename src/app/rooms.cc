@@ -53,9 +53,16 @@ class rooms_part {
   // one with, that chat shown.
   // Element's Start chat: those one has direct chats with to begin with, and
   // one's own link to send.
+  // With no account to ask, said so: left silent, a press on the drawer's
+  // row did nothing at all -- a tester signed in to none pressed it again
+  // and again.
   void apply(const request::open_new_chat&) {
     const auto& current = s_->listed();
-    if (!current) return;
+    if (!current) {
+      mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
+      s_->notice("Start new chat", "No account is signed in: sign in to one in Manage accounts first.");
+      return;
+    }
     std::vector<mux::found_person> known;
     std::string link;
     if (current) {
@@ -99,7 +106,11 @@ class rooms_part {
   }
   void apply(const request::open_new_room&) {
     const auto by = s_->account_offering(mux::proto::feature::room_creation{});
-    if (!by) return;
+    if (!by) {
+      mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
+      s_->notice("New room", "No account signed in can make rooms: sign in to one in Manage accounts first.");
+      return;
+    }
     mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show(*s_->showing, std::optional(mux::ui::new_room_facts{mux::proto::directory_server_of(mux::ui::protocol_state_of(s_->ui, *by), by->address), std::nullopt, by}));
   }

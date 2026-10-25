@@ -280,7 +280,7 @@ cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG cc827744782c6020f52128c3f65ed7e68c6e4c5e
+  GIT_TAG aa967d5dc59f1c80a5d86b200c8d8a4e51178b23
   VERSION 0.1.0)
 cme_options(skiff-framework "SKIFF_FRAMEWORK_APP OFF" "SKIFF_FRAMEWORK_SITE OFF" "SKIFF_FRAMEWORK_WINDOW ON")
 if(MUX_UI)

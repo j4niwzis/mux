@@ -151,6 +151,7 @@ struct emoji_item {
   std::string glyph;
   const alef::emoji* source = nullptr;
   std::optional<std::string> picture;
+  friend bool operator==(const emoji_item&, const emoji_item&) = default;
 };
 inline emoji_item item_of(const alef::emoji* one) { return {logic::emoji_text(*one), one, std::nullopt}; }
 inline emoji_item item_of(const std::string& one) { return {one, nullptr, std::nullopt}; }
@@ -163,7 +164,11 @@ struct emoji_group {
   std::optional<std::string> picture;
   std::string mark;
   std::optional<emote_pack> pack;
+  friend bool operator==(const emoji_group&, const emoji_group&) = default;
 };
+// Compared, so that the panel's sections read again with the same groups --
+// at every hover of the panel -- make nothing again (skiff's Sections).
+static_assert(std::equality_comparable<emoji_group>);
 inline auto emoji_items(const auto& all) { return all | std::views::transform([](const auto& one) { return item_of(one); }) | std::ranges::to<std::vector>(); }
 
 // The groups shown: what was picked lately first, then its default list

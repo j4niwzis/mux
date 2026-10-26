@@ -584,10 +584,14 @@ void app::before_frame() {
   looks.read();
   // The window's shape, as its size is: and the panel docked under the
   // field on a phone's, the field standing over it.
-  // Held to the layout chosen, where one is.
+  // Held to the layout chosen, where one is. As tall as without the
+  // on-screen keyboard: up, it took half a portrait phone's height, and the
+  // window then shaped as a landscape one -- the list and a chat side by
+  // side, squeezed over the keys (a tester's).
   if (const auto box = scene.viewport();
-      *showing.look<mux::ui::window_shape>() != mux::ui::window_shape{box.width(), box.height(), this->appearance().layout})
-    mux::ui::show(showing, mux::ui::window_shape{box.width(), box.height(), this->appearance().layout});
+      *showing.look<mux::ui::window_shape>() !=
+      mux::ui::window_shape{box.width(), box.height() + skiff::scene::hostWork().keyboardTaken, this->appearance().layout})
+    mux::ui::show(showing, mux::ui::window_shape{box.width(), box.height() + skiff::scene::hostWork().keyboardTaken, this->appearance().layout});
   shared.ui.set_docked_panel_height(shared.emoji_open() ? mux::ui::docked_height(*showing.look<mux::ui::window_shape>()) : 0.0f);
   if (showing.look<mux::ui::screen_shown>()->docked != shared.ui.docked_panel_height)
     mux::ui::change_shown<mux::ui::screen_shown>(showing, [&](mux::ui::screen_shown& now) { now.docked = shared.ui.docked_panel_height; });

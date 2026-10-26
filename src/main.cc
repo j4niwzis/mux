@@ -40,7 +40,18 @@ using namespace mux::app;
 
 }  // namespace
 
+// The program shown through litehtml (page_host.cc; page_host_off.cc where
+// mux is built without it): `mux --page ...`.
+int mux_run_on_page(mux::app::app& program, const skiff::platform::window::options& how,
+                    const skiff::platform::events::kinds& kinds);
+
 int mux_main(int argc, char** argv) {
+  // `mux --page ...`: shown through litehtml; the rest as without it.
+  const bool on_page = argc > 1 && std::string_view(argv[1]) == "--page";
+  if (on_page) {
+    --argc;
+    ++argv;
+  }
   // The window's own kinds of event, registered once, here.
   const skiff::platform::events::kinds kinds;
   mailbox_type box{wake_window{kinds.wake}};
@@ -145,9 +156,10 @@ int mux_main(int argc, char** argv) {
 
   if (config_note)
     program.shared.notice("The accounts file could not be read", *config_note);
-  const int code = skiff::platform::window::run(
-      program, {.title = "mux", .software = program.appearance().renderer == mux::config::renderer_t{mux::config::renderer::software{}},
-                .transparent = opacity < 100, .programs = mux::config::state_path("gpu-programs").string()}, kinds);
+  const skiff::platform::window::options how{
+      .title = "mux", .software = program.appearance().renderer == mux::config::renderer_t{mux::config::renderer::software{}},
+      .transparent = opacity < 100, .programs = mux::config::state_path("gpu-programs").string()};
+  const int code = on_page ? mux_run_on_page(program, how, kinds) : skiff::platform::window::run(program, how, kinds);
   // Started only once what is kept was read: never, where the vault stayed locked.
   if (net.thread.joinable())
     net.thread.join();

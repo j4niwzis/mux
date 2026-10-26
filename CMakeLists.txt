@@ -266,7 +266,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin a5d615e8386b40171c202f9b6b53b054224eed4d)
+set(mux_skiff_pin f7062aff0af0bf5e3a313e758154e1aae575b5c5)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
@@ -280,9 +280,18 @@ cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG 63e3e51b996f9d53b3a54cc9baf9721f7fea6049
+  GIT_TAG f252e3458e5752bacfc16459a4a1877f89b3f01f
   VERSION 0.1.0)
-cme_options(skiff-framework "SKIFF_FRAMEWORK_APP OFF" "SKIFF_FRAMEWORK_SITE OFF" "SKIFF_FRAMEWORK_WINDOW ON")
+# `mux --page`: the same program laid out and painted by an HTML engine
+# called directly (litehtml, through skiff.platform.page) -- for measuring it
+# against skiff's own. On the desktop.
+cmake_dependent_option(MUX_PAGE "mux --page: shown through litehtml" ON "NOT ANDROID" OFF)
+if(MUX_PAGE)
+  set(mux_page_option "SKIFF_FRAMEWORK_PAGE ON")
+else()
+  set(mux_page_option "SKIFF_FRAMEWORK_PAGE OFF")
+endif()
+cme_options(skiff-framework "SKIFF_FRAMEWORK_APP OFF" "SKIFF_FRAMEWORK_SITE OFF" "SKIFF_FRAMEWORK_WINDOW ON" "${mux_page_option}")
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
@@ -469,6 +478,13 @@ if(MUX_UI)
     mux_add_android_apk(mux)
   else()
     add_executable(mux src/main.cc src/main_desktop.cc)
+  endif()
+  # What `--page` runs: the page, where it is built; else a word that it is not.
+  if(MUX_PAGE)
+    target_sources(mux PRIVATE src/page_host.cc)
+    target_link_libraries(mux PRIVATE skiff::page)
+  else()
+    target_sources(mux PRIVATE src/page_host_off.cc)
   endif()
   # Outside a release build, the accounts each in a unit of its own, beside
   # network.cc, built in parallel; a release build instantiates them where

@@ -544,6 +544,8 @@ double app::wake_in() const {
 }
 
 void app::before_frame() {
+  // What Enter does in a message, as the settings say it now.
+  mux::ui::enter_choice() = this->appearance().enter;
   // A slice of what the network brought, before the frame shows it.
   this->take_arriving(kArrivingSlice);
   // What the window's nodes answered as they ticked (a page come to rest

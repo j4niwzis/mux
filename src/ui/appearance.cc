@@ -363,6 +363,19 @@ inline auto frame_look_view(const palette& colours, bool see_through) {
                                  "when mux starts again; from then on, "
                                  "changes here apply at once.")));
 }
+// Enter in a message: as the input is (a new line by touch, a send with a
+// keyboard), or always one of them.
+inline auto enter_settings_view(const palette& colours) {
+  using field = skiff::model::Field<&config::look_settings::enter>;
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(enter_settings_view, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+      spaced_title(colours, "ENTER IN A MESSAGE"),
+      c::bound<field>(widgets::ChoiceRowField<config::enter_t>(colours.widgets, "As the keyboard is", config::enter_key::automatic{})),
+      c::bound<field>(widgets::ChoiceRowField<config::enter_t>(colours.widgets, "Sends", config::enter_key::sends{})),
+      c::bound<field>(widgets::ChoiceRowField<config::enter_t>(colours.widgets, "New line", config::enter_key::new_line{})),
+      spaced_note(colours, "As the keyboard is: a new line when typing by touch, where the send button sends; a send with a "
+                           "keyboard and a mouse. Ctrl+Enter sends, and Shift+Enter is a new line, whatever is chosen.")));
+}
 // The Appearance page: its sections, each held where it was made. Building
 // the whole expression by value copied the nested controls through several
 // argument packs, and Android's UI thread has a much smaller stack than a
@@ -382,7 +395,8 @@ inline auto appearance_page(const ui_needs& needs, const config::theme_t& theme,
       std::move(looks),
       held(window_settings_view(colours)),
       held(c::visible(needs.looks->window.spaces, spaces_choices(colours, *needs.shared))),
-      held(frame_look_view(colours, needs.looks->window.see_through)));
+      held(frame_look_view(colours, needs.looks->window.see_through)),
+      held(enter_settings_view(colours)));
 }
 using appearance_page_t = decltype(appearance_page(std::declval<const ui_needs&>(), config::theme_t{}, config::accent_t{}));
 

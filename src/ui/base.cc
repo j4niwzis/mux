@@ -33,6 +33,19 @@ inline bool& typed_by_touch() {
   static bool on = false;
   return on;
 }
+// What Enter does, as the settings say (Appearance): told by the program
+// at each frame.
+inline config::enter_t& enter_choice() {
+  static config::enter_t chosen = config::enter_key::automatic{};
+  return chosen;
+}
+// Whether Enter in a message is a new line now -- else it sends.
+[[nodiscard]] inline bool enter_makes_line() {
+  return spl::visit(spl::overloaded{[](config::enter_key::automatic) { return typed_by_touch(); },
+                                    [](config::enter_key::sends) { return false; },
+                                    [](config::enter_key::new_line) { return true; }},
+                    enter_choice());
+}
 
 using skiff::compose::primary;
 using skiff::compose::elided;

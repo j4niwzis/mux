@@ -359,7 +359,7 @@ struct field_quotes {
     // keyboard, where the send button sends. Sent at Enter there, a message
     // half written went, and nothing could change that (a tester).
     const bool line = press.key == keys::kEnter &&
-                      (press.modifiers.has<modifier::shift>() || (typed_by_touch() && !press.modifiers.has<modifier::control>()));
+                      (press.modifiers.has<modifier::shift>() || (enter_makes_line() && !press.modifiers.has<modifier::control>()));
     if (deep == 0)
       return line && !press.modifiers.has<modifier::shift>()
                  ? std::optional(widgets::TextEdit{.from = caret, .to = caret, .with = "\n", .caret = caret + 1})

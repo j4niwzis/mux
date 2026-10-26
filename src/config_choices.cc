@@ -138,6 +138,24 @@ struct none {
 };
 }  // namespace motion
 using motion_t = spl::variant<motion::full, motion::reduced, motion::none>;
+// What Enter does in a message: as the input is -- a new line by touch (a
+// phone's keyboard, the send button sending), a send with a keyboard and a
+// mouse -- or always the one or the other.
+namespace enter_key {
+struct automatic {
+  static constexpr std::string_view json_value = "automatic";
+  friend bool operator==(automatic, automatic) = default;
+};
+struct sends {
+  static constexpr std::string_view json_value = "sends";
+  friend bool operator==(sends, sends) = default;
+};
+struct new_line {
+  static constexpr std::string_view json_value = "new_line";
+  friend bool operator==(new_line, new_line) = default;
+};
+}  // namespace enter_key
+using enter_t = spl::variant<enter_key::automatic, enter_key::sends, enter_key::new_line>;
 // How the window is laid out: as its shape says -- one thing at a time where
 // it is narrow and taller than wide, side by side otherwise -- or held to one
 // of the two whatever its shape (the user's: "fix portrait/landscape layout
@@ -201,6 +219,7 @@ using theme_said_t = spl::variant<theme::classic, theme::day, theme::tinted, the
 using accent_said_t = spl::variant<accent::theme_own, accent::blue, accent::green, accent::pink, accent::orange, accent::purple,
                                    accent::red, accent::grey, accent::gold, said::cyan, std::string>;
 using motion_said_t = spl::variant<motion::full, motion::reduced, motion::none, std::string>;
+using enter_said_t = spl::variant<enter_key::automatic, enter_key::sends, enter_key::new_line, std::string>;
 using layout_said_t = spl::variant<layout::automatic, layout::portrait, layout::landscape, std::string>;
 using renderer_said_t = spl::variant<renderer::opengl, renderer::software, std::string>;
 // Each read: the choice it says, the default where it says none of them,
@@ -227,6 +246,13 @@ using renderer_said_t = spl::variant<renderer::opengl, renderer::software, std::
     return motion::full{};
   return spl::visit(spl::overloaded{[](const std::string&) -> motion_t { return motion::full{}; },
                                     [](auto one) -> motion_t { return one; }},
+                    *said);
+}
+[[nodiscard]] inline enter_t enter_of(const std::optional<enter_said_t>& said) {
+  if (!said)
+    return enter_key::automatic{};
+  return spl::visit(spl::overloaded{[](const std::string&) -> enter_t { return enter_key::automatic{}; },
+                                    [](auto one) -> enter_t { return one; }},
                     *said);
 }
 [[nodiscard]] inline layout_t layout_of(const std::optional<layout_said_t>& said) {

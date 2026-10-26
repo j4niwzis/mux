@@ -178,6 +178,7 @@ struct look_settings {
   accent_t accent = accent::theme_own{};
   renderer_t renderer = renderer::opengl{};
   motion_t motion = motion::full{};
+  enter_t enter = enter_key::automatic{};  // what Enter does in a message
   layout_t layout = layout::automatic{};
   int window_opacity = 100;
   bool wallpaper_behind = false;
@@ -247,6 +248,7 @@ struct file {
   // How much the window moves: "none", "reduced" (sections unfold, panels
   // just appear) or "full". Nothing said is full.
   std::optional<motion_said_t> motion;
+  std::optional<enter_said_t> enter;
   // How the window is laid out: "portrait" (one thing at a time), "landscape"
   // (side by side) or "automatic", as its shape says. Nothing said is
   // automatic.

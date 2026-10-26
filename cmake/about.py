@@ -74,7 +74,10 @@ def cargo_records(record):
     metadata = json.loads(result.stdout)
     packages = {p["id"]: p for p in metadata["packages"]}
     nodes = {n["id"]: n for n in metadata["resolve"]["nodes"]}
-    roots = [p["id"] for p in packages.values() if p["name"] == record["CARGO_PACKAGE"]]
+    # The package the port names, or where it names none (skiff-blitz: one
+    # crate, no workspace) the one its manifest is.
+    roots = ([p["id"] for p in packages.values() if p["name"] == record["CARGO_PACKAGE"]]
+             if record.get("CARGO_PACKAGE") else [metadata["resolve"]["root"]] if metadata["resolve"].get("root") else [])
     if not roots:
         raise ValueError("Cargo package missing from metadata: " + record["name"])
     ids = {key: "rust:" + p["name"] + "@" + p["version"] for key, p in packages.items()}

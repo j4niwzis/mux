@@ -8,6 +8,7 @@ import splice;
 import skiff.scene;
 import skiff.compose;
 import skiff.model;
+import skiff.nodes.flow;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
 import skiff.widgets.button;
@@ -110,14 +111,19 @@ auto explore_view(const palette& colours, const explore_facts& facts) {
       page_header<no_back, sends<request::close_explore>>(colours, "Explore rooms", {}, {}, false, true),
       c::visible(facts.space.has_value(), c::styled({.fillX = true, .margin = {0.0f, 10.0f, 8.0f, 10.0f}},
           nodes::Text(facts.space ? facts.space->name : std::string(), 17.0f, colours.text, true))),
-      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 6.0f, 0.0f, 6.0f}}),
-          c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX},
+      // A flow that wraps: the query its own line where the server does not
+      // fit beside it -- a phone's dialog, 306 wide, left the query 6 of
+      // them, its caption a letter a line (a tester's) -- the server and
+      // Search under it then.
+      c::styled({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 6.0f, 0.0f, 6.0f}}, nodes::Flow(
+          nodes::FlowOptions{.direction = nodes::direction::horizontal{}, .spacingX = 8.0f, .spacingY = 8.0f, .wrap = true},
+          c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .minWidth = 150.0f},
               model_field<&explore_draft::query>(colours, "Find a room",
                   std::string(facts.by ? proto::directory_hint(facts.by->speaks) : std::string_view("Name, topic, or address")))),
           c::visible(!facts.space, c::styled({.width = 170.0f, .relativeSize = scene::axes::kNone},
               model_field<&explore_draft::server>(colours, "Server", facts.own_server))),
           c::styled({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},
-              primary(widgets::SendButton<submit_explore>(colours.widgets, "Search", {})))),
+              primary(widgets::SendButton<submit_explore>(colours.widgets, "Search", {}))))),
       c::visible(!status.empty(), c::styled({.fillX = true, .margin = {6.0f, 10.0f, 4.0f, 10.0f}},
           wrapped(nodes::Text(status, 13.0f, colours.dim)))),
       c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(

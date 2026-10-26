@@ -40,7 +40,7 @@ using namespace mux::app;
 
 }  // namespace
 
-// The program shown through litehtml (page_host.cc; page_host_off.cc where
+// The program shown through Blitz (page_host.cc; page_host_off.cc where
 // mux is built without it): `mux --page ...`. And in skiff's own window
 // (window_host.cc; window_host_off.cc where mux is the page only).
 int mux_run_on_page(mux::app::app& program, const skiff::platform::window::options& how,
@@ -52,7 +52,7 @@ int mux_run_in_window(mux::app::app& program, const skiff::platform::window::opt
 bool mux_has_window();
 
 int mux_main(int argc, char** argv) {
-  // `mux --page ...`: shown through litehtml; the rest as without it.
+  // `mux --page ...`: shown through Blitz; the rest as without it.
   const bool asked_page = argc > 1 && std::string_view(argv[1]) == "--page";
   const bool on_page = asked_page || !mux_has_window();
   if (asked_page) {

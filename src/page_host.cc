@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux --page: the program laid out and painted by litehtml, called directly
+// mux --page: the program laid out and painted by Blitz, called directly
 // (skiff.platform.page) -- its scene mirrored into a document each frame,
 // presses read back from the element pressed. For measuring the engine.
 import std;

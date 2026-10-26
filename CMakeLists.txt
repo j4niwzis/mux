@@ -266,7 +266,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin d3a932e27e3c889b05b00ff5cc379a01a603039f)
+set(mux_skiff_pin 47fbef1883795d96aab635d4b9c2b164324e4309)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
@@ -280,20 +280,22 @@ cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG 171325592fe7a2532166906b55ce82da9237349b
+  GIT_TAG a0e78ed179f4894d222c860e1dd51939464cab97
   VERSION 0.1.0)
 # `mux --page`: the same program laid out and painted by an HTML engine
-# called directly (litehtml, through skiff.platform.page) -- for measuring it
+# called directly (Blitz, through skiff.platform.page) -- for measuring it
 # against skiff's own. On the desktop.
-cmake_dependent_option(MUX_PAGE "mux --page: shown through litehtml" ON "NOT ANDROID" OFF)
+# Off by default: Blitz is Rust, built with cargo.
+cmake_dependent_option(MUX_PAGE "mux --page: shown through Blitz (needs cargo)" OFF "NOT ANDROID" OFF)
 # Without Skia: skiff on its stand-in for Skia's types (skia_lite), which
-# draws nothing -- mux the page only, painted by SDL's renderer and
-# FreeType. Pictures and skiff's own drawings (icons) are not shown.
-option(MUX_SKIA "Skia (off: the page only, painted by SDL and FreeType)" ON)
+# draws nothing -- mux the page only (Blitz paints it).
+option(MUX_SKIA "Skia (off: the page only)" ON)
 # The page only: skiff's own window not built, the page what mux shows.
 option(MUX_WINDOW "skiff's own window (off: the page only)" ON)
 if(NOT MUX_SKIA)
   set(MUX_WINDOW OFF CACHE BOOL "skiff's own window (off: the page only)" FORCE)
+  set(MUX_PAGE ON CACHE BOOL "mux --page: shown through Blitz (needs cargo)" FORCE)
+  set(MUX_PAGE ON)
 endif()
 if(NOT MUX_WINDOW AND NOT MUX_PAGE)
   message(FATAL_ERROR "MUX_WINDOW off needs MUX_PAGE: mux would have nothing to show itself in")
@@ -303,14 +305,11 @@ if(MUX_PAGE)
 else()
   set(mux_page_option "SKIFF_FRAMEWORK_PAGE OFF")
 endif()
-# The page's engine: litehtml, or Blitz (Stylo, Taffy, Vello -- built with
-# cargo; skiff.web's document is then Blitz's).
-set(MUX_PAGE_ENGINE "litehtml" CACHE STRING "The page's HTML engine: litehtml or blitz")
-cme_options(skiff-framework "SKIFF_FRAMEWORK_APP OFF" "SKIFF_FRAMEWORK_SITE OFF" "SKIFF_FRAMEWORK_WINDOW ON" "${mux_page_option}"
-            "SKIFF_PAGE_ENGINE ${MUX_PAGE_ENGINE}")
+cme_options(skiff-framework "SKIFF_FRAMEWORK_APP OFF" "SKIFF_FRAMEWORK_SITE OFF" "SKIFF_FRAMEWORK_WINDOW ON" "${mux_page_option}")
 # skiff's options, gathered and said once (cme_options sets them whole).
 set(mux_skiff_options)
-if(MUX_PAGE AND MUX_PAGE_ENGINE STREQUAL "blitz")
+# The page: skiff.web's document is Blitz's.
+if(MUX_PAGE)
   list(APPEND mux_skiff_options "SKIFF_WEB_DOM blitz")
 endif()
 if(MUX_UI)

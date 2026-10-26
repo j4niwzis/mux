@@ -273,14 +273,14 @@ cme_declare_port(NAME skiff PROVIDES skiff
   VERSION 0.1.0)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 75cd0ff5c19df694d86deb34a0ad1260d8d3b14e
+  GIT_TAG bfc219e13a8af3fd6bb49e359a4840876e1c8e0d
   VERSION 0.1.0)
 # skiff-framework: the window (skiff.platform.window) -- SDL3 makes it and
 # brings its input, Skia draws skiff's scene into it -- as any program of
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG 6c27d6e654ea72498dbde55fb8fda559914bad02
+  GIT_TAG 63e3e51b996f9d53b3a54cc9baf9721f7fea6049
   VERSION 0.1.0)
 cme_options(skiff-framework "SKIFF_FRAMEWORK_APP OFF" "SKIFF_FRAMEWORK_SITE OFF" "SKIFF_FRAMEWORK_WINDOW ON")
 if(MUX_UI)

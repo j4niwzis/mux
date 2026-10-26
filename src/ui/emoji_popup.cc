@@ -113,9 +113,12 @@ inline auto popup_tab(const palette& colours, popup_page_t page, std::string nam
 struct window_shape {
   float width = 0.0f, height = 0.0f;
   config::layout_t layout = config::layout::automatic{};
-  // One thing at a time, the panels docked over the field.
+  // One thing at a time, the panels docked over the field. By the width
+  // alone: a phone's keyboard, up, takes half the height away, and a window
+  // 540 wide and 400 high was then taken for a landscape one -- the list and
+  // a chat side by side, squeezed (a tester's, 2026-10-26).
   [[nodiscard]] bool phone() const {
-    return spl::visit(spl::overloaded{[&](config::layout::automatic) { return width < 600.0f && height > width; },
+    return spl::visit(spl::overloaded{[&](config::layout::automatic) { return width < 600.0f; },
                                       [](config::layout::portrait) { return true; },
                                       [](config::layout::landscape) { return false; }},
                       layout);

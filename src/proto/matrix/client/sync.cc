@@ -724,13 +724,22 @@ void account<Sink>::run() {
       log(id_, "first sync: {} room{}", joined, joined == 1 ? "" : "s");
     }
     // The rooms whose news the sync cut short, since the last run: where
-    // each had got to, to catch up on the gap between.
+    // each had got to, to catch up on the gap between. The sliding sync's
+    // first answer of a run too: its position is not kept between runs, so
+    // every start begins it again, each room cut to its newest message --
+    // and a chat that went on while mux was closed (read in another client)
+    // kept a hole between what mux had and that one, never filled (a
+    // tester's). Not where what came holds the newest it had: nothing missed.
     std::vector<std::tuple<std::string, std::string, std::string>> gaps;
-    if (!first && !sliding_first && got->rooms && got->rooms->join)
+    if (!first && got->rooms && got->rooms->join)
       for (const auto& [room, part] : *got->rooms->join)
         if (part.timeline && part.timeline->limited.value_or(false) && part.timeline->prev_batch)
-          if (const auto had = state_.joined.find(room); had != state_.joined.end() && !had->second.timeline.empty())
-            gaps.emplace_back(room, *part.timeline->prev_batch, had->second.timeline.back().event_id);
+          if (const auto had = state_.joined.find(room); had != state_.joined.end() && !had->second.timeline.empty()) {
+            const std::string& newest = had->second.timeline.back().event_id;
+            if (std::ranges::any_of(part.timeline->events, [&](const auto& one) { return one.event_id == newest; }))
+              continue;
+            gaps.emplace_back(room, *part.timeline->prev_batch, newest);
+          }
     snapshot_dirty_ = snapshot_dirty_ || sync_changes_snapshot(*got) ||
         (got->rooms && got->rooms->join && std::ranges::any_of(*got->rooms->join, [&](const auto& room) {
           return !state_.joined.contains(room.first);

@@ -26,6 +26,14 @@ import mux.platform.audio;
 
 export namespace mux::ui {
 
+// Whether the user types by touch -- a phone, as the last press said:
+// there Enter in a message is a new line, and the send button sends, as a
+// phone's messengers have it. Told by the program as the pointer changes.
+inline bool& typed_by_touch() {
+  static bool on = false;
+  return on;
+}
+
 using skiff::compose::primary;
 using skiff::compose::elided;
 using skiff::compose::on_now;

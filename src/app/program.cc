@@ -458,7 +458,10 @@ struct app : kept_settings {
   [[nodiscard]] bool phone_shaped(float width, float height) const {
     return mux::ui::window_shape{width, height, this->appearance().layout}.phone();
   }
-  void touch_changed(bool on) { shared.by_touch = on; }
+  void touch_changed(bool on) {
+    shared.by_touch = on;
+    mux::ui::typed_by_touch() = on;
+  }
   [[nodiscard]] std::optional<skia::SkPoint> take_press_again() { return std::exchange(shared.press_again, std::nullopt); }
   // The faces the window draws text with first (skiff.platform.fonts).
   using faces = mux::platform::faces;

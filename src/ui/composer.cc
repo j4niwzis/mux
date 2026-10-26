@@ -355,11 +355,18 @@ struct field_quotes {
       return widgets::TextEdit{.from = after, .to = after, .with = with, .caret = after + with.size()};
     }
     const int deep = depth(text, start);
+    // Enter for a new line: Shift+Enter, or Enter by touch -- a phone's
+    // keyboard, where the send button sends. Sent at Enter there, a message
+    // half written went, and nothing could change that (a tester).
+    const bool line = press.key == keys::kEnter &&
+                      (press.modifiers.has<modifier::shift>() || (typed_by_touch() && !press.modifiers.has<modifier::control>()));
     if (deep == 0)
-      return std::nullopt;
+      return line && !press.modifiers.has<modifier::shift>()
+                 ? std::optional(widgets::TextEdit{.from = caret, .to = caret, .with = "\n", .caret = caret + 1})
+                 : std::nullopt;
     const std::size_t marks = start + 2 * static_cast<std::size_t>(deep);
     const bool control = press.modifiers.has<modifier::control>();
-    if (press.key == keys::kEnter && press.modifiers.has<modifier::shift>()) {
+    if (line) {
       // An empty quoted line: the quote ends there.
       if (caret == marks && (caret == text.size() || text[caret] == '\n'))
         return widgets::TextEdit{.from = start, .to = marks, .with = "", .caret = start};

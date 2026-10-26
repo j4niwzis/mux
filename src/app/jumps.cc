@@ -293,10 +293,13 @@ class jumps_part {
     going_.reset();
     this->show_ways();
   }
-  // At an edge of what is held: older history asked at the top -- not
-  // again for the same page while it comes, but again after a while it
-  // did not -- and, a window away from the newest, the next page at the
-  // bottom.
+  // At an edge of what is held: older history asked at the top, and, a
+  // window away from the newest, the next page at the bottom -- each not
+  // again for the same page while it comes, but again after a while it did
+  // not. Asked once for good, a newer page that never came (the request
+  // failed, the network was away) left the chat a window for good: what came
+  // live went only to its row in the chats (core: at_end while detached),
+  // the newest never shown under the window, the way down always up.
   template <class Asked>
   void apply(const chat_edge& one, const Asked& asked) {
     const auto in = this->chosen();
@@ -305,10 +308,8 @@ class jumps_part {
       return;
     if (one.older)
       this->ask_older(*chat, asked);
-    else if (chat->detached && chat->future_from && newer_asked_ != chat->future_from) {
-      newer_asked_ = chat->future_from;
-      asked(request::load_newer{chat->id, *chat->future_from});
-    }
+    else if (chat->detached && chat->future_from)
+      this->ask_newer(*chat, asked);
   }
   // What the reader sees: each way back come down to let go -- once the
   // view's middle is at it or past it, or the view is at the end -- as
@@ -591,6 +592,17 @@ class jumps_part {
     asked(request::load_older{chat.id, chat.history_from});
     return true;
   }
+  // The newer, asked: once for the page from where the window ends, again
+  // after a while where nothing came.
+  template <class Asked>
+  void ask_newer(const mux::conversation& chat, const Asked& asked) {
+    const double now = now_ms();
+    if (newer_asked_ == chat.future_from && now - newer_asked_ms_ < kHistoryPatienceMs)
+      return;
+    newer_asked_ = chat.future_from;
+    newer_asked_ms_ = now;
+    asked(request::load_newer{chat.id, *chat.future_from});
+  }
   template <class Asked>
   void spanned(const std::string& first, const std::string& last, bool done, bool in_thread, const Asked& asked) {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
@@ -659,6 +671,7 @@ class jumps_part {
   std::optional<std::pair<std::string, std::string>> older_asked_;
   double older_asked_ms_ = 0.0;
   std::optional<std::string> newer_asked_;
+  double newer_asked_ms_ = 0.0;
   skiff::compose::WindowAim<std::string> thread_aim_;
   std::optional<std::string> thread_of_;
 };

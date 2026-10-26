@@ -266,7 +266,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin f7062aff0af0bf5e3a313e758154e1aae575b5c5)
+set(mux_skiff_pin 1b56f198d3fae541ff58c0d650e3a43fa7c26b8f)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
@@ -286,8 +286,15 @@ cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
 # called directly (litehtml, through skiff.platform.page) -- for measuring it
 # against skiff's own. On the desktop.
 cmake_dependent_option(MUX_PAGE "mux --page: shown through litehtml" ON "NOT ANDROID" OFF)
+# Without Skia: skiff on its stand-in for Skia's types (skia_lite), which
+# draws nothing -- mux the page only, painted by SDL's renderer and
+# FreeType. Pictures and skiff's own drawings (icons) are not shown.
+option(MUX_SKIA "Skia (off: the page only, painted by SDL and FreeType)" ON)
 # The page only: skiff's own window not built, the page what mux shows.
 option(MUX_WINDOW "skiff's own window (off: the page only)" ON)
+if(NOT MUX_SKIA)
+  set(MUX_WINDOW OFF CACHE BOOL "skiff's own window (off: the page only)" FORCE)
+endif()
 if(NOT MUX_WINDOW AND NOT MUX_PAGE)
   message(FATAL_ERROR "MUX_WINDOW off needs MUX_PAGE: mux would have nothing to show itself in")
 endif()
@@ -318,6 +325,11 @@ if(MUX_UI)
       list(APPEND mux_skiff_components ${feature})
     endif()
   endforeach()
+  # Without Skia: nothing asked of it, skiff on its stand-in.
+  if(NOT MUX_SKIA)
+    set(mux_skiff_components)
+    cme_options(skiff "SKIFF_SKIA OFF")
+  endif()
 else()
   set(mux_skiff_components)
   cme_options(skiff "SKIFF_UI OFF")

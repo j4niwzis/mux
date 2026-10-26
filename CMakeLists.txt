@@ -266,7 +266,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin edbabbce2bdd50fdb86c8f352bbb0f80e3810d13)
+set(mux_skiff_pin dbf6682eaefc6e7bf94bbb58fffef53da1e37a97)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
@@ -280,7 +280,7 @@ cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG 31712efd98e8cc526555582e771dac2f970acf68
+  GIT_TAG 7b078363a47bf151d06f9d2605c2f4138a2b0492
   VERSION 0.1.0)
 # `mux --page`: the same program laid out and painted by an HTML engine
 # called directly (litehtml, through skiff.platform.page) -- for measuring it
@@ -303,7 +303,16 @@ if(MUX_PAGE)
 else()
   set(mux_page_option "SKIFF_FRAMEWORK_PAGE OFF")
 endif()
-cme_options(skiff-framework "SKIFF_FRAMEWORK_APP OFF" "SKIFF_FRAMEWORK_SITE OFF" "SKIFF_FRAMEWORK_WINDOW ON" "${mux_page_option}")
+# The page's engine: litehtml, or Blitz (Stylo, Taffy, Vello -- built with
+# cargo; skiff.web's document is then Blitz's).
+set(MUX_PAGE_ENGINE "litehtml" CACHE STRING "The page's HTML engine: litehtml or blitz")
+cme_options(skiff-framework "SKIFF_FRAMEWORK_APP OFF" "SKIFF_FRAMEWORK_SITE OFF" "SKIFF_FRAMEWORK_WINDOW ON" "${mux_page_option}"
+            "SKIFF_PAGE_ENGINE ${MUX_PAGE_ENGINE}")
+# skiff's options, gathered and said once (cme_options sets them whole).
+set(mux_skiff_options)
+if(MUX_PAGE AND MUX_PAGE_ENGINE STREQUAL "blitz")
+  list(APPEND mux_skiff_options "SKIFF_WEB_DOM blitz")
+endif()
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
@@ -328,12 +337,13 @@ if(MUX_UI)
   # Without Skia: nothing asked of it, skiff on its stand-in.
   if(NOT MUX_SKIA)
     set(mux_skiff_components)
-    cme_options(skiff "SKIFF_SKIA OFF")
+    list(APPEND mux_skiff_options "SKIFF_SKIA OFF")
   endif()
 else()
   set(mux_skiff_components)
-  cme_options(skiff "SKIFF_UI OFF")
+  list(APPEND mux_skiff_options "SKIFF_UI OFF")
 endif()
+cme_options(skiff ${mux_skiff_options})
 mux_find_package(skiff 0.1.0 COMPONENTS ${mux_skiff_components} REQUIRED)
 add_library(mux_config)
 # With the protocols' tags and what each keeps in the accounts file: the

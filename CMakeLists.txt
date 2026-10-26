@@ -280,12 +280,17 @@ cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG f252e3458e5752bacfc16459a4a1877f89b3f01f
+  GIT_TAG b9655c92065713cbb13ea91074411b550170566c
   VERSION 0.1.0)
 # `mux --page`: the same program laid out and painted by an HTML engine
 # called directly (litehtml, through skiff.platform.page) -- for measuring it
 # against skiff's own. On the desktop.
 cmake_dependent_option(MUX_PAGE "mux --page: shown through litehtml" ON "NOT ANDROID" OFF)
+# The page only: skiff's own window not built, the page what mux shows.
+option(MUX_WINDOW "skiff's own window (off: the page only)" ON)
+if(NOT MUX_WINDOW AND NOT MUX_PAGE)
+  message(FATAL_ERROR "MUX_WINDOW off needs MUX_PAGE: mux would have nothing to show itself in")
+endif()
 if(MUX_PAGE)
   set(mux_page_option "SKIFF_FRAMEWORK_PAGE ON")
 else()
@@ -478,6 +483,12 @@ if(MUX_UI)
     mux_add_android_apk(mux)
   else()
     add_executable(mux src/main.cc src/main_desktop.cc)
+  endif()
+  # What runs the program: skiff's own window, unless mux is the page only.
+  if(MUX_WINDOW)
+    target_sources(mux PRIVATE src/window_host.cc)
+  else()
+    target_sources(mux PRIVATE src/window_host_off.cc)
   endif()
   # What `--page` runs: the page, where it is built; else a word that it is not.
   if(MUX_PAGE)

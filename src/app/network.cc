@@ -172,12 +172,33 @@ struct network {
       box->push(mux::change_t{mux::change::account_removed{{mux::ui::protocol_of(address), address}}});
     });
   }
+  // The id of a message sent from this window: this run's, made here so the
+  // message is in its chat -- sending -- the moment it is sent.
+  [[nodiscard]] std::string local_id() {
+    return std::format("mux-w{}-{}", window_run, ++window_sent);
+  }
+  std::int64_t window_run = std::chrono::system_clock::now().time_since_epoch().count();
+  std::uint64_t window_sent = 0;
   void send(const mux::conversation_id& to, std::string text, std::optional<std::string> reply_to = std::nullopt,
             std::vector<mux::mention> mentions = {}, std::vector<mux::styled_run> styles = {}) {
     // Said at each end of the post: a send that never reached the network's
     // loop, or found no account there, shows here.
     mux::log_line(to.account.address, std::format("send to {}: asked ({} bytes)", to.id, text.size()));
-    loop.post([this, to, text = std::move(text), reply_to = std::move(reply_to), mentions = std::move(mentions),
+    // In its chat now, as it is sent: shown by the account's fiber, it came
+    // only once the network's loop got to it -- minutes later, or never,
+    // behind a long sync or a key share (a user's, 2026-10-26). The account
+    // sends it under this id, and what it says of it is said of this one.
+    const std::string local = this->local_id();
+    box->push(mux::change_t{mux::change::message_added{mux::message{
+        .in = to,
+        .id = local,
+        .sender = to.account.address,
+        .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
+        .body = {text, std::nullopt},
+        .replies_to = reply_to,
+        .outgoing = true,
+        .delivery = mux::delivery::sending{}}}});
+    loop.post([this, to, local, text = std::move(text), reply_to = std::move(reply_to), mentions = std::move(mentions),
                styles = std::move(styles)] {
       bool found = false;
       for (auto& one : accounts)
@@ -185,12 +206,15 @@ struct network {
             [&](auto& account) {
               if (account->id() == to.account) {
                 found = true;
-                account->send(to.id, text, reply_to, mentions, styles);
+                account->send(to.id, text, reply_to, mentions, styles, local);
               }
             },
             one.account);
       mux::log_line(to.account.address, found ? std::format("send to {}: on the network's loop", to.id)
                                               : std::format("send to {}: no such account running", to.id));
+      // No account to send it: not sent, said so -- not sending for good.
+      if (!found)
+        box->push(mux::change_t{mux::change::delivery_changed{to, local, mux::delivery::failed{}}});
     });
   }
   void edit(const mux::conversation_id& in, std::string id, std::string text, std::vector<mux::styled_run> styles = {}) {

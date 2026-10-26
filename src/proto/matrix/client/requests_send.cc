@@ -278,10 +278,10 @@ void account<Sink>::leave(std::string room) {
 
 template <class Sink>
 void account<Sink>::send(std::string room, std::string body, std::optional<std::string> reply_to,
-                         std::vector<mention> mentions, std::vector<styled_run> styles) {
+                         std::vector<mention> mentions, std::vector<styled_run> styles, std::optional<std::string> local) {
   this->spawn_sending([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to),
-                mentions = std::move(mentions), styles = std::move(styles)]() mutable {
-    const std::string txn = this->transaction();
+                mentions = std::move(mentions), styles = std::move(styles), local = std::move(local)]() mutable {
+    const std::string txn = local ? *local : this->transaction();
     const conversation_id in{id_, room};
     log(id_, "send {}: begun in {}{}", txn, room, api_ ? "" : " (not connected: it will be marked not sent)");
     // Each mention a link to its person in the Markdown, as Element sends a

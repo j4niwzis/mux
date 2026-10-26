@@ -485,8 +485,11 @@ class account {
   // A text message sent to a room, from a fiber of its own. It is in the
   // conversation at once, under its transaction id; the server's answer
   // gives it its event id, and the echo in the next sync is the same message.
+  // Under `local` where the window gave it one -- the message already in
+  // its chat under it -- else one made here.
   void send(std::string room, std::string body, std::optional<std::string> reply_to = std::nullopt,
-            std::vector<mention> mentions = {}, std::vector<styled_run> styles = {});
+            std::vector<mention> mentions = {}, std::vector<styled_run> styles = {},
+            std::optional<std::string> local = std::nullopt);
   // A message as a slash command made it: its body and HTML as they are --
   // no Markdown read into it -- as a text or an emote (/me), answering one
   // where it does.

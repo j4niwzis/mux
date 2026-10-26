@@ -1092,12 +1092,15 @@ class account {
     return text;
   }
 
+  // Under `local` where the window gave it one -- the message already in
+  // its chat under it -- else one made here.
   void send(std::string to, std::string text, std::optional<std::string> reply_to = std::nullopt,
-            std::vector<mux::mention> = {}, std::vector<mux::styled_run> styles = {}) {
+            std::vector<mux::mention> = {}, std::vector<mux::styled_run> styles = {},
+            std::optional<std::string> local = std::nullopt) {
     text = styled_body(std::move(text), styles);
-    this->spawn_guarded([this, to = std::move(to), text = std::move(text), reply_to = std::move(reply_to)] {
+    this->spawn_guarded([this, to = std::move(to), text = std::move(text), reply_to = std::move(reply_to), local = std::move(local)] {
       message out{.in = {id_, to},
-                  .id = "mux-" + std::to_string(++sent_),
+                  .id = local ? *local : "mux-" + std::to_string(++sent_),
                   .sender = id_.address,
                   .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
                   .body = {text, std::nullopt},

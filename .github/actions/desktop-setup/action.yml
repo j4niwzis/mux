@@ -51,13 +51,22 @@ runs:
         sudo ln -sfn /usr/lib/llvm-${{ inputs.llvm }}/share/libc++/v1 /lib/share/libc++/v1
         sudo ln -sf /usr/lib/llvm-${{ inputs.llvm }}/bin/clang++ /usr/local/bin/clang++
         test -f /lib/share/libc++/v1/std.cppm
+    # Every stage must use the same Rust compiler when reusing crate metadata.
+    - name: Rust toolchain
+      shell: bash
+      run: |
+        rustup toolchain install 1.99.1 --profile minimal
+        rustup default 1.99.1
+        echo 'RUSTUP_TOOLCHAIN=1.99.1' >> "$GITHUB_ENV"
     # Which build of the compiler this is: apt.llvm.org's clang 23 is a
     # nightly, and a module file is read only by the very build that made
     # it -- a build restored from a run with another nightly is not one to
-    # go on from. The caches are keyed by it.
+    # go on from. Rust crate metadata also depends on the exact compiler.
     - name: the compiler's build
       shell: bash
-      run: echo "COMPILER_BUILD=$(clang++ --version | sha256sum | cut -c1-12)" >> "$GITHUB_ENV"
+      run: |
+        digest=$({ clang++ --version; rustc -vV; cargo --version; } | sha256sum)
+        echo "COMPILER_BUILD=${digest:0:12}" >> "$GITHUB_ENV"
     # Template-heavy units need room beyond the runner's physical memory.
     # These preinstalled SDKs are unused by this build; removing them leaves
     # space for both the compiler output and 32 GiB of swap.

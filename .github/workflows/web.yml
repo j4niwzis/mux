@@ -73,11 +73,11 @@ jobs:
         with:
           name: web-modules
           dir: build-web
-      - name: Record sources for the failed build
-        if: failure()
+      - name: Record sources for an interrupted build
+        if: always() && (failure() || cancelled()) && hashFiles('build-web/build.ninja') != ''
         run: git ls-files -z | xargs -0 sha1sum > build-web/sources.sha1
-      - name: Keep the failed module build for the next run
-        if: failure()
+      - name: Keep the interrupted module build for the next run
+        if: always() && (failure() || cancelled()) && hashFiles('build-web/build.ninja') != ''
         uses: actions/cache/save@v4
         with:
           path: |

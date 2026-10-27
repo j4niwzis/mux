@@ -274,6 +274,18 @@ class outbox_part {
       s_->net->send_file(*chosen, one.local, std::move(one.as.bytes), one.as.name, one.as.mimetype,
                          one.as.picture.has_value(), one.width, one.height, std::exchange(caption, std::string()),
                          std::exchange(reply_to, std::nullopt), thread, std::move(one.video));
+    // The draft copied into the caption was sent with the first file.
+    // Cancel leaves it alone; sending consumes it only if it is still the
+    // same draft in the same place, so a later edit is never erased.
+    if (files_chat_ == chosen) {
+      if (files_thread_ && s_->thread_open() == files_thread_) {
+        if (mux::ui::composer_plain(s_->thread_writing()) == files_caption_)
+          s_->write_thread({});
+      } else if (!files_thread_ && mux::ui::composer_plain(s_->chat_writing()) == files_caption_) {
+        s_->write_chat({});
+        drafts_->keep(*chosen, std::string());
+      }
+    }
     if (thread) {
       if (s_->thread_open() == files_thread_)
         s_->stop_thread_answer();
@@ -364,6 +376,10 @@ class outbox_part {
                                                          s_->written_last)
                           ? s_->thread_open()
                           : std::nullopt;
+    if (to_send_.empty()) {
+      files_chat_ = s_->chosen();
+      files_caption_ = mux::ui::composer_plain(files_thread_ ? s_->thread_writing() : s_->chat_writing());
+    }
     for (const std::string& path : paths) {
       auto bytes_read = mux::platform::files::read(path);
       if (!bytes_read)
@@ -397,7 +413,7 @@ class outbox_part {
     for (const file& one : to_send_)
       shown.push_back({one.as.name, one.as.picture ? "local:" + one.local : std::string(),
                        static_cast<std::int64_t>(one.as.bytes.size()), one.as.picture.has_value()});
-    mux::ui::show(*s_->showing, std::optional(mux::ui::send_facts{shown}));
+    mux::ui::show(*s_->showing, std::optional(mux::ui::send_facts{shown, files_caption_}));
   }
 
  private:
@@ -495,6 +511,8 @@ class outbox_part {
   drafts_part* drafts_;
   const mux::config::sending_settings* settings_;
   std::vector<file> to_send_;
+  std::optional<mux::conversation_id> files_chat_;
+  std::string files_caption_;
   std::uint64_t made_ = 0;
 };
 

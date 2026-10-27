@@ -19,10 +19,12 @@ struct root {};
 using model = skiff::model::Model<root, skiff::bind::NoReactions>;
 struct requests {
   std::vector<std::string> threads, reactions;
+  std::vector<std::string> captions;
   int closed = 0;
   void take(const ui::request::open_thread& one) { threads.push_back(one.root); }
   void take(const ui::request::menu_react& one) { reactions.push_back(one.key); }
   void take(const ui::request::close_menu&) { ++closed; }
+  void take(const ui::request::send_files& one) { captions.push_back(one.caption); }
   template <class E> void take(const E&) { ADD_FAILURE() << "Unexpected application request"; }
 };
 struct environment {
@@ -68,6 +70,21 @@ TEST(Interactions, ClickingTheThreadSummaryRequestsItsRoot) {
   ASSERT_TRUE(link.has_value());
   click(tree, *link, state, heard);
   EXPECT_EQ(heard.threads, (std::vector<std::string>{"$root"}));
+}
+
+TEST(Interactions, TheAttachmentBoxSendsTheExistingDraftAsItsCaption) {
+  environment env;
+  model state;
+  requests heard;
+  const ui::send_facts facts{{ui::pending_file{.name = "notes.txt", .size = 12}}, "text written before attaching"};
+  scene::Scene tree(ui::send_box(env.needs, facts));
+  skiff::bind::Binding<model> binding;
+  binding.refresh(tree.root(), state);
+  tree.layoutIfNeeded(skia::SkRect::MakeXYWH(0, 0, 500, 500));
+  const auto send = button(tree, "Send");
+  ASSERT_TRUE(send.has_value());
+  click(tree, *send, state, heard);
+  EXPECT_EQ(heard.captions, (std::vector<std::string>{facts.caption}));
 }
 
 TEST(Interactions, TheMenuArrowOpensEmojiAndAnEmojiRequestsAReaction) {

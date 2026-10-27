@@ -109,6 +109,58 @@ TEST(Loop, AFailureComesOutOfRun) {
   EXPECT_THROW(running.run(), std::runtime_error);
 }
 
+TEST(Loop, ParkedTasksEndBeforeRunReturnsOrThrows) {
+  for (const bool fails : {false, true}) {
+    loop running;
+    bool cleaned = false;
+    running.spawn([&] {
+      struct cleanup {
+        bool& cleaned;
+        ~cleanup() { cleaned = true; }
+      } done{cleaned};
+      running.park();
+    });
+    running.spawn([&] {
+      if (fails)
+        throw std::runtime_error("loop failure");
+      running.stop();
+    });
+    if (fails) {
+      EXPECT_THROW(running.run(), std::runtime_error);
+    } else {
+      running.run();
+    }
+    EXPECT_TRUE(cleaned);
+  }
+}
+
+TEST(Loop, BorrowersEndBeforeTheirOwningTask) {
+  for (const bool forever : {false, true}) {
+    loop running;
+    std::vector<std::string> ended;
+    struct cleanup {
+      std::vector<std::string>& ended;
+      std::string name;
+      ~cleanup() { ended.push_back(name); }
+    };
+    running.spawn([&] {
+      cleanup owner{ended, "owner"};
+      running.spawn([&] {
+        cleanup borrower{ended, "borrower"};
+        running.stop();
+        running.park();
+      });
+      running.park();
+    });
+    if (forever) {
+      running.run_forever();
+    } else {
+      running.run();
+    }
+    EXPECT_EQ(ended, (std::vector<std::string>{"borrower", "owner"}));
+  }
+}
+
 // Two fibers talking over a TCP connection on the loopback, each through a
 // stream as tern would use it: chunks in as they come, bytes out on flush.
 TEST(Stream, AbortWakesAnOutstandingRead) {

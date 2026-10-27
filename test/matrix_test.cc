@@ -11,6 +11,7 @@ import loom.ev;
 import splice;
 import mux.core;
 import mux.net;
+import mux.http;
 import mux.proto.matrix.client;
 import mux.test.certificate;
 import gtest;
@@ -479,6 +480,157 @@ TEST(Matrix, MediaFallsBackToOriginalsAndReusesUploads) {
     return one.target.contains("/download/x.org/ready") ||
            (one.method == "GET" && (one.target.contains("image.png") || one.target.contains("thumbnail.png")));
   }));
+}
+
+void check_upload_cleanup(bool sync_fails) {
+  const auto certificate = mux::test::self_signed();
+  mux::net::loop running;
+  auto server_tls = mux::net::server_tls(certificate.certificate_pem, certificate.key_pem);
+  auto client_tls = mux::net::client_tls();
+  mux::net::trust(client_tls, certificate.certificate_pem);
+  mux::net::listener listening(running);
+  mux::vault::vault vault;
+  bool online = false, upload_started = false, upload_failed = false, sync_failed = false, finished = false;
+  const std::function<void(mux::change_t)> sink = [&](mux::change_t one) {
+    spl::visit(spl::overloaded{
+        [&](const mux::change::connection_changed& change) {
+          online = change.state == mux::connection_t{mux::connection::online{}};
+          sync_failed = sync_failed || spl::visit(spl::overloaded{
+              [](const mux::connection::failed&) { return true; }, [](const auto&) { return false; }}, change.state);
+        },
+        [&](const mux::change::delivery_changed& change) {
+          if (change.id == "pending-upload" && change.now == mux::delivery_t{mux::delivery::failed{}})
+            upload_failed = true;
+        },
+        [&](const mux::change::message_added& change) {
+          if (sync_fails && change.message.id == "$pool-failure")
+            throw std::runtime_error("test sync failure while an upload is parked");
+        },
+        [](const auto&) {}}, one);
+  };
+  mux::proto::matrix::client::settings how{
+      .user_id = std::format("@pool-{}:x.org", std::chrono::steady_clock::now().time_since_epoch().count()),
+      .password = "pw", .homeserver = "https://127.0.0.1:" + std::to_string(listening.port()),
+      .sync_timeout = std::chrono::milliseconds(0), .vault = &vault};
+  mux::proto::matrix::client::account account(running, client_tls, how, sink);
+  running.spawn([&] {
+    for (;;) {
+      auto wire = std::make_shared<mux::net::stream>(running, server_tls, listening.accept());
+      running.spawn([&, wire] {
+        if (!wire->accept_tls())
+          return;
+        std::string pending;
+        for (auto it = wire->input().begin(); it != std::default_sentinel; ++it) {
+          pending += *it;
+          while (auto one = take(pending)) {
+            std::string body = "{}";
+            if (one->target.starts_with("/_matrix/client/v3/login")) {
+              body = login;
+            } else if (one->target.contains("/upload?filename=")) {
+              upload_started = true;
+              running.park(); // The server never answers this upload.
+            } else if (one->target.starts_with("/_matrix/client/v3/sync")) {
+              while (!upload_started)
+                running.sleep(std::chrono::milliseconds(1));
+              if (!sync_fails)
+                running.park();
+              body = R"({"next_batch":"pool-failure","rooms":{"join":{"!r:x.org":{"timeline":{"events":[
+                {"type":"m.room.message","event_id":"$pool-failure","sender":"@b:x.org","origin_server_ts":1,
+                 "content":{"msgtype":"m.text","body":"trigger the controlled failure"}}]}}}}})";
+            }
+            wire->write(answer(body));
+            wire->flush();
+          }
+        }
+      });
+    }
+  });
+  running.spawn([&] { running.sleep(std::chrono::seconds(5)); running.stop(); });
+  account.start();
+  running.spawn([&] {
+    while (!online)
+      running.sleep(std::chrono::milliseconds(1));
+    account.send_file("!r:x.org", "pending-upload", "payload", "pending.txt", "text/plain", false, 0, 0, "");
+    while (!upload_started || (sync_fails && (!sync_failed || !upload_failed)))
+      running.sleep(std::chrono::milliseconds(1));
+    finished = true;
+    running.stop();
+  });
+  running.run_forever();
+  EXPECT_TRUE(finished);
+  EXPECT_TRUE(upload_started);
+  EXPECT_TRUE(upload_failed);
+  EXPECT_EQ(sync_failed, sync_fails);
+}
+
+TEST(Matrix, ShutdownUnwindsAnOutstandingUploadBeforeItsAccount) {
+  check_upload_cleanup(false);
+}
+
+TEST(Matrix, FailedSyncCancelsAnOutstandingUploadWithoutFreeingItsPool) {
+  check_upload_cleanup(true);
+}
+
+TEST(Http, PendingRequestsRetainTheirAuthorizationToken) {
+  for (const bool queued : {false, true}) {
+    const auto certificate = mux::test::self_signed();
+    mux::net::loop running;
+    auto server_tls = mux::net::server_tls(certificate.certificate_pem, certificate.key_pem);
+    auto client_tls = mux::net::client_tls();
+    mux::net::trust(client_tls, certificate.certificate_pem);
+    mux::net::listener listening(running);
+    const mux::http::url where{"127.0.0.1", listening.port(), {}};
+    mux::http::connection direct(running, client_tls, where);
+    mux::http::pool pooled(running, client_tls, where, std::nullopt, 1);
+    std::string token(512, 'a');
+    const std::string expected = token;
+    bool accepted = false, held = false, changed = false, authenticated = false, finished = false;
+    running.spawn([&] {
+      auto wire = mux::net::stream(running, server_tls, listening.accept());
+      accepted = true;
+      // Direct requests must keep their token while the TLS handshake waits.
+      if (!queued)
+        while (!changed)
+          running.sleep(std::chrono::milliseconds(1));
+      if (!wire.accept_tls())
+        return;
+      std::string pending;
+      for (auto it = wire.input().begin(); it != std::default_sentinel; ++it) {
+        pending += *it;
+        while (auto one = take(pending)) {
+          if (one->target == "/hold") {
+            held = true;
+            while (!changed)
+              running.sleep(std::chrono::milliseconds(1));
+          } else {
+            authenticated = one->headers.contains("Authorization: Bearer " + expected);
+          }
+          wire.write(answer("{}"));
+          wire.flush();
+        }
+      }
+    });
+    running.spawn([&] { running.sleep(std::chrono::seconds(5)); running.stop(); });
+    if (queued)
+      running.spawn([&] { (void)pooled.request("GET", "/hold"); });
+    running.spawn([&] {
+      const auto got = queued ? pooled.request("GET", "/auth", {}, std::string_view(token))
+                              : direct.request("GET", "/auth", {}, std::string_view(token));
+      finished = got.status == 200;
+      running.stop();
+    });
+    running.spawn([&] {
+      while (!(queued ? held : accepted))
+        running.sleep(std::chrono::milliseconds(1));
+      // A refresh replaces and frees the original token's allocation.
+      token = std::string(50000, 'b');
+      changed = true;
+    });
+    running.run_forever();
+    EXPECT_TRUE(finished);
+    EXPECT_TRUE(changed);
+    EXPECT_TRUE(authenticated);
+  }
 }
 
 }  // namespace

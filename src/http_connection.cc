@@ -39,6 +39,9 @@ class connection {
                    std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {},
                    const Progress* progress = nullptr, std::string_view accept = "application/json",
                    std::span<const std::pair<std::string, std::string>> headers = {}) {
+    const auto authorization = bearer.transform([](std::string_view value) { return std::string(value); });
+    if (authorization)
+      bearer = std::string_view(*authorization);
     const turn mine(*this);
     // Cut short by abort(): opened afresh, not the stream it left.
     if (std::exchange(aborted_, false))
@@ -85,6 +88,8 @@ class connection {
       return;
     aborted_ = true;
     beast::get_lowest_layer(*stream_).cancel();
+    error_code ignored;
+    beast::get_lowest_layer(*stream_).socket().close(ignored);
   }
 
  private:

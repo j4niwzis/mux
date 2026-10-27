@@ -37,6 +37,11 @@ class pool {
                    std::optional<std::string_view> bearer = std::nullopt,
                    std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {},
                    const Progress* progress = nullptr, lane way = lane::user) {
+    // OAuth refresh can replace the account's token while this request
+    // waits for a connection. Keep the credentials this request received.
+    const auto authorization = bearer.transform([](std::string_view value) { return std::string(value); });
+    if (authorization)
+      bearer = std::string_view(*authorization);
     connection* free = this->take(way);
     if (free == nullptr) {
       // Counted while it waits: the pool is not let go under it (drain).
@@ -82,6 +87,7 @@ class pool {
         if (way == lane::background)
           --of.background_;
         of.wake_next();
+        of.release_closed();
       }
     } const told{*this, way};
     return free->request(method, target, body, bearer, timeout, type, progress);
@@ -92,13 +98,11 @@ class pool {
       one.close();
   }
 
-  // Let go, as its account stops: no request taken from now on, those
-  // waiting failed, those on the wire cut short -- and returned once none
-  // is left. A pool gone under a fiber parked in it, or reading on one of
-  // its connections, left that fiber parked for ever (its message "sending"
-  // for good) or woke it into freed memory.
-  void drain() {
-    closed_ = true;
+  // Stop taking requests, wake waiters, and cut short active connections.
+  // This does not park, so it can also run during exception unwinding.
+  void cancel() {
+    if (std::exchange(closed_, true))
+      return;
     for (auto* queue : {&waiting_user_, &waiting_background_}) {
       for (const net::loop::handle one : *queue)
         owner_->wake(one);
@@ -106,11 +110,22 @@ class pool {
     }
     for (connection& one : all_)
       one.abort();
+    release_closed();
+  }
+  // Wait for borrowers to leave before a normal return from the account.
+  void drain() {
+    cancel();
     while (in_flight_ > 0 || waiters_ > 0)
       owner_->sleep(std::chrono::milliseconds(20));
   }
 
  private:
+  // A closed pool remains valid for borrowers, but its I/O objects must
+  // leave while the loop is still alive, after the last active request.
+  void release_closed() {
+    if (closed_ && in_flight_ == 0)
+      all_.clear();
+  }
   // One no request holds, or a new one where there is room for it -- for
   // what fills in behind, never the last one.
   connection* take(lane way) {

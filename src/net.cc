@@ -72,10 +72,7 @@ class loop {
   loop() = default;
   loop(const loop&) = delete;
   loop& operator=(const loop&) = delete;
-  ~loop() {
-    unwinding_ = true;
-    tasks_.clear();
-  }
+  ~loop() { unwind(); }
 
   asio::io_context& io() noexcept { return io_; }
 
@@ -106,25 +103,17 @@ class loop {
   }
 
   // Runs until there is nothing left to do, or stop().
-  void run() { fibers::run(io_); }
+  void run() {
+    const finishing done{*this};
+    fibers::run(io_);
+  }
   void stop() { io_.stop(); }
 
   // Runs until stop(), whether or not there is anything to do: the loop of
   // a program whose other thread posts work to it.
   void run_forever() {
     auto kept = asio::make_work_guard(io_);
-    // Unwind parked fibers on the thread that ran them, while the network
-    // still owns their accounts and TLS. Leaving them for the loop's
-    // destructor resumed their cleanup later on the window's thread.
-    struct unwind_parked {
-      bool& unwinding;
-      std::vector<std::shared_ptr<task>>& tasks;
-      ~unwind_parked() {
-        unwinding = true;
-        tasks.clear();
-      }
-    } unwind{unwinding_, tasks_};
-    fibers::run(io_);
+    run();
   }
 
   // A fiber started from any thread: the loop's thread runs it.
@@ -194,6 +183,21 @@ class loop {
   }
 
  private:
+  void unwind() {
+    unwinding_ = true;
+    // Younger tasks can borrow resources on an older task's stack.
+    while (!tasks_.empty())
+      tasks_.pop_back();
+  }
+  struct finishing {
+    loop& owner;
+    ~finishing() {
+      // Release fibers on the thread that ran them, before callers free
+      // their accounts, TLS, or other state borrowed by parked work.
+      owner.unwind();
+      owner.unwinding_ = false;
+    }
+  };
   void resume(task* one) {
     if (one->finished)
       return;

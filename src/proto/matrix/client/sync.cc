@@ -212,23 +212,21 @@ void account<Sink>::run() {
     return;
   }
   // Several at once for what is asked while the long poll waits.
-  http::pool api(*loop_, *tls_, *base, how_.proxy);
+  if (!api_)
+    api_ = std::make_unique<http::pool>(*loop_, *tls_, *base, how_.proxy);
+  http::pool& api = *api_;
   http::connection syncing(*loop_, *tls_, *base, how_.proxy);  // the long poll has one of its own
-  api_ = &api;
-  // However the run ends: the account no longer asks through it, and the
-  // pool is let go only once nothing waits in it or reads on it -- what was
-  // waiting fails, a message being sent among it marked not sent. Left
-  // alone where the run is being unwound (the loop going away): no fiber
-  // may wait then.
+  // Reject and cancel requests on every exit. During exception unwinding
+  // do not park; the account keeps the closed pool alive while borrowers
+  // finish or unwind. Normal exits also wait for their requests to return.
   const struct drained {
-    account& of;
     http::pool& pool;
     ~drained() {
-      of.api_ = nullptr;
+      pool.cancel();
       if (std::uncaught_exceptions() == 0)
         pool.drain();
     }
-  } draining{*this, api};
+  } draining{api};
 
   // The machine woken from sleep -- a phone's screen turned on again: the
   // long poll it slept in is on a connection that is likely gone, and was
@@ -561,16 +559,13 @@ void account<Sink>::run() {
     }
   } else if (how_.oauth) {
     if (!oauth_sign_in()) {
-      api_ = nullptr;
       return;
     }
   } else if (how_.create) {
     if (!register_account()) {
-      api_ = nullptr;
       return;
     }
   } else if (!log_in()) {
-    api_ = nullptr;
     return;
   }
   say(connection::online{});
@@ -758,7 +753,6 @@ void account<Sink>::run() {
     }
   }
   this->save_kept();
-  api_ = nullptr;
   log(id_, "disconnected");
   say(connection::offline{});
 }

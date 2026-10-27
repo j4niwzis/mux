@@ -1011,7 +1011,9 @@ class account {
   // The rooms whose place to page back from was told.
   std::set<std::string> paged_;
   std::set<std::string> announced_;
-  http::pool* api_ = nullptr;
+  // Borrowed by request fibers, including while the sync fiber unwinds.
+  // Accounts outlive their tasks; a stopped pool rejects further requests.
+  std::unique_ptr<http::pool> api_;
   loom::client::state state_;
   // A source includes its event type: two formats may use the same state key.
   using pack_source = std::tuple<std::optional<std::string>, std::string, std::string>;

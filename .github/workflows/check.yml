@@ -96,7 +96,7 @@ jobs:
                           shutil.rmtree(path)
                   print("C compiler changed: reset configuration metadata; retained build outputs")
           EOF
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG='-O3 -g0' -DCMAKE_C_FLAGS_DEBUG='-O3 -g0' -DMUX_PROGRAM_JOBS=1 \
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG='-O3 -g -fno-omit-frame-pointer' -DCMAKE_C_FLAGS_DEBUG='-O3 -g -fno-omit-frame-pointer' -DMUX_PROGRAM_JOBS=1 \
             -DCMAKE_C_COMPILER="$CC" \
             -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
@@ -313,6 +313,23 @@ jobs:
       - name: build and link mux
         id: build
         run: cmake --build build --parallel 1 --target mux -- -k 0
+      - name: Package binaries with and without debug info
+        run: |
+          python3 test/binary_artifacts_test.py
+          python3 tools/split_binary.py --binary build/mux --output build/binaries --strip llvm-strip-23
+          for variant in debug stripped; do
+            tar -C "build/binaries/$variant" -caf "build/mux-linux-x86_64-$variant-${GITHUB_SHA}.tar.zst" mux
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mux-linux-x86_64-clang${{ matrix.llvm }}-debug-${{ github.sha }}
+          path: build/mux-linux-x86_64-debug-*.tar.zst
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mux-linux-x86_64-clang${{ matrix.llvm }}-stripped-${{ github.sha }}
+          path: build/mux-linux-x86_64-stripped-*.tar.zst
+          if-no-files-found: error
       # What this build was built from: only where it went through, so
       # that what failed is built again from scratch by the next run.
       - name: what the build was built from

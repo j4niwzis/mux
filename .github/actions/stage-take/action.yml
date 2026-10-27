@@ -12,7 +12,7 @@ runs:
       run: sudo mkdir -p /mnt/stage-take && sudo chown "$USER" /mnt/stage-take
     - uses: actions/download-artifact@v4
       with:
-        name: ${{ inputs.name }}
+        name: ${{ inputs.name }}-${{ github.sha }}
         path: /mnt/stage-take
     - name: Unpack the build
       shell: bash

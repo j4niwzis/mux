@@ -58,37 +58,59 @@ function(mux_add_android_apk target)
       --min-sdk-version "${MUX_ANDROID_MIN_API}" --target-sdk-version "${MUX_ANDROID_TARGET_API}"
       --version-code "${MUX_ANDROID_VERSION_CODE}" --version-name "${PROJECT_VERSION}"
     DEPENDS "${manifest}" "${MUX_ANDROID_FRAMEWORK_RES_APK}" VERBATIM)
+  if(CMAKE_STRIP)
+    set(mux_strip "${CMAKE_STRIP}")
+  else()
+    find_program(mux_strip NAMES llvm-strip llvm-strip-23 REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+  endif()
+  set(test_keystore "${PROJECT_SOURCE_DIR}/android/test-signing.p12")
+  foreach(variant stripped debug)
+    set(variant_out "${out}/${variant}")
+    file(MAKE_DIRECTORY "${variant_out}")
+    set(strip_args)
+    if(variant STREQUAL "stripped")
+      set(strip_args --strip-tool "${mux_strip}")
+    endif()
+    add_custom_command(OUTPUT "${variant_out}/mux-unsigned.apk"
+      COMMAND "${Python3_EXECUTABLE}" "${packager}"
+        --resources "${out}/mux-resources.apk" --dex "${out}/classes.dex"
+        --library "$<TARGET_FILE:${target}>" ${strip_args}
+        ${search} --readelf "${MUX_READELF}" --abi "${MUX_ANDROID_ABI}" --out "${variant_out}/mux-unaligned.apk"
+      COMMAND "${MUX_ZIPALIGN}" -f 4 "${variant_out}/mux-unaligned.apk" "${variant_out}/mux-unsigned.apk"
+      COMMAND "${MUX_ZIPALIGN}" -c 4 "${variant_out}/mux-unsigned.apk"
+      DEPENDS ${target} "${out}/classes.dex" "${out}/mux-resources.apk" "${packager}"
+        "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../android/abis.json"
+      VERBATIM COMMAND_EXPAND_LISTS)
+    add_custom_target(mux-apk-${variant}-unsigned DEPENDS "${variant_out}/mux-unsigned.apk")
+    if(MUX_ANDROID_TEST_KEY)
+      # One public test key for both variants and every revision, so either
+      # variant can update an existing installation without deleting its data.
+      add_custom_command(OUTPUT "${variant_out}/mux-test-signed.apk"
+        COMMAND "${MUX_JAVA}" -jar "${MUX_ANDROID_APKSIGNER_JAR}" sign
+          --ks "${test_keystore}" --ks-type PKCS12 --ks-key-alias androiddebugkey --ks-pass pass:android
+          --key-pass pass:android --min-sdk-version "${MUX_ANDROID_MIN_API}"
+          --v1-signing-enabled ${v1_signing}
+          --v2-signing-enabled true --v3-signing-enabled true
+          --out "${variant_out}/mux-test-signed.apk" "${variant_out}/mux-unsigned.apk"
+        COMMAND "${MUX_JAVA}" -jar "${MUX_ANDROID_APKSIGNER_JAR}" verify
+          --min-sdk-version "${MUX_ANDROID_MIN_API}" "${variant_out}/mux-test-signed.apk"
+        DEPENDS "${variant_out}/mux-unsigned.apk" "${test_keystore}" "${MUX_ANDROID_APKSIGNER_JAR}" VERBATIM)
+      add_custom_target(mux-apk-${variant} DEPENDS "${variant_out}/mux-test-signed.apk")
+    else()
+      add_custom_target(mux-apk-${variant} DEPENDS "${variant_out}/mux-unsigned.apk")
+    endif()
+  endforeach()
+  # Preserve the existing paths for callers expecting the compact APK.
   add_custom_command(OUTPUT "${out}/mux-unsigned.apk"
-    COMMAND "${Python3_EXECUTABLE}" "${packager}"
-      --resources "${out}/mux-resources.apk" --dex "${out}/classes.dex"
-      --library "$<TARGET_FILE:${target}>"
-      ${search} --readelf "${MUX_READELF}" --abi "${MUX_ANDROID_ABI}" --out "${out}/mux-unaligned.apk"
-    COMMAND "${MUX_ZIPALIGN}" -f 4 "${out}/mux-unaligned.apk" "${out}/mux-unsigned.apk"
-    COMMAND "${MUX_ZIPALIGN}" -c 4 "${out}/mux-unsigned.apk"
-    DEPENDS ${target} "${out}/classes.dex" "${out}/mux-resources.apk" "${packager}"
-      "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../android/abis.json"
-    VERBATIM COMMAND_EXPAND_LISTS)
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${out}/stripped/mux-unsigned.apk" "${out}/mux-unsigned.apk"
+    DEPENDS "${out}/stripped/mux-unsigned.apk" VERBATIM)
   add_custom_target(mux-apk-unsigned DEPENDS "${out}/mux-unsigned.apk")
   if(MUX_ANDROID_TEST_KEY)
-    # The test key, the same for every build: android/test-signing.p12, a
-    # PKCS#12 keystore in the repository -- public, not a release key (its
-    # name says so), alias androiddebugkey, password android. One made anew
-    # at each build signed each APK otherwise, and Android would not update
-    # an installed mux with the next one.
-    set(test_keystore "${PROJECT_SOURCE_DIR}/android/test-signing.p12")
     add_custom_command(OUTPUT "${out}/mux-test-signed.apk"
-      COMMAND "${MUX_JAVA}" -jar "${MUX_ANDROID_APKSIGNER_JAR}" sign
-        --ks "${test_keystore}" --ks-type PKCS12 --ks-key-alias androiddebugkey --ks-pass pass:android
-        --key-pass pass:android --min-sdk-version "${MUX_ANDROID_MIN_API}"
-        --v1-signing-enabled ${v1_signing}
-        --v2-signing-enabled true --v3-signing-enabled true
-        --out "${out}/mux-test-signed.apk" "${out}/mux-unsigned.apk"
-      COMMAND "${MUX_JAVA}" -jar "${MUX_ANDROID_APKSIGNER_JAR}" verify
-        --min-sdk-version "${MUX_ANDROID_MIN_API}" "${out}/mux-test-signed.apk"
-      DEPENDS "${out}/mux-unsigned.apk" "${test_keystore}" "${MUX_ANDROID_APKSIGNER_JAR}" VERBATIM)
-    add_custom_target(mux-apk DEPENDS "${out}/mux-test-signed.apk")
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${out}/stripped/mux-test-signed.apk" "${out}/mux-test-signed.apk"
+      DEPENDS "${out}/stripped/mux-test-signed.apk" VERBATIM)
+    add_custom_target(mux-apk DEPENDS "${out}/mux-test-signed.apk" mux-apk-debug)
   else()
-    # Release signing is a separate operation; no release secret enters CMake.
-    add_custom_target(mux-apk DEPENDS "${out}/mux-unsigned.apk")
+    add_custom_target(mux-apk DEPENDS mux-apk-unsigned mux-apk-debug)
   endif()
 endfunction()

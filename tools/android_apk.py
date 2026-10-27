@@ -5,7 +5,9 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -70,7 +72,7 @@ def native_closure(roots, directories, readelf, abi='arm64-v8a'):
     return result
 
 
-def package(resources, dex, libraries, output, abi='arm64-v8a'):
+def package(resources, dex, libraries, output, abi='arm64-v8a', strip_tool=None):
     with zipfile.ZipFile(resources) as source:
         entries = {info.filename: source.read(info) for info in source.infolist() if not info.is_dir()}
     if 'AndroidManifest.xml' not in entries:
@@ -78,8 +80,16 @@ def package(resources, dex, libraries, output, abi='arm64-v8a'):
     if any(name.startswith(('lib/', 'META-INF/')) or name == 'classes.dex' for name in entries):
         raise ValueError('resource APK already contains code or signatures')
     entries['classes.dex'] = dex.read_bytes()
-    for name, path in libraries.items():
-        entries[f'lib/{abi}/{name}'] = path.read_bytes()
+    # Keep the linked binary for symbolization. The normal APK gets stripped
+    # copies; the debug APK gets the original ELF files from the same build.
+    with tempfile.TemporaryDirectory() as temporary:
+        for name, path in libraries.items():
+            if strip_tool:
+                copied = Path(temporary) / name
+                shutil.copy2(path, copied)
+                subprocess.run([strip_tool, '--strip-all', str(copied)], check=True)
+                path = copied
+            entries[f'lib/{abi}/{name}'] = path.read_bytes()
     # extractNativeLibs=true in the manifest: compression is deliberate. The
     # loader uses extracted, 16 KB-aligned ELF files, not unaligned ZIP offsets.
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as apk:
@@ -99,12 +109,13 @@ def main():
     parser.add_argument('--library', type=Path, action='append', required=True)
     parser.add_argument('--library-dir', type=Path, action='append', default=[])
     parser.add_argument('--readelf', default='readelf')
+    parser.add_argument('--strip-tool', help='Strip temporary library copies before packaging')
     parser.add_argument('--abi', default='arm64-v8a', choices=sorted(ABIS))
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     try:
         libraries = native_closure(args.library, args.library_dir, args.readelf, args.abi)
-        package(args.resources, args.dex, libraries, args.out, args.abi)
+        package(args.resources, args.dex, libraries, args.out, args.abi, args.strip_tool)
     except (ValueError, OSError, subprocess.CalledProcessError, zipfile.BadZipFile) as error:
         parser.exit(1, f'APK: {error}\n')
     print(f'{args.out}: {", ".join(sorted(libraries))}, generated classes.dex')

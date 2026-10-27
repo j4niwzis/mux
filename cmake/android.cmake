@@ -52,6 +52,7 @@ set(CME_SYSTEM_SDL3 OFF)
 string(APPEND CMAKE_C_FLAGS " -fvisibility=hidden")
 string(APPEND CMAKE_CXX_FLAGS " -fvisibility=hidden -fvisibility-inlines-hidden")
 # The link options of an Android library: 16 KB pages, nothing undefined,
-# only android/exports.map exported, and no symbol table in what is shipped.
+# only android/exports.map exported. Packaging strips a copy, retaining the
+# original binary for the matching debug APK and offline symbolization.
 set(MUX_ANDROID_LINK_OPTIONS "LINKER:-z,max-page-size=16384" "LINKER:--no-undefined"
-  "LINKER:--version-script=${CMAKE_CURRENT_LIST_DIR}/../android/exports.map" "LINKER:--strip-all")
+  "LINKER:--version-script=${CMAKE_CURRENT_LIST_DIR}/../android/exports.map" "LINKER:--build-id=sha1")

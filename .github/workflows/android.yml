@@ -88,7 +88,7 @@ jobs:
           if [ "$FULL" = client ]; then source=.; fi
           cmake -S "$source" -B build-android -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$HOME/.cache/mux-android-$ABI/cmake/target.cmake" \
-            -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG='-O3 -g0' -DCMAKE_C_FLAGS_DEBUG='-O3 -g0' -DMUX_PROGRAM_JOBS=1 \
+            -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG='-O3 -g -fno-omit-frame-pointer' -DCMAKE_C_FLAGS_DEBUG='-O3 -g -fno-omit-frame-pointer' -DMUX_PROGRAM_JOBS=1 \
             -DMUX_CLI=OFF -DMUX_TESTS=OFF -DMUX_VIDEO=OFF -DMUX_CALLS=ON \
             -DCME_BUILD_MACHINE_CXX_COMPILER=clang++-23 \
             -DCME_BUILD_MACHINE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'
@@ -347,20 +347,33 @@ jobs:
       - name: Verify package
         run: |
           python3 test/android_apk_test.py
+          python3 test/binary_artifacts_test.py
           dexdump -c build-android/apk/classes.dex
-          zipalign -c 4 build-android/apk/mux-test-signed.apk
-          java -jar "$HOME/.cache/mux-android-$ABI/tools/apksigner.jar" verify --verbose \
-            build-android/apk/mux-test-signed.apk
+          for variant in stripped debug; do
+            zipalign -c 4 "build-android/apk/$variant/mux-test-signed.apk"
+            java -jar "$HOME/.cache/mux-android-$ABI/tools/apksigner.jar" verify --verbose \
+              "build-android/apk/$variant/mux-test-signed.apk"
+          done
       - uses: actions/upload-artifact@v4
         with:
-          name: mux-android-${{ env.ABI }}-${{ env.FULL }}-test-signed
+          name: mux-android-${{ env.ABI }}-${{ env.FULL }}-stripped-test-signed-${{ github.sha }}
           path: build-android/apk/mux-test-signed.apk
           if-no-files-found: error
       # The same APK unsigned, aligned: to be signed with a key of one's own.
       - uses: actions/upload-artifact@v4
         with:
-          name: mux-android-${{ env.ABI }}-${{ env.FULL }}-unsigned
+          name: mux-android-${{ env.ABI }}-${{ env.FULL }}-stripped-unsigned-${{ github.sha }}
           path: build-android/apk/mux-unsigned.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mux-android-${{ env.ABI }}-${{ env.FULL }}-debug-test-signed-${{ github.sha }}
+          path: build-android/apk/debug/mux-test-signed.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mux-android-${{ env.ABI }}-${{ env.FULL }}-debug-unsigned-${{ github.sha }}
+          path: build-android/apk/debug/mux-unsigned.apk
           if-no-files-found: error
       # What this build was built from: only where it went through, so
       # that what failed is built again from scratch by the next run.

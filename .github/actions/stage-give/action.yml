@@ -27,7 +27,7 @@ runs:
         ls -la /mnt/stage-give
     - uses: actions/upload-artifact@v4
       with:
-        name: ${{ inputs.name }}
+        name: ${{ inputs.name }}-${{ github.sha }}
         path: /mnt/stage-give
         compression-level: 0
         retention-days: 1

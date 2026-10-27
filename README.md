@@ -182,6 +182,11 @@ Options: `MUX_CALLS` (voice calls), `MUX_VIDEO` (FFmpeg), `MUX_GL`,
 - **Linux desktop entry:** `packaging/linux/mux.desktop`, for
   `/usr/local/bin/mux`.
 
+CI publishes Linux binaries and Android APKs in `debug` and `stripped`
+variants from the same compilation. Artifact names include the commit
+hash. Debug variants retain DWARF information for crash symbolization;
+stripped variants retain the matching ELF Build ID.
+
 The code is written as [CODE_STYLE.md](CODE_STYLE.md) says.
 
 ## Licence

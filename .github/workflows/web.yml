@@ -160,13 +160,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-preview
+          name: browser-preview-${{ github.sha }}
           path: |
             build-web/web-smoke.png
             build-web/web-smoke-error.txt
           if-no-files-found: ignore
       - uses: actions/upload-pages-artifact@v4
         with:
+          name: github-pages-${{ github.sha }}
           path: build-web/web
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -182,3 +183,5 @@ jobs:
       - uses: actions/configure-pages@v5
       - uses: actions/deploy-pages@v4
         id: deployment
+        with:
+          artifact_name: github-pages-${{ github.sha }}

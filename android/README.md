@@ -89,10 +89,28 @@ cmake -S . -B build-android -G Ninja \
 cmake --build build-android --target mux-apk -j4
 ```
 
-`mux-apk-unsigned` builds only the unsigned APK. `mux-apk` signs with a
-generated, explicitly named **test key** by default. For release packaging,
+`mux-apk` packages both `apk/stripped/mux-test-signed.apk` and
+`apk/debug/mux-test-signed.apk` from one linked library. The debug APK keeps
+the symbols present in that library; the stripped APK removes symbols from
+a copy. Configure with `-DCMAKE_BUILD_TYPE=Debug
+-DCMAKE_CXX_FLAGS_DEBUG='-O3 -g -fno-omit-frame-pointer'
+-DCMAKE_C_FLAGS_DEBUG='-O3 -g -fno-omit-frame-pointer'` to retain source-level
+debug information, as CI does. The existing `apk/mux-test-signed.apk` path
+contains the stripped APK.
+
+`mux-apk-debug` and `mux-apk-stripped` build individual variants. Append
+`-unsigned` to either target to package without signing;
+`mux-apk-unsigned` keeps the existing stripped unsigned output path.
+The default **test key** is shared between variants. For release packaging,
 set `MUX_ANDROID_TEST_KEY=OFF` and sign the unsigned output separately.
 Release keys and passwords are never passed to this CMake build.
+
+CI artifact names include the full commit hash, ABI, and `debug` or
+`stripped`. Keep the debug artifact from the same commit and ABI as a
+crashing installation. Extract its `lib/<abi>/libmux.so` to symbolize
+native addresses; both variants retain the same ELF Build ID. A stripped
+APK can still produce a native crash log, but cannot supply source lines
+without its matching debug library.
 
 The packager follows every non-platform `DT_NEEDED` dependency, rejects
 unresolved or conflicting libraries, and verifies ARM64 and 16 KB ELF

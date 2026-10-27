@@ -17,14 +17,12 @@
 # remembered, and a pin that differs from it wins -- while -DCME_VERSION=
 # on the command line still stands until this file says something else.
 #
-# Taken from the file uploaded to the release rather than from
-# archive/<ref>.tar.gz: the generated one is made on request, and when the
-# compression behind it changed every digest pinned against it broke at once.
-# A file uploaded to a release is stored as it was uploaded.
-set(CME_PINNED "v0.2.52")
-set(CME_PINNED_SHA256 "0434e546ca0baadae287be4b3859bf3b25fd368763abc8172d027bda4dcbad4e")
+# The registry revision containing the call dependencies and Android fixes.
+# Its archive is pinned by digest along with its commit.
+set(CME_PINNED "4e880c1000b4058800a602a64731b82ae55101db")
+set(CME_PINNED_SHA256 "921000984d65626351a4ea0a5c87ffd22bef8ac3947eba33b15002c78fa109c4")
 set(CME_PINNED_URL
-  "https://github.com/j4niwzis/cmake-everywhere/releases/download/v0.2.52/cmake-everywhere-0.2.52.tar.gz")
+  "https://github.com/j4niwzis/cmake-everywhere/archive/4e880c1000b4058800a602a64731b82ae55101db.tar.gz")
 if(NOT "${CME_PIN_APPLIED}" STREQUAL "${CME_PINNED}")
   set(CME_VERSION "${CME_PINNED}" CACHE STRING
     "cmake-everywhere release" FORCE)
@@ -110,21 +108,6 @@ if(NOT EXISTS "${CME_SOURCE_DIR}/cmake-everywhere.cmake"
   file(REMOVE_RECURSE "${CME_SOURCE_DIR}")
   file(RENAME "${root}" "${CME_SOURCE_DIR}")
   file(WRITE "${cme_stamp}" "${CME_VERSION}\n")
-endif()
-
-# v0.2.52 loses Clang's cross target when generating Meson machine files.
-# Keep the fix with the consumer until the next provider release carries it.
-set(cme_meson_patch "${CMAKE_CURRENT_LIST_DIR}/patches/cme-meson-cross-target.patch")
-if(CME_VERSION STREQUAL "v0.2.52" AND EXISTS "${cme_meson_patch}")
-  find_program(cme_git git REQUIRED)
-  execute_process(COMMAND "${cme_git}" apply --reverse --check "${cme_meson_patch}"
-    WORKING_DIRECTORY "${CME_SOURCE_DIR}" RESULT_VARIABLE cme_meson_patched OUTPUT_QUIET ERROR_QUIET)
-  if(NOT cme_meson_patched EQUAL 0)
-    execute_process(COMMAND "${cme_git}" apply --check "${cme_meson_patch}"
-      WORKING_DIRECTORY "${CME_SOURCE_DIR}" COMMAND_ERROR_IS_FATAL ANY)
-    execute_process(COMMAND "${cme_git}" apply "${cme_meson_patch}"
-      WORKING_DIRECTORY "${CME_SOURCE_DIR}" COMMAND_ERROR_IS_FATAL ANY)
-  endif()
 endif()
 
 include("${CME_SOURCE_DIR}/cmake-everywhere.cmake")

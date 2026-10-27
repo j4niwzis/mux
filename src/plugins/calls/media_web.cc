@@ -12,7 +12,7 @@ EM_JS(void, mux_web_call_create, (int id), {
   Module.muxCalls ||= new Map();
   const s = {servers: [], candidates: [], closed: false, muted: false};
   Module.muxCalls.set(id, s);
-  s.tell = (kind, text = '', mid = '', index = -1) => {
+  s.tell = (kind, text = "", mid = "", index = -1) => {
     if (!s.closed) Module.ccall('mux_web_call_event', null,
       ['number','number','string','string','number'], [id,kind,text,mid,index]);
   };
@@ -20,7 +20,7 @@ EM_JS(void, mux_web_call_create, (int id), {
   s.prepare = async () => {
     if (!s.pc) {
       s.pc = new RTCPeerConnection({iceServers:s.servers});
-      s.pc.onicecandidate = e => s.tell(3, e.candidate?.candidate || '', e.candidate?.sdpMid || '', e.candidate?.sdpMLineIndex ?? -1);
+      s.pc.onicecandidate = e => s.tell(3, e.candidate?.candidate || "", e.candidate?.sdpMid || "", e.candidate?.sdpMLineIndex ?? -1);
       s.pc.onconnectionstatechange = () => {
         const kinds = {connected:4, disconnected:5, failed:6, closed:7};
         const kind = kinds[s.pc.connectionState]; if (kind) s.tell(kind);

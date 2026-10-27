@@ -141,7 +141,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   set(mux_fibers src/fibers_web.cc)
   set(mux_http_connection src/http_connection_web.cc)
 endif()
-mux_find_package(Boost COMPONENTS asio beast pfr[modules] ${mux_context} REQUIRED)
+mux_find_package(Boost COMPONENTS asio_core beast pfr[modules] ${mux_context} REQUIRED)
 mux_find_package(OpenSSL REQUIRED)
 
 # Boost's definitions reach what links Boost, and nothing else, as in the
@@ -159,7 +159,7 @@ mux_find_package(OpenSSL REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "spl::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG db4be11c76c36ac32377cc5e918009b8898223c2
+  GIT_TAG 3197b7cc3a4656916d09b4a49454a43b9bff5556
   # Failed variant/callable replacement must not retain a destroyed object.
   VERSION 0.4.3
   LICENSE GPL-3.0-only
@@ -249,7 +249,7 @@ set(mux_std_flags
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
   $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 target_compile_options(mux_modules PUBLIC ${mux_std_flags})
-target_link_libraries(mux_modules PUBLIC chevron tern loom vodozemac::vodozemac Boost::asio Boost::beast
+target_link_libraries(mux_modules PUBLIC chevron tern loom vodozemac::vodozemac Boost::asio_core Boost::beast
   OpenSSL::SSL OpenSSL::Crypto)
 if(mux_context)
   target_link_libraries(mux_modules PUBLIC Boost::context)
@@ -277,7 +277,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin 4ce179cbcaeac3b093d9f6e1f0c0b89083d1c770)
+set(mux_skiff_pin 7da83cecab5be98291902f11460a16fb1b0a3ac8)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}

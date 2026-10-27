@@ -185,8 +185,6 @@ struct app : kept_settings {
   void plugins_tick() {
     std::apply([](auto&... part) { (tick_part(part), ...); }, plugin_parts);
   }
-  // Work off the UI's thread: decoding pictures, reading the disk.
-  workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
   void files_given(std::vector<std::string> paths, bool dropped) {
     if (took_files(packs, paths, dropped))
@@ -635,9 +633,10 @@ struct app : kept_settings {
   void apply(const request::switch_account& one);
   void apply(const request::pop_panel&);
 
-  // How much moves, from now on and in the file.
-
-
+  // Last: join decoding and disk-reading jobs before destroying the store,
+  // scene or parts their captures reach through shared. C++ destroys members
+  // in reverse declaration order, even while construction is unwinding.
+  workers work;
 };
 
 }  // namespace mux::app

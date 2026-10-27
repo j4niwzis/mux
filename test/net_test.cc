@@ -54,6 +54,43 @@ TEST(Loop, WokenTwiceRunsOnce) {
   EXPECT_EQ(resumed, 1);
 }
 
+TEST(Loop, InlineCompletionDoesNotWakeAFinishedTask) {
+  loop running;
+  bool completed = false;
+  running.spawn([&] {
+    const auto [error] = running.await<>([](auto done) { done({}); });
+    EXPECT_FALSE(error);
+    completed = true;
+  });
+  running.run();
+  EXPECT_TRUE(completed);
+}
+
+TEST(Loop, ShutdownDoesNotWakeAnAlreadyDestroyedTask) {
+  loop running;
+  loop::handle first = nullptr;
+  bool cleaned = false;
+  running.spawn([&] {
+    first = running.current();
+    running.park();
+  });
+  running.spawn([&] {
+    struct cleanup {
+      loop& running;
+      loop::handle first;
+      bool& cleaned;
+      ~cleanup() {
+        running.wake(first);
+        cleaned = true;
+      }
+    } done{running, first, cleaned};
+    running.stop();
+    running.park();
+  });
+  running.run_forever();
+  EXPECT_TRUE(cleaned);
+}
+
 TEST(Loop, Sleep) {
   loop running;
   std::chrono::steady_clock::duration took{};

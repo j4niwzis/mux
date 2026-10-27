@@ -60,7 +60,7 @@ struct failure : std::runtime_error {
 // Fibers on one io_context.
 class loop {
  public:
-  struct task {
+  struct task : std::enable_shared_from_this<task> {
     fibers::fiber suspended;  // the fiber, while it is not running
     fibers::fiber back;       // where it returns to, while it runs
     bool queued = false;
@@ -72,6 +72,10 @@ class loop {
   loop() = default;
   loop(const loop&) = delete;
   loop& operator=(const loop&) = delete;
+  ~loop() {
+    unwinding_ = true;
+    tasks_.clear();
+  }
 
   asio::io_context& io() noexcept { return io_; }
 
@@ -80,7 +84,7 @@ class loop {
   // can, and what it cannot is a bug to see.
   template <class Body>
   void spawn(Body body, std::size_t stack = 256 * 1024) {
-    auto made = std::make_unique<task>();
+    auto made = std::make_shared<task>();
     task* self = made.get();
     self->suspended = fibers::make(
         [self, body = std::move(body)](fibers::fiber&& back) mutable {
@@ -113,9 +117,13 @@ class loop {
     // still owns their accounts and TLS. Leaving them for the loop's
     // destructor resumed their cleanup later on the window's thread.
     struct unwind_parked {
-      std::vector<std::unique_ptr<task>>& tasks;
-      ~unwind_parked() { tasks.clear(); }
-    } unwind{tasks_};
+      bool& unwinding;
+      std::vector<std::shared_ptr<task>>& tasks;
+      ~unwind_parked() {
+        unwinding = true;
+        tasks.clear();
+      }
+    } unwind{unwinding_, tasks_};
     fibers::run(io_);
   }
 
@@ -140,12 +148,17 @@ class loop {
   // A fiber to run again, when the loop gets to it: once, however often it
   // is asked before then.
   void wake(handle one) {
-    if (!one || one->queued || one->finished)
+    if (unwinding_ || !one || one->queued || one->finished)
       return;
     one->queued = true;
-    asio::post(io_, [this, one] {
-      one->queued = false;
-      resume(one);
+    // A wake can be queued by a completion before the fiber returns. The
+    // task may finish before this handler runs; do not retain its raw
+    // address, nor keep a parked fiber alive past run_forever's cleanup.
+    asio::post(io_, [this, waiting = one->weak_from_this()] {
+      if (auto kept = waiting.lock()) {
+        kept->queued = false;
+        resume(kept.get());
+      }
     });
   }
 
@@ -190,15 +203,16 @@ class loop {
     current_ = was;
     if (one->finished) {
       std::exception_ptr failed = one->failure;
-      std::erase_if(tasks_, [one](const std::unique_ptr<task>& kept) { return kept.get() == one; });
+      std::erase_if(tasks_, [one](const std::shared_ptr<task>& kept) { return kept.get() == one; });
       if (failed)
         std::rethrow_exception(failed);
     }
   }
 
   asio::io_context io_;
-  std::vector<std::unique_ptr<task>> tasks_;
+  std::vector<std::shared_ptr<task>> tasks_;
   task* current_ = nullptr;
+  bool unwinding_ = false;
 };
 
 // The loop as tern sees a scheduler.

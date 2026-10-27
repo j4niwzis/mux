@@ -5,7 +5,7 @@
 #
 #   set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/cmake/get_cme.cmake)
 #
-# A release and its digest, not a branch. What resolves every dependency of
+# A revision and its digest, not a branch. What resolves every dependency of
 # this project is a dependency of this project.
 
 # The pin this project carries, and the pin this build was last given.
@@ -19,10 +19,10 @@
 #
 # The registry revision containing the call dependencies and Android fixes.
 # Its archive is pinned by digest along with its commit.
-set(CME_PINNED "4e880c1000b4058800a602a64731b82ae55101db")
-set(CME_PINNED_SHA256 "921000984d65626351a4ea0a5c87ffd22bef8ac3947eba33b15002c78fa109c4")
+set(CME_PINNED "884af53891e57e7de13a18b17f131e3d6eef8c74")
+set(CME_PINNED_SHA256 "ddd3f8c365358098c3dd8c7eac7cb5b6c1b3801de000eddf0f574293dc0e8d9f")
 set(CME_PINNED_URL
-  "https://github.com/j4niwzis/cmake-everywhere/archive/4e880c1000b4058800a602a64731b82ae55101db.tar.gz")
+  "https://github.com/j4niwzis/cmake-everywhere/archive/884af53891e57e7de13a18b17f131e3d6eef8c74.tar.gz")
 if(NOT "${CME_PIN_APPLIED}" STREQUAL "${CME_PINNED}")
   set(CME_VERSION "${CME_PINNED}" CACHE STRING
     "cmake-everywhere release" FORCE)

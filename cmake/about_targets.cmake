@@ -3,7 +3,14 @@
 function(mux_about_targets out directory)
   get_property(targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
   get_property(imported DIRECTORY "${directory}" PROPERTY IMPORTED_TARGETS)
-  list(APPEND targets ${imported})
+  # IMPORTED_TARGETS also lists non-global targets local to a child
+  # directory. They cannot be queried from this directory; find_package
+  # records already describe those dependencies.
+  foreach(target IN LISTS imported)
+    if(TARGET "${target}")
+      list(APPEND targets "${target}")
+    endif()
+  endforeach()
   get_property(children DIRECTORY "${directory}" PROPERTY SUBDIRECTORIES)
   foreach(child IN LISTS children)
     mux_about_targets(nested "${child}")
@@ -14,6 +21,10 @@ function(mux_about_targets out directory)
 endfunction()
 
 function(mux_about_target_owner out target ports)
+  if(NOT TARGET "${target}")
+    set(${out} "" PARENT_SCOPE)
+    return()
+  endif()
   get_target_property(alias "${target}" ALIASED_TARGET)
   if(alias)
     set(target "${alias}")

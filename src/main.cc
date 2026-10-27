@@ -141,6 +141,17 @@ int mux_main(int argc, char** argv) {
     std::optional<app>& storage;
     ~reset_program() { storage.reset(); }
   } program_lifetime{program_storage};
+  // A host can fail before it calls closing(), or throw while starting.
+  // Stop and join before the application and its borrowed state are freed.
+  struct finish_network {
+    network& owner;
+    ~finish_network() {
+      if (owner.thread.joinable()) {
+        owner.shutdown();
+        owner.thread.join();
+      }
+    }
+  } network_lifetime{net};
   auto& program = program_storage.emplace(
       mux::ui::palette_of(mux::config::theme_of(saved.theme), mux::config::accent_of(saved.accent), opacity), window);
   program.box = &box;
@@ -167,8 +178,5 @@ int mux_main(int argc, char** argv) {
       .title = "mux", .software = program.appearance().renderer == mux::config::renderer_t{mux::config::renderer::software{}},
       .transparent = opacity < 100, .programs = mux::config::state_path("gpu-programs").string()};
   const int code = on_page ? mux_run_on_page(program, how, kinds) : mux_run_in_window(program, how, kinds);
-  // Started only once what is kept was read: never, where the vault stayed locked.
-  if (net.thread.joinable())
-    net.thread.join();
   return code;
 }

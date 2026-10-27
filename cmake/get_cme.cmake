@@ -19,10 +19,10 @@
 #
 # The registry revision containing the call dependencies and Android fixes.
 # Its archive is pinned by digest along with its commit.
-set(CME_PINNED "884af53891e57e7de13a18b17f131e3d6eef8c74")
-set(CME_PINNED_SHA256 "ddd3f8c365358098c3dd8c7eac7cb5b6c1b3801de000eddf0f574293dc0e8d9f")
+set(CME_PINNED "941453b24f171d73c315de35b8a0c2b08615fb35")
+set(CME_PINNED_SHA256 "d6554265de8d385ebd136041ea5ee70a2de1891c31e1dff453161d135fa4cece")
 set(CME_PINNED_URL
-  "https://github.com/j4niwzis/cmake-everywhere/archive/884af53891e57e7de13a18b17f131e3d6eef8c74.tar.gz")
+  "https://github.com/j4niwzis/cmake-everywhere/archive/941453b24f171d73c315de35b8a0c2b08615fb35.tar.gz")
 if(NOT "${CME_PIN_APPLIED}" STREQUAL "${CME_PINNED}")
   set(CME_VERSION "${CME_PINNED}" CACHE STRING
     "cmake-everywhere release" FORCE)

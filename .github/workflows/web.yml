@@ -58,8 +58,9 @@ jobs:
             -DCME_BUILD_MACHINE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'
       - name: Check browser networking and persistence
         run: |
-          cmake --build build-web --parallel 1 --target skiff_browser_services skiff_browser_fibers
+          cmake --build build-web --parallel 1 --target skiff_browser_services skiff_browser_fibers skiff_browser_net_lifecycle
           node build-web/browser-check/fibers.js
+          node build-web/browser-check/net-lifecycle.js
           python3 tools/package_web.py --build build-web/browser-check --output build-web/service-check --program services
           npm install --no-save --prefix /tmp/mux-web-check playwright@1.62.1
           /tmp/mux-web-check/node_modules/.bin/playwright install --with-deps chromium
@@ -72,6 +73,17 @@ jobs:
         with:
           name: web-modules
           dir: build-web
+      - name: Record sources for the failed build
+        if: failure()
+        run: git ls-files -z | xargs -0 sha1sum > build-web/sources.sha1
+      - name: Keep the failed module build for the next run
+        if: failure()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build-web
+            .cache/cpm
+          key: web-emsdk6.0.13-v1-${{ github.sha }}-modules
   app:
     runs-on: ubuntu-24.04
     timeout-minutes: 350

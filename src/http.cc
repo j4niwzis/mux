@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.http: request pooling and exchange, on the platform transport.
+module;
+#include <boost/asio/error.hpp>
 export module mux.http;
 export import :types;
 export import :connection;

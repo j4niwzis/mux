@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Matrix's connection contract on skiff-framework's browser transport.
+module;
+#include <boost/asio/error.hpp>
 export module mux.http:connection;
 import std;
 import mux.net;

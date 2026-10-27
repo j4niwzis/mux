@@ -42,7 +42,7 @@ class turn_tls_tunnel {
     void close() {
       boost::system::error_code ignored;
       resolver.cancel();
-      deadline.cancel(ignored);
+      deadline.cancel();
       local.close(ignored);
       remote.lowest_layer().close(ignored);
     }

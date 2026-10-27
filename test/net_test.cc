@@ -10,6 +10,14 @@ namespace {
 
 using mux::net::loop;
 
+TEST(Net, MissingNameserverStillTriesTheXmppDomain) {
+  loop running;
+  const auto targets = mux::net::xmpp_targets(running, "example.com", std::nullopt);
+  ASSERT_EQ(targets.size(), 1u);
+  EXPECT_EQ(targets.front().host, "example.com");
+  EXPECT_EQ(targets.front().port, 5222);
+}
+
 TEST(Loop, ParkAndWake) {
   loop running;
   std::vector<std::string> said;

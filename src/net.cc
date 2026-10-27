@@ -846,12 +846,14 @@ inline std::optional<asio::ip::address> nameserver() {
 // the order they are to be tried; the domain itself on 5222 where there are
 // none, or the lookup fails. Asked over UDP, with tern's encoder and
 // decoder; a second try after a second without an answer.
-inline std::vector<tern::srv::target> xmpp_targets(loop& owner, std::string_view domain) {
+inline std::vector<tern::srv::target> xmpp_targets(loop& owner, std::string_view domain,
+                                                std::optional<asio::ip::address> dns = nameserver()) {
   std::vector<tern::srv::target> found;
   error_code opened;
   asio::ip::udp::socket socket(owner.io());
-  const auto dns = nameserver();
-  if (!dns) return found;
+  // Android may expose no nameserver, even though its system resolver can
+  // resolve the domain for connect(). SRV is optional in that case too.
+  if (!dns) return {tern::srv::fallback(domain)};
   const asio::ip::udp::endpoint server(*dns, 53);
   socket.open(server.protocol(), opened);
   std::random_device entropy;

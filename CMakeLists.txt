@@ -186,7 +186,7 @@ mux_find_package(alef 0.1.1 COMPONENTS precis idna grapheme line bidi emoji REQU
 # loom.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG 56858a4b579584a85b488db99ef10687a97702d5
+  GIT_TAG 54dd75281fc01014774196a96143d36155b26299
   LICENSE AGPL-3.0-only)
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),

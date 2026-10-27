@@ -39,6 +39,13 @@ jobs:
           fi
           echo "$began" > build-web/run-began
           tr '\n' '\0' < build-web/changed-sources | xargs -0 -r touch -d "@$began"
+      - name: Check Rust and C++ share the browser thread ABI
+        run: |
+          cargo build --manifest-path test/browser-rust/Cargo.toml --release --target wasm32-unknown-emscripten --target-dir build-web/rust-check
+          em++ -std=c++26 -pthread -O2 test/browser-rust/main.cc \
+            build-web/rust-check/wasm32-unknown-emscripten/release/libmux_browser_rust_check.a \
+            -sPTHREAD_POOL_SIZE=1 -sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sENVIRONMENT=node -o build-web/rust-check.js
+          node build-web/rust-check.js
       - name: Configure the client for the browser
         run: |
           emcmake cmake -S . -B build-web -G Ninja \

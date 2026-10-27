@@ -106,11 +106,11 @@ endforeach()
 
 # The libraries of this family, each pinned to a commit.
 # chevron, which tern reads the XML of streams with: mux reads a message's
-# HTML with it too (dialect::html). Declared first, at the same commit as
-# tern's own pin, so both use the streaming reader and writer.
+# HTML with it too (dialect::html). Declared first so tern and Mux use
+# the same streaming reader, including iterative ignored-markup parsing.
 cme_declare_port(NAME chevron PROVIDES chevron
   GITHUB_REPOSITORY j4niwzis/chevron
-  GIT_TAG 8f40c545f0120747b3bf2ad6a61b420505e1249b
+  GIT_TAG ac3a1f524d0fffe495d31f8208ba3f6c6c79e90f
   # What the pin is: a copy installed on the machine from before it (0.1,
   # before spl::remapped and chevron.escape) is passed over.
   VERSION 0.2
@@ -291,7 +291,7 @@ cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG 817cebe03fe1485d1680b43a691e914f8fb803fb
+  GIT_TAG 4d3928f56040b6ced65cef715d523108905da056
   VERSION 0.1.0)
 # `mux --page`: the same program laid out and painted by an HTML engine
 # called directly (Blitz, through skiff.platform.page) -- for measuring it

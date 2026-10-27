@@ -45,6 +45,7 @@ struct session_description {
 struct ice_candidate {
   std::string line;
   std::string mid;
+  std::optional<std::int64_t> index;
 };
 
 // What a call's connection told since the program last asked.
@@ -56,10 +57,14 @@ struct candidate {
   ice_candidate it;
 };
 struct connected {};
-struct failed {};
+struct disconnected {};
+struct failed {
+  std::string why;
+  bool audio = false;
+};
 struct ended {};
 }  // namespace said
-using said_t = spl::variant<said::description, said::candidate, said::connected, said::failed, said::ended>;
+using said_t = spl::variant<said::description, said::candidate, said::connected, said::disconnected, said::failed, said::ended>;
 
 }  // namespace mux::calls
 
@@ -71,12 +76,13 @@ namespace call_end {
 struct hung_up {};
 struct busy {};
 struct timed_out {};    // not answered in time
-struct failed {};       // the connection, or the sound, could not be had
+struct failed {};       // the connection could not be had
+struct media_failed {}; // the microphone or audio device failed
 struct other {
   std::string said;
 };
 }  // namespace call_end
-using call_end_t = spl::variant<call_end::hung_up, call_end::busy, call_end::timed_out, call_end::failed, call_end::other>;
+using call_end_t = spl::variant<call_end::hung_up, call_end::busy, call_end::timed_out, call_end::failed, call_end::media_failed, call_end::other>;
 // The version of the calls protocol a call is made in: Element's legacy
 // calls (0), or version 1 -- what its invite said, and what is said back.
 namespace call_version {
@@ -93,6 +99,10 @@ struct invite {
 struct answer {
   mux::calls::session_description it;
 };
+struct negotiate {
+  mux::calls::session_description description;
+  std::chrono::milliseconds lifetime{60000};
+};
 struct candidates {
   std::vector<mux::calls::ice_candidate> them;
 };
@@ -106,7 +116,7 @@ struct select_answer {
 };
 }  // namespace call_said
 using call_said_t =
-    spl::variant<call_said::invite, call_said::answer, call_said::candidates, call_said::hangup, call_said::reject,
+    spl::variant<call_said::invite, call_said::answer, call_said::negotiate, call_said::candidates, call_said::hangup, call_said::reject,
                  call_said::select_answer>;
 // A call's signalling, as its protocol carried it: what was said in one
 // call, by the other side or by the user's own other session. Protocol-
@@ -119,6 +129,7 @@ struct call_signalled {
   bool mine = false;   // the user's own, from another session
   std::chrono::sys_time<std::chrono::milliseconds> at{};
   call_said_t said;
+  std::string own_party; // This account's device, independent of any previous call.
 };
 // The servers a call of an account goes through, as its server gave them
 // (Matrix's /voip/turnServer): asked as a call starts.
@@ -126,6 +137,7 @@ struct call_servers {
   account_id account;
   std::vector<mux::calls::ice_server> servers;
   std::string party;
+  std::string call; // Correlate asynchronous replies with the requesting call.
 };
 using changes = mux::change_list<call_signalled, call_servers>;
 

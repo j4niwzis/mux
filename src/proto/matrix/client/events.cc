@@ -322,8 +322,17 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
   // A plugin's (mux.plugins.matrix, by the sink's): told to it, and a line
   // of its own in the timeline where it says so.
   }, [&](const auto& content) requires(plugins_hear<std::remove_cvref_t<decltype(content)>>()) {
-    if (this->tell_plugins(sink_plugins_tag{}, content, heard_here{this, in, one, at, where}))
-      done(in, one, event_type_of(one.type), at, where);
+    heard_here heard{this, in, one, at, where};
+    if (this->tell_plugins(sink_plugins_tag{}, content, heard)) {
+      if (heard.text) {
+        const std::string who = name_in(in.id, one.sender);
+        service(in, one, at, where, who + *heard.text, room_event::other{},
+                std::format(R"(<a href="https://matrix.to/#/{}">{}</a>{})",
+                            chevron::escaped(one.sender), chevron::escaped(who), chevron::escaped(*heard.text)));
+      } else {
+        done(in, one, event_type_of(one.type), at, where);
+      }
+    }
   }, [&](const auto&) {
     // The rest, by its type: loom's timeline union does not have their
     // content yet.

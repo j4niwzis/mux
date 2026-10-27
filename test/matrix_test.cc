@@ -113,6 +113,14 @@ void sink::operator()(mux::change_t one) const {
   if (room_there && !to->sent) {
     to->sent = true;
     to->account->send("!r:x.org", "from mux");
+    loom::ev::m_call_invite_content_t invite{};
+    invite.call_id = "ordered-call";
+    invite.lifetime = 60000;
+    invite.offer.sdp = "offer";
+    to->account->send_event("!r:x.org", "m.call.invite", std::move(invite));
+    loom::ev::m_call_candidates_content_t candidates{};
+    candidates.call_id = "ordered-call";
+    to->account->send_event("!r:x.org", "m.call.candidates", std::move(candidates));
     to->account->send_in_thread("!r:x.org", "> :neocat:\n\nreply", "$root", "$root", "$quoted",
         {{2, 10, mux::run_style::custom_emoji{"mxc://original/neocat"}}});
     to->account->react("!r:x.org", "$m1", "mxc://remote/neocat", true, ":neocat:");
@@ -133,7 +141,8 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
 
   std::vector<request> heard;
   recorder seen{.running = &running};
-  int syncs = 0, reactions_sent = 0, messages_sent = 0;
+  int syncs = 0, reactions_sent = 0, messages_sent = 0, call_events = 0;
+  bool call_description_acked = false, candidates_overtook_description = false;
   std::array<int, 3> initial_updates{};
   running.spawn([&] {
     for (;;) {
@@ -162,9 +171,20 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
                     "ephemeral":{"events":[{"type":"m.receipt","content":{
                       "$m1":{"m.read":{"@b:x.org":{"ts":15}}}}}]}}}}})";
                 }
-                if (syncs >= 3 && reactions_sent == 4 && messages_sent == 2)
+                if (syncs >= 3 && reactions_sent == 4 && messages_sent == 2 && call_events == 2)
                   seen.account->stop();
               }
+            } else if (one->target.find("/send/m.call.invite/") != std::string::npos) {
+              ++call_events;
+              // Let other HTTP fibers run while the description send is
+              // outstanding. Candidates must not start a parallel send.
+              running.sleep(std::chrono::milliseconds(50));
+              call_description_acked = true;
+              body = R"({"event_id":"$call-invite"})";
+            } else if (one->target.find("/send/m.call.candidates/") != std::string::npos) {
+              ++call_events;
+              candidates_overtook_description = !call_description_acked;
+              body = R"({"event_id":"$call-candidates"})";
             } else if (one->target.find("/send/m.reaction/") != std::string::npos) {
               ++reactions_sent;
               body = R"({"event_id":"$reaction)" + std::to_string(reactions_sent) + R"("})";
@@ -190,6 +210,8 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   seen.account.emplace(running, client_tls, how, sink{&seen});
   seen.account->start();
   running.run();
+  EXPECT_EQ(call_events, 2);
+  EXPECT_FALSE(candidates_overtook_description);
   EXPECT_EQ(seen.room_updates, initial_updates[0]);
   EXPECT_EQ(seen.member_updates, initial_updates[1]);
   EXPECT_EQ(seen.typing_updates, initial_updates[2]);

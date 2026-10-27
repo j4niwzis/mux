@@ -27,7 +27,7 @@ runs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y ninja-build python3 openjdk-17-jdk-headless \
+        sudo apt-get install -y ninja-build meson python3 openjdk-17-jdk-headless \
           aapt zipalign dexdump generate-ninja nasm pkg-config perl \
           curl lsb-release software-properties-common gnupg
         curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh

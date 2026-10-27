@@ -40,11 +40,18 @@ struct active_call {
   bool outgoing = false;
   call_state_t state;
   std::string their_party;
+  std::string their_sender;
+  bool negotiation_pending = false;
   mux::calls::session_description offer;
   // The version it is made in: its invite's, or version 1 for one made here.
   call_version_t version = call_version::current{};
   std::map<std::string, std::vector<mux::calls::ice_candidate>> early;
   std::vector<mux::calls::ice_candidate> candidates_out;
+  // ICE gathering can report candidates before libdatachannel reports the
+  // local SDP. Do not signal them until the invite or answer is queued first:
+  // the receiver cannot associate candidates with a call it has not
+  // seen yet, and would discard them.
+  bool description_signalled = false;
   std::chrono::steady_clock::time_point ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
   std::unique_ptr<mux::calls::media_session<app::wake_window>> media;
 };
@@ -72,7 +79,7 @@ class part {
     // The microphone asked for now, where the system asks the user: the
     // sound opens once it is given (mux.calls.media tries again).
     (void)platform::permissions::microphone();
-    s_->net->ask(one.in.account, ask_servers{});
+    s_->net->ask(one.in.account, ask_servers{current_->id});
     this->show();
   }
   // An ended call put away before its moment is up.
@@ -91,8 +98,9 @@ class part {
     if (!current_ || !holds<call_state::ringing_in>())
       return;
     current_->state = call_state::starting{};
+    current_->ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
     (void)platform::permissions::microphone();
-    s_->net->ask(current_->in.account, ask_servers{});
+    s_->net->ask(current_->in.account, ask_servers{current_->id});
     this->show();
   }
   void apply(const decline_call&) {
@@ -116,8 +124,22 @@ class part {
 
   // -- what accounts said
   void take(const call_signalled& one) {
+    if (is_current(one) && !one.mine && !current_->their_sender.empty() && one.sender != current_->their_sender)
+      return;
     spl::visit(spl::overloaded{[&](const call_said::invite& invite) { this->invited(one, invite); },
                                      [&](const call_said::answer& answer) { this->answered(one, answer); },
+                                     [&](const call_said::negotiate& update) {
+                                       if (!is_current(one) || one.mine || !current_->media || !current_->description_signalled || current_->negotiation_pending ||
+                                           holds<call_state::ringing_in>() || holds<call_state::ringing_out>() || holds<call_state::starting>())
+                                         return;
+                                       if (one.party != current_->their_party || std::chrono::system_clock::now() >= one.at + update.lifetime)
+                                         return;
+                                       const bool offer = spl::visit(spl::overloaded{
+                                           [](mux::calls::sdp_kind::offer) { return true; },
+                                           [](mux::calls::sdp_kind::answer) { return false; }}, update.description.kind);
+                                       current_->negotiation_pending = offer;
+                                       current_->media->renegotiate(update.description);
+                                     },
                                      [&](const call_said::candidates& them) {
                                        if (!this->is_current(one) || one.mine)
                                          return;
@@ -131,31 +153,49 @@ class part {
                                      [&](const call_said::hangup& done) {
                                        if (!this->is_current(one))
                                          return;
+                                       const bool legacy = spl::visit(spl::overloaded{
+                                           [](call_version::legacy) { return true; }, [](call_version::current) { return false; }}, current_->version);
+                                       if (one.mine && !legacy && !holds<call_state::ringing_in>()) return;
+                                       // A losing remote device can hang up after another
+                                       // device's answer was selected. It cannot end that call.
+                                       if (!one.mine && !current_->their_party.empty() && one.party != current_->their_party)
+                                         return;
                                        this->end(spl::visit(
                                            spl::overloaded{
                                                [](call_end::hung_up) { return std::string("Call ended"); },
                                                [](call_end::busy) { return std::string("They're busy"); },
                                                [](call_end::timed_out) { return std::string("No answer"); },
                                                [](call_end::failed) { return std::string("Their connection failed"); },
+                                               [](call_end::media_failed) { return std::string("Their audio could not be started"); },
                                                [](const call_end::other& said) { return "Call ended: " + said.said; }},
                                            done.why));
                                      },
                                      [&](const call_said::reject&) {
-                                       if (this->is_current(one))
-                                         this->end(one.mine ? "Declined on another device" : "They declined the call");
+                                       if (!this->is_current(one)) return;
+                                       if (!current_->their_party.empty() && !one.mine && one.party != current_->their_party) return;
+                                       // Once answered here, a late decline from another of
+                                       // our sessions must not tear down this device's call.
+                                       if (one.mine && !holds<call_state::ringing_in>()) return;
+                                       this->end(one.mine ? "Declined on another device" : "They declined the call");
                                      },
                                      [&](const call_said::select_answer& chosen) {
                                        // Answered by another of the user's sessions: not this one's.
-                                       if (this->is_current(one) && !current_->outgoing && !own_party_.empty() && chosen.party != own_party_)
+                                       if (this->is_current(one) && !one.mine && !current_->outgoing && !one.own_party.empty() &&
+                                           one.party == current_->their_party && chosen.party != one.own_party)
                                          this->end("Answered on another device");
                                      }},
                   one.said);
   }
   void take(const call_servers& one) {
-    if (!current_ || current_->in.account != one.account || !holds<call_state::starting>())
+    if (!current_ || current_->in.account != one.account || current_->id != one.call || !holds<call_state::starting>())
       return;
-    own_party_ = one.party;
-    current_->media = std::make_unique<session>(one.servers, *s_->wake);
+    try {
+      current_->media = std::make_unique<session>(one.servers, *s_->wake);
+    } catch (const std::exception& failed) {
+      this->signal(call_said_t{call_said::hangup{call_end::failed{}}});
+      this->end(std::string("Call setup failed: ") + failed.what());
+      return;
+    }
     if (current_->outgoing) {
       current_->media->offer();
       current_->state = call_state::ringing_out{};
@@ -192,7 +232,7 @@ class part {
     }
     if (current_->media)
       for (const mux::calls::said_t& said : current_->media->take()) { if (current_) this->connection_said(said); }
-    if (current_ && !current_->candidates_out.empty())
+    if (current_ && current_->description_signalled && !current_->negotiation_pending && !current_->candidates_out.empty())
       this->signal(call_said_t{call_said::candidates{std::exchange(current_->candidates_out, {})}});
     if (current_ && holds<call_state::ringing_in>() && std::chrono::steady_clock::now() > current_->ring_until)
       this->end("Missed call");
@@ -239,20 +279,21 @@ class part {
   void invited(const call_signalled& one, const call_said::invite& invite) {
     if (one.mine)
       return;
+    // Expired invites must not ring, nor produce a busy response.
+    const auto remaining = one.at + invite.lifetime - std::chrono::system_clock::now();
+    if (remaining <= std::chrono::system_clock::duration::zero())
+      return;
     // Busy: one call at a time.
     if (current_) {
       if (current_->id != one.call)
         s_->net->ask(one.in.account, send_signal{one.in.id, one.call, invite.version, call_said_t{call_said::hangup{call_end_t{call_end::busy{}}}}});
       return;
     }
-    // Come too late: its time run out already.
-    if (std::chrono::system_clock::now() > one.at + invite.lifetime)
-      return;
     ended_.reset();
     current_.emplace(active_call{.in = one.in, .id = one.call, .outgoing = false, .state = call_state::ringing_in{},
-                          .their_party = one.party, .offer = invite.offer, .version = invite.version});
+                          .their_party = one.party, .their_sender = one.sender, .offer = invite.offer, .version = invite.version});
     current_->ring_until = std::chrono::steady_clock::now() +
-                           std::chrono::duration_cast<std::chrono::steady_clock::duration>(invite.lifetime);
+                           std::chrono::duration_cast<std::chrono::steady_clock::duration>(remaining);
     this->show();
   }
   void answered(const call_signalled& one, const call_said::answer& answer) {
@@ -260,13 +301,16 @@ class part {
       return;
     // Answered by the user elsewhere, where they were called: not here.
     if (one.mine) {
-      if (!current_->outgoing)
+      // If this device has also accepted, the caller chooses between the
+      // simultaneous answers with select_answer. Do not cancel ours early.
+      if (!current_->outgoing && holds<call_state::ringing_in>())
         this->end("Answered on another device");
       return;
     }
     if (!current_->outgoing || !holds<call_state::ringing_out>() || !current_->media)
       return;
     current_->their_party = one.party;
+    current_->their_sender = one.sender;
     current_->media->answered(answer.it);
     add_early_candidates();
     this->signal(call_said_t{call_said::select_answer{one.party}});
@@ -281,24 +325,39 @@ class part {
   }
   void connection_said(const mux::calls::said_t& said) {
     spl::visit(spl::overloaded{[&](const mux::calls::said::description& ours) {
+                                       if (current_->description_signalled) {
+                                         this->signal(call_said_t{call_said::negotiate{ours.it}});
+                                         current_->negotiation_pending = false;
+                                         return;
+                                       }
                                        spl::visit(spl::overloaded{[&](mux::calls::sdp_kind::offer) {
                                                                           this->signal(call_said_t{call_said::invite{ours.it, std::chrono::milliseconds(60000)}});
+                                                                          current_->ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
                                                                         },
                                                                         [&](mux::calls::sdp_kind::answer) {
                                                                           this->signal(call_said_t{call_said::answer{ours.it}});
                                                                         }},
                                                      ours.it.kind);
+                                       current_->description_signalled = true;
                                      },
                                      [&](const mux::calls::said::candidate& ours) { current_->candidates_out.push_back(ours.it); },
                                      [&](mux::calls::said::connected) {
                                        current_->state = call_state::connected{std::chrono::steady_clock::now()};
                                        this->show();
                                      },
-                                     [&](mux::calls::said::failed) {
-                                       this->signal(call_said_t{call_said::hangup{call_end_t{call_end::failed{}}}});
+                                     [&](mux::calls::said::disconnected) {
+                                       if (!holds<call_state::connecting>()) {
+                                         current_->state = call_state::connecting{};
+                                         current_->ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+                                       }
+                                     },
+                                     [&](const mux::calls::said::failed& failed) {
+                                       const call_end_t reason = failed.audio ? call_end_t{call_end::media_failed{}} : call_end_t{call_end::failed{}};
+                                       this->signal(call_said_t{call_said::hangup{reason}});
                                        // Where the two are on different networks, the
                                        // account's server has to offer a relay (TURN).
-                                       this->end("Connection failed: no route between you, or no relay from your server");
+                                       this->end(failed.why.empty() ? "Connection failed: no route between you, or no relay from your server"
+                                                                     : "Call failed: " + failed.why);
                                      },
                                      [&](mux::calls::said::ended) { this->end("Call ended"); }},
                   said);
@@ -382,7 +441,6 @@ class part {
     if (std::exchange(callable_, now) != now)
       this->shown(call_shown{.now = shown_, .callable = callable_});
   }
-  std::string own_party_;
 };
 
 // Its part, among the program's (mux.app.program): it takes what the

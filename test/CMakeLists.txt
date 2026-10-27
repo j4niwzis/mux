@@ -69,6 +69,19 @@ if(MUX_UI)
   add_test(NAME emoji-panel COMMAND mux-emoji-panel-test)
 endif()
 
+# SDP negotiation uses the offer's media identity and codec payload.
+if(MUX_UI AND MUX_PLUGIN_CALLS AND MUX_CALLS)
+  add_executable(mux-calls-test calls_test.cc)
+  target_link_libraries(mux-calls-test PRIVATE mux_modules LibDataChannel::LibDataChannel ${mux_gtest})
+  add_test(NAME calls COMMAND mux-calls-test)
+endif()
+
+if(MUX_PLUGIN_CALLS AND MUX_PROTOCOL_MATRIX)
+  add_executable(mux-calls-matrix-test calls_matrix_test.cc)
+  target_link_libraries(mux-calls-matrix-test PRIVATE mux_modules ${mux_gtest})
+  add_test(NAME calls-matrix COMMAND mux-calls-matrix-test)
+endif()
+
 # The rest try every protocol side by side, and the plugins with them:
 # built where all are turned on.
 if(NOT mux_all_protocols OR NOT mux_all_plugins)

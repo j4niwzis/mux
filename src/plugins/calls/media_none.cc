@@ -20,6 +20,7 @@ class media_session {
   void offer() { this->fail(); }
   void answer(const session_description&) { this->fail(); }
   void answered(const session_description&) {}
+  void renegotiate(const session_description&) { this->fail(); }
   void add_candidate(const ice_candidate&) {}
   void mute(bool) {}
   [[nodiscard]] bool muted() const { return false; }

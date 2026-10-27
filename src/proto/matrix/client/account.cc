@@ -132,7 +132,11 @@ plaintext_refused::~plaintext_refused() = default;
 // found by ADL where the account is made -- and whether the event is then
 // a line of its own in the timeline.
 namespace heard {
-struct line {};
+struct line {
+  // Human-readable action following the sender's display name. Empty keeps
+  // the account's usual service-event rendering.
+  std::string text;
+};
 struct quiet {};
 }  // namespace heard
 using heard_t = spl::variant<heard::line, heard::quiet>;
@@ -506,15 +510,40 @@ class account {
   // session's party, as a call names it: its device.
   template <class Content>
   void send_event(std::string room, std::string type, Content content) {
-    this->spawn_sending([this, room = std::move(room), type = std::move(type), content = std::move(content)] {
-      if (!api_)
-        return;
-      auto sent = this->send_room_event(
-          loom::cs::send_message{.room_id = room, .event_type = type, .txn_id = this->transaction(), .body = as_body(content)});
-      if (!sent)
-        log(id_, "could not send {} in {}", type, room);
+    // These events form a protocol sequence (invite/answer, candidates,
+    // hangup). Separate sending fibers can overtake each other while HTTP
+    // or encryption yields, even when the caller enqueues them in order.
+    plugin_events_.push_back(loom::cs::send_message{
+        .room_id = std::move(room), .event_type = std::move(type),
+        .txn_id = this->transaction(), .body = as_body(content)});
+    if (sending_plugin_events_)
+      return;
+    sending_plugin_events_ = true;
+    this->spawn_sending([this] {
+      try {
+        while (!plugin_events_.empty()) {
+          auto event = std::move(plugin_events_.front());
+          plugin_events_.pop_front();
+          if (!api_)
+            continue;
+          const auto type = event.event_type;
+          const auto room = event.room_id;
+          auto sent = this->send_room_event(std::move(event));
+          if (!sent) {
+            log(id_, "could not send {} in {}", type, room);
+            // Later signals cannot repair a missing invite or answer.
+            plugin_events_.clear();
+          }
+        }
+      } catch (...) {
+        plugin_events_.clear();
+        sending_plugin_events_ = false;
+        throw;
+      }
+      sending_plugin_events_ = false;
     });
   }
+
   template <class Request, class Then>
   void ask_server(Request request, Then then) {
     this->spawn_guarded([this, request = std::move(request), then = std::move(then)] mutable {
@@ -699,6 +728,8 @@ class account {
   // The encrypted files events named, by their mxc:// URI: what opens each
   // once it is downloaded.
   std::map<std::string, crypto::encrypted_file, std::less<>> encrypted_media_;
+  std::deque<loom::cs::send_message> plugin_events_;
+  bool sending_plugin_events_ = false;
   // A fiber of this account. What it throws past its own handling -- the
   // unforeseen, a bug -- is caught here: let out, it left the loop and
   // stopped every account's network without a word. It is logged
@@ -906,6 +937,7 @@ class account {
     const loom::ev::timeline_event& event;
     std::chrono::sys_time<std::chrono::milliseconds> at;
     placement_t where;
+    std::optional<std::string> text;
     [[nodiscard]] bool news() const { return placed_as_news(where) || self->late_news_; }
     [[nodiscard]] bool history() const { return self->telling_history_; }
     [[nodiscard]] bool mine() const { return event.sender == self->id_.address; }
@@ -928,7 +960,10 @@ class account {
   template <class Plugin, class Content>
     requires hears<Plugin, Content, heard_here>
   static bool told(const Content& content, heard_here& what) {
-    return spl::visit(spl::overloaded{[](heard::line) { return true; }, [](heard::quiet) { return false; }},
+    return spl::visit(spl::overloaded{[&](heard::line line) {
+                        if (!line.text.empty()) what.text = std::move(line.text);
+                        return true;
+                      }, [](heard::quiet) { return false; }},
                       heard_t{matrix_heard(contract::matrix_events{}, type_tag<Plugin>{}, content, what)});
   }
   template <class Plugin, class Content>
@@ -938,7 +973,7 @@ class account {
   // Told to every plugin that hears it: a line in the timeline where any
   // says so.
   template <class Content, template <class...> class List, class... Plugins>
-  bool tell_plugins(type_tag<List<Plugins...>>, const Content& content, heard_here what) {
+  bool tell_plugins(type_tag<List<Plugins...>>, const Content& content, heard_here& what) {
     return (std::size_t{0} + ... + (told<Plugins>(content, what) ? std::size_t{1} : std::size_t{0})) > 0;
   }
   [[nodiscard]] std::string name_in(const std::string& room, const std::string& user) const;

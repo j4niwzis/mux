@@ -30,7 +30,7 @@ runs:
     # it opens windows on.
     - name: windowing headers
       shell: bash
-      run: sudo apt-get install -y xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols nasm
+      run: sudo apt-get install -y libnice-dev meson xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols nasm
     - name: cmake
       shell: bash
       run: |

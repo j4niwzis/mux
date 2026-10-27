@@ -139,6 +139,12 @@ cmake -G Ninja -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
+Voice call builds (`MUX_CALLS=ON`) use a pinned libdatachannel with libnice
+for relay transport and ICE restarts. Installed libnice development files
+are used when available (for example, `libnice-dev` on Debian or Ubuntu).
+Otherwise GLib and libnice are built from source; that fallback needs the
+host tools Meson and pkg-config, including when cross-compiling for Android.
+
 Options: `MUX_CALLS` (voice calls), `MUX_VIDEO` (FFmpeg), `MUX_GL`,
 `MUX_GIF`, `MUX_WEBP`, `MUX_CLI` (a terminal client), `MUX_TESTS`.
 

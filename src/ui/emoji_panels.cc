@@ -324,8 +324,13 @@ auto emoji_panel(const palette& colours, emoji_kept& kept, Pick pick) {
   using tones_field = skiff::model::Field<&emoji_draft::tones>;
   auto tones = c::placed_at<tones_field>([](const std::optional<tones_shown>& now) { return now.transform([](const tones_shown& one) { return one.at; }); },
       c::projected<tones_field>([](const std::optional<tones_shown>& now) {
-        return !now ? std::vector<emoji_item>{}
-                    : std::views::concat(std::views::single(now->base), logic::tones_of(*now->base)) | std::views::transform([](const alef::emoji* one) { return item_of(one); }) | std::ranges::to<std::vector>();
+        std::vector<emoji_item> items;
+        if (now) {
+          items.push_back(item_of(now->base));
+          for (const auto* one : logic::tones_of(*now->base))
+            items.push_back(item_of(one));
+        }
+        return items;
       }, c::listed<emoji_item>(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {4.0f, 4.0f, 4.0f, 4.0f}, .cornerRadius = 8.0f,
                                               .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f},
                                               .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),

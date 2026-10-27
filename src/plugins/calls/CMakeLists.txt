@@ -7,7 +7,9 @@
 option(MUX_CALLS "Voice calls' connection, through WebRTC (libdatachannel)" OFF)
 set(media media_none.cc)
 set(libraries)
-if(MUX_CALLS)
+if(MUX_CALLS AND CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  set(media media_web.cc)
+elseif(MUX_CALLS)
   # cme owns the library recipes, host generators and ICE backend patches.
   # This feature builds a known libnice backend with TURN TCP/TLS support.
   cme_features(libdatachannel nice)

@@ -1,0 +1,40 @@
+name: Browser build machine
+runs:
+  using: composite
+  steps:
+    - name: Host tools and libc++ headers
+      shell: bash
+      run: |
+        sudo apt-get update || true
+        sudo apt-get install -y ninja-build python3 pkg-config meson curl gnupg lsb-release software-properties-common
+        curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+        sudo bash /tmp/llvm.sh 23
+        sudo apt-get install -y libc++-23-dev libc++abi-23-dev
+    - name: CMake
+      shell: bash
+      run: |
+        version=4.4.3
+        curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}-linux-x86_64.tar.gz" -o /tmp/cmake.tar.gz
+        sudo tar xzf /tmp/cmake.tar.gz -C /opt
+        echo "/opt/cmake-${version}-linux-x86_64/bin" >> "$GITHUB_PATH"
+    - uses: actions/cache@v4
+      with:
+        path: ~/.cache/mux-emsdk
+        key: mux-emsdk-6.0.13-${{ runner.os }}-v1
+    - name: Emscripten and Rust target
+      shell: bash
+      run: |
+        sdk="$HOME/.cache/mux-emsdk"
+        if [ ! -x "$sdk/emsdk" ]; then git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$sdk"; fi
+        "$sdk/emsdk" install 6.0.13
+        "$sdk/emsdk" activate 6.0.13
+        echo "$sdk/upstream/emscripten" >> "$GITHUB_PATH"
+        echo "$sdk/upstream/bin" >> "$GITHUB_PATH"
+        echo "EM_CONFIG=$sdk/.emscripten" >> "$GITHUB_ENV"
+        rustup toolchain install 1.91.0 --profile minimal
+        rustup default 1.91.0
+        rustup target add wasm32-unknown-emscripten
+        python3 tools/prepare_emscripten.py --emscripten "$sdk/upstream/emscripten" --libcxx /usr/lib/llvm-23/include/c++/v1
+    - name: Memory for template-heavy units
+      shell: bash
+      run: bash .github/scripts/memory.sh

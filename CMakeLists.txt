@@ -133,7 +133,15 @@ cme_options(loom "LOOM_TESTS OFF")
 
 # Boost: Asio for the sockets and the loop, Beast for Matrix's HTTP,
 # Context for the fibers, and PFR as a module for what reads with it.
-mux_find_package(Boost COMPONENTS asio beast pfr[modules] context REQUIRED)
+set(mux_context context)
+set(mux_fibers src/fibers.cc)
+set(mux_http_connection src/http_connection.cc)
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  set(mux_context)
+  set(mux_fibers src/fibers_web.cc)
+  set(mux_http_connection src/http_connection_web.cc)
+endif()
+mux_find_package(Boost COMPONENTS asio beast pfr[modules] ${mux_context} REQUIRED)
 mux_find_package(OpenSSL REQUIRED)
 
 # Boost's definitions reach what links Boost, and nothing else, as in the
@@ -206,7 +214,7 @@ add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
   FILES ${mux_protocol_core} ${mux_enabled_core} ${mux_plugin_types} ${mux_plugins_types}
         ${mux_plugin_changes} ${mux_plugins_changes} src/core_ids.cc src/proto/changes.cc src/proto/proto.cc src/proto/protocols.cc
-        src/core.cc src/net.cc src/http.cc src/preview.cc src/media.cc src/proto/clients.cc
+        src/core.cc ${mux_fibers} src/net.cc src/http_types.cc ${mux_http_connection} src/http.cc src/preview.cc src/media.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc src/logic/notifications.cc
         src/logic/link_base.cc src/proto/links.cc
         src/logic/forwarding.cc src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
@@ -241,8 +249,11 @@ set(mux_std_flags
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
   $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 target_compile_options(mux_modules PUBLIC ${mux_std_flags})
-target_link_libraries(mux_modules PUBLIC chevron tern loom vodozemac::vodozemac Boost::asio Boost::beast Boost::context
+target_link_libraries(mux_modules PUBLIC chevron tern loom vodozemac::vodozemac Boost::asio Boost::beast
   OpenSSL::SSL OpenSSL::Crypto)
+if(mux_context)
+  target_link_libraries(mux_modules PUBLIC Boost::context)
+endif()
 
 # The accounts kept between runs: a library of its own, on knot alone, so
 # that it builds and is tested without the protocols.
@@ -266,21 +277,21 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin 4394f80df8cc6c56fad59296eab9d39876cd3e18)
+set(mux_skiff_pin 4ce179cbcaeac3b093d9f6e1f0c0b89083d1c770)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
   VERSION 0.1.0)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 09c01cb6707526e482d2ad6e5936b022b19fc536
+  GIT_TAG 9dcbcb6fcba5ef3861eeaa85b50663cde9ef2e03
   VERSION 0.1.0)
 # skiff-framework: the window (skiff.platform.window) -- SDL3 makes it and
 # brings its input, Skia draws skiff's scene into it -- as any program of
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG bb592834c57840bd1268786077a6d902b358779a
+  GIT_TAG dd065082621620bae5c4d68fc81d8c9e584f6674
   VERSION 0.1.0)
 # `mux --page`: the same program laid out and painted by an HTML engine
 # called directly (Blitz, through skiff.platform.page) -- for measuring it
@@ -292,12 +303,19 @@ cmake_dependent_option(MUX_PAGE "mux --page: shown through Blitz (needs cargo)" 
 option(MUX_SKIA "Skia (off: the page only)" ON)
 # The page only: skiff's own window not built, the page what mux shows.
 option(MUX_WINDOW "skiff's own window (off: the page only)" ON)
-if(NOT MUX_SKIA)
+set(MUX_BROWSER OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+  set(MUX_BROWSER ON)
+  set(MUX_SKIA OFF CACHE BOOL "Skia" FORCE)
+  set(MUX_WINDOW OFF CACHE BOOL "Native window" FORCE)
+  set(MUX_PAGE OFF CACHE BOOL "Embedded Blitz page" FORCE)
+endif()
+if(NOT MUX_SKIA AND NOT MUX_BROWSER)
   set(MUX_WINDOW OFF CACHE BOOL "skiff's own window (off: the page only)" FORCE)
   set(MUX_PAGE ON CACHE BOOL "mux --page: shown through Blitz (needs cargo)" FORCE)
   set(MUX_PAGE ON)
 endif()
-if(NOT MUX_WINDOW AND NOT MUX_PAGE)
+if(NOT MUX_WINDOW AND NOT MUX_PAGE AND NOT MUX_BROWSER)
   message(FATAL_ERROR "MUX_WINDOW off needs MUX_PAGE: mux would have nothing to show itself in")
 endif()
 if(MUX_PAGE)
@@ -308,6 +326,9 @@ endif()
 cme_options(skiff-framework "SKIFF_FRAMEWORK_APP OFF" "SKIFF_FRAMEWORK_SITE OFF" "SKIFF_FRAMEWORK_WINDOW ON" "${mux_page_option}")
 # skiff's options, gathered and said once (cme_options sets them whole).
 set(mux_skiff_options)
+if(MUX_BROWSER)
+  list(APPEND mux_skiff_options "SKIFF_WEB ON" "SKIFF_EMSCRIPTEN_THREADS ON")
+endif()
 # The page: skiff.web's document is Blitz's.
 if(MUX_PAGE)
   list(APPEND mux_skiff_options "SKIFF_WEB_DOM blitz")
@@ -487,7 +508,9 @@ if(MUX_UI)
   target_sources(mux_modules PRIVATE ${mux_protocol_ui_impl})
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets skiff::window Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries} ${mux_plugin_libraries})
-  if(ANDROID)
+  if(MUX_BROWSER)
+    add_executable(mux src/main.cc src/main_web.cc)
+  elseif(ANDROID)
     add_library(mux SHARED src/main.cc src/main_android.cc)
     # NativeActivity runs on a small pthread stack. Catch large startup
     # locals before packaging an APK that crashes at function entry.
@@ -506,13 +529,19 @@ if(MUX_UI)
     add_executable(mux src/main.cc src/main_desktop.cc)
   endif()
   # What runs the program: skiff's own window, unless mux is the page only.
-  if(MUX_WINDOW)
+  if(MUX_BROWSER)
+    target_sources(mux PRIVATE src/window_host_off.cc src/browser_host.cc)
+    target_link_libraries(mux PRIVATE skiff::browser)
+    include(cmake/browser.cmake)
+  elseif(MUX_WINDOW)
     target_sources(mux PRIVATE src/window_host.cc)
   else()
     target_sources(mux PRIVATE src/window_host_off.cc)
   endif()
   # What `--page` runs: the page, where it is built; else a word that it is not.
-  if(MUX_PAGE)
+  if(MUX_BROWSER)
+    # browser_host.cc supplies the page host through the browser's DOM.
+  elseif(MUX_PAGE)
     target_sources(mux PRIVATE src/page_host.cc)
     target_link_libraries(mux PRIVATE skiff::page)
   else()

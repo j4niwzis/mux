@@ -1,0 +1,165 @@
+name: web
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 1
+  CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/cpm
+jobs:
+  modules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/web-setup
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            build-web
+            .cache/cpm
+          key: web-emsdk6.0.13-v1-${{ github.sha }}
+          restore-keys: web-emsdk6.0.13-v1-
+      - name: Source times against the restored build
+        run: |
+          mkdir -p build-web
+          began=$(date +%s)
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          if [ -f build-web/sources.sha1 ]; then
+            git ls-files -z | xargs -0 sha1sum | sort > /tmp/web-sources-now.sha1
+            sort build-web/sources.sha1 | comm -13 - /tmp/web-sources-now.sha1 | cut -c43- > build-web/changed-sources
+          else
+            git ls-files > build-web/changed-sources
+          fi
+          echo "$began" > build-web/run-began
+          tr '\n' '\0' < build-web/changed-sources | xargs -0 -r touch -d "@$began"
+      - name: Configure the client for the browser
+        run: |
+          emcmake cmake -S . -B build-web -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG='-O2 -g0' -DCMAKE_C_FLAGS_DEBUG='-O2 -g0' \
+            -DCMAKE_CXX_FLAGS='-fexceptions -pthread -msimd128 -stdlib=libc++' -DCME_SYSTEM=NEVER -DCMAKE_C_FLAGS='-pthread -msimd128' \
+            -DCMAKE_CXX_COMPILER_CLANG_SCAN_DEPS="$HOME/.cache/mux-emsdk/upstream/bin/clang-scan-deps" \
+            -DMUX_UI=ON -DMUX_SKIA=OFF -DMUX_WINDOW=OFF -DMUX_CLI=OFF -DMUX_TESTS=OFF \
+            -DMUX_VIDEO=OFF -DMUX_CALLS=ON -DMUX_PROGRAM_JOBS=1 -DSKIFF_FRAMEWORK_BROWSER_TESTS=ON \
+            -DCME_BUILD_MACHINE_C_COMPILER=clang-23 -DCME_BUILD_MACHINE_CXX_COMPILER=clang++-23 \
+            -DCME_BUILD_MACHINE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'
+      - name: Check browser networking and persistence
+        run: |
+          cmake --build build-web --parallel 1 --target skiff_browser_services skiff_browser_fibers
+          node build-web/browser-check/fibers.js
+          python3 tools/package_web.py --build build-web/browser-check --output build-web/service-check --program services
+          npm install --no-save --prefix /tmp/mux-web-check playwright@1.62.1
+          /tmp/mux-web-check/node_modules/.bin/playwright install --with-deps chromium
+          PLAYWRIGHT_MODULE=/tmp/mux-web-check/node_modules/playwright node test/web_smoke.mjs build-web/service-check --services
+      - name: Build modules
+        run: cmake --build build-web --parallel 1 --target mux_modules -- -k 0
+      - name: Record the sources used
+        run: git ls-files -z | xargs -0 sha1sum > build-web/sources.sha1
+      - uses: ./.github/actions/stage-give
+        with:
+          name: web-modules
+          dir: build-web
+  app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    needs: modules
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/web-setup
+      - uses: ./.github/actions/stage-take
+        with:
+          name: web-modules
+      - name: Restore the first stage's source times
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build-web/changed-sources | xargs -0 -r touch -d "@$(cat build-web/run-began)"
+      - name: Build app
+        run: cmake --build build-web --parallel 1 --target mux_app -- -k 0
+      - name: Record the sources used
+        run: git ls-files -z | xargs -0 sha1sum > build-web/sources.sha1
+      - uses: ./.github/actions/stage-give
+        with:
+          name: web-app
+          dir: build-web
+  program:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    needs: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/web-setup
+      - uses: ./.github/actions/stage-take
+        with:
+          name: web-app
+      - name: Restore the first stage's source times
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build-web/changed-sources | xargs -0 -r touch -d "@$(cat build-web/run-began)"
+      - name: Build program
+        run: cmake --build build-web --parallel 1 --target CMakeFiles/mux.dir/src/app/program.cc.o CMakeFiles/mux.dir/src/main.cc.o CMakeFiles/mux.dir/src/app/program_core.cc.o CMakeFiles/mux.dir/src/app/program_lifetime.cc.o CMakeFiles/mux.dir/src/app/program_media.cc.o -- -k 0
+      - name: Record the sources used
+        run: git ls-files -z | xargs -0 sha1sum > build-web/sources.sha1
+      - uses: ./.github/actions/stage-give
+        with:
+          name: web-program
+          dir: build-web
+  link:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    needs: program
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/web-setup
+      - uses: ./.github/actions/stage-take
+        with:
+          name: web-program
+      - name: Restore the first stage's source times
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          tr '\n' '\0' < build-web/changed-sources | xargs -0 -r touch -d "@$(cat build-web/run-began)"
+      - name: Build link
+        run: cmake --build build-web --parallel 1 --target mux -- -k 0
+      - name: Record the sources used
+        run: git ls-files -z | xargs -0 sha1sum > build-web/sources.sha1
+      - uses: actions/cache/save@v4
+        with:
+          path: |
+            build-web
+            .cache/cpm
+          key: web-emsdk6.0.13-v1-${{ github.sha }}
+      - name: Browser smoke checks
+        run: |
+          npm install --no-save --prefix /tmp/mux-web-check playwright@1.62.1
+          /tmp/mux-web-check/node_modules/.bin/playwright install --with-deps chromium
+          PLAYWRIGHT_MODULE=/tmp/mux-web-check/node_modules/playwright node test/web_smoke.mjs build-web/web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-preview
+          path: |
+            build-web/web-smoke.png
+            build-web/web-smoke-error.txt
+          if-no-files-found: ignore
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: build-web/web
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: link
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - uses: actions/deploy-pages@v4
+        id: deployment

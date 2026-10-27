@@ -22,8 +22,6 @@ module;
 #include <boost/asio.hpp>
 #include <boost/asio/posix/stream_descriptor.hpp>
 #include <boost/asio/ssl.hpp>
-#include <boost/context/fiber.hpp>
-#include <boost/context/protected_fixedsize_stack.hpp>
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
@@ -34,6 +32,7 @@ import std;
 import splice.bytes;
 import splice;
 import tern;
+import mux.net.fibers;
 
 // Whether completion handlers are erased (outside a release build): CMake
 // says which build this is; C++ cannot see it.
@@ -62,8 +61,8 @@ struct failure : std::runtime_error {
 class loop {
  public:
   struct task {
-    boost::context::fiber suspended;  // the fiber, while it is not running
-    boost::context::fiber back;       // where it returns to, while it runs
+    fibers::fiber suspended;  // the fiber, while it is not running
+    fibers::fiber back;       // where it returns to, while it runs
     bool queued = false;
     bool finished = false;
     std::exception_ptr failure;
@@ -83,13 +82,12 @@ class loop {
   void spawn(Body body, std::size_t stack = 256 * 1024) {
     auto made = std::make_unique<task>();
     task* self = made.get();
-    self->suspended = boost::context::fiber(
-        std::allocator_arg, boost::context::protected_fixedsize_stack(stack),
-        [self, body = std::move(body)](boost::context::fiber&& back) mutable {
+    self->suspended = fibers::make(
+        [self, body = std::move(body)](fibers::fiber&& back) mutable {
           self->back = std::move(back);
           try {
             body();
-          } catch (const boost::context::detail::forced_unwind&) {
+          } catch (const fibers::forced_unwind&) {
             // The loop is going away and unwinds what is still parked:
             // that is how a fiber ends then, not a failure of it.
             throw;
@@ -98,13 +96,13 @@ class loop {
           }
           self->finished = true;
           return std::move(self->back);
-        });
+        }, stack);
     tasks_.push_back(std::move(made));
     wake(self);
   }
 
   // Runs until there is nothing left to do, or stop().
-  void run() { io_.run(); }
+  void run() { fibers::run(io_); }
   void stop() { io_.stop(); }
 
   // Runs until stop(), whether or not there is anything to do: the loop of
@@ -118,7 +116,7 @@ class loop {
       std::vector<std::unique_ptr<task>>& tasks;
       ~unwind_parked() { tasks.clear(); }
     } unwind{tasks_};
-    io_.run();
+    fibers::run(io_);
   }
 
   // A fiber started from any thread: the loop's thread runs it.
@@ -226,7 +224,7 @@ class tls {
 // A client's TLS settings: the system's trusted certificates, TLS 1.2 and up.
 inline tls client_tls() {
   asio::ssl::context made(asio::ssl::context::tls_client);
-  made.set_default_verify_paths();
+  if constexpr (fibers::verifies_sockets) made.set_default_verify_paths();
   made.set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
                    asio::ssl::context::no_sslv3 | asio::ssl::context::no_tlsv1 | asio::ssl::context::no_tlsv1_1);
   made.set_verify_mode(asio::ssl::verify_peer);

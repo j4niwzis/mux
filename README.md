@@ -66,6 +66,31 @@ Matrix features behind it.
   (XEP-0308), replies, message styling sent (XEP-0393), stream management,
   file upload.
 
+## Browser
+
+The `web` workflow builds the same client for WebAssembly, checks it in
+Chromium, and deploys it to [GitHub Pages](https://j4niwzis.github.io/mux/).
+The DOM lays out and paints skiff's scene; native Skia and Blitz are not
+part of this build. Browser HTTP, file storage, pickers and downloads are
+provided by skiff-framework. Matrix calls use the browser's WebRTC engine.
+
+Accounts, cached conversations, drafts and keys persist in IndexedDB. The
+page needs a browser with WebAssembly threads, service workers and
+cross-origin isolation; the supplied service worker enables isolation on
+Pages. Microphone access uses the browser's permission prompt.
+
+This browser build supports Matrix over HTTPS, subject to the homeserver's
+CORS policy. Direct XMPP TCP connections, per-account proxies, loopback OIDC
+callbacks and the native video player require platform support that a
+static Pages host does not supply. Animated images currently show their
+first frame. Password sign-in, the message UI, media uploads/downloads and
+voice calls use browser services.
+
+For a local build, use the pinned Emscripten setup and flags from
+`.github/actions/web-setup/action.yml` and `.github/workflows/web.yml`, then
+serve `build-web/web` over HTTP on localhost or HTTPS. `?demo` opens the
+built-in sample conversations without an account.
+
 ## Libraries
 
 | library | what mux takes from it |

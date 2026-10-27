@@ -45,6 +45,8 @@ jobs:
       ABI: ${{ matrix.abi }}
     steps:
       - uses: actions/checkout@v4
+      - name: Android network JNI stack routing
+        run: python3 test/android_runtime_test.py
       - id: setup
         uses: ./.github/actions/android-setup
         with:

@@ -7,6 +7,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <string>
 #include <mutex>
 #include <vector>
@@ -59,7 +60,8 @@ bool mux_android_initialize() {
   return true;
 }
 
-bool mux_android_nameserver(char* output, size_t capacity) {
+namespace {
+bool nameserver(char* output, size_t capacity) {
   frame jni;
   if (!jni.ready || !capacity) return false;
   auto* env = jni.env;
@@ -103,7 +105,7 @@ bool mux_android_nameserver(char* output, size_t capacity) {
   return length < capacity;
 }
 
-bool mux_android_trusts(const unsigned char* const* certificates, const size_t* sizes, size_t count, const char* host,
+bool trusts(const unsigned char* const* certificates, const size_t* sizes, size_t count, const char* host,
                         char* why, size_t capacity) {
   const auto said = [&](const char* text) {
     if (why && capacity) {
@@ -190,4 +192,19 @@ bool mux_android_trusts(const unsigned char* const* certificates, const size_t* 
     return said("not trusted");
   }
   return true;
+}
+}
+
+// Network callers can be on a Boost.Context stack. ART's thread attachment
+// installs guards from pthread_getattr_np, and its Java entry points check
+// against those bounds (ART Thread::InitStackHwm and InvokeWithVarArgs).
+// Enter Java on an ordinary pthread stack instead. Waiting for the result
+// also keeps the caller's output buffers and certificate bytes alive.
+bool mux_android_nameserver(char* output, size_t capacity) {
+  return std::async(std::launch::async, [=] { return nameserver(output, capacity); }).get();
+}
+
+bool mux_android_trusts(const unsigned char* const* certificates, const size_t* sizes, size_t count, const char* host,
+                        char* why, size_t capacity) {
+  return std::async(std::launch::async, [=] { return trusts(certificates, sizes, count, host, why, capacity); }).get();
 }

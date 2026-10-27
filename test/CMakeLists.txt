@@ -1,4 +1,6 @@
 # The tests: googletest's, as a module, from cmake-everywhere.
+add_test(NAME about-targets COMMAND "${CMAKE_COMMAND}"
+  -S "${CMAKE_CURRENT_SOURCE_DIR}/about_targets" -B "${CMAKE_CURRENT_BINARY_DIR}/about-targets")
 cme_declare_port(NAME googletest-modules PROVIDES GTest
   GITHUB_REPOSITORY j4niwzis/googletest-modules
   GIT_TAG 706920f1d230f0316d271466d8885735be3e300e

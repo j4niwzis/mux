@@ -112,4 +112,19 @@ if(NOT EXISTS "${CME_SOURCE_DIR}/cmake-everywhere.cmake"
   file(WRITE "${cme_stamp}" "${CME_VERSION}\n")
 endif()
 
+# v0.2.52 loses Clang's cross target when generating Meson machine files.
+# Keep the fix with the consumer until the next provider release carries it.
+set(cme_meson_patch "${CMAKE_CURRENT_LIST_DIR}/patches/cme-meson-cross-target.patch")
+if(CME_VERSION STREQUAL "v0.2.52" AND EXISTS "${cme_meson_patch}")
+  find_program(cme_git git REQUIRED)
+  execute_process(COMMAND "${cme_git}" apply --reverse --check "${cme_meson_patch}"
+    WORKING_DIRECTORY "${CME_SOURCE_DIR}" RESULT_VARIABLE cme_meson_patched OUTPUT_QUIET ERROR_QUIET)
+  if(NOT cme_meson_patched EQUAL 0)
+    execute_process(COMMAND "${cme_git}" apply --check "${cme_meson_patch}"
+      WORKING_DIRECTORY "${CME_SOURCE_DIR}" COMMAND_ERROR_IS_FATAL ANY)
+    execute_process(COMMAND "${cme_git}" apply "${cme_meson_patch}"
+      WORKING_DIRECTORY "${CME_SOURCE_DIR}" COMMAND_ERROR_IS_FATAL ANY)
+  endif()
+endif()
+
 include("${CME_SOURCE_DIR}/cmake-everywhere.cmake")

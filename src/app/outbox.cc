@@ -233,6 +233,14 @@ class outbox_part {
       files_thread_.reset();
     s_->system_dialogs->choose_files();
   }
+  // The send box's Add more: more chosen, to go with what is in it -- the
+  // caption written in the box kept, as the box is shown again with them.
+  void apply(const request::attach_more& one) {
+    if (!s_->chosen() || to_send_.empty())
+      return;
+    files_caption_ = one.caption;
+    s_->system_dialogs->choose_files();
+  }
   // The thread panel's paperclip: what is chosen goes into the thread open.
   void apply(const request::attach_in_thread&) {
     if (!s_->chosen() || !mux::ui::may_send_files(s_->ui, s_->chosen()->account))

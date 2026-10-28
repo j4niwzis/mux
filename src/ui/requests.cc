@@ -266,6 +266,11 @@ struct return_to_chat {};
 struct head_pressed {};
 // The pinned bar pressed: to the pin it shows, and the bar on to the one
 // pinned before it.
+// The send box's Add more: other files chosen, to go with those in it --
+// a gallery -- its caption as written so far kept.
+struct attach_more {
+  std::string caption;
+};
 struct pinned_pressed {};
 // The pinned bar swiped across: the pin before it (older) or after it,
 // shown in the bar -- nothing jumped to.

@@ -108,6 +108,10 @@ inline auto send_box(const ui_needs& n, const send_facts& facts) {
           c::bound<skiff::model::Field<&send_draft::caption>>(
               c::styled({.fillX = true}, widgets::TextAreaField<std::string>(colours.widgets, "Add a caption\u2026", 3))),
           c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}), nodes::justify::end{}),
+                 // More pictures or files for the same message: a gallery.
+                 c::asking_for<send_draft>([](const send_draft& draft) { return request::attach_more{draft.caption}; },
+                     c::styled({.width = 110.0f, .height = 36.0f},
+                               widgets::Button<scene::NoAction>(colours.widgets, "Add more", {}))),
                  c::styled({.width = 96.0f, .height = 36.0f},
                            widgets::Button<sends<request::close_send_box>>(colours.widgets, "Cancel", {})),
                  c::asking_for<send_draft>([](const send_draft& draft) { return request::send_files{draft.caption}; },

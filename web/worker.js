@@ -6,8 +6,12 @@ self.addEventListener('activate',event => event.waitUntil(self.clients.claim()))
 self.addEventListener('fetch',event => {
   const request = event.request;
   if (new URL(request.url).origin !== self.location.origin) return;
+  // Asked of the cache alone, not as the page's own (devtools, some of
+  // Firefox's): fetching it again throws, and the page got a network error.
+  if (request.cache === 'only-if-cached' && request.mode !== 'same-origin') return;
   event.respondWith((async () => {
-    const response = await fetch(request);
+    let response;
+    try {response = await fetch(request);} catch {return Response.error();}
     if (response.status === 0) return response;
     const headers = new Headers(response.headers);
     headers.set('Cross-Origin-Opener-Policy','same-origin');

@@ -2,7 +2,14 @@
 (async () => {
   const status = document.getElementById('loading');
   try {
-    if (!('serviceWorker' in navigator)) throw new Error('This browser does not support the features mux needs.');
+    // No service worker, no isolation, no threads: said with what turns
+    // them off -- a private window, a privacy setting, a page not over HTTPS
+    // -- rather than "not supported", which a tester's up-to-date browser
+    // was told.
+    if (!('serviceWorker' in navigator))
+      throw new Error(isSecureContext
+        ? 'mux needs service workers, and this browser has them turned off here: a private window, or a privacy setting or extension, does that. Open mux in a normal window, or allow service workers for this site.'
+        : 'mux needs a secure (HTTPS) page: open it over https://.');
     // GitHub Pages cannot configure response headers. A service worker
     // supplies isolation for the client's network and decoding workers.
     await navigator.serviceWorker.register('./worker.js', {scope:'./',updateViaCache:'none'});
@@ -10,9 +17,18 @@
     if (!navigator.serviceWorker.controller) {
       await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange',resolve,{once:true}));
     }
+    // The page isolated only once the worker serves it: reloaded for that,
+    // twice at most -- a reload that came before the worker took the page
+    // (a slow activation) was counted as a failure at once. Where it still
+    // is not, what was seen is said, for a report.
     if (!crossOriginIsolated) {
-      if (sessionStorage.getItem('mux-isolation-reload')) throw new Error('Cross-origin isolation could not be enabled. Please allow service workers and reload.');
-      sessionStorage.setItem('mux-isolation-reload','1');
+      const tries = Number(sessionStorage.getItem('mux-isolation-reload') || 0);
+      if (tries >= 2) {
+        sessionStorage.removeItem('mux-isolation-reload');
+        throw new Error('Cross-origin isolation could not be enabled. Please allow service workers for this site and reload. ' +
+          `(served by the worker: ${navigator.serviceWorker.controller ? 'yes' : 'no'}; ${navigator.userAgent})`);
+      }
+      sessionStorage.setItem('mux-isolation-reload',String(tries + 1));
       location.reload();
       return;
     }

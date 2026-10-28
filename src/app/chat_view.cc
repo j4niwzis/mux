@@ -127,11 +127,36 @@ class chat_view_part {
     std::size_t of = 0;
   };
   std::optional<pin_cycle> cycled_;
+  // What the bar's pin was worked out from, last: worked out again only
+  // where any of it moved -- at every frame, each pin was looked for through
+  // the whole timeline, a room of many pins and a long history slowed down
+  // with nothing changing.
+  struct pin_seen {
+    mux::conversation_id in;
+    std::size_t held = 0;
+    std::string front, back;
+    std::optional<std::string> top;
+    std::vector<std::string> pinned;
+    std::optional<std::size_t> cycled;
+    std::size_t quoted = 0;  // pins fetched aside since: their lines
+    friend bool operator==(const pin_seen&, const pin_seen&) = default;
+  };
+  std::optional<std::pair<pin_seen, std::optional<mux::ui::pinned_view>>> pin_kept_;
   std::optional<mux::ui::pinned_view> pin_of(const mux::conversation* chat) {
     if (!chat || chat->pinned.empty())
       return std::nullopt;
     if (cycled_ && (cycled_->in != chat->id || cycled_->of != chat->pinned.size()))
       cycled_.reset();
+    pin_seen seen{chat->id, chat->timeline.size(), chat->timeline.empty() ? std::string() : chat->timeline.front().id,
+                  chat->timeline.empty() ? std::string() : chat->timeline.back().id, s_->list.top, chat->pinned,
+                  cycled_ ? std::optional(cycled_->at) : std::nullopt, chat->quoted.size()};
+    if (pin_kept_ && pin_kept_->first == seen)
+      return pin_kept_->second;
+    auto made = this->pin_worked_out(chat);
+    pin_kept_ = std::pair{std::move(seen), made};
+    return made;
+  }
+  std::optional<mux::ui::pinned_view> pin_worked_out(const mux::conversation* chat) {
     const auto place = [&](const std::string& id) -> std::ptrdiff_t {
       const auto found = std::ranges::find(chat->timeline, id, &mux::message::id);
       return found == chat->timeline.end() ? -1 : found - chat->timeline.begin();

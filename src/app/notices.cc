@@ -44,6 +44,17 @@ class notices_part {
     };
     own_only(p.on, setting::on{});
     own_only(p.mentions, setting::mentions{});
+    // An account's, as the server has it by default -- notifications on,
+    // every message -- says no choice: the server's default rules are not
+    // the user's. Taken for one, every account's "Only mentions and
+    // keywords" lost to it at the first sync, before mux had told the
+    // server anything (a tester's).
+    if (!now.room) {
+      if (p.on == true)
+        p.on.reset();
+      if (p.mentions == false)
+        p.mentions.reset();
+    }
     if (now.sound_shared)
       own_only(p.sound, setting::sound{});
     if (now.room) {

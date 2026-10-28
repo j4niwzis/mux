@@ -587,6 +587,10 @@ struct send_in_thread {
 };
 struct menu_thread {};
 struct open_packs {};
+// An account's own packs, from its page in Manage accounts.
+struct open_account_packs {
+  std::string address;
+};
 struct open_room_packs { std::optional<std::string> key{}; };
 struct close_packs {};
 struct save_pack {

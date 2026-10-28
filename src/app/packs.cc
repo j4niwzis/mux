@@ -35,6 +35,7 @@ struct packs_part {
 };
 
 void part_apply(packs_part& self, const request::open_packs&);
+void part_apply(packs_part& self, const request::open_account_packs& one);
 void part_apply(packs_part& self, const request::open_room_packs&);
 void part_apply(packs_part& self, const request::close_packs&);
 void part_apply(packs_part& self, const request::save_pack& one);
@@ -52,13 +53,24 @@ void part_apply(packs_part& self, const request::pack_save&);
 void part_apply(packs_part& self, const request::pack_delete&);
 bool took_files(packs_part& self, const std::vector<std::string>& paths, bool dropped);
 
-void part_apply(packs_part& self, const request::open_packs&) {
-  self.account_ = self.s_->account_offering(mux::proto::feature::sticker_packs{});
+// One's own packs, the account's: listed as they open.
+void open_own_packs(packs_part& self) {
   mux::ui::show(*self.s_->showing,
                 std::optional(mux::ui::packs_facts{.account = self.account_, .room = std::nullopt, .editable = true,
                                                    .opened = self.first_opening(), .note = "Loading\u2026"}));
   if (self.account_ && !self.s_->demo())
     self.s_->net->list_packs(*self.account_, std::nullopt);
+}
+// From Settings: the first account that has packs.
+void part_apply(packs_part& self, const request::open_packs&) {
+  self.account_ = self.s_->account_offering(mux::proto::feature::sticker_packs{});
+  open_own_packs(self);
+}
+// From an account's page: that account's -- the only way to another's
+// than the first, where there are two.
+void part_apply(packs_part& self, const request::open_account_packs& one) {
+  self.account_ = mux::account_id{mux::ui::protocol_of(one.address), one.address};
+  open_own_packs(self);
 }
 
 void part_apply(packs_part& self, const request::open_room_packs& one) {

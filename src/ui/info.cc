@@ -123,16 +123,35 @@ struct info_member {
   std::string how;
   friend bool operator==(const info_member&, const info_member&) = default;
 };
+// A file the chat holds, as its list shows it: its message, when, and what
+// it carries.
+struct info_file {
+  std::string id;
+  std::chrono::sys_time<std::chrono::milliseconds> at{};
+  attachment carried;
+  friend bool operator==(const info_file&, const info_file&) = default;
+};
 // The info, as the program says: the chat's view, its members' head, and
 // the members made so far -- the first, and more as the list nears their
-// end -- and whether there are more.
+// end -- and whether there are more; and its files, newest first.
 struct info_shown {
   info_view head;
   info_members_heading heading;
   std::vector<info_member> members;
   bool more = false;
+  std::vector<info_file> files;
   friend bool operator==(const info_shown&, const info_shown&) = default;
 };
+// A file's row: the one a message shows it with, pressed to open it.
+struct info_file_row {
+  const palette* colours = nullptr;
+  auto operator()(const std::tuple<std::string, info_file>& item) const {
+    const attachment& carried = std::get<1>(item).carried;
+    return file_view(*colours, carried.source, carried.name, carried.size, false,
+                     file_open{request::open_file{carried.source, carried.name}});
+  }
+};
+using info_file_rows_t = nodes::MemoRows<std::string, info_file, file_view_t, info_file_row>;
 // A member's row, kept while it shows the same.
 struct info_member_row {
   const palette* colours = nullptr;
@@ -160,6 +179,21 @@ inline auto info_panel(const ui_needs& n) {
                   c::projected<info_shown>([](const info_shown& now) { return std::optional(now.head); },
                       c::mount<info_head_t, info_view>([at = &colours](const info_view& view) { return std::tuple{info_head(*at, view)}; },
                                                        {.fillX = true, .autoSize = scene::axes::kY})),
+                  // Its files, as Element X's Files: what it holds that is
+                  // a file -- not to go to another client for them (a
+                  // tester's).
+                  c::shown_for<info_shown>([](const info_shown& now) { return !now.files.empty(); },
+                      c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                          section_band(colours),
+                          c::text_for<info_shown>([](const info_shown& now) {
+                            return std::format("{} FILE{}", now.files.size(), now.files.size() == 1 ? "" : "S");
+                          },
+                              c::styled({.margin = {12.0f, 16.0f, 4.0f, 16.0f}}, nodes::Text("", 13.0f, colours.dim, true))),
+                          c::projected<info_shown>([](const info_shown& now) {
+                            return now.files | std::views::transform([](const info_file& one) { return std::tuple{one.id, one}; }) | std::ranges::to<std::vector>();
+                          },
+                              c::styled({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 16.0f, 8.0f, 16.0f}},
+                                        info_file_rows_t(info_file_row{&colours}))))),
                   c::shown_for<info_shown>(listed, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                       section_band(colours),
                       c::projected<info_shown>([](const info_shown& now) { return std::optional(now.heading); },

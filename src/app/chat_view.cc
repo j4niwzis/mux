@@ -18,6 +18,8 @@ import mux.proto;
 import mux.protocols;
 import mux.app.services;
 import mux.app.requests;
+import mux.app.workers;
+import mux.app.store;
 
 export namespace mux::app {
 
@@ -209,11 +211,58 @@ class chat_view_part {
     members_total_ = chat.members.size();
     // The rest is small: looked at each frame, the members put with it
     // only where something moved -- not copied and compared at every frame.
+    const bool files_moved = this->follow_files(chat);
     info_top top{std::move(head), {count, chat.id, !chat.invite && mux::proto::chat_rights(state, chat).invite}, seen.made < members_total_};
-    if (!fresh && top_ == top)
+    if (!fresh && !files_moved && top_ == top)
       return;
     top_ = top;
-    this->put(mux::ui::info_shown{std::move(top.head), std::move(top.heading), members_, top.more});
+    this->put(mux::ui::info_shown{std::move(top.head), std::move(top.heading), members_, top.more, files_});
+  }
+  // The chat's files: those its history on disk keeps -- read on a worker,
+  // once as its info opens -- and those it holds now, newest first. Whether
+  // they moved.
+  static constexpr std::size_t kFilesShown = 200;
+  [[nodiscard]] static bool is_file(const mux::message& said) {
+    return said.attachment && !said.redacted &&
+           spl::visit(spl::overloaded{[](const mux::attachment_kind::file&) { return true; }, [](const auto&) { return false; }},
+                      said.attachment->kind);
+  }
+  [[nodiscard]] static mux::ui::info_file file_of(const mux::message& said) { return {said.id, said.at, *said.attachment}; }
+  bool follow_files(const mux::conversation& chat) {
+    if (files_disk_of_ != chat.id) {
+      files_disk_of_ = chat.id;
+      files_disk_.clear();
+      files_seen_.reset();
+      if (!s_->demo())
+        s_->work->run([this, in = chat.id]() -> workers::done_t {
+          auto kept = s_->store->everything(in) | std::views::values | std::views::filter(&chat_view_part::is_file) |
+                      std::views::transform(&chat_view_part::file_of) | std::ranges::to<std::vector>();
+          return [this, in, kept = std::move(kept)]() mutable {
+            if (files_disk_of_ != in)
+              return;
+            files_disk_ = std::move(kept);
+            files_seen_.reset();
+            s_->refresh_due = true;
+          };
+        });
+    }
+    const std::pair seen{chat.timeline.size(), files_disk_.size()};
+    if (files_seen_ == seen)
+      return false;
+    files_seen_ = seen;
+    std::map<std::string, mux::ui::info_file> all;
+    for (const mux::ui::info_file& one : files_disk_)
+      all.insert_or_assign(one.id, one);
+    for (const mux::message& said : chat.timeline | std::views::filter(&chat_view_part::is_file))
+      all.insert_or_assign(said.id, file_of(said));
+    auto now = all | std::views::values | std::ranges::to<std::vector>();
+    std::ranges::sort(now, std::ranges::greater{}, &mux::ui::info_file::at);
+    if (now.size() > kFilesShown)
+      now.resize(kFilesShown);
+    if (now == files_)
+      return false;
+    files_ = std::move(now);
+    return true;
   }
   struct info_top {
     mux::ui::info_view head;
@@ -247,6 +296,12 @@ class chat_view_part {
   std::optional<members_seen> members_seen_;
   std::vector<mux::ui::info_member> members_;
   std::optional<info_top> top_;
+  // The files: of which chat those read from its disk are, they, the chat's
+  // held and disk's counts last listed by, and the list.
+  std::optional<mux::conversation_id> files_disk_of_;
+  std::vector<mux::ui::info_file> files_disk_;
+  std::optional<std::pair<std::size_t, std::size_t>> files_seen_;
+  std::vector<mux::ui::info_file> files_;
 };
 
 }  // namespace mux::app

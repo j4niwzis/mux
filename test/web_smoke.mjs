@@ -67,6 +67,16 @@ try {
   }
   assert.deepEqual(errors,[]);
 } catch (error) {
-  await writeFile(resolve(root,'../web-smoke-error.txt'),String(error));
+  // What the page was when it failed: its picture, its document, what it
+  // said -- a timeout alone said nothing of why.
+  const page = browser.contexts()[0]?.pages()[0];
+  let said = String(error);
+  if (page) {
+    await page.screenshot({path:resolve(root,'../web-smoke.png')}).catch(() => {});
+    const html = await page.content().catch(() => '');
+    await writeFile(resolve(root,'../web-smoke.html'),html).catch(() => {});
+    said += '\n\ntexts on the page: ' + JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('[data-skiff-h]')].map(e => e.childNodes.length === 1 && e.firstChild.nodeType === 3 ? e.textContent : null).filter(Boolean).slice(0,80)).catch(() => []));
+  }
+  await writeFile(resolve(root,'../web-smoke-error.txt'),said);
   throw error;
 } finally {await browser.close();server.close();}

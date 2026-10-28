@@ -163,6 +163,7 @@ jobs:
           name: browser-preview-${{ github.sha }}
           path: |
             build-web/web-smoke.png
+            build-web/web-smoke.html
             build-web/web-smoke-error.txt
           if-no-files-found: ignore
       - uses: actions/upload-pages-artifact@v4

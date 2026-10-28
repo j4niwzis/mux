@@ -389,6 +389,21 @@ struct kept_settings {
         return *chosen;
     return Setting::of(this->notifications());
   }
+  // A setting as a chat would have it with no choice of its own: its
+  // space's (and theirs up), else its account's, else every chat's. Without
+  // a chat, the account's would-be: every account's.
+  template <class Setting>
+  [[nodiscard]] bool inherited_notify(const mux::account_id& by, const std::optional<std::string>& room, Setting) {
+    if (!room)
+      return Setting::of(this->notifications());
+    const conversation_id chat{by, *room};
+    if (const auto up = space_above.find(chat); up != space_above.end())
+      return this->notify_value(up->second, Setting{});
+    if (const mux::config::account_t* account = this->settings_of(by.address))
+      if (const std::optional<bool>& chosen = account->shared.*Setting::account)
+        return *chosen;
+    return Setting::of(this->notifications());
+  }
   [[nodiscard]] notify_decision notify_for(const conversation_id& chat, bool mentions_me) {
     namespace setting = mux::config::notify_setting;
     if (!this->notify_value(chat, setting::on{}) || (this->notify_value(chat, setting::mentions{}) && !mentions_me))

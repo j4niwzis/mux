@@ -30,7 +30,22 @@ class notices_part {
   notices_part& operator=(const notices_part&) = delete;
 
   void receive(const mux::change::notifications_changed& now) {
-    const auto& p = now.choices;
+    namespace setting = mux::config::notify_setting;
+    // What the server says is what is in effect there: kept as a choice of
+    // the chat's or the account's own only where it differs from what the
+    // levels above give. Kept whole, a Matrix account always had a choice
+    // of its own -- the server's default rules notify on every message --
+    // and every account's "Only mentions and keywords" never won: plain
+    // messages notified (a tester's).
+    auto p = now.choices;
+    const auto own_only = [&](std::optional<bool>& said, auto which) {
+      if (said && *said == s_->kept->inherited_notify(now.by, now.room, which))
+        said.reset();
+    };
+    own_only(p.on, setting::on{});
+    own_only(p.mentions, setting::mentions{});
+    if (now.sound_shared)
+      own_only(p.sound, setting::sound{});
     if (now.room) {
       const mux::conversation_id in{now.by, *now.room};
       auto choices = s_->kept->own_of<&mux::config::chat_choices::notify>(in);

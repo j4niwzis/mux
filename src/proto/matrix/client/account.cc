@@ -342,6 +342,11 @@ class account {
   // live again), or aside where it was fetched aside.
   void decrypt_waiting(const std::string& session);
   void decrypt_all_waiting();
+  // A session a message waits for, looked for in the key backup -- once:
+  // the backup was read only as its key was given, and what other sessions
+  // backed up after it was never taken (a tester's: a whole chat waiting).
+  void key_from_backup(std::string room, std::string session);
+  std::set<std::string, std::less<>> backup_asked_;
   // A room's gap since the last sync, from where the sync left it back to
   // the event it had last: its events put in the timeline by their time --
   // between what was there and what the sync brought, where nothing pages

@@ -23,6 +23,7 @@ import loom.cs.rooms;
 import loom.cs.sync;
 import loom.cs.typing;
 import loom.cs.wellknown;
+import loom.cs.key_backup;
 import mux.config;
 import mux.core;
 import mux.http;
@@ -464,11 +465,47 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
   if (session) {
     if (const auto why = withheld_.find(*session); why != withheld_.end())
       waiting.body = {why->second, std::nullopt};
+    else
+      this->key_from_backup(in.id, *session);
     auto& kept = undecrypted_[*session];
     if (kept.size() < 200 && std::ranges::none_of(kept, [&](const undecrypted_event& each) { return each.event.event_id == one.event_id; }))
       kept.push_back({in, one, where});
   }
   sink_(change::message_added{std::move(waiting), where});
+}
+
+template <class Sink>
+void account<Sink>::key_from_backup(std::string room, std::string session) {
+  if (!crypto_ || !backup_asked_.insert(session).second)
+    return;
+  this->spawn_guarded([this, room = std::move(room), session = std::move(session)] {
+    if (!api_ || !crypto_)
+      return;
+    const auto kept = crypto_->backup();
+    if (!kept)
+      return;
+    auto got = perform(*api_, loom::cs::get_room_key_by_session_id{.version = kept->first, .room_id = room, .session_id = session},
+                       std::chrono::seconds(30), http::lane::background);
+    if (!got)
+      return;
+    const auto& said = got->session_data;
+    const auto plain = said.ephemeral && said.ciphertext && said.mac
+                           ? crypto::open_backup(kept->second, crypto::backup_session_data{.ephemeral = *said.ephemeral,
+                                                                                            .ciphertext = *said.ciphertext,
+                                                                                            .mac = *said.mac})
+                           : std::nullopt;
+    if (!plain)
+      return;
+    const std::vector<crypto::exported_session> sessions{crypto::exported_session{.room_id = room,
+                                                                                  .sender_key = plain->sender_key,
+                                                                                  .sender_claimed_keys = plain->sender_claimed_keys,
+                                                                                  .session_id = session,
+                                                                                  .session_key = plain->session_key}};
+    if (crypto_->import_sessions(sessions) > 0) {
+      log(id_, "a room key from the backup, for messages waiting on it");
+      this->decrypt_waiting(session);
+    }
+  });
 }
 
 template <class Sink>

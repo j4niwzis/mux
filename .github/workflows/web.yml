@@ -6,6 +6,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  # To drop the caches a run's own supersede (tools/prune_caches.sh).
+  actions: write
 concurrency:
   group: web-${{ github.ref }}
   cancel-in-progress: true
@@ -152,6 +154,13 @@ jobs:
             build-web
             .cache/cpm
           key: web-emsdk6.0.13-v1-${{ github.sha }}
+      # The older runs' builds: this one supersedes them. Left alone, they
+      # filled the repository's 10 GB and GitHub evicted the other
+      # workflows' builds, which then started from nothing.
+      - name: Drop the builds this one supersedes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/prune_caches.sh "web-emsdk6.0.13-v1-" "web-emsdk6.0.13-v1-${{ github.sha }}"
       - name: Browser smoke checks
         run: |
           npm install --no-save --prefix /tmp/mux-web-check playwright@1.62.1

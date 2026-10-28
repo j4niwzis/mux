@@ -430,4 +430,12 @@ jobs:
       - name: drop the builds the last one kept supersedes
         env:
           GH_TOKEN: ${{ github.token }}
-        run: sh tools/prune_caches.sh "build-${{ runner.os }}-clang${{ matrix.llvm }}-" "build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}"
+        # The key the link saved has the compiler's digest in it, which only
+        # the jobs that set the compiler up know: found by this run's commit.
+        # Given without it, the key was never found and nothing was dropped --
+        # the builds piled up past the repository's 10 GB, and GitHub evicted
+        # the newest desktop build with the rest.
+        run: |
+          prefix="build-${{ runner.os }}-clang${{ matrix.llvm }}-"
+          keep=$(gh cache list --repo "$GITHUB_REPOSITORY" --key "$prefix" --limit 100 --json key --jq '.[].key' | grep -e "-${{ github.sha }}\$" | head -n 1 || true)
+          if [ -n "$keep" ]; then sh tools/prune_caches.sh "$prefix" "$keep"; else echo "this run saved no build: nothing dropped"; fi

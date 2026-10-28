@@ -51,7 +51,9 @@ try {
     }
   } else {
     await page.waitForFunction(() => crossOriginIsolated && document.querySelectorAll('[data-skiff-h]').length > 20,{},{timeout:120000});
-    await page.getByText('Mad Tea Party',{exact:true}).first().click();
+    // The list shows one account at a time -- the first, XMPP's, as it opens:
+    // a chat of either demo account, whichever is listed.
+    await page.getByText(/^(White Rabbit|Mad Tea Party)$/).first().click();
     const composer = page.locator('textarea:visible').first();
     await composer.waitFor({timeout:30000});
     await composer.fill('🙂draft ✓');

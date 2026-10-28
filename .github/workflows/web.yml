@@ -134,6 +134,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     needs: program
+    outputs:
+      pages: ${{ steps.pages.outcome == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/web-setup
@@ -145,6 +147,7 @@ jobs:
           git ls-files -z | xargs -0 touch -d "@1000000000"
           tr '\n' '\0' < build-web/changed-sources | xargs -0 -r touch -d "@$(cat build-web/run-began)"
       - name: Build link
+        id: link-build
         run: cmake --build build-web --parallel 1 --target mux -- -k 0
       - name: Record the sources used
         run: git ls-files -z | xargs -0 sha1sum > build-web/sources.sha1
@@ -175,12 +178,16 @@ jobs:
             build-web/web-smoke.html
             build-web/web-smoke-error.txt
           if-no-files-found: ignore
+      # Deployed even where the browser checks failed (the user's wish): the
+      # run still says they failed; what was built goes out all the same.
       - uses: actions/upload-pages-artifact@v4
+        id: pages
+        if: always() && steps.link-build.outcome == 'success'
         with:
           name: github-pages-${{ github.sha }}
           path: build-web/web
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: always() && needs.link.outputs.pages == 'true' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: link
     runs-on: ubuntu-24.04
     permissions:

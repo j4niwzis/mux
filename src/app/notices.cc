@@ -173,6 +173,18 @@ class notices_part {
   }
   // What the connector said since: the endpoint given to the accounts, a
   // push a sync now, the rest said in the log.
+  // A chat a notification pressed asks to open: its account's address and
+  // its id, as show() gave them.
+  [[nodiscard]] std::optional<mux::conversation_id> take_opened() {
+    const auto said = mux::platform::notifications::take_opened();
+    if (!said)
+      return std::nullopt;
+    const auto cut = said->find('\n');
+    if (cut == std::string::npos)
+      return std::nullopt;
+    const std::string address = said->substr(0, cut);
+    return mux::conversation_id{{mux::ui::protocol_of(address), address}, said->substr(cut + 1)};
+  }
   void take_push() {
     std::vector<mux::platform::push::event> said;
     {
@@ -257,8 +269,9 @@ class notices_part {
     const bool custom = sound && chosen && !chosen->empty();
     if (custom) { this->sound_only(true); sound = false; }
     spl::visit(spl::overloaded{[&](mux::config::notify_backend::native) {
-                                       std::thread([title, text, sound] {
-                                         if (!mux::platform::notifications::notify(title, text, sound))
+                                       // Pressed, its chat opened (take_opened).
+                                       std::thread([title, text, sound, chat = std::format("{}\n{}", in.account.address, in.id)] {
+                                         if (!mux::platform::notifications::notify_chat(title, text, sound, chat))
                                            std::println(std::cerr, "[notify] no desktop notification service; {}: {}",
                                                         title, text);
                                        }).detach();

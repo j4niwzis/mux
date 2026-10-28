@@ -12,4 +12,20 @@ export namespace mux::platform::notifications {
 [[nodiscard]] inline bool notify(std::string_view title, std::string_view text, bool sound) {
   return backend::notify(title, text, sound);
 }
+// The same for a chat: pressed, the chat `chat` (its account's address and
+// its id, a line each) asked to be opened -- where the platform can say so
+// (take_opened); else as notify.
+[[nodiscard]] inline bool notify_chat(std::string_view title, std::string_view text, bool sound, std::string_view chat) {
+  if constexpr (requires { backend::notify_chat(title, text, sound, chat); })
+    return backend::notify_chat(title, text, sound, chat);
+  else
+    return backend::notify(title, text, sound);
+}
+// A chat a notification pressed asks to open, as notify_chat said it; none.
+[[nodiscard]] inline std::optional<std::string> take_opened() {
+  if constexpr (requires { backend::take_opened(); })
+    return backend::take_opened();
+  else
+    return std::nullopt;
+}
 }  // namespace mux::platform::notifications

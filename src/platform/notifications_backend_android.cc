@@ -4,6 +4,8 @@
 // with none as one that sends nothing), opening mux when it is pressed.
 // Through JNI, from whichever thread asks: SDL attaches it to the VM.
 module;
+// The SDL fork's: what an intent that brought mux up asked of it.
+extern "C" int SDL_TakeAndroidRequest(char *out, int size);
 #include <SDL3/SDL.h>
 #include <jni.h>
 export module mux.platform.notifications.backend;
@@ -82,8 +84,10 @@ void make_channel(JNIEnv* env, jobject manager, const channel& made) {
                       channel);
 }
 
-// What pressing it does: mux brought up, as its launcher icon would.
-jobject opening_mux(JNIEnv* env, jobject activity, int sdk) {
+// What pressing it does: mux brought up, as its launcher icon would -- and
+// its chat opened, where it is a chat's (the intent's request, which the SDL
+// fork keeps for take_opened).
+jobject opening_mux(JNIEnv* env, jobject activity, int sdk, std::string_view chat) {
   jclass context_class = env->FindClass("android/content/Context");
   jobject packages = env->CallObjectMethod(activity, env->GetMethodID(context_class, "getPackageManager",
                                                                      "()Landroid/content/pm/PackageManager;"));
@@ -95,13 +99,19 @@ jobject opening_mux(JNIEnv* env, jobject activity, int sdk) {
                                          name);
   if (!intent)
     return nullptr;
+  if (!chat.empty())
+    env->CallObjectMethod(intent, env->GetMethodID(env->GetObjectClass(intent), "putExtra",
+                                                   "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;"),
+                          env->NewStringUTF("org.libsdl.app.request"), string_of(env, chat));
   // FLAG_IMMUTABLE (API 23), which Android 12 and later require of every
-  // PendingIntent.
-  constexpr jint immutable = 0x04000000;
+  // PendingIntent; FLAG_UPDATE_CURRENT, its request the newest. One for each
+  // chat (its request code): else every notification opened the last one's.
+  constexpr jint immutable = 0x04000000, update_current = 0x08000000;
   jclass pending = env->FindClass("android/app/PendingIntent");
   return env->CallStaticObjectMethod(pending, env->GetStaticMethodID(pending, "getActivity",
                                                                      "(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;"),
-                                     activity, 0, intent, sdk >= 23 ? immutable : 0);
+                                     activity, static_cast<jint>(std::hash<std::string_view>{}(chat)), intent,
+                                     (sdk >= 23 ? immutable : 0) | update_current);
 }
 
 // The small icon: the platform's own chat icon, found by name -- mux ships
@@ -123,7 +133,7 @@ export namespace mux::platform::notifications::backend {
 // Posted; false where Android could not be asked. One notification for each
 // title -- a chat, or a person -- the newest in place of the one before;
 // with the system's notification sound, or silent.
-[[nodiscard]] inline bool notify(std::string_view title, std::string_view text, bool sound) {
+[[nodiscard]] inline bool notify_chat(std::string_view title, std::string_view text, bool sound, std::string_view chat) {
   const jni_frame frame;
   JNIEnv* env = frame.env();
   if (!env)
@@ -165,7 +175,7 @@ export namespace mux::platform::notifications::backend {
   constexpr jint default_sound = 1;
   if (sound)
     set("setDefaults", "(I)Landroid/app/Notification$Builder;", default_sound);
-  if (jobject opening = opening_mux(env, activity, sdk))
+  if (jobject opening = opening_mux(env, activity, sdk, chat))
     set("setContentIntent", "(Landroid/app/PendingIntent;)Landroid/app/Notification$Builder;", opening);
   if (frame.threw())
     return false;
@@ -175,6 +185,16 @@ export namespace mux::platform::notifications::backend {
   env->CallVoidMethod(manager, env->GetMethodID(env->GetObjectClass(manager), "notify", "(ILandroid/app/Notification;)V"),
                       static_cast<jint>(std::hash<std::string_view>{}(title)), notification);
   return !frame.threw();
+}
+[[nodiscard]] inline bool notify(std::string_view title, std::string_view text, bool sound) {
+  return notify_chat(title, text, sound, {});
+}
+// The chat a notification pressed asked to open, as notify_chat put it.
+[[nodiscard]] inline std::optional<std::string> take_opened() {
+  std::array<char, 1024> said{};
+  if (SDL_TakeAndroidRequest(said.data(), static_cast<int>(said.size())) <= 0)
+    return std::nullopt;
+  return std::string(said.data());
 }
 
 }  // namespace mux::platform::notifications::backend

@@ -267,6 +267,11 @@ struct head_pressed {};
 // The pinned bar pressed: to the pin it shows, and the bar on to the one
 // pinned before it.
 struct pinned_pressed {};
+// The pinned bar swiped across: the pin before it (older) or after it,
+// shown in the bar -- nothing jumped to.
+struct pinned_step {
+  bool older = true;
+};
 struct menu_copy_link {};
 struct menu_copy_url {};
 struct favourite_emoji { emote emoji; };

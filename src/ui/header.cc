@@ -314,11 +314,17 @@ inline constexpr float kPinnedHeight = 46.0f;
 // tdesktop's bar under a chat's head: a stripe in the accent, "Pinned
 // message" -- "#2 of 3" where there are more -- over a line of it. Pressed,
 // the program goes to it, and the bar to the one pinned before it.
+// Swiped across: right, the pin before; left, the one after. Its own drag:
+// the screen's flick (a step back, the drawer out) not made of it -- swiping
+// through the pins opened the drawer too (a tester's).
+struct pinned_swiped {
+  std::optional<request::pinned_step> operator()(bool towards_left) const { return request::pinned_step{.older = !towards_left}; }
+};
 inline auto pinned_bar_for(const palette& colours) {
   namespace c = skiff::compose;
   const auto pin = [](const pinned_shown& now) { return now.pin.value_or(pinned_view{}); };
   return SKIFF_NAMED(pinned_bar_for, c::shown_for<pinned_shown>([](const pinned_shown& now) { return now.pin.has_value(); },
-      c::onClick(request::pinned_pressed{},
+      c::flicked_holding(60.0f, pinned_swiped{}, c::onClick(request::pinned_pressed{},
           c::row(c::hbox(10.0f, {.fillX = true, .height = kPinnedHeight, .padding = {5.5f, 16.0f, 6.0f, 18.0f},
                                  .background = colours.sidebar, .hoverBackground = colours.chosen}),
                  c::styled({.fillY = true, .width = 2.0f, .cornerRadius = 1.0f}, nodes::Box<>(colours.accent)),
@@ -328,7 +334,7 @@ inline auto pinned_bar_for(const palette& colours) {
                            c::text_for<pinned_shown>([pin](const pinned_shown& now) { return pin(now).line; },
                                c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.dim))))),
                  c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))),
-          "Pinned message")));
+          "Pinned message"))));
 }
 
 // What the chat's protocol says over its composer -- Matrix's warning that

@@ -80,6 +80,22 @@ class chat_view_part {
       }
     asked(request::jump_to_message{pin->id});
   }
+  // The bar swiped: the pin before or after the one it shows, in the bar
+  // only -- as a press moves it on, without the jump.
+  void apply(const request::pinned_step& one) {
+    const auto& pin = s_->showing->look<mux::ui::pinned_shown>()->pin;
+    const auto& chosen = s_->showing->look<mux::ui::chat_shown>()->chosen;
+    const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
+    if (!pin || !chat)
+      return;
+    const auto at = std::ranges::find(chat->pinned, pin->id);
+    if (at == chat->pinned.end())
+      return;
+    const auto count = chat->pinned.size();
+    const auto index = static_cast<std::size_t>(at - chat->pinned.begin());
+    cycled_ = pin_cycle{chat->id, one.older ? (index + count - 1) % count : (index + 1) % count, count};
+    this->put(mux::ui::pinned_shown{this->pin_of(chat)});
+  }
   // The banner's button: its protocol's; its close: let go until it says
   // something else.
   template <class Asked>

@@ -368,6 +368,14 @@ class jumps_part {
     if (this->chosen() && s_->showing->look<mux::ui::chat_told>()->fetched != this->fetched())
       this->tell();
     this->show_ways();
+    // A window whose end is in view: its next page asked as the chat changes
+    // -- the list says its edge only as it is scrolled to it, and a page that
+    // brought the window to the newest but still gave a token left it a
+    // window for good, "\u2193" over the newest message (a tester's). Asked
+    // again only for another token, or after a while (ask_newer).
+    if (const auto open = this->chosen(); open && !going_)
+      if (const mux::conversation* chat = s_->model->find(*open); chat && chat->detached && chat->future_from && seen_.end)
+        this->ask_newer(*chat, asked);
     if (!going_)
       return;
     auto& jump = *going_;

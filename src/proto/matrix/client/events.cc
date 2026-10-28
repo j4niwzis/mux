@@ -413,6 +413,26 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
                                        },
                                        [](const auto&) {}},
                     one.content.data());
+      // The relation an encrypted event carries in the clear -- an edit's,
+      // as Element sends one in an encrypted room: m.relates_to outside what
+      // is sealed -- put on the message it decrypted to, where that says
+      // none of its own. Else the edit was a message of its own, shown
+      // beside the one it edited, the same words twice (a tester's).
+      spl::visit(spl::overloaded{[&](const loom::ev::m_room_encrypted_content_t& outer) {
+                                   if (!outer.m_relates_to)
+                                     return;
+                                   spl::visit(spl::overloaded{[&](loom::ev::m_room_message_content_t& inner) {
+                                                                if (inner.m_relates_to)
+                                                                  return;
+                                                                using relation = std::remove_cvref_t<decltype(*inner.m_relates_to)>;
+                                                                if (auto taken = knot::convert<relation>(*outer.m_relates_to))
+                                                                  inner.m_relates_to = std::move(*taken);
+                                                              },
+                                                              [](auto&) {}},
+                                              made.content.data());
+                                 },
+                                 [](const auto&) {}},
+                  one.content.data());
       // Gone however the event's reading ends -- thrown out of too: else the
       // next one read would take this one's reference.
       struct forget_reference {

@@ -173,17 +173,50 @@ class notices_part {
   }
   // What the connector said since: the endpoint given to the accounts, a
   // push a sync now, the rest said in the log.
-  // A chat a notification pressed asks to open: its account's address and
-  // its id, as show() gave them.
-  [[nodiscard]] std::optional<mux::conversation_id> take_opened() {
+  // What a notification asked of mux -- pressed, its chat opened; its
+  // actions, the chat read or answered -- read once into what it is: its
+  // word, the chat's account's address and its id, and a reply's text, a
+  // line each.
+  struct opened_chat {
+    mux::conversation_id chat;
+  };
+  struct read_chat {
+    mux::conversation_id chat;
+  };
+  struct replied {
+    mux::conversation_id chat;
+    std::string text;
+  };
+  using asked_t = spl::variant<opened_chat, read_chat, replied>;
+  [[nodiscard]] std::optional<asked_t> take_asked() {
     const auto said = mux::platform::notifications::take_opened();
     if (!said)
       return std::nullopt;
-    const auto cut = said->find('\n');
-    if (cut == std::string::npos)
+    const auto word_end = said->find('\n');
+    const auto address_end = word_end == std::string::npos ? std::string::npos : said->find('\n', word_end + 1);
+    if (address_end == std::string::npos)
       return std::nullopt;
-    const std::string address = said->substr(0, cut);
-    return mux::conversation_id{{mux::ui::protocol_of(address), address}, said->substr(cut + 1)};
+    const std::string word = said->substr(0, word_end);
+    const std::string address = said->substr(word_end + 1, address_end - word_end - 1);
+    const auto room_end = said->find('\n', address_end + 1);
+    const std::string room = said->substr(address_end + 1, room_end == std::string::npos ? std::string::npos : room_end - address_end - 1);
+    const mux::conversation_id chat{{mux::ui::protocol_of(address), address}, room};
+    // The words a request is said by, each what it asks.
+    static constexpr std::array kWords{std::string_view("open"), std::string_view("read"), std::string_view("reply")};
+    const auto which = std::ranges::find(kWords, word);
+    switch (which - kWords.begin()) {
+      case 0: return asked_t{opened_chat{chat}};
+      case 1: return asked_t{read_chat{chat}};
+      case 2:
+        if (room_end == std::string::npos)
+          return std::nullopt;
+        return asked_t{replied{chat, said->substr(room_end + 1)}};
+      default: return std::nullopt;
+    }
+  }
+  // A chat's notification taken away: read, or answered, from it.
+  static void dismiss(const mux::conversation_id& chat) {
+    mux::platform::notifications::dismiss_chat(std::format("{}\n{}", chat.account.address, chat.id));
   }
   void take_push() {
     std::vector<mux::platform::push::event> said;

@@ -38,7 +38,7 @@ if(MUX_ANDROID_SDL_SOURCE_DIR)
   list(APPEND mux_sdl_source SOURCE_DIR "${MUX_ANDROID_SDL_SOURCE_DIR}")
 endif()
 cme_declare_port(NAME sdl3 PROVIDES SDL3 sdl3 VERSION 3.5.0
-  GITHUB_REPOSITORY j4niwzis/SDL GIT_TAG 84fc0ecf49ab8ebfd3a8be88273eb75d8d82e955
+  GITHUB_REPOSITORY j4niwzis/SDL GIT_TAG 76274bbca9b7ed98b60e7cdb933d2fb2d56a0463
   ${mux_sdl_source} LICENSE Zlib TARGETS SDL3::SDL3)
 # Static, in libmux.so: the DEX loads libmux.so (sdl-native-dex --library),
 # whose JNI_OnLoad is SDL's (android/exports.map).

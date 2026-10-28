@@ -102,7 +102,7 @@ jobject opening_mux(JNIEnv* env, jobject activity, int sdk, std::string_view cha
   if (!chat.empty())
     env->CallObjectMethod(intent, env->GetMethodID(env->GetObjectClass(intent), "putExtra",
                                                    "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;"),
-                          env->NewStringUTF("org.libsdl.app.request"), string_of(env, chat));
+                          env->NewStringUTF("org.libsdl.app.request"), string_of(env, std::format("open\n{}", chat)));
   // FLAG_IMMUTABLE (API 23), which Android 12 and later require of every
   // PendingIntent; FLAG_UPDATE_CURRENT, its request the newest. One for each
   // chat (its request code): else every notification opened the last one's.
@@ -112,6 +112,59 @@ jobject opening_mux(JNIEnv* env, jobject activity, int sdk, std::string_view cha
                                                                      "(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;"),
                                      activity, static_cast<jint>(std::hash<std::string_view>{}(chat)), intent,
                                      (sdk >= 23 ? immutable : 0) | update_current);
+}
+
+// An action of a chat's notification: a broadcast to the SDL fork's
+// receiver -- mux not brought up -- asking `request` of mux (the action's
+// word and the chat, a line each); a reply's with a field to type it in
+// (RemoteInput), whose PendingIntent must be mutable for the text to reach
+// it. One PendingIntent for each chat and action (its request code).
+jobject chat_action(JNIEnv* env, jobject activity, int sdk, std::string_view word, std::string_view chat, std::string_view label,
+                    bool reply, jint icon) {
+  jclass intent_class = env->FindClass("android/content/Intent");
+  jobject intent = env->NewObject(intent_class, env->GetMethodID(intent_class, "<init>", "(Ljava/lang/String;)V"),
+                                  env->NewStringUTF("org.libsdl.app.NOTIFICATION_ACTION"));
+  jclass context_class = env->FindClass("android/content/Context");
+  jobject name = env->CallObjectMethod(activity, env->GetMethodID(context_class, "getPackageName", "()Ljava/lang/String;"));
+  if (!intent || !name)
+    return nullptr;
+  // Its receiver by name: a class of the app's is not found by FindClass on
+  // a thread of mux's own.
+  env->CallObjectMethod(intent, env->GetMethodID(intent_class, "setClassName", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;"),
+                        name, env->NewStringUTF("org.libsdl.nativeapp.Receiver"));
+  const std::string request = std::format("{}\n{}", word, chat);
+  env->CallObjectMethod(intent, env->GetMethodID(intent_class, "putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;"),
+                        env->NewStringUTF("org.libsdl.app.request"), string_of(env, request));
+  constexpr jint immutable = 0x04000000, update_current = 0x08000000, mutable_ = 0x02000000;
+  const jint flags = update_current | (reply ? (sdk >= 31 ? mutable_ : 0) : (sdk >= 23 ? immutable : 0));
+  jclass pending = env->FindClass("android/app/PendingIntent");
+  jobject sent = env->CallStaticObjectMethod(pending, env->GetStaticMethodID(pending, "getBroadcast",
+                                                                             "(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;"),
+                                             activity, static_cast<jint>(std::hash<std::string_view>{}(request)), intent, flags);
+  if (!sent)
+    return nullptr;
+  jclass builder_class = env->FindClass("android/app/Notification$Action$Builder");
+  jobject builder = env->NewObject(builder_class,
+                                   env->GetMethodID(builder_class, "<init>", "(ILjava/lang/CharSequence;Landroid/app/PendingIntent;)V"),
+                                   icon, string_of(env, label), sent);
+  if (!builder)
+    return nullptr;
+  if (reply) {
+    jclass remote_class = env->FindClass("android/app/RemoteInput$Builder");
+    jobject remote = env->NewObject(remote_class, env->GetMethodID(remote_class, "<init>", "(Ljava/lang/String;)V"),
+                                    env->NewStringUTF("org.libsdl.app.reply"));
+    env->CallObjectMethod(remote, env->GetMethodID(remote_class, "setLabel", "(Ljava/lang/CharSequence;)Landroid/app/RemoteInput$Builder;"),
+                          string_of(env, label));
+    jobject input = env->CallObjectMethod(remote, env->GetMethodID(remote_class, "build", "()Landroid/app/RemoteInput;"));
+    env->CallObjectMethod(builder, env->GetMethodID(builder_class, "addRemoteInput",
+                                                    "(Landroid/app/RemoteInput;)Landroid/app/Notification$Action$Builder;"),
+                          input);
+  }
+  return env->CallObjectMethod(builder, env->GetMethodID(builder_class, "build", "()Landroid/app/Notification$Action;"));
+}
+// What a chat's notification is known by: the chat, else its title.
+jint notification_id(std::string_view title, std::string_view chat) {
+  return static_cast<jint>(std::hash<std::string_view>{}(chat.empty() ? title : chat));
 }
 
 // The small icon: the platform's own chat icon, found by name -- mux ships
@@ -177,14 +230,34 @@ export namespace mux::platform::notifications::backend {
     set("setDefaults", "(I)Landroid/app/Notification$Builder;", default_sound);
   if (jobject opening = opening_mux(env, activity, sdk, chat))
     set("setContentIntent", "(Landroid/app/PendingIntent;)Landroid/app/Notification$Builder;", opening);
+  // A chat's: read, or answered, from where it is shown (Android 7's reply
+  // field) -- mux not brought up.
+  if (!chat.empty() && sdk >= 24) {
+    for (const auto& [word, label, reply] : {std::tuple{"read", "Mark as read", false}, std::tuple{"reply", "Reply", true}})
+      if (jobject action = chat_action(env, activity, sdk, word, chat, label, reply, chat_icon(env, activity)))
+        set("addAction", "(Landroid/app/Notification$Action;)Landroid/app/Notification$Builder;", action);
+  }
   if (frame.threw())
     return false;
   jobject notification = env->CallObjectMethod(builder, env->GetMethodID(builder_class, "build", "()Landroid/app/Notification;"));
   if (!notification || frame.threw())
     return false;
   env->CallVoidMethod(manager, env->GetMethodID(env->GetObjectClass(manager), "notify", "(ILandroid/app/Notification;)V"),
-                      static_cast<jint>(std::hash<std::string_view>{}(title)), notification);
+                      notification_id(title, chat), notification);
   return !frame.threw();
+}
+// A chat's notification taken away: read, or answered, from it.
+inline void dismiss_chat(std::string_view chat) {
+  const jni_frame frame;
+  JNIEnv* env = frame.env();
+  const auto activity = static_cast<jobject>(SDL_GetAndroidActivity());
+  if (!env || !activity)
+    return;
+  jobject manager = env->CallObjectMethod(activity, env->GetMethodID(env->FindClass("android/content/Context"), "getSystemService",
+                                                                    "(Ljava/lang/String;)Ljava/lang/Object;"),
+                                          env->NewStringUTF("notification"));
+  if (manager && !frame.threw())
+    env->CallVoidMethod(manager, env->GetMethodID(env->GetObjectClass(manager), "cancel", "(I)V"), notification_id({}, chat));
 }
 [[nodiscard]] inline bool notify(std::string_view title, std::string_view text, bool sound) {
   return notify_chat(title, text, sound, {});

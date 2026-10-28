@@ -33,9 +33,21 @@ auto app::window() -> skiff::scene::Scene<window_type>& { return scene; }
 void app::woken() {
   // What UnifiedPush's connector said, first: a push is a sync now.
   notices.take_push();
-  // A notification pressed: its chat opened -- it only brought mux up.
-  while (const auto chat = notices.take_opened())
-    this->open_chat(*chat, std::nullopt);
+  // What a notification asked: pressed, its chat opened -- it only brought
+  // mux up; its actions, the chat read, or answered and read, and taken away.
+  while (const auto asked = notices.take_asked())
+    spl::visit(spl::overloaded{[&](const notices_part::opened_chat& one) { this->open_chat(one.chat, std::nullopt); },
+                               [&](const notices_part::read_chat& one) {
+                                 reading.mark_read(one.chat);
+                                 notices_part::dismiss(one.chat);
+                               },
+                               [&](const notices_part::replied& one) {
+                                 if (!one.text.empty())
+                                   net->send(one.chat, one.text);
+                                 reading.mark_read(one.chat);
+                                 notices_part::dismiss(one.chat);
+                               }},
+               *asked);
   // What the workers made, put where it goes: on this, the UI's thread.
   work.finish();
   auto taken = box->take();

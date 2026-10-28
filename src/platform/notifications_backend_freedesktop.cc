@@ -10,4 +10,5 @@ export namespace mux::platform::notifications::backend {
   return notify(title, text, sound);
 }
 [[nodiscard]] inline std::optional<std::string> take_opened() { return std::nullopt; }
+inline void dismiss_chat(std::string_view) {}
 }  // namespace mux::platform::notifications::backend

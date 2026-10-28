@@ -22,4 +22,6 @@ export namespace mux::platform::notifications {
 }
 // A chat a notification pressed asks to open, as notify_chat said it; none.
 [[nodiscard]] inline std::optional<std::string> take_opened() { return backend::take_opened(); }
+// A chat's notification taken away, where it is shown.
+inline void dismiss_chat(std::string_view chat) { backend::dismiss_chat(chat); }
 }  // namespace mux::platform::notifications

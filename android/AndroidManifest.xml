@@ -20,5 +20,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- A notification's actions -- mark as read, a reply typed in it --
+             taken without bringing mux up. -->
+        <receiver android:name="org.libsdl.nativeapp.Receiver" android:exported="false" />
     </application>
 </manifest>

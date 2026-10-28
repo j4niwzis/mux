@@ -792,6 +792,9 @@ struct conversation {
   // forward meets the newest and it is live again.
   bool detached = false;
   std::optional<std::string> future_from;
+  // What came as it happened while it was a window: put in as the window
+  // meets the newest, where paging forward did not bring it.
+  std::vector<message> came_detached;
   std::optional<message> latest;
   // Counted up whenever its members change: what shows them is made again
   // only then -- a big room has thousands.

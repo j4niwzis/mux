@@ -825,8 +825,17 @@ class model {
     spl::visit(spl::overloaded{[&](placement::at_end) {
                             if (!where.latest || !message_before(one.message, *where.latest))
                               where.latest = one.message;
-                            if (where.detached)
+                            // A window: kept aside -- the page forward may have
+                            // been asked before it came, and come back without
+                            // it; else it was lost from the chat open (a
+                            // tester's: a message missing between two).
+                            if (where.detached) {
+                              constexpr std::size_t kKeptAside = 500;
+                              if (where.came_detached.size() >= kKeptAside)
+                                where.came_detached.erase(where.came_detached.begin());
+                              where.came_detached.push_back(one.message);
                               return;
+                            }
                             in_time();
                           },
                           [&](placement::at_start) { in_time(); },
@@ -854,6 +863,7 @@ class model {
   void on(const change::window_opened& one) {
     this->in_chat(one.in, [&](conversation& where) {
     where.timeline.clear();
+    where.came_detached.clear();
     where.history_from = one.history_from;
     where.future_from = one.future_from;
     where.detached = one.future_from.has_value();
@@ -863,6 +873,15 @@ class model {
     this->in_chat(one.in, [&](conversation& where) {
     where.future_from = one.future_from;
     where.detached = one.future_from.has_value();
+    // At the newest: what came meanwhile and no page brought, put in -- by
+    // its time, where the pages did not put it already.
+    if (!where.detached) {
+      for (message& said : std::exchange(where.came_detached, {}))
+        if (!message_in(where, said.id)) {
+          const auto at = std::ranges::upper_bound(where.timeline, said, message_before);
+          where.timeline.insert(at, std::move(said));
+        }
+    }
   });
   }
   void on(const change::message_encrypted& one) {

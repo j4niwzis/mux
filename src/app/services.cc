@@ -156,15 +156,32 @@ struct services {
   // An answer being written in the thread open let go: the field's bar over
   // it too.
   void stop_thread_answer() const {
-    if (!showing->look<mux::ui::chat_shown>()->thread_answer)
+    const auto& shown = *showing->look<mux::ui::chat_shown>();
+    if (!shown.thread_answer && !shown.thread_edit)
       return;
-    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) { now.thread_answer.reset(); });
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) {
+      now.thread_answer.reset();
+      now.thread_edit.reset();
+    });
     mux::ui::show(*showing, mux::ui::thread_compose{});
+  }
+  // A message of the thread open edited there: "Edit message" over its
+  // field. The chat's field, behind the thread on a phone, took it before,
+  // and Edit seemed to do nothing (a tester's).
+  void edit_in_thread(std::string id, mux::ui::compose_context said) const {
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) {
+      now.thread_answer.reset();
+      now.thread_edit = std::move(id);
+    });
+    mux::ui::show(*showing, mux::ui::thread_compose{std::move(said)});
   }
   // A message of the thread open answered there, as tdesktop's "Reply to
   // <name>" over the field.
   void answer_in_thread(std::string id, mux::ui::compose_context said) const {
-    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) { now.thread_answer = std::move(id); });
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) {
+      now.thread_answer = std::move(id);
+      now.thread_edit.reset();
+    });
     mux::ui::show(*showing, mux::ui::thread_compose{std::move(said)});
   }
   // The stretch of a chat's messages in view and a page around it -- or,

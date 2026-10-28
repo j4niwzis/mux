@@ -760,6 +760,8 @@ struct chat_shown {
   std::optional<std::string> thread;
   // An answer being written in it: to which of its messages.
   std::optional<std::string> thread_answer;
+  // Or one of its messages being edited there: which.
+  std::optional<std::string> thread_edit;
   // The space opened as a forum, its rooms listed: by its id.
   std::optional<std::string> forum;
 };

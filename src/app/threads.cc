@@ -59,6 +59,20 @@ class threads_part {
     const std::string text = mux::ui::composer_plain(s_->thread_writing());
     if (!shown.thread || text.empty())
       return;
+    // A message of it edited there: the edit sent, not an answer.
+    if (shown.thread_edit) {
+      const std::string id = *shown.thread_edit;
+      auto styles = mux::ui::composer_styles(s_->thread_writing());
+      s_->write_thread({});
+      s_->stop_thread_answer();
+      if (const auto chosen = s_->managed()) {
+        if (s_->demo())
+          s_->box->push(mux::change_t{mux::change::message_edited{*chosen, id, mux::body{text, std::nullopt}}});
+        else
+          s_->net->edit(*chosen, id, text, std::move(styles));
+      }
+      return;
+    }
     request::send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(s_->thread_writing())};
     s_->write_thread({});
     s_->stop_thread_answer();

@@ -15,17 +15,11 @@ export namespace mux::platform::notifications {
 // The same for a chat: pressed, the chat `chat` (its account's address and
 // its id, a line each) asked to be opened -- where the platform can say so
 // (take_opened); else as notify.
+// Every backend has both: where it cannot open a chat, notify_chat is
+// notify and take_opened says none.
 [[nodiscard]] inline bool notify_chat(std::string_view title, std::string_view text, bool sound, std::string_view chat) {
-  if constexpr (requires { backend::notify_chat(title, text, sound, chat); })
-    return backend::notify_chat(title, text, sound, chat);
-  else
-    return backend::notify(title, text, sound);
+  return backend::notify_chat(title, text, sound, chat);
 }
 // A chat a notification pressed asks to open, as notify_chat said it; none.
-[[nodiscard]] inline std::optional<std::string> take_opened() {
-  if constexpr (requires { backend::take_opened(); })
-    return backend::take_opened();
-  else
-    return std::nullopt;
-}
+[[nodiscard]] inline std::optional<std::string> take_opened() { return backend::take_opened(); }
 }  // namespace mux::platform::notifications

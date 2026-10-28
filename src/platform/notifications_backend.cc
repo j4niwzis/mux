@@ -6,4 +6,6 @@ import std;
 
 export namespace mux::platform::notifications::backend {
 [[nodiscard]] inline bool notify(std::string_view, std::string_view, bool) { return false; }
+[[nodiscard]] inline bool notify_chat(std::string_view, std::string_view, bool, std::string_view) { return false; }
+[[nodiscard]] inline std::optional<std::string> take_opened() { return std::nullopt; }
 }  // namespace mux::platform::notifications::backend

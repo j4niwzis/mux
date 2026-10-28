@@ -61,7 +61,15 @@ void app::apply(const request::choose& one) {
       members_fetched.insert(one.which).second)
     net->fetch_members(one.which);
   const bool another = shared.chosen() != one.which;
-  mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.chosen = one.which; });
+  // Another chat: the thread open in the one left is not one of its. Kept,
+  // a link to a message in another room, followed from a thread, showed
+  // that thread in the room gone to -- empty (a tester's); the panel stays
+  // as it was, listing the new chat's threads.
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) {
+    if (now.chosen != one.which)
+      now.thread.reset();
+    now.chosen = one.which;
+  });
   // Shown anew: opened at its first unread, quietly, where it has unread;
   // the ways back from jumps in the one left gone.
   if (another)

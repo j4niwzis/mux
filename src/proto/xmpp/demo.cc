@@ -15,6 +15,9 @@ template <class Maker>
 void demo(const state&, Maker& make) {
   const account_id me{id<state>{}, "alice@wonderland.example"};
   make.online(me);
+  // Its stream up, as the window asks before letting one write: offline,
+  // every demo chat said its reader might not post.
+  make.state(me, protocol_state_t{state{.online = true, .archive = false}});
   make.chat(me, "hatter@wonderland.example", "The Hatter", conversation_kind::direct{}, std::nullopt, true, 2,
             {{"hatter@wonderland.example", "Why is a raven like a writing-desk?"},
              {"alice@wonderland.example", "I give up. What's the answer?", true},

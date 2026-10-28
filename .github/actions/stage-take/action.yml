@@ -14,6 +14,23 @@ runs:
       with:
         name: ${{ inputs.name }}-${{ github.sha }}
         path: /mnt/stage-take
+    # download-artifact said it went through where the 3 GB archive came
+    # cut short ("premature end" at unpacking: the link of 8ebc4d9, on
+    # desktop and Android alike). Each archive tested whole; where one is
+    # not, fetched again, a few times, before giving up.
+    - name: The archives whole
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        whole() { zstd -q -t /mnt/stage-take/work.tar.zst && zstd -q -t /mnt/stage-take/cargo.tar.zst; }
+        for attempt in 1 2 3; do
+          whole && exit 0
+          echo "::warning::the build from the stage before came cut short; fetched again ($attempt)"
+          rm -rf /mnt/stage-take/*
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" -n "${{ inputs.name }}-${{ github.sha }}" -D /mnt/stage-take || true
+        done
+        whole
     - name: Unpack the build
       shell: bash
       run: |

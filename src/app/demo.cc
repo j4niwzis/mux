@@ -66,6 +66,20 @@ struct maker {
   void is(const mux::account_id& account, std::string contact, mux::availability_t state) {
     into.apply(mux::change_t{mux::change::presence_changed{account, std::move(contact), mux::presence{state, std::nullopt}}});
   }
+  // The protocol's state: the window's, not the model's (states_taker).
+  void state(const mux::account_id&, const mux::protocol_state_t&) {}
+};
+// What each protocol's demo says its account's protocol is -- online: what
+// the window offers goes by it (XMPP lets one write only while its stream is
+// up). The rest of the demo is the model's (maker), and not made twice.
+struct states_taker {
+  std::vector<mux::change::protocol_state_changed> took;
+  void online(const mux::account_id&) {}
+  void chat(const mux::account_id&, std::string, std::string, mux::conversation_kind_t, std::optional<std::string>, bool,
+            std::int64_t, std::vector<said>) {}
+  void members(const mux::account_id&, std::string, std::vector<mux::member>) {}
+  void is(const mux::account_id&, std::string, mux::availability_t) {}
+  void state(const mux::account_id& account, mux::protocol_state_t now) { took.push_back({account, std::move(now)}); }
 };
 
 // Each protocol's own demo (demo_account and demo, by ADL on its state):
@@ -90,14 +104,19 @@ template <class... Tags>
   return out;
 }
 [[nodiscard]] inline std::vector<mux::config::account_t> accounts() { return accounts_of(mux::protocols{}); }
-template <class... Tags>
-void fill_of(mux::protocol_list<Tags...>, maker& make) {
+template <class Maker, class... Tags>
+void fill_of(mux::protocol_list<Tags...>, Maker& make) {
   using demo_defaults::demo;
   (demo(mux::state_of<Tags>{}, make), ...);
 }
 inline void fill(mux::model& into) {
   maker make{into};
   fill_of(mux::protocols{}, make);
+}
+[[nodiscard]] inline std::vector<mux::change::protocol_state_changed> states() {
+  states_taker take;
+  fill_of(mux::protocols{}, take);
+  return std::move(take.took);
 }
 
 }  // namespace fake

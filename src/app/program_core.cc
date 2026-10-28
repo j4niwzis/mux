@@ -772,6 +772,10 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   });
 
   this->keeps_nothing = demo;
+  // The demo's accounts' protocols as their demos say: no client tells it.
+  if (demo)
+    for (auto& one : mux::app::fake::states())
+      shared.ui.protocol_states.insert_or_assign(one.account, std::move(one.now));
   // What each protocol's account does, for the window to offer.
   mux::app::tell_protocol_ops(shared.ui, mux::protocols{});
   // Load the saved settings through the base; app::take dispatches requests.

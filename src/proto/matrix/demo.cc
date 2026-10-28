@@ -15,6 +15,7 @@ template <class Maker>
 void demo(const state&, Maker& make) {
   const account_id me{id<state>{}, "@alice:matrix.example"};
   make.online(me);
+  make.state(me, protocol_state_t{state{.online = true}});
   make.chat(me, "!tea:matrix.example", "Mad Tea Party", conversation_kind::group{}, "No room! No room!", true, 12,
             {{"@dormouse:matrix.example", "Twinkle, twinkle, little bat\u2026"},
              {"@march.hare:matrix.example", "Have some wine."},

@@ -439,6 +439,7 @@ class jumps_part {
       if (!jump.context_asked) {
         jump.context_asked = true;
         jump.since = now;
+        s_->model->refuse_window(jump.in, std::nullopt);
         asked(request::load_context{jump.in, jump.to});
       } else if (now - jump.since > kContextPatienceMs) {
         jump.paging = true;
@@ -473,6 +474,8 @@ class jumps_part {
   [[nodiscard]] std::optional<std::string> going_to() const { return going_ ? std::optional(going_->to) : std::nullopt; }
   // Let go -- by hand, at the loader; or the message is not there.
   void stop() {
+    if (going_ && going_->context_asked)
+      s_->model->refuse_window(going_->in, going_->to);
     going_.reset();
     this->show_ways();
   }

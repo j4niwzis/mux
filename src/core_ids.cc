@@ -933,7 +933,11 @@ using media_use_t = spl::variant<media_use::avatar, media_use::emote, media_use:
 namespace placement {
 struct at_end {};     // live: after the rest -- but not into a window away from the newest
 struct at_start {};   // history paged back: before the rest
-struct in_window {};  // a window's own: loaded around a message, or paged forward
+// A window's own: loaded around a message -- the one it was asked around,
+// `around` -- or paged forward (none).
+struct in_window {
+  std::optional<std::string> around;
+};
 struct aside {};      // not in the timeline: a message a reply quotes, fetched for its quote
 }  // namespace placement
 using placement_t = spl::variant<placement::at_end, placement::at_start, placement::in_window, placement::aside>;

@@ -564,6 +564,7 @@ void account<Sink>::decrypt_waiting(const std::string& session) {
     const late_news_while news{late_news_, placed_as_news(one.where)};
     this->event(one.in, one.event,
                 spl::visit(spl::overloaded{[](placement::aside aside) -> placement_t { return aside; },
+                                                 [](const placement::in_window& window) -> placement_t { return window; },
                                                  [](const auto&) -> placement_t { return placement::in_window{}; }},
                               one.where));
   }

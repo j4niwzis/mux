@@ -207,6 +207,8 @@ struct window_opened {
   conversation_id in;
   std::optional<std::string> history_from;
   std::optional<std::string> future_from;
+  // The message it was asked around, where a jump asked for it.
+  std::optional<std::string> around = std::nullopt;
 };
 // A window paged forward: where to go on from, or none where the newest
 // was met and it is live again.
@@ -534,6 +536,16 @@ class model {
         where.read_up_to = std::move(message);
       });
   }
+  // A jump let go before its window came (its loader's cross): that window,
+  // and the messages that fill it, not taken when they come -- else the
+  // chat went to it all the same, the jump stopped only on the screen (a
+  // tester's). `around` none: a jump asked again, whatever it asks taken.
+  void refuse_window(const conversation_id& id, std::optional<std::string> around) {
+    if (around)
+      windows_refused_.insert_or_assign(id, std::move(*around));
+    else
+      windows_refused_.erase(id);
+  }
   // A chat read now: the last to lose its history.
   void touch(const conversation_id& id) {
     if (this->chat_in(id) != nullptr)
@@ -761,6 +773,10 @@ class model {
           std::max(one.at, ordered_at(*std::ranges::prev(std::ranges::end(messages))));
   }
   void add_to(conversation& where, change::message_added one) {
+    if (spl::visit(spl::overloaded{[&](const placement::in_window& window) { return this->refused(where.id, window.around); },
+                                   [](const auto&) { return false; }},
+                   one.where))
+      return;
     if (spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, one.where)) {
       std::erase(where.typing, one.message.sender);
       if (where.typing.empty())
@@ -860,7 +876,13 @@ class model {
                           }},
                one.where);
   }
+  [[nodiscard]] bool refused(const conversation_id& in, const std::optional<std::string>& around) const {
+    const auto found = windows_refused_.find(in);
+    return around && found != windows_refused_.end() && found->second == *around;
+  }
   void on(const change::window_opened& one) {
+    if (this->refused(one.in, one.around))
+      return;
     this->in_chat(one.in, [&](conversation& where) {
     where.timeline.clear();
     where.came_detached.clear();
@@ -1249,6 +1271,7 @@ class model {
   // The root being changed by a protocol's own change, while it is.
   chats_root* editing_ = nullptr;
   std::uint64_t read_tick_ = 0;
+  std::map<conversation_id, std::string> windows_refused_;
 };
 
 // Changes from the network's thread to the UI's: pushed on one, taken all

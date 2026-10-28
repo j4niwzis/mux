@@ -1131,17 +1131,17 @@ void account<Sink>::load_context(std::string room, std::string target) {
       return;
     }
     const conversation_id in{id_, room};
-    sink_(change::window_opened{in, got->start, got->end});
+    sink_(change::window_opened{in, got->start, got->end, target});
     // Before it, newest first: given oldest first.
     if (got->events_before)
       for (auto it = got->events_before->rbegin(); it != got->events_before->rend(); ++it)
-        event(in, *it, placement::in_window{});
+        event(in, *it, placement::in_window{target});
     // It, read as a timeline event from what the server gave.
     if (got->event)
-      event(in, *got->event, placement::in_window{});
+      event(in, *got->event, placement::in_window{target});
     if (got->events_after)
       for (const auto& one : *got->events_after)
-        event(in, one, placement::in_window{});
+        event(in, one, placement::in_window{target});
     log(id_, "context of {} in {}: {} before, {} after", target, room,
         got->events_before ? got->events_before->size() : 0, got->events_after ? got->events_after->size() : 0);
   });

@@ -696,7 +696,13 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   // an encrypted room (what came before it was encrypted is not marked);
   // encrypted by a device not verified by its owner; its authenticity not
   // guaranteed on this device.
-  const bool plain_in_encrypted = in.encrypted && !said.encrypted && !said.service &&
+  // One's own still on its way is not one: mux sends only encrypted to an
+  // encrypted room, and its echo is marked as its copy from the server is
+  // read -- "not encrypted" until then, on every message sent.
+  const bool on_its_way = said.outgoing && spl::visit(spl::overloaded{[](const delivery::sending&) { return true; },
+                                                                      [](const auto&) { return false; }},
+                                                      said.delivery);
+  const bool plain_in_encrypted = in.encrypted && !said.encrypted && !said.service && !on_its_way &&
                                   (said.came_plain || !in.encrypted_since || said.at >= *in.encrypted_since);
   const std::string warning = plain_in_encrypted                         ? std::string("not encrypted · ")
                               : said.encrypted && said.unverified        ? std::string("not verified by its owner · ")

@@ -316,6 +316,7 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
         .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
         .body = {body, html},
         .replies_to = reply_to,
+        .encrypted = this->encrypted_room(room),
         .outgoing = true,
         .delivery = delivery::sending{}}});
     unsent<Sink> pending{sink_, in, txn};
@@ -347,6 +348,7 @@ void account<Sink>::send_as(std::string room, std::string body, std::optional<st
         .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
         .body = {emote ? "* " + body : body, html},
         .replies_to = reply_to,
+        .encrypted = this->encrypted_room(room),
         .outgoing = true,
         .delivery = delivery::sending{}}});
     unsent<Sink> pending{sink_, in, txn};
@@ -467,6 +469,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
                                             std::chrono::system_clock::now()),
                                         .body = {body, html},
                                         .replies_to = reply_to,
+                                        .encrypted = this->encrypted_room(room),
                                         .outgoing = true,
                                         .delivery = delivery::sending{},
                                         .thread = root}});

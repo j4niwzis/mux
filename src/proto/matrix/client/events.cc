@@ -437,6 +437,9 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
                   .sender = one.sender,
                   .at = at,
                   .body = {"🔒 Waiting for this message, this may take a while.", std::nullopt},
+                  // Encrypted, not yet read: never "not encrypted", which it
+                  // was marked as every plain message in the room is.
+                  .encrypted = true,
                   .outgoing = one.sender == id_.address};
   if (session) {
     if (const auto why = withheld_.find(*session); why != withheld_.end())

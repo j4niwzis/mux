@@ -231,6 +231,7 @@ class vault {
     if (!key)
       return false;
     key_ = *key;
+    ++generation_;
     // A re-seal cut short: what it was doing, and the key before.
     if (const auto how = this->header_read()) {
       resealing_ = how->resealing.value_or(false);
@@ -277,6 +278,7 @@ class vault {
     write_plain(header_file_, knot::to_json_string(*how));
     resealing_ = true;
     going_off_ = true;
+    ++generation_;
   }
   // The re-seal done: the journal gone -- and, turned off, the header and
   // the key.
@@ -294,10 +296,20 @@ class vault {
     previous_.reset();
     resealing_ = false;
     going_off_ = false;
+    ++generation_;
   }
   [[nodiscard]] bool resealing() const {
     const std::scoped_lock held(lock_);
     return resealing_;
+  }
+  // How many times what seals and opens has changed -- a key made, given,
+  // taken away; a re-seal begun or done. What was sealed before a change
+  // may not open after it: a file written whole outside the vault's lock
+  // (a chat's file made compact) is put in place only where this is still
+  // what it was when its lines were sealed.
+  [[nodiscard]] std::uint64_t generation() const {
+    const std::scoped_lock held(lock_);
+    return generation_;
   }
   // Whether it is the passphrase, the vault left as it is: asked before it
   // is changed or turned off.
@@ -326,6 +338,7 @@ class vault {
     how.check = spl::bytes::base64_padded_text(
         detail::seal(key, spl::bytes::of(text), detail::kCheckBound));
     key_ = key;
+    ++generation_;
     return how;
   }
   [[nodiscard]] std::optional<header> header_read() const {
@@ -345,6 +358,7 @@ class vault {
       OPENSSL_cleanse(key_->data(), key_->size());
     key_.reset();
     going_off_ = false;
+    ++generation_;
   }
 
   // A whole file: read, opened where it is sealed (a sealed file with the
@@ -541,6 +555,7 @@ class vault {
     return std::nullopt;
   }
   std::optional<key_t> previous_;
+  std::uint64_t generation_ = 0;
   bool resealing_ = false;
   bool going_off_ = false;
   // The key a passphrase makes, where it is this vault's.

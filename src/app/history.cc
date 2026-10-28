@@ -98,13 +98,13 @@ class history_part {
                                   // A window over history already on disk -- a jump back
                                   // to what was read before -- leaves no gap: what is
                                   // before it is there already, as it was. Only one
-                                  // over what the disk did not have does.
-                                  auto known = on_disk_.find(c.message.in);
+                                  // over what the disk did not have does. What the disk
+                                  // has not known yet (read on a worker): not kept --
+                                  // a gap too many costs only a request.
+                                  const auto known = on_disk_.find(c.message.in);
                                   if (known == on_disk_.end())
-                                    known = on_disk_
-                                                .emplace(c.message.in, s_->store->everything(c.message.in) | std::views::keys | std::ranges::to<std::set<std::string>>())
-                                                .first;
-                                  const bool was_kept = !known->second.insert(c.message.id).second;
+                                    this->read_on_disk(c.message.in);
+                                  const bool was_kept = known != on_disk_.end() && !known->second.insert(c.message.id).second;
                                   const mux::conversation* chat = s_->model->find(c.message.in);
                                   if (!was_kept && chat && !chat->timeline.empty() && chat->timeline.front().id == c.message.id) {
                                     gaps_of(c.message.in).insert_or_assign(c.message.id, message_store::gap_mark{});
@@ -125,6 +125,7 @@ class history_part {
     // not in it (it came live while the chat is a window elsewhere), as it
     // came: kept either way, or it would be lost on going back to the newest.
     const auto added = [&](const mux::change::message_added& c) {
+      this->noting(c.message.in, c.message.id);
       // A message fetched for a quote is not history read in order: kept on
       // disk, it would be read back as though it were next to the rest.
       if (spl::visit(spl::overloaded{[](mux::placement::aside) { return true; }, [](const auto&) { return false; }},
@@ -176,9 +177,9 @@ class history_part {
       if (paged_from) {
         paging_from_.insert_or_assign(in, *paged_from);
         // What the disk has, before the page comes and is kept: whether it
-        // reaches it is told by this.
-        if (!on_disk_.contains(in))
-          on_disk_.emplace(in, s_->store->everything(in) | std::views::keys | std::ranges::to<std::set<std::string>>());
+        // reaches it is told by this -- read on a worker; not known by the
+        // time the page comes, it is taken not to.
+        this->read_on_disk(in);
         if (const auto gap = gaps_of(in).find(*paged_from); gap != gaps_of(in).end()) {
           if (gap->second.start)
             return;  // the room's beginning: nothing older anywhere
@@ -256,6 +257,31 @@ class history_part {
     gaps_kept_before_.insert(in);
     s_->store->keep_gaps(in, gaps_of(in));
   }
+  // The ids of a chat's messages on disk, read on a worker -- on the
+  // window's thread, a big chat's whole file was parsed there, and Android
+  // said the app was not responding. As they were when asked: what is kept
+  // meanwhile (noting) taken out again, for it was not there before.
+  void read_on_disk(const mux::conversation_id& in) {
+    if (on_disk_.contains(in) || kept_while_reading_.contains(in))
+      return;
+    kept_while_reading_.emplace(in, std::set<std::string>{});
+    s_->work->run([this, in]() -> workers::done_t {
+      auto ids = s_->store->everything(in) | std::views::keys | std::ranges::to<std::set<std::string>>();
+      return [this, in, ids = std::move(ids)]() mutable {
+        if (const auto since = kept_while_reading_.find(in); since != kept_while_reading_.end()) {
+          for (const std::string& id : since->second)
+            ids.erase(id);
+          kept_while_reading_.erase(since);
+        }
+        on_disk_[in].insert(ids.begin(), ids.end());
+      };
+    });
+  }
+  // A message kept while its chat's ids are being read.
+  void noting(const mux::conversation_id& in, const std::string& id) {
+    if (const auto reading = kept_while_reading_.find(in); reading != kept_while_reading_.end())
+      reading->second.insert(id);
+  }
 
   services* s_;
   std::set<mux::conversation_id> reads_restored_;
@@ -269,6 +295,8 @@ class history_part {
   // The ids of each chat's messages on disk, read once when a window is
   // loaded in it: a window over what is there leaves no gap.
   std::map<mux::conversation_id, std::set<std::string>> on_disk_;
+  // The chats whose ids are being read, and what was kept in each meanwhile.
+  std::map<mux::conversation_id, std::set<std::string>> kept_while_reading_;
 };
 
 }  // namespace mux::app

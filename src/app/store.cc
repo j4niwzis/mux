@@ -3,6 +3,7 @@
 export module mux.app.store;
 
 import std;
+import splice;
 import splice.bytes;
 import knot;
 import mux.vault;
@@ -116,6 +117,16 @@ class message_store {
   mux::vault::vault* vault = nullptr;
   using time_point = std::chrono::sys_time<std::chrono::milliseconds>;
 
+  // Its writer started: every line, reads file and compaction written on a
+  // thread of its own, in the order asked. The window's thread only asks --
+  // writing itself, it waited on the files' and the vault's locks for every
+  // message kept, while a worker made a big chat's file compact or the
+  // network wrote the encryption store, and Android said the app was not
+  // responding, again and again while history was paged back (a tester's).
+  message_store() : writer_([this](std::stop_token stop) { this->write_queued(stop); }) {}
+  message_store(const message_store&) = delete;
+  message_store& operator=(const message_store&) = delete;
+
   void record(const mux::message& one) {
     if (!one.id.empty())
       append(one.in, line_of(one));
@@ -128,23 +139,25 @@ class message_store {
     for (const auto& [user, when] : chat.receipt_times)
       times.emplace(user, when.time_since_epoch().count());
     const store_file::reads_file all{.users = chat.read_by, .me = chat.read_up_to, .times = std::move(times)};
-    pending_reads_.insert_or_assign(in, knot::to_json_string(all));
+    {
+      std::lock_guard held(queue_lock_);
+      pending_reads_.insert_or_assign(in, knot::to_json_string(all));
+    }
     flush_reads(true);
   }
-  // A failed write keeps the latest value for a later attempt.
+  // The reads waiting written, by the writer: one that failed kept, for a
+  // later attempt -- once a second at most, unless `force`.
   void flush_reads(bool force = false) {
-    if (pending_reads_.empty())
-      return;
     const auto now = std::chrono::steady_clock::now();
     if (!force && now < reads_retry_at_)
       return;
     reads_retry_at_ = now + std::chrono::seconds(1);
-    std::erase_if(pending_reads_, [&](const auto& entry) {
-      const auto where = reads_file_of(entry.first);
-      std::error_code failed;
-      std::filesystem::create_directories(where.parent_path(), failed);
-      return !failed && vault->write_file(where, entry.second);
-    });
+    {
+      std::lock_guard held(queue_lock_);
+      if (pending_reads_.empty())
+        return;
+    }
+    this->queue(queued::reads{});
   }
   struct reads {
     std::map<std::string, std::string> read_by;
@@ -153,9 +166,13 @@ class message_store {
   };
   [[nodiscard]] reads read_reads(const mux::conversation_id& in) const {
     reads out;
-    const auto pending = pending_reads_.find(in);
-    const std::string text = pending != pending_reads_.end() ? pending->second
-        : vault->read_file(reads_file_of(in)).value_or(std::string());
+    std::optional<std::string> waiting;
+    {
+      std::lock_guard held(queue_lock_);
+      if (const auto pending = pending_reads_.find(in); pending != pending_reads_.end())
+        waiting = pending->second;
+    }
+    const std::string text = waiting ? std::move(*waiting) : vault->read_file(reads_file_of(in)).value_or(std::string());
     auto parsed = knot::try_read<store_file::reads_file>(std::string_view(text));
     if (!parsed)
       return out;
@@ -172,14 +189,7 @@ class message_store {
   void mark_deleted(const mux::conversation_id& in, const std::string& id, mux::message whole) {
     append(in, knot::to_json_string(store_file::message_line{.id = id, .deleted = true}));
     whole.redacted = true;
-    const auto where = deleted_file_of(in);
-    std::error_code failed;
-    std::filesystem::create_directories(where.parent_path(), failed);
-    {
-      std::lock_guard held(file_lock());
-      (void)vault->append_line(where, line_of(whole));
-    }
-    prune(mux::config::state_path("deleted"), deleted_budget, where);
+    this->queue(queued::line{.where = deleted_file_of(in), .text = line_of(whole), .archive = true});
   }
   // Messages deleted that are not held in memory -- older than what is, or
   // told again from the sync kept at every start: each found in the chat's
@@ -192,10 +202,11 @@ class message_store {
   void mark_deleted_on_disk(const mux::conversation_id& in, const std::vector<std::string>& ids) {
     std::map<std::string, mux::message> kept;
     read_lines(file_of(in), in, kept);
+    this->waiting_into(file_of(in), in, kept);
     std::map<std::string, mux::message> archived;
     read_lines(deleted_file_of(in), in, archived);
+    this->waiting_into(deleted_file_of(in), in, archived);
     const auto where = deleted_file_of(in);
-    bool archiving = false;
     for (const std::string& id : ids) {
       const auto found = kept.find(id);
       if (found == kept.end())
@@ -206,17 +217,9 @@ class message_store {
       }
       if (archived.contains(id))
         continue;
-      if (!archiving) {
-        std::error_code failed;
-        std::filesystem::create_directories(where.parent_path(), failed);
-        archiving = true;
-      }
-      std::lock_guard held(file_lock());
-      (void)vault->append_line(where, line_of(found->second));
+      this->queue(queued::line{.where = where, .text = line_of(found->second), .archive = true});
       archived.insert_or_assign(id, found->second);
     }
-    if (archiving)
-      prune(mux::config::state_path("deleted"), deleted_budget, where);
   }
   void forget(const mux::conversation_id& in, const std::string& id) {
     append(in, knot::to_json_string(store_file::message_line{.id = id, .gone = true}));
@@ -307,15 +310,142 @@ class message_store {
   std::mutex& file_lock() const { return lock_; }
   mutable std::mutex lock_;
   void append(const mux::conversation_id& in, const std::string& line) {
-    const auto where = file_of(in);
+    this->queue(queued::line{.where = file_of(in), .text = line, .archive = false});
+  }
+
+  // What the writer is asked, in order: a line for a chat's file or for the
+  // archive of what was deleted; the reads waiting; a chat's file made
+  // compact.
+  struct queued {
+    struct line {
+      std::filesystem::path where;
+      std::string text;
+      bool archive = false;
+    };
+    struct reads {};
+    struct compact {
+      std::filesystem::path where;
+      mux::conversation_id in;
+    };
+    using one = spl::variant<line, reads, compact>;
+  };
+  void queue(queued::one job) const {
+    {
+      std::lock_guard held(queue_lock_);
+      queue_.push_back(std::move(job));
+    }
+    queue_ready_.notify_one();
+  }
+  // The writer: each job done, then let go of -- a line stays in the queue
+  // until it is written, so that a read meanwhile finds it there or in the
+  // file (waiting_into). Asked to stop, what is queued is written first.
+  void write_queued(std::stop_token stop) {
+    while (true) {
+      std::optional<queued::one> job;
+      {
+        std::unique_lock held(queue_lock_);
+        if (!queue_ready_.wait(held, stop, [&] { return !queue_.empty(); }))
+          return;  // asked to stop, and nothing left
+        job.emplace(queue_.front());
+      }
+      spl::visit(spl::overloaded{[&](const queued::line& one) { this->write_line(one); },
+                                 [&](const queued::reads&) { this->write_reads(); },
+                                 [&](const queued::compact& one) { this->write_compact(one.where, one.in); }},
+                 *job);
+      {
+        std::lock_guard held(queue_lock_);
+        queue_.pop_front();
+      }
+    }
+  }
+  void write_line(const queued::line& one) {
+    if (vault == nullptr)
+      return;
     std::error_code failed;
-    std::filesystem::create_directories(where.parent_path(), failed);
+    std::filesystem::create_directories(one.where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      (void)vault->append_line(where, line);
+      (void)vault->append_line(one.where, one.text);
     }
-    if (++appended_ % 500 == 1)
-      prune(mux::config::state_path("messages"), budget, where);
+    if (one.archive)
+      prune(mux::config::state_path("deleted"), deleted_budget, one.where);
+    else if (++appended_ % 500 == 1)
+      prune(mux::config::state_path("messages"), budget, one.where);
+  }
+  void write_reads() {
+    if (vault == nullptr)
+      return;
+    std::map<mux::conversation_id, std::string> now;
+    {
+      std::lock_guard held(queue_lock_);
+      now = pending_reads_;
+    }
+    for (const auto& [in, text] : now) {
+      const auto where = reads_file_of(in);
+      std::error_code failed;
+      std::filesystem::create_directories(where.parent_path(), failed);
+      if (failed || !vault->write_file(where, text))
+        continue;
+      // Written: let go of, unless a newer one came meanwhile.
+      std::lock_guard held(queue_lock_);
+      if (const auto still = pending_reads_.find(in); still != pending_reads_.end() && still->second == text)
+        pending_reads_.erase(still);
+    }
+  }
+  // A chat's file written again with one line each, oldest first: its lines
+  // sealed without the vault's lock held -- a big chat's took seconds, and
+  // every read and write of the program waited -- and the file put in its
+  // place under it, only where nothing was written to it since and what
+  // seals is what it was (vault::generation): else let go.
+  void write_compact(const std::filesystem::path& where, const mux::conversation_id& in) {
+    {
+      std::lock_guard held(queue_lock_);
+      compacting_.erase(where);
+    }
+    if (vault == nullptr)
+      return;
+    std::error_code sized;
+    const auto size_read = std::filesystem::file_size(where, sized);
+    const auto sealed_under = vault->generation();
+    std::map<std::string, mux::message> all;
+    const std::size_t lines = read_lines(where, in, all);
+    if (sized || lines <= 2 * all.size() + 64)
+      return;
+    std::vector<const mux::message*> order;
+    for (const auto& [id, one] : all)
+      order.push_back(&one);
+    std::ranges::sort(order, {}, [](const mux::message* one) { return one->at; });
+    const auto fresh = std::filesystem::path(where.string() + ".new");
+    {
+      std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
+      for (const mux::message* one : order)
+        out << vault->line_of(line_of(*one), where) << '\n';
+    }
+    std::lock_guard held(file_lock());
+    vault->exclusive([&] {
+      std::error_code failed;
+      if (std::filesystem::file_size(where, failed) == size_read && !failed && vault->generation() == sealed_under)
+        std::filesystem::rename(fresh, where, failed);
+      else
+        std::filesystem::remove(fresh, failed);
+    });
+  }
+  // The lines for `where` still waiting to be written, read into `all`
+  // after the file's: they are newer than what it has.
+  void waiting_into(const std::filesystem::path& where, const mux::conversation_id& in, std::map<std::string, mux::message>& all) const {
+    std::vector<std::string> waiting;
+    {
+      std::lock_guard held(queue_lock_);
+      for (const queued::one& job : queue_)
+        spl::visit(spl::overloaded{[&](const queued::line& one) {
+                                     if (one.where == where)
+                                       waiting.push_back(one.text);
+                                   },
+                                   [](const auto&) {}},
+                   job);
+    }
+    for (const std::string& text : waiting)
+      this->take_line(text, in, all);
   }
 
  public:
@@ -351,6 +481,11 @@ class message_store {
         total -= size;
     }
   }
+  // What the writer is asked, and the reads waiting: from any thread.
+  mutable std::mutex queue_lock_;
+  mutable std::condition_variable_any queue_ready_;
+  mutable std::deque<queued::one> queue_;
+  mutable std::set<std::filesystem::path> compacting_;
   std::map<mux::conversation_id, std::string> pending_reads_;
   std::chrono::steady_clock::time_point reads_retry_at_{};
   std::atomic<std::size_t> appended_ = 0;
@@ -362,36 +497,22 @@ class message_store {
   std::map<std::string, mux::message> read(const mux::conversation_id& in) const {
     std::map<std::string, mux::message> all;
     const auto where = file_of(in);
-    std::error_code sized;
-    const auto size_read = std::filesystem::file_size(where, sized);
     const std::size_t lines = read_lines(where, in, all);
+    // Mostly old versions: made compact by the writer, once, not here --
+    // a read on the window's thread did it there, every read and write of
+    // the program waiting on it.
     if (lines > 2 * all.size() + 64) {
-      // Mostly old versions: one line each, oldest first.
-      std::vector<const mux::message*> order;
-      for (const auto& [id, one] : all)
-        order.push_back(&one);
-      std::ranges::sort(order, {}, [](const mux::message* one) { return one->at; });
-      const auto fresh = std::filesystem::path(where.string() + ".new");
-      // Written and put in its place with the vault's other reads and writes
-      // waiting (the file's lock first, as an append takes them): a re-seal
-      // meanwhile would leave it under a key gone.
-      std::lock_guard held(file_lock());
-      vault->exclusive([&] {
-        {
-          std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
-          for (const mux::message* one : order)
-            out << vault->line_of(line_of(*one), where) << '\n';
-        }
-        // Put in its place only where nothing was written to it meanwhile:
-        // a line written since the read would be lost.
-        std::error_code failed;
-        if (std::filesystem::file_size(where, failed) == size_read && !sized && !failed)
-          std::filesystem::rename(fresh, where, failed);
-        else
-          std::filesystem::remove(fresh, failed);
-      });
+      bool asked = false;
+      {
+        std::lock_guard held(queue_lock_);
+        asked = !compacting_.insert(where).second;
+      }
+      if (!asked)
+        this->queue(queued::compact{.where = where, .in = in});
     }
+    this->waiting_into(where, in, all);
     read_lines(deleted_file_of(in), in, all);
+    this->waiting_into(deleted_file_of(in), in, all);
     return all;
   }
   // One file's lines, into `all`: how many there were.
@@ -407,18 +528,26 @@ class message_store {
       const auto opened = vault->open_line(text, where);
       if (!opened)
         continue;
-      auto parsed = knot::try_read<store_file::message_line>(std::string_view(*opened));
+      this->take_line(*opened, in, all);
+    }
+    return lines;
+  }
+  // A line read, into `all`: the message it says, or that it is deleted or
+  // gone. One that cannot be read is passed over.
+  void take_line(std::string_view text, const mux::conversation_id& in, std::map<std::string, mux::message>& all) const {
+    {
+      auto parsed = knot::try_read<store_file::message_line>(text);
       if (!parsed)
-        continue;
+        return;
       auto& o = *parsed;
       if (o.gone.value_or(false)) {
         all.erase(o.id);
-        continue;
+        return;
       }
       if (o.deleted.value_or(false)) {
         if (const auto found = all.find(o.id); found != all.end())
           found->second.redacted = true;
-        continue;
+        return;
       }
       mux::message one;
       one.in = in;
@@ -464,7 +593,6 @@ class message_store {
           one.album.push_back(attachment_of(each));
       all.insert_or_assign(o.id, std::move(one));
     }
-    return lines;
   }
   // An attachment as a line keeps it, and read back.
   static mux::attachment attachment_of(const store_file::attachment_line& c) {
@@ -552,6 +680,10 @@ class message_store {
       }
     return knot::to_json_string(line);
   }
+
+  // Last: stopped -- what is queued written -- and joined before anything
+  // it uses goes.
+  std::jthread writer_;
 };
 
 }  // namespace mux::app

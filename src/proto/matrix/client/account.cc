@@ -347,6 +347,12 @@ class account {
   // backed up after it was never taken (a tester's: a whole chat waiting).
   void key_from_backup(std::string room, std::string session);
   std::set<std::string, std::less<>> backup_asked_;
+  // Not in the backup either: asked of this user's other sessions
+  // (m.room_key_request), and their answer (m.forwarded_room_key) taken
+  // only for a session asked for, from a session of theirs this one trusts.
+  void ask_own_sessions(const std::string& room, const std::string& session);
+  void forwarded_in(const crypto::forwarded_key_got& got);
+  std::set<std::string, std::less<>> keys_requested_;
   // A room's gap since the last sync, from where the sync left it back to
   // the event it had last: its events put in the timeline by their time --
   // between what was there and what the sync brought, where nothing pages

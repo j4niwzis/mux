@@ -60,7 +60,8 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
         spl::visit(spl::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
                                            if (auto said = crypto_->to_device(one.sender.value_or(""), content))
                                              spl::visit(spl::overloaded{[&](const crypto::room_key_offer& offer) { this->vet_room_key(offer); },
-                                                                              [&](const crypto::secret_got& got) { this->secret_in(got); }},
+                                                                              [&](const crypto::secret_got& got) { this->secret_in(got); },
+                                                                              [&](const crypto::forwarded_key_got& got) { this->forwarded_in(got); }},
                                                            *said);
                                          },
                                          [&](const loom::ev::m_room_key_withheld_content_t& content) { this->withheld_in(content); },

@@ -24,6 +24,7 @@ import loom.cs.sync;
 import loom.cs.typing;
 import loom.cs.wellknown;
 import loom.cs.key_backup;
+import loom.cs.keys;
 import mux.config;
 import mux.core;
 import mux.http;
@@ -482,12 +483,16 @@ void account<Sink>::key_from_backup(std::string room, std::string session) {
     if (!api_ || !crypto_)
       return;
     const auto kept = crypto_->backup();
-    if (!kept)
+    if (!kept) {
+      this->ask_own_sessions(room, session);
       return;
+    }
     auto got = perform(*api_, loom::cs::get_room_key_by_session_id{.version = kept->first, .room_id = room, .session_id = session},
                        std::chrono::seconds(30), http::lane::background);
-    if (!got)
+    if (!got) {
+      this->ask_own_sessions(room, session);
       return;
+    }
     const auto& said = got->session_data;
     const auto plain = said.ephemeral && said.ciphertext && said.mac
                            ? crypto::open_backup(kept->second, crypto::backup_session_data{.ephemeral = *said.ephemeral,
@@ -506,6 +511,44 @@ void account<Sink>::key_from_backup(std::string room, std::string session) {
       this->decrypt_waiting(session);
     }
   });
+}
+
+template <class Sink>
+void account<Sink>::ask_own_sessions(const std::string& room, const std::string& session) {
+  if (!crypto_ || !keys_requested_.insert(session).second)
+    return;
+  loom::ev::m_room_key_request_content_t asked;
+  asked.body = loom::ev::m_room_key_request_content_t::requested_key_info_t{
+      .algorithm = "m.megolm.v1.aes-sha2", .room_id = room, .sender_key = std::nullopt, .session_id = session};
+  asked.action = loom::ev::m_room_key_request_content_t::action_values::request_{};
+  asked.requesting_device_id = crypto_->device_id();
+  asked.request_id = this->transaction();
+  // To every session of this user's: in the clear, as key requests go.
+  if (this->send_plain("m.room_key_request", id_.address, "*", knot::raw{knot::to_json_string(asked)}))
+    log(id_, "a room key asked of your other sessions, for messages waiting on it");
+}
+
+template <class Sink>
+void account<Sink>::forwarded_in(const crypto::forwarded_key_got& got) {
+  // Asked for here, and from this user: else a key anyone sends is not taken.
+  if (got.sender != id_.address || !keys_requested_.contains(got.key.session_id) || !api_)
+    return;
+  // From a session of theirs this one trusts: cross-signed, or verified
+  // here by comparing emoji -- the to-device sender is the server's word.
+  auto listed = perform(*api_, loom::cs::query_keys{.body = {.device_keys = {{id_.address, {}}}}});
+  if (!listed)
+    return;
+  const auto device = crypto::device_of(*listed, id_.address, got.sender_key, crypto_->pinned_master(id_.address));
+  if (!device || device->ed25519 != got.ed25519 ||
+      !(device->cross_signed || std::ranges::contains(crypto_->verified_keys(id_.address), device->ed25519))) {
+    log(id_, "a forwarded room key refused: not from a session of yours trusted here");
+    return;
+  }
+  if (!crypto_->accept_forwarded(got))
+    return;
+  keys_requested_.erase(got.key.session_id);
+  log(id_, "a room key from your session {}, for messages waiting on it", device->device_id);
+  this->decrypt_waiting(got.key.session_id);
 }
 
 template <class Sink>

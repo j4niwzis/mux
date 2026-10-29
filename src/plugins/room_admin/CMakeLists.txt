@@ -41,6 +41,7 @@ configure_file(types.cc.in ${admin_generated}/types.cc @ONLY)
 configure_file(ui.cc.in ${admin_generated}/ui.cc @ONLY)
 configure_file(app.cc.in ${admin_generated}/app.cc @ONLY)
 mux_plugin(room_admin ORDER 12
+  SUMMARY "A room's admin tabs in its settings -- Matrix's General, Members and Permissions, as Cinny's; an XMPP group chat's Room, Configuration and Roles & Permissions -- with what they keep and what their presses do."
   TYPES    ${admin_generated}/types.cc ${admin_types}
   UI       ${admin_generated}/ui.cc ${admin_ui}
   APP      ${admin_generated}/app.cc ${admin_app}

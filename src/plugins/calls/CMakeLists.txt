@@ -18,6 +18,7 @@ elseif(MUX_CALLS)
   set(libraries LibDataChannel::LibDataChannel)
 endif()
 mux_plugin(calls ORDER 40
+  SUMMARY "Voice calls, as Element makes and takes them: the call's button in a chat's head, its view under it, its card over the window, and the call itself."
   CHANGES   changes.cc
   TYPES     types.cc
   MATRIX    matrix.cc

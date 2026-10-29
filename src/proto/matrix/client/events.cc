@@ -6,7 +6,6 @@ import std;
 import loom.media;
 import chevron.escape;
 import mux.logic.forwarding;
-import loom.crypto;
 import splice;
 import knot;
 import loom.api;
@@ -23,8 +22,6 @@ import loom.cs.rooms;
 import loom.cs.sync;
 import loom.cs.typing;
 import loom.cs.wellknown;
-import loom.cs.key_backup;
-import loom.cs.keys;
 import mux.config;
 import mux.core;
 import mux.http;
@@ -89,8 +86,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     if (verification_request_of(content.msgtype) &&
         spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where))
       if (content.to && content.from_device && content.methods)
-        this->whole().verification_request_in_room(
-            in, one, crypto::room_request_fields{.to = *content.to, .from_device = *content.from_device, .methods = *content.methods});
+        this->whole().verification_request_in_room(in, one, content);
     const auto& relates = content.m_relates_to;
     // An edit: the event it replaces takes its new content.
     if (relates && loom::client::replaces(*relates)) {
@@ -154,10 +150,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       // Encrypted: its ciphertext's URI, and what opens it kept for when it
       // is downloaded.
       if (carried.source.empty() && shown.file)
-        if (auto sealed = knot::convert<crypto::encrypted_file>(*shown.file)) {
-          carried.source = sealed->url;
-          encrypted_media_.insert_or_assign(sealed->url, std::move(*sealed));
-        }
+        if (auto url = this->whole().media_heard(*shown.file))
+          carried.source = std::move(*url);
       carried.name = shown.filename.value_or(shown.body);
       if (shown.info) {
         carry_info(carried, *shown.info);

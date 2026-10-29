@@ -10,11 +10,11 @@ mux_protocol(matrix ORDER 20
   SPLIT  app/accounts_sync.cc app/accounts_requests.cc app/accounts_events.cc app/accounts_media.cc
   POINTS mux.proto.matrix mux.proto.matrix.requests
   # The parts of loom its client imports.
-  LOOM  state crypto cs-joining cs-leaving cs-login cs-registration cs-oauth_server_metadata
+  LOOM  state cs-joining cs-leaving cs-login cs-registration cs-oauth_server_metadata
         cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms
         cs-sync cs-filter cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting
         cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary
         cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations
         cs-threads_list cs-profile cs-presence cs-device_management cs-room_upgrades cs-directory
-        cs-capabilities cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher
+        cs-capabilities cs-knocking cs-pusher
         cs-pushrules)

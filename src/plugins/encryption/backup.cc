@@ -144,7 +144,8 @@ void encrypted_account<Sink>::setup_cross_signing(std::string password, bool res
       const bool asked_elsewhere = spl::visit(
           spl::overloaded{[](const uia_password&) { return false; },
                           [&](const uia_browser& page) {
-                            uia_ = pending_uia{*said->session, uia_cross_signing{secrets, body, *master_pub, *self_pub}};
+                            uia_ = pending_uia{*said->session, uia_whole{}};
+                            uia_cross_ = uia_cross_signing{secrets, body, *master_pub, *self_pub};
                             sink_(proto::matrix::uia_in_browser{id_, page.url, "Set up cross-signing"});
                             return true;
                           },
@@ -165,6 +166,20 @@ void encrypted_account<Sink>::setup_cross_signing(std::string password, bool res
     }
     this->finish_cross_signing(secrets, *master_pub, *self_pub);
   });
+}
+
+template <class Sink>
+void encrypted_account<Sink>::continue_uia(const std::string& session) {
+  if (!uia_cross_)
+    return;
+  auto one = std::move(*std::exchange(uia_cross_, std::nullopt));
+  using upload = loom::cs::upload_cross_signing_keys;
+  one.body.auth = upload::body_t::authentication_data_t{.session = session};
+  if (auto done = perform(*api_, upload{.body = one.body}); !done) {
+    sink_(change::refused{id_, "Cross-signing not set up: " + done.error().said()});
+    return;
+  }
+  this->finish_cross_signing(one.secrets, one.master_pub, one.self_pub);
 }
 
 template <class Sink>

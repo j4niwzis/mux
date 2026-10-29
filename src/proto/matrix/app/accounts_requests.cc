@@ -18,8 +18,6 @@ import mux.proto.matrix.client;
 // (account_of): what the account's members call through whole().
 import mux.plugins.matrix;
 import mux.proto.matrix.requests;
-import loom.cs.keys;
-import loom.crypto;
 
 namespace mux::proto::matrix::client {
 template auto account<mux::app::post_change>::id() const noexcept -> const account_id&;
@@ -82,7 +80,6 @@ template void account<mux::app::post_change>::fetch_members(std::string room);
 // is instantiated through them.
 // Defined in the class, but not inline there -- a named module's class body
 // makes nothing inline -- so made here, as the account is declared extern.
-template std::expected<loom::cs::query_keys::response, failure> account<mux::app::post_change>::keys_of(const std::string& user);
 template void account<mux::app::post_change>::send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body, std::optional<knot::raw> relates_to);
 // What the members above call, defined in the same partition: made here
 // too, for nothing instantiates them elsewhere.

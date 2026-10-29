@@ -421,7 +421,10 @@ void encrypted_account<Sink>::verification_in(const std::string& sender, const l
 // In a room: the request, a message to this user from a device of theirs.
 template <class Sink>
 void encrypted_account<Sink>::verification_request_in_room(const conversation_id& in, const loom::ev::timeline_event& one,
-                                                 const crypto::room_request_fields& fields) {
+                                                 const loom::ev::m_room_message_content_t& content) {
+  if (!content.to || !content.from_device || !content.methods)
+    return;
+  const crypto::room_request_fields fields{.to = *content.to, .from_device = *content.from_device, .methods = *content.methods};
   if (!crypto_ || fields.to != id_.address || one.sender == id_.address ||
       !std::ranges::contains(fields.methods, std::string_view("m.sas.v1")) ||
       std::ranges::any_of(verifications_, [](const auto& each) { return !each.second.we_requested; }))

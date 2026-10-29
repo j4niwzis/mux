@@ -9,11 +9,7 @@ import loom.api;
 import loom.ev;
 import loom.state;
 import loom.cs.joining;
-import loom.cs.cross_signing;
-import loom.cs.keys;
-import loom.cs.to_device;
 import loom.cs.sliding_sync;
-import loom.crypto;
 import mux.vault;
 import loom.cs.leaving;
 import loom.cs.login;
@@ -44,6 +40,23 @@ struct matrix_events {};
 }  // namespace mux::contract
 
 export namespace mux::proto::matrix::client {
+
+// What an event's content says it relates to, kept out of the ciphertext
+// where it is encrypted (an event a plugin writes whole).
+struct relation_said {
+  std::optional<knot::raw> relates_to;
+  friend consteval auto json_schema(knot::type<relation_said>) {
+    return knot::schema<relation_said>().member<"relates_to">(knot::key("m.relates_to"));
+  }
+};
+// A file sealed before its upload, where encryption seals it: its
+// ciphertext, and the number its opening is kept under (seal_media).
+struct sealed_media {
+  std::string ciphertext;
+  std::uint64_t seal = 0;
+};
+// A message's file, as the event names it (an EncryptedFile).
+using message_file_t = std::remove_cvref_t<decltype(*std::declval<const loom::ev::m_room_message_content_t&>().file)>;
 
 // Joined ancestors only, in breadth-first order. A removed relation has no
 // via servers; visited rooms make cycles and diamonds harmless. A space's
@@ -364,15 +377,12 @@ class account {
   struct uia_sign_out {
     std::vector<std::string> devices;
   };
-  struct uia_cross_signing {
-    crypto::cross_signing_secrets secrets;
-    loom::cs::upload_cross_signing_keys::body_t body;
-    std::string master_pub;
-    std::string self_pub;
-  };
+  // Asked by what the whole account is (encryption's cross-signing): it
+  // goes on with it itself (continue_uia), holding what it was for.
+  struct uia_whole {};
   struct pending_uia {
     std::string session;
-    spl::variant<uia_sign_out, uia_cross_signing> what;
+    spl::variant<uia_sign_out, uia_whole> what;
   };
   std::optional<pending_uia> uia_;
   void rename_session(std::string device, std::string name);
@@ -513,7 +523,7 @@ class account {
   // object) -- encrypted where the room is, a relation it says kept out of
   // the ciphertext: what a plugin's developer tools send.
   auto send_written(std::string room, std::string type, const std::string& json) {
-    const auto typed = knot::try_read<crypto::relation_part>(json);
+    const auto typed = knot::try_read<relation_said>(json);
     return this->send_room_event(loom::cs::send_message{.room_id = std::move(room), .event_type = std::move(type),
                                                         .txn_id = this->transaction(), .body = knot::raw{json}},
                                  typed ? typed->relates_to : std::nullopt);
@@ -551,7 +561,21 @@ class account {
   [[nodiscard]] proto::matrix::security_state security_now() { return proto::matrix::security_state{id_, false, false}; }
   void mentions_from(const conversation_id&, const loom::ev::net_mux_mentions_read_content_t&) {}
   [[nodiscard]] bool verification_in_room(const conversation_id&, const loom::ev::timeline_event&, placement_t) { return false; }
-  void verification_request_in_room(const conversation_id&, const loom::ev::timeline_event&, const crypto::room_request_fields&) {}
+  void verification_request_in_room(const conversation_id&, const loom::ev::timeline_event&, const loom::ev::m_room_message_content_t&) {}
+  // Interactive auth done in the browser for what the whole account asked
+  // (uia_whole): gone on with, by it. Nothing here.
+  void continue_uia(const std::string&) {}
+  // Encrypted media, where encryption is (the plugin's): whether a file is
+  // sealed, and opened; a file sealed before its upload -- its ciphertext,
+  // and a number for what opens it -- and, once uploaded, said as the event
+  // names it (an EncryptedFile, or a message's file part); an event's file
+  // heard: its URI, what opens it kept. Here, none: nothing is sealed.
+  [[nodiscard]] bool media_sealed(std::string_view) const { return false; }
+  [[nodiscard]] std::optional<std::string> media_opened(std::string_view, const std::string&) const { return std::nullopt; }
+  [[nodiscard]] std::optional<sealed_media> seal_media(std::string_view) { return std::nullopt; }
+  [[nodiscard]] knot::raw sealed_media_file(std::uint64_t, const std::string&) { return knot::raw{"{}"}; }
+  [[nodiscard]] knot::raw sealed_media_part(std::uint64_t, const std::string&) { return knot::raw{"{}"}; }
+  [[nodiscard]] std::optional<std::string> media_heard(const message_file_t&) { return std::nullopt; }
   template <class Ask>
   std::expected<typename Ask::response, failure> send_encrypted(Ask ask, std::optional<knot::raw>) {
     throw plaintext_refused(conversation_id{id_, ask.room_id}, ask.txn_id,
@@ -572,7 +596,6 @@ class account {
   void verify_confirm(std::string, bool) {}
   void verify_cancel(std::string) {}
   void setup_cross_signing(std::string, bool = false) { this->without_encryption(); }
-  void finish_cross_signing(const crypto::cross_signing_secrets&, const std::string&, const std::string&) {}
   void restore_cross_signing(std::string) { this->without_encryption(); }
   void reset_backup() { this->without_encryption(); }
   void delete_backup() { this->without_encryption(); }
@@ -582,13 +605,6 @@ class account {
  protected:
   void say(connection_t state);
 
-  // What the server has of a user's keys: their devices, and their
-  // cross-signing keys.
-  [[nodiscard]] std::expected<loom::cs::query_keys::response, failure> keys_of(const std::string& user) {
-    loom::cs::query_keys ask;
-    ask.body.device_keys.emplace(user, std::vector<std::string>{});
-    return this->perform(*api_, ask);
-  }
   // A state event of a room set, its content given; and what was asked of a
   // room, logged where it failed.
   void set_room_state(const std::string& room, std::string type, const auto& content, std::string key = {});
@@ -682,9 +698,6 @@ class account {
       return this->whole().send_encrypted(std::move(ask), std::move(relates_to));
     return perform(*api_, ask);
   }
-  // The encrypted files events named, by their mxc:// URI: what opens each
-  // once it is downloaded.
-  std::map<std::string, crypto::encrypted_file, std::less<>> encrypted_media_;
   std::deque<loom::cs::send_message> plugin_events_;
   bool sending_plugin_events_ = false;
   // A fiber of this account. What it throws past its own handling -- the

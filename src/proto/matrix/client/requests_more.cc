@@ -24,15 +24,11 @@ import loom.cs.list_public_rooms;
 import loom.cs.space_hierarchy;
 import loom.cs.room_send;
 import loom.cs.rooms;
-import loom.crypto;
-import loom.cs.keys;
-import loom.cs.cross_signing;
 import loom.cs.room_state;
 import loom.cs.content_repo;
 import loom.cs.authed_content_repo;
 import loom.cs.create_room;
 import loom.cs.account_data;
-import loom.cs.key_backup;
 import loom.cs.kicking;
 import loom.cs.banning;
 import loom.cs.inviting;
@@ -729,15 +725,7 @@ void account<Sink>::continue_uia() {
                 sink_(proto::matrix::sessions_refused{id_, "Could not sign out: " + done.error().said()});
               this->list_sessions();
             },
-            [&](uia_cross_signing& one) {
-              using upload = loom::cs::upload_cross_signing_keys;
-              one.body.auth = upload::body_t::authentication_data_t{.session = pending.session};
-              if (auto done = perform(*api_, upload{.body = one.body}); !done) {
-                sink_(change::refused{id_, "Cross-signing not set up: " + done.error().said()});
-                return;
-              }
-              this->whole().finish_cross_signing(one.secrets, one.master_pub, one.self_pub);
-            }},
+            [&](uia_whole) { this->whole().continue_uia(pending.session); }},
         pending.what);
   });
 }

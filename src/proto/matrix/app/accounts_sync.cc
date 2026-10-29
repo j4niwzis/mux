@@ -18,7 +18,6 @@ import mux.proto.matrix.client;
 // (account_of): what the account's members call through whole().
 import mux.plugins.matrix;
 import loom.cs.sliding_sync;
-import loom.crypto;
 
 namespace mux::proto::matrix::client {
 // Defined in the class, but a member of a module's class is not inline: the
@@ -53,7 +52,14 @@ template void account<mux::app::post_change>::store_encrypted(std::string_view);
 template proto::matrix::security_state account<mux::app::post_change>::security_now();
 template void account<mux::app::post_change>::mentions_from(const conversation_id&, const loom::ev::net_mux_mentions_read_content_t&);
 template bool account<mux::app::post_change>::verification_in_room(const conversation_id&, const loom::ev::timeline_event&, placement_t);
-template void account<mux::app::post_change>::verification_request_in_room(const conversation_id&, const loom::ev::timeline_event&, const crypto::room_request_fields&);
+template void account<mux::app::post_change>::verification_request_in_room(const conversation_id&, const loom::ev::timeline_event&, const loom::ev::m_room_message_content_t&);
+template void account<mux::app::post_change>::continue_uia(const std::string&);
+template bool account<mux::app::post_change>::media_sealed(std::string_view) const;
+template std::optional<std::string> account<mux::app::post_change>::media_opened(std::string_view, const std::string&) const;
+template std::optional<sealed_media> account<mux::app::post_change>::seal_media(std::string_view);
+template knot::raw account<mux::app::post_change>::sealed_media_file(std::uint64_t, const std::string&);
+template knot::raw account<mux::app::post_change>::sealed_media_part(std::uint64_t, const std::string&);
+template std::optional<std::string> account<mux::app::post_change>::media_heard(const message_file_t&);
 template void account<mux::app::post_change>::without_encryption();
 template void account<mux::app::post_change>::tell_trust(std::string);
 template void account<mux::app::post_change>::tell_devices(std::string);
@@ -65,7 +71,6 @@ template void account<mux::app::post_change>::verify_accept(std::string);
 template void account<mux::app::post_change>::verify_confirm(std::string, bool);
 template void account<mux::app::post_change>::verify_cancel(std::string);
 template void account<mux::app::post_change>::setup_cross_signing(std::string, bool);
-template void account<mux::app::post_change>::finish_cross_signing(const crypto::cross_signing_secrets&, const std::string&, const std::string&);
 template void account<mux::app::post_change>::restore_cross_signing(std::string);
 template void account<mux::app::post_change>::reset_backup();
 template void account<mux::app::post_change>::delete_backup();

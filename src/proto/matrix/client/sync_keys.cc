@@ -5,7 +5,6 @@ export module mux.proto.matrix.client:sync_keys;
 import mux.vault;
 import std;
 import splice.bytes;
-import loom.crypto;
 import splice;
 import knot;
 import loom.cs.sliding_sync;

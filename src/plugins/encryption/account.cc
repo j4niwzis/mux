@@ -74,6 +74,27 @@ import mux.plugin.encryption.changes;
 
 export namespace mux::proto::matrix::client {
 
+// End-to-end encryption: loom's (loom.crypto), its store kept in the
+// program's vault -- sealed where local data is encrypted, the user's alone
+// either way.
+namespace crypto = loom::crypto;
+struct vault_keeper {
+  mux::vault::vault* vault = nullptr;
+  [[nodiscard]] std::optional<std::string> read_file(const std::filesystem::path& path) const { return vault->read_file(path); }
+  [[nodiscard]] bool write_file(const std::filesystem::path& path, std::string_view text, bool secret) const {
+    return vault->write_file(path, text, secret);
+  }
+  template <class Plain>
+  [[nodiscard]] std::vector<std::uint8_t> seal(const mux::vault::key_t& key, Plain&& plain, std::string_view bound) const {
+    return mux::vault::detail::seal(key, std::forward<Plain>(plain), bound);
+  }
+  template <class Sealed>
+  [[nodiscard]] std::optional<std::vector<std::uint8_t>> open(const mux::vault::key_t& key, Sealed&& sealed, std::string_view bound) const {
+    return mux::vault::detail::open(key, std::forward<Sealed>(sealed), bound);
+  }
+};
+using olm_machine = crypto::olm_machine<vault_keeper>;
+
 template <class Sink>
 class encrypted_account : public account<Sink> {
   using base = account<Sink>;
@@ -98,7 +119,7 @@ class encrypted_account : public account<Sink> {
   using typename base::uia_password;
   using typename base::uia_browser;
   using typename base::uia_none;
-  using typename base::uia_cross_signing;
+  using typename base::uia_whole;
   using typename base::pending_uia;
 
   // What the account asks of encryption (its hooks, called through whole()).
@@ -131,7 +152,40 @@ class encrypted_account : public account<Sink> {
   void encrypted(const conversation_id& in, const loom::ev::timeline_event& one,
                  std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
   void verification_request_in_room(const conversation_id& in, const loom::ev::timeline_event& one,
-                                    const crypto::room_request_fields& fields);
+                                    const loom::ev::m_room_message_content_t& content);
+  // Cross-signing set up once its interactive auth was done in the browser
+  // (the account's uia_whole): its keys uploaded with the session.
+  void continue_uia(const std::string& session);
+  // Encrypted media (the account's hooks): what opens each file events
+  // named, by its URI; a file sealed for its upload, what opens it kept by
+  // its number until it is uploaded and named.
+  [[nodiscard]] bool media_sealed(std::string_view source) const { return sealed_media_.contains(source); }
+  [[nodiscard]] std::optional<std::string> media_opened(std::string_view source, const std::string& body) const {
+    const auto found = sealed_media_.find(source);
+    if (found == sealed_media_.end())
+      return std::nullopt;
+    const auto opened = crypto::open_file(spl::bytes::of(body), found->second);
+    return opened ? std::optional(spl::bytes::text_of(*opened)) : std::nullopt;
+  }
+  [[nodiscard]] std::optional<sealed_media> seal_media(std::string_view bytes) {
+    auto sealed = crypto::seal_file(spl::bytes::of(bytes));
+    seals_.insert_or_assign(++last_seal_, std::move(sealed.info));
+    return sealed_media{spl::bytes::text_of(sealed.bytes), last_seal_};
+  }
+  [[nodiscard]] knot::raw sealed_media_file(std::uint64_t seal, const std::string& uri) {
+    return knot::raw{knot::to_json_string(this->sealed_named(seal, uri))};
+  }
+  [[nodiscard]] knot::raw sealed_media_part(std::uint64_t seal, const std::string& uri) {
+    return knot::raw{knot::to_json_string(crypto::file_part{this->sealed_named(seal, uri)})};
+  }
+  [[nodiscard]] std::optional<std::string> media_heard(const message_file_t& file) {
+    auto sealed = knot::convert<crypto::encrypted_file>(file);
+    if (!sealed)
+      return std::nullopt;
+    std::string url = sealed->url;
+    sealed_media_.insert_or_assign(url, std::move(*sealed));
+    return url;
+  }
   [[nodiscard]] bool verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where);
 
   // What this account knows of a person's encryption identity, said
@@ -243,7 +297,6 @@ class encrypted_account : public account<Sink> {
   using base::how_;
   using base::id_;
   using base::kept_file;
-  using base::keys_of;
   using base::late_news_;
   using base::members;
   using base::perform;
@@ -261,6 +314,34 @@ class encrypted_account : public account<Sink> {
   // End-to-end encryption: this device's machine, made once the device is
   // known; its keys uploaded, and what comes for it read.
   std::optional<olm_machine> crypto_;
+  // What the server has of a user's keys: their devices, and their
+  // cross-signing keys.
+  [[nodiscard]] std::expected<loom::cs::query_keys::response, failure> keys_of(const std::string& user) {
+    loom::cs::query_keys ask;
+    ask.body.device_keys.emplace(user, std::vector<std::string>{});
+    return this->perform(*api_, ask);
+  }
+  // Cross-signing keys waiting on interactive auth done in the browser.
+  struct uia_cross_signing {
+    crypto::cross_signing_secrets secrets;
+    loom::cs::upload_cross_signing_keys::body_t body;
+    std::string master_pub;
+    std::string self_pub;
+  };
+  std::optional<uia_cross_signing> uia_cross_;
+  // Encrypted media: what opens each file, by its URI; and what opens a
+  // file sealed for its upload, by its number, until it is named.
+  std::map<std::string, crypto::encrypted_file, std::less<>> sealed_media_;
+  std::map<std::uint64_t, crypto::encrypted_file> seals_;
+  std::uint64_t last_seal_ = 0;
+  // A sealed file uploaded: named by its URI, and kept so.
+  crypto::encrypted_file sealed_named(std::uint64_t seal, const std::string& uri) {
+    auto info = seals_.extract(seal);
+    crypto::encrypted_file named = info.empty() ? crypto::encrypted_file{} : std::move(info.mapped());
+    named.url = uri;
+    sealed_media_.insert_or_assign(uri, named);
+    return named;
+  }
   // Users whose master key changed from the one pinned, told once a run.
   std::set<std::string, std::less<>> identity_changed_;
   // The mentions read, as the server last said of each room: nothing is

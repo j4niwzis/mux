@@ -5,7 +5,6 @@ export module mux.proto.matrix.client:media;
 import std;
 import loom.media;
 import splice.bytes;
-import loom.crypto;
 import knot;
 import loom.api;
 import loom.ev;
@@ -49,8 +48,8 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
     cancelled_.erase(source);
     // Encrypted: whole, for the server cannot make a thumbnail of
     // ciphertext; and opened here.
-    const auto sealed = encrypted_media_.find(source);
-    const int asked = sealed != encrypted_media_.end() ? 0 : size;
+    const bool sealed = this->whole().media_sealed(source);
+    const int asked = sealed ? 0 : size;
     // Thumbnail generation may fail even though the original is available.
     // Bound that wait, then download the original for local downsampling.
     // Encrypted media always takes only the original/decryption path.
@@ -87,16 +86,16 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
           if (stopping_ || cancelled || cancelled_.erase(source))
             return;
           if (got.status == 200 && !got.body.empty()) {
-            if (sealed == encrypted_media_.end()) {
+            if (!sealed) {
               sink_(change::avatar_loaded{use, source, got.body});
               return;
             }
-            const auto opened = crypto::open_file(spl::bytes::of(got.body), sealed->second);
+            auto opened = this->whole().media_opened(source, got.body);
             if (!opened) {
               log(id_, "{} is not what its event says: not shown", source);
               return;
             }
-            sink_(change::avatar_loaded{use, source, spl::bytes::text_of(*opened)});
+            sink_(change::avatar_loaded{use, source, std::move(*opened)});
             return;
           }
         } catch (const net::failure&) {
@@ -175,13 +174,15 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     // reach the server in the clear (review 4, H2).
     // In an encrypted room, sealed here first: what reaches the server is
     // ciphertext, under no name and no type.
-    std::optional<crypto::sealed_file> sealed;
+    std::optional<sealed_media> sealed;
     if (this->encrypted_room(room)) {
       if (!this->whole().encrypting())
         throw plaintext_refused(in, local, "Not sent: it could not be encrypted -- encryption is not running for this account.");
-      sealed = crypto::seal_file(spl::bytes::of(bytes));
+      sealed = this->whole().seal_media(bytes);
+      if (!sealed)
+        throw plaintext_refused(in, local, "Not sent: it could not be encrypted.");
     }
-    const std::string ciphertext = sealed ? spl::bytes::text_of(sealed->bytes) : std::string();
+    const std::string ciphertext = sealed ? sealed->ciphertext : std::string();
     const std::string_view uploaded = sealed ? std::string_view(ciphertext) : std::string_view(bytes);
     if (!api_)
       return;
@@ -189,11 +190,13 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     // encrypted room sealed as the video is -- its first picture is what it
     // shows, and goes to the server no more in the clear than the rest.
     std::optional<std::string> thumbnail_uri;
-    std::optional<crypto::sealed_file> sealed_thumbnail;
+    std::optional<sealed_media> sealed_thumbnail;
     if (video && !video->thumbnail.empty()) {
       if (sealed)
-        sealed_thumbnail = crypto::seal_file(spl::bytes::of(video->thumbnail));
-      const std::string thumbnail_cipher = sealed_thumbnail ? spl::bytes::text_of(sealed_thumbnail->bytes) : std::string();
+        sealed_thumbnail = this->whole().seal_media(video->thumbnail);
+      if (sealed && !sealed_thumbnail)
+        throw plaintext_refused(in, local, "Not sent: its thumbnail could not be encrypted.");
+      const std::string thumbnail_cipher = sealed_thumbnail ? sealed_thumbnail->ciphertext : std::string();
       try {
         const auto got = api_->request(
             "POST", sealed_thumbnail ? "/_matrix/media/v3/upload" : "/_matrix/media/v3/upload?filename=thumbnail.png",
@@ -241,10 +244,8 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     // Sealed: the file named by what opens it, its URL not in the clear.
     const auto with_file = [&](auto content) {
       if (sealed) {
-        sealed->info.url = *uri;
         content.url.reset();
-        content.rest = knot::raw{knot::to_json_string(crypto::file_part{sealed->info})};
-        encrypted_media_.insert_or_assign(*uri, sealed->info);
+        content.rest = this->whole().sealed_media_part(sealed->seal, *uri);
       }
       return std::pair{as_body(content), relates_to_of(content)};
     };
@@ -259,9 +260,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
       content.info->duration = video->duration_ms;
       if (thumbnail_uri) {
         if (sealed_thumbnail) {
-          sealed_thumbnail->info.url = *thumbnail_uri;
-          content.info->thumbnail_file = knot::raw{knot::to_json_string(sealed_thumbnail->info)};
-          encrypted_media_.insert_or_assign(*thumbnail_uri, sealed_thumbnail->info);
+          content.info->thumbnail_file = this->whole().sealed_media_file(sealed_thumbnail->seal, *thumbnail_uri);
         } else {
           content.info->thumbnail_url = *thumbnail_uri;
         }

@@ -581,7 +581,6 @@ struct adopt_pack {
   mux::emote_pack pack;
   std::optional<mux::account_id> by;
 };
-struct close_new_room {};
 // A text menu's item for a field: the key the field takes for it, given to
 // the field with the focus -- Ctrl+V a paste.
 struct text_key {

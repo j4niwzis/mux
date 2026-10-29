@@ -155,6 +155,12 @@ struct space_menu {
 struct composer_top {
   static constexpr std::string_view name = "over the composer";
 };
+// The drawer's rows, after the client's own new chat (mux.ui:drawer):
+//   extend(c, f, palette) -> its row, row_item(...) as the others are: what
+//   it opens its plugin's own
+struct drawer_rows {
+  static constexpr std::string_view name = "the drawer's rows";
+};
 // Settings' home page, its links after the client's own (mux.ui:proxies):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own

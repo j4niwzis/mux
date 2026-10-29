@@ -153,7 +153,6 @@ struct stub {
   void flip_home_hide(std::string) {}
   void menu_thread() {}
   void open_new_room() {}
-  void close_new_room() {}
   void copy_text(std::string) {}
   void text_key(scene::Key, bool = false) {}
   void ask_link() {}
@@ -1368,16 +1367,16 @@ TEST(Protocols, XmppFormsAndEventControlsUseItsCapabilities) {
   EXPECT_TRUE(form.address_required);
   EXPECT_FALSE(form.encryption);
   EXPECT_FALSE(form.federation);
-  mux::ui::new_room_facts facts{.own_server = "example.org", .by = mux::account_id{mux::protocol::xmpp{}, "alice@example.org"}};
-  mux::ui::room_creation_events submit{facts, form};
-  mux::ui::room_draft draft{.name = "Lounge", .topic = "Welcome", .address = "lounge@rooms.example.org"};
-  const auto event = submit.on(mux::ui::submit_room{}, draft).fEvent;
+  mux::plugins::new_room::shown facts{.own_server = "example.org", .by = mux::account_id{mux::protocol::xmpp{}, "alice@example.org"}};
+  mux::plugins::new_room::room_creation_events submit{facts, form};
+  mux::plugins::new_room::room_draft draft{.name = "Lounge", .topic = "Welcome", .address = "lounge@rooms.example.org"};
+  const auto event = submit.on(mux::plugins::new_room::submit_room{}, draft).fEvent;
   ASSERT_TRUE(event.has_value());
   EXPECT_EQ(event->alias, draft.address);
   EXPECT_EQ(event->name, draft.name);
   EXPECT_FALSE(event->encrypted);
   draft.address.clear();
-  EXPECT_FALSE(submit.on(mux::ui::submit_room{}, draft).fEvent.has_value());
+  EXPECT_FALSE(submit.on(mux::plugins::new_room::submit_room{}, draft).fEvent.has_value());
 }
 
 TEST(StartChat, XmppAddressesAndKnownContactsStayInItsForm) {
@@ -1575,13 +1574,13 @@ TEST(RoomCreation, DialogRefreshesLocalChoicesWithoutAnotherModelChange) {
   struct cleanup { ~cleanup() { skiff::paint::defaultFont() = nullptr; } } clear;
   struct sink {
     void take(const mux::ui::request::create_room&) {}
-    void take(const mux::ui::request::close_new_room&) {}
+    void take(const mux::ui::request::close_shown<mux::plugins::new_room::shown>&) {}
   } requests;
   mux::ui::palette colours;
-  const mux::ui::new_room_facts facts{.own_server = "example.org",
+  const mux::plugins::new_room::shown facts{.own_server = "example.org",
       .by = mux::account_id{mux::protocol::matrix{}, "@alice:example.org"}};
-  skiff::widgets::Dialog<mux::ui::create_room_box_t> dialog;
-  auto& view = dialog.open(mux::ui::create_room_view(colours, facts));
+  skiff::widgets::Dialog<mux::plugins::new_room::box> dialog;
+  auto& view = dialog.open(mux::plugins::new_room::create_room_view(colours, facts));
   mux::ui::shown_model owner(mux::ui::shown_root{});
   skiff::bind::Binding<mux::ui::shown_model> binding;
   binding.refresh(dialog, owner);
@@ -1591,7 +1590,7 @@ TEST(RoomCreation, DialogRefreshesLocalChoicesWithoutAnotherModelChange) {
   ASSERT_TRUE(skiff::bind::press(dialog, owner, scene::Path{2, 1, 0, 4}, &requests));
   binding.refresh(dialog, owner);
   EXPECT_EQ(owner.revision(), revision);
-  EXPECT_EQ(view.fModel.root().access, mux::ui::room_access_t(mux::ui::room_access::everyone{}));
+  EXPECT_EQ(view.fModel.root().access, mux::plugins::new_room::room_access_t(mux::plugins::new_room::room_access::everyone{}));
   EXPECT_TRUE(std::get<4>(form.fParts).fState.selected());
   EXPECT_TRUE(std::get<6>(form.fParts).visible());
   EXPECT_FALSE(std::get<7>(form.fParts).visible());

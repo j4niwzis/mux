@@ -104,23 +104,6 @@ class rooms_part {
     if (mux::proto::offers(state, mux::proto::feature::people_directory{}))
       s_->net->search_people(*by, one.query);
   }
-  void apply(const request::open_new_room&) {
-    const auto by = s_->account_offering(mux::proto::feature::room_creation{});
-    if (!by) {
-      mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
-      s_->notice("New room", "No account signed in can make rooms: sign in to one in Manage accounts first.");
-      return;
-    }
-    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
-    mux::ui::show(*s_->showing, std::optional(mux::ui::new_room_facts{mux::proto::directory_server_of(mux::ui::protocol_state_of(s_->ui, *by), by->address), std::nullopt, by}));
-  }
-  void apply(const request::open_new_room_in& one) {
-    const std::string& address = one.space.account.address;
-    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
-    mux::ui::show(*s_->showing, std::optional(mux::ui::new_room_facts{address.substr(address.find(':') + 1),
-                             mux::ui::new_room_place{one.space, one.name, one.make_space}, one.space.account}));
-  }
-  void apply(const request::close_new_room&) { mux::ui::show<mux::ui::new_room_facts>(*s_->showing, std::nullopt); }
   void apply(const request::close_new_chat&) { mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt); }
   void apply(const request::start_direct& one) {
     const auto& facts = s_->showing->root().new_chat.fValue;
@@ -159,23 +142,6 @@ class rooms_part {
     s_->net->join(*by, one.room, via);
   }
   // A room made, and opened once the model has it.
-  void apply(const request::create_room& one) {
-    // In a space: by its account.
-    const auto& facts = s_->showing->root().new_room.fValue;
-    const auto by = one.space ? std::optional<mux::account_id>(one.space->account)
-                              : facts ? facts->by : std::nullopt;
-    if (!by || s_->demo())
-      return;
-    mux::ui::show<mux::ui::new_room_facts>(*s_->showing, std::nullopt);
-    // Its alias's local part, as the protocol has it (#name:server, name).
-    const auto state = mux::ui::protocol_state_of(s_->ui, *by);
-    const auto form = mux::proto::room_creation_form_of(state, std::string());
-    const std::string alias = form.address_required ? one.alias : one.open ? mux::proto::local_part_of(state, one.alias) : std::string();
-    s_->net->create_room(*by, one.name, one.topic, one.open, alias, one.federate, one.encrypted,
-                         mux::room_place{one.space ? std::optional<std::string>(one.space->id) : std::nullopt,
-                                         one.space_members, one.make_space});
-    s_->notice("New room", "Making " + one.name + "\u2026");
-  }
   void apply(const request::start_group& one) {
     const auto& current = s_->listed();
     if (!current || s_->demo())

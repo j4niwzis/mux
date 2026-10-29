@@ -284,7 +284,6 @@ struct shown_root {
   skiff::model::Tracked<std::optional<person_shown>> person;
   skiff::model::Tracked<std::optional<room_card_facts>> room;
   skiff::model::Tracked<std::optional<new_chat_facts>> new_chat;
-  skiff::model::Tracked<std::optional<new_room_facts>> new_room;
   skiff::model::Tracked<std::optional<settings_facts>> settings;
   // Where the settings page rests scrolled: put back there when it is made
   // again (a theme), told by the page as it comes to rest.
@@ -570,7 +569,7 @@ auto layer_for(const Needs &needs) {
 template <class Facts> ::mux::ui::request::close_shown<Facts> closing_of(std::type_identity<Facts>) { return {}; }
 template <class... Features, class... Tools>
 consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) {
-  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_manage, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
+  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_manage, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
                                decltype(closing_of(std::type_identity<Tools>{}))...>>{};
 }
@@ -579,7 +578,6 @@ consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) 
 // window's own with none here asks for close_shown of its facts, which no
 // handler answers: the build says so (it is not in the answers).
 inline ::mux::ui::request::close_send_box closing_of(std::type_identity<send_facts>) { return {}; }
-inline ::mux::ui::request::close_new_room closing_of(std::type_identity<new_room_facts>) { return {}; }
 inline ::mux::ui::request::close_new_chat closing_of(std::type_identity<new_chat_facts>) { return {}; }
 inline ::mux::ui::request::close_manage closing_of(std::type_identity<room_settings_facts>) { return {}; }
 inline ::mux::ui::request::close_leave_space closing_of(std::type_identity<leave_space_facts>) { return {}; }
@@ -627,7 +625,7 @@ struct plugin_dialog_facts<plugin_list<Features...>> {
 };
 using escape_order = typename joined<
     type_list<settings_facts, notice_facts, person_shown, room_card_facts>, typename plugin_dialog_facts<dialog_plugins>::type,
-    type_list<link_facts, leave_space_facts, room_settings_facts, new_chat_facts, new_room_facts>,
+    type_list<link_facts, leave_space_facts, room_settings_facts, new_chat_facts>,
     tool_facts_list, type_list<send_facts, passphrase_facts, verification_view, emoji_facts, menu_facts, viewer_facts, text_menu_facts>>::type;
 template <class Model, class... Facts>
 [[nodiscard]] std::optional<escape_answer> escape_in(const Model& showing, type_list<Facts...>) {
@@ -741,7 +739,6 @@ inline auto window_body(const ui_needs& n) {
           shown_made<leave_space_box_t, leave_space_facts>(n),
           shown_made<room_settings_t, room_settings_facts>(n),
           shown_made<start_chat_box, new_chat_facts>(n),
-          shown_made<create_room_box, new_room_facts>(n),
           tool_dialogs(n, tool_facts_list{}),
           std::move(sending),
           // A passphrase asked for: at the start, where local data is

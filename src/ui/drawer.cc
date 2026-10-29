@@ -16,6 +16,7 @@ import skiff.nodes.text;
 import mux.core;
 import mux.config;
 import mux.ui.base;
+import mux.plugins.ui;
 import :accounts;
 
 export namespace mux::ui {
@@ -59,6 +60,23 @@ struct drawer_account_row_of {
 // What the drawer holds, as Telegram's does: the accounts with Manage
 // accounts under them, then a new chat, a new room, Settings and Quit, each
 // a full-width line with its icon.
+// The plugins' rows in the drawer (contract::drawer_rows), in their order --
+// New room, for one.
+template <class List>
+struct drawer_row_list;
+template <class... Features>
+struct drawer_row_list<plugin_list<Features...>> {
+  template <class Feature>
+  static auto row_of(const palette& colours) -> decltype(extend(contract::drawer_rows{}, type_tag<Feature>{}, colours)) {
+    static_assert(requires { extend(contract::drawer_rows{}, type_tag<Feature>{}, colours); },
+                  composition::broken<contract::drawer_rows, Feature>());
+    return extend(contract::drawer_rows{}, type_tag<Feature>{}, colours);
+  }
+  static auto rows(const palette& colours) {
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), row_of<Features>(colours)...);
+  }
+};
+using drawer_plugins = drawer_row_list<composition::providers<contract::drawer_rows, enabled_plugins>>;
 inline auto drawer_view(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
@@ -74,7 +92,7 @@ inline auto drawer_view(const ui_needs& n) {
               c::styled({.margin = {0.0f, 0.0f, 6.0f, 0.0f}}, row_item(colours, "Manage accounts", sends<request::open_accounts>{}, icon::person{})),
               c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 6.0f, 0.0f}}, nodes::Box<>(colours.chosen)),
               row_item(colours, "Start new chat", sends<request::open_new_chat>{}, icon::person{}),
-              row_item(colours, "New room", sends<request::open_new_room>{}, icon::people{}),
+              drawer_plugins::rows(colours),
               row_item(colours, "Settings", sends<request::open_settings>{}, icon::gear{}),
               row_item(colours, "Quit", sends<request::quit>{}, icon::power{}))))));
 }

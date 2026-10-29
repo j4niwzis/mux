@@ -86,6 +86,7 @@ void account<Sink>::edit_caption(std::string room, std::string event, std::strin
       return;
     const auto content = loom::client::edit_picture(
         event, loom::client::media_said{.uri = picture.source, .name = picture.name, .caption = caption,
+                                        .caption_html = caption.empty() ? std::nullopt : html_of(caption, emotes_in(room), {}),
                                         .mimetype = picture.mimetype, .size = picture.size},
         picture.width, picture.height);
     if (this->send_room_event(loom::cs::send_message{.room_id = room,

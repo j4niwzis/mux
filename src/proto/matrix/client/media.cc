@@ -25,6 +25,7 @@ import mux.config;
 import mux.core;
 import mux.http;
 import mux.net;
+import mux.logic.markdown;
 import :account;
 
 // The members defined here are declared in :account, and exported there.
@@ -239,6 +240,9 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     const loom::client::media_said said{.uri = *uri,
                                         .name = name,
                                         .caption = caption,
+                                        // Its Markdown as a text's is: sent formatted, not as
+                                        // its marks (a tester's: a link left raw).
+                                        .caption_html = caption.empty() ? std::nullopt : mux::logic::markdown_html(caption),
                                         .mimetype = mimetype,
                                         .size = static_cast<std::int64_t>(bytes.size()),
                                         .reply_to = reply_to,

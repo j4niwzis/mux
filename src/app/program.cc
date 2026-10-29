@@ -47,7 +47,6 @@ import mux.app.notices;
 import mux.app.marks;
 import mux.app.history;
 import mux.app.verification;
-import mux.app.proxies;
 import mux.app.packs;
 import mux.app.rooms;
 import mux.app.room_card;
@@ -135,11 +134,10 @@ struct app : kept_settings {
   marks_part marks{shared};
   history_part paging{shared};
   verification_part verification{shared};
-  proxies_part proxying{shared, *this};
   packs_part packs{&shared};
   rooms_part rooms{shared};
   room_card_part room_card{shared};
-  preferences_part preferences{shared, *this, proxying};
+  preferences_part preferences{shared, *this};
   manage_part manage{shared, *this};
   looks_part looks{shared, *this, colours};
   threads_part threads{shared};
@@ -301,7 +299,7 @@ struct app : kept_settings {
   // none of them takes, the program's own.
   auto parts() {
     return std::tuple_cat(
-        std::tie(search, pictures, reading, outbox, settings, menu, notices, marks, paging, verification, proxying,
+        std::tie(search, pictures, reading, outbox, settings, menu, notices, marks, paging, verification,
                  packs, rooms, room_card, preferences, manage, looks, threads, jumps, chat_view, chat_list, suggestions, emoji, accounts_screen, local_data),
         std::apply([](auto&... theirs) { return std::tie(theirs...); }, plugin_parts));
   }

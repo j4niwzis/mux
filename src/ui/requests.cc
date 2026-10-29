@@ -101,7 +101,6 @@ struct connection {};
 struct privacy {};
 struct notifications {};
 struct chats {};
-struct proxy {};
 }  // namespace account_page
 // Each protocol's own pages, as its account_pages(state) lists them.
 template <class List>
@@ -136,7 +135,7 @@ using plugin_account_pages_t = typename plugin_account_pages<composition::provid
 // A page of an account's: the client's, one of a protocol's, or a plugin's.
 using account_page_t = typename variant_of_types<typename joined<
     type_list<account_page::connection, account_page::privacy, account_page::notifications, account_page::chats,
-              account_page::proxy, account_page::appearance>,
+              account_page::appearance>,
     typename protocol_account_pages<protocols>::type, plugin_account_pages_t>::type>::type;
 // What a protocol keeps of an account while its pages are open, as its
 // account_parts(state) lists them: one of them all, or none.
@@ -921,20 +920,6 @@ struct proxy_kind {
 struct settings_rendering {};
 struct settings_storage {};
 struct clear_stored {};
-struct choose_account_proxy {
-  int index = -1;
-};
-struct manage_proxies {};
-struct settings_proxies {};
-struct add_proxy {};
-struct edit_proxy {
-  int index = 0;
-};
-struct save_proxy_profile {
-  std::expected<mux::config::proxy_settings, std::string> profile;
-  int index = -1;
-};
-struct delete_proxy_profile { int index = -1; };
 struct settings_appearance {};
 struct set_renderer {
   mux::config::renderer_t renderer;

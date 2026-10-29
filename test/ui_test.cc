@@ -239,13 +239,6 @@ struct stub {
   void flip_account_mentions_sealed() {}
   void accept_identity(mux::conversation_id) {}
   void proxy_kind(mux::config::proxy_kind_t) {}
-  void choose_account_proxy(int) {}
-  void manage_proxies() {}
-  void settings_proxies() {}
-  void add_proxy() {}
-  void edit_proxy(int) {}
-  void save_proxy_profile() {}
-  void delete_proxy_profile() {}
   void settings_appearance() {}
   void settings_rendering() {}
   void settings_storage() {}
@@ -1507,17 +1500,17 @@ TEST(Appearance, ThemeCardPressEditsTheFieldAndRefreshesItsRing) {
 }
 
 TEST(Proxies, DraftValidationPreservesCredentialsAndPortBounds) {
-  mux::ui::proxy_draft draft;
-  EXPECT_FALSE(mux::ui::proxy_profile(draft));
+  mux::plugins::proxies::draft draft;
+  EXPECT_FALSE(mux::plugins::proxies::profile_of(draft));
   draft.name = "Home";
   draft.host = "localhost";
   for (const auto& port : {"", "0", "65536", "1080junk", "-1"}) {
     draft.port = port;
-    EXPECT_FALSE(mux::ui::proxy_profile(draft));
+    EXPECT_FALSE(mux::plugins::proxies::profile_of(draft));
   }
   draft.port = "65535";
   draft.password = "secret";
-  const auto profile = mux::ui::proxy_profile(draft);
+  const auto profile = mux::plugins::proxies::profile_of(draft);
   ASSERT_TRUE(profile);
   EXPECT_EQ(profile->port, 65535);
   EXPECT_EQ(profile->password, "secret");
@@ -1525,13 +1518,13 @@ TEST(Proxies, DraftValidationPreservesCredentialsAndPortBounds) {
 }
 
 TEST(Proxies, RequestsCarryTheDraftAndProfileIndex) {
-  const mux::ui::proxy_draft draft{.index = 2, .name = "Work", .host = "localhost", .port = "1080"};
-  const mux::ui::proxy_draft_events events;
-  const auto saved = events.on(mux::ui::save_proxy_draft{}, draft).fEvent;
+  const mux::plugins::proxies::draft draft{.index = 2, .name = "Work", .host = "localhost", .port = "1080"};
+  const mux::plugins::proxies::draft_events events;
+  const auto saved = events.on(mux::plugins::proxies::save_draft{}, draft).fEvent;
   ASSERT_TRUE(saved.profile);
   EXPECT_EQ(saved.index, 2);
   EXPECT_EQ(saved.profile->name, "Work");
-  EXPECT_EQ(events.on(mux::ui::delete_proxy_draft{}, draft).fEvent.index, 2);
+  EXPECT_EQ(events.on(mux::plugins::proxies::delete_draft{}, draft).fEvent.index, 2);
 }
 
 TEST(Storage, SealModelRefreshesControlsWithoutReplacingThem) {
@@ -1659,18 +1652,18 @@ TEST(Controls, TappingTheIdShowsCopyConfirmationInNarrowRows) {
 
 TEST(Proxies, LocalEditorPressesSendTypedSaveAndDeleteRequests) {
   struct sink {
-    std::optional<mux::ui::request::save_proxy_profile> saved;
+    std::optional<mux::plugins::proxies::save> saved;
     int removed = -1;
-    void take(const mux::ui::request::save_proxy_profile& request) { saved = request; }
-    void take(const mux::ui::request::delete_proxy_profile& request) { removed = request.index; }
-    void take(const mux::ui::request::settings_proxies&) {}
+    void take(const mux::plugins::proxies::save& request) { saved = request; }
+    void take(const mux::plugins::proxies::remove& request) { removed = request.index; }
+    void take(const mux::plugins::proxies::open_list&) {}
     void take(const mux::ui::request::close_settings&) {}
   } requests;
   using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
   model_t model(0);
   mux::ui::palette colours;
   const mux::config::proxy_settings profile{.name = "Home", .host = "localhost", .port = 1080};
-  auto editor = mux::ui::proxy_editor(colours, profile, 2);
+  auto editor = mux::plugins::proxies::editor_view(colours, profile, 2);
   skiff::bind::Binding<model_t> binding;
   binding.refresh(editor, model);
   ASSERT_TRUE(skiff::bind::press(editor, model, scene::Path{9, 0}, &requests));

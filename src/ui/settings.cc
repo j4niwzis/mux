@@ -47,14 +47,6 @@ struct storage {
   config::history_settings history;
   bool sealed = false;
 };
-struct proxies {
-  std::vector<config::proxy_settings> all;
-  bool with_back = true;
-};
-struct proxy {
-  std::optional<config::proxy_settings> from;
-  int index = -1;
-};
 }  // namespace settings_page
 // The plugins' pages among them (contract::settings_pages): each its own
 // type of what it shows, and its node made from that.
@@ -78,9 +70,9 @@ struct settings_pages_of;
 template <class... Pages>
 struct settings_pages_of<type_list<Pages...>> {
   using pages = spl::variant<settings_page::home, settings_page::animations, settings_page::appearance, settings_page::rendering,
-                             settings_page::notifications, settings_page::files, settings_page::storage, settings_page::proxies,
-                             settings_page::proxy, settings_page::about, settings_page::library, Pages...>;
-  using nodes = spl::variant<settings_home_t, animations_page_t, proxies_page_t, proxy_editor_t,
+                             settings_page::notifications, settings_page::files, settings_page::storage,
+                             settings_page::about, settings_page::library, Pages...>;
+  using nodes = spl::variant<settings_home_t, animations_page_t,
                              appearance_page_t, rendering_page_t, storage_page_t, files_page_t,
                              notifications_page_t, about_page_t, library_page_t, plugin_settings_node<Pages>...>;
 };
@@ -114,17 +106,15 @@ inline auto settings_view(const ui_needs& needs) {
   auto show = [n = needs](settings_page_node& page, const settings_facts& facts) {
     const palette& c = *n.colours;
     spl::visit(spl::overloaded{
-                   [&](settings_page::home) { page.template emplace<0>(settings_home(c)); },
-                   [&](settings_page::animations) { page.template emplace<1>(animations_page(c)); },
-                   [&](const settings_page::proxies& one) { page.template emplace<2>(proxies_page(c, one.all, one.with_back)); },
-                   [&](const settings_page::proxy& one) { page.template emplace<3>(proxy_editor(c, one.from, one.index)); },
-                   [&](const settings_page::appearance& one) { page.template emplace<4>(appearance_page(n, one.theme, one.accent)); },
-                   [&](settings_page::rendering) { page.template emplace<5>(rendering_page(c)); },
-                   [&](settings_page::storage) { page.template emplace<6>(storage_page(c)); },
-                   [&](settings_page::files) { page.template emplace<7>(files_page(c)); },
-                   [&](settings_page::notifications) { page.template emplace<8>(notifications_page(c)); },
-                   [&](settings_page::about) { page.template emplace<9>(about_page(c)); },
-                   [&](const settings_page::library& one) { page.template emplace<10>(library_page(c, one.name)); },
+                   [&](settings_page::home) { page.template emplace<settings_home_t>(settings_home(c)); },
+                   [&](settings_page::animations) { page.template emplace<animations_page_t>(animations_page(c)); },
+                   [&](const settings_page::appearance& one) { page.template emplace<appearance_page_t>(appearance_page(n, one.theme, one.accent)); },
+                   [&](settings_page::rendering) { page.template emplace<rendering_page_t>(rendering_page(c)); },
+                   [&](settings_page::storage) { page.template emplace<storage_page_t>(storage_page(c)); },
+                   [&](settings_page::files) { page.template emplace<files_page_t>(files_page(c)); },
+                   [&](settings_page::notifications) { page.template emplace<notifications_page_t>(notifications_page(c)); },
+                   [&](settings_page::about) { page.template emplace<about_page_t>(about_page(c)); },
+                   [&](const settings_page::library& one) { page.template emplace<library_page_t>(library_page(c, one.name)); },
                    // A plugin's page: its node, made from what it shows.
                    [&]<class Page>(const Page& one) {
                      page.template emplace<plugin_settings_node<Page>>(extend(contract::settings_pages{}, n, one));

@@ -185,8 +185,7 @@ inline auto account_pages_view(const palette& colours, const State& state, const
   auto plugins = []<class... Pages>(type_list<Pages...>) {
     return std::vector<account_page_link>{{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...};
   }(plugin_account_pages_t{});
-  auto groups = std::array{std::move(links), std::move(own), std::move(plugins),
-      std::vector<account_page_link>{{"Proxy", account_page::proxy{}, icon::gear{}}}};
+  auto groups = std::array{std::move(links), std::move(own), std::move(plugins)};
   auto rows = groups | std::views::join | std::views::transform([&](auto link) {
     return account_page_row(colours, std::move(link), selected);
   }) | std::ranges::to<std::vector>();
@@ -395,44 +394,6 @@ inline auto account_appearance_view(const palette& colours, std::string address)
       section_title(colours, "APPEARANCE"), style_controls(colours)), std::move(address)));
 }
 
-// A proxy profile chosen for the chosen account: none, or one by its place.
-struct choose_account_proxy {
-  using Answer = request::choose_account_proxy;
-  int index = -1;
-  request::choose_account_proxy operator()() const { return {index}; }
-};
-// Proxy, as Gajim's: which of the program's proxy profiles it connects
-// through, or none; and the way to the profiles themselves.
-struct proxy_rows_key {
-  std::vector<config::proxy_settings> all;
-  std::optional<std::string> current;
-  friend bool operator==(const proxy_rows_key&, const proxy_rows_key&) = default;
-};
-inline auto proxy_rows(const palette& colours, const proxy_rows_key& key) {
-  namespace c = skiff::compose;
-  // No proxy first -- an empty place where the dots are, so the names line
-  // up -- then each profile, by its place.
-  const auto row = [&](int at) {
-    if (at < 0)
-      return row_item(colours, "No proxy", choose_account_proxy{-1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)}, !key.current);
-    const config::proxy_settings& one = key.all[static_cast<std::size_t>(at)];
-    return row_item(colours, std::format("{} ({} {}:{})", one.name, config::label_of(one.kind), one.host, one.port),
-                    choose_account_proxy{at}, icon::dot{proxy_colour(one.name)}, key.current == one.name);
-  };
-  return SKIFF_NAMED(proxy_rows, c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                 std::views::iota(-1, static_cast<int>(key.all.size())) | std::views::transform(row) | std::ranges::to<std::vector>()));
-}
-using proxy_rows_t = decltype(proxy_rows(std::declval<const palette&>(), proxy_rows_key{}));
-inline auto account_proxy_view(const palette& colours) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(account_proxy_view, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::styled({.margin = {0.0f, 0.0f, 4.0f, 0.0f}}, section_title(colours, "PROXY")),
-      c::projected<page_read>([](const page_read& now) {
-        return now ? std::optional(proxy_rows_key{now->proxies, config::proxy_of(now->account)}) : std::nullopt;
-      }, c::mount<proxy_rows_t, proxy_rows_key>([at = &colours](const proxy_rows_key& key) { return std::tuple{proxy_rows(*at, key)}; },
-                                                {.fillX = true, .autoSize = scene::axes::kY})),
-      c::styled({.margin = {8.0f, 0.0f, 0.0f, 0.0f}}, row_item(colours, "Manage proxies…", sends<request::manage_proxies>{}, icon::gear{}))));
-}
 
 // ---- what is beside the list ------------------------------------------------------------
 
@@ -467,11 +428,9 @@ using privacy_view_t = decltype(account_privacy_view(std::declval<const palette&
 using notifications_view_t = decltype(account_notifications_view(std::declval<const palette&>(), std::string()));
 using chats_page_t = decltype(account_chats_page(std::declval<const ui_needs&>(), std::string(), config::theme_t{}));
 using appearance_view_t = decltype(account_appearance_view(std::declval<const palette&>(), std::string()));
-using proxy_view_t = decltype(account_proxy_view(std::declval<const palette&>()));
 using choose_one_t = decltype(choose_one(std::declval<const palette&>()));
 using detail_page_t = typename variant_of_types<typename joined<
-    type_list<choose_one_t, editor_view_t, add_account_view_t, privacy_view_t, notifications_view_t, chats_page_t, appearance_view_t,
-              proxy_view_t>,
+    type_list<choose_one_t, editor_view_t, add_account_view_t, privacy_view_t, notifications_view_t, chats_page_t, appearance_view_t>,
     typename protocol_page_views<typename protocol_account_pages<protocols>::type>::type,
     typename protocol_page_views<plugin_account_pages_t>::type>::type>::type;
 // An account's page: a protocol's made over the facts it starts from --
@@ -486,7 +445,6 @@ using detail_page_t = typename variant_of_types<typename joined<
                         [&](account_page::notifications) { return detail_page_t(account_notifications_view(colours, address)); },
                         [&](account_page::chats) { return detail_page_t(account_chats_page(n, address, theme)); },
                         [&](account_page::appearance) { return detail_page_t(account_appearance_view(colours, address)); },
-                        [&](account_page::proxy) { return detail_page_t(account_proxy_view(colours)); },
                         // A protocol's own: as its page_view makes it.
                         [&]<class Page>(Page page) { return detail_page_t(page_view(page, colours, facts)); }},
                     chosen.page);

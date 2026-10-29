@@ -428,11 +428,9 @@ void look_as_its_content(const Node&, const palette&) {}
 //   void choose_new_proxy(name)      -- the proxy of an account being added
 //   void accounts_back()              -- ← on the accounts page
 //   void account_page(account_page_t) -- a page of the chosen account
-//   void flip_account_receipts(), flip_account_mentions_shared(), flip_account_mentions_sealed(), flip_only_verified(), accept_identity(who), flip_account_typing(), choose_account_proxy(int), manage_proxies()
+//   void flip_account_receipts(), flip_account_mentions_shared(), flip_account_mentions_sealed(), flip_only_verified(), accept_identity(who), flip_account_typing()
 //   a protocol's own request: sends<Request>
 //   void typing(bool)                -- the composer has text in it, or not
-//   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
-//        save_proxy_profile(), delete_proxy_profile()
 //   void settings_appearance(), settings_rendering(), settings_storage()
 //   void clear_stored()  -- Storage (its limits are the model's)
 //   void settings_files()  -- Files (its switches are the model's)

@@ -296,7 +296,6 @@ struct shown_root {
   skiff::model::Tracked<settings_scroll> settings_at;
   // Which field the program gives the keys to.
   skiff::model::Tracked<keys_asked> keys;
-  skiff::model::Tracked<proxy_notice> proxy_error;
   skiff::model::Tracked<local_seal> seal;
   skiff::model::Tracked<std::optional<room_settings_facts>> manage;
   // The chosen account's page, as the program shows it: what its pages read.
@@ -579,7 +578,7 @@ auto layer_for(const Needs &needs) {
 template <class Facts> ::mux::ui::request::close_shown<Facts> closing_of(std::type_identity<Facts>) { return {}; }
 template <class... Features, class... Tools>
 consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) {
-  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_proxies, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
+  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
                                decltype(closing_of(std::type_identity<Tools>{}))...>>{};
 }
@@ -618,11 +617,7 @@ template <class Facts> [[nodiscard]] std::optional<escape_answer> escape_of(cons
 }
 [[nodiscard]] inline std::optional<escape_answer> escape_of(const settings_facts& facts) {
   return spl::visit(spl::overloaded{[](settings_page::home) { return escape_answer{request::close_settings{}}; },
-                                    [](const settings_page::proxy&) { return escape_answer{request::settings_proxies{}}; },
                                     [](const settings_page::library&) { return escape_answer{request::settings_about{}}; },
-                                    [](const settings_page::proxies& one) {
-                                      return one.with_back ? escape_answer{request::settings_home{}} : escape_answer{request::close_settings{}};
-                                    },
                                     [](const auto&) { return escape_answer{request::settings_home{}}; }},
                     facts.page);
 }

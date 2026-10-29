@@ -19,15 +19,13 @@ import mux.app.network;
 import mux.app.kept;
 import mux.app.services;
 import mux.app.requests;
-import mux.app.proxies;
 
 export namespace mux::app {
 
 class preferences_part {
  public:
   using accounts = mux::ui::accounts_panel;
-  preferences_part(services& shared, kept_settings& kept, proxies_part& proxying)
-      : s_(&shared), k_(&kept), proxying_(&proxying) {}
+  preferences_part(services& shared, kept_settings& kept) : s_(&shared), k_(&kept) {}
   preferences_part(const preferences_part&) = delete;
   preferences_part& operator=(const preferences_part&) = delete;
 
@@ -245,17 +243,6 @@ class preferences_part {
                                             : "Room events are hidden in this chat.");
     s_->refresh_due = true;
   }
-  void apply(const request::choose_account_proxy& one) {
-    s_->with_chosen_account([&](mux::config::account_t& account) {
-      auto& kept = mux::config::proxy_in(account);
-      if (one.index < 0 || static_cast<std::size_t>(one.index) >= k_->proxies().size())
-        kept.reset();
-      else
-        kept = k_->proxies()[static_cast<std::size_t>(one.index)].name;
-      (void)k_->write();
-      proxying_->reconnect(account);
-    });
-  }
 
  private:
   // Chats in other accounts' lists: placed, taken out, their strips.
@@ -268,7 +255,6 @@ class preferences_part {
 
   services* s_;
   kept_settings* k_;
-  proxies_part* proxying_;
 };
 
 }  // namespace mux::app

@@ -215,9 +215,16 @@ class vault {
   // Where its header is: on disk there, the vault is on, and locked until
   // its passphrase is given.
   void place(std::filesystem::path header_file) { header_file_ = std::move(header_file); }
+  // Built without local encryption (MUX_LOCAL_ENCRYPTION off): never --
+  // a header there from another build is not read, and nothing is locked;
+  // what is sealed on disk is neither read nor written over (may_write).
   [[nodiscard]] bool exists() const {
+#ifdef MUX_LOCAL_ENCRYPTION
     std::error_code ignored;
     return !header_file_.empty() && std::filesystem::exists(header_file_, ignored);
+#else
+    return false;
+#endif
   }
   [[nodiscard]] bool locked() const {
     const std::scoped_lock held(lock_);

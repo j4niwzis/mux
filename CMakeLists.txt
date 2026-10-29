@@ -270,6 +270,13 @@ add_library(mux_vault)
 target_sources(mux_vault PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/vault.cc)
 target_compile_features(mux_vault PUBLIC cxx_std_26)
 target_compile_options(mux_vault PUBLIC ${mux_std_flags})
+# Local data's encryption: everything kept on disk sealed under a passphrase,
+# asked for at every start. Off, the vault is always plain -- no header read,
+# nothing locked -- and Storage offers no seal.
+option(MUX_LOCAL_ENCRYPTION "Local data encrypted under a passphrase (Storage)" ON)
+if(MUX_LOCAL_ENCRYPTION)
+  target_compile_definitions(mux_vault PUBLIC MUX_LOCAL_ENCRYPTION)
+endif()
 target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff: skiff.model holds the settings and the program's state, and is
 # there in every build; the rest of skiff, which draws, only with a window.

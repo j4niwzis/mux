@@ -119,12 +119,14 @@ inline auto storage_settings_view(const palette& colours) {
         skiff::compose::vbox(0.0f, {.fillX = true,
                                     .autoSize = scene::axes::kY,
                                     .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+#ifdef MUX_LOCAL_ENCRYPTION
         spaced_title(colours, "ENCRYPTION"), seal_settings_view(colours),
         spaced_note(colours, "Off by default. On, everything mux keeps on disk "
                              "is sealed under a passphrase asked for at "
                              "every start: settings with passwords and tokens, "
                              "chats, drafts, encryption keys. Pictures "
                              "are not kept on disk then."),
+#endif
         spaced_title(colours, "IN MEMORY"),
         limit_stepper<limit::messages_in_memory>(colours, "Messages",
                                                  "messages"),

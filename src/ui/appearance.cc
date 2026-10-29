@@ -19,7 +19,7 @@ import mux.core;
 import mux.config;
 import mux.ui.base;
 import :accounts;
-import :proxies;
+import :settings_pages;
 import :info;
 import :storage;
 import skiff.widgets.sliderbar;

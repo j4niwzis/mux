@@ -20,7 +20,7 @@ import mux.plugin.proxies.types;
 export namespace mux::plugins::proxies {
 using namespace ::mux::ui;
 
-// Settings' link to them (mux.ui:proxies).
+// Settings' link to them (mux.ui:settings_pages).
 inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return settings_link(colours, "Proxies", icon::gear{}, open_list{});
 }

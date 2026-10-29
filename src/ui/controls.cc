@@ -190,7 +190,7 @@ struct no_action {
   skiff::scene::Taken operator()() const { return {}; }
 };
 // A link of Settings' home page: its icon and name; pressed, what it opens
-// (mux.ui:proxies, and the plugins' links: contract::settings_links).
+// (mux.ui:settings_pages, and the plugins' links: contract::settings_links).
 template <class Event>
 auto settings_link(const palette& colours, std::string label, icon_t icon, Event event) {
   return SKIFF_NAMED(settings_link, skiff::compose::onClick(std::move(event), skiff::compose::row(

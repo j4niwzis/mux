@@ -191,7 +191,7 @@ struct chat_folders {
 struct side_bars {
   static constexpr std::string_view name = "the side's bars";
 };
-// Settings' home page, its links after the client's own (mux.ui:proxies):
+// Settings' home page, its links after the client's own (mux.ui:settings_pages):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own
 struct settings_links {

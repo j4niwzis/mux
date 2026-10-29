@@ -9,7 +9,7 @@ import skiff.compose;
 import skiff.nodes.text;
 import mux.platform.video;
 import mux.ui.base;
-import :proxies;
+import :settings_pages;
 
 export namespace mux::ui {
 struct library_info {

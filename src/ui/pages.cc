@@ -289,6 +289,33 @@ inline nodes::Text section_title(const palette& colours, std::string text) {
 // A note under a section, as the settings' pages have them.
 inline nodes::Text note_text(const palette& colours, std::string text) { return nodes::Text(std::move(text), 13.0f, colours.dim); }
 
+// A setting's switch, a section's title and a note, as Settings' pages
+// lay them out: the switch bound to its setting by its member pointer --
+// what is chosen is an edit of the model, and what the model holds is what
+// shows.
+template <auto Setting, class T = bool>
+auto setting_switch(const palette& colours, std::string text) {
+  return SKIFF_NAMED(setting_switch, skiff::compose::row(
+      skiff::compose::hbox(16.0f, {.fillX = true,
+                                   .height = kRowHeight,
+                                   .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+      skiff::compose::styled(
+          {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+          elided(nodes::Text(std::move(text), 15.0f, colours.text))),
+      skiff::compose::bound<skiff::model::Field<Setting>>(
+          skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                 widgets::ToggleField<T>(colours.widgets)))));
+}
+inline nodes::Text spaced_title(const palette& colours, std::string text) {
+  return skiff::compose::styled({.margin = {10.0f, 0.0f, 4.0f, 20.0f}},
+                                section_title(colours, std::move(text)));
+}
+inline nodes::Text spaced_note(const palette& colours, std::string text) {
+  return wrapped(skiff::compose::styled(
+      {.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}},
+      note_text(colours, std::move(text))));
+}
+
 // An account's Privacy page: whether it sends read receipts; whether it
 // tells others one is typing, as every account's until chosen here, and a
 // chat or space of it may choose again.

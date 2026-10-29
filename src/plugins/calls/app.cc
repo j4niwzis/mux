@@ -150,9 +150,11 @@ class part {
                                        if (!current_->their_party.empty() && one.party != current_->their_party) return;
                                        if (current_->media && !holds<call_state::ringing_out>() && !holds<call_state::starting>())
                                          current_->theirs += them.them.size();
+                                         mux::log_line(current_->in.account.address, std::format("call {}: {} candidate(s) from them", current_->id, them.them.size()));
                                          for (const auto& each : them.them) { current_->media->add_candidate(each); }
                                        else
                                          current_->theirs += them.them.size();
+                                         mux::log_line(current_->in.account.address, std::format("call {}: {} candidate(s) from them, kept until answered", current_->id, them.them.size()));
                                          current_->early[one.party].insert_range(current_->early[one.party].end(), them.them);
                                      },
                                      // Ended by them: why, as Element says it.
@@ -196,6 +198,7 @@ class part {
     if (!current_ || current_->in.account != one.account || current_->id != one.call || !holds<call_state::starting>())
       return;
     current_->relays = one.servers.size();
+    mux::log_line(current_->in.account.address, std::format("call {}: {} relay server(s) from the homeserver", current_->id, one.servers.size()));
     try {
       current_->media = std::make_unique<session>(one.servers, *s_->wake);
     } catch (const std::exception& failed) {
@@ -359,6 +362,7 @@ class part {
                                        current_->candidates_out.push_back(ours.it);
                                      },
                                      [&](mux::calls::said::connected) {
+                                       mux::log_line(current_->in.account.address, std::format("call {}: connected", current_->id));
                                        current_->state = call_state::connected{std::chrono::steady_clock::now()};
                                        this->show();
                                      },

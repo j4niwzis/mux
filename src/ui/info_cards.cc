@@ -129,19 +129,32 @@ struct person_verify_act {
   Answer operator()() const { return {::mux::ui::request::verify_person{who}, ::mux::ui::request::close_person_info{}}; }
 };
 
+// Verify, where their protocol verifies people -- known from its type, the
+// tile not made for one that does not -- shown while their identity is
+// known (told by end-to-end encryption, the encryption plugin's) and they
+// are not verified, or not any more.
+template <class Protocol>
+auto verify_part(const palette&, const scene::Spec&, const account_id&, const std::string&, bool) {
+  return nothing_shown();
+}
+template <class Protocol>
+  requires(proto::offered_by<state_of<Protocol>, proto::feature::identity_verification>())
+auto verify_part(const palette& colours, const scene::Spec& tile_spec, const account_id& account, const std::string& key, bool unverified) {
+  namespace c = skiff::compose;
+  return c::visible(unverified, c::styled(tile_spec, action_tile<person_verify_act>(
+      colours, "Verify with emoji", icon::check{}, {conversation_id{account, key}})));
+}
 // Everything below the title scrolls within the height the dialog gives it.
-inline auto person_card_details(const palette& colours, const ui_shared& shared,
-                                const account_id& account, const std::string& key, const person_facts& facts) {
+// Of a protocol's account's person.
+template <class Protocol>
+auto person_card_details(const palette& colours, const ui_shared& shared,
+                         const account_id& account, const std::string& key, const person_facts& facts) {
   namespace c = skiff::compose;
   const scene::Spec tile_spec{.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}};
   const auto& proto_state = protocol_state_of(shared, account);
-  // Verify where their protocol verifies people, their identity is known --
-  // told by end-to-end encryption (the encryption plugin's), so never
-  // without it -- and they are not verified, or not any more.
-  const bool can_verify = proto::offers(proto_state, proto::feature::identity_verification{}) &&
-                          (facts.trust && !spl::visit(spl::overloaded{[](trust::verified) { return true; },
-                                                                       [](const auto&) { return false; }},
-                                                       *facts.trust));
+  const bool unverified = facts.trust && !spl::visit(spl::overloaded{[](trust::verified) { return true; },
+                                                                     [](const auto&) { return false; }},
+                                                     *facts.trust);
   // Their identity reset: taken as theirs now, unverified (Element's
   // "Withdraw verification").
   const bool can_accept = facts.trust && spl::visit(spl::overloaded{[](trust::changed) { return true; },
@@ -167,8 +180,7 @@ inline auto person_card_details(const palette& colours, const ui_shared& shared,
       section_band(colours),
       id_line(colours, key, proto::person_link(proto_state, key).value_or("")),
       c::styled(tile_spec, action_tile<person_message_act>(colours, "Message", icon::send{}, {conversation_id{account, key}})),
-      c::visible(can_verify, c::styled(tile_spec, action_tile<person_verify_act>(
-          colours, "Verify with emoji", icon::check{}, {conversation_id{account, key}}))),
+      verify_part<Protocol>(colours, tile_spec, account, key, unverified),
       c::visible(can_accept, c::styled(tile_spec, action_tile<person_accept_act>(
           colours, "Withdraw verification", icon::close{}, {conversation_id{account, key}}))),
       c::visible(facts.may_kick, c::styled(tile_spec, action_tile<person_room_act>(
@@ -183,20 +195,32 @@ inline auto person_card_details(const palette& colours, const ui_shared& shared,
       c::visible(!theirs.empty(), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(theirs)))));
 }
 
-inline auto person_card(const palette& colours, const ui_shared& shared,
-                        const account_id& account, const std::string& key, const person_facts& facts) {
+template <class Protocol>
+auto person_card(const palette& colours, const ui_shared& shared,
+                 const account_id& account, const std::string& key, const person_facts& facts) {
   namespace c = skiff::compose;
   using close_act = sends<::mux::ui::request::close_person_info>;
-  auto details = person_card_details(colours, shared, account, key, facts);
+  auto details = person_card_details<Protocol>(colours, shared, account, key, facts);
   return c::arranged<card_fit>({}, card_box(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
       page_header<no_back, close_act>(colours, "User info", {}, {}, false, true),
       c::styled({.fillX = true}, nodes::ScrollContainer<decltype(details)>(std::move(details)))));
 }
-inline auto person_card(const ui_needs& n, const person_shown& shown) {
-  return person_card(*n.colours, *n.shared, shown.account, shown.key, shown.facts);
+// The card of the person's account's protocol: one type for each, the
+// account's protocol read once, here.
+template <class>
+struct person_cards_of;
+template <class... Protocols>
+struct person_cards_of<protocol_list<Protocols...>> {
+  using type = spl::variant<decltype(person_card<Protocols>(std::declval<const palette&>(), std::declval<const ui_shared&>(),
+                                                            std::declval<const account_id&>(), std::string(), std::declval<const person_facts&>()))...>;
+};
+using person_card_t = typename person_cards_of<protocols>::type;
+inline person_card_t person_card(const ui_needs& n, const person_shown& shown) {
+  return spl::visit([&]<class Protocol>(Protocol) {
+    return person_card_t(person_card<Protocol>(*n.colours, *n.shared, shown.account, shown.key, shown.facts));
+  }, shown.account.speaks);
 }
-using person_card_t = decltype(person_card(std::declval<const ui_needs&>(), std::declval<const person_shown&>()));
 // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
 // it shows, a 24th of the window down within 20 and 40.
 inline dialog_look content_look(std::type_identity<person_shown>) {

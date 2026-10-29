@@ -77,7 +77,7 @@ struct part {
   // Each frame: what the window shows of them, as they are kept.
   void tick() {
     shown now{s_->kept->plugin_settings<kept>().chats | std::views::transform([](const forum_chat& one) {
-                return conversation_id{account_id{protocol_of(one.account), one.account}, one.room};
+                return conversation_id{account_id{proto::protocol_of(one.account), one.account}, one.room};
               }) | std::ranges::to<std::set>()};
     if (*s_->showing->look<shown>() != now)
       ui::show(*s_->showing, std::move(now));

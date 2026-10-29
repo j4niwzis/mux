@@ -135,10 +135,11 @@ inline auto person_card_details(const palette& colours, const ui_shared& shared,
   namespace c = skiff::compose;
   const scene::Spec tile_spec{.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}};
   const auto& proto_state = protocol_state_of(shared, account);
-  // Verify where their protocol verifies people, and they are not, or not
-  // any more: not for one verified.
+  // Verify where their protocol verifies people, their identity is known --
+  // told by end-to-end encryption (the encryption plugin's), so never
+  // without it -- and they are not verified, or not any more.
   const bool can_verify = proto::offers(proto_state, proto::feature::identity_verification{}) &&
-                          (!facts.trust || !spl::visit(spl::overloaded{[](trust::verified) { return true; },
+                          (facts.trust && !spl::visit(spl::overloaded{[](trust::verified) { return true; },
                                                                        [](const auto&) { return false; }},
                                                        *facts.trust));
   // Their identity reset: taken as theirs now, unverified (Element's

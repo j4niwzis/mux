@@ -291,7 +291,7 @@ cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG 81854f40a462bc2b3dded5c0f03db820b981272c
+  GIT_TAG 54a43f94859f6cb958154f69115f8af6b08a4f7a
   VERSION 0.1.0)
 # `mux --page`: the same program laid out and painted by an HTML engine
 # called directly (Blitz, through skiff.platform.page) -- for measuring it

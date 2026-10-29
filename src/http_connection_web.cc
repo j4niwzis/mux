@@ -9,6 +9,43 @@ import skiff.platform.net;
 import :types;
 
 export namespace mux::http {
+namespace detail {
+// The requests waited for, by their tickets: the loop and the fiber that
+// waits, to be woken as the browser says one ended.
+struct waiting {
+  net::loop *loop;
+  net::loop::handle fiber;
+};
+inline std::mutex &waiting_lock() {
+  static std::mutex kept;
+  return kept;
+}
+inline std::map<std::uint64_t, waiting> &waiting_on() {
+  static std::map<std::uint64_t, waiting> kept;
+  return kept;
+}
+inline std::uint64_t next_ticket() {
+  static std::atomic<std::uint64_t> last{0};
+  return ++last;
+}
+// The browser's word that a request ended -- on whichever thread it says
+// it: its fiber woken on its loop's own, where it still waits.
+struct wake_waiting {
+  static void finished(std::uint64_t ticket) {
+    const std::lock_guard held(waiting_lock());
+    const auto found = waiting_on().find(ticket);
+    if (found == waiting_on().end()) return;
+    found->second.loop->soon([ticket] {
+      std::unique_lock held(waiting_lock());
+      const auto found = waiting_on().find(ticket);
+      if (found == waiting_on().end()) return;
+      const waiting one = found->second;
+      held.unlock();
+      one.loop->wake(one.fiber);
+    });
+  }
+};
+}  // namespace detail
 class connection {
 public:
   connection(net::loop &owner, net::tls &, url where, std::optional<net::proxy> via = std::nullopt)
@@ -39,32 +76,56 @@ public:
       .timeout = std::chrono::duration_cast<std::chrono::milliseconds>(timeout)};
     asked.headers.emplace_back("Accept", accept);
     if (bearer) asked.headers.emplace_back("Authorization", "Bearer " + std::string(*bearer));
-    transport_.start(1, asked);
+    // Waited for without looking again and again: the browser's end of it
+    // wakes this fiber (detail::wake_waiting). Looked at every 5 ms, a page
+    // worked all the time a long poll waited, doing nothing (the user's).
+    const std::uint64_t ticket = detail::next_ticket();
+    {
+      const std::lock_guard listed(detail::waiting_lock());
+      detail::waiting_on().insert_or_assign(ticket, detail::waiting{owner_, owner_->current()});
+    }
+    transport_.start(ticket, asked);
+    ticket_ = ticket;
     struct release {
-      platform::browser &transport;
-      ~release() { transport.abort(1); (void)transport.take(1); }
-    } held{transport_};
-    // Looked at again sooner while an answer is fresh, then less often: a
-    // long poll waits up to half a minute, and looked at every 5 ms the
-    // page worked all the time, doing nothing (the user's).
-    auto wait = std::chrono::milliseconds(5);
+      transport_t &transport;
+      std::uint64_t ticket;
+      ~release() {
+        transport.abort(ticket);
+        (void)transport.take(ticket);
+        const std::lock_guard listed(detail::waiting_lock());
+        detail::waiting_on().erase(ticket);
+      }
+    } held{transport_, ticket};
+    struct forget {
+      std::uint64_t &now;
+      ~forget() { now = 0; }
+    } done{ticket_};
     while (true) {
-      if (auto got = transport_.take(1)) {
+      if (auto got = transport_.take(ticket)) {
         if (got->cancelled) throw net::failure("Browser request cancelled", asio::error::operation_aborted);
         if (got->status == 0) throw net::failure(got->body, asio::error::connection_refused);
         return {.status = got->status, .body = std::move(got->body),
                 .retry_after_ms = got->after ? std::optional<std::int64_t>(got->after->count()) : std::nullopt,
                 .location = std::move(got->location)};
       }
+      // Its progress shown as it goes: looked at a few times a second, then;
+      // else woken only as it ends.
       if (progress) {
-        const auto bytes = transport_.transferred(1);
-        if (!(*progress)(bytes.read, bytes.total)) transport_.abort(1);
+        const auto bytes = transport_.transferred(ticket);
+        if (!(*progress)(bytes.read, bytes.total)) transport_.abort(ticket);
+        owner_->sleep(std::chrono::milliseconds(100));
+      } else {
+        owner_->park();
       }
-      owner_->sleep(wait);
-      wait = std::min(wait * 2, std::chrono::milliseconds(100));
     }
   }
-  void abort() { transport_.abort(1); }
+  // Let go, from another fiber: the one waiting woken to find it ended.
+  void abort() {
+    if (const std::uint64_t now = std::exchange(ticket_, 0)) {
+      transport_.abort(now);
+      detail::wake_waiting::finished(now);
+    }
+  }
   void close() { abort(); }
 private:
   struct turn {
@@ -84,7 +145,9 @@ private:
   net::loop *owner_;
   url where_;
   std::optional<net::proxy> via_;
-  skiff::platform::net::browser transport_;
+  using transport_t = skiff::platform::net::basic_browser<detail::wake_waiting>;
+  transport_t transport_;
+  std::uint64_t ticket_ = 0;  // the request waited for, while one is
   bool busy_ = false;
   std::deque<net::loop::handle> waiting_;
 };

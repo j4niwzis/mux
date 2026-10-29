@@ -122,6 +122,13 @@ class loop {
     asio::post(io_, [this, body = std::move(body)]() mutable { spawn(std::move(body)); });
   }
 
+  // Something done on the loop's thread, asked from any: a plain call, not
+  // a fiber of its own.
+  template <class Body>
+  void soon(Body body) {
+    asio::post(io_, std::move(body));
+  }
+
   // The running fiber; nullptr outside one.
   handle current() const noexcept { return current_; }
 

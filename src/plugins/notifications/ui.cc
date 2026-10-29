@@ -36,14 +36,14 @@ inline auto notification_settings_view(const palette& colours) {
       setting_switch<&every::mentions_only, std::optional<bool>>(colours, "Only mentions and keywords"),
       setting_switch<&every::sound>(colours, "Sound"),
       spaced_title(colours, "CUSTOM SOUND"),
-      skiff::compose::bound<skiff::model::Field<&every::sound_file>>(skiff::compose::styled(
+      skiff::compose::bound<skiff::model::Field<&kept::sound_file>>(skiff::compose::styled(
           {.fillX = true, .height = 36.0f, .margin = {4.0f, 20.0f, 4.0f, 20.0f}},
           widgets::TextField<std::optional<std::string>>(colours.widgets, "Ogg Opus or Vorbis file; empty uses the default"))),
       spaced_title(colours, "SHOWN BY"), std::move(backend),
       spaced_note(colours, "System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
                            "shows mux's own, in a corner of the screen, as Telegram Desktop does."),
       spaced_title(colours, "WAKE"),
-      setting_switch<&every::unified_push, std::optional<bool>>(colours, "Wake by UnifiedPush"),
+      setting_switch<&kept::unified_push, std::optional<bool>>(colours, "Wake by UnifiedPush"),
       spaced_note(colours, "Your Matrix servers push to the UnifiedPush distributor on this device (ntfy, NextPush, "
                            "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
                            "of messages while it runs.")));

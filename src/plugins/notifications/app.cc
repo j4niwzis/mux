@@ -83,7 +83,7 @@ struct part {
   }
   void tick() { this->follow_push(); }
   void follow_push() {
-    const bool wanted = s_->kept->notifications().unified_push.value_or(false) && !s_->demo();
+    const bool wanted = this->own().unified_push.value_or(false) && !s_->demo();
     if (wanted == pushing_)
       return;
     pushing_ = wanted;
@@ -147,17 +147,26 @@ struct part {
                invite.direct ? std::string("A direct chat") : std::format("from {}", who), decision.sound);
   }
 
+  // Its own settings, as kept; and one of them changed.
+  [[nodiscard]] const kept& own() const { return s_->kept->plugin_settings<kept>(); }
+  template <class Change>
+  void keep(Change change) {
+    auto now = this->own();
+    change(now);
+    s_->kept->set_plugin_settings(std::move(now));
+  }
   void start_push() {
-    const auto& settings = s_->kept->notifications();
+    const kept settings = this->own();
     if (push_thread_.joinable() || s_->kept->keeps_nothing)
       return;
     if (!settings.push_token) {
-      s_->kept->choose_notification<&mux::config::notification_settings::push_token>(std::optional<std::string>(mux::platform::push::new_token()));
+      this->keep([](kept& now) { now.push_token = mux::platform::push::new_token(); });
       (void)s_->kept->write();
     }
+    const auto token = this->own().push_token.value_or("");
     push_forget_ = std::make_shared<std::atomic<bool>>(false);
     push_thread_ = std::jthread([inbox = push_box_, wake = *s_->wake, forget = push_forget_,
-                                 token = *settings.push_token](std::stop_token stop) {
+                                 token](std::stop_token stop) {
       mux::platform::push::run(stop, std::string(mux::platform::push::kAppId), token, "Messages from your accounts",
                                forget, push_sink{inbox, wake});
     });
@@ -166,7 +175,7 @@ struct part {
   }
   void stop_push() {
     s_->net->set_push_endpoint(std::nullopt);
-    s_->kept->choose_notification<&mux::config::notification_settings::push_endpoint>(std::optional<std::string>());
+    this->keep([](kept& now) { now.push_endpoint.reset(); });
     if (!push_thread_.joinable())
       return;
     // Left to finish on its own -- it waits a second for the bus at a time,
@@ -228,12 +237,12 @@ struct part {
       std::lock_guard held(push_box_->lock);
       said = std::exchange(push_box_->pending, {});
     }
-    const auto& settings = s_->kept->notifications();
+    const kept settings = this->own();
     for (const auto& one : said)
       spl::visit(spl::overloaded{[&](const mux::platform::push::endpoint& given) {
                                          std::println(std::cerr, "[push] endpoint {}", given.url);
                                          if (settings.push_endpoint != given.url) {
-                                           s_->kept->choose_notification<&mux::config::notification_settings::push_endpoint>(std::optional<std::string>(given.url));
+                                           this->keep([&](kept& now) { now.push_endpoint = given.url; });
                                            (void)s_->kept->write();
                                          }
                                          s_->net->set_push_endpoint(given.url);
@@ -241,7 +250,7 @@ struct part {
                                        [&](const mux::platform::push::message&) { s_->net->sync_now(); },
                                        [&](const mux::platform::push::unregistered&) {
                                          std::println(std::cerr, "[push] the distributor dropped the registration");
-                                         s_->kept->choose_notification<&mux::config::notification_settings::push_endpoint>(std::optional<std::string>());
+                                         this->keep([](kept& now) { now.push_endpoint.reset(); });
                                          s_->net->set_push_endpoint(std::nullopt);
                                          (void)s_->kept->write();
                                        },
@@ -264,7 +273,7 @@ struct part {
   // thread, with the system's own sound -- the user's, by default (#16873);
   // or mux's own window, with the chime.
   void show(const mux::conversation_id& in, std::string title, std::string text, bool sound) {
-    const auto& chosen = s_->kept->notifications().sound_file;
+    const auto& chosen = this->own().sound_file;
     const bool custom = sound && chosen && !chosen->empty();
     if (custom) { this->sound_only(true); sound = false; }
     spl::visit(spl::overloaded{[&](mux::config::notify_backend::native) {
@@ -284,7 +293,7 @@ struct part {
   // A sound with nothing shown, or with mux's own window: the chime.
   void sound_only(bool sound) {
     if (!sound) return;
-    const auto& chosen = s_->kept->notifications().sound_file;
+    const auto& chosen = this->own().sound_file;
     if (chosen && !chosen->empty()) {
       if (sound_path_ != *chosen) {
         sound_path_ = *chosen;

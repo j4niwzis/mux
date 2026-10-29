@@ -29,11 +29,6 @@ using mux::kept_root;
 struct write_kept {
   [[nodiscard]] constexpr int key() const { return 0; }
 };
-// UnifiedPush wanted on, or off: its connector started, or stopped.
-struct push_wanted {
-  bool on = false;
-  [[nodiscard]] constexpr int key() const { return 0; }
-};
 // The limits changed: the caches and the disk told, and what is held in
 // memory trimmed to them.
 struct limits_changed {
@@ -75,7 +70,6 @@ struct kept_due {
   bool deleted = false;
   bool opacity = false;
   bool limits = false;
-  std::optional<bool> push;
 };
 struct kept_reactions {
   // Where what they ask for is marked: the kept settings' own (kept_settings::due).
@@ -89,10 +83,6 @@ struct kept_reactions {
   skiff::model::Nothing on(const deleted_shown&) const { return mark(&kept_due::deleted); }
   skiff::model::Nothing on(const opacity_chosen&) const { return mark(&kept_due::opacity); }
   skiff::model::Nothing on(const limits_changed&) const { return mark(&kept_due::limits); }
-  skiff::model::Nothing on(const push_wanted& wanted) const {
-    due->push = wanted.on;
-    return {};
-  }
   skiff::model::Nothing mark(bool kept_due::*what) const {
     due->*what = true;
     return {};
@@ -131,9 +121,6 @@ struct kept_reactions {
   [[nodiscard]] motion_chosen on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::motion>>, const auto&) const { return {}; }
   [[nodiscard]] opacity_chosen on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::window_opacity>>, const auto&) const {
     return {};
-  }
-  [[nodiscard]] push_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::notification_settings::unified_push>>, const auto& at) const {
-    return {skiff::model::part(at).value_or(false)};
   }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::account_t>, const mux::config::account_t&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Removed<mux::config::account_t>, const mux::config::account_t&, const std::string&) const { return {}; }

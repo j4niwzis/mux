@@ -66,14 +66,8 @@ struct notification_settings {
   bool sound = true;
   std::optional<bool> mentions_only;  // only @mentions and keywords notify
   notify_backend_t backend = notify_backend::native{};
-  std::optional<std::string> sound_file;
-  // Woken by UnifiedPush, through the desktop's distributor (its D-Bus
-  // specification) -- off unless chosen: only then is the bus asked, and
-  // the servers given a pusher. The connection token, kept across runs, and
-  // the endpoint the distributor gave for it.
-  std::optional<bool> unified_push;
-  std::optional<std::string> push_token;
-  std::optional<std::string> push_endpoint;
+  // (A sound of one's own and UnifiedPush are the notifications plugin's
+  // own settings.)
   friend bool operator==(const notification_settings&, const notification_settings&) = default;
 };
 consteval auto json_schema(knot::type<notification_settings>) { return knot::schema<notification_settings>(); }

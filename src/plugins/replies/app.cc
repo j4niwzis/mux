@@ -7,12 +7,14 @@
 export module mux.plugin.replies.app;
 
 import std;
+import splice;
 import skiff.scene;
 import mux.composition;
 import mux.core;
 import mux.ui;
 import mux.logic.messages;
 import mux.app.services;
+import mux.app.jumps;
 import mux.plugin.replies.types;
 
 export namespace mux::plugins::replies {
@@ -28,6 +30,39 @@ struct part {
   }
   // A swipe on a message, or a reaction's row: the message it names.
   void apply(const ui::request::reply_to& one) { this->answer(one.id, one.text); }
+  // Ctrl+Up where nothing is answered: the last message that can be; answering
+  // one, the one above it; Ctrl+Down the one below, and past the newest the
+  // answer let go. What can be answered is what the view shows -- not what
+  // its filter leaves out. The one answered scrolled to and flashed.
+  template <class Asked>
+  void apply(const ui::request::answer_step& one, const Asked& asked) {
+    const conversation* chat = s_->chosen() ? s_->model->find(*s_->chosen()) : nullptr;
+    if (!chat)
+      return;
+    const auto answerable = chat->timeline | std::views::filter([&](const message& each) {
+                              return !each.id.empty() && ui::answerable(each) && app::chat_shows(*s_, *chat, each);
+                            }) | std::views::transform([](const message& each) { return &each; }) | std::ranges::to<std::vector>();
+    if (answerable.empty())
+      return;
+    const std::optional<std::string> now = spl::visit(
+        spl::overloaded{[](const ui::compose::reply& r) { return std::optional<std::string>(r.id); },
+                        [](const auto&) { return std::optional<std::string>(); }},
+        s_->showing->look<ui::chat_compose>()->now);
+    const auto at = now ? std::ranges::find(answerable, *now, &message::id) : answerable.end();
+    const message* next = nullptr;
+    if (at == answerable.end())
+      next = one.older ? answerable.back() : nullptr;
+    else if (one.older)
+      next = at == answerable.begin() ? *at : *(at - 1);
+    else if (at + 1 != answerable.end())
+      next = *(at + 1);
+    if (!next) {
+      asked(ui::request::cancel_compose{});
+      return;
+    }
+    this->answer(next->id, next->body.plain);
+    s_->show_message_due = app::services::message_asked{next->id};
+  }
   // The text selected in the message, quoted in what answers it.
   void apply(const quote_reply&) {
     const auto& open = *s_->showing->look<std::optional<ui::menu_facts>>();

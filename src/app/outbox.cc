@@ -105,10 +105,12 @@ class outbox_part {
     if (last != chat->timeline.rend())
       this->edit(last->id, edited_text(*last));
   }
-  // Ctrl+Up: the last message answered -- and, answering one, the one above
-  // it; Ctrl+Down the one below, and past the newest the answer let go. The
-  // one answered is scrolled to and flashed, as tdesktop does.
-  void apply(const request::reply_step& one) {
+  // Ctrl+Up and Down: editing, the user's own messages stepped through; else
+  // the message answered, as a plugin steps it (request::answer_step: the
+  // replies'). The one stepped to is scrolled to and flashed, as tdesktop
+  // does.
+  template <class Asked>
+  void apply(const request::reply_step& one, const Asked& asked) {
     // Held, one step a frame: the message stepped to is scrolled to and
     // flashed once a frame (show_message_due, taken before it), so a repeat
     // that comes while the last step's is still due -- a frame slower than
@@ -116,7 +118,6 @@ class outbox_part {
     // never shown: every other one seen. The first press always steps.
     if (one.repeat && s_->show_message_due)
       return;
-    auto& screen = s_->root();
     const conversation* chat = s_->chosen() ? s_->model->find(*s_->chosen()) : nullptr;
     if (!chat)
       return;
@@ -148,35 +149,7 @@ class outbox_part {
       s_->show_message_due = services::message_asked{next->id};
       return;
     }
-    // What can be answered: what the view shows -- not what it hides, a room
-    // event its filter leaves out.
-    std::vector<const message*> answerable;
-    for (const message& each : chat->timeline)
-      if (!each.id.empty() && mux::ui::answerable(each) && chat_shows(*s_, *chat, each))
-        answerable.push_back(&each);
-    if (answerable.empty())
-      return;
-    const std::optional<std::string> now = spl::visit(
-        spl::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
-                   [](const auto&) { return std::optional<std::string>(); }},
-        this->composing());
-    const auto at = now ? std::ranges::find(answerable, *now, &message::id) : answerable.end();
-    const message* next = nullptr;
-    if (at == answerable.end())
-      next = one.older ? answerable.back() : nullptr;
-    else if (one.older)
-      next = at == answerable.begin() ? *at : *(at - 1);
-    else if (at + 1 != answerable.end())
-      next = *(at + 1);
-    if (!next) {
-      this->apply(request::cancel_compose{});
-      return;
-    }
-    const std::string title = "Reply to " + (next->outgoing ? std::string("You") : mux::ui::sender_name(*chat, next->sender));
-    this->answer(next->id, title,
-                 next->body.plain.empty() ? logic::reply_line(next, next->body.plain)
-                                          : mux::ui::quote_line_of(*next, *chat, s_->model));
-    s_->show_message_due = services::message_asked{next->id};
+    asked(request::answer_step{one.older, one.repeat});
   }
   // Element's unsent bar: what the server did not take here -- sent again,
   // each anew at the end and the one not sent let go; or let go.

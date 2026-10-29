@@ -411,6 +411,12 @@ struct reply_step {
   // Ctrl+Up held: a repeat of the key, not its first press.
   bool repeat = false;
 };
+// Ctrl+Up and Down where no edit is stepped through: the message answered
+// stepped through -- a plugin's (the replies').
+struct answer_step {
+  bool older = true;
+  bool repeat = false;
+};
 struct close_search {};
 struct search_typed {
   std::string text;

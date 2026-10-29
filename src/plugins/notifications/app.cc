@@ -167,14 +167,45 @@ struct part {
       (void)s_->kept->write();
     }
     const auto token = this->own().push_token.value_or("");
+    const auto wanted = this->own().push_distributor.value_or("");
     push_forget_ = std::make_shared<std::atomic<bool>>(false);
     push_thread_ = std::jthread([inbox = push_box_, wake = *s_->wake, forget = push_forget_,
-                                 token](std::stop_token stop) {
+                                 token, wanted](std::stop_token stop) {
       mux::platform::push::run(stop, std::string(mux::platform::push::kAppId), token, "Messages from your accounts",
-                               forget, push_sink{inbox, wake});
+                               wanted, forget, push_sink{inbox, wake});
     });
     if (settings.push_endpoint)
       s_->net->set_push_endpoint(settings.push_endpoint);
+  }
+  // A distributor chosen in Settings: kept, and the registration made again
+  // with it -- the one before let go of.
+  void apply(const choose_distributor& one) {
+    if (one.index >= push_shown_.distributors.size())
+      return;
+    const std::string name = push_shown_.distributors[one.index];
+    this->keep([&](kept& now) { now.push_distributor = name; });
+    (void)s_->kept->write();
+    this->apply(register_again{});
+  }
+  void apply(const register_again&) {
+    if (!pushing_)
+      return;
+    this->stop_push();
+    this->start_push();
+    this->said_push([](push_shown& now) { now.status = "Registering…"; });
+  }
+  // What Settings shows of it, changed.
+  template <class Change>
+  void said_push(Change change) {
+    change(push_shown_);
+    ui::show(*s_->showing, push_shown_);
+  }
+  push_shown push_shown_;
+  // A distributor's bus name, as the user knows it: what follows
+  // org.unifiedpush.Distributor.
+  static std::string short_name(std::string_view bus_name) {
+    constexpr std::string_view kPrefix = "org.unifiedpush.Distributor.";
+    return std::string(bus_name.starts_with(kPrefix) ? bus_name.substr(kPrefix.size()) : bus_name);
   }
   void stop_push() {
     s_->net->set_push_endpoint(std::nullopt);
@@ -249,6 +280,7 @@ struct part {
                                            (void)s_->kept->write();
                                          }
                                          s_->net->set_push_endpoint(given.url);
+                                         this->said_push([&](push_shown& now) { now.endpoint = given.url; });
                                        },
                                        [&](const mux::platform::push::message&) { s_->net->sync_now(); },
                                        [&](const mux::platform::push::unregistered&) {
@@ -259,15 +291,28 @@ struct part {
                                        },
                                        [&](const mux::platform::push::registered& with) {
                                          std::println(std::cerr, "[push] registered with {}", with.distributor);
+                                         this->said_push([&](push_shown& now) { now.status = "Registered with " + short_name(with.distributor); });
                                        },
                                        [&](const mux::platform::push::refused& why) {
                                          std::println(std::cerr, "[push] the distributor refused: {}", why.reason);
+                                         this->said_push([&](push_shown& now) { now.status = "Refused: " + why.reason; });
                                        },
                                        [&](const mux::platform::push::no_distributor&) {
                                          std::println(std::cerr, "[push] no UnifiedPush distributor on the session bus");
+                                         this->said_push([](push_shown& now) {
+                                           now.status = "No UnifiedPush distributor found (install ntfy, NextPush or KUnifiedPush)";
+                                         });
                                        },
                                        [&](const mux::platform::push::no_bus&) {
                                          std::println(std::cerr, "[push] no session bus");
+                                         this->said_push([](push_shown& now) { now.status = "No session bus"; });
+                                       },
+                                       [&](const mux::platform::push::distributors& found) {
+                                         this->said_push([&](push_shown& now) {
+                                           now.distributors = found.names;
+                                           now.chosen = found.chosen;
+                                           now.status = found.chosen.empty() ? now.status : "Registering with " + short_name(found.chosen) + "…";
+                                         });
                                        }},
                     one);
   }

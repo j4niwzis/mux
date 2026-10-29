@@ -7,7 +7,7 @@ import mux.platform.push.types;
 
 export namespace mux::platform::push::backend {
 template <class Sink>
-void run(std::stop_token, std::string, std::string, std::string, std::shared_ptr<const std::atomic<bool>>, Sink sink) {
+void run(std::stop_token, std::string, std::string, std::string, std::string, std::shared_ptr<const std::atomic<bool>>, Sink sink) {
   sink(event{no_bus{}});
 }
 }  // namespace mux::platform::push::backend

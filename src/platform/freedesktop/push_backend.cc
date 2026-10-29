@@ -35,7 +35,7 @@ inline connector_call_t connector_call_of(std::string_view member) {
 export namespace mux::platform::push::backend {
 
 template <class Sink>
-void run(std::stop_token stop, std::string service, std::string token, std::string description,
+void run(std::stop_token stop, std::string service, std::string token, std::string description, std::string wanted,
          std::shared_ptr<const std::atomic<bool>> forget, Sink sink) {
   using namespace freedesktop::bus;
   using namespace freedesktop::unified_push;
@@ -136,7 +136,9 @@ void run(std::stop_token stop, std::string service, std::string token, std::stri
     body.u32(4);  // DBUS_NAME_FLAG_DO_NOT_QUEUE
     (void)ask("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "RequestName", "su", body.bytes());
   }
-  // The distributor: the one asked for, else the first there is.
+  // The distributor: the one chosen in Settings, where it is there; else the
+  // one UNIFIEDPUSH_DISTRIBUTOR names; else the first there is. Those found,
+  // and the one asked, said first -- for Settings to list them.
   constexpr std::string_view kPrefix = "org.unifiedpush.Distributor.";
   std::vector<std::string> distributors = names_of("ListNames");
   distributors.append_range(names_of("ListActivatableNames"));
@@ -144,10 +146,13 @@ void run(std::stop_token stop, std::string service, std::string token, std::stri
   std::ranges::sort(distributors);
   distributors.erase(std::ranges::unique(distributors).begin(), distributors.end());
   std::string chosen;
-  if (const char* asked = std::getenv("UNIFIEDPUSH_DISTRIBUTOR"); asked && std::ranges::contains(distributors, std::string(asked)))
+  if (!wanted.empty() && std::ranges::contains(distributors, wanted))
+    chosen = wanted;
+  else if (const char* asked = std::getenv("UNIFIEDPUSH_DISTRIBUTOR"); asked && std::ranges::contains(distributors, std::string(asked)))
     chosen = asked;
   else if (!distributors.empty())
     chosen = distributors.front();
+  sink(event{push::distributors{distributors, chosen}});
   if (chosen.empty()) {
     sink(event{push::no_distributor{}});
     return;

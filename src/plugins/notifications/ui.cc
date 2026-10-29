@@ -25,6 +25,32 @@ export namespace mux::plugins::notifications {
 
 using namespace ::mux::ui;
 
+// UnifiedPush's distributors found on the bus, each a row -- the one in use
+// marked -- pressed, chosen; as Element's "Choose distributor".
+inline auto distributor_rows(const palette& colours, const push_shown& now) {
+  constexpr std::string_view kPrefix = "org.unifiedpush.Distributor.";
+  auto rows = now.distributors | std::views::enumerate | std::views::transform([&](const auto& each) {
+                const auto& [at, name] = each;
+                const std::string_view shown = std::string_view(name).starts_with(kPrefix) ? std::string_view(name).substr(kPrefix.size())
+                                                                                           : std::string_view(name);
+                return settings_link(colours, std::format("{}{}", name == now.chosen ? "✓ " : "", shown), icon::bell{},
+                                     choose_distributor{static_cast<std::size_t>(at)});
+              }) | std::ranges::to<std::vector>();
+  return skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows));
+}
+using distributor_rows_t = decltype(distributor_rows(std::declval<const palette&>(), push_shown{}));
+inline auto distributors_view(const palette& colours) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(distributors_view, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::text_for<push_shown>([](const push_shown& now) {
+        return now.status.empty() ? std::string("Not registered: turn on Wake by UnifiedPush.")
+                                  : now.endpoint ? std::format("{}\nEndpoint: {}", now.status, *now.endpoint) : now.status;
+      }, c::styled({.fillX = true, .margin = {6.0f, 20.0f, 4.0f, 20.0f}}, note_text(colours, ""))),
+      c::projected<push_shown>([](const push_shown& now) { return std::optional(now); },
+          c::mount<distributor_rows_t, push_shown>([at = &colours](const push_shown& now) { return std::tuple{distributor_rows(*at, now)}; },
+                                                   {.fillX = true, .autoSize = scene::axes::kY})),
+      settings_link(colours, "Register again", icon::send{}, register_again{})));
+}
 inline auto notification_settings_view(const palette& colours) {
   using every = config::notification_settings;
   auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(
@@ -46,7 +72,8 @@ inline auto notification_settings_view(const palette& colours) {
       setting_switch<&kept::unified_push, std::optional<bool>>(colours, "Wake by UnifiedPush"),
       spaced_note(colours, "Your Matrix servers push to the UnifiedPush distributor on this device (ntfy, NextPush, "
                            "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
-                           "of messages while it runs.")));
+                           "of messages while it runs."),
+      spaced_title(colours, "DISTRIBUTOR"), distributors_view(colours)));
 }
 inline auto notifications_view(const palette& colours) {
   using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;

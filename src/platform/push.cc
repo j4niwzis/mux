@@ -39,9 +39,9 @@ inline std::string new_token() {
 // distributor as it stops -- the user turned it off -- rather than kept for
 // the next run, as where the program only closes.
 template <class Sink>
-void run(std::stop_token stop, std::string service, std::string token, std::string description,
+void run(std::stop_token stop, std::string service, std::string token, std::string description, std::string wanted,
          std::shared_ptr<const std::atomic<bool>> forget, Sink sink) {
-  backend::run(std::move(stop), std::move(service), std::move(token), std::move(description), std::move(forget),
+  backend::run(std::move(stop), std::move(service), std::move(token), std::move(description), std::move(wanted), std::move(forget),
                std::move(sink));
 }
 

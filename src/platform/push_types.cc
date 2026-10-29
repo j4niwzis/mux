@@ -25,6 +25,10 @@ struct refused {  // the distributor would not
 };
 struct no_distributor {};  // none on the bus, running or to be started
 struct no_bus {};          // no session bus at all
-using event = spl::variant<endpoint, message, unregistered, registered, refused, no_distributor, no_bus>;
+struct distributors {      // those found on the bus, and the one asked to register
+  std::vector<std::string> names;
+  std::string chosen;
+};
+using event = spl::variant<endpoint, message, unregistered, registered, refused, no_distributor, no_bus, distributors>;
 
 }  // namespace mux::platform::push

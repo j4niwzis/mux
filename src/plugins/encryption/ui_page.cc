@@ -36,7 +36,6 @@ export namespace mux::plugins::encryption {
 namespace page_detail {
 using namespace ::mux::ui;
 namespace said = ::mux::proto::matrix::settings_detail;
-namespace asked = ::mux::proto::matrix::request;
 using facts_t = said::facts_t;
 
 // This session, as its account's protocol state says it, once known.
@@ -78,17 +77,17 @@ inline auto security_view(const palette& colours, const account_page_facts&) {
       // Backup, made anew or deleted.
       c::styled({.margin = {14.0f, 0.0f, 0.0f, 0.0f}}, section_title(colours, "DEVICE VERIFICATION")),
       c::text_for<facts_t>(said::security_said, said::note(colours, "")),
-      said::row_if<sends<asked::setup_cross_signing>>(colours, "Set up cross-signing…", std::not_fn(said::cross_signing)),
-      said::row_if<sends<asked::restore_cross_signing>>(colours, "Restore with the recovery key…", std::not_fn(said::cross_signing)),
-      row_item(colours, "Reset your identity…", sends<asked::reset_identity>{}),
-      said::row_if<sends<asked::reset_backup>>(colours, "Reset the key backup", said::cross_signing),
-      said::row_if<sends<asked::delete_backup>>(colours, "Delete the key backup", said::backed_up),
+      said::row_if<sends<setup_cross_signing>>(colours, "Set up cross-signing…", std::not_fn(said::cross_signing)),
+      said::row_if<sends<restore_cross_signing>>(colours, "Restore with the recovery key…", std::not_fn(said::cross_signing)),
+      row_item(colours, "Reset your identity…", sends<reset_identity>{}),
+      said::row_if<sends<reset_backup>>(colours, "Reset the key backup", said::cross_signing),
+      said::row_if<sends<delete_backup>>(colours, "Delete the key backup", said::backed_up),
       c::styled({.margin = {14.0f, 0.0f, 0.0f, 0.0f}}, section_title(colours, "ROOM KEYS")),
-      row_item(colours, "Export room keys…", sends<asked::export_room_keys>{}),
-      row_item(colours, "Import room keys…", sends<asked::import_room_keys>{}),
+      row_item(colours, "Export room keys…", sends<export_room_keys>{}),
+      row_item(colours, "Import room keys…", sends<import_room_keys>{}),
       // Element's: every session of one's own not verified, signed out.
       c::styled({.margin = {14.0f, 0.0f, 0.0f, 0.0f}}, section_title(colours, "SESSIONS")),
-      row_item(colours, "Sign out unverified sessions…", sends<asked::sign_out_unverified>{})));
+      row_item(colours, "Sign out unverified sessions…", sends<sign_out_unverified>{})));
 }
 }  // namespace page_detail
 

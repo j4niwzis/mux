@@ -114,7 +114,7 @@ auto make_content(const Needs& needs, const link_facts& facts) {
 // purpose shows and says, by its type.
 // A passphrase asked for: why, and why the last one given was not taken.
 struct passphrase_facts {
-  proto::passphrase_for_t why;
+  passphrase_purpose_t why;
   std::optional<std::string> refused;
   std::string current, fresh, again, file;
 };
@@ -135,7 +135,7 @@ inline constexpr passphrase_words words_of(config::passphrase_for::encrypt) {
 inline constexpr passphrase_words words_of(config::passphrase_for::change) {
   return {"Change the passphrase", "Everything kept is sealed again under the new one.", "Change", true, true};
 }
-// A protocol's own: as it words it (passphrase_text, by ADL).
+// A protocol's own, or a plugin's: as it words it (passphrase_text, by ADL).
 template <class Purpose>
 inline constexpr passphrase_words words_of(Purpose why) {
   const proto::passphrase_words said = passphrase_text(why);
@@ -146,7 +146,7 @@ inline constexpr passphrase_words words_of(config::passphrase_for::decrypt) {
                                         "these files.",
           "Decrypt", true, false};
 }
-inline passphrase_words words_of(const proto::passphrase_for_t& purpose) {
+inline passphrase_words words_of(const passphrase_purpose_t& purpose) {
   return spl::visit([](auto why) { return words_of(why); }, purpose);
 }
 inline auto passphrase_box(const palette& colours) {

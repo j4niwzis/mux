@@ -544,9 +544,7 @@ template <class Action>
 // Its own requests, done by program_asked (mux.app.proto.matrix): listed
 // here, where its settings pages' manage_room is seen too -- what a debug
 // build's program serves a request by.
-constexpr request_list<request::setup_cross_signing, request::restore_cross_signing, request::reset_identity,
-                       request::sign_out_unverified, request::reset_backup, request::delete_backup, request::export_room_keys,
-                       request::import_room_keys, request::verify_session, request::change_account,
+constexpr request_list<request::verify_session, request::change_account,
                        request::refresh_sessions, request::verify_them,
                        request::change_room, request::manage_room,
                        request::slash,

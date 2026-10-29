@@ -37,26 +37,6 @@ void rename_session(Net& net, const account_id& by, std::string device, std::str
 }
 
 template <class Net>
-void setup_cross_signing(Net& net, const account_id& by, std::string password, bool reset = false) {
-  net.on_account(by, [password = std::move(password), reset](auto& account) -> decltype(void(account.setup_cross_signing(password, reset))) { account.setup_cross_signing(password, reset); });
-}
-
-template <class Net>
-void restore_cross_signing(Net& net, const account_id& by, std::string recovery) {
-  net.on_account(by, [recovery = std::move(recovery)](auto& account) -> decltype(void(account.restore_cross_signing(recovery))) { account.restore_cross_signing(recovery); });
-}
-
-template <class Net>
-void reset_backup(Net& net, const account_id& by) {
-  net.on_account(by, [](auto& account) -> decltype(void(account.reset_backup())) { account.reset_backup(); });
-}
-
-template <class Net>
-void delete_backup(Net& net, const account_id& by) {
-  net.on_account(by, [](auto& account) -> decltype(void(account.delete_backup())) { account.delete_backup(); });
-}
-
-template <class Net>
 void continue_uia(Net& net, const account_id& by) {
   net.on_account(by, [](auto& account) -> decltype(void(account.continue_uia())) { account.continue_uia(); });
 }
@@ -64,22 +44,6 @@ template <class Net>
 void cancel_uia(Net& net, const account_id& by) {
   net.on_account(by, [](auto& account) -> decltype(void(account.cancel_uia())) { account.cancel_uia(); });
 }
-
-template <class Net>
-void sign_out_unverified(Net& net, const account_id& by, std::string password) {
-  net.on_account(by, [password = std::move(password)](auto& account) -> decltype(void(account.sign_out_unverified(password))) { account.sign_out_unverified(password); });
-}
-
-template <class Net>
-void export_room_keys(Net& net, const account_id& by, std::string path, std::string passphrase) {
-  net.on_account(by, [path = std::move(path), passphrase = std::move(passphrase)](auto& account) -> decltype(void(account.export_room_keys(path, passphrase))) { account.export_room_keys(path, passphrase); });
-}
-
-template <class Net>
-void import_room_keys(Net& net, const account_id& by, std::string path, std::string passphrase) {
-  net.on_account(by, [path = std::move(path), passphrase = std::move(passphrase)](auto& account) -> decltype(void(account.import_room_keys(path, passphrase))) { account.import_room_keys(path, passphrase); });
-}
-
 
 }  // namespace mux::proto::matrix::ops
 
@@ -600,54 +564,6 @@ void program_told(App& app, const sessions_refused& said) {
 // What Matrix's UI asks, done: each for the account whose pages are open.
 export namespace mux::proto::matrix::request {
 
-// Asked with a passphrase (or the account's password) first: its dialog up,
-// for that account.
-template <class App, class Purpose>
-void with_passphrase(App& app, Purpose purpose) {
-  app.shared.with_chosen_account([&](config::account_t& account) {
-    app.keys_of = App::id_of(account);
-    mux::ui::show(app.showing, std::optional(mux::ui::passphrase_facts{purpose, std::nullopt}));
-  });
-}
-template <class App>
-void program_asked(App& app, const setup_cross_signing&) {
-  with_passphrase(app, passphrase::cross_signing{});
-}
-template <class App>
-void program_asked(App& app, const restore_cross_signing&) {
-  with_passphrase(app, passphrase::recovery{});
-}
-template <class App>
-void program_asked(App& app, const reset_identity&) {
-  with_passphrase(app, passphrase::reset_identity{});
-}
-template <class App>
-void program_asked(App& app, const sign_out_unverified&) {
-  with_passphrase(app, passphrase::sign_out_unverified{});
-}
-template <class App>
-void program_asked(App& app, const export_room_keys&) {
-  with_passphrase(app, passphrase::export_keys{});
-}
-template <class App>
-void program_asked(App& app, const import_room_keys&) {
-  with_passphrase(app, passphrase::import_keys{});
-}
-// Element's Secure Backup: made anew, or deleted.
-template <class App>
-void program_asked(App& app, const reset_backup&) {
-  app.shared.with_chosen_account([&](config::account_t& account) {
-    if (!app.shared.demo())
-      ops::reset_backup(*app.net, App::id_of(account));
-  });
-}
-template <class App>
-void program_asked(App& app, const delete_backup&) {
-  app.shared.with_chosen_account([&](config::account_t& account) {
-    if (!app.shared.demo())
-      ops::delete_backup(*app.net, App::id_of(account));
-  });
-}
 // The sessions: one verified by emoji, some signed out, one renamed, listed.
 template <class App>
 void program_asked(App& app, const verify_session& one) {
@@ -795,56 +711,3 @@ void program_asked(App& app, const close_tool<Facts>&) {
 }
 }  // namespace mux::proto::matrix::request
 
-// A passphrase or a password given, for what Matrix asked it for: for the
-// account whose keys were asked of (keys_of).
-export namespace mux::proto::matrix::passphrase {
-
-template <class App, class Given>
-void passphrase_given(App& app, const export_keys&, const Given& one) {
-  if (auto refused = config::new_passphrase_refused(one.fresh, one.again))
-    return app.shared.passphrase_refused(*refused);
-  if (!app.keys_of)
-    return mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
-  const char* home = std::getenv("HOME");
-  const auto folder = home && *home ? std::filesystem::path(home) / "Downloads" : std::filesystem::current_path();
-  // Joined, not formatted: clang 23 crashed on format strings first made in
-  // these modules (see app/network.cc).
-  const std::string file = "mux-room-keys-" + std::string(config::file_name_of(app.keys_of->address)) + ".txt";
-  ops::export_room_keys(*app.net, *app.keys_of, (folder / file).string(), one.fresh);
-  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
-}
-template <class App, class Given>
-void passphrase_given(App& app, const import_keys&, const Given& one) {
-  if (one.file.empty())
-    return app.shared.passphrase_refused("Type the key file's path.");
-  if (!app.keys_of)
-    return mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
-  ops::import_room_keys(*app.net, *app.keys_of, one.file, one.current);
-  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
-}
-template <class App, class Given>
-void passphrase_given(App& app, const cross_signing&, const Given& one) {
-  if (app.keys_of)
-    ops::setup_cross_signing(*app.net, *app.keys_of, one.current);
-  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
-}
-template <class App, class Given>
-void passphrase_given(App& app, const sign_out_unverified&, const Given& one) {
-  if (app.keys_of)
-    ops::sign_out_unverified(*app.net, *app.keys_of, one.current);
-  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
-}
-template <class App, class Given>
-void passphrase_given(App& app, const reset_identity&, const Given& one) {
-  if (app.keys_of)
-    ops::setup_cross_signing(*app.net, *app.keys_of, one.current, true);
-  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
-}
-template <class App, class Given>
-void passphrase_given(App& app, const recovery&, const Given& one) {
-  if (app.keys_of)
-    ops::restore_cross_signing(*app.net, *app.keys_of, one.current);
-  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
-}
-
-}  // namespace mux::proto::matrix::passphrase

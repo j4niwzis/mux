@@ -27,6 +27,15 @@ struct plugin_list {};
 // plugin's types can say they provide them; each what it asks is said where
 // it is used.
 namespace contract {
+// What a plugin asks a passphrase (or the account's password) for, in the
+// client's passphrase dialog (mux.ui.base:forms), beside the client's and
+// the protocols':
+//   passphrases(c, f) -> proto::passphrase_list<its purposes...>; each with
+//   passphrase_text(purpose) -> proto::passphrase_words, and done by
+//   passphrase_given(program, purpose, given) -- found by ADL
+struct passphrases {
+  static constexpr std::string_view name = "the passphrases asked";
+};
 // The Matrix account, made by a plugin over the client's own
 // (mux.proto.matrix.client, account_of): end-to-end encryption's.
 //   matrix_account_made(c, f, type_tag<Sink>) -> std::type_identity<its

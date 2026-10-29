@@ -133,6 +133,26 @@ struct plugin_account_pages<plugin_list<Features...>> {
                                typename plugin_page_types<decltype(account_pages(contract::account_pages{}, type_tag<Features>{}))>::type...>::type;
 };
 using plugin_account_pages_t = typename plugin_account_pages<composition::providers<contract::account_pages, enabled_plugins>>::type;
+// What a passphrase is asked for: the client's own, every protocol's
+// (proto::passphrase_for_t), and every plugin's (contract::passphrases).
+template <class Union, class... Lists>
+struct passphrases_joined;
+template <class... Ours>
+struct passphrases_joined<spl::variant<Ours...>> {
+  using type = spl::variant<Ours...>;
+};
+template <class... Ours, class... Theirs, class... Rest>
+struct passphrases_joined<spl::variant<Ours...>, proto::passphrase_list<Theirs...>, Rest...>
+    : passphrases_joined<spl::variant<Ours..., Theirs...>, Rest...> {};
+template <class>
+struct plugin_passphrases;
+template <class... Features>
+struct plugin_passphrases<plugin_list<Features...>> {
+  using type = typename passphrases_joined<proto::passphrase_for_t,
+                                           decltype(passphrases(contract::passphrases{}, type_tag<Features>{}))...>::type;
+};
+using passphrase_purpose_t =
+    typename plugin_passphrases<composition::providers<contract::passphrases, enabled_plugins>>::type;
 // A page of an account's: the client's, one of a protocol's, or a plugin's.
 using account_page_t = typename variant_of_types<typename joined<
     type_list<account_page::connection, account_page::privacy, account_page::notifications, account_page::chats,
@@ -746,7 +766,7 @@ struct keep_whole {
 // the level over it says.
 // A passphrase given, for what it was asked: the one now, a new one twice.
 struct give_passphrase {
-  mux::proto::passphrase_for_t why;
+  passphrase_purpose_t why;
   std::string current, fresh, again;
   std::string file;  // a key file's path, where one was asked
 };

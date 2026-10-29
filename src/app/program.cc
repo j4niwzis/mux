@@ -681,7 +681,7 @@ struct app : kept_settings {
   void apply(const request::close_text_menu&);
   void apply(const request::give_passphrase&);
   // The account whose room keys a passphrase was asked for.
-  std::optional<mux::account_id> keys_of;
+
   void apply(const request::resize_info& one);
   // ← on the accounts page: from an account's pages to the list, from the
   // list to the chats.

@@ -17,13 +17,21 @@ struct feature {
 };
 
 // The kinds of settings, each its own type (room_settings_of<kind>), its
-// own tabs, its own dialog: a protocol's rooms (a Matrix room, DMs too; an
-// XMPP group chat), and a plain chat with no room of a protocol's to
-// manage (an XMPP one-to-one chat) -- which the client's tabs alone have.
+// own tabs, its own dialog, all it shows known from its type: a protocol's
+// rooms (a Matrix room, DMs too; an XMPP group chat) -- left from their
+// General; and a protocol's chats that are no rooms (an XMPP one-to-one
+// chat) -- the client's tabs alone, nothing to leave.
 namespace room_kind {
 template <class Protocol>
-struct room_of {};
-struct plain {};
+struct room_of {
+  using protocol = Protocol;
+  static constexpr bool leavable = true;
+};
+template <class Protocol>
+struct chat_of {
+  using protocol = Protocol;
+  static constexpr bool leavable = false;
+};
 }  // namespace room_kind
 
 // What a room's settings let other plugins add, said as composition's

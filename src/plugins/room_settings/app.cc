@@ -124,7 +124,7 @@ class part {
 
  private:
   // Settings, for a chat: of its kind -- its protocol's rooms', or, where
-  // a one-to-one chat of its protocol is no room (XMPP's), a plain chat's --
+  // a one-to-one chat of its protocol is no room (XMPP's), its chats' --
   // read once here, from its protocol's type.
   void manage_chat(const conversation_id& id) {
     const conversation* chat = s_->model->find(id);
@@ -133,7 +133,7 @@ class part {
     const bool direct = chat->kind.template get_if<conversation_kind::direct>() != nullptr;
     spl::visit([&]<class Protocol>(Protocol) {
       if (direct && !proto::direct_chats_are_rooms<state_of<Protocol>>())
-        this->manage_as<room_kind::plain>(*chat);
+        this->manage_as<room_kind::chat_of<Protocol>>(*chat);
       else
         this->manage_as<room_kind::room_of<Protocol>>(*chat);
     }, chat->id.account.speaks);
@@ -155,8 +155,6 @@ class part {
                   .alias = chat->alias,
                   .other_aliases = chat->other_aliases,
                   .encrypted = chat->encrypted,
-                  .group = chat->kind.template get_if<conversation_kind::direct>() == nullptr,
-                  .leavable = proto::can_leave(ui::protocol_state_of(s_->ui, chat->id.account), *chat),
                   .theirs = their_part_of<Kind>(chat->theirs),
                   .notify = k.notify_choices_of(chat->id),
                   .events_all = k.own_of<&app::chat_choices::room_events>(chat->id),
@@ -166,8 +164,7 @@ class part {
                   .holds_spaces = std::ranges::any_of(chat->children, [&](const std::string& child) {
                     const conversation* in = s_->model->find(conversation_id{chat->id.account, child});
                     return in && in->space;
-                  }),
-                  .speaks = chat->id.account.speaks};
+                  })};
     facts.chat = chat->id;
     facts.members = chat->members;
     // Its own choices there to be bound to, chosen or not.

@@ -221,6 +221,8 @@ constexpr bool can_upload(const auto&) { return true; }
 constexpr bool offers(const auto&, const auto&) { return false; }
 // Whether its one-to-one chats are rooms, with a room's settings (Matrix's DMs).
 constexpr bool direct_rooms(const auto&) { return false; }
+// Whether its chats show room events (joins, names, topics) a user may choose among.
+constexpr bool has_room_events(const auto&) { return true; }
 constexpr bool owns_address(const auto&, std::string_view) { return false; }
 inline std::optional<std::string> share_link(const auto&, std::string_view) { return std::nullopt; }
 inline std::optional<std::string> room_link(const auto&, const conversation&) { return std::nullopt; }
@@ -324,6 +326,12 @@ template <class State>
 consteval bool direct_chats_are_rooms() {
   using defaults::direct_rooms;
   return direct_rooms(State{});
+}
+// Whether a protocol's chats have room events to choose among (room_event_kinds).
+template <class State>
+consteval bool shows_room_events() {
+  using defaults::has_room_events;
+  return has_room_events(State{});
 }
 
 inline constexpr struct can_page_back_t {

@@ -127,20 +127,19 @@ template <class Protocol>
 struct their_part<room_kind::room_of<Protocol>> {
   using type = typename their_parts_of<decltype(::mux::room_parts_of(::mux::state_of<Protocol>{}))>::type;
 };
-template <>
-struct their_part<room_kind::plain> {
+template <class Protocol>
+struct their_part<room_kind::chat_of<Protocol>> {
   using type = spl::variant<proto::no_room_part>;
 };
 template <class Kind>
 using their_part_t = typename their_part<Kind>::type;
 
-// The kinds, one dialog each: a room of each protocol turned on, and a
-// plain chat.
+// The kinds, one dialog each: a room and a chat of each protocol turned on.
 template <class>
 struct kinds_of;
 template <class... Protocols>
 struct kinds_of<protocol_list<Protocols...>> {
-  using type = ui::type_list<room_kind::plain, room_kind::room_of<Protocols>...>;
+  using type = ui::type_list<room_kind::room_of<Protocols>..., room_kind::chat_of<Protocols>...>;
 };
 using room_kinds = typename kinds_of<protocols>::type;
 
@@ -159,8 +158,6 @@ struct room_settings_of {
   std::optional<std::string> alias;
   std::vector<std::string> other_aliases;
   bool encrypted = false;
-  bool group = true;
-  bool leavable = true;
   // Its protocol's part, for its pages.
   their_part_t<Kind> theirs;
   // Its notifications, as chosen for it (muted: off).
@@ -186,8 +183,6 @@ struct room_settings_of {
   // A space: whether it holds spaces, and whether it is shown as a forum.
   bool space = false;
   bool holds_spaces = false;
-  // The protocol the chat is of: the room events it can show.
-  protocol_t speaks;
   // Those whose level is not the default: Element's privileged users.
   struct person {
     std::string id;
@@ -289,19 +284,43 @@ auto general_sections_of(plugin_list<Features...>, const auto& colours, const ro
   return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                                 extend(contract::general_sections{}, type_tag<Features>{}, colours, facts)...);
 }
+// What the General has by its kind alone, known while compiling: the note
+// over the room events where its protocol has them; Leave where a room of
+// its is left. Where not, nothing in its place.
+inline auto nothing_here() {
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}));
+}
+template <class Kind>
+auto room_events_note(const auto&) {
+  return nothing_here();
+}
+template <class Kind>
+  requires(proto::shows_room_events<state_of<typename Kind::protocol>>())
+auto room_events_note(const auto& colours) {
+  return explained(colours, "Room events shown in this room, for you: As above follows the inherited settings.");
+}
+template <class Kind>
+auto leave_part(const auto&) {
+  return nothing_here();
+}
+template <class Kind>
+  requires(Kind::leavable)
+auto leave_part(const auto& colours) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}), part_heading(colours, "Leave room"),
+                   c::styled({.width = 130.0f, .height = 32.0f},
+                             button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {})));
+}
 template <class Kind>
 auto room_general_page(const auto& colours, const room_settings_of<Kind>& facts, bool has_page_header = false) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(room_general_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
                                 .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       c::visible(!has_page_header, tab_heading(colours, general_title<Kind>())),
-      c::visible(!proto::room_event_kinds_of(state_before(facts.speaks)).empty(),
-          explained(colours, "Room events shown in this room, for you: As above follows the inherited settings.")),
+      room_events_note<Kind>(colours),
       chat_settings_view(colours, facts.chat),
       general_sections_of(composition::providers<contract::general_sections, enabled_plugins>{}, colours, facts),
-      c::visible(facts.leavable, part_heading(colours, "Leave room")),
-      c::styled({.width = 130.0f, .height = 32.0f},
-          c::visible(facts.leavable, button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {})))));
+      leave_part<Kind>(colours)));
 }
 
 template <class Kind>

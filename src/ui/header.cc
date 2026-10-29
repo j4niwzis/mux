@@ -251,7 +251,6 @@ struct chats_shown {
   bool chosen = false;
   friend bool operator==(const chats_shown&, const chats_shown&) = default;
 };
-inline constexpr float kChatHeadHeight = 56.0f;
 [[nodiscard]] inline chat_head_shown chat_head_of(const ui_shared& shared, const conversation* one, const model& now) {
   if (one == nullptr)
     return {};
@@ -298,7 +297,6 @@ inline auto chat_header_for(const palette& colours) {
                   c::shown_for<chat_head_shown>(chat,
                       c::text_for<chat_head_shown>([](const chat_head_shown& now) { return now.status; },
                           c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.dim)))))),
-              c::shown_for<chat_head_shown>(chat, c::styled(middle, icon_button(colours, icon::search{}, sends<request::open_search>{}))),
               c::shown_for<chat_head_shown>(chat, chat_header_buttons::row_of(colours)),
               c::shown_for<chat_head_shown>(chat, c::styled(middle, icon_button(colours, icon::info{}, sends<request::toggle_info>{}))))),
       c::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)))));
@@ -400,74 +398,6 @@ auto selection_bar(const ui_needs& n) {
 }
 using selection_bar_t = decltype(selection_bar(std::declval<const ui_needs&>()));
 
-// Where the finding is, as what is shown says: the one shown of how many;
-// none asked yet, nothing said.
-struct search_found {
-  std::optional<std::size_t> at;
-  std::size_t of = 0;
-  bool asked = false;
-  // Open, in place of the head.
-  bool open = false;
-  friend bool operator==(const search_found&, const search_found&) = default;
-};
-// What the bar says of it: a callable type, made as it is shown.
-struct found_said_t {
-  std::string operator()(const search_found& now) const {
-    return !now.asked ? std::string() : now.of == 0 ? std::string("No results") : std::format("{} of {}", now.at.value_or(0) + 1, now.of);
-  }
-};
-
-// Finding in a chat, as tdesktop's search in a chat: in place of the head,
-// a field with the magnifier, how many are found and which is shown ("3 of
-// 12"), the arrows to the newer and the older, and ✕. Enter goes to the
-// older one, Shift+Enter to the newer, Esc closes.
-struct search_typed {
-  using Answer = std::optional<::mux::ui::request::search_typed>;
-  std::optional<::mux::ui::request::search_typed> operator()(std::string_view text) { return ::mux::ui::request::search_typed{std::string(text)}; }
-};
-struct search_step {
-  using Answer = ::mux::ui::request::search_step;
-  bool older = true;
-  ::mux::ui::request::search_step operator()() { return ::mux::ui::request::search_step{older}; }
-};
-// Finding in a chat, as tdesktop's search in a chat: in place of the head,
-// a field with the magnifier, how many are found and which is shown ("3 of
-// 12"), the arrows to the newer and the older, and close. Enter goes to the
-// older one, Shift+Enter to the newer, Esc closes; Up and Down step. Shown
-// while the program says it is open, its field empty again once it is not.
-inline auto search_bar_for(const palette& colours) {
-  namespace c = skiff::compose;
-  const scene::Spec middle{.alignSelf = scene::align::kMiddle};
-  auto field = widgets::TextBox<search_typed>(colours.widgets, "Search", {});
-  field.setSearchIcon(true);
-  const auto keys = [](const scene::key::down& press) -> std::optional<std::variant<request::search_step, request::close_search>> {
-    namespace keys = scene::keys;
-    if (press.key == keys::kEnter)
-      return request::search_step{!press.modifiers.template has<scene::modifier::shift>()};
-    if (press.key == keys::kEscape)
-      return request::close_search{};
-    if (press.key == keys::kUp || press.key == keys::kDown)
-      return request::search_step{press.key == keys::kDown};
-    return std::nullopt;
-  };
-  return SKIFF_NAMED(search_bar_for, c::shown_for<search_found>([](const search_found& now) { return now.open; },
-      c::onKeys(keys,
-          c::row(c::hbox(4.0f, {.fillX = true, .height = kChatHeadHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
-                                .background = colours.sidebar}),
-                 c::focused_by<keys_asked>(keys_on<keys::search>{},
-                     c::applied<search_found>([](const search_found& now) { return now.open; },
-                         [](widgets::TextBox<search_typed>& typed, bool open) {
-                           if (!open && !typed.text().empty())
-                             typed.setText({});
-                         },
-                         c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field)))),
-                 c::text_for<search_found>(found_said_t{}, c::styled(middle, nodes::Text("", 13.0f, colours.dim))),
-                 c::styled(middle, icon_button(colours, icon::up{}, search_step{false})),
-                 c::styled(middle, icon_button(colours, icon::down{}, search_step{true})),
-                 c::styled(middle, icon_button(colours, icon::close{}, sends<request::close_search>{})),
-                 c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))))));
-}
-using search_bar_t = decltype(search_bar_for(std::declval<const palette&>()));
 
 }  // namespace mux::ui
 

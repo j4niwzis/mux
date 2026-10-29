@@ -274,7 +274,6 @@ struct shown_root {
   // keeps it.
   skiff::model::Tracked<chat_draft> chat_writing;
   skiff::model::Tracked<thread_draft> thread_writing;
-  skiff::model::Tracked<search_found> found;
   skiff::model::Tracked<std::optional<leave_space_facts>> leaving;
   skiff::model::Tracked<std::optional<link_facts>> linking;
   skiff::model::Tracked<std::optional<notice_facts>> notice;

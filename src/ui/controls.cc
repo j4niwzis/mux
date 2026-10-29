@@ -205,6 +205,8 @@ using no_back = no_action;
 // the page's name, and ✕ on the right where the page closes. Every panel,
 // box and page that has a title and a ✕ has this one.
 inline constexpr float kPageHeaderHeight = 54.0f;
+// A chat's head: as high as Telegram's, and what stands in its place.
+inline constexpr float kChatHeadHeight = 56.0f;
 template <class Back, class Close>
 auto page_header(const palette& colours, std::string name, Back back, Close close, bool has_back, bool has_close) {
   return SKIFF_NAMED(page_header, skiff::compose::row(

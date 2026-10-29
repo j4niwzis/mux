@@ -35,7 +35,7 @@ class chat_view_part {
     const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
     auto head = mux::ui::chat_head_of(s_->ui, chat, *s_->model);
     head.back = s_->single();
-    head.hidden = s_->showing->look<mux::ui::search_found>()->open || s_->showing->look<mux::ui::selection_shown>()->count > 0;
+    head.hidden = s_->searching || s_->showing->look<mux::ui::selection_shown>()->count > 0;
     this->put(std::move(head));
     this->put(mux::ui::chats_shown{.none = s_->model->accounts().empty(), .chosen = chat != nullptr});
     this->put(this->banner_of(chat));

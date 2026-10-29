@@ -46,7 +46,6 @@ void app::apply(const request::choose& one) {
   }
   // What was being written where the reader was: kept as its draft; and
   // the chat opened's own put back in the field.
-  search.chat_chosen(one.which);
   if (shared.chosen() && *shared.chosen() != one.which) {
     drafts.keep(*shared.chosen(), mux::ui::draft_text(shared.chat_writing()));
     shared.write_chat(mux::ui::plain_draft(shared.draft_of(one.which)));

@@ -55,6 +55,9 @@ struct services {
   // A list over the composer is up (a plugin's: what an @ or a ':' asks):
   // the screen catches its keys -- Up, Down, Enter, Tab, Esc -- for it.
   bool composer_list_up = false;
+  // Finding in the chat is open (a plugin's): Esc closes it, the head
+  // stands aside for its bar.
+  bool searching = false;
   bool rebuild_due = false;
   // Whether it is used by a finger -- a phone's screen -- as the host saw
   // last: a touch, or a mouse's press. Where it is, the input is not given

@@ -36,7 +36,6 @@ import mux.plugins.app;
 import mux.app.words;
 import mux.app.services;
 import mux.app.kept;
-import mux.app.search;
 import mux.app.pictures;
 import mux.app.drafts;
 import mux.app.reading;
@@ -119,7 +118,6 @@ struct app : kept_settings {
   // -- the parts: each owns its state, and reaches the rest through what
   // they share
   services shared;
-  search_part search{shared};
   pictures_part pictures{shared};
   drafts_part drafts{shared};
   reading_part reading{shared};
@@ -302,7 +300,7 @@ struct app : kept_settings {
   // none of them takes, the program's own.
   auto parts() {
     return std::tuple_cat(
-        std::tie(search, pictures, reading, outbox, settings, menu, notices, paging, verification,
+        std::tie(pictures, reading, outbox, settings, menu, notices, paging, verification,
                  rooms, room_card, preferences, manage, looks, jumps, chat_view, chat_list, emoji, accounts_screen, local_data),
         std::apply([](auto&... theirs) { return std::tie(theirs...); }, plugin_parts));
   }
@@ -533,6 +531,11 @@ struct app : kept_settings {
   void apply(const request::adopt_pack&) {}
   void apply(const request::explore_space&) {}
   void apply(const request::search_rooms&) {}
+  void apply(const request::open_search&) {}
+  void apply(const request::close_search&) {}
+  void apply(const request::search_typed&) {}
+  void apply(const request::search_step&) {}
+  void apply(const request::search_pick&) {}
   void apply(const request::quit&);
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);

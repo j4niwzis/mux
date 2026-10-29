@@ -1,39 +1,53 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.app.search: finding in a chat -- what is asked, in which chat, the
-// messages it is found in, and which of them is shown -- as tdesktop's
-// search in a chat.
-export module mux.app.search;
+// mux.plugin.search.app -- Finding in a chat: what is asked, in which chat,
+// the messages it is found in (listed down the side, the program's
+// found_shown), and which of them is shown -- as tdesktop's search in a chat.
+export module mux.plugin.search.app;
 
 import std;
-import mux.logic.text;
+import mux.composition;
 import mux.core;
+import mux.logic.text;
+import mux.logic.search;
 import mux.ui;
 import mux.app.store;
-import mux.app.requests;
-import mux.app.services;
 import mux.app.workers;
-import mux.logic.search;
+import mux.app.services;
+import mux.plugin.search.types;
+import mux.plugin.search.ui;
 
-export namespace mux::app {
+export namespace mux::plugins::search {
 
-class search_part {
- public:
-  explicit search_part(services& shared) : s_(&shared) {}
+struct part {
+  app::services* s_ = nullptr;
 
-  void apply(const request::open_search&) {
+  // What the bar says, put where it changed; and the program told whether
+  // it is open (Esc closes it, the head stands aside for it).
+  void put(shown now) {
+    s_->searching = now.open;
+    if (*s_->showing->look<shown>() != now)
+      ui::show(*s_->showing, std::move(now));
+  }
+  // Another chat chosen: finding is in one chat, and is closed.
+  void tick() {
+    if (const auto& chosen = s_->chosen(); chosen)
+      this->chat_chosen(*chosen);
+  }
+
+  void apply(const ui::request::open_search&) {
     if (!s_->chosen())
       return;
     if (!searching_ || searching_->in != *s_->chosen())
       searching_ = state{*s_->chosen(), {}, {}, std::nullopt};
-    mux::ui::show(*s_->showing, mux::ui::search_found{.open = true});
+    this->put(shown{.open = true});
     s_->ask_keys(mux::ui::keys::search{});
   }
-  void apply(const request::close_search&) {
+  void apply(const ui::request::close_search&) {
     searching_.reset();
     mux::ui::show(*s_->showing, mux::ui::found_shown{});
-    mux::ui::show(*s_->showing, mux::ui::search_found{});
+    this->put(shown{});
   }
-  void apply(const request::search_typed& one) {
+  void apply(const ui::request::search_typed& one) {
     if (!searching_)
       return;
     searching_->query = one.text;
@@ -42,7 +56,7 @@ class search_part {
     std::vector<message> in_memory;
     if (const conversation* chat = s_->model->find(searching_->in))
       in_memory = chat->timeline;
-    s_->work->run([this, in = searching_->in, query = one.text, in_memory = std::move(in_memory)]() -> workers::done_t {
+    s_->work->run([this, in = searching_->in, query = one.text, in_memory = std::move(in_memory)]() -> app::workers::done_t {
       std::map<std::string, message> all = s_->store->everything(in);
       for (const message& each : in_memory)
         all.insert_or_assign(each.id, each);
@@ -63,9 +77,9 @@ class search_part {
       };
     });
   }
-  void apply(const request::search_step& one) { this->step(one.older); }
+  void apply(const ui::request::search_step& one) { this->step(one.older); }
   // One of the list picked: gone to, as a step to it.
-  void apply(const request::search_pick& one) {
+  void apply(const ui::request::search_pick& one) {
     if (!searching_ || one.index >= searching_->found.size())
       return;
     searching_->at = one.index;
@@ -77,11 +91,10 @@ class search_part {
     if (searching_ && searching_->in != which) {
       searching_.reset();
     mux::ui::show(*s_->showing, mux::ui::found_shown{});
-      mux::ui::show(*s_->showing, mux::ui::search_found{});
+      this->put(shown{});
     }
   }
 
- private:
   // What is asked, in which chat, the messages it is in (newest first), and
   // which of them is shown.
   struct state {
@@ -119,8 +132,8 @@ class search_part {
   // The found at `at` gone to, what was asked marked in it; the count set.
   void show_at() {
     if (searching_->at)
-      s_->show_message_due = services::message_asked{searching_->found[*searching_->at], searching_->query};
-    mux::ui::show(*s_->showing, mux::ui::search_found{searching_->at, searching_->found.size(), !searching_->query.empty(), true});
+      s_->show_message_due = app::services::message_asked{searching_->found[*searching_->at], searching_->query};
+    this->put(shown{searching_->at, searching_->found.size(), !searching_->query.empty(), true});
   }
 
   // To the next found, older or newer, shown and flashed; the count set.
@@ -133,8 +146,10 @@ class search_part {
     this->show_at();
   }
 
-  services* s_;
   std::optional<state> searching_;
 };
 
-}  // namespace mux::app
+// Its part, among the program's (mux.app.program).
+inline part extend(contract::program_parts, type_tag<feature>, app::services& shared) { return part{&shared}; }
+
+}  // namespace mux::plugins::search

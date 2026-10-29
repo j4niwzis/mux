@@ -126,7 +126,7 @@ class chat_list_part {
     if (!chat.chosen && !(list.pointed && stepping))
       return;
     const bool selected = s_->showing->look<mux::ui::selection_shown>()->count > 0;
-    const bool searching = s_->showing->look<mux::ui::search_found>()->open;
+    const bool searching = s_->searching;
     const bool answering = s_->showing->look<mux::ui::chat_compose>()->said.has_value();
     if (one.key == keys::kF && one.control)
       asked(request::open_search{});

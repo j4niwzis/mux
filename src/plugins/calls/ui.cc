@@ -222,4 +222,26 @@ inline auto extend(contract::chat_header, type_tag<feature>, const palette& colo
                                                            icon_button(colours, icon::phone{}, sends<call_chosen>{})))));
 }
 
+// Settings' Calls page: Element's two switches, bound to the plugin's own
+// settings, in effect from the next call.
+inline auto calls_settings_view(const palette& colours) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(calls_settings_view, c::column(
+      c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::styled({.depth = 1.0f, .background = colours.sidebar},
+          page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Calls", {}, {}, true, true)),
+      c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+          spaced_title(colours, "CONNECTION"),
+          setting_switch<&kept::peer_to_peer>(colours, "Allow peer-to-peer for 1:1 calls"),
+          spaced_note(colours, "Off, a call goes through your homeserver's relay (TURN) only: the other side never learns your "
+                               "address. It needs the homeserver to give one."),
+          setting_switch<&kept::fallback_server>(colours, "Allow fallback call assist server (turn.matrix.org)"),
+          spaced_note(colours, "Where your homeserver gives no relay, Matrix.org's server is asked for your address, so that a "
+                               "call can find its way through your router. That server learns your IP address."))));
+}
+inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
+  return settings_link(colours, "Calls", icon::phone{}, open_calls_page{});
+}
+inline auto extend(contract::settings_pages, const ui_needs& n, const calls_page&) { return calls_settings_view(*n.colours); }
+
 } // namespace mux::plugins::calls

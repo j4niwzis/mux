@@ -64,9 +64,13 @@ struct audio_limits {
 template <class Wake, class Audio = platform::audio::call_audio>
 class media_session {
  public:
-  media_session(const std::vector<ice_server>& servers, Wake wake, audio_limits limits = {})
+  media_session(const std::vector<ice_server>& servers, connect_choice choice, Wake wake, audio_limits limits = {})
       : wake_(std::move(wake)), limits_(limits) {
     rtc::Configuration config;
+    // Peer-to-peer off: only the relay's addresses offered and tried -- the
+    // other side never learns this one's.
+    if (choice.relay_only)
+      config.iceTransportPolicy = rtc::TransportPolicy::Relay;
     // Signalling owns negotiation: adding the track must not send an offer
     // before the call controller requests one.
     config.disableAutoNegotiation = true;

@@ -8,9 +8,9 @@ import splice;
 export import mux.plugin.calls.changes;
 
 // clang-format off
-EM_JS(void, mux_web_call_create, (int id), {
+EM_JS(void, mux_web_call_create, (int id, int relay_only), {
   Module.muxCalls ||= new Map();
-  const s = {servers: [], candidates: [], closed: false, muted: false};
+  const s = {servers: [], candidates: [], closed: false, muted: false, policy: relay_only ? 'relay' : 'all'};
   Module.muxCalls.set(id, s);
   s.tell = (kind, text = "", mid = "", index = -1) => {
     if (!s.closed) Module.ccall('mux_web_call_event', null,
@@ -19,7 +19,7 @@ EM_JS(void, mux_web_call_create, (int id), {
   s.fail = e => s.tell(e.muxAudio ? 8 : 6, String(e.message || e));
   s.prepare = async () => {
     if (!s.pc) {
-      s.pc = new RTCPeerConnection({iceServers:s.servers});
+      s.pc = new RTCPeerConnection({iceServers:s.servers, iceTransportPolicy:s.policy});
       s.pc.onicecandidate = e => s.tell(3, e.candidate?.candidate || "", e.candidate?.sdpMid || "", e.candidate?.sdpMLineIndex ?? -1);
       s.pc.onconnectionstatechange = () => {
         const kinds = {connected:4, disconnected:5, failed:6, closed:7};
@@ -113,9 +113,9 @@ export namespace mux::calls {
 inline constexpr bool kAvailable = true;
 template <class Wake> class media_session {
 public:
-  media_session(const std::vector<ice_server> &servers, Wake) : id_(++browser::next) {
+  media_session(const std::vector<ice_server> &servers, connect_choice choice, Wake) : id_(++browser::next) {
     browser::boxes.try_emplace(id_);
-    mux_web_call_create(id_);
+    mux_web_call_create(id_, choice.relay_only ? 1 : 0);
     for (const auto &server : servers) {
       const auto [scheme, transport] = spl::visit(spl::overloaded{
         [](relay::stun) { return std::pair{"stun:", ""}; },

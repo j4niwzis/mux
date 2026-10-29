@@ -8,6 +8,7 @@ export module mux.plugin.calls.types;
 
 import std;
 import splice;
+import knot;
 import mux.core;
 import mux.composition;
 
@@ -75,5 +76,27 @@ constexpr type_tag<call_shown> facts_type(contract::window_layers, type_tag<feat
 consteval bool provides(contract::chat_column, type_tag<feature>) { return true; }
 consteval bool provides(contract::chat_header, type_tag<feature>) { return true; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
+
+// Its own settings (contract::settings_kept), as Element's Voice & Video
+// has them: whether a call may go straight between the two ends (off,
+// through a relay only -- neither end's address told to the other); and
+// whether, where the homeserver gives no relay, a public one (Matrix.org's
+// STUN) is asked for this one's address.
+struct kept {
+  bool peer_to_peer = true;
+  bool fallback_server = false;
+  friend bool operator==(const kept&, const kept&) = default;
+  friend consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>(); }
+};
+consteval bool provides(contract::settings_kept, type_tag<feature>) { return true; }
+constexpr type_tag<kept> settings_type(contract::settings_kept, type_tag<feature>) { return {}; }
+// Settings' Calls page, and its link.
+struct calls_page {
+  friend bool operator==(calls_page, calls_page) = default;
+};
+struct open_calls_page {};
+consteval bool provides(contract::settings_links, type_tag<feature>) { return true; }
+consteval bool provides(contract::settings_pages, type_tag<feature>) { return true; }
+constexpr composition::page_list<calls_page> settings_pages(contract::settings_pages, type_tag<feature>) { return {}; }
 
 }  // namespace mux::plugins::calls

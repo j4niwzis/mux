@@ -14,7 +14,7 @@ inline constexpr bool kAvailable = false;
 template <class Wake>
 class media_session {
  public:
-  media_session(const std::vector<ice_server>&, Wake wake) : wake_(std::move(wake)) {}
+  media_session(const std::vector<ice_server>&, connect_choice, Wake wake) : wake_(std::move(wake)) {}
   media_session(const media_session&) = delete;
   media_session& operator=(const media_session&) = delete;
   void offer() { this->fail(); }

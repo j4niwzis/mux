@@ -14,6 +14,7 @@ import mux.ui;
 import mux.calls.media;
 import mux.platform.permissions;
 import mux.app.network;
+import mux.app.kept;
 import mux.app.services;
 import mux.plugin.calls.types;
 import mux.plugin.calls.matrix;
@@ -230,13 +231,27 @@ class part {
                                      }},
                   one.said);
   }
+  // Settings' Calls page.
+  void apply(const open_calls_page&) {
+    if (s_->settings_open())
+      s_->settings_page(calls_page{});
+  }
   void take(const call_servers& one) {
     if (!current_ || current_->in.account != one.account || current_->id != one.call || !holds<call_state::starting>())
       return;
     current_->relays = one.servers.size();
     mux::log_line(current_->in.account.address, std::format("call {}: {} relay server(s) from the homeserver", current_->id, one.servers.size()));
+    // As the user chose: the homeserver's relays, or -- none given, and the
+    // fallback allowed -- Matrix.org's STUN (Element's turn.matrix.org);
+    // straight between the ends, or through a relay only.
+    const auto& chosen = s_->kept->plugin_settings<kept>();
+    auto servers = one.servers;
+    if (servers.empty() && chosen.fallback_server) {
+      servers.push_back(mux::calls::ice_server{.kind = mux::calls::relay::stun{}, .host = "turn.matrix.org", .port = 3478});
+      mux::log_line(current_->in.account.address, std::format("call {}: no relay from the homeserver; turn.matrix.org asked", current_->id));
+    }
     try {
-      current_->media = std::make_unique<session>(one.servers, *s_->wake);
+      current_->media = std::make_unique<session>(servers, mux::calls::connect_choice{.relay_only = !chosen.peer_to_peer}, *s_->wake);
     } catch (const std::exception& failed) {
       this->signal(call_said_t{call_said::hangup{call_end::failed{}}});
       this->end(std::string("Call setup failed: ") + failed.what());

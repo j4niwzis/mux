@@ -22,6 +22,11 @@ struct turn_tcp {};
 struct turn_tls {};
 }  // namespace relay
 using relay_t = spl::variant<relay::stun, relay::turn_udp, relay::turn_tcp, relay::turn_tls>;
+// How a call may connect, as the user chose (Element's two switches):
+// straight between the two ends, or through a relay only.
+struct connect_choice {
+  bool relay_only = false;
+};
 struct ice_server {
   relay_t kind;
   std::string host;

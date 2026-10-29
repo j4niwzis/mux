@@ -25,14 +25,15 @@ struct said {
 
 inline void conversation(mux::model& into, const mux::account_id& account, std::string id, std::string name,
                          mux::conversation_kind_t kind, std::optional<std::string> topic, bool encrypted,
-                         std::int64_t unread, std::vector<said> lines) {
+                         std::int64_t unread, std::vector<said> lines, mux::room_part_t theirs = {}) {
   const mux::conversation_id where{account, id};
   into.apply(mux::change_t{mux::change::conversation_updated{.id = where,
                                                              .kind = kind,
                                                              .name = std::move(name),
                                                              .topic = std::move(topic),
                                                              .encrypted = encrypted,
-                                                             .unread = unread}});
+                                                             .unread = unread,
+                                                             .theirs = std::move(theirs)}});
   const auto now = std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now());
   auto at = now - std::chrono::minutes(3 * static_cast<int>(lines.size()));
   int n = 0;
@@ -57,8 +58,10 @@ struct maker {
     into.apply(mux::change_t{mux::change::connection_changed{account, mux::connection::online{}}});
   }
   void chat(const mux::account_id& account, std::string id, std::string name, mux::conversation_kind_t kind,
-            std::optional<std::string> topic, bool encrypted, std::int64_t unread, std::vector<said> lines) {
-    conversation(into, account, std::move(id), std::move(name), kind, std::move(topic), encrypted, unread, std::move(lines));
+            std::optional<std::string> topic, bool encrypted, std::int64_t unread, std::vector<said> lines,
+            mux::room_part_t theirs = {}) {
+    conversation(into, account, std::move(id), std::move(name), kind, std::move(topic), encrypted, unread, std::move(lines),
+                 std::move(theirs));
   }
   void members(const mux::account_id& account, std::string id, std::vector<mux::member> who) {
     into.apply(mux::change_t{mux::change::members_changed{{account, std::move(id)}, std::move(who)}});
@@ -76,7 +79,7 @@ struct states_taker {
   std::vector<mux::change::protocol_state_changed> took;
   void online(const mux::account_id&) {}
   void chat(const mux::account_id&, std::string, std::string, mux::conversation_kind_t, std::optional<std::string>, bool,
-            std::int64_t, std::vector<said>) {}
+            std::int64_t, std::vector<said>, mux::room_part_t = {}) {}
   void members(const mux::account_id&, std::string, std::vector<mux::member>) {}
   void is(const mux::account_id&, std::string, mux::availability_t) {}
   void state(const mux::account_id& account, mux::protocol_state_t now) { took.push_back({account, std::move(now)}); }

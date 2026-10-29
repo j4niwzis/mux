@@ -32,7 +32,10 @@ void demo(const state&, Maker& make) {
             {{"queen@wonderland.example", "Who has been painting my roses red?"},
              {"two@wonderland.example", "Not us, Your Majesty."},
              {"queen@wonderland.example", "Off with their heads!"},
-             {"king@wonderland.example", "My dear, let us have the trial first."}});
+             {"king@wonderland.example", "My dear, let us have the trial first."}},
+            // Joined, as Alice: a member who may write in it -- else the demo's
+            // room said she might not post.
+            room_part_t{muc_room{.nick = "Alice", .affiliation = "member", .role = "participant", .joined = true}});
   make.members(me, "croquet@rooms.wonderland.example",
                {{"queen@wonderland.example", "The Queen of Hearts", "owner"},
                 {"king@wonderland.example", "The King of Hearts", "admin"},

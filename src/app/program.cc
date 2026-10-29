@@ -200,7 +200,6 @@ struct app : kept_settings {
   void files_given(std::vector<std::string> paths, bool dropped) {
     if (plugins_took_files(paths, dropped))
       return;
-    if (manage.took_files(paths, dropped)) return;
     if (profile_files_given(paths, dropped)) return;
     outbox.files_given(std::move(paths), dropped);
   }
@@ -537,6 +536,10 @@ struct app : kept_settings {
   // nothing, where that plugin is not built. Where it is, its part is
   // offered the request first (route), and takes it.
   void apply(const request::typing&) {}
+  void apply(const request::open_manage&) {}
+  void apply(const request::manage_space&) {}
+  void apply(const request::manage_forum&) {}
+  void apply(const request::pick_room_avatar&) {}
   void apply(const request::toggle_emoji&) {}
   void apply(const request::toggle_thread_emoji&) {}
   void apply(const request::insert_emoji&) {}

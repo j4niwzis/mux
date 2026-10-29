@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui.proto.matrix:manage -- Cinny's room settings, expressed with the
+// mux.plugin.room_admin.ui:matrix -- Cinny's room settings, expressed with the
 // client's typed requests and skiff combinators. Reference: cinnyapp/cinny,
 // 8967c13878137841e49ee17184b689a6b4da334a, features/room-settings and
 // features/common-settings. The five pages keep the same responsibilities.
@@ -9,7 +9,7 @@
 // page's own (a Local), made again where the program settles it.
 module;
 #include "skiff/named.h"
-export module mux.ui.proto.matrix:manage;
+export module mux.plugin.room_admin.ui:matrix;
 
 import std;
 import splice;
@@ -33,9 +33,13 @@ import mux.proto.matrix.requests;
 import mux.proto.matrix.changes;
 import mux.logic.text;
 import mux.ui.base;
+import mux.plugin.room_settings.types;
+import mux.plugin.room_settings.ui;
+import mux.plugin.room_admin.types;
 
 export namespace mux::proto::matrix::manage_detail {
 using namespace ::mux::ui;
+using ::mux::plugins::room_settings::room_settings_facts;
 
 // ---- what the pages read --------------------------------------------------------
 using facts_t = std::optional<room_settings_facts>;
@@ -1069,47 +1073,30 @@ auto permissions_page(const auto& colours, const room_settings_facts&) {
 
 }  // namespace mux::proto::matrix::manage_detail
 
-// ---- the tabs: their titles, icons and pages ----------------------------------------
-export namespace mux::proto::matrix {
-inline ui::icon_t manage_avatar_icon(const state&, const ui::room_settings_facts& facts) {
-  return facts.encrypted ? ui::icon_t{ui::icon::lock{}} : ui::icon_t{ui::icon::none{}};
-}
-inline ui::room_manage_style manage_style(const state&, const ui::palette& original) { return {original, true, 222.0f}; }
-constexpr std::string_view manage_preferences_title(const state&) { return "Preferences"; }
-// A room avatar being sent: shown pending, the last error gone.
-inline void avatar_sending(manage_state& kept) {
-  kept.pending = true;
-  kept.error.clear();
-}
-}  // namespace mux::proto::matrix
+// ---- the tabs: their icons and pages --------------------------------------------------
 export namespace mux::proto::matrix::manage {
-constexpr std::string_view tab_title(room) { return "General"; }
-constexpr std::string_view tab_title(members) { return "Members"; }
-constexpr std::string_view tab_title(roles) { return "Permissions"; }
 inline ui::icon_t tab_icon(room) { return ui::icon::gear{}; }
 inline ui::icon_t tab_icon(members) { return ui::icon::person{}; }
 inline ui::icon_t tab_icon(roles) { return ui::icon::lock{}; }
-// What these pages may ask, whatever their trees: outside a release build
-// each is held erased (made in its own unit, manage_*.cc), so the dialog
-// that holds them is not made again for every change of a page.
-using manage_out = skiff::model::Types<request::manage_room, ui::request::open_url, ui::request::pick_room_avatar,
-                                       ui::request::copy_text,
-                                       ui::request::open_member_info>;
-using erased_page = skiff::compose::Erased<manage_out>;
-erased_page manage_page_erased(room, const ui::palette&, const ui::room_settings_facts&);
-erased_page manage_page_erased(members, const ui::palette&, const ui::room_settings_facts&);
-erased_page manage_page_erased(roles, const ui::palette&, const ui::room_settings_facts&);
 // Each tab's page.
-auto page_of(room, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::general_page(colours, facts); }
-auto page_of(members, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::members_page(colours, facts); }
-auto page_of(roles, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::permissions_page(colours, facts); }
+auto page_of(room, const auto& colours, const ::mux::plugins::room_settings::room_settings_facts& facts) { return manage_detail::general_page(colours, facts); }
+auto page_of(members, const auto& colours, const ::mux::plugins::room_settings::room_settings_facts& facts) { return manage_detail::members_page(colours, facts); }
+auto page_of(roles, const auto& colours, const ::mux::plugins::room_settings::room_settings_facts& facts) { return manage_detail::permissions_page(colours, facts); }
 template <class Tab>
-auto make_manage_page(Tab tab, const ui::palette& colours, const ui::room_settings_facts& facts)
+auto make_manage_page(Tab tab, const ui::palette& colours, const ::mux::plugins::room_settings::room_settings_facts& facts)
   requires requires { page_of(tab, colours, facts); }
 {
-  if constexpr (skiff::scene::kErasedWalks)
-    return manage_page_erased(tab, colours, facts);
-  else
-    return page_of(tab, colours, facts);
+  return page_of(tab, colours, facts);
 }
 }  // namespace mux::proto::matrix::manage
+
+export namespace mux::plugins::room_admin {
+// The dialog for a Matrix room, as Cinny's: a head over each page, and the
+// tabs a little wider.
+inline std::optional<room_settings::room_manage_style> admin_presented(matrix_admin, const ::mux::plugins::room_settings::room_settings_facts& facts,
+                                                                         const ui::palette& colours) {
+  if (!proto::matrix::manage::matrix_room(facts))
+    return std::nullopt;
+  return room_settings::room_manage_style{colours, true, 222.0f};
+}
+}  // namespace mux::plugins::room_admin

@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// mux.plugin.room_admin.app -- Written by CMake from app.cc.in: the room
+// admin plugin's part of the program, each protocol's glue turned on in it.
+export module mux.plugin.room_admin.app;
+
+import std;
+import mux.composition;
+import mux.core;
+import mux.app.services;
+import mux.plugin.room_admin.types;
+@ADMIN_IMPORTS@
+export namespace mux::plugins::room_admin {
+
+class part : @ADMIN_BASES@ {
+ public:
+  explicit part(app::services& shared) : @ADMIN_INITS@ {}
+@ADMIN_USINGS@};
+
+// Its part, among the program's (mux.app.program).
+inline part extend(::mux::contract::program_parts, type_tag<feature>, app::services& shared) { return part{shared}; }
+
+}  // namespace mux::plugins::room_admin

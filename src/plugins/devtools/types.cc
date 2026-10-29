@@ -9,6 +9,7 @@ import std;
 import splice;
 import mux.core;
 import mux.composition;
+import mux.plugin.room_settings.types;
 export import mux.plugin.devtools.changes;
 
 export namespace mux::plugins::devtools {
@@ -91,8 +92,9 @@ struct send_event {
 };
 
 consteval bool provides(contract::message_menu, type_tag<feature>) { return true; }
-consteval bool provides(contract::room_settings_tabs, type_tag<feature>) { return true; }
-constexpr composition::page_list<room_tab> room_tabs(contract::room_settings_tabs, type_tag<feature>) { return {}; }
+// Its tab of a room's settings (the room_settings plugin's).
+consteval bool provides(room_settings::contract::tabs, type_tag<feature>) { return true; }
+constexpr composition::page_list<room_tab> room_tabs(room_settings::contract::tabs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
 constexpr type_tag<shown> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }

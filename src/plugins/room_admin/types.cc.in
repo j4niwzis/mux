@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// mux.plugin.room_admin.types -- Written by CMake from types.cc.in: the
+// room admin plugin's types, with a realization for each protocol turned
+// on, and what it gives the room_settings plugin's contracts.
+export module mux.plugin.room_admin.types;
+
+import std;
+import mux.core;
+import mux.composition;
+import mux.plugin.room_settings.types;
+export import :feature;
+@ADMIN_IMPORTS@
+export namespace mux::plugins::room_admin {
+
+using realizations = realization_list<@ADMIN_REALIZATIONS@>;
+// Its tabs, what it keeps while a room's settings are open, and what it
+// fills as they open: each protocol's (contract::tabs, kept, opened).
+constexpr auto room_tabs(room_settings::contract::tabs, type_tag<feature>) { return tabs_of(realizations{}); }
+constexpr auto kept_parts(room_settings::contract::kept, type_tag<feature>) { return kept_of(realizations{}); }
+template <class Facts>
+void room_opened(room_settings::contract::opened, type_tag<feature>, Facts& facts, const conversation& chat) {
+  opened_by(realizations{}, facts, chat);
+}
+
+}  // namespace mux::plugins::room_admin

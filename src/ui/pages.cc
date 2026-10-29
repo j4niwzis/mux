@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui.base:pages -- What a protocol builds its own pages of, under the
-// window's settings and manage dialogs: a room's facts and tabs, their
-// headings and editors, a switch's row, a profile's editor. Below the
-// protocols' UI modules; room_settings and accounts, above them, hold the
-// protocols' pages these build.
+// mux.ui.base:pages -- What pages are built of, under the window's settings
+// and dialogs: headings, a switch's row, a chat's choices and notifications,
+// a profile's editor; the looks plugins' sections. Below the protocols' UI
+// modules and the plugins'. (A room's settings are the room_settings
+// plugin's.)
 module;
 #include "skiff/named.h"
 export module mux.ui.base:pages;
@@ -42,159 +42,7 @@ import :forms;
 
 export namespace mux::ui {
 
-// Which tabs a room's protocol has: a list of their types (manage_tabs,
-// beside its state in its points module) -- after the client's (General,
-// Notifications, Appearance) every room has. Each tab type has its title,
-// its icon and its page by overloads of its own (tab_title, tab_icon,
-// make_manage_page), found by ADL where the dialog is made. And what it
-// keeps while the settings are open (manage_parts). A protocol with none:
-// the defaults, no tabs and nothing kept.
-using proto::manage_tab_list;
-using proto::manage_part_list;
-using proto::no_manage_part;
-namespace manage_defaults {
-constexpr manage_tab_list<> manage_tabs(const auto&) { return {}; }
-constexpr manage_part_list<> manage_parts(const auto&) { return {}; }
-constexpr bool tab_visible(const auto&, const auto&) { return true; }
-}  // namespace manage_defaults
-template <class State>
-constexpr auto manage_tabs_of(const State& state) {
-  using manage_defaults::manage_tabs;
-  return manage_tabs(state);
-}
-template <class State>
-constexpr auto manage_parts_of(const State& state) {
-  using manage_defaults::manage_parts;
-  return manage_parts(state);
-}
-template <class... Tabs, class Tab>
-[[nodiscard]] constexpr bool lists(manage_tab_list<Tabs...>, type_tag<Tab>) {
-  struct all : type_tag<Tabs>... {};
-  return std::derived_from<all, type_tag<Tab>>;
-}
 
-// The client's tabs, every room's.
-namespace settings_tab {
-struct general {};        // the room's events, receipts, previews, typing, Home, leaving
-struct notifications {};
-struct looks {};
-constexpr std::string_view tab_title(general) { return "General"; }
-constexpr std::string_view tab_title(notifications) { return "Notifications"; }
-constexpr std::string_view tab_title(looks) { return "Appearance"; }
-inline icon_t tab_icon(general) { return icon::gear{}; }
-inline icon_t tab_icon(notifications) { return icon::bell{}; }
-inline icon_t tab_icon(looks) { return icon::eye{}; }
-}  // namespace settings_tab
-
-template <class Tabs>
-struct tab_types;
-template <class... Tabs>
-struct tab_types<manage_tab_list<Tabs...>> {
-  using type = type_list<Tabs...>;
-};
-template <class... Lists>
-struct manage_part_union;
-template <class... Ps>
-struct manage_part_union<manage_part_list<Ps...>> {
-  using type = spl::variant<no_manage_part, Ps...>;
-};
-template <class... As, class... Bs, class... Rest>
-struct manage_part_union<manage_part_list<As...>, manage_part_list<Bs...>, Rest...>
-    : manage_part_union<manage_part_list<As..., Bs...>, Rest...> {};
-// The plugins' tabs (contract::room_settings_tabs), as their room_tabs list them.
-template <class List>
-struct plugin_tab_types;
-template <class... Tabs>
-struct plugin_tab_types<composition::page_list<Tabs...>> {
-  using type = type_list<Tabs...>;
-};
-template <class>
-struct plugin_room_tabs;
-template <class... Features>
-struct plugin_room_tabs<plugin_list<Features...>> {
-  using type = typename joined<type_list<>,
-      typename plugin_tab_types<decltype(room_tabs(contract::room_settings_tabs{}, type_tag<Features>{}))>::type...>::type;
-};
-using plugin_room_tabs_t = typename plugin_room_tabs<composition::providers<contract::room_settings_tabs, enabled_plugins>>::type;
-template <class>
-struct manage_lists;
-template <class... Tags>
-struct manage_lists<protocol_list<Tags...>> {
-  // Every tab a room can have: the client's, each protocol's, the plugins'.
-  using protocol_tabs = typename joined<type_list<>, typename tab_types<decltype(manage_tabs_of(state_of<Tags>{}))>::type...>::type;
-  using tabs = typename variant_of_types<
-      typename joined<type_list<settings_tab::general, settings_tab::notifications, settings_tab::looks>, protocol_tabs,
-                      plugin_room_tabs_t>::type>::type;
-  using parts = typename manage_part_union<manage_part_list<>, decltype(manage_parts_of(state_of<Tags>{}))...>::type;
-};
-// A tab of a room's settings, and what its protocol keeps while they are open.
-using manage_tab_t = typename manage_lists<protocols>::tabs;
-using manage_part_t = typename manage_lists<protocols>::parts;
-
-struct room_settings_facts {
-  std::string id;  // the room's ID
-  std::string name;
-  std::string topic;
-  std::optional<std::string> avatar;
-  std::optional<std::string> alias;
-  std::vector<std::string> other_aliases;
-  bool encrypted = false;
-  bool group = true;
-  bool leavable = true;
-  // Its protocol's part (Matrix: its rules and levels), for its pages.
-  room_part_t theirs;
-  // Its notifications, as chosen for it (muted: off).
-  config::notify_choices notify;
-  // Which of its room events it shows, as chosen for it: none chosen is as
-  // its account's.
-  std::optional<bool> events_all;
-  // Whether it shows link previews, as chosen for it.
-  std::optional<bool> typing;  // others told one is typing: its own choice
-  std::optional<bool> previews;
-  std::optional<bool> previews_direct;  // where its previews come from: its own choice
-  // Whether it shows who has read up to where, as chosen for it.
-  std::optional<bool> receipts;
-  // How far a jump's search pages back in it, as chosen for it.
-  std::optional<std::int64_t> jump_search;
-  std::optional<config::room_event_kinds> event_kinds;
-  // The user's own level, as the protocol fills it (manage_facts).
-  std::int64_t mine = 0;
-  // A room by its ID and name.
-  struct named_room {
-    std::string id;
-    std::string name;
-  };
-  // The spaces it is in, as theirs list it: what a rule for their members
-  // names.
-  std::vector<named_room> parents;
-  // A space's: the rooms and spaces it holds, and the account's others --
-  // those that may be added to it.
-  std::vector<named_room> children;
-  std::vector<named_room> addable;
-  std::vector<member> members;
-  // A space: whether it holds spaces, and whether it is shown as a forum.
-  bool space = false;
-  bool holds_spaces = false;
-  bool forum = false;
-  bool hidden_from_home = false;  // a space whose rooms Home leaves out
-  // The protocol the room is of: which tabs it has besides the client's own.
-  protocol_t speaks;
-  // Those whose level is not the default: Element's privileged users.
-  struct person {
-    std::string id;
-    std::string name;
-    std::int64_t level = 0;
-  };
-  std::vector<person> privileged;
-  // The chat itself, its own choices kept by it in the model.
-  conversation_id chat{};
-  // What the dialog shows, as the program says: the tab up; on a narrow
-  // window, whether the tab list is up in place of the page; and what the
-  // room's protocol keeps while it is open.
-  manage_tab_t tab = settings_tab::general{};
-  bool narrow = false, navigation = false;
-  manage_part_t manage;
-};
 // An account's pages, as the program shows them: the account as saved and
 // its protocol's state; the page up; what its protocol keeps while they are
 // open; and its own profile and presence as the model has them -- with what
@@ -291,14 +139,6 @@ using first_account_part_t = typename first_account_part<decltype(proto::account
 // colours, facts), as its UI module overloads it.
 template <class Page>
 using account_page_view_t = decltype(page_view(Page{}, std::declval<const palette&>(), std::declval<const account_page_facts&>()));
-namespace request {
-// A tab of the settings picked; and their ← (an editor open closed first,
-// then the page, to the tab list on a narrow window).
-struct manage_tab {
-  manage_tab_t tab;
-};
-struct manage_back {};
-}  // namespace request
 
 
 // Element's names for levels: 100 Admin, 50 Moderator, the default Default.
@@ -317,25 +157,6 @@ template <class Rule, class Variant>
   return spl::visit(spl::overloaded{[](const Rule&) { return true; }, [](const auto&) { return false; }}, now);
 }
 
-namespace manage_defaults {
-constexpr settings_tab::general manage_initial_tab(const auto&) { return {}; }
-constexpr std::string_view manage_preferences_title(const auto&) { return "General"; }
-// The tab the client's General is shown in: its own, where the protocol's
-// tabs have no General of their own.
-constexpr settings_tab::general manage_general_host(const auto&) { return {}; }
-}
-template <class State> constexpr auto initial_manage_tab(const State& state) {
-  using manage_defaults::manage_initial_tab;
-  return manage_initial_tab(state);
-}
-template <class State> constexpr auto general_host_of(const State& state) {
-  using manage_defaults::manage_general_host;
-  return manage_general_host(state);
-}
-template <class State> constexpr auto preferences_title(const State& state) {
-  using manage_defaults::manage_preferences_title;
-  return manage_preferences_title(state);
-}
 
 // A heading over a tab, and over a part of one, as Element's.
 inline nodes::Text tab_heading(const palette& colours, std::string text) {
@@ -355,12 +176,17 @@ inline nodes::Text explained(const palette& colours, std::string text) {
   return out;
 }
 
+// A room by its ID and name.
+struct named_room {
+  std::string id;
+  std::string name;
+};
 // Leaving a space, as Element's LeaveSpaceDialog: the rooms of it one is in
 // left with it -- none of them, all, or those chosen, each by a switch.
 struct leave_space_facts {
   conversation_id space;
   std::string name;
-  std::vector<room_settings_facts::named_room> rooms;  // its rooms one is in
+  std::vector<named_room> rooms;  // its rooms one is in
 };
 namespace leave_choice {
 struct none { friend bool operator==(none, none) = default; };
@@ -398,7 +224,7 @@ struct leave_events {
     return skiff::model::Up{request::leave_space{facts.space, std::move(leaving)}};
   }
 };
-inline auto leave_room_row(const palette& colours, const room_settings_facts::named_room& room) {
+inline auto leave_room_row(const palette& colours, const named_room& room) {
   return SKIFF_NAMED(leave_room_row, skiff::compose::row(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
       skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(room.name, 14.0f, colours.text))),
       // On while the room is among those to leave; pressed, flipped there.
@@ -511,91 +337,8 @@ inline auto space_choice_row(const palette& colours, std::string label, bool all
       c::bound<skiff::model::Field<Member>>(c::styled({.alignSelf = scene::align::kMiddle},
                                                     widgets::ToggleField<bool>(colours.widgets)))));
 }
-inline auto room_general_page(const palette& colours, const room_settings_facts& facts, bool has_page_header = false) {
-  namespace c = skiff::compose;
-  using choices = config::chat_choices;
-  return SKIFF_NAMED(room_general_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
-                                .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
-      c::visible(!has_page_header, tab_heading(colours, spl::visit([](auto tag) { return std::string(preferences_title(state_of<decltype(tag)>{})); }, facts.speaks))),
-      c::visible(!proto::room_event_kinds_of(state_before(facts.speaks)).empty(),
-          explained(colours, "Room events shown in this room, for you: As above follows the inherited settings.")),
-      chat_settings_view(colours, facts.chat),
-      c::visible(facts.space, c::scoped<choices>(c::handlers(),
-          c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              part_heading(colours, "Shown as"),
-              space_choice_row<&choices::forum>(colours, "One chat, its rooms as topics", !facts.holds_spaces),
-              explained(colours, facts.holds_spaces ? "A space that holds spaces is shown as a space."
-                  : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
-              c::shown_for<skiff::model::Field<&choices::forum>>([](bool forum) { return !forum; },
-                  space_choice_row<&choices::hidden_from_home>(colours, "Its rooms not in Home"))), facts.chat)),
-      c::visible(facts.leavable, part_heading(colours, "Leave room")),
-      c::styled({.width = 130.0f, .height = 32.0f},
-          c::visible(facts.leavable, button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {})))));
-}
-using room_general_page_t = decltype(room_general_page(std::declval<const palette&>(), std::declval<const room_settings_facts&>()));
 
 
-struct room_manage_style {
-  palette colours;
-  bool page_header = false;
-  float navigation_width = 220.0f;
-};
-namespace manage_defaults {
-inline room_manage_style manage_style(const auto&, const palette& colours) { return {colours}; }
-inline bool manage_close_editor(const auto&, auto&) { return false; }
-inline bool manage_editor_header(const auto&, const auto&) { return false; }
-inline icon_t manage_avatar_icon(const auto&, const room_settings_facts&) { return icon::none{}; }
-}
-// What a protocol keeps while the settings are open: its first part type,
-// else none.
-template <class List>
-struct first_manage_part {
-  using type = no_manage_part;
-};
-template <class First, class... Rest>
-struct first_manage_part<manage_part_list<First, Rest...>> {
-  using type = First;
-};
-template <class Tag>
-using first_manage_part_t = typename first_manage_part<decltype(manage_parts_of(state_of<Tag>{}))>::type;
-namespace manage_defaults {
-constexpr void avatar_sending(auto&) {}
-}  // namespace manage_defaults
-// A room avatar being sent: what the protocol keeps shows it pending.
-inline void manage_avatar_sending(room_settings_facts& facts) {
-  spl::visit([](auto& part) {
-    using manage_defaults::avatar_sending;
-    avatar_sending(part);
-  }, facts.manage);
-}
-// What the tab up closes first, by its protocol: an editor open on it.
-// Whether it did.
-inline bool close_manage_editor(room_settings_facts& facts) {
-  return spl::visit([&](const auto& tab) {
-    return spl::visit([&](auto& part) {
-      using manage_defaults::manage_close_editor;
-      return manage_close_editor(tab, part);
-    }, facts.manage);
-  }, facts.tab);
-}
-// Whether the tab's page shows an editor, with a way back over it.
-[[nodiscard]] inline bool manage_editor_up(const room_settings_facts& facts) {
-  return spl::visit([&](const auto& tab) {
-    return spl::visit([&](const auto& part) {
-      using manage_defaults::manage_editor_header;
-      return manage_editor_header(tab, part);
-    }, facts.manage);
-  }, facts.tab);
-}
-template <class State> auto manage_style_of(const State& state, const palette& colours) {
-  using manage_defaults::manage_style;
-  return manage_style(state, colours);
-}
-
-template <class State> auto manage_avatar_icon_of(const State& state, const room_settings_facts& facts) {
-  using manage_defaults::manage_avatar_icon;
-  return manage_avatar_icon(state, facts);
-}
 
 // A setting's row with a switch at its end: the text taking the room; the
 // switch flips what `act` answers.
@@ -796,4 +539,23 @@ inline auto member_row(const palette& colours, const member& one, std::string ho
               .text = skia::colorSetARGB(255, 190, 170, 250), .size = 12.0f, .height = 20.0f, .padX = 8.0f})))), name));
 }
 using member_row_t = decltype(member_row(std::declval<const palette&>(), std::declval<const member&>(), ""));
+// The plugins' sections on the pages a chat's looks are chosen on
+// (contract::level_sections), for the page's level, in their order -- the
+// background and bubbles pickers, for one.
+template <class List>
+struct level_section_list;
+template <class... Features>
+struct level_section_list<plugin_list<Features...>> {
+  template <class Feature>
+  static auto section_of(const palette& colours, choice_level_t level) -> decltype(extend(contract::level_sections{}, type_tag<Feature>{}, colours, level)) {
+    static_assert(requires { extend(contract::level_sections{}, type_tag<Feature>{}, colours, level); },
+                  composition::broken<contract::level_sections, Feature>());
+    return extend(contract::level_sections{}, type_tag<Feature>{}, colours, level);
+  }
+  static auto made(const palette& colours, choice_level_t level) {
+    return skiff::compose::column(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), section_of<Features>(colours, level)...);
+  }
+};
+using level_section_plugins = level_section_list<composition::providers<contract::level_sections, enabled_plugins>>;
+
 }  // namespace mux::ui

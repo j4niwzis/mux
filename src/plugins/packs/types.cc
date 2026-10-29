@@ -8,6 +8,7 @@ export module mux.plugin.packs.types;
 import std;
 import mux.core;
 import mux.composition;
+import mux.plugin.room_settings.types;
 
 export namespace mux::plugins::packs {
 
@@ -84,8 +85,9 @@ struct pack_delete {};
 
 consteval bool provides(contract::settings_links, type_tag<feature>) { return true; }
 consteval bool provides(contract::account_rows, type_tag<feature>) { return true; }
-consteval bool provides(contract::room_settings_tabs, type_tag<feature>) { return true; }
-constexpr composition::page_list<room_tab> room_tabs(contract::room_settings_tabs, type_tag<feature>) { return {}; }
+// Its tab of a room's settings (the room_settings plugin's).
+consteval bool provides(room_settings::contract::tabs, type_tag<feature>) { return true; }
+constexpr composition::page_list<room_tab> room_tabs(room_settings::contract::tabs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
 constexpr type_tag<shown> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }

@@ -3,6 +3,5 @@
 export module mux.ui.proto.matrix;
 
 export import :form;
-export import :manage;
 export import :sessions;
 export import :tools;

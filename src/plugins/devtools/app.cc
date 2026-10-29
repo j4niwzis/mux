@@ -15,6 +15,7 @@ import mux.ui;
 import mux.app.network;
 import mux.app.services;
 import mux.plugin.devtools.types;
+import mux.plugin.room_settings.ui;
 import mux.plugin.devtools.changes;
 import mux.plugin.devtools.ui;
 import mux.plugin.devtools.matrix;
@@ -36,7 +37,7 @@ struct part {
       return open->in;
     const auto chosen = s_->managed();
     if (chosen)
-      ui::show<ui::room_settings_facts>(*s_->showing, std::nullopt);
+      ui::show<room_settings::room_settings_facts>(*s_->showing, std::nullopt);
     return chosen;
   }
 

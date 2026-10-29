@@ -257,8 +257,6 @@ constexpr bool native_forum(const auto&, const conversation&) { return false; }
 // No chat continued in another, nor continuing one.
 inline std::optional<std::string> successor_of(const auto&, const conversation&) { return std::nullopt; }
 inline std::optional<std::string> predecessor_of(const auto&, const conversation&) { return std::nullopt; }
-// Nothing of its own in the Manage dialog's facts.
-inline void manage_facts(const auto&, const conversation&, auto&) {}
 // Anything one may do in a chat; nothing to anyone in it.
 inline part::chat_rights chat_rights(const auto&, const conversation&) { return {}; }
 inline part::person_rights person_rights(const auto&, const conversation&, std::string_view) { return {}; }
@@ -506,17 +504,6 @@ inline constexpr struct predecessor_of_t {
     }, state);
   }
 } predecessor_of{};
-// The Manage dialog's facts, as a protocol fills its part of them: nothing
-// by default.
-inline constexpr struct manage_facts_t {
-  template <class State, class Facts>
-  void operator()(const State& state, const conversation& chat, Facts& facts) const {
-    spl::visit([&](const auto& now) {
-      using defaults::manage_facts;
-      manage_facts(now, chat, facts);
-    }, state);
-  }
-} manage_facts{};
 // The layout a protocol's chats show their messages in.
 inline constexpr struct message_style_t {
   template <class State>

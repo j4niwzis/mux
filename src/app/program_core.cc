@@ -521,7 +521,6 @@ void app::before_frame() {
   }
   chat_view.show();
   chat_list.show();
-  manage.show();
   pictures.asked_tick();
   // Whether Esc lets go of something up: a dialog, a layer, the drawer.
   if (const mux::ui::overlay_shown up{mux::ui::escape_in(showing, mux::ui::escape_order{}).has_value() || showing.look<mux::ui::drawer_shown>()->out};
@@ -592,7 +591,7 @@ void app::before_frame() {
   const auto style = reads().style_of(shared.listed(), shared.chosen());
   // Text fields save as they are edited; apply when the editor closes or
   // its Apply button is pressed, so rebuilding cannot interrupt typing.
-  if (!this->page_over_chats() && !showing.look<std::optional<mux::ui::room_settings_facts>>()->has_value() &&
+  if (!this->page_over_chats() && !shared.managing &&
       (!active_style || *active_style != style)) {
     active_style = style;
     skiff::scene::forgetStyles();

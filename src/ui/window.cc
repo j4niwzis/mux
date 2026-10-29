@@ -25,7 +25,6 @@ import mux.plugins.ui.top;
 import mux.ui.proto;
 import :header;
 import :info;
-import :room_settings;
 import mux.ui.messages;
 import mux.ui.lists;
 import :conversations;
@@ -289,7 +288,6 @@ struct shown_root {
   // Which field the program gives the keys to.
   skiff::model::Tracked<keys_asked> keys;
   skiff::model::Tracked<local_seal> seal;
-  skiff::model::Tracked<std::optional<room_settings_facts>> manage;
   // The chosen account's page, as the program shows it: what its pages read.
   skiff::model::Tracked<std::optional<account_page_facts>> account_page;
   // An account's form, as the program says: what it is made from, and says.
@@ -549,7 +547,7 @@ struct plugin_layer_escapes<plugin_list<Features...>> {
 };
 template <class... Features, class... Tools, class... Layers>
 consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>, type_list<Layers...>) {
-  return type_tag<std::variant<::mux::ui::request::close_menu, ::mux::ui::request::close_send_box, ::mux::ui::request::close_manage, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
+  return type_tag<std::variant<::mux::ui::request::close_menu, ::mux::ui::request::close_send_box, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
                                decltype(closing_of(std::type_identity<Tools>{}))...,
                                ::mux::ui::request::close_shown<Layers>...>>{};
@@ -559,7 +557,6 @@ consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>, 
 // window's own with none here asks for close_shown of its facts, which no
 // handler answers: the build says so (it is not in the answers).
 inline ::mux::ui::request::close_send_box closing_of(std::type_identity<send_facts>) { return {}; }
-inline ::mux::ui::request::close_manage closing_of(std::type_identity<room_settings_facts>) { return {}; }
 inline ::mux::ui::request::close_leave_space closing_of(std::type_identity<leave_space_facts>) { return {}; }
 inline ::mux::ui::request::close_link closing_of(std::type_identity<link_facts>) { return {}; }
 inline ::mux::ui::request::close_person_info closing_of(std::type_identity<person_shown>) { return {}; }
@@ -596,7 +593,7 @@ struct plugin_dialog_facts<plugin_list<Features...>> {
 };
 using escape_order = typename joined<
     type_list<settings_facts, notice_facts, person_shown>, typename plugin_dialog_facts<dialog_plugins>::type,
-    type_list<link_facts, leave_space_facts, room_settings_facts>,
+    type_list<link_facts, leave_space_facts>,
     tool_facts_list, type_list<send_facts, passphrase_facts, menu_facts, text_menu_facts>,
     typename plugin_layer_escapes<layer_plugins>::type>::type;
 template <class Model, class... Facts>
@@ -708,7 +705,6 @@ inline auto window_body(const ui_needs& n) {
           plugin_dialogs<dialog_plugins>::made(n),
           shown_made<link_box_t, link_facts>(n),
           shown_made<leave_space_box_t, leave_space_facts>(n),
-          shown_made<room_settings_t, room_settings_facts>(n),
           tool_dialogs(n, tool_facts_list{}),
           std::move(sending),
           // A passphrase asked for: at the start, where local data is

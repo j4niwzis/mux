@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// mux.plugin.room_admin.ui -- Written by CMake from ui.cc.in: the room admin
+// plugin's pages, each protocol's turned on, and how the dialog is drawn
+// for its rooms.
+export module mux.plugin.room_admin.ui;
+
+export import :common;
+@ADMIN_IMPORTS@

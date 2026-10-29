@@ -42,8 +42,8 @@ struct rejoin_muc { std::string nick, password; };
 struct muc_privilege { std::string user, affiliation, role; };
 struct destroy_muc { std::string reason; };
 }
-constexpr request_list<request::refresh_muc, request::configure_muc, request::muc_identity,
-    request::muc_privilege, request::destroy_muc, request::rejoin_muc, request::registration_typed> requests_of(const state&) { return {}; }
+// (A group chat's admin requests are the room_admin plugin's part's.)
+constexpr request_list<request::registration_typed> requests_of(const state&) { return {}; }
 inline const muc_room& muc_of(const conversation& chat) {
   static const muc_room empty;
   const auto* room = chat.theirs.template get_if<muc_room>();
@@ -100,12 +100,5 @@ inline std::string local_part(const state&, std::string_view address) {
 // An xmpp: URI (RFC 5122).
 inline std::optional<std::string> share_link(const state&, std::string_view address) { return "xmpp:" + std::string(address); }
 
-// A room's settings (Manage): its tabs beside the client's.
-namespace manage {
-struct room {};
-struct configuration {};
-struct roles {};
-}  // namespace manage
-constexpr manage_tab_list<manage::room, manage::configuration, manage::roles> manage_tabs(const state&) { return {}; }
 
 }  // namespace mux::proto::xmpp

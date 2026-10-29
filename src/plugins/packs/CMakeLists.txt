@@ -9,4 +9,5 @@ mux_plugin(packs ORDER 50
   TYPES   types.cc
   MATRIX  matrix.cc
   UI      ui.cc
-  APP     app.cc)
+  APP     app.cc
+  REQUIRES room_settings)

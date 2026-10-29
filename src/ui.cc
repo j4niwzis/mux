@@ -16,7 +16,6 @@ export import mux.ui.messages;
 export import mux.ui.lists;
 export import :header;
 export import :info;
-export import :room_settings;
 export import :conversations;
 export import :add_account;
 export import :account_forms;

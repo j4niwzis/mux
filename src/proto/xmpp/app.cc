@@ -15,19 +15,6 @@ import mux.ui;
 import mux.proto.xmpp;
 import mux.app.network;
 
-namespace mux::proto::xmpp::app_detail {
-// The room the settings show, its configuration changed as `change` says,
-// and the page shown again from it.
-template <class App, class Change>
-void change_room(App& app, const mux::conversation_id& in, Change change) {
-  const auto& open = *app.showing.template look<std::optional<mux::ui::room_settings_facts>>();
-  if (!open || open->chat != in)
-    return;
-  auto now = *open;
-  spl::visit(spl::overloaded{[&](muc_room& room) { change(room); }, [](auto&) {}}, now.theirs);
-  mux::ui::show(app.showing, std::optional(std::move(now)));
-}
-}  // namespace mux::proto::xmpp::app_detail
 
 export namespace mux::proto::xmpp {
 
@@ -55,54 +42,10 @@ void program_told(App& app, const registered& made) {
   });
 }
 
-template <class App>
-void program_told(App& app, const muc_settings_loaded& loaded) {
-  const auto chosen = app.shared.managed();
-  if (!chosen || chosen->account != loaded.account || chosen->id != loaded.room) return;
-  if (const auto& open = *app.showing.template look<std::optional<mux::ui::room_settings_facts>>()) {
-    auto now = *open;
-    now.theirs = loaded.settings;
-    mux::ui::show(app.showing, std::optional(std::move(now)));
-  }
-}
-template <class App>
-void program_told(App& app, const muc_configuration_failed& failed) {
-  const auto chosen = app.shared.managed();
-  if (!chosen || chosen->account != failed.account || chosen->id != failed.room) return;
-  // The save done with: what the server said, beside the fields as they
-  // were sent.
-  app_detail::change_room(app, *chosen, [&](muc_room& room) {
-    room.saving = false;
-    room.failure = failed.reason;
-  });
-}
-template <class App, class Request>
-void muc_request(App& app, const Request& one) {
-  const auto chosen = app.shared.managed();
-  if (!chosen || app.shared.demo()) return;
-  app.net->on_account_of(*chosen, [room = chosen->id, one](auto& account)
-      -> decltype(void(account.change_muc(room, one))) { account.change_muc(room, one); });
-}
 }  // namespace mux::proto::xmpp
 
 export namespace mux::proto::xmpp::request {
 
-template <class App> void program_asked(App& app, const refresh_muc& one) { muc_request(app, one); }
-// A configuration saved: on its way, the fields as sent kept with the room
-// until the server answers -- loaded again, or what was wrong.
-template <class App> void program_asked(App& app, const configure_muc& one) {
-  muc_request(app, one);
-  if (const auto chosen = app.shared.managed())
-    app_detail::change_room(app, *chosen, [&](muc_room& room) {
-      room.saving = true;
-      room.failure.reset();
-      room.fields = one.fields;
-    });
-}
-template <class App> void program_asked(App& app, const muc_identity& one) { muc_request(app, one); }
-template <class App> void program_asked(App& app, const muc_privilege& one) { muc_request(app, one); }
-template <class App> void program_asked(App& app, const destroy_muc& one) { muc_request(app, one); }
-template <class App> void program_asked(App& app, const rejoin_muc& one) { muc_request(app, one); }
 // One of the fields it asked, typed into: the answer kept beside the form.
 template <class App>
 void program_asked(App& app, const registration_typed& typed) {

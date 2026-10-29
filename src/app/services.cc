@@ -97,6 +97,8 @@ struct services {
   // The emoji panel to be put away -- a message sent from under it: by its
   // part (a plugin's), at the next frame.
   bool emoji_close_due = false;
+  // The chat a room's settings are open for (the room_settings plugin's).
+  std::optional<mux::conversation_id> managing;
   // The chat's list as the jumps part has it -- where a jump goes, and the
   // messages the reader sees, by the rows at the view's top and bottom --
   // read by the other parts; and what they ask of it: a message brought
@@ -362,8 +364,8 @@ struct services {
   // The chat Manage is for -- a space, where its settings are open: what is
   // chosen there goes to it -- else the chat chosen.
   [[nodiscard]] std::optional<mux::conversation_id> managed() const {
-    if (const auto& open = *showing->look<std::optional<mux::ui::room_settings_facts>>())
-      return open->chat;
+    if (managing)
+      return managing;
     return this->chosen();
   }
   // Features belong to the selected account. An unsupported feature never

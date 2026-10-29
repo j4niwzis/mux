@@ -7,4 +7,5 @@ mux_plugin(devtools ORDER 60
   TYPES   types.cc
   MATRIX  matrix.cc
   UI      ui.cc
-  APP     app.cc)
+  APP     app.cc
+  REQUIRES room_settings)

@@ -819,7 +819,6 @@ struct selection_taken {
 };
 struct open_manage {};
 struct pick_room_avatar { conversation_id room; };
-struct close_manage {};
 struct room_act {
   mux::room_action_t action;
 };

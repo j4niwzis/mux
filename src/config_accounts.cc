@@ -159,13 +159,6 @@ struct decrypt {
   return std::nullopt;
 }
 
-// Its own choice, if it made one; else as every account's.
-[[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {
-  return one.shared.send_typing;
-}
-[[nodiscard]] inline std::optional<bool>& send_typing_in(account_t& one) {
-  return one.shared.send_typing;
-}
 // Whether the account's chats show their room events: its own choice, if
 // it made one.
 [[nodiscard]] inline const std::optional<std::int64_t>& jump_search_of(const account_t& one) {
@@ -173,19 +166,6 @@ struct decrypt {
 }
 [[nodiscard]] inline std::optional<std::int64_t>& jump_search_in(account_t& one) {
   return one.shared.jump_search;
-}
-[[nodiscard]] inline const std::optional<bool>& link_previews_of(const account_t& one) {
-  return one.shared.link_previews;
-}
-[[nodiscard]] inline std::optional<bool>& link_previews_in(account_t& one) {
-  return one.shared.link_previews;
-}
-// Whether its chats' link previews come from the sites themselves.
-[[nodiscard]] inline const std::optional<bool>& previews_direct_of(const account_t& one) {
-  return one.shared.previews_direct;
-}
-[[nodiscard]] inline std::optional<bool>& previews_direct_in(account_t& one) {
-  return one.shared.previews_direct;
 }
 [[nodiscard]] inline const std::optional<bool>& room_events_of(const account_t& one) {
   return one.shared.room_events;

@@ -18,9 +18,6 @@ struct room_events_choice {
   std::string conversation;  // the chat's id in it
   std::optional<bool> show;  // all of them
   std::optional<room_event_kinds> kinds;  // each kind
-  std::optional<bool> previews;  // a card for a message's first link
-  std::optional<bool> previews_direct;  // fetched from the site itself, not the server
-  std::optional<bool> typing;    // others told one is typing
   std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
   style_settings style;
   friend bool operator==(const room_events_choice&, const room_events_choice&) = default;
@@ -135,9 +132,6 @@ struct chat_choices {
   bool muted = false;
   std::optional<bool> room_events;
   std::optional<room_event_kinds> room_event_kinds;
-  std::optional<bool> previews;
-  std::optional<bool> previews_direct;
-  std::optional<bool> typing;
   std::optional<std::int64_t> jump_search;
   notify_choices notify;
   friend bool operator==(const chat_choices&, const chat_choices&) = default;
@@ -181,27 +175,11 @@ struct history_settings {
   // events nothing here reads -- shown as lines of their own, or not. Kept
   // either way; an account's choice, and a room's own, come first.
   bool show_room_events = true;
-  // Who has read up to where, as Element shows it: small faces under the
-  // message each person read up to. Off unless chosen.
-  // A card under a message for its first link, fetched through the
-  // account's server. On unless turned off.
-  bool link_previews = true;
-  // Link previews fetched from the site itself, through the account's proxy,
-  // instead of through its server: off -- the site then sees where
-  // the request comes from.
-  // Optional, as every field added to a kept file after it was first
-  // written: knot requires the others, and a file saved before this one
-  // came would no longer be read. Unset: off.
-  std::optional<bool> previews_direct;
   // How many events a search for a message jumped to (a reply's, a link's)
   // pages back through before it gives up; 0 for no limit.
   std::int64_t jump_search = 5000;
   // And each kind of them, where chosen apart.
   std::optional<room_event_kinds> room_event_kinds;
-  // Whether others are told one is typing (m.typing, XEP-0085's chat
-  // states) -- never what: as every account's, until chosen there or in a
-  // chat or its space.
-  std::optional<bool> send_typing;  // unset: sent (and optional, as previews_direct)
   friend bool operator==(const history_settings&, const history_settings&) = default;
 };
 consteval auto json_schema(knot::type<history_settings>) { return knot::schema<history_settings>(); }

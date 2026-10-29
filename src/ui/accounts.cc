@@ -277,14 +277,6 @@ inline auto account_editor_view(const ui_needs& n, const std::string& address) {
       account_rows_of(composition::providers<contract::account_rows, enabled_plugins>{}, colours, address)));
 }
 
-// Its typing, as every account's until chosen here.
-inline auto account_typing_view(const palette& colours, std::string address) {
-  return SKIFF_NAMED(account_typing_view, skiff::compose::scoped<config::account_t>(
-      skiff::compose::handlers(),
-      skiff::compose::bound<skiff::model::Field<&config::account_shared::send_typing>>(
-          show_hide_field<typing_setting, std::optional<bool>, skiff::model::Field<&config::account_shared::send_typing>>(colours, choice_level::account{})),
-      std::move(address)));
-}
 // Privacy: whether it sends read receipts, and tells others one is typing;
 // and, where its protocol can (Matrix's), the mentions read shared with its
 // other sessions -- sealed there, where they are shared.
@@ -295,9 +287,8 @@ inline auto account_privacy_view(const palette& colours, const std::string& addr
       section_title(colours, "PRIVACY"),
       account_switch<sends<request::flip_account_receipts>>(colours, "Send read receipts",
           [](const config::account_t& one) { return config::read_receipts_of(one); }, always),
-      account_typing_view(colours, address),
       c::styled({.fillX = true}, wrapped(note_text(colours, "Off, the people you talk to through this account are not told when you have "
-                                                            "read their messages, or that you are typing. Theirs are still shown, and "
+                                                            "read their messages. Theirs are still shown, and "
                                                             "receipts are still kept here."))),
       c::shown_for<page_read>(mentions, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           account_switch<sends<request::flip_account_mentions_shared>>(colours, "Sync read mentions between sessions",
@@ -347,10 +338,6 @@ inline auto account_chats_view(const palette& colours, std::string address) {
       skiff::compose::column(
           skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           event_kinds_field<shared>(colours, level, proto::room_event_kinds_of(state_before(protocol_of(address)))),
-          bound<skiff::model::Field<&shared::link_previews>>(show_hide_field<link_previews_setting, std::optional<bool>, skiff::model::Field<&shared::link_previews>>(colours, level)),
-          skiff::compose::visible(proto::offers(state_before(protocol_of(address)), proto::feature::server_previews{}),
-              bound<skiff::model::Field<&shared::previews_direct>>(
-                  show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&shared::previews_direct>>(colours, level))),
           bound<skiff::model::Field<&shared::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&shared::jump_search>>(colours, level))),
       std::move(address)),
     std::move(rows)));

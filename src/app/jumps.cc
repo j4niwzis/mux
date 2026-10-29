@@ -537,7 +537,7 @@ class jumps_part {
       now.aim = aim_;
       now.filter = this->filter_of(*chat);
       now.receipts = s_->kept->flags_of(*in).receipts.value_or(false);
-      now.previews = reads.previews_shown(*in) && !chat->encrypted;
+      now.previews = s_->kept->flags_of(*in).previews.value_or(false) && !chat->encrypted;
       // The program's model, as it is now: rooms found, previews fetched.
       needs_.now = s_->model;
       now.needs = &needs_;

@@ -369,7 +369,7 @@ class pictures_part {
             // Never for an encrypted room: the preview is fetched through the
             // homeserver (/preview_url), which would be handed every link
             // said in it -- as Element does not by default.
-            if (const auto link = !s_->kept->reads().previews_shown(one.id) || one.encrypted
+            if (const auto link = !s_->kept->flags_of(one.id).previews.value_or(false) || one.encrypted
                                       ? std::nullopt
                                       : mux::ui::first_link_of(said)) {
               if (const auto found = s_->model->previews.find(*link); found != s_->model->previews.end()) {

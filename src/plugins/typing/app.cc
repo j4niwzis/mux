@@ -14,6 +14,7 @@ import mux.logic.reading;
 import mux.app.network;
 import mux.app.kept;
 import mux.app.services;
+import mux.levels;
 import mux.plugin.typing.types;
 
 export namespace mux::plugins::typing {
@@ -25,7 +26,9 @@ struct part {
   void apply(const ui::request::typing& one) {
     if (s_->demo())
       return;
-    const auto allowed = [&](const conversation_id& in) { return s_->kept->typing_sent(in); };
+    // Told where the chat, its space, its account or every chat lets it.
+    const auto& mine = s_->kept->plugin_settings<level_choices<choices>>();
+    const auto allowed = [&](const conversation_id& in) { return choices_in_effect(mine, s_->kept->space_above, in).sent.value_or(true); };
     auto step = logic::typing_after(typing_, one.on, s_->chosen(), std::chrono::steady_clock::now(), allowed);
     for (const auto& said : step.say)
       spl::visit(spl::overloaded{[&](const logic::typing_said::started& it) { s_->net->typing(it.in, true); },

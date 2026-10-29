@@ -97,11 +97,8 @@ struct account_shared {
   style_settings style;
   bool enabled = true;
   std::optional<bool> read_receipts;
-  std::optional<bool> send_typing;  // others' typing is always shown
   std::optional<bool> room_events;
   std::optional<room_event_kinds> room_event_kinds;
-  std::optional<bool> link_previews;
-  std::optional<bool> previews_direct;  // link previews fetched from the site itself
   std::optional<std::int64_t> jump_search;
   std::optional<bool> notify;
   std::optional<bool> notify_sound;

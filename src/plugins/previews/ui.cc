@@ -17,6 +17,9 @@ import skiff.nodes.image;
 import skiff.nodes.text;
 import mux.composition;
 import mux.core;
+import mux.levels;
+import mux.protocols;
+import skiff.model;
 import mux.ui.base;
 import mux.plugin.previews.types;
 
@@ -90,6 +93,29 @@ inline std::optional<card> extend(contract::message_cards, type_tag<feature>, co
 // The link a press on it is on, for the message's menu.
 inline std::optional<std::string> pressed_link(contract::message_cards, type_tag<feature>, const card& shown, float x, float y) {
   return shown.bounds().contains(x, y) ? std::optional(shown.fTag.url) : std::nullopt;
+}
+
+// Whether the choice of where cards come from is offered where a row is:
+// every chat's, always; an account's or a chat's, where its protocol's
+// servers fetch them (else they come from the sites, whatever is chosen).
+[[nodiscard]] inline bool server_fetches(level_place::every) { return true; }
+[[nodiscard]] inline bool server_fetches(const level_place::account& at) {
+  return proto::offers(state_before(proto::protocol_of(at.address)), proto::feature::server_previews{});
+}
+[[nodiscard]] inline bool server_fetches(const level_place::chat& at) {
+  return proto::offers(state_before(at.id.account.speaks), proto::feature::server_previews{});
+}
+// Its rows among a level's choices (contract::choice_rows): cards shown or
+// not, and where they come from -- each Default as the level over it.
+template <class Place>
+inline auto extend(contract::choice_rows, type_tag<feature>, const auto& colours, const Place& place) {
+  namespace c = skiff::compose;
+  using shown = skiff::model::Field<&choices::shown>;
+  using direct = skiff::model::Field<&choices::direct>;
+  return choices_scoped<choices>(place, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::bound<shown>(show_hide_field<link_previews_setting, std::optional<bool>, shown>(colours, level_of(place))),
+      c::visible(server_fetches(place),
+          c::bound<direct>(show_hide_field<previews_direct_setting, std::optional<bool>, direct>(colours, level_of(place))))));
 }
 
 }  // namespace mux::plugins::previews

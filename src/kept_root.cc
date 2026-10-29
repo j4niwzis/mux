@@ -160,21 +160,6 @@ struct chat_settings {
     return this->in_effect<&config::chat_choices::jump_search>(chat, [](const config::account_t& a) { return config::jump_search_of(a); },
                                                                this->history().jump_search);
   }
-  // Whether a chat shows link previews.
-  [[nodiscard]] bool previews_shown(const conversation_id& chat) const {
-    return this->in_effect<&config::chat_choices::previews>(chat, [](const config::account_t& a) { return config::link_previews_of(a); },
-                                                            this->history().link_previews);
-  }
-  // Whether a chat's link previews come from the sites themselves.
-  [[nodiscard]] bool previews_direct(const conversation_id& chat) const {
-    return this->in_effect<&config::chat_choices::previews_direct>(
-        chat, [](const config::account_t& a) { return config::previews_direct_of(a); }, this->history().previews_direct.value_or(false));
-  }
-  // Whether others in a chat are told one is typing.
-  [[nodiscard]] bool typing_sent(const conversation_id& chat) const {
-    return this->in_effect<&config::chat_choices::typing>(chat, [](const config::account_t& a) { return config::send_typing_of(a); },
-                                                          this->history().send_typing.value_or(true));
-  }
   // Whether a chat shows who has read up to where.
   // Whether a chat shows what is done in it.
   [[nodiscard]] bool room_events_shown(const conversation_id& chat) const {

@@ -461,20 +461,12 @@ struct kept_settings {
   [[nodiscard]] std::int64_t jump_search_of(const conversation_id& chat) {
     return this->reads().jump_search_of(chat);
   }
-  // Whether a chat shows link previews: its own choice, else its account's,
-  // else every account's.
-  [[nodiscard]] bool previews_shown(const conversation_id& chat) {
-    return this->reads().previews_shown(chat);
-  }
-  // Whether a chat's link previews come from the sites themselves: its own
-  // choice, its space's, its account's, else every account's.
-  [[nodiscard]] bool previews_direct(const conversation_id& chat) {
-    return !proto::offers(state_before(chat.account.speaks), proto::feature::server_previews{}) || this->reads().previews_direct(chat);
-  }
-  // Whether others in a chat are told one is typing: its own choice, its
-  // space's, its account's, else every account's.
-  [[nodiscard]] bool typing_sent(const conversation_id& chat) {
-    return this->reads().typing_sent(chat);
+  // Whether a chat's link previews come from the sites themselves: where
+  // its protocol's servers fetch none, always; else as the plugins say
+  // (contract::chat_flags).
+  [[nodiscard]] bool previews_direct(const conversation_id& chat) const {
+    return !proto::offers(state_before(chat.account.speaks), proto::feature::server_previews{}) ||
+           this->flags_of(chat).previews_direct.value_or(false);
   }
   // Whether a chat shows what is done in it: its own choice, else its
   // account's, else every account's.
@@ -601,9 +593,6 @@ struct kept_settings {
       chosen.style = one.style;
       chosen.room_events = one.show;
       chosen.room_event_kinds = one.kinds;
-      chosen.previews = one.previews;
-      chosen.typing = one.typing;
-      chosen.previews_direct = one.previews_direct;
       chosen.jump_search = one.jump_search;
     }
     const auto placements_read = saved.placements.value_or(std::vector<mux::config::chat_placement>{});
@@ -714,9 +703,6 @@ struct kept_settings {
           .conversation = chat.id,
           .show = chosen.room_events,
           .kinds = chosen.room_event_kinds,
-          .previews = chosen.previews,
-          .previews_direct = chosen.previews_direct,
-          .typing = chosen.typing,
           .jump_search = chosen.jump_search,
           .style = chosen.style};
       if (one != mux::config::room_events_choice{.account = one.account, .conversation = one.conversation})

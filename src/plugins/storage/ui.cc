@@ -124,18 +124,9 @@ inline auto storage_settings_view(const auto& colours) {
         limit_stepper<limit::deleted_on_disk>(colours, "On disk", "MB"),
         spaced_title(colours, "ROOM EVENTS"),
         event_kinds_field<config::history_settings>(colours, choice_level::everywhere{}),
-        bound<skiff::model::Field<&config::history_settings::link_previews>>(
-            show_hide_field<link_previews_setting, bool, skiff::model::Field<&config::history_settings::link_previews>>(
-                colours, choice_level::everywhere{})),
-        bound<skiff::model::Field<&config::history_settings::previews_direct>>(
-            show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&config::history_settings::previews_direct>>(
-                colours, choice_level::everywhere{})),
         bound<skiff::model::Field<&config::history_settings::jump_search>>(
             jump_search_field<std::int64_t, skiff::model::Field<&config::history_settings::jump_search>>(colours,
                                             choice_level::everywhere{})),
-        bound<skiff::model::Field<&config::history_settings::send_typing>>(
-            show_hide_field<typing_setting, std::optional<bool>, skiff::model::Field<&config::history_settings::send_typing>>(
-                colours, choice_level::everywhere{})),
         choice_row_plugins::made(colours, level_place::every{}),
         spaced_note(colours, "Deleted messages are kept on disk, apart from "
                              "the rest and up to their own size, the "

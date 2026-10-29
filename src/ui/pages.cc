@@ -211,9 +211,9 @@ struct choice_row_list<plugin_list<Features...>> {
 };
 using choice_row_plugins = choice_row_list<composition::providers<contract::choice_rows, enabled_plugins>>;
 
-// A chat's own choices, bound to them in the model: previews, where
-// previews come from, typing sent -- Default as the level above; and the
-// plugins' rows, bound to theirs.
+// A chat's own choices, bound to them in the model: its room events, how
+// far a jump searches -- Default as the level above; and the plugins' rows
+// (receipts, previews, typing), bound to theirs.
 inline auto chat_settings_view(const auto& colours, const conversation_id& chat) {
   using choices = config::chat_choices;
   const choice_level_t level = choice_level::chat{};
@@ -223,12 +223,6 @@ inline auto chat_settings_view(const auto& colours, const conversation_id& chat)
       skiff::compose::column(
           skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           event_kinds_field<choices>(colours, level, proto::room_event_kinds_of(state_before(chat.account.speaks))),
-          skiff::compose::bound<skiff::model::Field<&choices::previews>>(
-              show_hide_field<link_previews_setting, std::optional<bool>, skiff::model::Field<&choices::previews>>(colours, level)),
-          skiff::compose::visible(proto::offers(state_before(chat.account.speaks), proto::feature::server_previews{}),
-              skiff::compose::bound<skiff::model::Field<&choices::previews_direct>>(
-                  show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&choices::previews_direct>>(colours, level))),
-          skiff::compose::bound<skiff::model::Field<&choices::typing>>(show_hide_field<typing_setting, std::optional<bool>, skiff::model::Field<&choices::typing>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&choices::jump_search>>(colours, level))),
       chat),
     choice_row_plugins::made(colours, level_place::chat{chat})));

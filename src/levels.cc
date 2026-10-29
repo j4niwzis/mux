@@ -82,6 +82,8 @@ struct chat {
 // each unsaid where no plugin says it.
 struct chat_flags {
   std::optional<bool> receipts;
+  std::optional<bool> previews;
+  std::optional<bool> previews_direct;
 };
 
 }  // namespace mux

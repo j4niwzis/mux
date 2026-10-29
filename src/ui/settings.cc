@@ -58,22 +58,33 @@ struct proxy {
 }  // namespace settings_page
 // The plugins' pages among them (contract::settings_pages): each its own
 // type of what it shows, and its node made from that.
-template <class Feature>
-using plugin_settings_page = typename decltype(page_type(contract::settings_pages{}, type_tag<Feature>{}))::type;
 template <class Page>
 using plugin_settings_node = decltype(extend(contract::settings_pages{}, std::declval<const ui_needs&>(), std::declval<const Page&>()));
 template <class List>
-struct settings_pages_of;
+struct settings_page_types;
+template <class... Pages>
+struct settings_page_types<composition::page_list<Pages...>> {
+  using type = type_list<Pages...>;
+};
+template <class List>
+struct plugin_settings_pages;
 template <class... Features>
-struct settings_pages_of<plugin_list<Features...>> {
+struct plugin_settings_pages<plugin_list<Features...>> {
+  using type = typename joined<type_list<>,
+      typename settings_page_types<decltype(settings_pages(contract::settings_pages{}, type_tag<Features>{}))>::type...>::type;
+};
+template <class List>
+struct settings_pages_of;
+template <class... Pages>
+struct settings_pages_of<type_list<Pages...>> {
   using pages = spl::variant<settings_page::home, settings_page::animations, settings_page::appearance, settings_page::rendering,
                              settings_page::notifications, settings_page::files, settings_page::storage, settings_page::proxies,
-                             settings_page::proxy, settings_page::about, settings_page::library, plugin_settings_page<Features>...>;
+                             settings_page::proxy, settings_page::about, settings_page::library, Pages...>;
   using nodes = spl::variant<settings_home_t, animations_page_t, proxies_page_t, proxy_editor_t,
                              appearance_page_t, rendering_page_t, storage_page_t, files_page_t,
-                             notifications_page_t, about_page_t, library_page_t, plugin_settings_node<plugin_settings_page<Features>>...>;
+                             notifications_page_t, about_page_t, library_page_t, plugin_settings_node<Pages>...>;
 };
-using settings_plugins = composition::providers<contract::settings_pages, enabled_plugins>;
+using settings_plugins = typename plugin_settings_pages<composition::providers<contract::settings_pages, enabled_plugins>>::type;
 using settings_page_t = typename settings_pages_of<settings_plugins>::pages;
 // Settings open, on a page.
 struct settings_facts {

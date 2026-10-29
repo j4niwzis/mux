@@ -126,9 +126,9 @@ struct account_pages {
 };
 // Settings' pages (mux.ui:settings): a plugin's own page, opened by its
 // link (contract::settings_links):
-//   page_type(c, f) -> type_tag<its page>: what it shows, in settings_page_t
-//   extend(c, needs, page) -> its page's node, made from it; Esc and its <-
-//   go to Settings' home, its own requests its plugin's
+//   settings_pages(c, f) -> page_list<its pages...>: each what it shows, in
+//   settings_page_t; extend(c, needs, page) -> that page's node, made from
+//   it; Esc and its <- go to Settings' home, its own requests its plugin's
 struct settings_pages {
   static constexpr std::string_view name = "Settings' pages";
 };

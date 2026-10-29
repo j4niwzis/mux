@@ -167,23 +167,26 @@ struct part {
     }
     this->act().jump(from->id, asked);
   }
-  // The history paged back until its oldest message is from then: a page at
-  // a time, each asked once its last came (or after a while where none
-  // did); then the chat's first message from then gone to. At the room's
-  // beginning, or past a bound of pages, its oldest, and a word.
+  // The history paged back until its oldest message is from then -- a page
+  // asked, the next asked as the last comes (its account tells where the
+  // history goes on from: change::history_position), nothing done between:
+  // then the chat's first message from then gone to. At the room's beginning,
+  // or past a bound of pages, its oldest, and a word.
   struct seeking {
     conversation_id in;
     std::chrono::sys_time<std::chrono::milliseconds> when;
-    std::pair<std::string, std::string> page;  // what the last page was asked from
-    std::chrono::steady_clock::time_point asked{};
     int pages = 0;
   };
   void seek(const conversation_id& in, std::chrono::sys_time<std::chrono::milliseconds> when) {
     seeking_ = seeking{in, when};
+    this->advance(true);
   }
-  void tick() {
-    if (!seeking_)
-      return;
+  // A page come, for the chat sought in: on, or done.
+  void take(const change::history_position& one) {
+    if (seeking_ && seeking_->in == one.in)
+      this->advance(one.from.has_value() && !one.from->empty());
+  }
+  void advance(bool more) {
     auto& now = *seeking_;
     const conversation* chat = s_->model->find(now.in);
     if (!chat || s_->chosen() != now.in) {
@@ -203,15 +206,7 @@ struct part {
       done({});
       return;
     }
-    const std::pair<std::string, std::string> page{chat->history_from.value_or(std::string()),
-                                                   timeline.empty() ? std::string() : timeline.front().id};
-    const auto clock = std::chrono::steady_clock::now();
-    // The last page not come yet: waited for, a while.
-    if (page == now.page && clock - now.asked < std::chrono::seconds(8))
-      return;
-    // Asked from here before, and nothing came: the room's beginning, as far
-    // as its server goes.
-    if (page == now.page || (!chat->history_from && timeline.empty())) {
+    if (!more || (!chat->history_from && timeline.empty())) {
       done("That is before the chat's beginning as its server keeps it: here is its oldest message.");
       return;
     }
@@ -219,8 +214,6 @@ struct part {
       done("Still not that far back after 50 pages: here is the oldest loaded. Ask again to go further.");
       return;
     }
-    now.page = page;
-    now.asked = clock;
     ++now.pages;
     if (chat->history_from)
       s_->net->load_older(chat->id, *chat->history_from);

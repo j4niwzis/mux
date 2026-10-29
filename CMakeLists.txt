@@ -284,7 +284,7 @@ cme_declare_port(NAME skiff PROVIDES skiff
   VERSION 0.1.0)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 2b6b97843dc0b012484660e96e23c944d2a1c0f4
+  GIT_TAG d1bcbf6288b34fa58e1e8f4cfb12ea582080130a
   VERSION 0.1.0)
 # skiff-framework: the window (skiff.platform.window) -- SDL3 makes it and
 # brings its input, Skia draws skiff's scene into it -- as any program of

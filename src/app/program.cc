@@ -378,8 +378,16 @@ struct app : kept_settings {
     std::apply([&](auto&... part) { (served_by_part(out, part), ...); }, parts());
     served_each(out, skiff::bind::takes::Applied<app>{});
     served_protocols(out, mux::protocols{});
+    // The selection bar's plugin actions: menu_part takes them through one
+    // apply templated on the plugin -- what the loophole above cannot read a
+    // type from -- so they are listed here, one for each plugin offering one.
+    // Missing, Forward on the messages selected did nothing outside a
+    // release build.
+    served_each(out, decltype(selection_asked_types(composition::providers<contract::selection_actions, enabled_plugins>{})){});
     return out;
   }
+  template <class... Features>
+  static auto selection_asked_types(plugin_list<Features...>) -> skiff::model::Types<mux::ui::request::selection_asked<Features>...>;
 #endif
 
   using accounts = mux::ui::accounts_panel;

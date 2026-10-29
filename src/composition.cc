@@ -134,6 +134,13 @@ struct chat_status {
 struct side_header {
   static constexpr std::string_view name = "the side's head";
 };
+// A space's menu in the side, its rows after the space's name
+// (mux.ui:conversations_side), each shown for a space:
+//   label(c, f) -> what it says; act(c, f, room) -> what a press asks of
+//   its plugin's own (a callable with its Answer)
+struct space_menu {
+  static constexpr std::string_view name = "a space's menu";
+};
 // Settings' home page, its links after the client's own (mux.ui:proxies):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own

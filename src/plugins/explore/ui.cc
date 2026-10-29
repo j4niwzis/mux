@@ -31,6 +31,15 @@ inline auto extend(contract::side_header, type_tag<feature>, const palette& colo
                                                             icon_button(colours, icon::compass{}, sends<open>{})));
 }
 
+// Explore its rooms, in a space's menu in the side.
+struct explore_act {
+  using Answer = request::explore_space;
+  std::string room;
+  Answer operator()() const { return Answer{room}; }
+};
+constexpr std::string_view label(contract::space_menu, type_tag<feature>) { return "Explore its rooms\u2026"; }
+inline explore_act act(contract::space_menu, type_tag<feature>, std::string room) { return {std::move(room)}; }
+
 // A room listed: its picture, name, address and members, topic; Join -- or,
 // a space, Open.
 struct row_act {

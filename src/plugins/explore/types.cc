@@ -58,6 +58,7 @@ struct join {
 };
 
 consteval bool provides(contract::side_header, type_tag<feature>) { return true; }
+consteval bool provides(contract::space_menu, type_tag<feature>) { return true; }
 consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
 constexpr type_tag<shown> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }

@@ -270,11 +270,6 @@ struct set_bars_act {
   bool side = true, top = false;
   ::mux::ui::request::set_space_bars operator()() { return ::mux::ui::request::set_space_bars{account, item, side, top}; }
 };
-struct explore_act {
-  using Answer = ::mux::ui::request::explore_space;
-  std::string room;
-  ::mux::ui::request::explore_space operator()() { return ::mux::ui::request::explore_space{room}; }
-};
 struct manage_act {
   using Answer = ::mux::ui::request::manage_space;
   std::string room;
@@ -345,6 +340,19 @@ auto side_menu_button(const auto& colours, std::string label, Act act) {
   return SKIFF_NAMED(side_menu_button, skiff::compose::styled({.fillX = true, .height = 30.0f},
       button_for<side_menu_pick<Act>>(colours.widgets, std::move(label), side_menu_pick<Act>{std::move(act)})));
 }
+// The rows plugins put in a space's menu (contract::space_menu), in their
+// order -- Explore's, for one.
+template <class List>
+struct space_menu_rows;
+template <class... Features>
+struct space_menu_rows<plugin_list<Features...>> {
+  static auto made(const auto& colours, const std::string& room) {
+    return skiff::compose::column(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+        skiff::compose::visible(!room.empty(), side_menu_button(colours, std::string(label(contract::space_menu{}, type_tag<Features>{})),
+                                                                act(contract::space_menu{}, type_tag<Features>{}, room)))...);
+  }
+};
+using space_menu_plugins = space_menu_rows<composition::providers<contract::space_menu, enabled_plugins>>;
 auto side_chat_menu(const auto& colours, const conversation_id& id, std::string name,
                            const account_id& listing, const std::vector<account_id>& accounts,
                            const config::theme_t& theme) {
@@ -380,7 +388,7 @@ auto side_space_menu(const auto& colours, const std::string& account,
   const auto room = side_space_room(item);
   return SKIFF_NAMED(side_space_menu, c::column(side_popup_look(colours, 190.0f),
       c::styled({.fillX = true}, elided(nodes::Text(name, 13.0f, colours.dim, true))),
-      c::visible(!room.empty(), side_menu_button(colours, "Explore its rooms\u2026", explore_act{room})),
+      space_menu_plugins::made(colours, room),
       c::visible(!room.empty(), side_menu_button(colours, "Space settings\u2026", manage_act{room})),
       c::visible(!room.empty(), side_menu_button(colours, "Create a room in it\u2026", create_in_act{account, room, name, false})),
       c::visible(!room.empty(), side_menu_button(colours, "Create a space in it\u2026", create_in_act{account, room, name, true})),

@@ -12,6 +12,7 @@ import mux.proto.xmpp.changes;
 
 export namespace mux::proto::xmpp {
 
+constexpr creation_traits room_creation_traits(const state&) { return {true, false, false}; }
 inline creation_form room_creation_form(const state&, std::string_view) {
   return {"room@conference.example.com", true, false, false};
 }

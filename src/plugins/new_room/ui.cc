@@ -50,20 +50,30 @@ struct room_draft {
   bool encrypted = true, federate = true, advanced = false;
 };
 struct submit_room {};
+// What a protocol's form has, while compiling.
+template <class Protocol>
+inline constexpr proto::creation_traits traits_of = proto::creation_traits_of<state_of<Protocol>>();
+// The space it is made in, where it is one's form.
+template <class Protocol>
+std::optional<place> place_of(const room_form_of<Protocol>&) { return std::nullopt; }
+template <class Protocol>
+std::optional<place> place_of(const space_room_form_of<Protocol>& facts) { return facts.in; }
+template <class Facts>
 struct room_creation_events {
-  shown facts;
-  proto::creation_form form;
+  Facts facts;
   auto on(submit_room, const room_draft& draft) const {
+    constexpr auto traits = traits_of<typename Facts::protocol>;
     std::optional<request::create_room> asked;
     const auto [open, members] = spl::visit(spl::overloaded{
         [](room_access::invited) { return std::pair{false, false}; },
         [](room_access::everyone) { return std::pair{true, false}; },
         [](room_access::space) { return std::pair{false, true}; }}, draft.access);
-    if (!draft.name.empty() && (!form.address_required || !draft.address.empty()))
+    const auto in = place_of(facts);
+    if (!draft.name.empty() && (!traits.address_required || !draft.address.empty()))
       asked = request::create_room{draft.name, draft.topic, open, draft.address, draft.federate,
-          form.encryption && draft.encrypted && !open,
-          facts.in ? std::optional(facts.in->space) : std::nullopt, members,
-          facts.in && facts.in->make_space};
+          traits.encryption && draft.encrypted && !open,
+          in ? std::optional(in->space) : std::nullopt, members,
+          in && in->make_space};
     return skiff::model::Up{asked};
   }
 };
@@ -90,14 +100,57 @@ inline auto room_access_choice(const palette& colours, std::string label, room_a
                     return selected == choice ? std::string("●") : std::string("○");
                   }, nodes::Text("", 20.0f, colours.accent)))), label)));
 }
-inline auto create_room_view(const palette& colours, const shown& facts) {
-  namespace c = skiff::compose;
+// What differs by the form's type, each made only where it is had: the
+// space's members as a choice, in a space's form; the address, always where
+// the protocol needs one, else as Anyone is chosen; encryption and
+// federation, where the protocol has them.
+template <class Protocol>
+auto space_choice(const palette&, const room_form_of<Protocol>&) { return nothing_shown(); }
+template <class Protocol>
+auto space_choice(const palette& colours, const space_room_form_of<Protocol>&) {
+  return room_access_choice(colours, "Space members", room_access::space{});
+}
+template <class Protocol>
+auto address_part(const palette& colours, const std::string& hint) {
   using access = skiff::model::Field<&room_draft::access>;
-  const auto form = proto::room_creation_form_of(facts.by ? state_before(facts.by->speaks) : state_before(protocol_t{}), facts.own_server);
-  return SKIFF_NAMED(create_room_view, c::local<room_draft>(room_creation_events{facts, form}, c::column(
+  return skiff::compose::shown_for<access>([](const auto& access) { return access == room_access_t(room_access::everyone{}); },
+                                           model_field<&room_draft::address>(colours, "Address", hint));
+}
+template <class Protocol>
+  requires(traits_of<Protocol>.address_required)
+auto address_part(const palette& colours, const std::string& hint) {
+  return model_field<&room_draft::address>(colours, "Address", hint);
+}
+template <class Protocol>
+auto encryption_part(const palette&) { return nothing_shown(); }
+template <class Protocol>
+  requires(traits_of<Protocol>.encryption)
+auto encryption_part(const palette& colours) {
+  using access = skiff::model::Field<&room_draft::access>;
+  return skiff::compose::shown_for<access>([](const auto& access) { return access != room_access_t(room_access::everyone{}); },
+                                           room_form_toggle<&room_draft::encrypted>(colours, "Enable end-to-end encryption"));
+}
+template <class Protocol>
+auto federation_part(const palette&) { return nothing_shown(); }
+template <class Protocol>
+  requires(traits_of<Protocol>.federation)
+auto federation_part(const palette& colours) {
+  namespace c = skiff::compose;
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                   room_form_toggle<&room_draft::advanced>(colours, "Advanced"),
+                   c::shown_for<skiff::model::Field<&room_draft::advanced>>([](bool shown) { return shown; },
+                       room_form_toggle<&room_draft::federate>(colours, "Allow people from other servers")));
+}
+template <class Facts>
+auto create_room_view(const palette& colours, const Facts& facts) {
+  namespace c = skiff::compose;
+  using Protocol = typename Facts::protocol;
+  const auto in = place_of(facts);
+  const auto form = proto::room_creation_form_of(state_before(facts.by.speaks), facts.own_server);
+  return SKIFF_NAMED(create_room_view, c::local<room_draft>(room_creation_events<Facts>{facts}, c::column(
       c::vbox(8.0f, {.fill = true, .padding = {0.0f, 22.0f, 18.0f, 22.0f}}),
-      page_header<no_back, sends<request::close_shown<shown>>>(colours,
-          facts.in ? std::string(facts.in->make_space ? "Create a space in " : "Create a room in ") + facts.in->name : "Create a room", {}, {}, false, true),
+      page_header<no_back, sends<request::close_shown<Facts>>>(colours,
+          in ? std::string(in->make_space ? "Create a space in " : "Create a room in ") + in->name : "Create a room", {}, {}, false, true),
       c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(c::column(
           c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           model_field<&room_draft::name>(colours, "Name", ""),
@@ -105,28 +158,46 @@ inline auto create_room_view(const palette& colours, const shown& facts) {
           nodes::Text("Who can join", 13.0f, colours.dim),
           room_access_choice(colours, "Invite only", room_access::invited{}),
           room_access_choice(colours, "Anyone", room_access::everyone{}),
-          c::visible(facts.in.has_value(), room_access_choice(colours, "Space members", room_access::space{})),
-          c::shown_for<access>([required = form.address_required](const auto& access) {
-            return required || access == room_access_t(room_access::everyone{});
-          }, model_field<&room_draft::address>(colours, "Address", form.address_hint)),
-          c::visible(form.encryption, c::shown_for<access>([](const auto& access) {
-            return access != room_access_t(room_access::everyone{});
-          }, room_form_toggle<&room_draft::encrypted>(colours, "Enable end-to-end encryption"))),
-          c::visible(form.federation, room_form_toggle<&room_draft::advanced>(colours, "Advanced")),
-          c::visible(form.federation, c::shown_for<skiff::model::Field<&room_draft::advanced>>([](bool shown) { return shown; },
-              room_form_toggle<&room_draft::federate>(colours, "Allow people from other servers")))))),
+          space_choice(colours, facts),
+          address_part<Protocol>(colours, form.address_hint),
+          encryption_part<Protocol>(colours),
+          federation_part<Protocol>(colours)))),
       c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::justify::end{}),
-          c::styled({.width = 90.0f, .height = 34.0f}, widgets::SendButton<request::close_shown<shown>>(colours.widgets, "Cancel", {})),
+          c::styled({.width = 90.0f, .height = 34.0f}, widgets::SendButton<request::close_shown<Facts>>(colours.widgets, "Cancel", {})),
           c::styled({.width = 128.0f, .height = 34.0f},
-              skiff::compose::primary(widgets::SendButton<submit_room>(colours.widgets, facts.in && facts.in->make_space ? "Create space" : "Create room", {}))))),
-      room_draft{.access = facts.in ? room_access_t(room_access::space{}) : room_access_t(room_access::invited{}),
-                 .encrypted = form.encryption}));
+              skiff::compose::primary(widgets::SendButton<submit_room>(colours.widgets, in && in->make_space ? "Create space" : "Create room", {}))))),
+      room_draft{.access = in ? room_access_t(room_access::space{}) : room_access_t(room_access::invited{}),
+                 .encrypted = traits_of<Protocol>.encryption}));
 }
-using box = decltype(create_room_view(std::declval<const palette&>(), std::declval<const shown&>()));
-inline dialog_look content_look(std::type_identity<shown>) { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
-inline auto make_content(const ui_needs& needs, const shown& facts) { return create_room_view(*needs.colours, facts); }
+template <class Protocol>
+dialog_look content_look(std::type_identity<room_form_of<Protocol>>) { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
+template <class Protocol>
+dialog_look content_look(std::type_identity<space_room_form_of<Protocol>>) { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
+template <class Protocol>
+auto make_content(const ui_needs& needs, const room_form_of<Protocol>& facts) { return create_room_view(*needs.colours, facts); }
+template <class Protocol>
+auto make_content(const ui_needs& needs, const space_room_form_of<Protocol>& facts) { return create_room_view(*needs.colours, facts); }
 
-// Its dialog, among the window's (mux.ui:window).
-constexpr type_tag<box> extend(contract::window_dialogs, type_tag<feature>) { return {}; }
+// Its dialogs, among the window's (mux.ui:window): one for each protocol's
+// form, from the drawer and in a space.
+template <class>
+struct forms_of;
+template <class... Protocols>
+struct forms_of<protocol_list<Protocols...>> {
+  using type = composition::page_list<room_form_of<Protocols>..., space_room_form_of<Protocols>...>;
+  using requests = proto::request_list<request::close_shown<room_form_of<Protocols>>..., request::close_shown<space_room_form_of<Protocols>>...>;
+  template <class Showing>
+  static void close(Showing& showing) {
+    // show() is the window's (mux.ui), found by ADL on the model.
+    (show(showing, std::optional<room_form_of<Protocols>>{}), ...);
+    (show(showing, std::optional<space_room_form_of<Protocols>>{}), ...);
+  }
+};
+using forms = forms_of<protocols>;
+constexpr typename forms::type facts_types(contract::window_dialogs, type_tag<feature>) { return {}; }
+template <class Facts>
+constexpr auto extend(contract::window_dialogs, type_tag<feature>, type_tag<Facts>) {
+  return type_tag<decltype(create_room_view(std::declval<const palette&>(), std::declval<const Facts&>()))>{};
+}
 
 }  // namespace mux::plugins::new_room

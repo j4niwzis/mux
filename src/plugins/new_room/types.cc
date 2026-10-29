@@ -24,16 +24,27 @@ struct place {
 };
 // Create a room open: on which server, where in a space, if in one, and by
 // which account.
-struct shown {
+// Create a room open, by a protocol's account, as its own type: from the
+// drawer, or in a space -- all it shows known from the type, the space's
+// choice only in a space's.
+template <class Protocol>
+struct room_form_of {
+  using protocol = Protocol;
   std::string own_server;
-  std::optional<place> in;
-  std::optional<account_id> by;
-  friend bool operator==(const shown&, const shown&) = default;
+  account_id by;
+  friend bool operator==(const room_form_of&, const room_form_of&) = default;
+};
+template <class Protocol>
+struct space_room_form_of {
+  using protocol = Protocol;
+  std::string own_server;
+  account_id by;
+  place in;
+  friend bool operator==(const space_room_form_of&, const space_room_form_of&) = default;
 };
 
 consteval bool provides(contract::drawer_rows, type_tag<feature>) { return true; }
 consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
-constexpr type_tag<shown> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
 
 }  // namespace mux::plugins::new_room

@@ -43,6 +43,13 @@ struct creation_form {
   bool federation = true;
 };
 struct chat_form { std::string hint, intro; };
+// What a protocol's Create a room has, known from its type: an address that
+// must be given (XMPP's room JID), encryption, federation.
+struct creation_traits {
+  bool address_required = false;
+  bool encryption = true;
+  bool federation = true;
+};
 // What a protocol may have, each a type: asked of it by offers().
 namespace feature {
 struct server_previews {}; // server-side URL preview service
@@ -207,6 +214,7 @@ using style_t = spl::variant<style::bubbles, style::lines>;
 // The defaults: what a protocol that says nothing of a thing comes to.
 namespace mux::proto::defaults {
 constexpr bool available(const auto&) { return true; }
+constexpr creation_traits room_creation_traits(const auto&) { return {}; }
 inline creation_form room_creation_form(const auto&, std::string_view server) {
   return {"#room-name:" + std::string(server)};
 }
@@ -333,6 +341,12 @@ template <class State>
 std::vector<room_event_t> room_events_of() {
   using defaults::room_event_kinds;
   return room_event_kinds(State{});
+}
+// What a protocol's Create a room has, by its state's type.
+template <class State>
+consteval creation_traits creation_traits_of() {
+  using defaults::room_creation_traits;
+  return room_creation_traits(State{});
 }
 // Whether a protocol's chats have room events to choose among (room_event_kinds).
 template <class State>

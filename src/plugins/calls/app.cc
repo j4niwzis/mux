@@ -52,6 +52,10 @@ struct active_call {
   // the receiver cannot associate candidates with a call it has not
   // seen yet, and would discard them.
   bool description_signalled = false;
+  // What it had to connect with, said where it times out: the relays
+  // (TURN) its account's server gave, the candidates gathered here and those
+  // the other side sent.
+  std::size_t relays = 0, ours = 0, theirs = 0;
   std::chrono::steady_clock::time_point ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
   std::unique_ptr<mux::calls::media_session<app::wake_window>> media;
 };
@@ -145,8 +149,10 @@ class part {
                                          return;
                                        if (!current_->their_party.empty() && one.party != current_->their_party) return;
                                        if (current_->media && !holds<call_state::ringing_out>() && !holds<call_state::starting>())
+                                         current_->theirs += them.them.size();
                                          for (const auto& each : them.them) { current_->media->add_candidate(each); }
                                        else
+                                         current_->theirs += them.them.size();
                                          current_->early[one.party].insert_range(current_->early[one.party].end(), them.them);
                                      },
                                      // Ended by them: why, as Element says it.
@@ -189,6 +195,7 @@ class part {
   void take(const call_servers& one) {
     if (!current_ || current_->in.account != one.account || current_->id != one.call || !holds<call_state::starting>())
       return;
+    current_->relays = one.servers.size();
     try {
       current_->media = std::make_unique<session>(one.servers, *s_->wake);
     } catch (const std::exception& failed) {
@@ -243,7 +250,13 @@ class part {
     if (current_ && (holds<call_state::starting>() || holds<call_state::connecting>()) &&
         std::chrono::steady_clock::now() > current_->ring_until) {
       this->signal(call_said_t{call_said::hangup{call_end::failed{}}});
-      this->end("Connection timed out");
+      // Why, as far as can be told: nothing from the other side; no relay
+      // to go through; or no route even through one.
+      mux::log_line(current_->in.account.address, std::format("call {}: timed out connecting -- {} relay(s), {} candidate(s) here, {} from them",
+                                                              current_->id, current_->relays, current_->ours, current_->theirs));
+      this->end(current_->theirs == 0 ? "Connection timed out: the other side sent nothing to connect to -- its client may not have taken the call"
+                : current_->relays == 0 ? "Connection timed out: no direct route between you, and your server offers no relay (TURN)"
+                                        : "Connection timed out: no route between you, even through your server's relay (TURN)");
     }
     // Shown as it is now -- its time going on, the chat shown changed --
     // where that changed what is shown.
@@ -340,7 +353,11 @@ class part {
                                                      ours.it.kind);
                                        current_->description_signalled = true;
                                      },
-                                     [&](const mux::calls::said::candidate& ours) { current_->candidates_out.push_back(ours.it); },
+                                     [&](const mux::calls::said::candidate& ours) {
+                                       if (!ours.it.line.empty())
+                                         ++current_->ours;
+                                       current_->candidates_out.push_back(ours.it);
+                                     },
                                      [&](mux::calls::said::connected) {
                                        current_->state = call_state::connected{std::chrono::steady_clock::now()};
                                        this->show();

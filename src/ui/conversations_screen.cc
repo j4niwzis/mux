@@ -67,59 +67,23 @@ constexpr auto composer_views_for(const State& state) {
   return composer_views(state);
 }
 
-// A row of a list over the field -- the @ list's, the emoji list's: what
-// it shows at its start, its text beside it; pressed to pick.
-template <class Pick, class Face>
-auto suggestion_row(const palette& colours, Pick pick, Face face, std::string first, std::string second) {
-  namespace c = skiff::compose;
-  auto label = first;
-  return SKIFF_NAMED(suggestion_row, c::onPress(std::move(pick), c::row(
-      c::hbox(10.0f, {.fillX = true, .height = 44.0f, .padding = {0.0f, 14.0f, 0.0f, 14.0f},
-                     .hoverBackground = colours.chosen, .selectedBackground = colours.chosen}),
-      std::move(face), two_lines(colours, std::move(first), std::move(second), 14.0f, 1.0f)), std::move(label)));
-}
-// One of the list over the composer, as the program has it: a member (their
-// avatar, their name, their id) or an emoji (its picture or character, its
-// name, its code), where it is in the list, and whether it is lit.
-struct suggestion {
-  std::size_t at = 0;
-  bool person = false;
-  std::string id;       // whose avatar, a member's
-  std::string glyph;    // the emoji's character
-  std::string picture;  // a custom emoji's picture
-  std::string title, sub;
-  bool lit = false;
-  friend bool operator==(const suggestion&, const suggestion&) = default;
+// What plugins put over the composer (contract::composer_top), in their
+// order -- the list of what an @ or a ':' asks, for one.
+template <class List>
+struct composer_top_list;
+template <class... Features>
+struct composer_top_list<plugin_list<Features...>> {
+  template <class Feature>
+  static auto node_of(const palette& colours) -> decltype(extend(contract::composer_top{}, type_tag<Feature>{}, colours)) {
+    static_assert(requires { extend(contract::composer_top{}, type_tag<Feature>{}, colours); },
+                  composition::broken<contract::composer_top, Feature>());
+    return extend(contract::composer_top{}, type_tag<Feature>{}, colours);
+  }
+  static auto made(const palette& colours) {
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), node_of<Features>(colours)...);
+  }
 };
-struct suggestions_shown {
-  std::vector<suggestion> items;
-  friend bool operator==(const suggestions_shown&, const suggestions_shown&) = default;
-};
-using suggestion_face = spl::variant<nodes::Text, nodes::Image<from_emotes>, avatar_mark_t<avatar_of::person>>;
-[[nodiscard]] inline suggestion_face face_of(const palette& colours, const suggestion& one) {
-  if (one.person)
-    return suggestion_face(std::in_place_index<2>, avatar_mark(avatar_of::person{}, one.id, one.title, 28.0f));
-  if (one.picture.empty())
-    return suggestion_face(std::in_place_index<0>, nodes::Text(one.glyph, 22.0f, colours.text));
-  suggestion_face face(std::in_place_index<1>, from_emotes{one.picture});
-  spl::get<1>(face).apply({.width = 28.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle});
-  return face;
-}
-// Over the field: the members matching what follows an @ at the end of
-// what is written, or the emoji matching what follows a ':' -- six at
-// most, the lit one marked; pressed, picked. As the program says.
-inline auto suggestions_for(const palette& colours) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(suggestions_for, c::shown_for<suggestions_shown>([](const suggestions_shown& now) { return !now.items.empty(); },
-      c::projected<suggestions_shown>([](const suggestions_shown& now) { return now.items; },
-          c::listed<suggestion>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .background = colours.sidebar}),
-              [&colours](const suggestion& one) {
-                auto row = suggestion_row(colours, sends<request::suggestion_pick>{{one.at}}, face_of(colours, one), one.title, one.sub);
-                row.apply({.selected = one.lit});
-                return row;
-              }))));
-}
-using suggestions_t = decltype(suggestions_for(std::declval<const palette&>()));
+using composer_top_plugins = composer_top_list<composition::providers<contract::composer_top, enabled_plugins>>;
 // No account at all: what to do about it.
 inline auto no_accounts_yet(const palette& colours) {
   using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
@@ -267,7 +231,7 @@ inline auto chat_column(const ui_needs& n) {
       column_parts_t::column_of(n),
       protocol_view_for<head_view_holder, make_head_of>(n),
       c::shown_for<chat_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, chat_area(n))),
-      suggestions_for(*n.colours),
+      composer_top_plugins::made(*n.colours),
       composer_banner_for(*n.colours),
       protocol_view_for<composer_view_holder, make_composer_of>(n),
       c::shown_for<chat_shown>(open, composer_bar<>(n)),

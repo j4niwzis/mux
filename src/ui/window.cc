@@ -326,7 +326,6 @@ struct shown_root {
   skiff::model::Tracked<chat_head_shown> head;
   skiff::model::Tracked<connection_shown> connections;
   skiff::model::Tracked<banner_shown> banner;
-  skiff::model::Tracked<suggestions_shown> suggested;
   // The window's shape, from its size: a phone's, or not.
   skiff::model::Tracked<window_shape> shape;
   // The looks, as their choices show them (app: refresh_shown).
@@ -800,13 +799,10 @@ inline auto window_view(const ui_needs& n) {
 using window = decltype(window_view(std::declval<const ui_needs&>()));
 
 // The emote pictures the window wants fetched: those its panels and menus
-// drew without their pictures (drained), the custom emoji the list over the
-// composer shows, and those in the fields.
-[[nodiscard]] inline std::vector<emote_picture> emoji_pictures_wanted(const suggestions_shown& listed, const chat_draft& chat,
-                                                                      const thread_draft& thread) {
+// drew without their pictures (drained) -- the custom emoji the list over
+// the composer shows among them -- and those in the fields.
+[[nodiscard]] inline std::vector<emote_picture> emoji_pictures_wanted(const chat_draft& chat, const thread_draft& thread) {
   std::vector<emote_picture> wanted = std::exchange(emotes_wanted(), {});
-  wanted.append_range(listed.items | std::views::filter([](const suggestion& one) { return !one.picture.empty(); }) |
-                      std::views::transform([](const suggestion& one) { return emote_picture{one.picture, emote_kind::emoji}; }));
   // Those put in what is being written: the drafts' pictures.
   const auto inserted = [&](const composer_doc& draft) {
     wanted.append_range(draft.atoms | std::views::filter(&widgets::TextAtom::picture) |

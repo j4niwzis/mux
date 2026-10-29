@@ -141,6 +141,13 @@ struct side_header {
 struct space_menu {
   static constexpr std::string_view name = "a space's menu";
 };
+// Over the chat's composer, under its messages (mux.ui:conversations_screen):
+//   extend(c, f, palette) -> its node -- the list of what an @ or a ':'
+//   asks, for one; its part says the screen is to catch the list's keys
+//   (services::composer_list_up) while it is up
+struct composer_top {
+  static constexpr std::string_view name = "over the composer";
+};
 // Settings' home page, its links after the client's own (mux.ui:proxies):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own

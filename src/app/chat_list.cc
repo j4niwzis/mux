@@ -682,7 +682,7 @@ class chat_list_part {
       now.side_edge = !now.single;
       now.chat_up = !now.single || (chat.chosen && !beside);
       now.selecting = s_->showing->look<mux::ui::selection_shown>()->count > 0;
-      now.suggesting = !s_->showing->look<mux::ui::suggestions_shown>()->items.empty();
+      now.suggesting = s_->composer_list_up;
       now.pointing = s_->showing->look<mux::ui::list_shown>()->pointed.has_value();
       now.in_forum = chat.forum.has_value();
     });

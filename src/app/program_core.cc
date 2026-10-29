@@ -573,7 +573,6 @@ void app::before_frame() {
   chat_view.show();
   chat_list.show();
   manage.show();
-  suggestions.show();
   pictures.viewer_tick();
   // Whether Esc lets go of something up: a dialog, a layer, the drawer.
   if (const mux::ui::overlay_shown up{mux::ui::escape_in(showing, mux::ui::escape_order{}).has_value() || showing.look<mux::ui::drawer_shown>()->out};
@@ -637,7 +636,7 @@ void app::before_frame() {
   // when something else refreshed the window: those not asked yet, not the
   // whole sweep of every picture the window shows (pictures_due), which
   // ran at nearly every frame of a scroll through custom emoji.
-  if (auto shown = mux::ui::emoji_pictures_wanted(*showing.look<mux::ui::suggestions_shown>(), *showing.look<mux::ui::chat_draft>(),
+  if (auto shown = mux::ui::emoji_pictures_wanted(*showing.look<mux::ui::chat_draft>(),
                                                 *showing.look<mux::ui::thread_draft>()); shown != shared.ui.panel_pictures_shown) {
     pictures.want_shown(shown);
     shared.ui.panel_pictures_shown = std::move(shown);

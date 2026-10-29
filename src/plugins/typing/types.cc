@@ -36,5 +36,7 @@ struct choices {
 consteval bool provides(contract::settings_kept, type_tag<feature>) { return true; }
 constexpr type_tag<level_choices<choices>> settings_type(contract::settings_kept, type_tag<feature>) { return {}; }
 consteval bool provides(contract::choice_rows, type_tag<feature>) { return true; }
+// On an account's Privacy page: whether others are told one is typing.
+consteval choice_group::privacy row_group(contract::choice_rows, type_tag<feature>) { return {}; }
 
 }  // namespace mux::plugins::typing

@@ -201,12 +201,39 @@ auto choices_scoped(const level_place::chat& at, Node node) {
 // (contract::choice_rows), in their order.
 template <class List>
 struct choice_row_list;
+// A row's group (contract::choice_rows' row_group): its own, where it says
+// one; an account's Chats page's, where it does not.
+template <class Feature>
+consteval choice_group::chats group_of_row(type_tag<Feature>) {
+  return {};
+}
+template <class Feature>
+  requires requires { row_group(contract::choice_rows{}, type_tag<Feature>{}); }
+consteval auto group_of_row(type_tag<Feature>) {
+  return row_group(contract::choice_rows{}, type_tag<Feature>{});
+}
+template <class Group, class Other>
+consteval bool same_group(Group, Other) {
+  return false;
+}
+template <class Group>
+consteval bool same_group(Group, Group) {
+  return true;
+}
 template <class... Features>
 struct choice_row_list<plugin_list<Features...>> {
+  // Every plugin's row: a chat's, every chat's.
   template <class Place>
   static auto made(const auto& colours, const Place& place) {
     return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                                   extend(contract::choice_rows{}, type_tag<Features>{}, colours, place)...);
+  }
+  // Those of one group: an account's pages, each its own.
+  template <class Group, class Place>
+  static auto made_in(const auto& colours, const Place& place) {
+    return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                  skiff::compose::visible(same_group(Group{}, group_of_row(type_tag<Features>{})),
+                                                          extend(contract::choice_rows{}, type_tag<Features>{}, colours, place))...);
   }
 };
 using choice_row_plugins = choice_row_list<composition::providers<contract::choice_rows, enabled_plugins>>;

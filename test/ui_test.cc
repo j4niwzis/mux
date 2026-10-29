@@ -1789,3 +1789,19 @@ TEST(Plugins, PreviewLineRunsWhitespaceTogetherAndCutsAtAWord) {
   const std::string cut = mux::plugins::previews::preview_line(long_line);
   EXPECT_EQ(cut, std::string(150, 'a') + "…");
 }
+
+TEST(Plugins, PinnedBarShowsWhileThereIsAPin) {
+  namespace pins = mux::plugins::pins;
+  ui_state ui;
+  auto bar = pins::pinned_bar(ui.colours);
+  mux::ui::shown_model model(mux::ui::shown_root{});
+  skiff::bind::Binding<mux::ui::shown_model> binding;
+  binding.refresh(bar, model);
+  EXPECT_FALSE(bar.visible());
+  mux::ui::show(model, pins::shown{pins::pin_view{"$pinned", "Pinned message", "hello"}});
+  binding.refresh(bar, model);
+  EXPECT_TRUE(bar.visible());
+  mux::ui::show(model, pins::shown{});
+  binding.refresh(bar, model);
+  EXPECT_FALSE(bar.visible());
+}

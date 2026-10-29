@@ -1805,3 +1805,11 @@ TEST(Plugins, PinnedBarShowsWhileThereIsAPin) {
   binding.refresh(bar, model);
   EXPECT_FALSE(bar.visible());
 }
+
+TEST(Plugins, SearchBarSaysWhichOfHowManyIsShown) {
+  namespace search = mux::plugins::search;
+  const search::found_said_t said;
+  EXPECT_EQ(said(search::shown{.open = true}), "");
+  EXPECT_EQ(said(search::shown{.of = 0, .asked = true, .open = true}), "No results");
+  EXPECT_EQ(said(search::shown{.at = 2, .of = 12, .asked = true, .open = true}), "3 of 12");
+}

@@ -744,6 +744,16 @@ struct trailer_facts {
   const conversation& in;
   std::string message_id;
 };
+// What a message's cards are made from (contract::message_cards): the
+// message, its first link, the program's model (the previews fetched), and
+// whether the chat shows previews.
+struct card_facts {
+  const palette& colours;
+  const message& said;
+  std::optional<std::string> link;
+  const model* now = nullptr;
+  bool previews_shown = true;
+};
 
 
 [[nodiscard]] inline skiff::compose::Look list_dialog(float height) {

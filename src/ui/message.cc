@@ -222,6 +222,54 @@ struct plugin_trailers<plugin_list<Features...>> {
 };
 using trailers_t = plugin_trailers<composition::providers<contract::message_trailers, enabled_plugins>>;
 
+// What plugins put in the bubble after its text and blocks
+// (contract::message_cards) -- a link's preview -- in their order, each in
+// a slot of its own: empty where it has nothing to show of the message.
+template <class List>
+struct plugin_cards;
+template <class... Features>
+struct plugin_cards<plugin_list<Features...>> {
+  template <class Feature>
+  static auto made(const card_facts& facts) -> decltype(extend(contract::message_cards{}, type_tag<Feature>{}, facts)) {
+    static_assert(requires { extend(contract::message_cards{}, type_tag<Feature>{}, facts); },
+                  composition::broken<contract::message_cards, Feature>());
+    return extend(contract::message_cards{}, type_tag<Feature>{}, facts);
+  }
+  template <class Feature>
+  using node_of = composition::node_t<decltype(made<Feature>(std::declval<const card_facts&>()))>;
+  using nodes_t = std::tuple<std::optional<node_of<Features>>...>;
+  static nodes_t built(const card_facts& facts) {
+    nodes_t slots;
+    [&]<std::size_t... At>(std::index_sequence<At...>) {
+      (composition::put(std::get<At>(slots), made<Features>(facts)), ...);
+    }(std::index_sequence_for<Features...>{});
+    return slots;
+  }
+  // Whether any is shown: the time then goes under them.
+  static bool any(const nodes_t& slots) {
+    return std::apply([](const auto&... slot) { return (slot.has_value() || ...); }, slots);
+  }
+  // The link a press at x, y in a row is on, where it is on a card that
+  // has one.
+  template <class Feature>
+    requires requires(const node_of<Feature>& shown, float x, float y) { pressed_link(contract::message_cards{}, type_tag<Feature>{}, shown, x, y); }
+  static std::optional<std::string> pressed_in(auto& row, float x, float y) {
+    const node_of<Feature>* shown = skiff::scene::findNode<node_of<Feature>>(row);
+    return shown ? pressed_link(contract::message_cards{}, type_tag<Feature>{}, *shown, x, y) : std::nullopt;
+  }
+  // A card with no link of its own.
+  template <class Feature>
+  static std::optional<std::string> pressed_in(auto&, float, float) {
+    return std::nullopt;
+  }
+  static std::optional<std::string> pressed(auto& row, float x, float y) {
+    std::optional<std::string> found;
+    ((found = found ? found : pressed_in<Features>(row, x, y)), ...);
+    return found;
+  }
+};
+using cards_t = plugin_cards<composition::providers<contract::message_cards, enabled_plugins>>;
+
 // The facts a message's row is made from: while they are the same, the
 // row is kept as it is -- with a selection in its text.
 struct bubble_facts {
@@ -318,7 +366,7 @@ struct named_rooms {
 // The body's parts, by where they are in it.
 namespace bubble_part {
 inline constexpr std::size_t frost = 0, name = 1, forwarded = 2, quote = 3, picture = 4, their_sticker = 5, album = 6, file = 7,
-                             text = 8, blocks = 9, preview = 10, trailers = 11, thread = 12, lines = 13, their_view = 14, time = 15,
+                             text = 8, blocks = 9, cards = 10, trailers = 11, thread = 12, lines = 13, their_view = 14, time = 15,
                              inline_time = 16;
 }
 template <std::size_t Part> [[nodiscard]] auto& part_of(auto& body) { return std::get<Part>(body.fParts); }
@@ -341,11 +389,6 @@ struct bubble_words {};
 using bubble_words_t = skiff::compose::Marked<bubble_words, decltype(skiff::compose::styled({}, message_words(std::declval<const palette&>(),
                                                                                                std::declval<const text_piece&>(), 0u, 0u)))>;
 [[nodiscard]] bubble_words_t* words_in(auto& node) { return skiff::scene::findNode<bubble_words_t>(node); }
-// A link's preview, marked with its address: what a menu over it copies.
-struct previewed_link {
-  std::string url;
-};
-using previewed_link_t = skiff::compose::Marked<previewed_link, page_preview_t>;
 
 // The bubble's own rules, as tdesktop lays one out: the time beside the
 // text's last line wherever the two fit at the bubble's widest -- the bubble
@@ -422,7 +465,7 @@ struct bubble_rules {
         scene::layout(inline_time, body.fState.contentBox());
       }
     }
-    if (state.time_placed && text.visible() && part_of<bubble_part::blocks>(body).empty() && !part_of<bubble_part::preview>(body) &&
+    if (state.time_placed && text.visible() && part_of<bubble_part::blocks>(body).empty() && !cards_t::any(part_of<bubble_part::cards>(body)) &&
         !state.beside) {
       const auto last = trailer ? trailer->bounds : text.bounds();
       if (last != state.placed_beside) {
@@ -500,7 +543,7 @@ struct bubble_rules {
       }
       return;
     }
-    if (!part_of<bubble_part::blocks>(body).empty() || part_of<bubble_part::preview>(body) || (!text.visible() && !trailer)) {
+    if (!part_of<bubble_part::blocks>(body).empty() || cards_t::any(part_of<bubble_part::cards>(body)) || (!text.visible() && !trailer)) {
       // Under all of it, on a line of its own: what follows the text -- a
       // code block, a preview -- is no line to put it beside. Left as the
       // first guess had it, it stayed beside the text, in the middle of the
@@ -840,11 +883,8 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
                              return marks.flashed == id ? marks.fragment : std::nullopt;
                            },
                            marks_fragment{pieces.front().styles, quote_colour}, bubble_words_t(std::move(words))));
-  // The first link's preview, where it has come.
-  std::optional<previewed_link_t> preview;
-  if (const auto link = first_link_of(said); link && now && f.previews_shown)
-    if (const auto found = now->previews.find(*link); found != now->previews.end())
-      preview.emplace(previewed_link_t(page_preview(colours, found->second, *link), previewed_link{*link}));
+  // The plugins' cards: the first link's preview, where it has come.
+  auto cards = cards_t::built(card_facts{colours, said, first_link_of(said), now, f.previews_shown});
   // What it answers, in the timeline, in a thread or fetched aside: pressed,
   // that message -- the part the header shows marked there.
   std::optional<decltype(c::onClick(request::jump_to_message{}, quote_row(colours, 0, "", "")))> quote;
@@ -959,7 +999,7 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
                                                  nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim)));
   // Only where the words are what ends the bubble: after a code block or a
   // preview, the time goes under them.
-  if (skia::SkFont* font = skiff::paint::defaultFont(); font && words_shown && !words_said.empty() && !rules.sticker && pieces.size() == 1 && !preview) {
+  if (skia::SkFont* font = skiff::paint::defaultFont(); font && words_shown && !words_said.empty() && !rules.sticker && pieces.size() == 1 && !cards_t::any(cards)) {
     const skiff::paint::Painter p(nullptr, *font);
     if (const auto wrapped_lines = p.wrap(words_said, kBubbleMaxWidth, 13.0f, false); !wrapped_lines.empty()) {
       const float needs = p.measure(wrapped_lines.back(), 13.0f, false) + p.measure(when, 11.0f) + 10.0f;
@@ -974,7 +1014,7 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   return c::arranged<bubble_rules>(
       std::move(rules),
       bubble_box(c::vbox(2.0f, spec), std::move(frost), std::move(name), std::move(forwarded), std::move(quote), std::move(picture),
-                std::move(their_sticker), std::move(album), std::move(file), std::move(text), std::move(blocks), std::move(preview),
+                std::move(their_sticker), std::move(album), std::move(file), std::move(text), std::move(blocks), std::move(cards),
                 trailers_t::built(trailer_facts{colours, looks, said, in, said.id}), std::move(thread), std::move(lines),
                 std::move(their_view), std::move(time), std::move(inline_time)));
 }
@@ -1067,8 +1107,8 @@ struct row_menu {
     // where the pointer is on it.
     if (auto pressed = skiff::scene::pressedLink())
       facts.pressed_link = std::move(*pressed);
-    else if (const previewed_link_t* preview = skiff::scene::findNode<previewed_link_t>(row); preview && preview->bounds().contains(x, y))
-      facts.pressed_link = preview->fTag.url;
+    else if (auto on_card = cards_t::pressed(row, x, y))
+      facts.pressed_link = std::move(*on_card);
     facts.emoji = copied_emoji_at(facts.pressed_link);
     // A sticker: what sending it again takes.
     if (said.sticker && said.attachment)

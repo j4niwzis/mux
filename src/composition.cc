@@ -53,6 +53,15 @@ struct message_menu {
 struct message_trailers {
   static constexpr std::string_view name = "a message's trailers";
 };
+// A message's cards: what goes in its bubble after its text and its blocks,
+// before its trailers -- a link's preview (mux.ui.messages:message):
+//   extend(c, f, card_facts) -> std::optional<its node>: none where it has
+//   nothing to show of the message; the time goes under a card, not
+//   beside it; and pressed_link(c, f, node, x, y), the link a press there
+//   is on, for the message's menu, where it has one
+struct message_cards {
+  static constexpr std::string_view name = "a message's cards";
+};
 // The window's dialogs (mux.ui:window): what a plugin's dialog shows -- its
 // facts, a part of what is shown -- and its box:
 //   facts_type(c, f) -> type_tag<its facts>, in the plugin's types

@@ -118,59 +118,5 @@ using link_card_t = decltype(link_card(std::declval<const palette&>(), "", "", "
   return out;
 }
 
-// A preview's line about its page, as Telegram shows one: its whitespace --
-// the page's own lines, a menu's items one under another -- run together,
-// and cut at a word near 200 bytes.
-[[nodiscard]] std::string preview_line(std::string_view said) {
-  std::string out;
-  bool gap = false;
-  for (const char c : said) {
-    if (c == ' ' || c == '\n' || c == '\t' || c == '\r') {
-      gap = !out.empty();
-      continue;
-    }
-    if (gap)
-      out += ' ';
-    gap = false;
-    out += c;
-  }
-  constexpr std::size_t kMost = 200;
-  if (out.size() > kMost) {
-    std::size_t cut = out.rfind(' ', kMost);
-    if (cut == std::string::npos || cut < kMost / 2)
-      cut = kMost;
-    while (cut > 0 && (static_cast<unsigned char>(out[cut]) & 0xC0) == 0x80)
-      --cut;  // not inside a character
-    out.resize(cut);
-    out += "\u2026";
-  }
-  return out;
-}
-
-// A link's preview, as Telegram's: under the text, a stripe in the accent,
-// the site's name in it, the page's title and a few lines about it, and its
-// picture on the right.
-// Pressed -- it is a link -- the link is followed; lit under the pointer,
-// as a link is. Its link: the press's request's (fEvent.url).
-auto page_preview(const palette& colours, const link_preview& shown, std::string where) {
-  namespace c = skiff::compose;
-  std::optional<nodes::Image<from_avatars>> picture;
-  if (shown.image)
-    picture.emplace(c::styled({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f}, nodes::Image<from_avatars>(from_avatars{*shown.image})));
-  return SKIFF_NAMED(page_preview, c::onClick(request::open_url{std::move(where)},
-      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {6.0f, 0.0f, 2.0f, 0.0f},
-                            .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f,
-                            .background = (colours.accent & 0x00FFFFFFu) | (0x18u << 24),
-                            .hoverBackground = (colours.accent & 0x00FFFFFFu) | (0x34u << 24)}),
-             c::styled({.fillY = true, .width = 3.0f, .cornerRadius = 1.5f}, nodes::Box<>(colours.accent)),
-             c::column(c::vbox(1.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX}),
-                       c::visible(!shown.site.empty(), c::styled({.fillX = true}, elided(nodes::Text(shown.site, 13.0f, colours.accent, true)))),
-                       c::visible(!shown.title.empty(), c::styled({.fillX = true}, elided(nodes::Text(shown.title, 13.0f, colours.text, true)))),
-                       c::visible(!shown.description.empty(),
-                                  c::styled({.fillX = true}, wrapped(nodes::Text(preview_line(shown.description), 13.0f, colours.text))))),
-             std::move(picture)),
-      "Open link"));
-}
-using page_preview_t = decltype(page_preview(std::declval<const palette&>(), std::declval<const link_preview&>(), std::string()));
 
 }  // namespace mux::ui

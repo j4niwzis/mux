@@ -75,7 +75,7 @@ class connection {
   void close() {
     const turn mine(*this);
     if (stream_) {
-      (void)owner_->await<>([&](auto done) { stream_->async_shutdown(std::move(done)); });
+      std::visit([&](auto& open) { shut(open); }, *stream_);
       stream_.reset();
     }
   }
@@ -87,9 +87,9 @@ class connection {
     if (!stream_)
       return;
     aborted_ = true;
-    beast::get_lowest_layer(*stream_).cancel();
+    lowest().cancel();
     error_code ignored;
-    beast::get_lowest_layer(*stream_).socket().close(ignored);
+    lowest().socket().close(ignored);
   }
 
  private:
@@ -98,7 +98,21 @@ class connection {
   // was last used.
   static constexpr std::chrono::seconds kMostIdle{20};
   std::chrono::steady_clock::time_point last_done_{};
-  using stream_type = beast::ssl_stream<beast::tcp_stream>;
+  // Over TLS, or in the clear: as the url's scheme says.
+  using tls_stream = beast::ssl_stream<beast::tcp_stream>;
+  using plain_stream = beast::tcp_stream;
+  using stream_type = std::variant<tls_stream, plain_stream>;
+
+  // The TCP stream under either.
+  beast::tcp_stream& lowest() {
+    return std::visit([](auto& open) -> beast::tcp_stream& { return beast::get_lowest_layer(open); }, *stream_);
+  }
+  // Closed as each is: TLS said goodbye to, a bare socket shut.
+  void shut(tls_stream& open) { (void)owner_->await<>([&](auto done) { open.async_shutdown(std::move(done)); }); }
+  void shut(plain_stream& open) {
+    error_code ignored;
+    open.socket().shutdown(asio::ip::tcp::socket::shutdown_both, ignored);
+  }
 
   void open() {
     // A new connection reads from nothing: what the last one left unread --
@@ -106,26 +120,42 @@ class connection {
     // on as the start of this one's answer, it was "bad version" and the
     // account reconnecting.
     buffer_.consume(buffer_.size());
-    stream_.emplace(owner_->io(), tls_->context());
-    if (!::SSL_set_tlsext_host_name(stream_->native_handle(), where_.host.c_str()))
+    std::visit([&](auto how) { open(how); }, where_.scheme);
+  }
+  void open(scheme::https) {
+    auto& made = stream_.emplace(std::in_place_type<tls_stream>, owner_->io(), tls_->context());
+    // Just made as a TLS stream: the alternative is known, not tested.
+    auto& tls = std::get<tls_stream>(made);
+    if (!::SSL_set_tlsext_host_name(tls.native_handle(), where_.host.c_str()))
       throw net::failure("naming " + where_.host, error_code(static_cast<int>(::ERR_get_error()),
                                                                asio::error::get_ssl_category()));
-    stream_->set_verify_mode(asio::ssl::verify_peer);
-    stream_->set_verify_callback(net::peer_verification{where_.host});
-    const auto started = std::chrono::steady_clock::now();
-    beast::get_lowest_layer(*stream_).socket() = net::connect(*owner_, via_, where_.host, where_.port);
-    log_line(where_.host, std::format("connected{}, in {} ms", via_ ? std::format(" through {}:{}", via_->host, via_->port) : "",
-                                      since_ms(started)));
-    beast::get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
+    tls.set_verify_mode(asio::ssl::verify_peer);
+    tls.set_verify_callback(net::peer_verification{where_.host});
+    const auto started = connect();
     const auto [shaken] = owner_->await<>([&](auto done) {
-      stream_->async_handshake(asio::ssl::stream_base::client, std::move(done));
+      tls.async_handshake(asio::ssl::stream_base::client, std::move(done));
     });
     if (shaken) {
-      const std::string reason = net::verify_reason(stream_->native_handle());
+      const std::string reason = net::verify_reason(tls.native_handle());
       stream_.reset();
       throw net::failure("TLS with " + where_.host + (reason.empty() ? std::string() : " (" + reason + ")"), shaken);
     }
     log_line(where_.host, std::format("TLS up, in {} ms", since_ms(started)));
+  }
+  // In the clear: connected, and that is all.
+  void open(scheme::http) {
+    stream_.emplace(std::in_place_type<plain_stream>, owner_->io());
+    (void)connect();
+    log_line(where_.host, "plain http: nothing on this connection is encrypted");
+  }
+  // The socket connected, under whichever stream: when it started.
+  std::chrono::steady_clock::time_point connect() {
+    const auto started = std::chrono::steady_clock::now();
+    lowest().socket() = net::connect(*owner_, via_, where_.host, where_.port);
+    log_line(where_.host, std::format("connected{}, in {} ms", via_ ? std::format(" through {}:{}", via_->host, via_->port) : "",
+                                      since_ms(started)));
+    lowest().expires_after(std::chrono::seconds(30));
+    return started;
   }
   // How long since then, in whole milliseconds.
   static long long since_ms(std::chrono::steady_clock::time_point from) {
@@ -148,8 +178,7 @@ class connection {
     out.method(verb);
     out.target(where_.path + std::string(target));
     out.version(11);
-    out.set(beast::http::field::host,
-            where_.port == 443 ? where_.host : where_.host + ":" + std::to_string(where_.port));
+    out.set(beast::http::field::host, where_.authority());
     out.set(beast::http::field::user_agent, "mux");
     out.set(beast::http::field::accept, accept);
     if (bearer)
@@ -160,10 +189,10 @@ class connection {
     }
     for (const auto& [name, value] : headers) out.insert(name, value);
     out.prepare_payload();
-    beast::get_lowest_layer(*stream_).expires_after(timeout);
+    lowest().expires_after(timeout);
     const auto asked_at = std::chrono::steady_clock::now();
     const auto [sent, sent_bytes] = owner_->await<std::size_t>([&](auto done) {
-      beast::http::async_write(*stream_, out, std::move(done));
+      std::visit([&](auto& open) { beast::http::async_write(open, out, std::move(done)); }, *stream_);
     });
     if (sent) {
       stream_.reset();
@@ -173,7 +202,7 @@ class connection {
     in.body_limit(64 * 1024 * 1024);  // a first sync can be large
     if (!progress) {
       const auto [read, read_bytes] = owner_->await<std::size_t>([&](auto done) {
-        beast::http::async_read(*stream_, buffer_, in, std::move(done));
+        std::visit([&](auto& open) { beast::http::async_read(open, buffer_, in, std::move(done)); }, *stream_);
       });
       if (read) {
         stream_.reset();
@@ -182,7 +211,7 @@ class connection {
     } else {
       // Read in pieces, how far it has come said after each.
       const auto [header, header_bytes] = owner_->await<std::size_t>([&](auto done) {
-        beast::http::async_read_header(*stream_, buffer_, in, std::move(done));
+        std::visit([&](auto& open) { beast::http::async_read_header(open, buffer_, in, std::move(done)); }, *stream_);
       });
       if (header) {
         stream_.reset();
@@ -192,7 +221,7 @@ class connection {
           in.content_length() ? std::optional<std::size_t>(static_cast<std::size_t>(*in.content_length())) : std::nullopt;
       while (!in.is_done()) {
         const auto [read, read_bytes] = owner_->await<std::size_t>([&](auto done) {
-          beast::http::async_read_some(*stream_, buffer_, in, std::move(done));
+          std::visit([&](auto& open) { beast::http::async_read_some(open, buffer_, in, std::move(done)); }, *stream_);
         });
         if (read) {
           stream_.reset();

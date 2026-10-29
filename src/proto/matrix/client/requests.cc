@@ -110,8 +110,7 @@ void account<Sink>::register_pusher() {
         // Read once, here: whether it is a Matrix gateway.
         const bool own = said && said->unifiedpush && said->unifiedpush->gateway == std::optional<std::string>("matrix");
         if (own)
-          gateway = "https://" + where->host + (where->port == 443 ? std::string() : std::format(":{}", where->port)) +
-                    std::string(kPath);
+          gateway = where->origin() + std::string(kPath);
       } catch (const net::failure& failed) {
         log(id_, "push: the endpoint's server not asked for its gateway ({}); the public one used", failed.what());
       }

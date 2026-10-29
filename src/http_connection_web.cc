@@ -69,8 +69,7 @@ public:
     const auto verb = platform::method_of(method);
     if (!verb) throw std::runtime_error("Unsupported HTTP method");
     platform::request asked{.method = *verb,
-      .url = "https://" + (where_.host.contains(':') ? "[" + where_.host + "]" : where_.host) +
-             (where_.port == 443 ? "" : ":" + std::to_string(where_.port)) + where_.path + std::string(target),
+      .url = where_.origin() + where_.path + std::string(target),
       .body = std::string(body), .type = std::string(type.empty() ? "application/json" : type),
       .headers = headers | std::ranges::to<std::vector>(),
       .timeout = std::chrono::duration_cast<std::chrono::milliseconds>(timeout)};

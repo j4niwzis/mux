@@ -209,7 +209,7 @@ void account<Sink>::run() {
     log(id_, "no homeserver found");
     // Named by hand, but not as an address mux speaks to: said as such.
     if (how_.homeserver && !how_.homeserver->empty())
-      say(connection::failed{"homeserver address not understood: " + *how_.homeserver + " (https:// only)"});
+      say(connection::failed{"homeserver address not understood: " + *how_.homeserver + " (https:// or http://)"});
     else
       say(connection::failed{"no homeserver for " + how_.user_id});
     return;
@@ -301,7 +301,7 @@ void account<Sink>::run() {
   // the browser, the server asked again every few seconds until it says
   // that stage is done. Then logged in as, with the session it gives.
   const auto base_text = [&] {
-    return std::format("https://{}{}{}", base->host, base->port == 443 ? std::string() : std::format(":{}", base->port), base->path);
+    return base->origin() + base->path;
   };
   const auto register_account = [&]() -> bool {
     using asked_t = loom::cs::register_;

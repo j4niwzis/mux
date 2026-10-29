@@ -703,8 +703,7 @@ auto account<Sink>::uia_answer(const loom::error& said, const std::string& given
   const auto home = this->homeserver();
   if (stage == flow.end() || !home)
     return uia_none{};
-  return uia_browser{std::format("https://{}{}{}/_matrix/client/v3/auth/{}/fallback/web?session={}", home->host,
-                                 home->port == 443 ? std::string() : std::format(":{}", home->port), home->path,
+  return uia_browser{std::format("{}{}/_matrix/client/v3/auth/{}/fallback/web?session={}", home->origin(), home->path,
                                  loom::name_of(*stage), *said.session)};
 }
 

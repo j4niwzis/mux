@@ -55,7 +55,7 @@ struct page {
   const auto at = page_of(from);
   if (!at)
     return std::nullopt;
-  const std::string origin = "https://" + at->site.host + (at->site.port == 443 ? "" : ":" + std::to_string(at->site.port));
+  const std::string origin = at->site.origin();
   if (to.starts_with("//"))
     return "https:" + std::string(to);
   if (to.starts_with('/'))

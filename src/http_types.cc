@@ -5,9 +5,27 @@ import mux.net;
 export namespace mux::http {
 namespace asio = net::asio;
 using error_code = net::error_code;
-// Where an HTTPS service is: its host, its port, and the path everything is
-// under. "https://matrix.example.org:8448/prefix/" and "example.org" alike.
+// How a service is spoken to: over TLS, or in the clear (a server on a home
+// network, a test one) -- each with its own port where none is said.
+namespace scheme {
+struct https {
+  static constexpr std::string_view word = "https";
+  static constexpr std::uint16_t port = 443;
+  friend bool operator==(https, https) = default;
+};
+struct http {
+  static constexpr std::string_view word = "http";
+  static constexpr std::uint16_t port = 80;
+  friend bool operator==(http, http) = default;
+};
+}  // namespace scheme
+using scheme_t = std::variant<scheme::https, scheme::http>;
+
+// Where an HTTP service is: how it is spoken to, its host, its port, and the
+// path everything is under. "https://matrix.example.org:8448/prefix/",
+// "http://192.168.1.2:8008" and "example.org" (https) alike.
 struct url {
+  scheme_t scheme = scheme::https{};
   std::string host;
   std::uint16_t port = 443;
   std::string path;  // without its trailing slash; empty for the root
@@ -16,8 +34,12 @@ struct url {
     url made;
     if (text.starts_with("https://"))
       text.remove_prefix(8);
-    else if (text.find("://") != std::string_view::npos)
-      return std::nullopt;  // plain http is not spoken here
+    else if (text.starts_with("http://")) {
+      text.remove_prefix(7);
+      made.scheme = scheme::http{};
+      made.port = scheme::http::port;
+    } else if (text.find("://") != std::string_view::npos)
+      return std::nullopt;  // no other scheme is spoken here
     const auto slash = text.find('/');
     std::string_view authority = text.substr(0, slash);
     if (slash != std::string_view::npos)
@@ -50,6 +72,20 @@ struct url {
     if (made.host.empty())
       return std::nullopt;
     return made;
+  }
+  // Whether the port is the scheme's own: left out of what is written.
+  [[nodiscard]] bool default_port() const {
+    return std::visit([&](auto how) { return port == decltype(how)::port; }, scheme);
+  }
+  // Its host as a URL or a Host header writes it: an IPv6 literal in
+  // brackets; and its port, where it is not the scheme's own.
+  [[nodiscard]] std::string authority() const {
+    const std::string named = host.contains(':') ? "[" + host + "]" : host;
+    return default_port() ? named : std::format("{}:{}", named, port);
+  }
+  // "https://host[:port]", without the path.
+  [[nodiscard]] std::string origin() const {
+    return std::format("{}://{}", std::visit([](auto how) { return decltype(how)::word; }, scheme), authority());
   }
 };
 

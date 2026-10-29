@@ -44,6 +44,10 @@ public:
       platform::browser &transport;
       ~release() { transport.abort(1); (void)transport.take(1); }
     } held{transport_};
+    // Looked at again sooner while an answer is fresh, then less often: a
+    // long poll waits up to half a minute, and looked at every 5 ms the
+    // page worked all the time, doing nothing (the user's).
+    auto wait = std::chrono::milliseconds(5);
     while (true) {
       if (auto got = transport_.take(1)) {
         if (got->cancelled) throw net::failure("Browser request cancelled", asio::error::operation_aborted);
@@ -56,7 +60,8 @@ public:
         const auto bytes = transport_.transferred(1);
         if (!(*progress)(bytes.read, bytes.total)) transport_.abort(1);
       }
-      owner_->sleep(std::chrono::milliseconds(5));
+      owner_->sleep(wait);
+      wait = std::min(wait * 2, std::chrono::milliseconds(100));
     }
   }
   void abort() { transport_.abort(1); }

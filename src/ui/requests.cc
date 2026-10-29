@@ -424,6 +424,10 @@ struct look_up_room {
 struct show_invite {
   mux::conversation_id chat;
 };
+// A chat marked read, as a notification's action asks.
+struct mark_chat_read {
+  mux::conversation_id chat;
+};
 // A space's rooms and spaces, joined or not, in Explore.
 struct explore_space {
   std::string room;

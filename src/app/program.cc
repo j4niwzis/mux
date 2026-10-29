@@ -182,6 +182,21 @@ struct app : kept_settings {
   bool plugins_took_files(const std::vector<std::string>& paths, bool dropped) {
     return std::apply([&](auto&... part) { return (part_took_files(part, paths, dropped) || ...); }, plugin_parts);
   }
+  // What arrived, as a batch, to each plugin's part that takes it so -- the
+  // notifications', which know a mention by the marks the same batch made.
+  template <class Part>
+    requires requires(Part& part, const std::vector<mux::change_t>& changes) { part.took(changes); }
+  static void took_part(Part& part, const std::vector<mux::change_t>& changes) {
+    part.took(changes);
+  }
+  template <class Part>
+  static void took_part(Part&, const std::vector<mux::change_t>&) {}
+  void plugins_took(const std::vector<mux::change_t>& changes) {
+    std::apply([&](auto&... part) { (took_part(part, changes), ...); }, plugin_parts);
+  }
+  void plugins_woken() {
+    std::apply([&](auto&... part) { (this->woken_part(part), ...); }, plugin_parts);
+  }
   void plugins_tick() {
     std::apply([](auto&... part) { (tick_part(part), ...); }, plugin_parts);
   }
@@ -237,6 +252,15 @@ struct app : kept_settings {
       program->take(asked);
     }
   };
+  // The window woken, to each plugin's part that takes it -- asking the
+  // program in turn: a notification's action, its chat opened or read.
+  template <class Part>
+    requires requires(Part& part, const taker& asked) { part.woken(asked); }
+  void woken_part(Part& part) {
+    part.woken(taker{this});
+  }
+  template <class Part>
+  void woken_part(Part&) {}
   template <class Part, class Request>
     requires requires(Part& part, const Request& one, const taker& asked) { part.apply(one, asked); }
   bool offer(Part& part, const Request& one) {
@@ -610,14 +634,25 @@ struct app : kept_settings {
   std::optional<std::pair<mux::conversation_id, std::string>> person_open_;
   // The notifications mux shows itself, for the host to put up; one pressed;
   // the window's focus -- the notices part's.
-  using toast_due = notices_part::toast_due;
+  using toast_due = mux::app::toast_due;
   using toast_card = mux::ui::toast_card_t;
   static auto make_toast(const mux::ui::palette& colours, std::string key, std::string title, std::string text) {
     return mux::ui::toast_card(colours, std::move(key), std::move(title), std::move(text));
   }
-  [[nodiscard]] std::vector<toast_due> take_toasts() { return notices.take_toasts(); }
+  template <class Part>
+    requires requires(Part& part) { { part.take_toasts() } -> std::same_as<std::vector<toast_due>>; }
+  static void toasts_of(Part& part, std::vector<toast_due>& out) {
+    out.append_range(part.take_toasts());
+  }
+  template <class Part>
+  static void toasts_of(Part&, std::vector<toast_due>&) {}
+  [[nodiscard]] std::vector<toast_due> take_toasts() {
+    std::vector<toast_due> out;
+    std::apply([&](auto&... part) { (toasts_of(part, out), ...); }, plugin_parts);
+    return out;
+  }
   void open_notified(const mux::conversation_id& chat) { this->open_chat(chat, std::nullopt); }
-  void focus_changed(bool on) { notices.focus_changed(on); }
+  void focus_changed(bool on) { shared.window_focused = on; }
   // Whether the window is on screen: not hidden, minimised, covered or
   // suspended -- a phone's screen off, another app over it. Off it, only
   // the connections go on: the model kept up and notifications given, and
@@ -631,6 +666,7 @@ struct app : kept_settings {
     if (now == on_screen)
       return;
     on_screen = now;
+    shared.on_screen = now;
     if (now && std::exchange(refresh_waiting_, false))
       this->refresh();
   }

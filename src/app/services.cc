@@ -27,6 +27,15 @@ import mux.app.kept;
 
 export namespace mux::app {
 
+// A notification mux shows itself, in a window of its own: for the host --
+// a plugin's (the notifications'), gathered by the program.
+struct toast_due {
+  mux::conversation_id chat;
+  std::string key;
+  std::string title;
+  std::string text;
+};
+
 struct services {
   mux::model* model = nullptr;
   // What the window shows that the program opens and closes.
@@ -61,6 +70,10 @@ struct services {
   // The room a card is up for (a plugin's): the server's answer of it is
   // the card's, not a pill's.
   std::optional<std::string> card_room;
+  // Whether the window has the keyboard's focus, and is on screen at all:
+  // a message to the chat being read then notifies nothing.
+  bool window_focused = true;
+  bool on_screen = true;
   bool rebuild_due = false;
   // Whether it is used by a finger -- a phone's screen -- as the host saw
   // last: a touch, or a mouse's press. Where it is, the input is not given

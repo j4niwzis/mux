@@ -24,6 +24,7 @@ class reading_part {
 
   // A chat read to its newest message from someone else: kept, and sent
   // where the account's privacy lets it.
+  void apply(const request::mark_chat_read& one) { this->mark_read(one.chat); }
   void mark_read(const conversation_id& which) {
     if (s_->demo())
       return;

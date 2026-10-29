@@ -31,23 +31,9 @@ namespace mux::app {
 auto app::window() -> skiff::scene::Scene<window_type>& { return scene; }
 
 void app::woken() {
-  // What UnifiedPush's connector said, first: a push is a sync now.
-  notices.take_push();
-  // What a notification asked: pressed, its chat opened -- it only brought
-  // mux up; its actions, the chat read, or answered and read, and taken away.
-  while (const auto asked = notices.take_asked())
-    spl::visit(spl::overloaded{[&](const notices_part::opened_chat& one) { this->open_chat(one.chat, std::nullopt); },
-                               [&](const notices_part::read_chat& one) {
-                                 reading.mark_read(one.chat);
-                                 notices_part::dismiss(one.chat);
-                               },
-                               [&](const notices_part::replied& one) {
-                                 if (!one.text.empty())
-                                   net->send(one.chat, one.text);
-                                 reading.mark_read(one.chat);
-                                 notices_part::dismiss(one.chat);
-                               }},
-               *asked);
+  // What the plugins do as the window is woken: UnifiedPush's word, a
+  // notification's actions (the notifications').
+  this->plugins_woken();
   // What the workers made, put where it goes: on this, the UI's thread.
   work.finish();
   auto taken = box->take();
@@ -127,8 +113,6 @@ void app::take_arriving(std::chrono::milliseconds most) {
                                // An invite come: said once a run.
                                [&](const mux::change::conversation_updated& updated) {
                                  pictures.avatar_changed(updated.id.id, updated.avatar);
-                                 if (updated.invite)
-                                   notices.invite_came(updated.id, *updated.invite, updated.name);
                                },
                                [&](const mux::change::devices_listed& listed) {
                                  if (person_open_ && person_open_->first.account == listed.by && person_open_->second == listed.user) {
@@ -247,27 +231,9 @@ void app::take_arriving(std::chrono::milliseconds most) {
       store.mark_deleted_on_disk(in, ids);
       return {};
     });
-  // What came as it happened, notified: mentions known by the marks the same
-  // changes made.
-  if (!ask.demo) {
-    std::set<std::string> mentioning;
-    for (const mux::change_t& one : changes)
-      spl::visit(spl::overloaded{[&](const mux::change::mentioned& m) { mentioning.insert(m.event); },
-                                 [](const auto&) {}},
-                 one);
-    for (const mux::change_t& one : changes)
-      spl::visit(spl::overloaded{[&](const mux::change::message_added& added) {
-                                   const bool live = spl::visit(
-                                       spl::overloaded{[](mux::placement::at_end) { return true; },
-                                                       [](const auto&) { return false; }},
-                                       added.where);
-                                   if (live)
-                                     notices.message_came(added.message, mentioning.contains(added.message.id),
-                                                          on_screen && shared.chosen() == added.message.in);
-                                 },
-                                 [](const auto&) {}},
-                 one);
-  }
+  // What came, as a batch, to the plugins that take it so: notified, as it
+  // happened (the notifications').
+  this->plugins_took(changes);
   // Messages held to a number in all, least recently read out first.
   model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), shared.chosen());
   const auto refresh_began = std::chrono::steady_clock::now();
@@ -428,12 +394,6 @@ void app::settle_model() {
   if (due.limits) {
     settings.apply_limits();
     model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), shared.chosen());
-  }
-  if (due.push) {
-    if (*due.push)
-      notices.start_push();
-    else
-      notices.stop_push();
   }
   window_binding.refresh(root(), this->state);
   this->refresh_shown();
@@ -772,9 +732,6 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
     this->drafts.load();
   this->model->show_deleted = this->history().show_deleted;
   this->settings.apply_limits();
-  // UnifiedPush only where chosen; off by default.
-  if (this->notifications().unified_push.value_or(false) && !demo)
-    notices.start_push();
   skiff::paint::motionLevel() = motion_of(this->appearance().motion);
   this->config_error = std::move(error);
   this->refresh();

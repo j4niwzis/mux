@@ -99,7 +99,7 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG='-O3 -g -fno-omit-frame-pointer' -DCMAKE_C_FLAGS_DEBUG='-O3 -g -fno-omit-frame-pointer' -DMUX_PROGRAM_JOBS=1 \
             -DCMAKE_C_COMPILER="$CC" \
             -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
-            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++ -ftime-trace -ftime-trace-granularity=500" \
             -DMUX_UI=ON -DMUX_CALLS=ON
       # The tests, each with the target that runs it: a job each.
       - name: the tests
@@ -119,9 +119,25 @@ jobs:
           print("list=" + json.dumps(out))
           EOF
       # Every unit that fails, not only the first: a run shows them all.
+      - name: when the stage's compiles began
+        run: touch build/stage-began
       - name: build the modules
         id: build
         run: cmake --build build --parallel 1 --target mux_modules -- -k 0
+      # What its compiles spent their time on (-ftime-trace), summed; the
+      # traces themselves kept with the summary.
+      - name: compile time, modules
+        if: always()
+        run: python3 .github/scripts/time_trace.py modules build build/stage-began
+      - name: keep the compile-time traces, modules
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: time-trace-modules-clang${{ matrix.llvm }}
+          path: |
+            build/time-trace-modules.md
+            build/time-trace-modules.tar.gz
+          if-no-files-found: ignore
       # Where the build stopped over the std module: the flags and defines
       # each copy of std, and each copy of a module, was built with -- the
       # difference between them is the answer.
@@ -194,9 +210,25 @@ jobs:
           git ls-files -z | xargs -0 touch -d "@1000000000"
           tr '\n' '\0' < build/changed-sources | xargs -0 -r touch -d "@$(cat build/run-began)"
       # Every unit that fails, not only the first: a run shows them all.
+      - name: when the stage's compiles began
+        run: touch build/stage-began
       - name: build the app's units
         id: build
         run: cmake --build build --parallel 1 --target mux_app -- -k 0
+      # What its compiles spent their time on (-ftime-trace), summed; the
+      # traces themselves kept with the summary.
+      - name: compile time, app
+        if: always()
+        run: python3 .github/scripts/time_trace.py app build build/stage-began
+      - name: keep the compile-time traces, app
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: time-trace-app-clang${{ matrix.llvm }}
+          path: |
+            build/time-trace-app.md
+            build/time-trace-app.tar.gz
+          if-no-files-found: ignore
       # What this build was built from: only where it went through, so
       # that what failed is built again from scratch by the next run.
       - name: what the build was built from
@@ -252,9 +284,23 @@ jobs:
           git ls-files -z | xargs -0 touch -d "@1000000000"
           tr '\n' '\0' < build/changed-sources | xargs -0 -r touch -d "@$(cat build/run-began)"
       # Every unit that fails, not only the first: a run shows them all.
+      - name: when the stage's compiles began
+        run: touch build/stage-began
       - name: build the program's first units
         id: build
         run: cmake --build build --parallel 1 --target CMakeFiles/mux.dir/src/app/program.cc.o CMakeFiles/mux.dir/src/main.cc.o CMakeFiles/mux.dir/src/app/program_core.cc.o CMakeFiles/mux.dir/src/app/program_lifetime.cc.o CMakeFiles/mux.dir/src/app/program_media.cc.o -- -k 0
+      - name: compile time, program
+        if: always()
+        run: python3 .github/scripts/time_trace.py program build build/stage-began
+      - name: keep the compile-time traces, program
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: time-trace-program-clang${{ matrix.llvm }}
+          path: |
+            build/time-trace-program.md
+            build/time-trace-program.tar.gz
+          if-no-files-found: ignore
       # What this build was built from: only where it went through, so
       # that what failed is built again from scratch by the next run.
       - name: what the build was built from
@@ -310,9 +356,23 @@ jobs:
           git ls-files -z | xargs -0 touch -d "@1000000000"
           tr '\n' '\0' < build/changed-sources | xargs -0 -r touch -d "@$(cat build/run-began)"
       # Every unit that fails, not only the first: a run shows them all.
+      - name: when the stage's compiles began
+        run: touch build/stage-began
       - name: build and link mux
         id: build
         run: cmake --build build --parallel 1 --target mux -- -k 0
+      - name: compile time, link
+        if: always()
+        run: python3 .github/scripts/time_trace.py link build build/stage-began
+      - name: keep the compile-time traces, link
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: time-trace-link-clang${{ matrix.llvm }}
+          path: |
+            build/time-trace-link.md
+            build/time-trace-link.tar.gz
+          if-no-files-found: ignore
       - name: Package binaries with and without debug info
         run: |
           python3 test/binary_artifacts_test.py

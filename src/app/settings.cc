@@ -68,19 +68,11 @@ class settings_part {
     if (s_->settings_open())
       s_->settings_page(mux::ui::settings_page::home{});
   }
-  void apply(const request::settings_animations&) {
-    if (s_->settings_open())
-      s_->settings_page(mux::ui::settings_page::animations{});
-  }
 
-  // Appearance and rendering.
+  // Appearance.
   void apply(const request::settings_appearance&) {
     if (s_->settings_open())
       s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
-  }
-  void apply(const request::settings_rendering&) {
-    if (s_->settings_open())
-      s_->settings_page(mux::ui::settings_page::rendering{k_->appearance().renderer});
   }
   // Frosted's blur: kept, the backgrounds' frost made again, and shown.
   void apply(const request::set_frost_blur& one) {

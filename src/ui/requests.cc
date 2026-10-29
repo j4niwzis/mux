@@ -871,7 +871,6 @@ struct typing {
 struct proxy_kind {
   mux::config::proxy_kind_t kind;
 };
-struct settings_rendering {};
 struct settings_storage {};
 struct clear_stored {};
 struct settings_appearance {};
@@ -886,7 +885,6 @@ struct switch_account {
 };
 struct close_settings {};
 struct settings_home {};
-struct settings_animations {};
 // A chat's banner's button pressed: what it asks is its protocol's, asked
 // again where the program knows which protocol it is.
 struct banner_pressed {

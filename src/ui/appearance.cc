@@ -400,35 +400,5 @@ inline auto appearance_page(const ui_needs& needs, const config::theme_t& theme,
 }
 using appearance_page_t = decltype(appearance_page(std::declval<const ui_needs&>(), config::theme_t{}, config::accent_t{}));
 
-// Settings' Rendering page: what draws the window, from the next start.
-// The Rendering page's frames: a toggle bound to each of frame_settings'
-// fields, in effect at once -- the host reads them as it draws.
-inline auto frame_settings_view(const palette& colours) {
-  using frames = config::frame_settings;
-  return SKIFF_NAMED(frame_settings_view, skiff::compose::column(
-      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
-      spaced_title(colours, "FRAMES"), setting_switch<&frames::partial_redraw>(colours, "Partial redraw"),
-      setting_switch<&frames::flash_redraws>(colours, "Flash redrawn areas"), setting_switch<&frames::vsync>(colours, "Vsync"),
-      setting_switch<&frames::show_fps>(colours, "Show frames a second"),
-      spaced_note(colours, "Partial redraw repaints only what changed, into a frame kept between them; a part "
-                              "that forgets to say it changed then stays as it was. Flashing outlines what each "
-                              "frame repainted. Vsync shows frames in step with the screen; off, they are shown as "
-                              "soon as drawn. The counter shows frames a second and the last frame's time. All take "
-                              "effect at once.")));
-}
-inline auto rendering_page(const palette& colours) {
-  using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
-  using field = skiff::model::Field<&config::look_settings::renderer>;
-  return SKIFF_NAMED(rendering_page, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Rendering", {}, {}, true, true)),
-      skiff::compose::column(
-          skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
-          skiff::compose::bound<field>(widgets::ChoiceRowField<config::renderer_t>(colours.widgets, "OpenGL (the graphics card)", config::renderer::opengl{})),
-          skiff::compose::bound<field>(widgets::ChoiceRowField<config::renderer_t>(colours.widgets, "Software (the processor)", config::renderer::software{})),
-          wrapped(skiff::compose::styled({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}}, note_text(colours, "Takes effect when mux starts again.")))),
-      frame_settings_view(colours)));
-}
-using rendering_page_t = decltype(rendering_page(std::declval<const palette&>()));
 
 }  // namespace mux::ui

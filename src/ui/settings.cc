@@ -25,13 +25,9 @@ export namespace mux::ui {
 // Settings' pages, each with what it shows.
 namespace settings_page {
 struct home {};
-struct animations {};
 struct appearance {
   config::theme_t theme;
   config::accent_t accent;
-};
-struct rendering {
-  config::renderer_t renderer;
 };
 struct files {
   config::sending_settings now;
@@ -63,11 +59,11 @@ template <class List>
 struct settings_pages_of;
 template <class... Pages>
 struct settings_pages_of<type_list<Pages...>> {
-  using pages = spl::variant<settings_page::home, settings_page::animations, settings_page::appearance, settings_page::rendering,
+  using pages = spl::variant<settings_page::home, settings_page::appearance,
                              settings_page::files, settings_page::storage,
                              Pages...>;
-  using nodes = spl::variant<settings_home_t, animations_page_t,
-                             appearance_page_t, rendering_page_t, storage_page_t, files_page_t,
+  using nodes = spl::variant<settings_home_t,
+                             appearance_page_t, storage_page_t, files_page_t,
                              plugin_settings_node<Pages>...>;
 };
 using settings_plugins = typename plugin_settings_pages<composition::providers<contract::settings_pages, enabled_plugins>>::type;
@@ -101,9 +97,7 @@ inline auto settings_view(const ui_needs& needs) {
     const palette& c = *n.colours;
     spl::visit(spl::overloaded{
                    [&](settings_page::home) { page.template emplace<settings_home_t>(settings_home(c)); },
-                   [&](settings_page::animations) { page.template emplace<animations_page_t>(animations_page(c)); },
                    [&](const settings_page::appearance& one) { page.template emplace<appearance_page_t>(appearance_page(n, one.theme, one.accent)); },
-                   [&](settings_page::rendering) { page.template emplace<rendering_page_t>(rendering_page(c)); },
                    [&](settings_page::storage) { page.template emplace<storage_page_t>(storage_page(c)); },
                    [&](settings_page::files) { page.template emplace<files_page_t>(files_page(c)); },
                    // A plugin's page: its node, made from what it shows.

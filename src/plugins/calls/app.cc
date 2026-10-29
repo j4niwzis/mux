@@ -148,14 +148,15 @@ class part {
                                        if (!this->is_current(one) || one.mine)
                                          return;
                                        if (!current_->their_party.empty() && one.party != current_->their_party) return;
-                                       if (current_->media && !holds<call_state::ringing_out>() && !holds<call_state::starting>())
-                                         current_->theirs += them.them.size();
+                                       current_->theirs += them.them.size();
+                                       if (current_->media && !holds<call_state::ringing_out>() && !holds<call_state::starting>()) {
                                          mux::log_line(current_->in.account.address, std::format("call {}: {} candidate(s) from them", current_->id, them.them.size()));
-                                         for (const auto& each : them.them) { current_->media->add_candidate(each); }
-                                       else
-                                         current_->theirs += them.them.size();
+                                         for (const auto& each : them.them)
+                                           current_->media->add_candidate(each);
+                                       } else {
                                          mux::log_line(current_->in.account.address, std::format("call {}: {} candidate(s) from them, kept until answered", current_->id, them.them.size()));
                                          current_->early[one.party].insert_range(current_->early[one.party].end(), them.them);
+                                       }
                                      },
                                      // Ended by them: why, as Element says it.
                                      [&](const call_said::hangup& done) {

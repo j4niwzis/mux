@@ -52,7 +52,7 @@ jobs:
         run: |
           emcmake cmake -S . -B build-web -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS_DEBUG='-O2 -g0' -DCMAKE_C_FLAGS_DEBUG='-O2 -g0' \
-            -DCMAKE_CXX_FLAGS='-fexceptions -pthread -msimd128 -stdlib=libc++' -DCME_SYSTEM=NEVER -DCMAKE_C_FLAGS='-pthread -msimd128' \
+            -DCMAKE_CXX_FLAGS='-fexceptions -fno-rtti -pthread -msimd128 -stdlib=libc++' -DCME_SYSTEM=NEVER -DCMAKE_C_FLAGS='-pthread -msimd128' \
             -DCMAKE_CXX_COMPILER_CLANG_SCAN_DEPS="$HOME/.cache/mux-emsdk/upstream/bin/clang-scan-deps" \
             -DMUX_UI=ON -DMUX_SKIA=OFF -DMUX_WINDOW=OFF -DMUX_CLI=OFF -DMUX_TESTS=OFF \
             -DMUX_VIDEO=OFF -DMUX_CALLS=ON -DMUX_PROGRAM_JOBS=1 -DSKIFF_FRAMEWORK_BROWSER_TESTS=ON \

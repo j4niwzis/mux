@@ -41,6 +41,7 @@ struct choices {
 consteval bool provides(contract::settings_kept, type_tag<feature>) { return true; }
 constexpr type_tag<level_choices<choices>> settings_type(contract::settings_kept, type_tag<feature>) { return {}; }
 consteval bool provides(contract::choice_rows, type_tag<feature>) { return true; }
+consteval bool provides(contract::account_chat_rows, type_tag<feature>) { return true; }
 // The program told whether a chat shows them, and from where they come
 // (contract::chat_flags).
 consteval bool provides(contract::chat_flags, type_tag<feature>) { return true; }

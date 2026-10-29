@@ -118,4 +118,9 @@ inline auto extend(contract::choice_rows, type_tag<feature>, const auto& colours
           c::bound<direct>(show_hide_field<previews_direct_setting, std::optional<bool>, direct>(colours, level_of(place))))));
 }
 
+// The same row on an account's Chats page (contract::account_chat_rows).
+inline auto extend(contract::account_chat_rows, type_tag<feature> f, const auto& colours, const level_place::account& place) {
+  return extend(contract::choice_rows{}, f, colours, place);
+}
+
 }  // namespace mux::plugins::previews

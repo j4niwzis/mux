@@ -38,4 +38,9 @@ inline auto extend(contract::choice_rows, type_tag<feature>, const auto& colours
       ::mux::ui::show_hide_field<::mux::ui::typing_setting, std::optional<bool>, field>(colours, level_of(place))));
 }
 
+// The same row on an account's Privacy page (contract::account_privacy_rows).
+inline auto extend(contract::account_privacy_rows, type_tag<feature> f, const auto& colours, const level_place::account& place) {
+  return extend(contract::choice_rows{}, f, colours, place);
+}
+
 }  // namespace mux::plugins::typing

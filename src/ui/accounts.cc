@@ -290,8 +290,8 @@ inline auto account_privacy_view(const palette& colours, const std::string& addr
       c::styled({.fillX = true}, wrapped(note_text(colours, "Off, the people you talk to through this account are not told when you have "
                                                             "read their messages. Theirs are still shown, and "
                                                             "receipts are still kept here."))),
-      // The plugins' rows that are about privacy (row_group): typing sent.
-      choice_rows_in<choice_group::privacy>::made(colours, level_place::account{address}),
+      // The plugins' rows on it (contract::account_privacy_rows): typing sent.
+      rows_of<contract::account_privacy_rows>::made(colours, level_place::account{address}),
       c::shown_for<page_read>(mentions, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           account_switch<sends<request::flip_account_mentions_shared>>(colours, "Sync read mentions between sessions",
               [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).shared; }, always),
@@ -333,7 +333,7 @@ inline auto account_chats_view(const palette& colours, std::string address) {
   using shared = config::account_shared;
   using skiff::compose::bound;
   const choice_level_t level = choice_level::account{};
-  auto rows = choice_rows_in<choice_group::chats>::made(colours, level_place::account{address});
+  auto rows = rows_of<contract::account_chat_rows>::made(colours, level_place::account{address});
   return SKIFF_NAMED(account_chats_view, skiff::compose::column(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
     skiff::compose::scoped<config::account_t>(
       skiff::compose::handlers(),

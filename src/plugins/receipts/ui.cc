@@ -56,4 +56,9 @@ inline auto extend(contract::choice_rows, type_tag<feature>, const auto& colours
       show_hide_field<receipts_setting, std::optional<bool>, field>(colours, level_of(place))));
 }
 
+// The same row on an account's Chats page (contract::account_chat_rows).
+inline auto extend(contract::account_chat_rows, type_tag<feature> f, const auto& colours, const level_place::account& place) {
+  return extend(contract::choice_rows{}, f, colours, place);
+}
+
 }  // namespace mux::plugins::receipts

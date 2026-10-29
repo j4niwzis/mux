@@ -85,10 +85,18 @@ struct chat_flags {
 // (Storage), an account's (its Chats page), a chat's (its General tab)
 // (mux.ui:pages): extend(c, f, colours, level_place::every / account /
 // chat) -> its node, bound to its level_choices where it is (choices_scoped).
-// row_group(c, f) -> choice_group::privacy{}, where it has one: on an
-// account's Privacy page rather than its Chats page (typing sent).
 struct choice_rows {
   static constexpr std::string_view name = "a level's choice rows";
+};
+// The same rows on an account's pages, each page its own list -- a plugin
+// put straight on the page it is on: extend(c, f, colours,
+// level_place::account) -> its node. The Privacy page's (typing sent):
+struct account_privacy_rows {
+  static constexpr std::string_view name = "an account's Privacy rows";
+};
+// Its Chats page's (receipts as faces, link previews):
+struct account_chat_rows {
+  static constexpr std::string_view name = "an account's Chats rows";
 };
 // Chats the chat list opens as a list of chats -- a forum's topics -- in
 // place of the chat, their rooms listed in them, not beside them
@@ -456,10 +464,3 @@ consteval message broken() {
 }
 
 }  // namespace mux::composition
-
-// Which page of an account a plugin's choice row is on (contract::choice_rows'
-// row_group): its Chats page, unless it says Privacy.
-export namespace mux::choice_group {
-struct chats {};
-struct privacy {};
-}  // namespace mux::choice_group

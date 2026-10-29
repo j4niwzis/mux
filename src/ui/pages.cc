@@ -198,50 +198,22 @@ auto choices_scoped(const level_place::chat& at, Node node) {
   return skiff::compose::scoped<chat_choice<T>>(skiff::compose::handlers(), std::move(node), at.id);
 }
 // The rows plugins put among a level's choices for chats
-// (contract::choice_rows), in their order.
-template <class List>
-struct choice_row_list;
-// A row's group (contract::choice_rows' row_group): its own, where it says
-// one; an account's Chats page's, where it does not.
-template <class Feature>
-consteval choice_group::chats group_of_row(type_tag<Feature>) {
-  return {};
-}
-template <class Feature>
-  requires requires { row_group(contract::choice_rows{}, type_tag<Feature>{}); }
-consteval auto group_of_row(type_tag<Feature>) {
-  return row_group(contract::choice_rows{}, type_tag<Feature>{});
-}
-template <class Group, class Other>
-consteval bool same_group(Group, Other) {
-  return false;
-}
-template <class Group>
-consteval bool same_group(Group, Group) {
-  return true;
-}
-template <class... Features>
-struct choice_row_list<plugin_list<Features...>> {
+// (contract::choice_rows), and on an account's pages
+// (contract::account_privacy_rows, account_chat_rows): each list its
+// contract's providers, in their order.
+template <class Contract, class List>
+struct row_list;
+template <class Contract, class... Features>
+struct row_list<Contract, plugin_list<Features...>> {
   template <class Place>
   static auto made(const auto& colours, const Place& place) {
     return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                  extend(contract::choice_rows{}, type_tag<Features>{}, colours, place)...);
+                                  extend(Contract{}, type_tag<Features>{}, colours, place)...);
   }
 };
-// The plugins of a list whose rows are of one group, in order: a page made
-// of only its own rows -- the others not in its tree at all.
-template <class Group, class List>
-struct rows_in;
-template <class Group, class... Features>
-struct rows_in<Group, plugin_list<Features...>> {
-  using type = typename composition::joined<
-      std::conditional_t<same_group(Group{}, group_of_row(type_tag<Features>{})), plugin_list<Features>, plugin_list<>>...>::type;
-};
-using all_choice_rows = composition::providers<contract::choice_rows, enabled_plugins>;
-// A group's rows: an account's pages, each its own.
-template <class Group>
-using choice_rows_in = choice_row_list<typename rows_in<Group, all_choice_rows>::type>;
-using choice_row_plugins = choice_row_list<all_choice_rows>;
+template <class Contract>
+using rows_of = row_list<Contract, composition::providers<Contract, enabled_plugins>>;
+using choice_row_plugins = rows_of<contract::choice_rows>;
 
 // A chat's own choices, bound to them in the model: its room events, how
 // far a jump searches -- Default as the level above; and the plugins' rows

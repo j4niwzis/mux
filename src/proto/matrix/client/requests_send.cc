@@ -237,7 +237,12 @@ void account<Sink>::leave(std::string room) {
                                     },
                                     [&](const run_style::link& one) {
                                       return tags("<a href=\"" + chevron::escaped(one.url) + "\">", "</a>");
-                                    }},
+                                    },
+                                    [&](const run_style::colour& one) {
+                                      const std::string hex = std::format("#{:06x}", one.rgb & 0xffffffu);
+                                      return tags(std::format(R"(<font data-mx-color="{}" color="{}">)", hex, hex), "</font>");
+                                    },
+                                    [&](const run_style::verbatim&) { return tags({}, {}); }},
                     run.style);
 }
 template <class Plugins>
@@ -248,7 +253,11 @@ template <class Plugins>
   });
   const std::vector<mux::logic::html_run> runs =
       valid | std::views::transform([&](const styled_run& run) { return html_run_of(run, body); }) | std::ranges::to<std::vector<mux::logic::html_run>>();
-  if (auto marked = written_html<Plugins>(body, runs))
+  // Sent as typed (/raw): the runs alone, no markup read.
+  const bool as_typed = std::ranges::any_of(styles, [](const styled_run& run) {
+    return spl::visit(spl::overloaded{[](const run_style::verbatim&) { return true; }, [](const auto&) { return false; }}, run.style);
+  });
+  if (auto marked = as_typed ? mux::logic::runs_html(body, runs) : written_html<Plugins>(body, runs))
     return emotes.empty() ? *marked : emotes_in_html(*marked, emotes);
   return with_emotes(body, emotes);
 }

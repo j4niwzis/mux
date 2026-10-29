@@ -112,6 +112,20 @@ struct script {
     }
     s->ask->send(to, std::move(text));
   }
+  // Text sent with runs of its own formatting (a colour, "as typed"), not
+  // read as the field's: in the demo, its text alone.
+  void send_styled(const conversation_id& to, std::string text, std::vector<styled_run> styles) const {
+    if (s->demo()) {
+      s->ask->send(to, std::move(text));
+      return;
+    }
+    s->net->send(to, std::move(text), std::nullopt, {}, std::move(styles));
+  }
+  // A message of a chat gone to, as a link or a reply goes to it.
+  template <class Asked>
+  void jump(std::string message, const Asked& asked) const {
+    asked(request::jump_to_message{std::move(message)});
+  }
   // A reaction put on a message, or taken back.
   void react(const conversation_id& in, std::string message, std::string key, bool on = true) const {
     s->net->react(in, std::move(message), std::move(key), on);

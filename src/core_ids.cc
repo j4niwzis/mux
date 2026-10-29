@@ -676,9 +676,19 @@ struct custom_emoji {
   std::string url;
   friend bool operator==(const custom_emoji&, const custom_emoji&) = default;
 };
+// In a colour of its own, as 0xRRGGBB (Element's /rainbow).
+struct colour {
+  std::uint32_t rgb = 0;
+  friend bool operator==(const colour&, const colour&) = default;
+};
+// Sent as it is typed: not read as markup (/raw).
+struct verbatim {
+  friend bool operator==(const verbatim&, const verbatim&) = default;
+};
 }  // namespace run_style
 using run_style_t = spl::variant<run_style::bold, run_style::italic, run_style::underline, run_style::strike,
-                                 run_style::spoiler, run_style::code, run_style::link, run_style::custom_emoji>;
+                                 run_style::spoiler, run_style::code, run_style::link, run_style::custom_emoji, run_style::colour,
+                                 run_style::verbatim>;
 // A run of what is sent, by byte offsets in its text, and how it is formatted.
 struct styled_run {
   std::size_t first = 0;

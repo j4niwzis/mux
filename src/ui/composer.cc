@@ -415,6 +415,8 @@ struct field_quotes {
                                       [](const run_style::spoiler&) { return widgets::RunLook{.plate = true}; },
                                       [](const run_style::code&) { return widgets::RunLook{.monospace = true, .accent = true}; },
                                       [](const run_style::custom_emoji&) { return widgets::RunLook{}; },
+                                      [](const run_style::colour&) { return widgets::RunLook{}; },
+                                      [](const run_style::verbatim&) { return widgets::RunLook{}; },
                                       [](const run_style::link&) { return widgets::RunLook{.underline = true, .accent = true}; }},
                       style);
   }

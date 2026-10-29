@@ -1095,6 +1095,8 @@ class account {
                           [](const mux::run_style::underline&) { return std::string_view(); },
                           [](const mux::run_style::spoiler&) { return std::string_view(); },
                           [](const mux::run_style::custom_emoji&) { return std::string_view(); },
+                          [](const mux::run_style::colour&) { return std::string_view(); },
+                          [](const mux::run_style::verbatim&) { return std::string_view(); },
                           [](const mux::run_style::link&) { return std::string_view(); }},
           run.style);
       if (mark.empty())

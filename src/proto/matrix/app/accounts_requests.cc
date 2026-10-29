@@ -14,6 +14,9 @@ import mux.config;
 import mux.http;
 import mux.net;
 import mux.proto.matrix.client;
+// The account as made, end-to-end encryption's where its plugin is on
+// (account_of): what the account's members call through whole().
+import mux.plugins.matrix;
 import mux.proto.matrix.requests;
 import loom.cs.keys;
 import loom.crypto;
@@ -55,7 +58,6 @@ template void account<mux::app::post_change>::sign_out_sessions(std::vector<std:
 template void account<mux::app::post_change>::continue_uia();
 template void account<mux::app::post_change>::cancel_uia();
 template account<mux::app::post_change>::uia_way_t account<mux::app::post_change>::uia_answer(const loom::error& said, const std::string& given);
-template void account<mux::app::post_change>::finish_cross_signing(const crypto::cross_signing_secrets& secrets, const std::string& master_pub, const std::string& self_pub);
 template std::string account<mux::app::post_change>::server_of(const std::string& room) const;
 template void account<mux::app::post_change>::create_group(std::string name);
 template void account<mux::app::post_change>::forward(std::string from, std::vector<forward_source> events, std::string to);
@@ -78,23 +80,12 @@ template void account<mux::app::post_change>::fetch_members(std::string room);
 // Cross-signing set up with the password, and restored with the recovery key:
 // what they call -- the backup made and stored, devices and people signed --
 // is instantiated through them.
-template void account<mux::app::post_change>::setup_cross_signing(std::string password, bool reset);
-template void account<mux::app::post_change>::reset_backup();
-template void account<mux::app::post_change>::delete_backup();
-template void account<mux::app::post_change>::sign_out_unverified(std::string password);
 // Defined in the class, but not inline there -- a named module's class body
 // makes nothing inline -- so made here, as the account is declared extern.
 template std::expected<loom::cs::query_keys::response, failure> account<mux::app::post_change>::keys_of(const std::string& user);
 template void account<mux::app::post_change>::send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body, std::optional<knot::raw> relates_to);
-template void account<mux::app::post_change>::restore_cross_signing(std::string recovery);
 // What the members above call, defined in the same partition: made here
 // too, for nothing instantiates them elsewhere.
-template std::optional<std::string> account<mux::app::post_change>::make_backup(const crypto::cross_signing_secrets& secrets);
-template void account<mux::app::post_change>::upload_backup();
-template std::size_t account<mux::app::post_change>::restore_backup(const std::string& secret);
-template std::optional<std::string> account<mux::app::post_change>::store_secrets(const crypto::cross_signing_secrets& secrets, const std::optional<std::string>& backup_secret);
-template void account<mux::app::post_change>::cross_sign_device(const loom::cs::query_keys::response_t::device_information_t& info);
-template void account<mux::app::post_change>::cross_sign_user(const std::string& user, const loom::cs::query_keys::response_t::cross_signing_key_t& master);
 template void account<mux::app::post_change>::cut_long_poll();
 template void account<mux::app::post_change>::sync_now();
 template void account<mux::app::post_change>::flush_notifications();

@@ -1923,4 +1923,9 @@ class account {
   std::size_t commands_ = 0;
 };
 
+// The account as made: no plugin makes XMPP's over it, so this one -- named as
+// Matrix's is (account_of), for what deletes either.
+template <class Sink>
+using account_of = account<Sink>;
+
 }  // namespace mux::proto::xmpp::client

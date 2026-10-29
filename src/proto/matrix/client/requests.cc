@@ -651,12 +651,6 @@ bool account<Sink>::save_notifications(std::optional<std::string> room, mux::not
 // A room encrypted from its first event: m.room.encryption in its initial
 // state, as Element makes direct chats and private rooms -- never a first
 // message in the clear while the state catches up.
-// An account data request whose answer is read as the type it is kept as:
-// once, from the response's body.
-template <class Content>
-struct account_data_as : loom::cs::get_account_data {
-  using response = Content;
-};
 
 inline std::vector<loom::cs::create_room::body_t::state_event_t> encrypted_from_the_start() {
   loom::ev::m_room_encryption_content_t content;

@@ -14,7 +14,10 @@
 export module mux.app.network:accounts;
 
 import std;
-@mux_account_imports@import :sink;
+@mux_account_imports@// What the accounts are made as, a plugin's where one makes one (Matrix's
+// end-to-end encryption: account_of).
+import mux.plugins.matrix;
+import :sink;
 
 #if defined(MUX_SPLIT_ACCOUNTS)
 @mux_accounts_extern@#else

@@ -14,6 +14,9 @@ import mux.config;
 import mux.http;
 import mux.net;
 import mux.proto.matrix.client;
+// The account as made, end-to-end encryption's where its plugin is on
+// (account_of): what the account's members call through whole().
+import mux.plugins.matrix;
 
 namespace mux::proto::matrix::client {
 template void account<mux::app::post_change>::fetch_media(std::string source, media_use_t use, int size, bool crop);

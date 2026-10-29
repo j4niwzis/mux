@@ -569,7 +569,7 @@ void account<Sink>::run() {
     return;
   }
   say(connection::online{});
-  this->start_crypto();
+  this->whole().start_crypto();
   // Simplified sliding sync, where the server says it has it: the rooms by
   // their activity, a window of them -- not every room at the first sync.
   if (auto versions = perform(api, loom::cs::get_versions{}); versions && versions->unstable_features)
@@ -644,18 +644,15 @@ void account<Sink>::run() {
       ask.body.extensions = loom::cs::sliding_sync::body_t::extensions_t{
           .account_data = extension{.enabled = true}, .receipts = extension{.enabled = true}, .typing = extension{.enabled = true}};
       // What comes for this device, and how many of its one-time keys are
-      // left, where it has encryption.
-      if (crypto_) {
-        ask.body.extensions->to_device = extension{.enabled = true, .since = crypto_->to_device_since()};
-        ask.body.extensions->e2ee = extension{.enabled = true};
-      }
+      // left, where it has encryption (a plugin's: whole()).
+      this->whole().device_extensions(*ask.body.extensions);
       auto slid = perform(syncing, ask,
                           sliding_first ? std::chrono::seconds(300)
                                         : std::chrono::duration_cast<std::chrono::seconds>(how_.sync_timeout) + std::chrono::seconds(30));
       if (!slid)
         return std::unexpected(slid.error());
       sliding_pos_ = slid->pos;
-      this->crypto_answer(*slid);
+      this->whole().crypto_answer(*slid);
       // Fewer rooms in the window than the account has: two hundred more at
       // the next, until all are -- every room, a window at a time.
       if (slid->lists)
@@ -1038,7 +1035,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       // the room's account data): seen here too.
       if (part.account_data && part.account_data->events)
         for (const auto& one : *part.account_data->events)
-          spl::visit(spl::overloaded{[&](const loom::ev::net_mux_mentions_read_content_t& content) { this->mentions_from(in, content); },
+          spl::visit(spl::overloaded{[&](const loom::ev::net_mux_mentions_read_content_t& content) { this->whole().mentions_from(in, content); },
                                      [](const auto&) {}},
                      one.content.data());
       // Receipts: m.receipt's content is event -> kind -> user; the public

@@ -27,6 +27,13 @@ struct plugin_list {};
 // plugin's types can say they provide them; each what it asks is said where
 // it is used.
 namespace contract {
+// The Matrix account, made by a plugin over the client's own
+// (mux.proto.matrix.client, account_of): end-to-end encryption's.
+//   matrix_account_made(c, f, type_tag<Sink>) -> std::type_identity<its
+//   account>, a class over client::account<Sink> that hides its hooks
+struct matrix_account {
+  static constexpr std::string_view name = "the Matrix account";
+};
 // The media panel's pages beside its emoji and stickers (mux.ui:emoji_popup):
 //   page_type(c, f)  -> type_tag<its page>: in popup_page_t, what is shown
 //   shown_type(c, f) -> type_tag<what is shown on it>: in emoji_facts

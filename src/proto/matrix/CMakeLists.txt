@@ -4,7 +4,7 @@ mux_protocol(matrix ORDER 20
   CORE   changes.cc points.cc requests.cc make.cc links.cc
          client/matrix.cc client/base.cc client/oauth.cc client/names.cc client/account.cc
          client/requests.cc client/requests_more.cc client/requests_send.cc
-         client/sync.cc client/sync_crypto.cc client/sync_keys.cc client/events.cc client/media.cc
+         client/sync.cc client/sync_keys.cc client/events.cc client/media.cc
   UI     ui_form.cc ui_manage.cc ui_sessions.cc ui_tools.cc ui.cc
   UI_IMPL manage_general.cc manage_members.cc manage_permissions.cc
          

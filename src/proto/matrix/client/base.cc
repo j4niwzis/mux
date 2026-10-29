@@ -22,6 +22,7 @@ import loom.cs.wellknown;
 export import loom.crypto;
 import mux.config;
 import mux.core;
+import loom.cs.account_data;
 import mux.http;
 import mux.net;
 
@@ -47,6 +48,13 @@ struct vault_keeper {
   }
 };
 using olm_machine = crypto::olm_machine<vault_keeper>;
+
+// An account data request whose answer is read as the type it is kept as:
+// once, from the response's body.
+template <class Content>
+struct account_data_as : loom::cs::get_account_data {
+  using response = Content;
+};
 
 // Matrix's room rules and levels, as its protocol's state module has them
 // (mux.proto.matrix.state): named here as before.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.proto.matrix.client:sync_crypto -- End-to-end encryption begun, keys put on the server, emoji verification, broken sessions mended.
-export module mux.proto.matrix.client:sync_crypto;
+// mux.plugin.encryption.matrix:verification -- Encryption begun, keys put on the server, emoji verification, broken sessions mended.
+export module mux.plugin.encryption.matrix:verification;
 
 import mux.vault;
 import std;
@@ -27,10 +27,46 @@ import mux.config;
 import mux.core;
 import mux.http;
 import mux.net;
+import splice.bytes;
+import loom.cs.account_data;
+import loom.media;
+import chevron.escape;
+import mux.logic.forwarding;
+import loom.cs.key_backup;
+import loom.cs.keys;
+import loom.cs.event_context;
+import loom.cs.users;
+import loom.cs.relations;
+import loom.cs.threads_list;
+import loom.cs.room_summary;
+import loom.cs.list_public_rooms;
+import loom.cs.space_hierarchy;
+import loom.cs.cross_signing;
+import loom.cs.room_state;
+import loom.cs.content_repo;
+import loom.cs.authed_content_repo;
+import loom.cs.create_room;
+import loom.cs.kicking;
+import loom.cs.banning;
+import loom.cs.inviting;
+import loom.cs.profile;
+import loom.cs.presence;
+import loom.cs.device_management;
+import loom.cs.pusher;
+import mux.logic.markdown;
+import loom.names;
+import loom.cs.voip;
+import mux.logic.reactions;
+import loom.cs.to_device;
+import loom.cs.room_upgrades;
+import loom.cs.knocking;
+import mux.composition;
+import mux.proto.matrix.requests;
+import mux.proto.matrix.client;
+import mux.plugin.encryption.types;
 import :account;
-import :sync;
 
-// The members defined here are declared in :account, and exported there.
+// The members defined here are declared in :account.
 namespace mux::proto::matrix::client {
 
 // End-to-end encryption.
@@ -39,7 +75,7 @@ namespace mux::proto::matrix::client {
 // made, and its keys put on the server -- the device's identity keys once,
 // signed, and one-time keys up to half of what it may hold.
 template <class Sink>
-void account<Sink>::start_crypto() {
+void encrypted_account<Sink>::start_crypto() {
   if (crypto_ || !how_.device_id || how_.crypto_store.empty())
     return;
   try {
@@ -61,7 +97,7 @@ void account<Sink>::start_crypto() {
 // Keys put on the server: the device's, the first time; one-time keys where
 // it has fewer than half of what it may hold.
 template <class Sink>
-void account<Sink>::upload_keys(std::int64_t on_server) {
+void encrypted_account<Sink>::upload_keys(std::int64_t on_server) {
   if (!crypto_ || !api_)
     return;
   const bool first = !crypto_->device_keys_uploaded();
@@ -109,7 +145,7 @@ inline constexpr std::string_view kSasInfo = "MATRIX_KEY_VERIFICATION_SAS|";
 inline constexpr std::string_view kMacInfo = "MATRIX_KEY_VERIFICATION_MAC";
 
 template <class Sink>
-bool account<Sink>::send_plain(std::string type, const std::string& user, const std::string& device, knot::raw content) {
+bool encrypted_account<Sink>::send_plain(std::string type, const std::string& user, const std::string& device, knot::raw content) {
   if (!api_)
     return false;
   std::map<std::string, std::map<std::string, knot::raw>> messages;
@@ -120,11 +156,11 @@ bool account<Sink>::send_plain(std::string type, const std::string& user, const 
       .has_value();
 }
 template <class Sink>
-void account<Sink>::verification_said(const crypto::sas_state& state, verification_step_t step) {
+void encrypted_account<Sink>::verification_said(const crypto::sas_state& state, verification_step_t step) {
   sink_(proto::matrix::verification_changed{id_, state.txn, state.their_user, state.their_device, std::move(step)});
 }
 template <class Sink>
-void account<Sink>::cancel_verification(const std::string& txn, std::string code, std::string reason) {
+void encrypted_account<Sink>::cancel_verification(const std::string& txn, std::string code, std::string reason) {
   const auto found = verifications_.find(txn);
   if (found == verifications_.end())
     return;
@@ -136,7 +172,7 @@ void account<Sink>::cancel_verification(const std::string& txn, std::string code
 }
 
 template <class Sink>
-void account<Sink>::verify_start(std::string user, std::optional<std::string> device) {
+void encrypted_account<Sink>::verify_start(std::string user, std::optional<std::string> device) {
   this->spawn_guarded([this, user = std::move(user), device = std::move(device)] {
     if (!crypto_)
       return;
@@ -154,7 +190,7 @@ void account<Sink>::verify_start(std::string user, std::optional<std::string> de
   });
 }
 template <class Sink>
-void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_request_content_t& content) {
+void encrypted_account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_request_content_t& content) {
   if (!crypto_ || !content.transaction_id || (sender == id_.address && content.from_device == crypto_->device_id()) ||
       !std::ranges::contains(content.methods, std::string_view("m.sas.v1")))
     return;
@@ -167,7 +203,7 @@ void account<Sink>::verification_in(const std::string& sender, const loom::ev::m
   verifications_.insert_or_assign(state.txn, std::move(state));
 }
 template <class Sink>
-void account<Sink>::verify_accept(std::string txn) {
+void encrypted_account<Sink>::verify_accept(std::string txn) {
   this->spawn_guarded([this, txn = std::move(txn)] {
     const auto found = verifications_.find(txn);
     if (found == verifications_.end() || !crypto_)
@@ -179,7 +215,7 @@ void account<Sink>::verify_accept(std::string txn) {
   });
 }
 template <class Sink>
-void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_ready_content_t& content) {
+void encrypted_account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_ready_content_t& content) {
   const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
   if (found == verifications_.end() || !found->second.we_requested || found->second.their_user != sender ||
       !found->second.their_device.empty())
@@ -188,7 +224,7 @@ void account<Sink>::verification_in(const std::string& sender, const loom::ev::m
   this->sas_start(found->second);
 }
 template <class Sink>
-void account<Sink>::sas_start(crypto::sas_state& state) {
+void encrypted_account<Sink>::sas_start(crypto::sas_state& state) {
   using start_t = loom::ev::m_key_verification_start_m_sas_v1_content_t;
   using sas_kind = start_t::short_authentication_string_item_values;
   state.begin();
@@ -208,7 +244,7 @@ void account<Sink>::sas_start(crypto::sas_state& state) {
   this->send_step(state, "m.key.verification.start", start);
 }
 template <class Sink>
-void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_start_content_t& content) {
+void encrypted_account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_start_content_t& content) {
   const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
   if (found == verifications_.end() || found->second.their_user != sender || found->second.their_device != content.from_device)
     return;
@@ -253,7 +289,7 @@ void account<Sink>::verification_in(const std::string& sender, const loom::ev::m
   this->verification_said(state, verification_step::waiting{});
 }
 template <class Sink>
-void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_accept_content_t& content) {
+void encrypted_account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_accept_content_t& content) {
   const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
   if (found == verifications_.end() || found->second.their_user != sender || !found->second.we_started)
     return;
@@ -261,7 +297,7 @@ void account<Sink>::verification_in(const std::string& sender, const loom::ev::m
   this->send_step(found->second, "m.key.verification.key", loom::ev::m_key_verification_key_content_t{.key = found->second.our_key});
 }
 template <class Sink>
-void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_key_content_t& content) {
+void encrypted_account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_key_content_t& content) {
   const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
   if (found == verifications_.end() || found->second.their_user != sender || found->second.their_key)
     return;
@@ -277,14 +313,14 @@ void account<Sink>::verification_in(const std::string& sender, const loom::ev::m
   this->sas_show(state);
 }
 template <class Sink>
-void account<Sink>::sas_show(crypto::sas_state& state) {
+void encrypted_account<Sink>::sas_show(crypto::sas_state& state) {
   const std::string ours = std::format("{}|{}|{}", id_.address, crypto_->device_id(), state.our_key);
   const std::string theirs = std::format("{}|{}|{}", state.their_user, state.their_device, *state.their_key);
   const std::string info = std::string(kSasInfo) + (state.we_started ? ours + "|" + theirs : theirs + "|" + ours) + "|" + state.txn;
   this->verification_said(state, verification_step::compare{state.emoji(info)});
 }
 template <class Sink>
-void account<Sink>::verify_confirm(std::string txn, bool match) {
+void encrypted_account<Sink>::verify_confirm(std::string txn, bool match) {
   this->spawn_guarded([this, txn = std::move(txn), match] {
     const auto found = verifications_.find(txn);
     if (found == verifications_.end() || !found->second.established)
@@ -300,7 +336,7 @@ void account<Sink>::verify_confirm(std::string txn, bool match) {
   });
 }
 template <class Sink>
-void account<Sink>::sas_send_mac(crypto::sas_state& state) {
+void encrypted_account<Sink>::sas_send_mac(crypto::sas_state& state) {
   const std::string base = std::string(kMacInfo) + id_.address + crypto_->device_id() + state.their_user + state.their_device + state.txn;
   std::map<std::string, std::string> macs;
   const std::string device_key = "ed25519:" + crypto_->device_id();
@@ -314,7 +350,7 @@ void account<Sink>::sas_send_mac(crypto::sas_state& state) {
                   loom::ev::m_key_verification_mac_content_t{.mac = std::move(macs), .keys = state.mac(ids, base + "KEY_IDS")});
 }
 template <class Sink>
-void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_mac_content_t& content) {
+void encrypted_account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_mac_content_t& content) {
   const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
   if (found == verifications_.end() || found->second.their_user != sender || !found->second.established)
     return;
@@ -324,7 +360,7 @@ void account<Sink>::verification_in(const std::string& sender, const loom::ev::m
     this->sas_check_mac(found->second);
 }
 template <class Sink>
-void account<Sink>::sas_check_mac(crypto::sas_state& state) {
+void encrypted_account<Sink>::sas_check_mac(crypto::sas_state& state) {
   const std::string txn = state.txn;
   const std::string base = std::string(kMacInfo) + state.their_user + state.their_device + id_.address + crypto_->device_id() + txn;
   const std::string ids = (*state.their_mac) | std::views::keys | std::views::join_with(',') | std::ranges::to<std::string>();
@@ -374,7 +410,7 @@ void account<Sink>::sas_check_mac(crypto::sas_state& state) {
   verifications_.erase(txn);
 }
 template <class Sink>
-void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_cancel_content_t& content) {
+void encrypted_account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_cancel_content_t& content) {
   const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
   if (found == verifications_.end() || found->second.their_user != sender)
     return;
@@ -383,7 +419,7 @@ void account<Sink>::verification_in(const std::string& sender, const loom::ev::m
 }
 // In a room: the request, a message to this user from a device of theirs.
 template <class Sink>
-void account<Sink>::verification_request_in_room(const conversation_id& in, const loom::ev::timeline_event& one,
+void encrypted_account<Sink>::verification_request_in_room(const conversation_id& in, const loom::ev::timeline_event& one,
                                                  const crypto::room_request_fields& fields) {
   if (!crypto_ || fields.to != id_.address || one.sender == id_.address ||
       !std::ranges::contains(fields.methods, std::string_view("m.sas.v1")) ||
@@ -396,7 +432,7 @@ void account<Sink>::verification_request_in_room(const conversation_id& in, cons
 // Its steps: read by their type as the to-device ones are, the request they
 // refer to standing for the transaction. Shown nowhere in the timeline.
 template <class Sink>
-bool account<Sink>::verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where) {
+bool encrypted_account<Sink>::verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where) {
   // The step, its reference made its transaction -- for the room it came in
   // only. An old one -- in the first sync's history -- is not one to answer.
   // Asked here, outside the step's lambda, as before: an inline member
@@ -429,12 +465,12 @@ bool account<Sink>::verification_in_room(const conversation_id& in, const loom::
 }
 
 template <class Sink>
-void account<Sink>::verify_cancel(std::string txn) {
+void encrypted_account<Sink>::verify_cancel(std::string txn) {
   this->spawn_guarded([this, txn = std::move(txn)] { this->cancel_verification(txn, "m.user", "Cancelled."); });
 }
 
 template <class Sink>
-void account<Sink>::mend_session(const std::string& user, const std::string& curve25519) {
+void encrypted_account<Sink>::mend_session(const std::string& user, const std::string& curve25519) {
   if (!api_ || !crypto_)
     return;
   const auto now = std::chrono::steady_clock::now();
@@ -473,7 +509,7 @@ void account<Sink>::mend_session(const std::string& user, const std::string& cur
 }
 
 template <class Sink>
-void account<Sink>::upload_fallback_key() {
+void encrypted_account<Sink>::upload_fallback_key() {
   if (!crypto_ || !api_)
     return;
   const auto now = std::chrono::steady_clock::now();

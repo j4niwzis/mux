@@ -15,8 +15,8 @@ import mux.proto.kept;
 export namespace mux::proto::matrix {
 
 template <class Sink>
-[[nodiscard]] std::unique_ptr<::mux::proto::matrix::client::account<Sink>,
-                              typename ::mux::account_deleter_of<Sink, ::mux::proto::matrix::client::account<Sink>>::type>
+[[nodiscard]] std::unique_ptr<::mux::proto::matrix::client::account_of<Sink>,
+                              typename ::mux::account_deleter_of<Sink, ::mux::proto::matrix::client::account_of<Sink>>::type>
 make_account(const kept& saved, ::mux::net::loop& loop,
                                                                          ::mux::net::tls& tls, ::mux::vault::vault& vault,
                                                                          std::optional<::mux::net::proxy> via, Sink sink) {
@@ -44,7 +44,9 @@ make_account(const kept& saved, ::mux::net::loop& loop,
                               .oauth_client_id = saved.oauth_client_id,
                               .refresh_token = saved.refresh_token};
   // Held with the deleter the sink names: made here, let go where it says.
-  using account_t = ::mux::proto::matrix::client::account<Sink>;
+  // As made: end-to-end encryption's account where its plugin is on
+  // (account_of), else the client's own.
+  using account_t = ::mux::proto::matrix::client::account_of<Sink>;
   return std::unique_ptr<account_t, typename ::mux::account_deleter_of<Sink, account_t>::type>(
       new account_t(loop, tls, std::move(how), std::move(sink)));
 }

@@ -177,7 +177,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     // ciphertext, under no name and no type.
     std::optional<crypto::sealed_file> sealed;
     if (this->encrypted_room(room)) {
-      if (!crypto_)
+      if (!this->whole().encrypting())
         throw plaintext_refused(in, local, "Not sent: it could not be encrypted -- encryption is not running for this account.");
       sealed = crypto::seal_file(spl::bytes::of(bytes));
     }

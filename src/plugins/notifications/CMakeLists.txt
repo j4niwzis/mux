@@ -5,4 +5,5 @@
 # MUX_PLUGIN_NOTIFICATIONS is on (cmake/plugins.cmake).
 mux_plugin(notifications ORDER 80
   TYPES types.cc
+  UI    ui.cc
   APP   app.cc)

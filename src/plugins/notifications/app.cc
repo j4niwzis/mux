@@ -76,6 +76,11 @@ struct part {
                  *said);
   }
   // Between frames too: UnifiedPush turned on or off in Settings.
+  // Its page of Settings, from Settings' home.
+  void apply(const open_settings&) {
+    if (s_->settings_open())
+      s_->settings_page(settings_page{s_->kept->notifications()});
+  }
   void tick() { this->follow_push(); }
   void follow_push() {
     const bool wanted = s_->kept->notifications().unified_push.value_or(false) && !s_->demo();

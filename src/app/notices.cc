@@ -86,8 +86,6 @@ class notices_part {
     seeded_ = true;
   }
 
-  // Notifications in Settings: the page, its switches, what shows them.
-  void apply(const request::settings_notifications&) { this->show_page(); }
 
  private:
   struct preference_pair {
@@ -127,10 +125,6 @@ class notices_part {
   bool seeded_ = false;
   std::map<std::pair<mux::account_id, std::optional<std::string>>, preference_pair> remembered_;
 
-  void show_page() {
-    if (s_->settings_open())
-      s_->settings_page(mux::ui::settings_page::notifications{s_->kept->notifications()});
-  }
 
   services* s_;
 };

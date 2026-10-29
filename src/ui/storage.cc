@@ -24,34 +24,6 @@ import :settings_pages;
 
 export namespace mux::ui {
 
-// Settings' Notifications page, as Telegram Desktop's: a notification on
-// the desktop or not, a sound
-// or not; what shows it -- the desktop's own service, or mux's window; and
-// whether UnifiedPush wakes mux. Made of the model's widgets, each bound to
-// its setting by its member pointer: what is chosen is an edit of the
-// model, and what the model holds is what shows.
-template <auto Setting, class T = bool>
-auto setting_switch(const palette& colours, std::string text) {
-  return SKIFF_NAMED(setting_switch, skiff::compose::row(
-      skiff::compose::hbox(16.0f, {.fillX = true,
-                                   .height = kRowHeight,
-                                   .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
-      skiff::compose::styled(
-          {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-          elided(nodes::Text(std::move(text), 15.0f, colours.text))),
-      skiff::compose::bound<skiff::model::Field<Setting>>(
-          skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                 widgets::ToggleField<T>(colours.widgets)))));
-}
-inline nodes::Text spaced_title(const palette& colours, std::string text) {
-  return skiff::compose::styled({.margin = {10.0f, 0.0f, 4.0f, 20.0f}},
-                                section_title(colours, std::move(text)));
-}
-inline nodes::Text spaced_note(const palette& colours, std::string text) {
-  return wrapped(skiff::compose::styled(
-      {.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}},
-      note_text(colours, std::move(text))));
-}
 // A limit, as the model holds it, shown with a step down and up: halved or
 // doubled within its bounds, the whole of the limits set again.
 template <class Which> struct limit_change {
@@ -175,37 +147,6 @@ inline auto storage_page(const palette& colours) {
 }
 using storage_page_t = decltype(storage_page(std::declval<const palette&>()));
 
-inline auto notification_settings_view(const palette& colours) {
-  using every = config::notification_settings;
-  auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(
-      skiff::compose::styled({.margin = {4.0f, 20.0f, 4.0f, 20.0f}}, themed_tabs<config::notify_backend_t>(colours, 
-          {{"System", config::notify_backend::native{}}, {"Built in", config::notify_backend::built_in{}}})));
-  return SKIFF_NAMED(notification_settings_view, skiff::compose::column(
-      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), spaced_title(colours, "NOTIFICATIONS"),
-      setting_switch<&every::desktop>(colours, "Notifications"),
-      setting_switch<&every::mentions_only, std::optional<bool>>(colours, "Only mentions and keywords"),
-      setting_switch<&every::sound>(colours, "Sound"),
-      spaced_title(colours, "CUSTOM SOUND"),
-      skiff::compose::bound<skiff::model::Field<&every::sound_file>>(skiff::compose::styled(
-          {.fillX = true, .height = 36.0f, .margin = {4.0f, 20.0f, 4.0f, 20.0f}},
-          widgets::TextField<std::optional<std::string>>(colours.widgets, "Ogg Opus or Vorbis file; empty uses the default"))),
-      spaced_title(colours, "SHOWN BY"), std::move(backend),
-      spaced_note(colours, "System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
-                           "shows mux's own, in a corner of the screen, as Telegram Desktop does."),
-      spaced_title(colours, "WAKE"),
-      setting_switch<&every::unified_push, std::optional<bool>>(colours, "Wake by UnifiedPush"),
-      spaced_note(colours, "Your Matrix servers push to the UnifiedPush distributor on this device (ntfy, NextPush, "
-                           "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
-                           "of messages while it runs.")));
-}
-inline auto notifications_page(const palette& colours) {
-  using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
-  return SKIFF_NAMED(notifications_page, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Notifications", {}, {}, true, true)),
-      notification_settings_view(colours)));
-}
-using notifications_page_t = decltype(notifications_page(std::declval<const palette&>()));
 
 // Settings' Files page: what is done to a picture dropped on the window
 // before it is sent.

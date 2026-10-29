@@ -652,7 +652,6 @@ struct close_link {};
 struct copy_text {
   std::string text;
 };
-struct settings_notifications {};
 // The room card's room asked to be let into.
 // The input's emoji button pressed: where it is laid out, the panel opened
 // beside it.

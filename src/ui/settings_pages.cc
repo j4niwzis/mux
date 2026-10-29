@@ -46,7 +46,6 @@ inline auto settings_home(const palette& colours) {
       settings_link(colours, "Animations", icon::motion{}, request::settings_animations{}),
       settings_link(colours, "Appearance", icon::eye{}, request::settings_appearance{}),
       settings_link(colours, "Rendering", icon::sliders{}, request::settings_rendering{}),
-      settings_link(colours, "Notifications", icon::bell{}, request::settings_notifications{}),
       settings_link(colours, "Storage", icon::clip{}, request::settings_storage{}),
       settings_link(colours, "Files", icon::send{}, request::settings_files{}),
       settings_links_of(composition::providers<contract::settings_links, enabled_plugins>{}, colours)));

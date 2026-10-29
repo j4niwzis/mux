@@ -149,7 +149,6 @@ inline constexpr float kBubbleMaxWidth = 480.0f;
 inline constexpr float kReplyLineMax = 240.0f;
 // The list's own room at its left and right, around every row.
 inline constexpr float kListSide = 12.0f;
-inline constexpr float kReadersHeight = 16.0f;
 inline constexpr float kSwipeToReply = 70.0f;
 inline constexpr float kBesideGap = 8.0f;
 
@@ -269,6 +268,38 @@ struct plugin_cards<plugin_list<Features...>> {
   }
 };
 using cards_t = plugin_cards<composition::providers<contract::message_cards, enabled_plugins>>;
+
+// What plugins put under a message's row (contract::message_footers) -- who
+// has read up to it -- in their order, each in a slot of its own: empty
+// where it has nothing to show of the message.
+template <class List>
+struct plugin_footers;
+template <class... Features>
+struct plugin_footers<plugin_list<Features...>> {
+  template <class Feature>
+  static auto made(const footer_facts& facts) -> decltype(extend(contract::message_footers{}, type_tag<Feature>{}, facts)) {
+    static_assert(requires { extend(contract::message_footers{}, type_tag<Feature>{}, facts); },
+                  composition::broken<contract::message_footers, Feature>());
+    return extend(contract::message_footers{}, type_tag<Feature>{}, facts);
+  }
+  using nodes_t = std::tuple<std::optional<composition::node_t<decltype(made<Features>(std::declval<const footer_facts&>()))>>...>;
+  static nodes_t built(const footer_facts& facts) {
+    nodes_t slots;
+    [&]<std::size_t... At>(std::index_sequence<At...>) {
+      (composition::put(std::get<At>(slots), made<Features>(facts)), ...);
+    }(std::index_sequence_for<Features...>{});
+    return slots;
+  }
+  // The room under the row they take: the tallest shown's.
+  static float height(const nodes_t& slots) {
+    float most = 0.0f;
+    [&]<std::size_t... At>(std::index_sequence<At...>) {
+      ((std::get<At>(slots) ? void(most = std::max(most, footer_height(contract::message_footers{}, type_tag<Features>{}))) : void()), ...);
+    }(std::index_sequence_for<Features...>{});
+    return most;
+  }
+};
+using footers_t = plugin_footers<composition::providers<contract::message_footers, enabled_plugins>>;
 
 // The facts a message's row is made from: while they are the same, the
 // row is kept as it is -- with a selection in its text.
@@ -1204,21 +1235,19 @@ auto message_row(const bubble_needs& n, const conversation& in, const bubble_fac
     unread.emplace(unread_bar(colours));
     unread->apply({.margin = {0.0f, -kListSide, 0.0f, -kListSide}});
   }
-  std::optional<readers_row_t> readers;
-  if (!f.readers.empty()) {
-    readers.emplace(readers_row(colours, in, f.readers));
-    readers->apply({.place = scene::anchor::kBottomRight, .x = -4.0f, .y = kReadersHeight + 1.0f});
-  }
+  // The plugins' footers under it: who has read up to it, for one.
+  auto footers = footers_t::built(footer_facts{colours, in, f.readers});
+  const float footer = footers_t::height(footers);
   // Drawn once and played back until something in it changes -- not one
   // with a picture or a file (a loader turns in it while it comes, a picture
   // may move), nor a frosted one (its backdrop is where it is on the screen).
   const bool frosted = frosts(looks.bubbles);
   auto row = c::onRightPressAt(row_menu{n, in.id, said, f.version}, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
                                       .padding = {f.unread_start ? kUnreadBarHeight + 6.0f : 0.0f, 0.0f,
-                                                  f.readers.empty() ? 0.0f : kReadersHeight + 2.0f, 0.0f}}),
+                                                  footer > 0.0f ? footer + 2.0f : 0.0f, 0.0f}}),
                        c::swiped(kSwipeToReply, 120.0f, sends<request::reply_to>{{said.id, said.body.plain}}, swipe_shown{&colours},
                                  std::move(mark), std::move(inner)),
-                       std::move(unread), std::move(readers)));
+                       std::move(unread), std::move(footers)));
   skiff::compose::state_of(row).setRecorded(!said.attachment && said.album.empty() && !frosted);
   // Not shown where the chat's settings say so: kept, and out of the flow.
   row.setVisible(!said.service || f.events_shown);

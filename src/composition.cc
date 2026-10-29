@@ -62,6 +62,13 @@ struct message_trailers {
 struct message_cards {
   static constexpr std::string_view name = "a message's cards";
 };
+// Under a message's row, at its right (mux.ui.messages:message): who has
+// read up to it, for one:
+//   extend(c, f, footer_facts) -> std::optional<its node>, placed in the
+//   room under the row; footer_height(c, f), how much room it takes
+struct message_footers {
+  static constexpr std::string_view name = "a message's footers";
+};
 // The window's dialogs (mux.ui:window): what a plugin's dialog shows -- its
 // facts, a part of what is shown -- and its box:
 //   facts_type(c, f) -> type_tag<its facts>, in the plugin's types

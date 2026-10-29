@@ -728,22 +728,4 @@ auto forward_line(const palette& colours, std::string who, std::vector<nodes::Te
 }
 using forward_line_t = decltype(forward_line(std::declval<const palette&>(), std::string(), {}, skia::SkColor{}));
 
-// Who has read up to a message, as Element shows it: their small faces at
-// the row's right under it, three at most and the rest counted.
-inline constexpr float kReaderFace = 14.0f;  // Element's read receipt avatar
-inline constexpr std::size_t kReadersShown = 3;
-auto readers_row(const palette& colours, const conversation& in, const std::vector<std::string>& users) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(readers_row, c::row(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),
-      c::many(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),
-              users | std::views::take(kReadersShown) | std::views::transform([&](const std::string& user) {
-                return avatar_mark(avatar_of::person{}, user, sender_name(in, user), kReaderFace);
-              }) | std::ranges::to<std::vector>()),
-      c::styled({.alignSelf = scene::align::kMiddle},
-                c::visible(users.size() > kReadersShown,
-                           nodes::Text(users.size() > kReadersShown ? std::format("+{}", users.size() - kReadersShown) : std::string(),
-                                       10.0f, colours.dim)))));
-}
-using readers_row_t = decltype(readers_row(std::declval<const palette&>(), std::declval<const conversation&>(), {}));
-
 }  // namespace mux::ui

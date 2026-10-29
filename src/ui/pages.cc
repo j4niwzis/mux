@@ -747,6 +747,13 @@ struct trailer_facts {
 // What a message's cards are made from (contract::message_cards): the
 // message, its first link, the program's model (the previews fetched), and
 // whether the chat shows previews.
+// What a message's footers are made from (contract::message_footers): the
+// chat, and who has read up to the message where the chat shows receipts.
+struct footer_facts {
+  const palette& colours;
+  const conversation& in;
+  const std::vector<std::string>& readers;
+};
 struct card_facts {
   const palette& colours;
   const message& said;

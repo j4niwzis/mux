@@ -9,6 +9,8 @@ import skiff.model;
 import mux.core;
 import mux.config;
 import mux.logic.room_events;
+import mux.composition;
+import mux.plugins.types;
 
 export namespace mux {
 
@@ -23,6 +25,16 @@ struct recently_used {
 };
 
 // What is kept, as the model holds it: each chat's own choices, by the chat.
+// The plugins' own settings (contract::settings_kept): each its struct, held
+// as the client's are.
+template <class Feature>
+using plugin_settings_t = typename decltype(settings_type(contract::settings_kept{}, type_tag<Feature>{}))::type;
+using settings_plugins = composition::providers<contract::settings_kept, enabled_plugins>;
+template <class... Features>
+consteval auto plugin_settings_of(plugin_list<Features...>) {
+  return type_tag<composition::aggregate_list<skiff::model::Tracked<plugin_settings_t<Features>>...>>{};
+}
+using plugin_settings_root = typename decltype(plugin_settings_of(settings_plugins{}))::type;
 struct kept_root {
   // The accounts saved, by their addresses, in the order they are listed.
   skiff::model::Keyed<std::string, mux::config::account_t> accounts;
@@ -44,6 +56,8 @@ struct kept_root {
   // The chats listed in other accounts' lists than their own.
   skiff::model::Tracked<std::vector<mux::config::chat_placement>> placements;
   skiff::model::Tracked<recently_used> recent;
+  // Each plugin's own settings.
+  plugin_settings_root plugins;
 };
 // The chats whose own choices have a flag set.
 template <auto M>

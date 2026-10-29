@@ -9,12 +9,14 @@ export module mux.app.kept;
 import std;
 import mux.vault;
 import splice;
+import knot;
 import mux.core;
 import mux.config;
 import mux.protocols;
 import mux.logic.room_events;
 import skiff.model;
 import mux.kept_root;
+import mux.plugins.types;
 
 export namespace mux::app {
 
@@ -169,6 +171,12 @@ struct kept_settings {
   [[nodiscard]] const mux::config::history_settings& history() const { return state.root().history.fValue; }
   // How much is kept, as the model holds it.
   [[nodiscard]] const mux::config::cache_limits& limits() const { return state.root().limits.fValue; }
+  // A plugin's own settings (contract::settings_kept), as the model holds
+  // them; and set, whole.
+  template <class Settings>
+  [[nodiscard]] const Settings& plugin_settings() const { return *state.template look<Settings>(); }
+  template <class Settings>
+  void set_plugin_settings(Settings now) { this->set_part(std::move(now)); }
   // A part the model's root holds one of, made what is given, whole.
   template <class Part>
   void set_part(Part now) {
@@ -533,7 +541,33 @@ struct kept_settings {
     root.placements.fValue = placements_read;
     root.recent.fValue = recent_read;
     this->state = kept_model(std::move(root), kept_reactions{&due});
+    // Each plugin's own, as the file kept it under its name; what no plugin
+    // turned on reads, kept to be written back as it was.
+    plugins_unread_ = saved.plugins.value_or(std::map<std::string, knot::raw>{});
+    this->read_plugins(mux::settings_plugins{});
   }
+  template <class... Features>
+  void read_plugins(mux::plugin_list<Features...>) {
+    (this->read_plugin<Features>(), ...);
+  }
+  template <class Feature>
+  void read_plugin() {
+    using settings = mux::plugin_settings_t<Feature>;
+    const auto found = plugins_unread_.find(std::string(Feature::name));
+    if (found == plugins_unread_.end())
+      return;
+    if (auto read = knot::try_read<settings>(found->second.text))
+      this->set_part(std::move(*read));
+    plugins_unread_.erase(found);
+  }
+  template <class... Features>
+  [[nodiscard]] std::map<std::string, knot::raw> plugins_said(mux::plugin_list<Features...>) const {
+    auto out = plugins_unread_;
+    (out.insert_or_assign(std::string(Features::name), knot::raw{knot::to_json_string(this->plugin_settings<mux::plugin_settings_t<Features>>())}), ...);
+    return out;
+  }
+  // What the file kept for plugins not turned on now.
+  std::map<std::string, knot::raw> plugins_unread_;
   [[nodiscard]] mux::config::file file() const {
     // Copied: the file is made of a contiguous list of them.
     const auto listed = this->accounts().values() | std::ranges::to<std::vector>();
@@ -557,6 +591,8 @@ struct kept_settings {
       out.favourite_emoji = kept_of(this->recent().favourite_emoji);
     if (!this->proxies().empty())
       out.proxies = this->proxies();
+    if (auto said = this->plugins_said(mux::settings_plugins{}); !said.empty())
+      out.plugins = std::move(said);
     out.theme = mux::config::said_of<mux::config::theme_said_t>(this->appearance().theme);
     if (!this->appearance().theme_overrides.empty()) out.theme_overrides = this->appearance().theme_overrides;
     if (this->appearance().developer_tools) out.developer_tools = true;

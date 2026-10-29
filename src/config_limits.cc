@@ -243,6 +243,10 @@ struct history_settings {
 consteval auto json_schema(knot::type<history_settings>) { return knot::schema<history_settings>(); }
 
 struct file {
+  // The plugins' own settings, each under its name, as it reads them
+  // (contract::settings_kept): what no plugin turned on reads, kept as it
+  // was.
+  std::optional<std::map<std::string, knot::raw>> plugins;
   // The accounts, of every protocol, in order.
   std::optional<std::vector<saved_account>> accounts;
   // How much the window moves: "none", "reduced" (sections unfold, panels

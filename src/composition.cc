@@ -43,6 +43,16 @@ struct passphrases {
 struct text_markup {
   static constexpr std::string_view name = "the text's markup";
 };
+// Settings of a plugin's own, kept with the client's in its settings file
+// (mux.app.kept): settings_type(c, f) -> type_tag<its struct> -- default
+// made, comparable, with a json_schema (knot) -- kept under the plugin's
+// name in the file's "plugins", read back at the start; held in the kept
+// model (mux.kept_root), where a page binds to its fields as to the client's,
+// and read and set by its part (kept_settings::plugin_settings<T>,
+// set_plugin_settings).
+struct settings_kept {
+  static constexpr std::string_view name = "a plugin's own settings";
+};
 // The Matrix account, made by a plugin over the client's own
 // (mux.proto.matrix.client, account_of): end-to-end encryption's.
 //   matrix_account_made(c, f, type_tag<Sink>) -> std::type_identity<its

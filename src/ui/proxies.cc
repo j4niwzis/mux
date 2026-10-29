@@ -21,6 +21,8 @@ import skiff.bind;
 import mux.core;
 import mux.config;
 import mux.ui.base;
+import mux.composition;
+import mux.plugins.ui;
 import :drawer;
 
 export namespace mux::ui {
@@ -28,14 +30,12 @@ export namespace mux::ui {
 // ---- the settings -------------------------------------------------------------------
 
 // Settings, as Telegram Desktop shows them: a box over the window, a list of
-// sections, and each section a page of the same box.
-template <class Event>
-auto settings_link(const palette& colours, std::string label, icon_t icon, Event event) {
-  return SKIFF_NAMED(settings_link, skiff::compose::onClick(std::move(event), skiff::compose::row(
-      skiff::compose::hbox(16.0f, {.fillX = true, .height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
-                                  .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
-      skiff::compose::styled({.width = 28.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon), colours.dim)),
-      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(label, 15.0f, colours.text)))), label));
+// sections, and each section a page of the same box. The plugins' links
+// after the client's own (contract::settings_links).
+template <class... Features>
+auto settings_links_of(plugin_list<Features...>, const palette& colours) {
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      extend(contract::settings_links{}, type_tag<Features>{}, colours)...);
 }
 inline auto settings_home(const palette& colours) {
   return SKIFF_NAMED(settings_home, skiff::compose::column(
@@ -51,6 +51,7 @@ inline auto settings_home(const palette& colours) {
       settings_link(colours, "Storage", icon::clip{}, request::settings_storage{}),
       settings_link(colours, "Files", icon::send{}, request::settings_files{}),
       settings_link(colours, "Proxies", icon::gear{}, request::settings_proxies{}),
+      settings_links_of(composition::providers<contract::settings_links, enabled_plugins>{}, colours),
       settings_link(colours, "About", icon::eye{}, request::settings_about{})));
 }
 using settings_home_t = decltype(settings_home(std::declval<const palette&>()));

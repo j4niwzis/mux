@@ -101,6 +101,18 @@ struct chat_column {
 struct chat_header {
   static constexpr std::string_view name = "the chat's head";
 };
+// Settings' home page, its links after the client's own (mux.ui:proxies):
+//   extend(c, f, palette) -> its row, settings_link(...) as the others are:
+//   what it opens its plugin's own
+struct settings_links {
+  static constexpr std::string_view name = "Settings' links";
+};
+// An account's page in Manage accounts, its rows under its connection
+// (mux.ui:accounts): extend(c, f, palette, address) -> its row, shown or
+// not as the account's protocol is -- what it opens its plugin's own
+struct account_rows {
+  static constexpr std::string_view name = "an account's rows";
+};
 // What can be done with the messages selected, beside Delete in the selection
 // bar (mux.ui:header) and in their text menu (mux.ui:window):
 //   label(c, f) -> what it says: "<label> 3" on the bar, "<label> selected"

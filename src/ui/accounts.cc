@@ -22,6 +22,7 @@ import mux.config;
 import mux.ui.base;
 import :account_forms;
 import mux.plugins.ui.top;
+import mux.composition;
 import mux.ui.proto;
 import :add_account;
 import :info;
@@ -225,6 +226,12 @@ auto account_switch(const palette& colours, std::string text, On on, Allowed all
 }
 inline constexpr auto always = [](const config::account_t&) { return true; };
 
+// The plugins' rows on an account's page (contract::account_rows).
+template <class... Features>
+auto account_rows_of(plugin_list<Features...>, const palette& colours, const std::string& address) {
+  return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      extend(contract::account_rows{}, type_tag<Features>{}, colours, address)...);
+}
 // The connection: its address, on or off and Remove; how it is now; and
 // its protocol's form.
 inline auto account_editor_view(const ui_needs& n, const std::string& address) {
@@ -249,7 +256,8 @@ inline auto account_editor_view(const ui_needs& n, const std::string& address) {
       // Its own emoji and sticker packs, where its protocol has them: found
       // only in Settings before, and only the first account's (a tester's).
       c::visible(proto::offers(state_before(protocol_of(address)), proto::feature::sticker_packs{}),
-                 row_item(colours, "Emojis & Stickers", sends<request::open_account_packs>{{address}}, icon::smile{}))));
+                 row_item(colours, "Emojis & Stickers", sends<request::open_account_packs>{{address}}, icon::smile{})),
+      account_rows_of(composition::providers<contract::account_rows, enabled_plugins>{}, colours, address)));
 }
 
 // Its typing, as every account's until chosen here.

@@ -189,6 +189,16 @@ struct no_action {
   using Answer = skiff::scene::Taken;
   skiff::scene::Taken operator()() const { return {}; }
 };
+// A link of Settings' home page: its icon and name; pressed, what it opens
+// (mux.ui:proxies, and the plugins' links: contract::settings_links).
+template <class Event>
+auto settings_link(const palette& colours, std::string label, icon_t icon, Event event) {
+  return SKIFF_NAMED(settings_link, skiff::compose::onClick(std::move(event), skiff::compose::row(
+      skiff::compose::hbox(16.0f, {.fillX = true, .height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
+                                  .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
+      skiff::compose::styled({.width = 28.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon), colours.dim)),
+      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(label, 15.0f, colours.text)))), label));
+}
 using no_back = no_action;
 
 // The head of a page: ← on the left where there is somewhere to go back to,

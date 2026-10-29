@@ -174,7 +174,6 @@ struct look_settings {
   style_settings style;
   theme_t theme = theme::tinted{};
   std::map<std::string, custom_theme> theme_overrides;
-  bool developer_tools = false;
   accent_t accent = accent::theme_own{};
   renderer_t renderer = renderer::opengl{};
   motion_t motion = motion::full{};
@@ -277,7 +276,6 @@ struct file {
   std::optional<style_settings> style;
   std::optional<theme_said_t> theme;
   std::optional<std::map<std::string, custom_theme>> theme_overrides;
-  std::optional<bool> developer_tools;
   std::optional<accent_said_t> accent;
   // Every chat's background, as word_of(wallpaper_t) says it; none, the theme's.
   std::optional<std::string> wallpaper;

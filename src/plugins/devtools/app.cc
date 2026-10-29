@@ -13,6 +13,7 @@ import mux.core;
 import mux.protocols;
 import mux.ui;
 import mux.app.network;
+import mux.app.kept;
 import mux.app.services;
 import mux.plugin.devtools.types;
 import mux.plugin.room_settings.ui;
@@ -24,6 +25,22 @@ export namespace mux::plugins::devtools {
 
 struct part {
   app::services* s_ = nullptr;
+
+  // The tools turned on or off: kept in its own settings, and shown.
+  void apply(const flip_tools&) {
+    auto now = s_->kept->plugin_settings<kept>();
+    now.tools = !now.tools;
+    s_->kept->set_plugin_settings(now);
+    (void)s_->kept->write();
+    ui::show(*s_->showing, now);
+  }
+  // Each frame: what the window shows of them as they are kept -- at the
+  // start, once local data is opened.
+  void tick() {
+    const auto& now = s_->kept->plugin_settings<kept>();
+    if (*s_->showing->look<kept>() != now)
+      ui::show(*s_->showing, now);
+  }
   std::uint64_t opened_ = 0;
 
   // The dialog open on a screen, for a room: made anew.

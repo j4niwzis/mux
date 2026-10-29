@@ -302,8 +302,8 @@ inline bool tab_visible(room_tab, const room_settings::room_settings_facts& fact
 }
 inline auto developer_switch(const palette& colours) {
   namespace c = skiff::compose;
-  using toggle_t = widgets::Toggle<sends<request::flip_developer_tools>>;
-  return SKIFF_NAMED(developer_switch, c::applied<looks_picked>([](const looks_picked& now) { return now.developer_tools; },
+  using toggle_t = widgets::Toggle<sends<flip_tools>>;
+  return SKIFF_NAMED(developer_switch, c::applied<kept>([](const kept& now) { return now.tools; },
       [](toggle_t& toggle, bool on) { toggle.setOnNow(on); },
       c::styled({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, {}))));
 }
@@ -313,13 +313,13 @@ auto tool_button(const palette& colours, std::string label) {
 }
 inline auto make_manage_page(room_tab, const palette& colours, const room_settings::room_settings_facts& facts) {
   namespace c = skiff::compose;
-  const auto tools_on = [](const looks_picked& now) { return now.developer_tools; };
+  const auto tools_on = [](const kept& now) { return now.tools; };
   return SKIFF_NAMED(devtools_tab_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Developer Tools"),
       c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text("Enable Developer Tools", 14.0f, colours.text)),
           developer_switch(colours)),
-      c::shown_for<looks_picked>(tools_on, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::shown_for<kept>(tools_on, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text("Room ID: " + facts.id, 13.0f, colours.dim))),
               c::styled({.width = 90.0f, .height = 30.0f}, widgets::Button<sends<request::copy_text>>(colours.widgets, "Copy", {{facts.id}}))),

@@ -269,10 +269,15 @@ TEST(Config, GraphiteAndThemeOverridesSurviveSerialization) {
   EXPECT_EQ(read->theme_overrides->at("graphite"), custom);
 }
 
-TEST(Config, DeveloperToolsPreferenceSurvivesSerialization) {
+// A plugin's own settings are kept under its name, as it wrote them, and
+// read back the same -- those of plugins not built among them.
+TEST(Config, PluginSettingsSurviveSerialization) {
   mux::config::file saved;
-  saved.developer_tools = true;
+  saved.plugins = std::map<std::string, knot::raw>{{"developer tools", knot::raw{R"({"tools":true})"}},
+                                                   {"not built here", knot::raw{R"({"anything":[1,2]})"}}};
   const auto read = knot::try_read<mux::config::file>(knot::to_json_string(saved));
   ASSERT_TRUE(read);
-  EXPECT_EQ(read->developer_tools, true);
+  ASSERT_TRUE(read->plugins);
+  EXPECT_EQ(read->plugins->size(), 2u);
+  EXPECT_TRUE(read->plugins->contains("not built here"));
 }

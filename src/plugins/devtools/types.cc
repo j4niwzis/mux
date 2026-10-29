@@ -7,6 +7,7 @@ export module mux.plugin.devtools.types;
 
 import std;
 import splice;
+import knot;
 import mux.core;
 import mux.composition;
 import mux.plugin.room_settings.types;
@@ -98,5 +99,19 @@ constexpr composition::page_list<room_tab> room_tabs(room_settings::contract::ta
 consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
 constexpr type_tag<shown> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
+// Its own settings (contract::settings_kept): whether the tools are on --
+// kept in the settings file under its name, and shown as the window's
+// (contract::window_state) for its rows and tab to read.
+struct kept {
+  bool tools = false;
+  friend bool operator==(const kept&, const kept&) = default;
+  friend consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>(); }
+};
+// Asked of the program: the tools turned on or off.
+struct flip_tools {};
+consteval bool provides(contract::settings_kept, type_tag<feature>) { return true; }
+constexpr type_tag<kept> settings_type(contract::settings_kept, type_tag<feature>) { return {}; }
+consteval bool provides(contract::window_state, type_tag<feature>) { return true; }
+constexpr type_tag<kept> state_type(contract::window_state, type_tag<feature>) { return {}; }
 
 }  // namespace mux::plugins::devtools

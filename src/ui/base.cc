@@ -211,7 +211,6 @@ struct looks_held {
 // the colours (ui_needs).
 struct looks_shown {
   std::map<std::string, config::custom_theme> theme_overrides;
-  bool developer_tools = false;
   // The window's own: its opacity, the background behind it, Frosted's blur.
   window_look_t window;
   // How the bubbles of the chat shown look -- set before its bubbles are
@@ -237,7 +236,6 @@ struct looks_picked {
   config::bubble_look bubbles, panels;
   config::bubble_look bubbles_everywhere, panels_everywhere;
   window_look_t window;
-  bool developer_tools = false;
   template <class Self>
   [[nodiscard]] auto& at(this Self& self, const choice_level_t& level) {
     return spl::visit(spl::overloaded{[&](choice_level::everywhere) -> auto& { return self.everywhere; },
@@ -249,7 +247,7 @@ struct looks_picked {
 };
 [[nodiscard]] inline looks_picked looks_picked_of(const looks_shown& looks) {
   return {looks.everywhere, looks.account,  looks.chat,  looks.bubbles, looks.panels, looks.bubbles_everywhere,
-          looks.panels_everywhere, looks.window, looks.developer_tools};
+          looks.panels_everywhere, looks.window};
 }
 // The panels' opacity going from one chat's to another's: eased, the look
 // otherwise as it is.

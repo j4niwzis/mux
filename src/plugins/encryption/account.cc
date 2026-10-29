@@ -254,6 +254,7 @@ class encrypted_account : public account<Sink> {
   using typename base::uia_none;
   using typename base::uia_cross_signing;
   using typename base::pending_uia;
+  using typename base::late_news_while;
 
   // End-to-end encryption: this device's machine, made once the device is
   // known; its keys uploaded, and what comes for it read.

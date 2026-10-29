@@ -39,11 +39,11 @@ class settings_part {
   }
 
 
-  // The limits, as kept: to the caches and the disk.
+  // The limits in force: to the caches and the disk.
   void apply_limits() {
-    pictures_->set_limits(k_->limits());
-    s_->store->budget = static_cast<std::uintmax_t>(k_->limits().messages_on_disk_mb) << 20;
-    s_->store->deleted_budget = static_cast<std::uintmax_t>(mux::config::deleted_on_disk_of(k_->limits())) << 20;
+    pictures_->set_limits(s_->limits);
+    s_->store->budget = static_cast<std::uintmax_t>(s_->limits.messages_on_disk_mb) << 20;
+    s_->store->deleted_budget = static_cast<std::uintmax_t>(mux::config::deleted_on_disk_of(s_->limits)) << 20;
   }
 
   void apply(const request::open_settings&) {

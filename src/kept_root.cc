@@ -52,8 +52,6 @@ struct kept_root {
   skiff::model::Tracked<mux::config::sending_settings> sending;
   // What is kept and shown of the history, for every chat that does not say.
   skiff::model::Tracked<mux::config::history_settings> history;
-  // How much is kept, in memory and on disk.
-  skiff::model::Tracked<mux::config::cache_limits> limits;
   // How the window looks.
   skiff::model::Tracked<mux::config::look_settings> looks;
   // The proxy profiles, in their order.

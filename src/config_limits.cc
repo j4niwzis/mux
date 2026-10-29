@@ -279,7 +279,6 @@ struct file {
   // The interface's scale, in percent of the display's own (none, 100): as
   // Telegram Desktop's "Interface scale".
   std::optional<int> interface_scale;
-  std::optional<cache_limits> cache;
   std::optional<sending_settings> sending;
   std::optional<history_settings> history;
   std::optional<notification_settings> notifications;

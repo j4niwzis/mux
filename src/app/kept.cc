@@ -30,11 +30,6 @@ using mux::kept_root;
 struct write_kept {
   [[nodiscard]] constexpr int key() const { return 0; }
 };
-// The limits changed: the caches and the disk told, and what is held in
-// memory trimmed to them.
-struct limits_changed {
-  [[nodiscard]] constexpr int key() const { return 0; }
-};
 // How the window looks changed: what the window's parts read of it put in
 // place; and where the theme, the accent or the background behind the
 // window did, every style resolved again and the window made anew.
@@ -70,7 +65,6 @@ struct kept_due {
   bool motion = false;
   bool deleted = false;
   bool opacity = false;
-  bool limits = false;
 };
 struct kept_reactions {
   // Where what they ask for is marked: the kept settings' own (kept_settings::due).
@@ -83,7 +77,6 @@ struct kept_reactions {
   skiff::model::Nothing on(const motion_chosen&) const { return mark(&kept_due::motion); }
   skiff::model::Nothing on(const deleted_shown&) const { return mark(&kept_due::deleted); }
   skiff::model::Nothing on(const opacity_chosen&) const { return mark(&kept_due::opacity); }
-  skiff::model::Nothing on(const limits_changed&) const { return mark(&kept_due::limits); }
   skiff::model::Nothing mark(bool kept_due::*what) const {
     due->*what = true;
     return {};
@@ -103,9 +96,6 @@ struct kept_reactions {
   [[nodiscard]] write_kept on(skiff::model::Changed<Settings>, const Settings&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::history_settings>, const mux::config::history_settings&) const { return {}; }
   [[nodiscard]] deleted_shown on(skiff::model::Changed<skiff::model::Field<&mux::config::history_settings::show_deleted>>, const auto&) const {
-    return {};
-  }
-  [[nodiscard]] std::tuple<write_kept, limits_changed> on(skiff::model::Changed<mux::config::cache_limits>, const mux::config::cache_limits&) const {
     return {};
   }
   [[nodiscard]] std::tuple<write_kept, looks_changed> on(skiff::model::Changed<mux::config::look_settings>, const mux::config::look_settings&) const {
@@ -160,8 +150,6 @@ struct kept_settings {
   [[nodiscard]] const mux::config::sending_settings& sending() const { return state.root().sending.fValue; }
   // What is kept and shown of the history, as the model holds it.
   [[nodiscard]] const mux::config::history_settings& history() const { return state.root().history.fValue; }
-  // How much is kept, as the model holds it.
-  [[nodiscard]] const mux::config::cache_limits& limits() const { return state.root().limits.fValue; }
   // A plugin's own settings (contract::settings_kept), as the model holds
   // them; and set, whole.
   template <class Settings>
@@ -474,7 +462,6 @@ struct kept_settings {
     looks_read.chat_avatar_rounding = saved.chat_avatar_rounding;
     looks_read.person_avatar_rounding = saved.person_avatar_rounding;
     looks_read.interface_scale = saved.interface_scale.value_or(100);
-    const auto limits_read = saved.cache.value_or(mux::config::cache_limits{});
     const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
     const auto history_read = saved.history.value_or(mux::config::history_settings{});
     const auto proxies_read = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
@@ -517,7 +504,6 @@ struct kept_settings {
     root.notifications.fValue = notifications_read;
     root.sending.fValue = sending_read;
     root.history.fValue = history_read;
-    root.limits.fValue = limits_read;
     root.looks.fValue = looks_read;
     root.proxies.fValue = proxies_read;
     root.placements.fValue = placements_read;
@@ -599,7 +585,6 @@ struct kept_settings {
     out.person_avatar_rounding = this->appearance().person_avatar_rounding;
     if (this->appearance().interface_scale != 100)
       out.interface_scale = this->appearance().interface_scale;
-    out.cache = this->limits();
     out.sending = this->sending();
     out.history = this->history();
     out.style = this->appearance().style;

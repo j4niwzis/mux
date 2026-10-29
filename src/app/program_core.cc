@@ -235,7 +235,7 @@ void app::take_arriving(std::chrono::milliseconds most) {
   // happened (the notifications').
   this->plugins_took(changes);
   // Messages held to a number in all, least recently read out first.
-  model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), shared.chosen());
+  model->trim(static_cast<std::size_t>(shared.limits.messages_in_memory), shared.chosen());
   const auto refresh_began = std::chrono::steady_clock::now();
   this->refresh();
   if (const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - refresh_began).count(); ms >= 30.0)
@@ -386,9 +386,9 @@ void app::settle_model() {
       shared.rebuild_due = true;
     }
   }
-  if (due.limits) {
+  if (std::exchange(shared.limits_due, false)) {
     settings.apply_limits();
-    model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), shared.chosen());
+    model->trim(static_cast<std::size_t>(shared.limits.messages_in_memory), shared.chosen());
   }
   window_binding.refresh(root(), this->state);
   this->refresh_shown();

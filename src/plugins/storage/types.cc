@@ -32,5 +32,10 @@ consteval bool provides(contract::settings_links, type_tag<feature>) { return tr
 consteval bool provides(contract::settings_pages, type_tag<feature>) { return true; }
 constexpr composition::page_list<storage_page, files_page> settings_pages(contract::settings_pages, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
+// Its own settings (contract::settings_kept), kept in the settings file
+// under its name: how much is kept, in memory and on disk -- put in force
+// by its part.
+consteval bool provides(contract::settings_kept, type_tag<feature>) { return true; }
+constexpr type_tag<config::cache_limits> settings_type(contract::settings_kept, type_tag<feature>) { return {}; }
 
 }  // namespace mux::plugins::storage

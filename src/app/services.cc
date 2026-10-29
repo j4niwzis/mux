@@ -54,6 +54,11 @@ struct services {
   mux::ui::ui_shared ui;
   network* net = nullptr;
   message_store* store = nullptr;
+  // How much is kept, in memory and on disk, in force: what a plugin (the
+  // storage plugin's settings) says, the defaults where none does; and it
+  // changed, to be told to the caches and the disk after the event.
+  mux::config::cache_limits limits;
+  bool limits_due = true;
   mailbox_type* box = nullptr;
   actions* ask = nullptr;
   skiff::scene::Scene<window_type>* scene = nullptr;

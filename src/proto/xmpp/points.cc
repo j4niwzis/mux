@@ -27,8 +27,6 @@ inline std::string directory_server(const state&, std::string_view address) {
 // The current XMPP client does not emit service events into the timeline.
 // Keep their controls absent until those events are implemented.
 inline std::vector<room_event_t> room_event_kinds(const state&) { return {}; }
-namespace settings { struct profile {}; }
-constexpr account_page_list<settings::profile> account_pages(const state&) { return {}; }
 constexpr form_part_list<registration_form> form_parts(const state&) { return {}; }
 namespace request {
 // One of the fields the server asked to register, typed into.

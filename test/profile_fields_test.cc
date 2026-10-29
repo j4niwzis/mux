@@ -7,13 +7,13 @@ import skiff.model;
 import skiff.bind;
 import mux.core;
 import mux.ui.base;
+import mux.plugin.profiles.ui;
 import gtest;
 #include "gtest/gtest-macros.h"
 namespace {
 namespace ui = mux::ui;
 namespace scene = skiff::scene;
 namespace model = skiff::model;
-struct profile_policy { static constexpr bool banners = false; };
 struct shown_root { model::Tracked<ui::account_page_read> page; };
 using shown_model = model::Model<shown_root, skiff::bind::NoReactions>;
 }
@@ -30,11 +30,11 @@ TEST(ProfileFields, TextInputEditsTheNestedDraftWithoutChangingTheReceivedProfil
   skiff::paint::defaultFont() = &font;
   ui::palette colours{};
   mux::user_profile profile; profile.name = "Alice";
-  ui::profile_form_seed seed{.profile = profile};
+  mux::plugins::profiles::profile_form_seed seed{.profile = profile};
   shown_model shown(shown_root{});
   skiff::bind::Binding<shown_model> binding;
   const auto revision = shown.revision();
-  scene::Scene tree(ui::profile_fields<profile_policy>(colours, seed));
+  scene::Scene tree(mux::plugins::profiles::profile_fields(colours, seed, false));
   binding.refresh(tree.root(), shown);
   tree.root().apply({.width = 400.0f, .autoSize = scene::axes::kY});
   tree.layoutIfNeeded(skia::SkRect::MakeWH(400.0f, 800.0f));

@@ -185,15 +185,12 @@ inline void with_form_part(account_draft& draft, const registration_form& kept) 
 
 }  // namespace mux::proto::xmpp
 
-export namespace mux::proto::xmpp::settings {
-struct profile_policy {
-  static constexpr bool banners = false;
-  static auto presences() { return std::vector<std::pair<std::string, availability_t>>{{"Online", availability::online{}}, {"Free to chat", availability::chat{}}, {"Away", availability::away{}}, {"Extended away", availability::extended_away{}}, {"Do not disturb", availability::do_not_disturb{}}, {"Offline", availability::offline{}}}; }
-};
-constexpr std::string_view page_title(profile) { return "Profile"; }
-inline ui::icon_t page_icon(profile) { return ui::icon::info{}; }
-inline auto page_view(profile, const ui::palette& colours, const ui::account_page_facts& first) {
-  return ui::profile_page<profile_policy>(colours, first);
+export namespace mux::proto::xmpp {
+// What an XMPP profile holds beside its name: no banner; and the presences
+// it has (the profiles plugin's page asks).
+inline ui::profile_policy profile_policy_of(const state&) {
+  return {false, {{"Online", availability::online{}}, {"Free to chat", availability::chat{}}, {"Away", availability::away{}},
+                  {"Extended away", availability::extended_away{}}, {"Do not disturb", availability::do_not_disturb{}},
+                  {"Offline", availability::offline{}}}};
 }
-inline ui::request::refresh_profile asked_as_it_opens(profile, const account_id& by) { return {by}; }
 }

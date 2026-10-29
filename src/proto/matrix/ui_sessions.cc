@@ -236,16 +236,6 @@ using account_sessions_t = decltype(account_sessions(std::declval<const palette&
 // Its pages: their titles, icons, and what each is, made over the facts;
 // and what each asks of the program as it opens.
 export namespace mux::proto::matrix::settings {
-struct profile_policy {
-  static constexpr bool banners = true;
-  static auto presences() { return std::vector<std::pair<std::string, availability_t>>{{"Online", availability::online{}}, {"Away", availability::away{}}, {"Offline", availability::offline{}}}; }
-};
-constexpr std::string_view page_title(profile) { return "Profile"; }
-inline ui::icon_t page_icon(profile) { return ui::icon::info{}; }
-inline auto page_view(profile, const ui::palette& colours, const ui::account_page_facts& first) {
-  return ui::profile_page<profile_policy>(colours, first);
-}
-inline ui::request::refresh_profile asked_as_it_opens(profile, const account_id& by) { return {by}; }
 
 constexpr std::string_view page_title(sessions) { return "Sessions"; }
 inline ui::icon_t page_icon(sessions) { return ui::icon::info{}; }
@@ -254,3 +244,11 @@ inline auto page_view(sessions, const ui::palette& colours, const ui::account_pa
 }
 inline request::refresh_sessions asked_as_it_opens(sessions, const account_id&) { return {}; }
 }  // namespace mux::proto::matrix::settings
+
+// What a Matrix profile holds beside its name: a banner; and the presences
+// it has (the profiles plugin's page asks).
+export namespace mux::proto::matrix {
+inline ui::profile_policy profile_policy_of(const state&) {
+  return {true, {{"Online", availability::online{}}, {"Away", availability::away{}}, {"Offline", availability::offline{}}}};
+}
+}  // namespace mux::proto::matrix

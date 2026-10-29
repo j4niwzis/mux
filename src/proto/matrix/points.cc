@@ -43,13 +43,13 @@ inline std::optional<std::string> message_link(const state&, const conversation&
 // state, an event of any type sent -- and a step of interactive auth done
 // in the browser.
 constexpr dialog_list<tool::uia_step> dialogs(const state&) { return {}; }
-// Its own account pages: its profile, and its sessions. (Its encryption's,
+// Its own account pages: its sessions. (Its profile is the profiles
+// plugin's page; its encryption's,
 // cross-signing and the key backup, are the encryption plugin's.)
 namespace settings {
-struct profile {};
 struct sessions {};
 }  // namespace settings
-constexpr account_page_list<settings::profile, settings::sessions> account_pages(const state&) { return {}; }
+constexpr account_page_list<settings::sessions> account_pages(const state&) { return {}; }
 // What it keeps of an account while they are open: its sessions as the
 // server listed them (none yet: not heard), this one's among them; whether
 // this session has the cross-signing keys and the room keys are backed up;

@@ -136,70 +136,10 @@ class rooms_part {
     s_->net->create_direct(*current, one.user);
     s_->notice("New chat", "Starting a chat with " + one.user + "…");
   }
-  // Explore rooms: opened on the account's own server.
-  void apply(const request::open_explore&) {
-    const auto by = s_->listed();
-    if (!by) return;
-    const std::string own = mux::proto::directory_server_of(mux::ui::protocol_state_of(s_->ui, *by), by->address);
-    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
-    mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
-    // What the server lists, at once, as Cinny opens its explorer: its
-    // directory with nothing searched -- said as asked until it answers.
-    const bool asking = by && !s_->demo();
-    mux::ui::show(*s_->showing, std::optional(mux::ui::explore_facts{own, std::nullopt, asking, std::nullopt, by, own, {}}));
-    if (asking)
-      s_->net->search_directory(*by, own, std::string());
-  }
-  void apply(const request::close_explore&) {
-    mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt);
-  }
-  // A space's rooms and spaces, in Explore: asked of its account.
-  void apply(const request::explore_space& one) {
-    const auto& facts = s_->showing->root().explore.fValue;
-    const auto by = facts ? facts->by : s_->listed();
-    if (!by || s_->demo())
-      return;
-    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
-    mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
-    // Said as the space's: its name and picture over what it holds.
-    std::string name = one.name;
-    if (const auto& chats = s_->model->accounts().at(*by).conversations; chats.contains(one.room))
-      name = mux::ui::display_name(chats.at(one.room));
-    mux::ui::show(*s_->showing, std::optional(mux::ui::explore_facts{by->address.substr(by->address.find(':') + 1), std::nullopt, true,
-                                                                     mux::ui::explore_space_shown{one.room, name.empty() ? one.room : name}, by, {}, {}}));
-    s_->net->explore_space(*by, one.room);
-  }
-  // A search: an address typed in is gone to, as a link to it would be --
-  // its card, or the room where joined; else the directory asked.
-  void apply(const request::search_rooms& one) {
-    const auto& facts = s_->showing->root().explore.fValue;
-    const auto by = facts ? facts->by : std::nullopt;
-    if (!by || s_->demo())
-      return;
-    if (auto room = mux::proto::directory_room(by->speaks, one.query)) {
-      this->apply(request::join_directory_room{std::move(*room), one.server});
-      return;
-    }
-    if (auto link = mux::logic::link_of_id(one.query); link && mux::proto::owns_address(mux::ui::protocol_state_of(s_->ui, *by), one.query)) {
-      mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt);
-      s_->link_due = *link;
-      return;
-    }
-    bool space = false;
-    mux::ui::change_shown<std::optional<mux::ui::explore_facts>>(*s_->showing, [&](auto& now) {
-      if (!now) return;
-      space = now->space.has_value();
-      now->server = one.server;
-      now->query = one.query;
-      now->loading = !space;
-    });
-    if (!space) s_->net->search_directory(*by, one.server, one.query, one.since);
-  }
   // A room of the directory joined, through the server it was listed by, and
   // opened when it comes.
   void apply(const request::join_directory_room& one) {
-    const auto& facts = s_->showing->root().explore.fValue;
-    const auto by = one.by ? one.by : facts ? facts->by : s_->listed();
+    const auto by = one.by ? one.by : s_->listed();
     if (!by || s_->demo())
       return;
     std::vector<std::string> via;
@@ -217,7 +157,6 @@ class rooms_part {
     else
       s_->joining.reset();
     s_->net->join(*by, one.room, via);
-    mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt);
   }
   // A room made, and opened once the model has it.
   void apply(const request::create_room& one) {

@@ -129,6 +129,11 @@ struct beside_panels {
 struct chat_status {
   static constexpr std::string_view name = "the chat's status";
 };
+// The side's head, its buttons after the space bar (mux.ui:conversations_side):
+//   extend(c, f, palette) -> its button: what it opens its plugin's own
+struct side_header {
+  static constexpr std::string_view name = "the side's head";
+};
 // Settings' home page, its links after the client's own (mux.ui:proxies):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own

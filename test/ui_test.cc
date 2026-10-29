@@ -110,8 +110,6 @@ struct stub {
   void close_notice() {}
   void close_person_info() {}
   void close_room_card() { ++room_cards_closed; }
-  void open_explore() {}
-  void close_explore() {}
   void search_rooms(std::string, std::string) {}
   void more_rooms(std::string, std::string, std::string) {}
   void search_pick(std::size_t) {}
@@ -2453,19 +2451,19 @@ TEST(History, ReactionsTargetEachEditAndNeverGuessMissingEditIds) {
 TEST(Explore, RepliesBelongToTheOpeningAccountAndSearch) {
   const mux::account_id xmpp{mux::protocol::xmpp{}, "alice@example.org"};
   const mux::account_id matrix{mux::protocol::matrix{}, "@alice:example.org"};
-  mux::ui::explore_facts facts{.by = xmpp, .server = "rooms.example.org", .query = "lounge"};
+  mux::plugins::explore::shown facts{.by = xmpp, .server = "rooms.example.org", .query = "lounge"};
   mux::change::directory_listed reply{.by = matrix, .server = facts.server, .query = facts.query};
-  EXPECT_FALSE(mux::ui::accepts_listing(facts, reply));
+  EXPECT_FALSE(mux::plugins::explore::accepts_listing(facts, reply));
   reply.by = xmpp;
-  EXPECT_TRUE(mux::ui::accepts_listing(facts, reply));
+  EXPECT_TRUE(mux::plugins::explore::accepts_listing(facts, reply));
   reply.query = "old query";
-  EXPECT_FALSE(mux::ui::accepts_listing(facts, reply));
+  EXPECT_FALSE(mux::plugins::explore::accepts_listing(facts, reply));
   reply.query = facts.query;
   reply.server = "other.example.org";
-  EXPECT_FALSE(mux::ui::accepts_listing(facts, reply));
+  EXPECT_FALSE(mux::plugins::explore::accepts_listing(facts, reply));
   reply.server = facts.server;
   reply.space = "!space:example.org";
-  EXPECT_FALSE(mux::ui::accepts_listing(facts, reply));
+  EXPECT_FALSE(mux::plugins::explore::accepts_listing(facts, reply));
 }
 
 TEST(Protocols, XmppFormsAndEventControlsUseItsCapabilities) {

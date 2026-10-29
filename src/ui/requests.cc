@@ -415,8 +415,6 @@ struct not_implemented {
 struct close_notice {};
 struct close_person_info {};
 struct close_room_card {};
-struct open_explore {};
-struct close_explore {};
 // A space's rooms and spaces, joined or not, in Explore.
 struct explore_space {
   std::string room;

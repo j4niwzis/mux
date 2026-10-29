@@ -23,6 +23,7 @@ import mux.core;
 import mux.protocols;
 import mux.config;
 import mux.ui.base;
+import mux.plugins.ui;
 import :chat_list;
 import mux.ui.messages;
 import :header;
@@ -621,6 +622,24 @@ auto side_space_bar(const auto& colours, bool big) {
 
 export namespace mux::ui {
 
+// The buttons plugins put in the side's head (contract::side_header), after
+// the space bar, in their order -- Explore's, for one.
+template <class List>
+struct side_buttons;
+template <class... Features>
+struct side_buttons<plugin_list<Features...>> {
+  template <class Feature>
+  static auto button_of(const palette& colours) -> decltype(extend(contract::side_header{}, type_tag<Feature>{}, colours)) {
+    static_assert(requires { extend(contract::side_header{}, type_tag<Feature>{}, colours); },
+                  composition::broken<contract::side_header, Feature>());
+    return extend(contract::side_header{}, type_tag<Feature>{}, colours);
+  }
+  static auto row_of(const palette& colours) {
+    return skiff::compose::row(skiff::compose::hbox(10.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+                               button_of<Features>(colours)...);
+  }
+};
+using side_header_plugins = side_buttons<composition::providers<contract::side_header, enabled_plugins>>;
 auto side_header_for(const auto& colours) {
   namespace c = skiff::compose;
   auto top = side_space_bar(colours, false);
@@ -628,8 +647,7 @@ auto side_header_for(const auto& colours) {
       .padding = {8.0f, 8.0f, 8.0f, 8.0f}}),
       menu_button(colours),
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("mux", 17.0f, colours.text, true)),
-      std::move(top), c::styled({.alignSelf = scene::align::kMiddle},
-          icon_button(colours, icon::compass{}, sends<request::open_explore>{})));
+      std::move(top), side_header_plugins::row_of(colours));
   return head;
 }
 auto side_body_for(const auto& needs) {

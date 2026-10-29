@@ -243,9 +243,7 @@ inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts
     return c::visible(shown, row_item(colours, std::move(label), std::move(act), mark, std::nullopt, menu_row_look));
   };
   auto items = c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      item(facts.answerable, "Reply", sends<request::menu_reply>{}, icon::back{}),
       item(facts.answerable && facts.can.threads && !facts.link.empty(), "Reply in thread", sends<request::menu_thread>{}, icon::threads{}),
-      item(facts.answerable && facts.selection && !facts.own && !facts.copied.empty(), "Quote & Reply", sends<request::menu_quote_reply>{}, icon::back{}),
       item(facts.editable && !facts.reaction && ((!facts.text.empty() && !facts.media) || facts.captioned), "Edit", sends<request::menu_edit>{},
            icon::sliders{}),
       item(!facts.copied.empty(), facts.selection ? "Copy Selected Text" : "Copy Text", sends<request::menu_copy>{}, icon::clip{}),

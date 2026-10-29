@@ -74,7 +74,6 @@ struct stub {
   void menu_react(std::string) {}
   void react(std::string, std::string) {}
   void close_menu() {}
-  void menu_reply() {}
   void menu_edit() {}
   void menu_copy() {}
   void menu_delete() {}
@@ -226,7 +225,6 @@ struct stub {
   void settings_rendering() {}
   void settings_storage() {}
   void clear_stored() {}
-  void menu_quote_reply() {}
   void show_account(std::string) {}
   void leave_chat() {}
   void close_chat() {}

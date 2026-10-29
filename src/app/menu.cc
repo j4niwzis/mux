@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.app.menu: a message's menu, as tdesktop's -- the message it is up for,
 // and what is chosen from it: a reaction, Reply, Edit, Copy, Copy Message
-// Link, Save As, Delete -- and a message swiped to be answered.
+// Link, Save As, Delete. (Reply is the replies plugin's.)
 export module mux.app.menu;
 
 import std;
@@ -38,9 +38,6 @@ struct menu_part {
 void part_apply(menu_part& self, const request::message_menu& one);
 void part_apply(menu_part& self, const request::close_menu&);
 void part_apply(menu_part& self, const request::menu_pressed_off&);
-void part_apply(menu_part& self, const request::reply_to& one);
-void part_apply(menu_part& self, const request::menu_quote_reply&);
-void part_apply(menu_part& self, const request::menu_reply&);
 void part_apply(menu_part& self, const request::menu_edit&);
 void part_apply(menu_part& self, const request::menu_copy&);
 void part_apply(menu_part& self, const request::menu_copy_link&);
@@ -103,57 +100,6 @@ void part_apply(menu_part& self, const request::close_menu&) { mux::ui::show<mux
 void part_apply(menu_part& self, const request::menu_pressed_off&) {
   part_apply(self, request::close_menu{});
   self.s_->press_again = self.s_->last_press;
-}
-
-void part_apply(menu_part& self, const request::reply_to& one) {
-  self.target_.id = one.id;
-  self.target_.text = one.text;
-  part_apply(self, request::menu_reply{});
-}
-
-void part_apply(menu_part& self, const request::menu_quote_reply&) {
-  const auto selected = self.target_.selection ? self.target_.copied_fragment : std::nullopt;
-  const auto plain = self.target_.selection ? self.target_.copied : std::string();
-  part_apply(self, request::menu_reply{});
-  if (plain.empty()) return;
-  const auto fragment = selected.value_or(skiff::scene::clipboardFragment(plain, {}));
-  // Into what answers it: the thread's draft, where it is answered there.
-  const auto quote = [&](mux::ui::composer_doc& now) { mux::ui::prepend_quote(now, fragment); };
-  if (self.s_->showing->look<mux::ui::chat_shown>()->thread_answer == self.target_.id) {
-    self.s_->edit_thread_writing(quote);
-    return;
-  }
-  self.s_->edit_chat_writing(quote);
-}
-
-void part_apply(menu_part& self, const request::menu_reply&) {
-  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  std::string title = "Reply";
-  const message* said = nullptr;
-  std::string line;
-  if (const auto& chosen = self.s_->chosen())
-    if (const conversation* chat = self.s_->model->find(*chosen))
-      if (const message* it = mux::ui::held_message(*chat, self.target_.id)) {
-        // Deleted, or not on the server: nothing to answer -- a swipe on
-        // one asks all the same.
-        if (!mux::ui::answerable(*it))
-          return;
-        said = &*it;
-        title = "Reply to " + mux::ui::sender_name(*chat, it->sender);
-        // Its mentions by name, as the quote in the bubble shows them.
-        if (!it->body.plain.empty())
-          line = mux::ui::quote_line_of(*it, *chat, self.s_->model);
-      }
-  // A thread's root or answer, its thread open: answered there.
-  if (said) {
-    const std::string root = said->thread ? *said->thread : said->id;
-    if (self.s_->thread_open() == root) {
-      self.s_->answer_in_thread(self.target_.id, mux::ui::compose_context{mux::ui::icon::reply{}, title,
-                                                                          line.empty() ? logic::reply_line(said, self.target_.text) : line});
-      return;
-    }
-  }
-  self.outbox_->answer(self.target_.id, std::move(title), line.empty() ? logic::reply_line(said, self.target_.text) : line);
 }
 
 void part_apply(menu_part& self, const request::menu_edit&) {

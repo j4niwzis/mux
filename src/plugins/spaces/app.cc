@@ -15,6 +15,8 @@ import mux.composition;
 import mux.core;
 import mux.config;
 import mux.ui;
+import mux.app.kept;
+import mux.app.services;
 import mux.plugin.spaces.types;
 
 export namespace mux::plugins::spaces {
@@ -175,5 +177,86 @@ inline void space_bars(contract::chat_folders, type_tag<feature>, const ui::fold
                                                             in_bar(one, mux::config::space_bar::top{})};
                          }) | std::ranges::to<std::vector>();
   }
+
+// The spaces' part of the program: the bars as a drag leaves them, an
+// item's bars as its menu chooses them, and Home without what spaces hold
+// (or the direct chats), at a level.
+struct part {
+  app::services* s_ = nullptr;
+
+  // A bar's order, as a drag left it: its items put there in that order --
+  // the one moved taken out of the bar it came from, and from hidden.
+  void apply(const ui::request::place_spaces& one) {
+    const auto mine = [&](const mux::config::space_placed& p) { return p.account == one.account; };
+    auto places = s_->kept->appearance().space_places;
+    std::erase_if(places, [&](const mux::config::space_placed& p) {
+      return mine(p) && (p.bar == one.bar || (one.moved && p.item == *one.moved && (p.bar == mux::config::space_bar_t{mux::config::space_bar::hidden{}} ||
+                                                                                (one.from && p.bar == *one.from))));
+    });
+    // Where the item came from the side bar by default -- put nowhere -- the
+    // rest of the side bar is put too, so it stays as it was.
+    std::ranges::copy(one.order | std::views::transform([&](const mux::config::space_item_t& item) {
+                        return mux::config::space_placed{one.account, item, one.bar};
+                      }),
+                      std::back_inserter(places));
+    s_->kept->choose_field<&mux::config::look_settings::space_places>(std::move(places));
+    (void)s_->kept->write();
+    s_->refresh_due = true;
+  }
+  // Home without what spaces hold, at a level.
+  void apply(const ui::request::set_home_hides& one) {
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
+                                       s_->kept->choose_field<&mux::config::look_settings::home_hides_spaced>(one.on.value_or(false));
+                                       s_->looks.window.home_hides = s_->kept->appearance().home_hides_spaced;
+                                     },
+                                     [&](mux::choice_level::account) {
+                                       s_->with_chosen_account([&](mux::config::account_t& account) {
+                                         mux::config::home_hides_in(account) = one.on;
+                                       });
+                                     },
+                                     [](mux::choice_level::chat) {}},
+                  one.level);
+    (void)s_->kept->write();
+    s_->refresh_due = true;
+    if (s_->on_settings_page<mux::ui::settings_page::appearance>())
+      s_->settings_page(mux::ui::settings_page::appearance{s_->kept->appearance().theme, s_->kept->appearance().accent});
+  }
+  void apply(const ui::request::set_home_direct& one) {
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
+                                       s_->kept->choose_field<&mux::config::look_settings::home_hides_direct>(one.on.value_or(false));
+                                       s_->looks.window.home_direct = s_->kept->appearance().home_hides_direct;
+                                     },
+                                     [&](mux::choice_level::account) {
+                                       s_->with_chosen_account([&](mux::config::account_t& account) {
+                                         mux::config::home_direct_in(account) = one.on;
+                                       });
+                                     },
+                                     [](mux::choice_level::chat) {}},
+                  one.level);
+    (void)s_->kept->write();
+    s_->refresh_due = true;
+    if (s_->on_settings_page<mux::ui::settings_page::appearance>())
+      s_->settings_page(mux::ui::settings_page::appearance{s_->kept->appearance().theme, s_->kept->appearance().accent});
+  }
+  // An item's bars, as chosen: the side, the top, both, or none -- hidden.
+  void apply(const ui::request::set_space_bars& one) {
+    auto places = s_->kept->appearance().space_places;
+    std::erase_if(places, [&](const mux::config::space_placed& p) { return p.account == one.account && p.item == one.item; });
+    if (one.side)
+      places.push_back({one.account, one.item, mux::config::space_bar::side{}});
+    if (one.top)
+      places.push_back({one.account, one.item, mux::config::space_bar::top{}});
+    if (!one.side && !one.top)
+      places.push_back({one.account, one.item, mux::config::space_bar::hidden{}});
+    s_->kept->choose_field<&mux::config::look_settings::space_places>(std::move(places));
+    (void)s_->kept->write();
+    s_->refresh_due = true;
+    if (s_->on_settings_page<mux::ui::settings_page::appearance>())
+      s_->settings_page(mux::ui::settings_page::appearance{s_->kept->appearance().theme, s_->kept->appearance().accent});
+  }
+};
+
+// Its part, among the program's (mux.app.program).
+inline part extend(contract::program_parts, type_tag<feature>, app::services& shared) { return part{&shared}; }
 
 }  // namespace mux::plugins::spaces

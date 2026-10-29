@@ -54,6 +54,12 @@ template void account<mux::app::post_change>::mentions_from(const conversation_i
 template bool account<mux::app::post_change>::verification_in_room(const conversation_id&, const loom::ev::timeline_event&, placement_t);
 template void account<mux::app::post_change>::verification_request_in_room(const conversation_id&, const loom::ev::timeline_event&, const loom::ev::m_room_message_content_t&);
 template void account<mux::app::post_change>::continue_uia(const std::string&);
+// What plugins reach through the account (pins, packs, devtools, ...).
+template bool account<mux::app::post_change>::connected() const;
+template const loom::client::state& account<mux::app::post_change>::synced() const;
+template auto account<mux::app::post_change>::send_written(std::string, std::string, const std::string&);
+template auto account<mux::app::post_change>::upload(const std::string&, std::string_view, std::string_view);
+template void account<mux::app::post_change>::account_data_set(std::string, loom::ev::account_data_event);
 template bool account<mux::app::post_change>::media_sealed(std::string_view) const;
 template std::optional<std::string> account<mux::app::post_change>::media_opened(std::string_view, const std::string&) const;
 template std::optional<sealed_media> account<mux::app::post_change>::seal_media(std::string_view);

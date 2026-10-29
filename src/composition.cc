@@ -107,6 +107,14 @@ struct chat_header {
 struct settings_links {
   static constexpr std::string_view name = "Settings' links";
 };
+// Settings' pages (mux.ui:settings): a plugin's own page, opened by its
+// link (contract::settings_links):
+//   page_type(c, f) -> type_tag<its page>: what it shows, in settings_page_t
+//   extend(c, needs, page) -> its page's node, made from it; Esc and its <-
+//   go to Settings' home, its own requests its plugin's
+struct settings_pages {
+  static constexpr std::string_view name = "Settings' pages";
+};
 // An account's page in Manage accounts, its rows under its connection
 // (mux.ui:accounts): extend(c, f, palette, address) -> its row, shown or
 // not as the account's protocol is -- what it opens its plugin's own

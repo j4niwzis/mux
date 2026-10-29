@@ -14,6 +14,8 @@ import skiff.nodes.scroll;
 import mux.core;
 import mux.config;
 import mux.ui.base;
+import mux.composition;
+import mux.plugins.ui;
 import :proxies;
 import :appearance;
 import :storage;
@@ -54,9 +56,25 @@ struct proxy {
   int index = -1;
 };
 }  // namespace settings_page
-using settings_page_t = spl::variant<settings_page::home, settings_page::animations, settings_page::appearance, settings_page::rendering,
-                                     settings_page::notifications, settings_page::files, settings_page::storage, settings_page::proxies,
-                                     settings_page::proxy, settings_page::about, settings_page::library>;
+// The plugins' pages among them (contract::settings_pages): each its own
+// type of what it shows, and its node made from that.
+template <class Feature>
+using plugin_settings_page = typename decltype(page_type(contract::settings_pages{}, type_tag<Feature>{}))::type;
+template <class Page>
+using plugin_settings_node = decltype(extend(contract::settings_pages{}, std::declval<const ui_needs&>(), std::declval<const Page&>()));
+template <class List>
+struct settings_pages_of;
+template <class... Features>
+struct settings_pages_of<plugin_list<Features...>> {
+  using pages = spl::variant<settings_page::home, settings_page::animations, settings_page::appearance, settings_page::rendering,
+                             settings_page::notifications, settings_page::files, settings_page::storage, settings_page::proxies,
+                             settings_page::proxy, settings_page::about, settings_page::library, plugin_settings_page<Features>...>;
+  using nodes = spl::variant<settings_home_t, animations_page_t, proxies_page_t, proxy_editor_t,
+                             appearance_page_t, rendering_page_t, storage_page_t, files_page_t,
+                             notifications_page_t, about_page_t, library_page_t, plugin_settings_node<plugin_settings_page<Features>>...>;
+};
+using settings_plugins = composition::providers<contract::settings_pages, enabled_plugins>;
+using settings_page_t = typename settings_pages_of<settings_plugins>::pages;
 // Settings open, on a page.
 struct settings_facts {
   settings_page_t page = settings_page::home{};
@@ -78,9 +96,7 @@ struct settings_scrolled_to {
 // page's header -- its first part -- stays at the top while the rest
 // scrolls, raised over it; home has none. Esc on a page goes where its ←
 // goes, on home it closes the box (escape_of, by the facts).
-using settings_page_node = spl::variant<settings_home_t, animations_page_t, proxies_page_t, proxy_editor_t,
-                                        appearance_page_t, rendering_page_t, storage_page_t, files_page_t,
-                                        notifications_page_t, about_page_t, library_page_t>;
+using settings_page_node = typename settings_pages_of<settings_plugins>::nodes;
 inline auto settings_view(const ui_needs& needs) {
   const palette* colours = needs.colours;
   // The page the facts name, made in place of the one up.
@@ -97,7 +113,11 @@ inline auto settings_view(const ui_needs& needs) {
                    [&](settings_page::files) { page.template emplace<7>(files_page(c)); },
                    [&](settings_page::notifications) { page.template emplace<8>(notifications_page(c)); },
                    [&](settings_page::about) { page.template emplace<9>(about_page(c)); },
-                   [&](const settings_page::library& one) { page.template emplace<10>(library_page(c, one.name)); }},
+                   [&](const settings_page::library& one) { page.template emplace<10>(library_page(c, one.name)); },
+                   // A plugin's page: its node, made from what it shows.
+                   [&]<class Page>(const Page& one) {
+                     page.template emplace<plugin_settings_node<Page>>(extend(contract::settings_pages{}, n, one));
+                   }},
                facts.page);
   };
   // The same page asked for again: made again where it is.

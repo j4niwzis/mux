@@ -101,6 +101,12 @@ struct chat_column {
 struct chat_header {
   static constexpr std::string_view name = "the chat's head";
 };
+// The buttons over the chat list's bottom right corner, over the client's
+// own (mux.ui.messages:timeline): extend(c, f, palette) -> its node, shown
+// or not as its part keeps in the model
+struct list_corner {
+  static constexpr std::string_view name = "the list's corner";
+};
 // Settings' home page, its links after the client's own (mux.ui:proxies):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own

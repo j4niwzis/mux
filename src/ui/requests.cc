@@ -415,17 +415,6 @@ struct not_implemented {
 struct close_notice {};
 struct close_person_info {};
 struct close_room_card {};
-struct jump_to_mark {
-  mux::mark_kind_t kind;
-};
-struct list_marks {
-  mux::mark_kind_t kind;
-};
-struct go_to_mark {
-  mux::mark_kind_t kind;
-  std::string event;
-};
-struct close_marks {};
 struct open_explore {};
 struct close_explore {};
 // A space's rooms and spaces, joined or not, in Explore.

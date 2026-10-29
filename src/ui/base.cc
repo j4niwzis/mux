@@ -450,8 +450,6 @@ void look_as_its_content(const Node&, const palette&) {}
 //   void open_member_info(std::string id)  -- a person's info, in the middle
 //   void close_person_info()
 //   void close_room_card(), join_room_card()  -- a room not joined, from a link: its card
-//   void jump_to_mark(mark_kind_t)   -- the oldest unseen mention or reaction, gone to
-//   void list_marks(mark_kind_t), go_to_mark(mark_kind_t, std::string event), close_marks()  -- all of them listed
 //   void open_explore(), close_explore(), search_rooms(server, query), join_directory_room(room, server),
 //        search_elsewhere(query)  -- the chat list's search, where nothing joined matches,
 //        create_room(name, topic, open, alias, federate, encrypted)  -- rooms found and made

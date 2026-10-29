@@ -110,10 +110,6 @@ struct stub {
   void close_notice() {}
   void close_person_info() {}
   void close_room_card() { ++room_cards_closed; }
-  void jump_to_mark(mux::mark_kind_t) {}
-  void list_marks(mux::mark_kind_t) {}
-  void go_to_mark(mux::mark_kind_t, std::string) {}
-  void close_marks() {}
   void open_explore() {}
   void close_explore() {}
   void search_rooms(std::string, std::string) {}

@@ -110,8 +110,6 @@ struct chat_ways {
   bool back_here = false, back_to_chat = false, loading = false;
   // A window of its history away from the newest: the way down wanted.
   bool detached = false;
-  // The mentions of the user, and reactions to theirs, not seen yet.
-  std::size_t mentions = 0, reactions = 0;
   friend bool operator==(const chat_ways&, const chat_ways&) = default;
 };
 // Which of the two lists a list's answers are of.
@@ -337,28 +335,35 @@ struct stop_jump_act {
   using Answer = ::mux::ui::request::stop_jump;
   ::mux::ui::request::stop_jump operator()() const { return {}; }
 };
-// The buttons over the list's bottom right corner, stacked: Telegram's
-// heart and @ -- reactions to the user's and mentions of them not seen
-// yet, pressed the oldest gone to, pressed with the other button all
-// listed -- the way back to the chat a jump left, and "\u2193", back to the
-// newest (or a way back in this chat first), with how many came meanwhile.
+// The plugins' buttons over the list's corner (contract::list_corner), in
+// their order -- Telegram's heart and @, for one.
+template <class List>
+struct corner_buttons;
+template <class... Features>
+struct corner_buttons<plugin_list<Features...>> {
+  template <class Feature>
+  static auto button_of(const palette& colours) -> decltype(extend(contract::list_corner{}, type_tag<Feature>{}, colours)) {
+    static_assert(requires { extend(contract::list_corner{}, type_tag<Feature>{}, colours); },
+                  composition::broken<contract::list_corner, Feature>());
+    return extend(contract::list_corner{}, type_tag<Feature>{}, colours);
+  }
+  static auto made(const palette& colours) {
+    return skiff::compose::column(skiff::compose::vbox(10.0f, {.autoSize = scene::axes::kBoth}), button_of<Features>(colours)...);
+  }
+};
+using corner_plugins = corner_buttons<composition::providers<contract::list_corner, enabled_plugins>>;
+// The buttons over the list's bottom right corner, stacked: the plugins'
+// (Telegram's heart and @), the way back to the chat a jump left, and
+// "\u2193", back to the newest (or a way back in this chat first), with
+// how many came meanwhile.
 // What shows each is read from what the program says (chat_ways); "\u2193"
 // is told by the list (with_way_down: its fourth part).
 inline auto list_corner(const palette& colours) {
   namespace c = skiff::compose;
   const scene::Spec plate{.width = 42.0f, .height = 42.0f, .cornerRadius = 21.0f, .background = colours.sidebar,
                           .hoverBackground = colours.chosen, .border = scene::Border{colours.band, 1.0f}};
-  const auto mark = [&](mark_kind_t which, std::string glyph, auto count) {
-    return c::shown_for<chat_ways>([count](const chat_ways& now) { return count(now) > 0; },
-        c::onRightPress(request::list_marks{which},
-            c::onClick(request::jump_to_mark{which},
-                c::column(c::vbox(0.0f, plate),
-                          c::styled({.place = scene::anchor::kCentre}, nodes::Text(std::move(glyph), 18.0f, colours.text, true)),
-                          count_badge_for<chat_ways>(colours, count)))));
-  };
   return SKIFF_NAMED(list_corner, c::column(c::vbox(10.0f, {.place = scene::anchor::kBottomRight, .x = -18.0f, .y = -12.0f, .autoSize = scene::axes::kBoth}),
-                   mark(mark_kind::reaction{}, "\u2665", [](const chat_ways& now) { return now.reactions; }),
-                   mark(mark_kind::mention{}, "@", [](const chat_ways& now) { return now.mentions; }),
+                   corner_plugins::made(colours),
                    c::shown_for<chat_ways>([](const chat_ways& now) { return now.back_to_chat; },
                        c::onClick(request::return_to_chat{},
                                   c::column(c::vbox(0.0f, plate), c::styled({.fill = true}, nodes::Icon(shape_of(icon::back{}), colours.text))))),

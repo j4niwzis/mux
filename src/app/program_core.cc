@@ -268,9 +268,6 @@ void app::take_arriving(std::chrono::milliseconds most) {
       store.mark_deleted_on_disk(in, ids);
       return {};
     });
-  // The marks: those read back put in, written where they changed, and a
-  // mark made kept with its message.
-  marks.took(changes);
   // What came as it happened, notified: mentions known by the marks the same
   // changes made.
   if (!ask.demo) {
@@ -315,8 +312,6 @@ void app::take_arriving(std::chrono::milliseconds most) {
       else
         this->open_chat(*found, std::nullopt);
     }
-  // What was fetched for the marks: kept with them, the list shown again.
-  marks.fetched(changes);
   // A message jumped to that the server says is not there: the jump
   // stopped, and said why -- it paged the whole history back for it.
   for (const mux::change_t& one : changes)
@@ -632,7 +627,6 @@ void app::before_frame() {
       const auto marked = [&](const mux::unread_mark& mark) { return std::ranges::contains(shown, mark.target); };
       if (std::ranges::any_of(chat->unread_mentions, marked) || std::ranges::any_of(chat->unread_reactions, marked)) {
         model->apply(mux::change_t{mux::change::marks_shown{*chosen, std::move(shown)}});
-        marks.save();
         this->refresh();
       }
     }
@@ -801,7 +795,6 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
     this->drafts.load();
   this->model->show_deleted = this->history().show_deleted;
   this->settings.apply_limits();
-  marks.load();
   // UnifiedPush only where chosen; off by default.
   if (this->notifications().unified_push.value_or(false) && !demo)
     notices.start_push();

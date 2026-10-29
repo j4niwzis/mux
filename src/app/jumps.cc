@@ -662,9 +662,7 @@ class jumps_part {
     mux::ui::chat_ways now{.back_here = stack != returns_.end() && !stack->second.empty(),
                            .back_to_chat = !chat_returns_.empty(),
                            .loading = this->waited(),
-                           .detached = chat && chat->detached,
-                           .mentions = chat ? chat->unread_mentions.size() : 0,
-                           .reactions = chat ? chat->unread_reactions.size() : 0};
+                           .detached = chat && chat->detached};
     if (*s_->showing->look<mux::ui::chat_ways>() != now)
       mux::ui::show(*s_->showing, now);
     s_->list = {.jump_target = this->going_to(), .top = seen_.top, .bottom = seen_.bottom};

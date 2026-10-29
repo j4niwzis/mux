@@ -134,7 +134,6 @@ struct room_settings_facts {
   // A space: whether it holds spaces, and whether it is shown as a forum.
   bool space = false;
   bool holds_spaces = false;
-  bool hidden_from_home = false;  // a space whose rooms Home leaves out
   // The protocol the room is of: which tabs it has besides the client's own.
   protocol_t speaks;
   // Those whose level is not the default: Element's privileged users.
@@ -261,9 +260,6 @@ inline auto room_general_page(const auto& colours, const room_settings_facts& fa
       c::visible(!proto::room_event_kinds_of(state_before(facts.speaks)).empty(),
           explained(colours, "Room events shown in this room, for you: As above follows the inherited settings.")),
       chat_settings_view(colours, facts.chat),
-      c::visible(facts.space, c::scoped<choices>(c::handlers(),
-          c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              space_choice_row<&choices::hidden_from_home>(colours, "Its rooms not in Home")), facts.chat)),
       general_sections_of(composition::providers<contract::general_sections, enabled_plugins>{}, colours, facts),
       c::visible(facts.leavable, part_heading(colours, "Leave room")),
       c::styled({.width = 130.0f, .height = 32.0f},
@@ -344,12 +340,12 @@ inline auto notifications_page(const palette& colours, const room_settings_facts
                                                      12.0f, colours.dim)))));
 }
 // (The looks plugins' sections under it, found where the window makes it.)
-inline auto looks_page(const auto& colours, const room_settings_facts& facts) {
+inline auto looks_page(const auto& colours, const ui_shared& shared, const room_settings_facts& facts) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(looks_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Appearance"),
       c::scoped<config::chat_choices>(c::handlers(), style_controls(colours), facts.chat),
-      level_section_plugins::made(colours, choice_level::chat{})));
+      level_section_plugins::made(colours, choice_level::chat{}, shared)));
 }
 template <class Up, class Page>
 auto client_page(Up up, Page page) {
@@ -424,7 +420,7 @@ auto room_settings_view(const Needs& n, const room_settings_facts& facts) {
                           c::restarted_scroll<std::size_t>(nodes::ScrollContainer(
                               c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                                         client_page(tab_up<settings_tab::notifications>{}, notifications_page(colours, facts)),
-                                        client_page(tab_up<settings_tab::looks>{}, looks_page(colours, facts)),
+                                        client_page(tab_up<settings_tab::looks>{}, looks_page(colours, *n.shared, facts)),
                                         plugin_pages(plugin_tabs_t{}, colours, facts),
                                         // Under a plugin's page, where it hosts the General.
                                         client_page(general_up{}, room_general_page(colours, facts, presentation.page_header && general_on_its_own(facts)))))))))))));

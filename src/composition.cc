@@ -206,8 +206,8 @@ struct drawer_rows {
 };
 // On each page a chat's looks are chosen on, for its level -- Appearance
 // (every chat's), an account's page (its own), a room's Appearance tab
-// (the room's) (mux.ui:info): extend(c, f, palette, choice_level_t) -> its
-// section, the same node whatever the level
+// (the room's) (mux.ui.base:pages): extend(c, f, palette, choice_level_t,
+// ui_shared) -> its section, the same node whatever the level
 struct level_sections {
   static constexpr std::string_view name = "a level's sections";
 };

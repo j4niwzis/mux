@@ -34,6 +34,8 @@ import mux.ui.messages;
 import mux.ui.lists;
 import mux.plugins.ui;
 import mux.plugin.spaces.types;
+import mux.plugin.room_settings.types;
+import mux.plugin.room_settings.ui;
 
 // Bars are keyed by their items, ordered for memo reconciliation.
 export namespace mux::config::space_item {
@@ -425,5 +427,112 @@ using leave_space_box_t = decltype(leave_space_box(std::declval<const palette&>(
 // Its box, among the window's dialogs (contract::window_dialogs).
 constexpr type_tag<leave_space_facts> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 constexpr type_tag<leave_space_box_t> extend(contract::window_dialogs, type_tag<feature>) { return {}; }
+
+
+// ---- its settings, on the pages they are chosen on ---------------------------------
+// The items of the space bars -- Home, Direct messages, each space -- each
+// with where it is: the side bar, the top one, both, or hidden. A choice
+// asks for the item's bars to be set so.
+struct pick_space_bars {
+  using Answer = std::optional<request::set_space_bars>;
+  std::string account;
+  config::space_item_t item;
+  Answer operator()(std::size_t index) const {
+    static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
+    if (index >= kWays.size())
+      return std::nullopt;
+    return request::set_space_bars{account, item, kWays[index].first, kWays[index].second};
+  }
+};
+// Where an item is now, as the dropdown lists the ways.
+[[nodiscard]] inline std::size_t space_bars_way(const space_item_shown& one) {
+  return one.side && !one.top ? 0 : one.top && !one.side ? 1 : one.side && one.top ? 2 : 3;
+}
+inline auto space_bars_row(const palette& colours, const std::string& account, const space_item_shown& one) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(space_bars_row, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}}),
+                   nodes::Text(one.name, 14.0f, colours.text),
+                   make_choice_menu(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"}, space_bars_way(one),
+                                    pick_space_bars{account, one.item})));
+}
+inline auto spaces_choices(const palette& colours, const ui_shared& shared) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(spaces_choices, c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                 shared.space_items | std::views::transform([&](const space_item_shown& one) { return space_bars_row(colours, shared.space_account, one); }) | std::ranges::to<std::vector>()));
+}
+// Home without what an account's spaces hold -- but direct messages -- or
+// as every account's.
+struct pick_home {
+  using Answer = std::tuple<request::set_home_hides, request::set_home_direct>;
+  Answer operator()(std::size_t index) const {
+    const auto said = [&](bool on) { return index == 0 ? std::nullopt : std::optional<bool>(on); };
+    return {request::set_home_hides{choice_level::account{}, said(index >= 2)}, request::set_home_direct{choice_level::account{}, said(index == 3)}};
+  }
+};
+inline auto home_choice(const palette& colours, std::size_t way) {
+  return make_choice_menu(colours, "Home", {"As above", "Every chat", "Without chats spaces hold", "Without those and direct messages"},
+                          way, pick_home{});
+}
+using home_choice_t = decltype(home_choice(std::declval<const palette&>(), 0));
+// An account's Home menu, by its address: its own way, else as every
+// account's.
+inline auto home_choice_view(const palette& colours, std::string address) {
+  namespace c = skiff::compose;
+  return c::projected<shown>([address = std::move(address)](const shown& now) {
+    const auto way = now.home_ways.find(address);
+    return std::optional<std::size_t>(way == now.home_ways.end() ? 0 : way->second);
+  }, c::mount<home_choice_t, std::size_t>([at = &colours](std::size_t way) { return std::tuple{home_choice(*at, way)}; },
+                                          {.fillX = true, .autoSize = scene::axes::kY}));
+}
+using home_choice_view_t = decltype(home_choice_view(std::declval<const palette&>(), std::string()));
+// An account's Home, as its page shows the account.
+inline auto account_home_view(const palette& colours) {
+  namespace c = skiff::compose;
+  using page_read = std::optional<account_page_facts>;
+  return c::projected<page_read>([](const page_read& now) { return now ? std::optional(now->by.address) : std::nullopt; },
+      c::mount<home_choice_view_t, std::string>([at = &colours](const std::string& address) { return std::tuple{home_choice_view(*at, address)}; },
+                                                {.fillX = true, .autoSize = scene::axes::kY}));
+}
+// Every account's: the bars at all, the one along the top, and Home
+// without what spaces hold -- and without direct messages, only then.
+inline auto everywhere_view(const palette& colours) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(spaces_everywhere, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      spaced_title(colours, "SPACES"),
+      setting_switch<&kept::bars>(colours, "Space bars"),
+      setting_switch<&kept::top_bar>(colours, "The bar after \"mux\""),
+      setting_switch<&kept::home_hides_spaced>(colours, "Home without chats spaces hold (not direct messages)"),
+      c::spec_for<kept>([](const kept& now) -> scene::Spec {
+        return {.alpha = now.home_hides_spaced ? 1.0f : 0.4f, .disabled = !now.home_hides_spaced};
+      }, setting_switch<&kept::home_hides_direct>(colours, "And without direct messages"))));
+}
+// Its section on the pages a level's looks are chosen on
+// (contract::level_sections): every account's, on Appearance; an account's
+// own Home, on its page; and the bars' items, on both.
+inline auto extend(contract::level_sections, type_tag<feature>, const palette& colours, choice_level_t level, const ui_shared& shared) {
+  namespace c = skiff::compose;
+  const auto is = [&](auto which) {
+    return spl::visit(spl::overloaded{[](decltype(which)) { return true; }, [](const auto&) { return false; }}, level);
+  };
+  return SKIFF_NAMED(spaces_section, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::visible(is(choice_level::everywhere{}), everywhere_view(colours)),
+      c::visible(is(choice_level::account{}), c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                                        spaced_title(colours, "SPACES"), account_home_view(colours))),
+      c::visible(!is(choice_level::chat{}), spaces_choices(colours, shared))));
+}
+// A space's own, in its settings: its rooms out of Home, or not
+// (room_settings' general_sections).
+template <class Colours>
+auto extend(room_settings::contract::general_sections, type_tag<feature>, const Colours& colours,
+            const room_settings::room_settings_facts& facts) {
+  namespace c = skiff::compose;
+  using toggle_t = widgets::Toggle<sends<request::flip_home_hide>>;
+  return SKIFF_NAMED(home_section, c::visible(facts.space,
+      c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
+          c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text("Its rooms not in Home", 14.0f, colours.text))),
+          c::applied<shown>([chat = facts.chat](const shown& now) { return now.hidden.contains(chat); },
+                            [](toggle_t& toggle, bool on) { toggle.setOn(on); },
+                            c::styled({.alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, {request::flip_home_hide{facts.id}}))))));
+}
 
 }  // namespace mux::plugins::spaces

@@ -378,14 +378,15 @@ struct level_section_list<plugin_list<Features...>> {
   // Templates on the palette too: made where their caller is (a plugin's
   // page, where the window makes it), the looks plugins' sections found there.
   template <class Feature, class Colours>
-  static auto section_of(const Colours& colours, choice_level_t level) -> decltype(extend(contract::level_sections{}, type_tag<Feature>{}, colours, level)) {
-    static_assert(requires { extend(contract::level_sections{}, type_tag<Feature>{}, colours, level); },
+  static auto section_of(const Colours& colours, choice_level_t level, const ui_shared& shared)
+      -> decltype(extend(contract::level_sections{}, type_tag<Feature>{}, colours, level, shared)) {
+    static_assert(requires { extend(contract::level_sections{}, type_tag<Feature>{}, colours, level, shared); },
                   composition::broken<contract::level_sections, Feature>());
-    return extend(contract::level_sections{}, type_tag<Feature>{}, colours, level);
+    return extend(contract::level_sections{}, type_tag<Feature>{}, colours, level, shared);
   }
   template <class Colours>
-  static auto made(const Colours& colours, choice_level_t level) {
-    return skiff::compose::column(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), section_of<Features>(colours, level)...);
+  static auto made(const Colours& colours, choice_level_t level, const ui_shared& shared) {
+    return skiff::compose::column(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), section_of<Features>(colours, level, shared)...);
   }
 };
 using level_section_plugins = level_section_list<composition::providers<contract::level_sections, enabled_plugins>>;

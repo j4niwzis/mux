@@ -357,36 +357,6 @@ inline auto make_choice_menu(const palette& colours, std::string label,
       show_choice_menu<labelled_choice_head>{&colours, {&colours, std::move(label)}});
 }
 
-// The items of the space bars -- Home, Direct messages, each space -- each
-// with where it is: the side bar, the top one, both, or hidden. A choice
-// asks for the item's bars to be set so.
-struct pick_space_bars {
-  using Answer = std::optional<request::set_space_bars>;
-  std::string account;
-  config::space_item_t item;
-  Answer operator()(std::size_t index) const {
-    static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
-    if (index >= kWays.size())
-      return std::nullopt;
-    return request::set_space_bars{account, item, kWays[index].first, kWays[index].second};
-  }
-};
-// Where an item is now, as the dropdown lists the ways.
-[[nodiscard]] inline std::size_t space_bars_way(const space_item_shown& one) {
-  return one.side && !one.top ? 0 : one.top && !one.side ? 1 : one.side && one.top ? 2 : 3;
-}
-inline auto space_bars_row(const palette& colours, const std::string& account, const space_item_shown& one) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(space_bars_row, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}}),
-                   nodes::Text(one.name, 14.0f, colours.text),
-                   make_choice_menu(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"}, space_bars_way(one),
-                                    pick_space_bars{account, one.item})));
-}
-inline auto spaces_choices(const palette& colours, const ui_shared& shared) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(spaces_choices, c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                 shared.space_items | std::views::transform([&](const space_item_shown& one) { return space_bars_row(colours, shared.space_account, one); }) | std::ranges::to<std::vector>()));
-}
 
 // What a level holds of room events: all of them or messages only, and
 // each kind chosen apart.

@@ -349,10 +349,6 @@ void app::take_page_input() {
 void app::show_looks() {
   const auto& now = this->appearance();
   auto& window = shared.looks.window;
-  window.home_hides = now.home_hides_spaced;
-  window.home_direct = now.home_hides_direct;
-  window.spaces = now.spaces;
-  window.top_bar = now.top_bar;
   window.interface_scale = now.interface_scale;
   window.live_blur = now.live_blur;
   window.behind = now.wallpaper_behind;

@@ -121,10 +121,6 @@ struct window_look_t {
   bool behind = false;
   bool see_through = false;  // the window made with an alpha channel: opacity changes at once
   double frost = 10.0;       // how much Frosted blurs, in percent of the most
-  bool spaces = true;        // the space bars at all
-  bool top_bar = true;       // the one along the top
-  bool home_hides = false;   // Home without what spaces hold, for the client
-  bool home_direct = false;  // and without direct messages
   bool live_blur = false;   // frosted popups and sheets blur what is under them, live
   int interface_scale = 100;  // in percent of the display's scale
   friend bool operator==(const window_look_t&, const window_look_t&) = default;

@@ -281,16 +281,6 @@ inline auto avatar_rounding_view(const palette& colours) {
       rounding_setting<&looks::person_avatar_rounding>(colours, "People"),
       spaced_note(colours, "0% is square, 100% is round.")));
 }
-// Home without direct messages: only where Home is without what spaces
-// hold, so it reads both, and is flipped only then.
-inline auto home_direct_switch(const palette& colours) {
-  return SKIFF_NAMED(home_direct_switch, skiff::compose::row(
-      skiff::compose::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
-      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                             elided(nodes::Text("And without direct messages", 15.0f, colours.text))),
-      skiff::compose::bound<skiff::model::Field<&config::look_settings::home_hides_direct>>(
-          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::ToggleField<bool>(colours.widgets)))));
-}
 
 // Settings' Appearance page, as Telegram's: the themes as cards, and the
 // accents as circles -- either changes at once -- every chat's looks, the
@@ -320,18 +310,7 @@ inline auto window_settings_view(const palette& colours) {
           widgets::ChoiceRowField<config::layout_t>(colours.widgets, "Portrait: one thing at a time", config::layout::portrait{})),
       skiff::compose::bound<skiff::model::Field<&looks::layout>>(
           widgets::ChoiceRowField<config::layout_t>(colours.widgets, "Landscape: side by side", config::layout::landscape{})),
-      spaced_note(colours, "Automatic follows the window: one thing at a time where it is narrow and taller than wide."),
-      spaced_title(colours, "SPACES"),
-      setting_switch<&looks::spaces>(colours, "Space bars"),
-      setting_switch<&looks::top_bar>(colours, "The bar after \"mux\""),
-      setting_switch<&looks::home_hides_spaced>(
-          colours, "Home without chats spaces hold (not direct messages)"),
-      skiff::compose::spec_for<looks>(
-          [](const looks &now) -> scene::Spec {
-            return {.alpha = now.home_hides_spaced ? 1.0f : 0.4f,
-                    .disabled = !now.home_hides_spaced};
-          },
-          home_direct_switch(colours))));
+      spaced_note(colours, "Automatic follows the window: one thing at a time where it is narrow and taller than wide.")));
 }
 inline auto frame_look_view(const palette& colours, bool see_through) {
   using looks = config::look_settings;
@@ -383,7 +362,7 @@ template <class Section> [[nodiscard]] auto held(Section section) { return std::
 inline auto appearance_page(const ui_needs& needs, const config::theme_t& theme, const config::accent_t&) {
   namespace c = skiff::compose;
   const palette& colours = *needs.colours;
-  auto looks = held(level_section_plugins::made(colours, choice_level::everywhere{}));
+  auto looks = held(level_section_plugins::made(colours, choice_level::everywhere{}, *needs.shared));
   looks->apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
   return c::Box(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::styled({.depth = 1.0f, .background = colours.sidebar},
@@ -393,7 +372,6 @@ inline auto appearance_page(const ui_needs& needs, const config::theme_t& theme,
       held(c::scoped<config::look_settings>(c::handlers(), style_controls(colours, false))),
       std::move(looks),
       held(window_settings_view(colours)),
-      held(c::visible(needs.looks->window.spaces, spaces_choices(colours, *needs.shared))),
       held(frame_look_view(colours, needs.looks->window.see_through)),
       held(enter_settings_view(colours)));
 }

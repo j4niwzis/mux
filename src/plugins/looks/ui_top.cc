@@ -362,7 +362,7 @@ using look_choices_t = decltype(look_choices(std::declval<const palette&>(), cho
 // Its pickers on the pages a level's looks are chosen on: Appearance (every
 // chat's), an account's page (its own), a room's Appearance tab (the
 // room's) -- mux.ui:appearance, :accounts, :room_settings.
-inline auto extend(contract::level_sections, type_tag<feature>, const palette& colours, choice_level_t level) {
+inline auto extend(contract::level_sections, type_tag<feature>, const palette& colours, choice_level_t level, const ui_shared&) {
   return look_choices(colours, level);
 }
 

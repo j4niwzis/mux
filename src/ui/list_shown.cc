@@ -44,14 +44,11 @@ using folder_t = spl::variant<folder::all, folder::space, folder::group, folder:
 }
 
 // What a folder is worked out in (contract::chat_folders): the account
-// listed, its chats opened as lists of chats (contract::chat_scopes: a
-// forum), those hidden from Home, and the bars' settings.
+// listed, and its chats opened as lists of chats (contract::chat_scopes: a
+// forum). (What a plugin keeps of its folders is its own.)
 struct folder_context {
   const account* in = nullptr;
   std::set<std::string> scopes;
-  std::set<conversation_id> hidden_from_home;
-  bool spaces_on = true, top_bar_on = true, home_hides_spaced = false;
-  std::vector<config::space_placed> space_places;
 };
 // What the list is of, as the program keeps it: the account listed, its
 // folder, a list of chats gone to by Alt+Up or Alt+Down (lit, not opened), what is

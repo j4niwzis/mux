@@ -24,7 +24,6 @@ struct room_events_choice {
   std::optional<bool> typing;    // others told one is typing
   std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
   std::optional<std::string> wallpaper;  // its background, as word_of(wallpaper_t) says it
-  std::optional<bool> hide_from_home;  // a space: its rooms not in Home
   std::optional<std::string> bubbles;    // its bubbles, as word_of(bubble_look) says them
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   style_settings style;
@@ -159,7 +158,6 @@ struct chat_choices {
   std::optional<wallpaper_t> wallpaper;
   std::optional<bubble_look> bubbles;
   std::optional<bubble_look> panels;
-  bool hidden_from_home = false;
   notify_choices notify;
   friend bool operator==(const chat_choices&, const chat_choices&) = default;
 };
@@ -181,11 +179,6 @@ struct look_settings {
   bool wallpaper_behind = false;
   bool live_blur = false;
   double frost_blur = 10.0;
-  bool spaces = true;
-  bool top_bar = true;
-  bool home_hides_spaced = false;
-  bool home_hides_direct = false;  // and direct messages, where that is so
-  std::vector<space_placed> space_places;
   int interface_scale = 100;  // in percent of the display's
   std::optional<wallpaper_t> wallpaper;
   std::optional<bubble_look> bubbles;
@@ -280,8 +273,6 @@ struct file {
   // Every chat's bubbles, as word_of(bubble_look) says them; none, solid.
   std::optional<std::string> bubbles;
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
-  std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
-  std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
   // How round avatars are, in percent: chats' and people's. None, round.
   std::optional<int> chat_avatar_rounding;
   std::optional<int> person_avatar_rounding;
@@ -306,9 +297,6 @@ struct file {
   std::optional<int> frost_blur;
   // Spaces in bars at all (none, yes); the bar along the top (none, yes);
   // and where each item is put, in order.
-  std::optional<bool> spaces;
-  std::optional<bool> top_bar;
-  std::optional<std::vector<space_place>> space_places;
   // Frames a second, and the last frame's time, in the window's corner.
   std::optional<bool> show_fps;
   // The interface's scale, in percent of the display's own (none, 100): as

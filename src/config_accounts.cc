@@ -193,18 +193,6 @@ struct decrypt {
 [[nodiscard]] inline std::optional<std::string>& panels_in(account_t& one) {
   return one.shared.panels;
 }
-[[nodiscard]] inline const std::optional<bool>& home_hides_of(const account_t& one) {
-  return one.shared.home_hides_spaced;
-}
-[[nodiscard]] inline const std::optional<bool>& home_direct_of(const account_t& one) {
-  return one.shared.home_hides_direct;
-}
-[[nodiscard]] inline std::optional<bool>& home_direct_in(account_t& one) {
-  return one.shared.home_hides_direct;
-}
-[[nodiscard]] inline std::optional<bool>& home_hides_in(account_t& one) {
-  return one.shared.home_hides_spaced;
-}
 [[nodiscard]] inline const std::optional<bool>& link_previews_of(const account_t& one) {
   return one.shared.link_previews;
 }

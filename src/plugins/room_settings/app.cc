@@ -153,7 +153,6 @@ class part {
                                 const conversation* in = s_->model->find(conversation_id{chat->id.account, child});
                                 return in && in->space;
                               }),
-                              .hidden_from_home = k.own_of<&app::chat_choices::hidden_from_home>(chat->id),
                               .speaks = chat->id.account.speaks};
     facts.chat = chat->id;
     facts.members = chat->members;

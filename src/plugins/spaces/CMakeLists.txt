@@ -6,4 +6,5 @@
 mux_plugin(spaces ORDER 5
   TYPES  types.cc
   UI_TOP ui_top.cc
-  APP    app.cc)
+  APP    app.cc
+  REQUIRES room_settings)

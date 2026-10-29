@@ -33,27 +33,29 @@ template <class List>
 struct folder_rules;
 template <class... Features>
 struct folder_rules<plugin_list<Features...>> {
-  static bool folder_chat(const mux::ui::folder_context& ctx, const mux::conversation& one) {
-    return (is_folder(contract::chat_folders{}, type_tag<Features>{}, ctx, one) || ...);
+  // Each with the program's services: what a plugin keeps of its folders
+  // is its own (a space's bars and Home), read where it answers.
+  static bool folder_chat(const services& s, const mux::ui::folder_context& ctx, const mux::conversation& one) {
+    return (is_folder(contract::chat_folders{}, type_tag<Features>{}, s, ctx, one) || ...);
   }
-  static std::optional<std::set<std::string>> rooms_of(const mux::ui::folder_context& ctx, const mux::ui::folder_t& folder) {
+  static std::optional<std::set<std::string>> rooms_of(const services& s, const mux::ui::folder_context& ctx, const mux::ui::folder_t& folder) {
     std::optional<std::set<std::string>> found;
-    ((found = found ? found : folder_rooms(contract::chat_folders{}, type_tag<Features>{}, ctx, folder)), ...);
+    ((found = found ? found : folder_rooms(contract::chat_folders{}, type_tag<Features>{}, s, ctx, folder)), ...);
     return found;
   }
-  static std::set<std::string> home_out_of(const mux::ui::folder_context& ctx) {
+  static std::set<std::string> home_out_of(const services& s, const mux::ui::folder_context& ctx) {
     std::set<std::string> out;
-    (out.insert_range(out_of_home(contract::chat_folders{}, type_tag<Features>{}, ctx)), ...);
+    (out.insert_range(out_of_home(contract::chat_folders{}, type_tag<Features>{}, s, ctx)), ...);
     return out;
   }
-  static void tabs_into(const mux::ui::folder_context& ctx, std::vector<std::pair<std::string, mux::ui::folder_t>>& out) {
-    (folder_tabs(contract::chat_folders{}, type_tag<Features>{}, ctx, out), ...);
+  static void tabs_into(const services& s, const mux::ui::folder_context& ctx, std::vector<std::pair<std::string, mux::ui::folder_t>>& out) {
+    (folder_tabs(contract::chat_folders{}, type_tag<Features>{}, s, ctx, out), ...);
   }
-  static bool keeps(const mux::ui::folder_context& ctx, const mux::ui::folder_t& folder) {
-    return (keeps_folder(contract::chat_folders{}, type_tag<Features>{}, ctx, folder) || ...);
+  static bool keeps(const services& s, const mux::ui::folder_context& ctx, const mux::ui::folder_t& folder) {
+    return (keeps_folder(contract::chat_folders{}, type_tag<Features>{}, s, ctx, folder) || ...);
   }
-  static void bars_into(const mux::ui::folder_context& ctx, const mux::ui::list_shown& list, mux::ui::side_shown& side, mux::ui::ui_shared& shared) {
-    (space_bars(contract::chat_folders{}, type_tag<Features>{}, ctx, list, side, shared), ...);
+  static void bars_into(const services& s, const mux::ui::folder_context& ctx, const mux::ui::list_shown& list, mux::ui::side_shown& side, mux::ui::ui_shared& shared) {
+    (space_bars(contract::chat_folders{}, type_tag<Features>{}, s, ctx, list, side, shared), ...);
   }
 };
 using folder_plugins = folder_rules<composition::providers<contract::chat_folders, enabled_plugins>>;
@@ -310,23 +312,17 @@ class chat_list_part {
     friend bool operator==(const inputs&, const inputs&) = default;
   };
   // What is kept that the list reads: the chats in other accounts' lists and
-  // their strips, the chats muted, left out of Home; the
-  // bars' settings; and each chat's room events.
+  // their strips, the chats muted; and each chat's room events.
   struct kept_view {
     std::map<mux::account_id, std::vector<mux::conversation_id>> listed_in;
     std::set<mux::conversation_id> moved_out;
     std::map<mux::conversation_id, skia::SkColor> strips;
-    std::set<mux::conversation_id> muted, hidden_from_home;
-    bool spaces_on = true, top_bar_on = true;
-    std::vector<mux::config::space_placed> space_places;
-    bool home_hides_spaced = false, home_hides_direct = false;
+    std::set<mux::conversation_id> muted;
     mux::chat_settings reads;
   };
   kept_view read_kept(const std::optional<mux::account_id>& listed) const {
     const kept_root& root = k_->state.root();
     const auto& looks = root.looks.fValue;
-    const mux::config::account_t* own = listed ? mux::account_settings(root, listed->address) : nullptr;
-    const auto own_or = [&](const std::optional<bool>& theirs, bool everyone) { return theirs.value_or(everyone); };
     const auto& placements = root.placements.fValue;
     const auto chat_of = [](const mux::config::chat_placement& one) {
       return mux::conversation_id{{mux::ui::protocol_of(one.account), one.account}, one.conversation};
@@ -351,12 +347,6 @@ class chat_list_part {
             // The last placement of a chat says its strip, as it was written last.
             .strips = placements | std::views::reverse | std::views::filter(strip_shown) | std::views::transform(strip_of) | std::ranges::to<std::map>(),
             .muted = mux::chats_where<&mux::config::chat_choices::muted>(root),
-            .hidden_from_home = mux::chats_where<&mux::config::chat_choices::hidden_from_home>(root),
-            .spaces_on = looks.spaces,
-            .top_bar_on = looks.top_bar,
-            .space_places = looks.space_places,
-            .home_hides_spaced = own ? own_or(mux::config::home_hides_of(*own), looks.home_hides_spaced) : looks.home_hides_spaced,
-            .home_hides_direct = own ? own_or(mux::config::home_direct_of(*own), looks.home_hides_direct) : looks.home_hides_direct,
             .reads = k_->reads()};
   }
   // Which room events a chat shows: in an encrypted room, who joins and who
@@ -372,12 +362,8 @@ class chat_list_part {
   // lists of chats (forums), what is kept of the bars and of Home.
   [[nodiscard]] mux::ui::folder_context context_of(const mux::model& now, const kept_view& kept,
                                                    const std::optional<mux::account_id>& listed) const {
-    mux::ui::folder_context ctx{.in = listed ? now.accounts().find(*listed) : nullptr,
-                                .hidden_from_home = kept.hidden_from_home,
-                                .spaces_on = kept.spaces_on,
-                                .top_bar_on = kept.top_bar_on,
-                                .home_hides_spaced = kept.home_hides_spaced,
-                                .space_places = kept.space_places};
+    (void)kept;
+    mux::ui::folder_context ctx{.in = listed ? now.accounts().find(*listed) : nullptr};
     if (ctx.in)
       ctx.scopes = ctx.in->conversations.values() | std::views::filter([&](const mux::conversation& one) { return scope_plugins::opens(*s_, one); }) |
                    std::views::transform([](const mux::conversation& one) { return one.id.id; }) | std::ranges::to<std::set>();
@@ -392,13 +378,13 @@ class chat_list_part {
     if (!listed)
       return out;
     const auto& chats = now.accounts().at(*listed).conversations;
-    folder_plugins::tabs_into(this->context_of(now, kept, listed), out);
+    folder_plugins::tabs_into(*s_, this->context_of(now, kept, listed), out);
     const auto groups = chats.values() | std::views::transform(&mux::conversation::groups) | std::views::join | std::ranges::to<std::set<std::string>>();
     for (const std::string& name : groups) { out.emplace_back(name, mux::ui::folder::group{name}); }
     return out;
   }
   void keep_folder(const mux::model& now, const kept_view& kept, mux::ui::list_shown& list) const {
-    const bool in_bars = folder_plugins::keeps(this->context_of(now, kept, list.account), list.folder);
+    const bool in_bars = folder_plugins::keeps(*s_, this->context_of(now, kept, list.account), list.folder);
     const auto folders = this->folders_of(now, kept, list.account);
     if (!in_bars && !std::ranges::contains(folders, list.folder, &std::pair<std::string, mux::ui::folder_t>::second))
       list.folder = mux::ui::folder::all{};
@@ -425,7 +411,7 @@ class chat_list_part {
   }
   // The bars: the plugins' (contract::chat_folders) -- the spaces'.
   void bars_of(const mux::model& now, const kept_view& kept, const mux::ui::list_shown& list, mux::ui::side_shown& out) const {
-    folder_plugins::bars_into(this->context_of(now, kept, list.account), list, out, s_->ui);
+    folder_plugins::bars_into(*s_, this->context_of(now, kept, list.account), list, out, s_->ui);
   }
 
   // The chats listed: the account's in the folder chosen -- or the list of
@@ -442,28 +428,26 @@ class chat_list_part {
     // What the plugins say of the folder chosen: the rooms it shows (a
     // space's, down every level), and what Home leaves out.
     const mux::ui::folder_context ctx = this->context_of(now, kept, list.account);
-    const std::optional<std::set<std::string>> in_folder_rooms = folder_plugins::rooms_of(ctx, list.folder);
+    const std::optional<std::set<std::string>> in_folder_rooms = folder_plugins::rooms_of(*s_, ctx, list.folder);
     const auto rooms_of = [](const mux::conversation& one) -> const std::vector<std::string>& { return one.children; };
     // Lists of chats (forums): each listed as one chat; their rooms in them,
     // not beside them.
     const std::set<std::string> in_scopes = in->conversations.values() | std::views::filter([&](const mux::conversation& one) { return scope_plugins::opens(*s_, one); }) | std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::set>();
     const mux::conversation* scope = chat.scope ? in->conversations.find(*chat.scope) : nullptr;
     // What the plugins leave out of Home (what the account's spaces hold,
-    // where it is chosen so) -- but direct messages.
+    // where it is chosen so, and the direct chats where that is so too).
     const bool home = list.folder == mux::ui::folder_t{mux::ui::folder::all{}};
-    const std::set<std::string> in_spaces = home ? folder_plugins::home_out_of(ctx) : std::set<std::string>{};
+    const std::set<std::string> out_of_home = home ? folder_plugins::home_out_of(*s_, ctx) : std::set<std::string>{};
     const auto direct = [](const mux::conversation& one) {
       return spl::visit(spl::overloaded{[](mux::conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
     };
     const auto in_folder = [&](const mux::conversation& one) {
-      if (!one.space && in_spaces.contains(one.id.id) && !direct(one))
-        return false;
-      if (kept.home_hides_spaced && kept.home_hides_direct && home && direct(one))
+      if (!one.space && out_of_home.contains(one.id.id))
         return false;
       if (scope)
         return !one.space && std::ranges::contains(scope->children, one.id.id);
       // A folder of a plugin's, not a chat (a space) -- but a list of chats is one chat.
-      if (folder_plugins::folder_chat(ctx, one))
+      if (folder_plugins::folder_chat(*s_, ctx, one))
         return false;
       if (!one.space && in_scopes.contains(one.id.id))
         return false;

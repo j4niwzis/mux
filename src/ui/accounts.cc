@@ -357,27 +357,10 @@ struct set_colour {
   using Answer = std::optional<request::set_account_colour>;
   std::optional<request::set_account_colour> operator()(const config::accent_t& one) { return request::set_account_colour{one}; }
 };
-// Home without what its spaces hold -- but direct messages -- or as every
-// account's.
-struct pick_home {
-  using Answer = std::tuple<request::set_home_hides, request::set_home_direct>;
-  Answer operator()(std::size_t index) const {
-    const auto said = [&](bool on) { return index == 0 ? std::nullopt : std::optional<bool>(on); };
-    return {request::set_home_hides{choice_level::account{}, said(index >= 2)}, request::set_home_direct{choice_level::account{}, said(index == 3)}};
-  }
-};
-[[nodiscard]] inline std::size_t home_way(const config::account_t& one) {
-  const auto hides = config::home_hides_of(one);
-  return !hides ? 0 : !*hides ? 1 : config::home_direct_of(one).value_or(false) ? 3 : 2;
-}
-inline auto home_choice(const palette& colours, std::size_t way) {
-  return make_choice_menu(colours, "Home", {"As above", "Every chat", "Without chats spaces hold", "Without those and direct messages"},
-                          way, pick_home{});
-}
-using home_choice_t = decltype(home_choice(std::declval<const palette&>(), 0));
 // Chats: its colour -- the strip on its chats in other lists, unless they
 // chose another -- how its chats are, their looks, and its spaces in the
-// bars. Each as every account's, until chosen here.
+// bars (the spaces plugin's section of its looks). Each as every
+// account's, until chosen here.
 inline auto account_chats_page(const ui_needs& n, const std::string& address, const config::theme_t& theme) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
@@ -392,12 +375,7 @@ inline auto account_chats_page(const ui_needs& n, const std::string& address, co
       spaced(section_title(colours, "CHATS")),
       account_chats_view(colours, address),
       spaced(section_title(colours, "LOOKS")),
-      level_section_plugins::made(colours, choice_level::account{}),
-      spaced(section_title(colours, "SPACES")),
-      c::projected<page_read>([](const page_read& now) { return now ? std::optional(home_way(now->account)) : std::nullopt; },
-          c::mount<home_choice_t, std::size_t>([at = &colours](std::size_t way) { return std::tuple{home_choice(*at, way)}; },
-                                               {.fillX = true, .autoSize = scene::axes::kY})),
-      spaces_choices(colours, *n.shared)));
+      level_section_plugins::made(colours, choice_level::account{}, *n.shared)));
 }
 
 inline auto account_appearance_view(const palette& colours, std::string address) {

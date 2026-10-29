@@ -14,6 +14,7 @@ import splice;
 import mux.composition;
 import mux.core;
 import mux.config;
+import mux.protocols;
 import mux.ui;
 import mux.app.kept;
 import mux.app.network;
@@ -22,14 +23,38 @@ import mux.plugin.spaces.types;
 
 export namespace mux::plugins::spaces {
 
+// What it keeps, and what of it holds for an account: its own Home, else
+// every account's.
+[[nodiscard]] inline const kept& kept_of(const app::services& shared) { return shared.kept->plugin_settings<kept>(); }
+struct home_way {
+  bool hides_spaced = false, hides_direct = false;
+};
+[[nodiscard]] inline home_way home_of(const kept& now, const std::string& account) {
+  const auto own = std::ranges::find(now.accounts, account, &account_home::account);
+  if (own == now.accounts.end())
+    return {now.home_hides_spaced, now.home_hides_direct};
+  return {own->hides_spaced.value_or(now.home_hides_spaced), own->hides_direct.value_or(now.home_hides_direct)};
+}
+// Where each item of the bars is put, as the bars read it.
+[[nodiscard]] inline std::vector<mux::config::space_placed> places_of(const kept& now) {
+  return now.places | std::views::transform([](const mux::config::space_place& one) {
+           return mux::config::space_placed{one.account, mux::config::space_item_of(one.item), mux::config::space_bar_of(one.bar)};
+         }) | std::ranges::to<std::vector>();
+}
+[[nodiscard]] inline std::vector<mux::config::space_place> said_of(const std::vector<mux::config::space_placed>& places) {
+  return places | std::views::transform([](const mux::config::space_placed& one) {
+           return mux::config::space_place{one.account, mux::config::word_of(one.item), std::string(mux::config::word_of(one.bar))};
+         }) | std::ranges::to<std::vector>();
+}
+
 // A space: a folder, not a chat listed -- but where it opens as a list of
 // chats (a forum).
-inline bool is_folder(contract::chat_folders, type_tag<feature>, const ui::folder_context& ctx, const conversation& one) {
+inline bool is_folder(contract::chat_folders, type_tag<feature>, const app::services&, const ui::folder_context& ctx, const conversation& one) {
   return one.space && !ctx.scopes.contains(one.id.id);
 }
 // The rooms a space's folder shows: its own, and those of the spaces in
 // it, down every level -- each space once. None for a folder not a space's.
-inline std::optional<std::set<std::string>> folder_rooms(contract::chat_folders, type_tag<feature>, const ui::folder_context& ctx,
+inline std::optional<std::set<std::string>> folder_rooms(contract::chat_folders, type_tag<feature>, const app::services&, const ui::folder_context& ctx,
                                                          const ui::folder_t& folder) {
   const auto chosen_room = ui::space_of(folder);
   if (!chosen_room || !ctx.in)
@@ -48,29 +73,45 @@ inline std::optional<std::set<std::string>> folder_rooms(contract::chat_folders,
   }
   return in_space;
 }
-// What the account's spaces hold, out of Home: where it is chosen so, or
-// the space is hidden from it.
-inline std::set<std::string> out_of_home(contract::chat_folders, type_tag<feature>, const ui::folder_context& ctx) {
+// What Home leaves out: what the account's spaces hold, where it is chosen
+// so or the space is hidden from it -- but direct chats; and those too,
+// where that is chosen as well.
+inline std::set<std::string> out_of_home(contract::chat_folders, type_tag<feature>, const app::services& shared, const ui::folder_context& ctx) {
   if (!ctx.in)
     return {};
-  return ctx.in->conversations.values() | std::views::filter([&](const conversation& each) {
-           return each.space && (ctx.home_hides_spaced || ctx.hidden_from_home.contains(each.id));
-         }) |
-         std::views::transform([](const conversation& one) -> const std::vector<std::string>& { return one.children; }) | std::views::join |
-         std::ranges::to<std::set>();
+  const kept& now = kept_of(shared);
+  const home_way home = home_of(now, ctx.in->id.address);
+  const auto direct = [](const conversation& one) {
+    return spl::visit(spl::overloaded{[](conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
+  };
+  const auto hidden = [&](const conversation& space) {
+    return std::ranges::contains(now.hidden_from_home, hidden_space{space.id.account.address, space.id.id});
+  };
+  std::set<std::string> out = ctx.in->conversations.values() | std::views::filter([&](const conversation& each) {
+                                return each.space && (home.hides_spaced || hidden(each));
+                              }) |
+                              std::views::transform([](const conversation& one) -> const std::vector<std::string>& { return one.children; }) |
+                              std::views::join | std::ranges::to<std::set>();
+  std::erase_if(out, [&](const std::string& room) {
+    const conversation* one = ctx.in->conversations.find(room);
+    return one != nullptr && direct(*one);
+  });
+  if (home.hides_spaced && home.hides_direct)
+    out.insert_range(ctx.in->conversations.values() | std::views::filter(direct) | std::views::transform([](const conversation& one) { return one.id.id; }));
+  return out;
 }
 // The spaces as tabs over the list, where there are no bars.
-inline void folder_tabs(contract::chat_folders, type_tag<feature>, const ui::folder_context& ctx,
+inline void folder_tabs(contract::chat_folders, type_tag<feature>, const app::services& shared, const ui::folder_context& ctx,
                         std::vector<std::pair<std::string, ui::folder_t>>& out) {
-  if (!ctx.in || ctx.spaces_on)
+  if (!ctx.in || kept_of(shared).bars)
     return;
   for (const conversation& one : ctx.in->conversations.values() | std::views::filter(&conversation::space))
     out.emplace_back(ui::display_name(one), ui::folder::space{one.id.id});
 }
 // Whether the bars hold the folder chosen: Direct messages, or a space
 // still there -- kept chosen, where the tabs do not list it.
-inline bool keeps_folder(contract::chat_folders, type_tag<feature>, const ui::folder_context& ctx, const ui::folder_t& folder) {
-  return ctx.spaces_on && spl::visit(spl::overloaded{[](const ui::folder::direct&) { return true; },
+inline bool keeps_folder(contract::chat_folders, type_tag<feature>, const app::services& shared, const ui::folder_context& ctx, const ui::folder_t& folder) {
+  return kept_of(shared).bars && spl::visit(spl::overloaded{[](const ui::folder::direct&) { return true; },
                                                      [&](const ui::folder::space& s) {
                                                        const auto* found = ctx.in ? ctx.in->conversations.find(s.room) : nullptr;
                                                        return found != nullptr && found->space;
@@ -82,8 +123,10 @@ inline bool keeps_folder(contract::chat_folders, type_tag<feature>, const ui::fo
 // bars it is placed in (the side one, unplaced); under the space chosen --
 // or one holding it -- its own spaces, smaller a level down. And them all,
 // for the settings to list.
-inline void space_bars(contract::chat_folders, type_tag<feature>, const ui::folder_context& ctx, const ui::list_shown& list,
-                       ui::side_shown& out, ui::ui_shared& shared) {
+inline void space_bars(contract::chat_folders, type_tag<feature>, const app::services& services, const ui::folder_context& ctx,
+                       const ui::list_shown& list, ui::side_shown& out, ui::ui_shared& shared) {
+    const kept& now = kept_of(services);
+    const auto places = places_of(now);
     struct entry {
       mux::config::space_item_t item;
       mux::ui::folder_t shows;
@@ -121,7 +164,7 @@ inline void space_bars(contract::chat_folders, type_tag<feature>, const ui::fold
                             })) {
                               all.push_back({mux::config::space_item::space{one.id.id}, mux::ui::folder::space{one.id.id}, one.id.id, mux::ui::display_name(one)});
                             }
-    const auto mine = ctx.space_places | std::views::filter([&](const mux::config::space_placed& p) { return p.account == address; }) | std::ranges::to<std::vector>();
+    const auto mine = places | std::views::filter([&](const mux::config::space_placed& p) { return p.account == address; }) | std::ranges::to<std::vector>();
     const auto in_bar = [&](const entry& one, const mux::config::space_bar_t& bar) {
       if (std::ranges::none_of(mine, [&](const auto& p) { return p.item == one.item; }))
         return bar == mux::config::space_bar_t{mux::config::space_bar::side{}};
@@ -170,8 +213,8 @@ inline void space_bars(contract::chat_folders, type_tag<feature>, const ui::fold
     out.side_bar = icons_of(side_items, 40.0f);
     out.top_bar = icons_of(bar_of(mux::config::space_bar::top{}), list.big_bars ? 50.0f : 30.0f);
     out.big = list.big_bars;
-    out.top_on = ctx.spaces_on && ctx.top_bar_on;
-    out.side_on = ctx.spaces_on && !side_items.empty();
+    out.top_on = now.bars && now.top_bar;
+    out.side_on = now.bars && !side_items.empty();
     // For the settings to list them.
     shared.space_account = address;
     shared.space_items = all | std::views::transform([&](const entry& one) {
@@ -213,7 +256,7 @@ struct part {
   // the one moved taken out of the bar it came from, and from hidden.
   void apply(const ui::request::place_spaces& one) {
     const auto mine = [&](const mux::config::space_placed& p) { return p.account == one.account; };
-    auto places = s_->kept->appearance().space_places;
+    auto places = places_of(kept_of(*s_));
     std::erase_if(places, [&](const mux::config::space_placed& p) {
       return mine(p) && (p.bar == one.bar || (one.moved && p.item == *one.moved && (p.bar == mux::config::space_bar_t{mux::config::space_bar::hidden{}} ||
                                                                                 (one.from && p.bar == *one.from))));
@@ -224,48 +267,36 @@ struct part {
                         return mux::config::space_placed{one.account, item, one.bar};
                       }),
                       std::back_inserter(places));
-    s_->kept->choose_field<&mux::config::look_settings::space_places>(std::move(places));
-    (void)s_->kept->write();
-    s_->refresh_due = true;
+    this->keep([&](kept& now) { now.places = said_of(places); });
   }
   // Home without what spaces hold, at a level.
   void apply(const ui::request::set_home_hides& one) {
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
-                                       s_->kept->choose_field<&mux::config::look_settings::home_hides_spaced>(one.on.value_or(false));
-                                       s_->looks.window.home_hides = s_->kept->appearance().home_hides_spaced;
+                                       this->keep([&](kept& now) { now.home_hides_spaced = one.on.value_or(false); });
                                      },
                                      [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](mux::config::account_t& account) {
-                                         mux::config::home_hides_in(account) = one.on;
-                                       });
+                                       this->keep_home([&](account_home& own) { own.hides_spaced = one.on; });
                                      },
                                      [](mux::choice_level::chat) {}},
                   one.level);
-    (void)s_->kept->write();
-    s_->refresh_due = true;
     if (s_->on_settings_page<mux::ui::settings_page::appearance>())
       s_->settings_page(mux::ui::settings_page::appearance{s_->kept->appearance().theme, s_->kept->appearance().accent});
   }
   void apply(const ui::request::set_home_direct& one) {
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
-                                       s_->kept->choose_field<&mux::config::look_settings::home_hides_direct>(one.on.value_or(false));
-                                       s_->looks.window.home_direct = s_->kept->appearance().home_hides_direct;
+                                       this->keep([&](kept& now) { now.home_hides_direct = one.on.value_or(false); });
                                      },
                                      [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](mux::config::account_t& account) {
-                                         mux::config::home_direct_in(account) = one.on;
-                                       });
+                                       this->keep_home([&](account_home& own) { own.hides_direct = one.on; });
                                      },
                                      [](mux::choice_level::chat) {}},
                   one.level);
-    (void)s_->kept->write();
-    s_->refresh_due = true;
     if (s_->on_settings_page<mux::ui::settings_page::appearance>())
       s_->settings_page(mux::ui::settings_page::appearance{s_->kept->appearance().theme, s_->kept->appearance().accent});
   }
   // An item's bars, as chosen: the side, the top, both, or none -- hidden.
   void apply(const ui::request::set_space_bars& one) {
-    auto places = s_->kept->appearance().space_places;
+    auto places = places_of(kept_of(*s_));
     std::erase_if(places, [&](const mux::config::space_placed& p) { return p.account == one.account && p.item == one.item; });
     if (one.side)
       places.push_back({one.account, one.item, mux::config::space_bar::side{}});
@@ -273,11 +304,60 @@ struct part {
       places.push_back({one.account, one.item, mux::config::space_bar::top{}});
     if (!one.side && !one.top)
       places.push_back({one.account, one.item, mux::config::space_bar::hidden{}});
-    s_->kept->choose_field<&mux::config::look_settings::space_places>(std::move(places));
-    (void)s_->kept->write();
-    s_->refresh_due = true;
+    this->keep([&](kept& now) { now.places = said_of(places); });
     if (s_->on_settings_page<mux::ui::settings_page::appearance>())
       s_->settings_page(mux::ui::settings_page::appearance{s_->kept->appearance().theme, s_->kept->appearance().accent});
+  }
+  // A space's rooms in Home, or not: its own choice.
+  void apply(const ui::request::flip_home_hide& one) {
+    const auto by = s_->listed();
+    if (!by)
+      return;
+    const conversation* space = s_->model->find(conversation_id{*by, one.room});
+    if (!space || !space->space)
+      return;
+    const hidden_space chosen{by->address, one.room};
+    this->keep([&](kept& now) {
+      if (const auto at = std::ranges::find(now.hidden_from_home, chosen); at != now.hidden_from_home.end())
+        now.hidden_from_home.erase(at);
+      else
+        now.hidden_from_home.push_back(chosen);
+    });
+  }
+  // Each frame: what the window shows of what it keeps, for its switches.
+  void tick() {
+    const kept& now = kept_of(*s_);
+    shown made;
+    for (const account_home& one : now.accounts)
+      made.home_ways[one.account] = !one.hides_spaced ? 0 : !*one.hides_spaced ? 1 : one.hides_direct.value_or(false) ? 3 : 2;
+    for (const hidden_space& one : now.hidden_from_home)
+      made.hidden.insert(conversation_id{account_id{proto::protocol_of(one.account), one.account}, one.room});
+    if (*s_->showing->look<shown>() != made)
+      ui::show(*s_->showing, std::move(made));
+  }
+
+ private:
+  // What it keeps changed, written, and the list made again.
+  template <class Change>
+  void keep(Change change) {
+    auto now = kept_of(*s_);
+    change(now);
+    s_->kept->set_plugin_settings(std::move(now));
+    (void)s_->kept->write();
+    s_->refresh_due = true;
+  }
+  // The chosen account's own Home, changed.
+  template <class Change>
+  void keep_home(Change change) {
+    s_->with_chosen_account([&](mux::config::account_t& account) {
+      const std::string address(mux::config::address_of(account));
+      this->keep([&](kept& now) {
+        auto own = std::ranges::find(now.accounts, address, &account_home::account);
+        if (own == now.accounts.end())
+          own = now.accounts.insert(now.accounts.end(), account_home{address, std::nullopt, std::nullopt});
+        change(*own);
+      });
+    });
   }
 };
 

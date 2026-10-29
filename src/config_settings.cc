@@ -106,8 +106,6 @@ struct account_shared {
   std::optional<std::string> wallpaper;  // its chats' background, as word_of(wallpaper_t) says it
   std::optional<std::string> bubbles;    // its chats' bubbles, as word_of(bubble_look) says them
   std::optional<std::string> panels;     // its panels' look
-  std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
-  std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
   std::optional<std::int64_t> jump_search;
   std::optional<bool> notify;
   std::optional<bool> notify_sound;

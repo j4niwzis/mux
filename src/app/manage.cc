@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.app.manage: a space's rooms in Home, or not; the list of chats open
-// (a forum) left; what is
+// mux.app.manage: the list of chats open (a forum) left; what is
 // done to a room by one allowed to (a person's card's kick and ban). A part
 // of the program: it reaches the settings it is given and the rest through
 // the services. (A room's settings themselves are the room_settings
@@ -31,19 +30,6 @@ class manage_part {
   manage_part(const manage_part&) = delete;
   manage_part& operator=(const manage_part&) = delete;
 
-  // A space's rooms in Home, or not: its own choice.
-  void apply(const request::flip_home_hide& one) {
-    const auto by = s_->listed();
-    if (!by)
-      return;
-    const mux::conversation_id id{*by, one.room};
-    const mux::conversation* space = s_->model->find(id);
-    if (!space || !space->space)
-      return;
-    k_->flip<&mux::app::chat_choices::hidden_from_home>(id);
-    (void)k_->write();
-    s_->refresh_due = true;
-  }
   // Out of the list of chats open (a forum).
   void apply(const request::close_scope&) {
     mux::ui::change_shown<mux::ui::chat_shown>(*s_->showing, [](mux::ui::chat_shown& now) { now.scope.reset(); });

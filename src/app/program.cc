@@ -567,6 +567,7 @@ struct app : kept_settings {
   void apply(const request::search_rooms&) {}
   void apply(const request::place_spaces&) {}
   void apply(const request::set_home_hides&) {}
+  void apply(const request::flip_home_hide&) {}
   void apply(const request::set_home_direct&) {}
   void apply(const request::set_space_bars&) {}
   void apply(const request::set_wallpaper&) {}

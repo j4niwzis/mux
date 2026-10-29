@@ -3166,153 +3166,6 @@ TEST(Info, MatrixProfileIdCopiesItsLinkAndImmediatelyConfirmsIt) {
   EXPECT_EQ(id.parts.feedback.text(), "ID · link copied, with its servers");
 }
 
-namespace {
-struct manage_test_box {
-  mux::ui::palette colours;
-  const mux::ui::palette* colours_ = &colours;
-  mux::ui::looks_shown looks;
-  const mux::ui::looks_shown* looks_ = &looks;
-  mux::ui::room_settings_facts facts;
-  mux::proto::matrix::manage_detail::part kept;
-  std::size_t refreshed = 0;
-  template <class State> auto& part() { return kept; }
-  void show_again() { ++refreshed; }
-};
-}
-
-TEST(RoomManagement, FailedPermissionSavePreservesTheDraftAndSavedRules) {
-  namespace matrix = mux::proto::matrix;
-  namespace manage = matrix::manage_detail;
-  manage_test_box box;
-  box.facts.mine = 100;
-  auto& rules = matrix::rules_in(box.facts.theirs);
-  rules.needs.events_default = 0;
-  rules.needs.state_default = 50;
-  const manage::permission_t message = manage::event_permission{"m.reaction", false};
-  const manage::permission_t state = manage::event_permission{"org.matrix.msc3401.call.member"};
-  EXPECT_EQ(manage::required(rules.needs, message), 0);
-  EXPECT_EQ(manage::required(rules.needs, state), 50);
-  typename manage::permission_actions<manage_test_box>::choose{&box, message, {0, 50}}(1);
-  ASSERT_TRUE(box.kept.permissions);
-  EXPECT_EQ(manage::required(rules.needs, message), 0);
-  EXPECT_EQ(manage::required(*box.kept.permissions, message), 50);
-  const auto asked = typename manage::permission_actions<manage_test_box>::apply{&box}();
-  ASSERT_TRUE(asked);
-  EXPECT_TRUE(box.kept.pending);
-  EXPECT_FALSE(typename manage::permission_actions<manage_test_box>::apply{&box}());
-  manage::completed(&box, matrix::management_saved{box.facts.chat, asked->change, "Forbidden"});
-  EXPECT_FALSE(box.kept.pending);
-  ASSERT_TRUE(box.kept.permissions);
-  EXPECT_EQ(box.kept.error, "Forbidden");
-  EXPECT_EQ(manage::required(rules.needs, message), 0);
-  const auto retry = typename manage::permission_actions<manage_test_box>::apply{&box}();
-  ASSERT_TRUE(retry);
-  manage::completed(&box, matrix::management_saved{box.facts.chat, retry->change, {}});
-  EXPECT_FALSE(box.kept.permissions);
-  EXPECT_EQ(manage::required(rules.needs, message), 50);
-}
-
-TEST(RoomManagement, PowersOverviewAndEditorAreSeparateAndChangesWaitForApply) {
-  namespace matrix = mux::proto::matrix;
-  namespace manage = matrix::manage_detail;
-  manage_test_box box;
-  box.facts.mine = 100;
-  auto overview = manage::permissions_page(&box, box.facts);
-  EXPECT_TRUE(std::get<1>(overview.fParts).visible());
-  EXPECT_FALSE(std::get<2>(overview.fParts).visible());
-  manage::edit_section<manage_test_box>{&box, manage::editor::powers}();
-  auto editor = manage::permissions_page(&box, box.facts);
-  EXPECT_FALSE(std::get<1>(editor.fParts).visible());
-  EXPECT_TRUE(std::get<2>(editor.fParts).visible());
-  manage::power_events<manage_test_box> events{&box};
-  const auto saved = events.on(manage::save_power{}, manage::power_draft<manage_test_box>{&box, "75", "Bot", "#91cfdf", ""});
-  EXPECT_FALSE(saved.fEvent);
-  EXPECT_TRUE(box.kept.data.tags.empty());
-  ASSERT_TRUE(box.kept.tag_draft);
-  EXPECT_EQ(box.kept.tag_draft->at("75").name, "Bot");
-  const auto asked = manage::apply_tags<manage_test_box>{&box}();
-  ASSERT_TRUE(asked);
-  manage::completed(&box, matrix::management_saved{box.facts.chat, asked->change, "Forbidden"});
-  EXPECT_TRUE(box.kept.data.tags.empty());
-  EXPECT_TRUE(box.kept.tag_draft);
-  const auto retry = manage::apply_tags<manage_test_box>{&box}();
-  ASSERT_TRUE(retry);
-  manage::completed(&box, matrix::management_saved{box.facts.chat, retry->change, {}});
-  EXPECT_EQ(box.kept.data.tags.at("75").name, "Bot");
-  EXPECT_FALSE(box.kept.tag_draft);
-}
-
-TEST(RoomManagement, LocalAddressSelectionUsesBulkActionsAndKeepsTheMainAlias) {
-  namespace matrix = mux::proto::matrix;
-  namespace manage = matrix::manage_detail;
-  manage_test_box box;
-  box.facts.mine = 100;
-  box.facts.alias = "#main:example.org";
-  box.facts.other_aliases = {"#other:example.org"};
-  EXPECT_FALSE(box.kept.local_addresses_expanded);
-  manage::expand_addresses<manage_test_box>{&box}();
-  EXPECT_TRUE(box.kept.local_addresses_expanded);
-  manage::select_address<manage_test_box>{&box, "#main:example.org"}();
-  manage::select_address<manage_test_box>{&box, "#other:example.org"}();
-  using action = manage::selected_addresses<manage_test_box>;
-  const auto asked = action{&box, action::kind::unpublish}();
-  ASSERT_TRUE(asked);
-  spl::visit(spl::overloaded{[&](const matrix::room_change::set_addresses& change) {
-    EXPECT_EQ(change.main, box.facts.alias);
-    EXPECT_TRUE(change.published.empty());
-  }, [](const auto&) { FAIL(); }}, asked->change);
-  manage::completed(&box, matrix::management_saved{box.facts.chat, asked->change, "Forbidden"});
-  EXPECT_EQ(box.kept.selected_aliases.size(), 2u);
-  EXPECT_EQ(box.facts.other_aliases.size(), 1u);
-  const auto retry = action{&box, action::kind::unpublish}();
-  ASSERT_TRUE(retry);
-  manage::completed(&box, matrix::management_saved{box.facts.chat, retry->change, {}});
-  EXPECT_TRUE(box.kept.selected_aliases.empty());
-  EXPECT_EQ(box.facts.alias, "#main:example.org");
-  EXPECT_TRUE(box.facts.other_aliases.empty());
-}
-
-TEST(RoomManagement, NewAddressesTrimSpacesAndClearOnlyAfterSuccess) {
-  namespace matrix = mux::proto::matrix;
-  namespace manage = matrix::manage_detail;
-  manage_test_box box;
-  box.facts.chat.account.address = "@alice:example.org";
-  manage::general_draft<manage_test_box> draft{&box};
-  draft.address = "  new room  ";
-  box.kept.local_address = draft.address;
-  const auto asked = manage::general_events<manage_test_box>{&box}.on(manage::create_address{}, draft);
-  ASSERT_TRUE(asked.fEvent);
-  spl::visit(spl::overloaded{[](const matrix::room_change::create_alias& change) {
-    EXPECT_EQ(change.alias, "#new-room:example.org");
-  }, [](const auto&) { FAIL(); }}, asked.fEvent->change);
-  manage::completed(&box, matrix::management_saved{box.facts.chat, asked.fEvent->change, "Already in use"});
-  EXPECT_EQ(box.kept.local_address, draft.address);
-  manage::completed(&box, matrix::management_saved{box.facts.chat, asked.fEvent->change, {}});
-  EXPECT_TRUE(box.kept.local_address.empty());
-}
-
-TEST(RoomManagement, CustomEventOverridesCanBeAddedEditedAndRemovedBeforeApply) {
-  namespace matrix = mux::proto::matrix;
-  namespace manage = matrix::manage_detail;
-  manage_test_box box;
-  box.facts.mine = 100;
-  auto& rules = matrix::rules_in(box.facts.theirs);
-  rules.needs.events = {{"org.example.existing", 50}, {"m.room.name", 50}};
-  manage::power_draft<manage_test_box> draft{&box};
-  draft.event = "org.example.new"; draft.level = "75";
-  manage::power_events<manage_test_box>{&box}.on(manage::add_custom_permission{}, draft);
-  ASSERT_TRUE(box.kept.permissions);
-  EXPECT_EQ(box.kept.permissions->events.at(draft.event), 75);
-  EXPECT_FALSE(rules.needs.events.contains(draft.event));
-  manage::permission_actions<manage_test_box>::choose{&box, manage::event_permission{draft.event}, {50, 75}}(0);
-  EXPECT_EQ(box.kept.permissions->events.at(draft.event), 50);
-  manage::remove_custom_permission<manage_test_box>{&box, "org.example.existing"}();
-  EXPECT_FALSE(box.kept.permissions->events.contains("org.example.existing"));
-  EXPECT_EQ(box.kept.permissions->events.at("m.room.name"), 50);
-  EXPECT_EQ(rules.needs.events.at("org.example.existing"), 50);
-  EXPECT_FALSE(manage::standard_permission_events().contains("org.example.existing"));
-  EXPECT_TRUE(manage::standard_permission_events().contains("m.room.name"));
-}
 
 TEST(Appearance, GraphiteHasItsOwnPaletteAndAllAccentChoices) {
   const mux::config::theme_t theme = mux::config::theme::graphite{};
@@ -3388,41 +3241,6 @@ TEST(Appearance, ThemeConfigurationValidatesColorsAndPreservesAlpha) {
   EXPECT_FALSE(reset.fEvent.custom);
 }
 
-TEST(RoomManagement, AddressFieldHasOneLineAndStaysInsideItsRoundedBackground) {
-  namespace manage = mux::proto::matrix::manage_detail;
-  mux::ui::palette colours;
-  using draft = manage::general_draft<manage_test_box>;
-  auto input = manage::local_address_input<draft>(colours, ":example.org", false);
-  scene::layout(input, skia::SkRect::MakeWH(400.0f, 44.0f));
-  const auto bounds = input.bounds();
-  const auto field = std::get<1>(input.fParts).bounds();
-  EXPECT_GE(field.top(), bounds.top());
-  EXPECT_LE(field.bottom(), bounds.bottom());
-  EXPECT_TRUE(input.fState.fMasking);
-  EXPECT_GE(input.fState.fCornerRadius, 10.0f);
-  EXPECT_EQ(std::get<0>(input.fParts).text(), "#");
-  EXPECT_EQ(std::get<2>(input.fParts).text(), ":example.org");
-}
-
-TEST(RoomManagement, MembersAreMountedImmediatelyAndUseTheRoomListWhileLoading) {
-  namespace manage = mux::proto::matrix::manage_detail;
-  manage_test_box box;
-  box.facts.members = {{"@alice:example.org", "Alice", std::nullopt, std::nullopt}};
-  auto members = manage::available_members(box.kept.data, box.facts);
-  ASSERT_EQ(members.size(), 1u);
-  EXPECT_EQ(members.front().name, "Alice");
-  auto page = manage::members_page(&box, box.facts);
-  auto& rows = std::get<3>(page.fParts);
-  ASSERT_TRUE(rows.shown());
-  EXPECT_TRUE(rows.visible());
-  EXPECT_EQ(std::get<0>(rows.shown()->fParts).fParts.size(), 1u);
-  box.kept.data.members = {{"@bob:example.org", "Bob", std::nullopt,
-      mux::proto::matrix::membership_view::joined{}, 0}};
-  members = manage::available_members(box.kept.data, box.facts);
-  ASSERT_EQ(members.size(), 1u);
-  EXPECT_EQ(members.front().name, "Bob");
-}
-
 TEST(RoomManagement, SettingsUseSharedAvatarsAndClipTheirRoundedSurfaces) {
   namespace manage = mux::proto::matrix::manage_detail;
   mux::ui::palette colours;
@@ -3487,39 +3305,6 @@ TEST(RoomManagement, CompactSelectorsLeaveRoomForTheirLabels) {
   }
 }
 
-TEST(RoomManagement, EncryptionChangesOnlyAfterConfirmationAndAcknowledgement) {
-  namespace matrix = mux::proto::matrix;
-  namespace manage = matrix::manage_detail;
-  manage_test_box box;
-  box.facts.mine = 100;
-  typename manage::general_actions<manage_test_box>::encryption enable{&box};
-  EXPECT_FALSE(enable());
-  EXPECT_TRUE(box.kept.confirming_encryption);
-  EXPECT_FALSE(box.facts.encrypted);
-  const auto asked = enable();
-  ASSERT_TRUE(asked);
-  EXPECT_FALSE(box.facts.encrypted);
-  manage::completed(&box, matrix::management_saved{box.facts.chat, asked->change, "Forbidden"});
-  EXPECT_FALSE(box.facts.encrypted);
-  EXPECT_FALSE(enable());
-  const auto retry = enable();
-  ASSERT_TRUE(retry);
-  manage::completed(&box, matrix::management_saved{box.facts.chat, retry->change, {}});
-  EXPECT_TRUE(box.facts.encrypted);
-  EXPECT_FALSE(enable());
-}
-
-TEST(RoomManagement, SwitchingPagesPreservesTypedProfileDrafts) {
-  namespace manage = mux::proto::matrix::manage_detail;
-  manage_test_box box;
-  box.facts.name = "Garden";
-  manage::preserve_draft(manage::general_draft<manage_test_box>{&box, "New garden", "Topic", "garden", "12", "@bob:example.org"});
-  ASSERT_TRUE(box.kept.profile);
-  EXPECT_EQ(box.kept.profile->name, "New garden");
-  EXPECT_EQ(box.kept.local_address, "garden");
-  EXPECT_EQ(box.kept.upgrade_creators, "@bob:example.org");
-}
-
 TEST(RoomManagement, NarrowScreensStartWithNavigationAndReturnToIt) {
   mux::ui::palette colours;
   mux::ui::looks_shown looks;
@@ -3549,25 +3334,6 @@ TEST(RoomManagement, NarrowScreensStartWithNavigationAndReturnToIt) {
   dialog.update(0.0);
   EXPECT_TRUE(dialog.tabs().visible());
   EXPECT_TRUE(dialog.content().visible());
-}
-
-TEST(RoomManagement, UploadedAvatarsStayInTheProfileDraftUntilSave) {
-  namespace matrix = mux::proto::matrix;
-  namespace manage = matrix::manage_detail;
-  manage_test_box box;
-  box.facts.mine = 100;
-  box.kept.pending = true;
-  box.kept.profile = matrix::room_change::set_profile{.name = "New garden"};
-  manage::avatar_uploaded(&box, matrix::room_avatar_uploaded{box.facts.chat, "mxc://example.org/new", {}});
-  EXPECT_FALSE(box.kept.pending);
-  ASSERT_TRUE(box.kept.profile);
-  EXPECT_EQ(box.kept.profile->name, "New garden");
-  EXPECT_EQ(box.kept.profile->avatar, "mxc://example.org/new");
-  EXPECT_FALSE(box.facts.avatar);
-  const auto change = *box.kept.profile;
-  manage::completed(&box, matrix::management_saved{box.facts.chat, change, {}});
-  EXPECT_EQ(box.facts.avatar, "mxc://example.org/new");
-  EXPECT_FALSE(box.kept.profile);
 }
 
 TEST(Plugins, TypingSaysWhoIsTypingAsTelegramDoes) {

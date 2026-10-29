@@ -573,62 +573,6 @@ struct network {
     });
   }
   // Packs: listed, saved, taken away, an image uploaded -- by the account named.
-  void list_packs(const mux::account_id& by, std::optional<std::string> room) {
-    loop.post([this, by, room = std::move(room)] {
-      for (auto& one : accounts)
-        spl::visit(
-            [&](auto& account) {
-              if (account->id() == by)
-                ask_if_able([&](auto& a) -> decltype(void(a.list_packs(room))) { a.list_packs(room); }, *account);
-            },
-            one.account);
-    });
-  }
-  void save_pack(const mux::account_id& by, emote_pack pack) {
-    loop.post([this, by, pack = std::move(pack)] {
-      for (auto& one : accounts)
-        spl::visit(
-            [&](auto& account) {
-              if (account->id() == by)
-                ask_if_able([&](auto& a) -> decltype(void(a.save_pack(pack))) { a.save_pack(pack); }, *account);
-            },
-            one.account);
-    });
-  }
-  void adopt_pack(const mux::account_id& by, emote_pack pack) {
-    loop.post([this, by, pack = std::move(pack)] {
-      for (auto& one : accounts) {
-        spl::visit([&](auto& account) {
-          if (account->id() == by)
-            ask_if_able([&](auto& a) -> decltype(void(a.adopt_pack(pack))) { a.adopt_pack(pack); }, *account);
-        }, one.account);
-      }
-    });
-  }
-  void delete_pack(const mux::account_id& by, emote_pack pack) {
-    loop.post([this, by, pack = std::move(pack)] {
-      for (auto& one : accounts)
-        spl::visit(
-            [&](auto& account) {
-              if (account->id() == by)
-                ask_if_able([&](auto& a) -> decltype(void(a.delete_pack(pack))) { a.delete_pack(pack); }, *account);
-            },
-            one.account);
-    });
-  }
-  void upload_pack_picture(const mux::account_id& by, pack_picture picture, std::string bytes, pack_opening opening) {
-    loop.post([this, by, picture = std::move(picture), bytes = std::move(bytes), opening = std::move(opening)] {
-      for (auto& one : accounts)
-        spl::visit(
-            [&](auto& account) {
-              if (account->id() == by)
-                ask_if_able([&](auto& a) -> decltype(void(a.upload_pack_picture(picture, bytes, opening))) {
-                  a.upload_pack_picture(picture, bytes, opening);
-                }, *account);
-            },
-            one.account);
-    });
-  }
   // The user directory of the account named, searched.
   // What the account knows of a person's encryption identity, asked for.
   void ask_trust(const mux::account_id& by, std::string user) {

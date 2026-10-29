@@ -1067,54 +1067,6 @@ auto permissions_page(const auto& colours, const room_settings_facts&) {
           action(colours, "Permissions", ask(manage_change::edit{editor::powers, false}))))));
 }
 
-// ---- Emojis & Stickers: the room's packs -----------------------------------------
-struct pack_draft {
-  std::string name;
-  friend bool operator==(const pack_draft&, const pack_draft&) = default;
-};
-[[nodiscard]] inline bool may_packs(const facts_t& now) { return facts_of(now).mine >= event_need(rules_now(now), "im.ponies.room_emotes"); }
-auto pack_maker(const auto& colours) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(pack_maker, c::local<pack_draft>(c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&pack_draft::name>(colours, "Name", "Pack name")),
-      action_asking<pack_draft>(colours, "Create", [](const pack_draft& now) { return request::manage_room{manage_change::create_pack{now.name}}; },
-                                may_packs)),
-      pack_draft{}));
-}
-template <class P> using pack_maker_t = decltype(pack_maker(std::declval<P>()));
-struct pack_line {
-  std::string key, name;
-  std::size_t pictures = 0;
-  friend bool operator==(const pack_line&, const pack_line&) = default;
-};
-struct packs_key {
-  std::vector<pack_line> packs;
-  friend bool operator==(const packs_key&, const packs_key&) = default;
-};
-auto pack_cards(const auto& colours, const packs_key& key) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(pack_cards, c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.packs | std::views::transform([&](const pack_line& one) {
-    return card(colours, setting_tile(colours, one.name.empty() ? "Unnamed Pack" : one.name, std::format("{} images", one.pictures),
-                                      action(colours, "View", sends<::mux::ui::request::open_room_packs>{{one.key}})));
-  }) | std::ranges::to<std::vector>()));
-}
-template <class P> using pack_cards_t = decltype(pack_cards(std::declval<P>(), packs_key{}));
-auto packs_page(const auto& colours, const room_settings_facts&) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(packs_page, c::column(page_look(), section(colours, "Room Packs",
-      c::shown_for<facts_t>(may_packs, card(colours,
-          setting_tile(colours, "New Pack", "Add your own emoji and sticker pack to use in room.", c::column()),
-          rows_of<pack_maker_t<decltype(colours)>, std::uint32_t>([](const facts_t& now) { return kept_of(now).pack_round; },
-                                               [at = &colours](std::uint32_t) { return pack_maker(*at); }))),
-      rows_of<pack_cards_t<decltype(colours)>, packs_key>([](const facts_t& now) {
-        return packs_key{kept_of(now).packs | std::views::transform([](const mux::emote_pack& pack) {
-          return pack_line{pack.key, pack.name, pack.pictures.size()};
-        }) | std::ranges::to<std::vector>()};
-      },
-          [at = &colours](const packs_key& key) { return pack_cards(*at, key); }),
-      c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).packs.empty(); }, wrapped(nodes::Text("No packs found.", 12.0f, colours.dim))))));
-}
-
 // ---- Developer Tools: the room's state events and account data --------------------
 enum class state_row_kind { add, type, key };
 template <class Act>
@@ -1321,30 +1273,26 @@ export namespace mux::proto::matrix::manage {
 constexpr std::string_view tab_title(room) { return "General"; }
 constexpr std::string_view tab_title(members) { return "Members"; }
 constexpr std::string_view tab_title(roles) { return "Permissions"; }
-constexpr std::string_view tab_title(packs) { return "Emojis & Stickers"; }
 constexpr std::string_view tab_title(advanced) { return "Developer Tools"; }
 inline ui::icon_t tab_icon(room) { return ui::icon::gear{}; }
 inline ui::icon_t tab_icon(members) { return ui::icon::person{}; }
 inline ui::icon_t tab_icon(roles) { return ui::icon::lock{}; }
-inline ui::icon_t tab_icon(packs) { return ui::icon::smile{}; }
 inline ui::icon_t tab_icon(advanced) { return ui::icon::terminal{}; }
 // What these pages may ask, whatever their trees: outside a release build
 // each is held erased (made in its own unit, manage_*.cc), so the dialog
 // that holds them is not made again for every change of a page.
 using manage_out = skiff::model::Types<request::manage_room, request::open_send_custom, ui::request::open_url, ui::request::pick_room_avatar,
-                                       ui::request::open_room_packs, ui::request::flip_developer_tools, ui::request::copy_text,
+                                       ui::request::flip_developer_tools, ui::request::copy_text,
                                        ui::request::open_member_info>;
 using erased_page = skiff::compose::Erased<manage_out>;
 erased_page manage_page_erased(room, const ui::palette&, const ui::room_settings_facts&);
 erased_page manage_page_erased(members, const ui::palette&, const ui::room_settings_facts&);
 erased_page manage_page_erased(roles, const ui::palette&, const ui::room_settings_facts&);
-erased_page manage_page_erased(packs, const ui::palette&, const ui::room_settings_facts&);
 erased_page manage_page_erased(advanced, const ui::palette&, const ui::room_settings_facts&);
 // Each tab's page.
 auto page_of(room, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::general_page(colours, facts); }
 auto page_of(members, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::members_page(colours, facts); }
 auto page_of(roles, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::permissions_page(colours, facts); }
-auto page_of(packs, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::packs_page(colours, facts); }
 auto page_of(advanced, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::developer_page(colours, facts); }
 template <class Tab>
 auto make_manage_page(Tab tab, const ui::palette& colours, const ui::room_settings_facts& facts)

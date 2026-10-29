@@ -1,70 +1,70 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:info_packs -- Emojis & Stickers: a room's packs, or one's own.
+// mux.plugin.packs.ui -- Emojis & Stickers, as Cinny edits them (MSC2545):
+// the packs of a room -- or one's own pack -- listed; a pack opened: its
+// name, attribution and use (as emoji, as stickers), and its images, each
+// with its shortcode and use, removable; images added from files, uploaded
+// as they are chosen; saved as the room's state, or one's account data. And
+// the ways to it: Settings' link, an account's row, a room's settings' tab.
 module;
 #include "skiff/named.h"
-export module mux.ui:info_packs;
+export module mux.plugin.packs.ui;
 
 import std;
-import splice.bytes;
 import splice;
+import splice.bytes;
 import skia;
-import skiff.paint;
 import skiff.scene;
 import skiff.compose;
 import skiff.nodes.box;
 import skiff.nodes.flow;
-import skiff.nodes.icon;
 import skiff.nodes.image;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
+import skiff.nodes.icon;
 import skiff.widgets.pill;
 import skiff.widgets.button;
 import skiff.widgets.sliderbar;
 import skiff.widgets.textbox;
 import skiff.widgets.textarea;
+import mux.composition;
 import mux.core;
-import mux.config;
-import mux.logic.links;
 import mux.protocols;
 import mux.ui.base;
-import mux.ui.messages;
-import :info_common;
-import :info_cards;
-import :info_reactions;
-import :info_new_chats;
-import :info_looks;
-import :info_threads;
+import mux.plugin.packs.types;
 
-export namespace mux::ui {
-// Emojis & Stickers, as Cinny edits them (MSC2545): the packs of a room --
-// or one's own pack -- listed; a pack opened: its name, attribution and use
-// (as emoji, as stickers), and its images, each with its shortcode and use,
-// removable; images added from files, uploaded as they are chosen; saved as
-// the room's state, or one's account data.
-// Emojis & Stickers open: a room's packs, or one's own; and whether they
-// may be changed.
-struct packs_facts {
-  // Whose packs: the account's, and the room's where they are a room's --
-  // what an answer from the server is matched by.
-  std::optional<account_id> account;
-  std::optional<std::string> room;
-  bool editable = false;
-  std::optional<std::string> key{};
-  // As the account listed them; listed yet or not.
-  std::vector<emote_pack> packs;
-  bool listed = false;
-  // A pack open -- a new one, not yet saved -- as it is being edited; each
-  // opening its number, its fields made anew for it.
-  std::optional<emote_pack> draft;
-  bool new_pack = false;
-  std::uint64_t opened = 0;
-  // What is said over it: saving, saved, what went wrong.
-  std::string note;
-  friend bool operator==(const packs_facts&, const packs_facts&) = default;
-};
+export namespace mux::plugins::packs {
+using namespace ::mux::ui;
+
+// The ways to it: Settings' link (one's own, the first account's), an
+// account's row (that account's), where its protocol has packs.
+inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
+  return settings_link(colours, "Emojis & Stickers", icon::smile{}, open{});
+}
+inline auto extend(contract::account_rows, type_tag<feature>, const palette& colours, const std::string& address) {
+  return skiff::compose::visible(proto::offers(state_before(protocol_of(address)), proto::feature::sticker_packs{}),
+                                 row_item(colours, "Emojis & Stickers", sends<open_account>{{address}}, icon::smile{}));
+}
+// A room's settings' tab, where its protocol has packs: its packs, opened
+// in the dialog -- the list, Create pack and the editor all there.
+constexpr std::string_view tab_title(room_tab) { return "Emojis & Stickers"; }
+inline icon_t tab_icon(room_tab) { return icon::smile{}; }
+inline bool tab_visible(room_tab, const room_settings_facts& facts) {
+  return proto::offers(state_before(facts.speaks), proto::feature::sticker_packs{});
+}
+inline auto make_manage_page(room_tab, const palette& colours, const room_settings_facts&) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(room_tab_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
+      tab_heading(colours, "Emojis & Stickers"),
+      c::styled({.fillX = true}, wrapped(nodes::Text("The custom emoji and stickers of this room and the spaces it is in: listed, "
+                                                     "made and edited where your power here allows, or added to your account.",
+                                                     13.0f, colours.dim))),
+      c::styled({.width = 160.0f, .height = 34.0f},
+                skiff::compose::primary(widgets::Button<sends<open_room>>(colours.widgets, "Open packs", {{std::nullopt}})))));
+}
+
 // A pack opened -- a new one where none is named -- to edit: what is said
 // over it as it may be changed or not.
-inline void open_pack(packs_facts& facts, std::optional<std::size_t> at) {
+inline void open_pack(shown& facts, std::optional<std::size_t> at) {
   facts.new_pack = !at;
   facts.draft = at && *at < facts.packs.size() ? facts.packs[*at] : emote_pack{.chat = facts.room, .emoji = true, .sticker = true};
   ++facts.opened;
@@ -72,7 +72,7 @@ inline void open_pack(packs_facts& facts, std::optional<std::size_t> at) {
                                                                    : std::string("You may not change this room's packs.");
 }
 // The list again: what it is said to be.
-inline void show_pack_list(packs_facts& facts) {
+inline void show_pack_list(shown& facts) {
   facts.draft.reset();
   facts.note = facts.room ? (facts.packs.empty() ? std::string("This room has no packs yet.")
                                                  : std::string("Packs from this room and its spaces. Add a pack to your account to use it in every room."))
@@ -80,7 +80,7 @@ inline void show_pack_list(packs_facts& facts) {
 }
 // What the account listed: the packs -- the one asked for opened, or one's
 // own pack at once where there is one -- else the list.
-inline void packs_listed(packs_facts& facts, std::vector<emote_pack> listed) {
+inline void packs_listed_in(shown& facts, std::vector<emote_pack> listed) {
   facts.packs = std::move(listed);
   facts.listed = true;
   if (auto key = std::exchange(facts.key, std::nullopt))
@@ -96,7 +96,7 @@ inline void packs_listed(packs_facts& facts, std::vector<emote_pack> listed) {
 }
 // A pack saved -- or taken away: the list as it is now, shown again, or
 // one's own left open; or what went wrong.
-inline void pack_saved(packs_facts& facts, const emote_pack& pack, bool removed, bool done) {
+inline void pack_saved_in(shown& facts, const emote_pack& pack, bool removed, bool done) {
   if (!done) {
     facts.note = removed ? "The pack was not deleted." : "The pack was not saved.";
     return;
@@ -111,7 +111,7 @@ inline void pack_saved(packs_facts& facts, const emote_pack& pack, bool removed,
 }
 // An image uploaded for the pack open: in it, its shortcode from its file's
 // name, unique in it; or why not.
-inline void pack_picture_uploaded(packs_facts& facts, pack_picture one, bool done, const pack_opening& opening) {
+inline void picture_uploaded_in(shown& facts, pack_picture one, bool done, const pack_opening& opening) {
   // For another opening of the editor -- another pack, or this one opened
   // again since: not this draft's.
   if (opening != pack_opening{facts.room, facts.opened})
@@ -134,7 +134,7 @@ inline void pack_picture_uploaded(packs_facts& facts, pack_picture one, bool don
   facts.draft->pictures.push_back(std::move(one));
 }
 // The pictures it shows: the pack open's images, else each pack's own.
-[[nodiscard]] inline std::vector<emote_picture> pack_pictures_of(const packs_facts& facts) {
+[[nodiscard]] inline std::vector<emote_picture> pictures_of(const shown& facts) {
   if (facts.draft)
     return facts.draft->pictures | std::views::transform([](const pack_picture& one) {
              return emote_picture{one.url, one.emoji ? emote_kind::emoji : emote_kind::sticker};
@@ -146,7 +146,7 @@ inline void pack_picture_uploaded(packs_facts& facts, pack_picture one, bool don
 }
 // Whether the pack open may be changed here: the room's own, where its
 // rights allow -- not one of a space it is in.
-[[nodiscard]] inline bool draft_editable(const packs_facts& facts) {
+[[nodiscard]] inline bool draft_editable(const shown& facts) {
   return facts.editable && facts.draft && facts.draft->chat == facts.room;
 }
 // A pack in the list: its picture, its name, how many images and what for;
@@ -157,7 +157,7 @@ inline auto pack_row(const palette& colours, const std::optional<std::string>& r
       nodes::Image<from_emotes>({pack.avatar.value_or(pack.pictures.empty() ? std::string() : pack.pictures.front().url),
                                  pack.emoji ? emote_kind::emoji : emote_kind::sticker}));
   picture.keepBox();
-  return SKIFF_NAMED(pack_row, c::onClick(request::pack_open{index},
+  return SKIFF_NAMED(pack_row, c::onClick(pack_open{index},
       c::row(c::hbox(12.0f, {.fillX = true, .height = 56.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
              std::move(picture),
              two_lines(colours, pack.name.empty() ? "Unnamed pack" : pack.name,
@@ -166,7 +166,7 @@ inline auto pack_row(const palette& colours, const std::optional<std::string>& r
                                    pack.chat != room ? " · From space" : ""),
                        14.0f, 2.0f),
              c::visible(pack.chat.has_value(),
-                        c::onClick(request::adopt_pack{pack},
+                        c::onClick(adopt{pack, std::nullopt},
                                    c::styled({.width = 120.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
                                               .hoverBackground = colours.tile},
                                              nodes::Text("Add to account", 13.0f, colours.accent)),
@@ -185,7 +185,7 @@ struct pack_row_of {
 template <class Act, class On>
 auto use_switch(const palette& colours, Act act, On on) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(use_switch, c::applied<std::optional<packs_facts>>([on](const std::optional<packs_facts>& facts) { return facts ? on(*facts) : false; },
+  return SKIFF_NAMED(use_switch, c::applied<std::optional<shown>>([on](const std::optional<shown>& facts) { return facts ? on(*facts) : false; },
                                                 [](widgets::Toggle<Act>& toggle, bool now) { toggle.setOn(now); },
                                                 c::styled({.alignSelf = scene::align::kMiddle}, widgets::Toggle<Act>(colours.widgets, std::move(act)))));
 }
@@ -193,8 +193,8 @@ auto use_switch(const palette& colours, Act act, On on) {
 struct picture_renamed_typed {
   static constexpr bool kEveryEdit = true;
   std::string url;
-  using Answer = request::pack_picture_renamed;
-  request::pack_picture_renamed operator()(std::string_view text) const { return {url, std::string(text)}; }
+  using Answer = picture_renamed;
+  picture_renamed operator()(std::string_view text) const { return {url, std::string(text)}; }
 };
 // An image of the pack open: its picture, its shortcode to edit, its use,
 // and close to take it out. Kept while it is in the pack, by its picture;
@@ -210,9 +210,9 @@ struct picture_row_of {
     face.keepBox();
     auto shortcode = widgets::internal::TextBox<picture_renamed_typed>(colours->widgets, "shortcode", picture_renamed_typed{one.url});
     shortcode.setText(one.shortcode);
-    auto emoji = widgets::Toggle<sends<request::pack_picture_use>>(colours->widgets, {{one.url, true}});
+    auto emoji = widgets::Toggle<sends<picture_use>>(colours->widgets, {{one.url, true}});
     emoji.setOnNow(use.first);
-    auto sticker = widgets::Toggle<sends<request::pack_picture_use>>(colours->widgets, {{one.url, false}});
+    auto sticker = widgets::Toggle<sends<picture_use>>(colours->widgets, {{one.url, false}});
     sticker.setOnNow(use.second);
     return c::row(c::hbox(8.0f, {.fillX = true, .height = 52.0f, .padding = {6.0f, 10.0f, 6.0f, 10.0f}}),
                   std::move(face),
@@ -220,15 +220,15 @@ struct picture_row_of {
                             std::move(shortcode)),
                   c::styled(middle, nodes::Text("Emoji", 12.0f, colours->dim)), c::styled(middle, std::move(emoji)),
                   c::styled(middle, nodes::Text("Sticker", 12.0f, colours->dim)), c::styled(middle, std::move(sticker)),
-                  c::styled(middle, icon_button(*colours, icon::close{}, sends<request::pack_picture_removed>{{one.url}})));
+                  c::styled(middle, icon_button(*colours, icon::close{}, sends<picture_removed>{{one.url}})));
   }
 };
 // What a pack's name and attribution answer as they are typed.
 struct pack_named_typed {
   static constexpr bool kEveryEdit = true;
   bool attribution = false;
-  using Answer = request::pack_named;
-  request::pack_named operator()(std::string_view text) const { return {std::string(text), attribution}; }
+  using Answer = pack_named;
+  pack_named operator()(std::string_view text) const { return {std::string(text), attribution}; }
 };
 // The pack open, its fields as it was when opened: what is typed in them
 // the program's to keep, as it is typed.
@@ -254,12 +254,12 @@ inline auto pack_editor(const palette& colours, const pack_opened& opened) {
       field("Attribution (optional)", "Where its images are from", opened.pack.attribution, true),
       c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}, .disabled = !opened.editable}),
              c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Use as emoji", 13.0f, colours.text)),
-             use_switch(colours, sends<request::pack_use>{{true}}, [](const packs_facts& now) { return now.draft && now.draft->emoji; }),
+             use_switch(colours, sends<pack_use>{{true}}, [](const shown& now) { return now.draft && now.draft->emoji; }),
              c::styled({.alignSelf = scene::align::kMiddle, .margin = {0.0f, 0.0f, 0.0f, 14.0f}}, nodes::Text("Use as stickers", 13.0f, colours.text)),
-             use_switch(colours, sends<request::pack_use>{{false}}, [](const packs_facts& now) { return now.draft && now.draft->sticker; })),
+             use_switch(colours, sends<pack_use>{{false}}, [](const shown& now) { return now.draft && now.draft->sticker; })),
       c::styled({.margin = {6.0f, 10.0f, 0.0f, 10.0f}}, nodes::Text("Images", 13.0f, colours.dim, true)),
       c::styled({.fillX = true, .grow = scene::axes::kY, .disabled = !opened.editable},
-                nodes::ScrollContainer(c::projected<std::optional<packs_facts>>([](const std::optional<packs_facts>& facts) {
+                nodes::ScrollContainer(c::projected<std::optional<shown>>([](const std::optional<shown>& facts) {
                   return facts && facts->draft ? facts->draft->pictures | std::views::transform([](const pack_picture& one) {
                                                    return std::tuple{one.url, std::pair{one.emoji, one.sticker}, one};
                                                  }) | std::ranges::to<std::vector>()
@@ -267,20 +267,20 @@ inline auto pack_editor(const palette& colours, const pack_opened& opened) {
                 },
                     c::styled({.fillX = true, .autoSize = scene::axes::kY}, rows_t(picture_row_of{&colours}))))),
       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}}),
-             c::visible(opened.editable, c::styled(button, widgets::Button<sends<request::pick_pack_images>>(colours.widgets, "Add images", {}))),
+             c::visible(opened.editable, c::styled(button, widgets::Button<sends<pick_images>>(colours.widgets, "Add images", {}))),
              c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::SkColor{0})),
              c::visible(opened.editable && opened.in_room && !opened.new_pack,
-                        c::styled(button, widgets::Button<sends<request::pack_delete>>(colours.widgets, "Delete pack", {}))),
-             c::visible(opened.in_room, c::styled(button, widgets::Button<sends<request::pack_back>>(colours.widgets, "Back", {}))),
-             c::visible(opened.editable, c::styled(button, primary(widgets::Button<sends<request::pack_save>>(colours.widgets, "Save", {})))))));
+                        c::styled(button, widgets::Button<sends<pack_delete>>(colours.widgets, "Delete pack", {}))),
+             c::visible(opened.in_room, c::styled(button, widgets::Button<sends<pack_back>>(colours.widgets, "Back", {}))),
+             c::visible(opened.editable, c::styled(button, skiff::compose::primary(widgets::Button<sends<pack_save>>(colours.widgets, "Save", {})))))));
 }
 using pack_editor_t = decltype(pack_editor(std::declval<const palette&>(), std::declval<const pack_opened&>()));
 // Emojis & Stickers, as the program has it: its packs listed -- Create
 // where the room's may be added to -- or the one open, edited.
-inline auto packs_box(const ui_needs& n, const packs_facts& first) {
+inline auto packs_box(const ui_needs& n, const shown& first) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
-  using facts_t = std::optional<packs_facts>;
+  using facts_t = std::optional<shown>;
   const auto listing = [](const facts_t& facts) { return facts && !facts->draft; };
   return SKIFF_NAMED(packs_box, c::column(c::vbox(8.0f, {.fillX = true, .height = 600.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}}),
       c::row(c::hbox(8.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
@@ -289,7 +289,7 @@ inline auto packs_box(const ui_needs& n, const packs_facts& first) {
                                                 : facts->draft->name.empty() ? std::string("Pack") : facts->draft->name;
              },
                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text("", 16.0f, colours.text, true)))),
-             c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::close{}, sends<request::close_packs>{}))),
+             c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::close{}, sends<request::close_shown<shown>>{}))),
       c::text_for<facts_t>([](const facts_t& facts) { return facts ? facts->note : std::string(); },
           c::styled({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}}, wrapped(nodes::Text("", 13.0f, colours.dim)))),
       c::shown_for<facts_t>(listing,
@@ -302,7 +302,7 @@ inline auto packs_box(const ui_needs& n, const packs_facts& first) {
       c::shown_for<facts_t>([](const facts_t& facts) { return facts && !facts->draft && facts->room && facts->editable; },
           c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}}),
                  c::styled({.width = 140.0f, .height = 34.0f},
-                           primary(widgets::Button<sends<request::pack_open>>(colours.widgets, "Create pack", {{std::nullopt}}))))),
+                           skiff::compose::primary(widgets::Button<sends<pack_open>>(colours.widgets, "Create pack", {{std::nullopt}}))))),
       c::projected<facts_t>([](const facts_t& facts) {
         return facts && facts->draft ? std::optional(pack_opened{facts->opened, *facts->draft, draft_editable(*facts), facts->new_pack,
                                                                  facts->room.has_value()})
@@ -311,15 +311,14 @@ inline auto packs_box(const ui_needs& n, const packs_facts& first) {
           c::mount<pack_editor_t, pack_opened>([at = &colours](const pack_opened& opened) { return std::tuple{pack_editor(*at, opened)}; },
                                                {.fillX = true, .grow = scene::axes::kY}))));
 }
-using packs_box_t = decltype(packs_box(std::declval<const ui_needs&>(), std::declval<const packs_facts&>()));
-// The dialog it is shown in; made once while it is up -- for the room it
-// is for, the rest read as the facts move.
-inline dialog_look content_look(std::type_identity<packs_facts>) { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
-template <class Needs>
-auto make_content(const Needs& needs, const packs_facts& facts) {
-  return packs_box(needs, facts);
-}
-constexpr bool content_persistent(std::type_identity<packs_facts>) { return true; }
+using box = decltype(packs_box(std::declval<const ui_needs&>(), std::declval<const shown&>()));
+// The dialog it is shown in; made once while it is up -- for the room it is
+// for, the rest read as the facts move.
+inline dialog_look content_look(std::type_identity<shown>) { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
+inline auto make_content(const ui_needs& n, const shown& facts) { return packs_box(n, facts); }
+constexpr bool content_persistent(std::type_identity<shown>) { return true; }
 
-}  // namespace mux::ui
+// Its dialog, among the window's (mux.ui:window).
+constexpr type_tag<box> extend(contract::window_dialogs, type_tag<feature>) { return {}; }
 
+}  // namespace mux::plugins::packs

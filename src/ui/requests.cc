@@ -508,8 +508,8 @@ struct open_new_room_in {
   std::string name;
   bool make_space = false;
 };
-// Emojis & Stickers: one's own pack, or the room's packs; a pack saved or
-// taken away; images chosen for the pack open.
+// Emojis & Stickers: a room's pack added to the account, from the emoji
+// panel -- taken by the packs plugin.
 // Threads: their panel opened or closed, one opened or let go (back to the
 // list), an answer sent in one, one begun from a message's menu.
 // A chat background: its dialog, for a level; what is chosen there.
@@ -598,50 +598,10 @@ struct send_in_thread {
   std::vector<styled_run> styles;
 };
 struct menu_thread {};
-struct open_packs {};
-// An account's own packs, from its page in Manage accounts.
-struct open_account_packs {
-  std::string address;
-};
-struct open_room_packs { std::optional<std::string> key{}; };
-struct close_packs {};
-struct save_pack {
-  mux::emote_pack pack;
-};
 struct adopt_pack {
   mux::emote_pack pack;
   std::optional<mux::account_id> by;
 };
-struct delete_pack {
-  mux::emote_pack pack;
-};
-struct pick_pack_images {};
-// The packs dialog: a pack opened (a new one, where none is said), the
-// list again; the one open named, attributed, its use flipped; one of its
-// images renamed, its use flipped, taken out; it saved, or deleted.
-struct pack_open {
-  std::optional<std::size_t> at;
-};
-struct pack_back {};
-struct pack_named {
-  std::string text;
-  bool attribution = false;
-};
-struct pack_use {
-  bool emoji = true;
-};
-struct pack_picture_renamed {
-  std::string url, shortcode;
-};
-struct pack_picture_use {
-  std::string url;
-  bool emoji = true;
-};
-struct pack_picture_removed {
-  std::string url;
-};
-struct pack_save {};
-struct pack_delete {};
 struct close_new_room {};
 // A text menu's item for a field: the key the field takes for it, given to
 // the field with the focus -- Ctrl+V a paste.

@@ -58,28 +58,6 @@ struct state_listed {
   conversation_id in;
   std::vector<state_entry> entries;
 };
-// The packs of a room, or one's own, as asked for to edit.
-struct packs_listed {
-  account_id by;
-  std::optional<std::string> room;
-  std::vector<emote_pack> packs;
-};
-// A pack saved -- or taken away, where `removed` -- or not.
-struct pack_saved {
-  account_id by;
-  emote_pack pack;
-  bool removed = false;
-  bool done = false;
-};
-// An image uploaded for a pack being edited: its mxc://, none where it
-// failed.
-struct pack_picture_uploaded {
-  account_id by;
-  pack_picture picture;
-  bool done = false;
-  // The editor's opening it was uploaded for.
-  pack_opening opening;
-};
 // The account's sessions, this one's ID among them.
 struct sessions_listed {
   account_id by;
@@ -127,7 +105,7 @@ struct sign_in_page {
   std::string url;
 };
 
-using changes = change_list<management_loaded, management_saved, room_avatar_uploaded, session_given, registration_page, sign_in_page, verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused, uia_in_browser>;
+using changes = change_list<management_loaded, management_saved, room_avatar_uploaded, session_given, registration_page, sign_in_page, verification_changed, security_state, devtools_text, state_listed, sessions_listed, sessions_refused, uia_in_browser>;
 constexpr type_tag<changes> changes_type(const state&) { return {}; }
 
 // As the command line says them.
@@ -142,11 +120,6 @@ inline std::string describe(const state_entry& one) { return one.type + " " + on
 inline std::string describe(const state_listed& one) {
   return std::format("{} state events of {}", one.entries.size(), one.in.id);
 }
-inline std::string describe(const packs_listed& one) { return std::format("{} packs", one.packs.size()); }
-inline std::string describe(const pack_saved& one) {
-  return std::format("pack {} {}", one.pack.key, one.done ? (one.removed ? "taken away" : "saved") : "not saved");
-}
-inline std::string describe(const pack_picture_uploaded& one) { return std::format("uploaded {}", one.picture.url); }
 inline std::string describe(const security_state& one) {
   return std::format("cross-signing {}, backup {}", one.cross_signing ? "set up" : "not set up", one.backup ? "on" : "off");
 }

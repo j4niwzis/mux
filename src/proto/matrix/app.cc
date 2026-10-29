@@ -102,22 +102,12 @@ struct member_named {
   std::string displayname;
   friend consteval auto json_schema(knot::type<member_named>) { return knot::schema<member_named>(); }
 };
-// What the packs dialog shows, changed as `change` says, where it is up.
-template <class App, class Change>
-void change_packs(App& app, const account_id& by, const std::optional<std::optional<std::string>>& room, Change change) {
-  // Only the packs this answer is about: the same account's, and -- where
-  // the answer says whose -- the same room's (none: the account's own).
-  const auto& open = *app.showing.template look<std::optional<mux::ui::packs_facts>>();
-  if (!open || open->account != by || (room && *room != open->room))
-    return;
-  mux::ui::change_shown<std::optional<mux::ui::packs_facts>>(app.showing, [&](std::optional<mux::ui::packs_facts>& now) { change(*now); });
-}
 }  // namespace mux::proto::matrix::app_detail
 
 namespace mux::proto::matrix::app_detail {
 // What a change on the settings' pages asks of the server: a change of the
-// room, or a pack saved.
-using manage_ask_t = spl::variant<room_change_t, mux::emote_pack>;
+// room.
+using manage_ask_t = spl::variant<room_change_t>;
 [[nodiscard]] inline std::optional<std::int64_t> integer(std::string_view text) {
   std::int64_t value = 0;
   const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
@@ -451,25 +441,6 @@ struct manage_step {
     for (std::int64_t value : kept.deleted_powers) { tags.erase(std::to_string(value)); }
     return submit(room_change::set_tags{std::move(tags)});
   }
-  // A pack made: keyed by its name, apart from the room's others.
-  asked operator()(const manage_change::create_pack& one) {
-    if (one.name.empty() || facts.mine < event_need(rules(), "im.ponies.room_emotes"))
-      return std::nullopt;
-    mux::emote_pack pack;
-    pack.chat = facts.id;
-    pack.name = one.name;
-    pack.key = one.name;
-    std::ranges::replace(pack.key, ' ', '-');
-    const auto taken = [&](const std::string& key) { return std::ranges::contains(kept.packs, key, &mux::emote_pack::key); };
-    const auto stem = pack.key;
-    // The keys it may take, the stem first: a view kept by name, so what the
-    // search finds is not left dangling with a temporary.
-    const auto keys = std::views::iota(std::size_t{0}) | std::views::transform([&](std::size_t suffix) {
-      return suffix == 0 ? stem : std::format("{}-{}", stem, suffix);
-    });
-    pack.key = *std::ranges::find_if(keys, [&](const std::string& key) { return !taken(key); });
-    return manage_ask_t{std::move(pack)};
-  }
   // The developer tools' state events: one opened, written, the list.
   asked operator()(const manage_change::state_open& one) {
     if (kept.pending)
@@ -688,45 +659,6 @@ template <class App>
 void program_told(App& app, const management_saved& one) {
   app_detail::change_manage(app, one.in, [&](ui::room_settings_facts& facts, manage_state& kept) { app_detail::saved_in(facts, kept, one); });
 }
-// Packs: listed, saved, an image uploaded -- in their dialog.
-template <class App>
-void program_told(App& app, const packs_listed& listed) {
-  // A room's packs, in its settings where they are open; an account's own
-  // have no room.
-  if (listed.room)
-    app_detail::change_manage(app, mux::conversation_id{listed.by, *listed.room},
-                              [&](ui::room_settings_facts&, manage_state& kept) { kept.packs = listed.packs; });
-  app_detail::change_packs(app, listed.by, std::optional(listed.room), [&](mux::ui::packs_facts& now) { mux::ui::packs_listed(now, listed.packs); });
-}
-template <class App>
-void program_told(App& app, const pack_saved& saved) {
-  if (saved.pack.chat)
-  app_detail::change_manage(app, mux::conversation_id{saved.by, *saved.pack.chat}, [&](ui::room_settings_facts&, manage_state& kept) {
-    if (!saved.done) {
-      kept.error = "The pack was not saved.";
-      return;
-    }
-    if (saved.removed) {
-      std::erase_if(kept.packs, [&](const mux::emote_pack& one) { return one.key == saved.pack.key; });
-      return;
-    }
-    if (const auto found = std::ranges::find(kept.packs, saved.pack.key, &mux::emote_pack::key); found != kept.packs.end())
-      *found = saved.pack;
-    else
-      kept.packs.push_back(saved.pack);
-    ++kept.pack_round;
-  });
-  app_detail::change_packs(app, saved.by, std::optional(saved.pack.chat),
-                           [&](mux::ui::packs_facts& now) { mux::ui::pack_saved(now, saved.pack, saved.removed, saved.done); });
-}
-template <class App>
-void program_told(App& app, const pack_picture_uploaded& uploaded) {
-  // A picture uploaded for the opening of the editor it was asked in: the
-  // same account's, the same room's, the same draft's.
-  app_detail::change_packs(app, uploaded.by, std::optional(uploaded.opening.room), [&](mux::ui::packs_facts& now) {
-    mux::ui::pack_picture_uploaded(now, uploaded.picture, uploaded.done, uploaded.opening);
-  });
-}
 // An emoji verification, as it goes: its dialog.
 template <class App>
 void program_told(App& app, const verification_changed& one) {
@@ -931,13 +863,6 @@ void program_asked(App& app, const slash& one) {
                  }},
              one.what);
 }
-template <class App>
-void program_asked(App& app, const save_room_pack& one) {
-  const auto chosen = app.shared.managed();
-  if (!chosen || app.shared.demo() || one.pack.chat != chosen->id) return;
-  app.net->on_account_of(*chosen, [pack = one.pack](auto& account)
-      -> decltype(void(account.save_pack(pack))) { account.save_pack(pack); });
-}
 // A press on the settings' pages: what Matrix keeps of them changed, and
 // the write it asks, asked.
 template <class App>
@@ -951,9 +876,7 @@ void program_asked(App& app, const manage_room& one) {
              now.manage);
   mux::ui::show(app.showing, std::optional(std::move(now)));
   if (asked)
-    spl::visit(spl::overloaded{[&](room_change_t& change) { program_asked(app, change_room{std::move(change)}); },
-                               [&](mux::emote_pack& pack) { program_asked(app, save_room_pack{std::move(pack)}); }},
-               *asked);
+    spl::visit(spl::overloaded{[&](room_change_t& change) { program_asked(app, change_room{std::move(change)}); }}, *asked);
 }
 // The developer tools: for the room being managed, by its account.
 template <class App>

@@ -169,6 +169,9 @@ struct ui_shared {
   // shows -- in view, and its packs' tabs: keyed by source and kind,
   // fetched into their separate stores while they show.
   std::vector<emote_picture> panel_pictures_shown;
+  // The pictures a plugin's dialog shows (the packs being edited), said by
+  // the plugin as it ticks.
+  std::vector<emote_picture> plugin_pictures;
   // A viewport moved onto messages whose media has not been requested yet.
   bool pictures_due = false;
   // What each protocol's account does beyond what every one does, as the

@@ -274,11 +274,6 @@ class account {
   // Packs of custom emoji and stickers (MSC2545): a room's, or one's own
   // where none is named, listed to edit; one saved, or a room's taken away;
   // an image uploaded for one.
-  void list_packs(std::optional<std::string> room);
-  void save_pack(emote_pack pack);
-  void adopt_pack(emote_pack pack);
-  void delete_pack(emote_pack pack);
-  void upload_pack_picture(pack_picture picture, std::string bytes, pack_opening opening);
   // Threads (m.thread): a room's roots listed; a thread's answers loaded,
   // each as a message in it; an answer sent in one.
   void list_threads(std::string room);

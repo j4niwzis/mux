@@ -35,7 +35,6 @@ export import :info_reactions;
 export import :info_new_chats;
 export import :info_looks;
 export import :info_threads;
-export import :info_packs;
 export import :info_explore;
 
 export namespace mux::ui {

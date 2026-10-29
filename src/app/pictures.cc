@@ -227,9 +227,8 @@ class pictures_part {
     auto& screen = s_->root();
     // The images of the pack being edited, by the account of the chat in view.
     if (s_->listed()) {
-      if (const auto& packs = *s_->showing->look<std::optional<mux::ui::packs_facts>>())
-        for (const auto& picture : mux::ui::pack_pictures_of(*packs))
-          this->want_emote(*s_->listed(), picture.source, true, picture.kind);
+      for (const auto& picture : s_->ui.plugin_pictures)
+        this->want_emote(*s_->listed(), picture.source, true, picture.kind);
       for (const auto& picture : s_->ui.panel_pictures_shown)
         this->want_emote(*s_->listed(), picture.source, true, picture.kind);
       // Those a dialog lists -- Explore's rooms, people found -- by their keys.

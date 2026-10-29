@@ -133,7 +133,6 @@ struct stub {
   void close_leave_space() {}
   void find_people(std::string) {}
   void search_elsewhere(std::string) {}
-  void open_packs() {}
   void toggle_threads() {}
   void set_bubbles(mux::choice_level_t, std::optional<mux::config::bubble_look>,
                    mux::config::look_part_t = mux::config::look_part::bubbles{}) {}
@@ -159,11 +158,6 @@ struct stub {
   void set_chat_strip_colour(mux::conversation_id, mux::account_id, mux::config::accent_t) {}
   void flip_home_hide(std::string) {}
   void menu_thread() {}
-  void open_room_packs() {}
-  void close_packs() {}
-  void save_pack(mux::emote_pack) {}
-  void delete_pack(mux::emote_pack) {}
-  void pick_pack_images() {}
   void open_new_room() {}
   void close_new_room() {}
   void copy_text(std::string) {}

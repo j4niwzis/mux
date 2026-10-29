@@ -47,7 +47,6 @@ import mux.app.notices;
 import mux.app.marks;
 import mux.app.history;
 import mux.app.verification;
-import mux.app.packs;
 import mux.app.rooms;
 import mux.app.room_card;
 import mux.app.preferences;
@@ -134,7 +133,6 @@ struct app : kept_settings {
   marks_part marks{shared};
   history_part paging{shared};
   verification_part verification{shared};
-  packs_part packs{&shared};
   rooms_part rooms{shared};
   room_card_part room_card{shared};
   preferences_part preferences{shared, *this};
@@ -180,12 +178,23 @@ struct app : kept_settings {
   void plugins_take(const mux::change_t& one) {
     spl::visit([&](const auto& each) { std::apply([&](auto&... part) { (take_change(part, each), ...); }, plugin_parts); }, one);
   }
+  // Files picked for a plugin (one asked for them), not the outbox.
+  template <class Part>
+  static bool part_took_files(Part& part, const std::vector<std::string>& paths, bool dropped) {
+    if constexpr (requires { { part.took_files(paths, dropped) } -> std::same_as<bool>; })
+      return part.took_files(paths, dropped);
+    else
+      return false;
+  }
+  bool plugins_took_files(const std::vector<std::string>& paths, bool dropped) {
+    return std::apply([&](auto&... part) { return (part_took_files(part, paths, dropped) || ...); }, plugin_parts);
+  }
   void plugins_tick() {
     std::apply([](auto&... part) { (tick_part(part), ...); }, plugin_parts);
   }
   // Files chosen in the dialog, or dropped on the window: to the outbox.
   void files_given(std::vector<std::string> paths, bool dropped) {
-    if (took_files(packs, paths, dropped))
+    if (plugins_took_files(paths, dropped))
       return;
     if (manage.took_files(paths, dropped)) return;
     if (looks.took_files(paths, dropped))
@@ -300,7 +309,7 @@ struct app : kept_settings {
   auto parts() {
     return std::tuple_cat(
         std::tie(search, pictures, reading, outbox, settings, menu, notices, marks, paging, verification,
-                 packs, rooms, room_card, preferences, manage, looks, threads, jumps, chat_view, chat_list, suggestions, emoji, accounts_screen, local_data),
+                 rooms, room_card, preferences, manage, looks, threads, jumps, chat_view, chat_list, suggestions, emoji, accounts_screen, local_data),
         std::apply([](auto&... theirs) { return std::tie(theirs...); }, plugin_parts));
   }
   template <class Request>

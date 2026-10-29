@@ -56,7 +56,6 @@ struct slash {
   slash_t what;
 };
 // A pack created or edited from the room's settings.
-struct save_room_pack { mux::emote_pack pack; };
 // A room changed, as Matrix changes one: the room being managed.
 struct change_room {
   room_change_t change;

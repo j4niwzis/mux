@@ -235,10 +235,9 @@ namespace manage {
 struct room {};
 struct members {};
 struct roles {};
-struct packs {};
 struct advanced {};
 }  // namespace manage
-constexpr manage_tab_list<manage::room, manage::members, manage::roles, manage::packs, manage::advanced> manage_tabs(const state&) { return {}; }
+constexpr manage_tab_list<manage::room, manage::members, manage::roles, manage::advanced> manage_tabs(const state&) { return {}; }
 constexpr manage::room manage_initial_tab(const state&) { return {}; }
 // The client's General shown under Matrix's own (the room's name, topic,
 // address): one General tab, not two.
@@ -274,8 +273,7 @@ struct manage_state {
   bool expanded_state = false, expanded_account_data = false, account_editor = false;
   // The account data chosen to edit, its draft made from it.
   std::string account_type, account_json;
-  std::vector<emote_pack> packs;
-  std::uint32_t profile_round = 0, address_round = 0, custom_round = 0, pack_round = 0, state_round = 0, account_round = 0;
+  std::uint32_t profile_round = 0, address_round = 0, custom_round = 0, state_round = 0, account_round = 0;
 };
 constexpr manage_part_list<manage_state> manage_parts(const state&) { return {}; }
 // A permission a page sets: a thing done (power_need), or an event's type --
@@ -318,7 +316,6 @@ struct delete_power { std::string power; };
 struct edit_power { std::int64_t power = 0; };
 struct delete_tag { std::int64_t power = 0; };
 struct apply_tags { bool reset = false; };
-struct create_pack { std::string name; };
 struct state_open { state_screen target = state_screen::overview; std::string type, key; };
 struct state_expand { std::string type; };
 struct save_state { std::string type, key, json; };
@@ -332,7 +329,7 @@ using manage_change_t = spl::variant<
     manage_change::upgrade, manage_change::cancel_upgrade, manage_change::member_power, manage_change::permission,
     manage_change::apply_permissions, manage_change::add_custom_permission, manage_change::remove_custom_permission,
     manage_change::save_power, manage_change::delete_power, manage_change::edit_power, manage_change::delete_tag,
-    manage_change::apply_tags, manage_change::create_pack, manage_change::state_open, manage_change::state_expand,
+    manage_change::apply_tags, manage_change::state_open, manage_change::state_expand,
     manage_change::save_state, manage_change::save_account_data, manage_change::choose_account_data>;
 namespace request {
 struct manage_room {
@@ -578,7 +575,7 @@ constexpr request_list<request::setup_cross_signing, request::restore_cross_sign
                        request::sign_out_unverified, request::reset_backup, request::delete_backup, request::export_room_keys,
                        request::import_room_keys, request::verify_session, request::change_account,
                        request::refresh_sessions, request::verify_them, request::explore_state,
-                       request::open_send_custom, request::send_custom, request::save_room_pack, request::change_room, request::manage_room,
+                       request::open_send_custom, request::send_custom, request::change_room, request::manage_room,
                        request::slash,
                        request::continue_uia,
                        request::cancel_uia, request::close_tool<tool::devtools_text>, request::close_tool<tool::devtools_state>,

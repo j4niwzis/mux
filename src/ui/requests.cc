@@ -746,7 +746,6 @@ using writing_t = spl::variant<writing::chat, writing::thread>;
 struct settings_scrolled {
   float at = 0.0f;
 };
-struct close_emoji {};
 struct insert_emoji {
   std::string text;
   std::string picture;  // a custom emoji's, where it is one

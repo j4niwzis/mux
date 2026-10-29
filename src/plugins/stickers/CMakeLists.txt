@@ -5,4 +5,5 @@
 mux_plugin(stickers ORDER 20
   TYPES types.cc
   UI    ui.cc
-  APP   app.cc)
+  APP   app.cc
+  REQUIRES emoji_picker)

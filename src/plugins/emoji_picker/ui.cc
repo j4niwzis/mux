@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:emoji_popup -- The emoji popup: its pages -- its emoji, and each a
-// plugin gives it (contract::media_pages) -- and what a pick does.
+// mux.plugin.emoji_picker.ui -- The emoji popup, the media panel: its pages
+// -- its emoji, and each a plugin gives it (contract::media_pages) -- and
+// what a pick does; a layer over the window (contract::window_layers).
 module;
 #include "skiff/named.h"
-export module mux.ui:emoji_popup;
+export module mux.plugin.emoji_picker.ui;
 
 import std;
 import splice;
@@ -22,12 +23,13 @@ import mux.config;
 import mux.logic.emoji;
 import mux.plugins.types;
 import mux.ui.base;
-import mux.plugins.ui.top;
-import mux.ui.proto;
-import mux.ui.messages;
-import :conversations;
+import mux.composition;
+import skiff.bind;
+import mux.plugin.emoji_picker.types;
 
-export namespace mux::ui {
+export namespace mux::plugins::emoji_picker {
+
+using namespace ::mux::ui;
 
 // The picker page is part of what is shown, so data refreshes retain it:
 // its emoji, and each page a plugin gives the media panel
@@ -49,9 +51,7 @@ consteval auto pages_shown_of(plugin_list<Features...>) {
 }
 using pages_shown_t = typename decltype(pages_shown_of(media_page_plugins{}))::type;
 // A page of the media panel chosen: by its type, one a plugin may give.
-namespace request {
 struct select_emoji_page { popup_page_t page; };
-}  // namespace request
 // What the input's emoji do: go into what is written.
 struct insert_emoji_into {
   using Answer = ::mux::ui::request::insert_emoji;
@@ -98,38 +98,12 @@ std::array<popup_page_t, 1 + sizeof...(Features)> all_pages(plugin_list<Features
 
 inline auto popup_tab(const palette& colours, popup_page_t page, std::string name, bool selected, bool available) {
   namespace c = skiff::compose;
-  return c::visible(available, c::onClick(request::select_emoji_page{std::move(page)},
+  return c::visible(available, c::onClick(select_emoji_page{std::move(page)},
       c::row(c::justified(c::hbox(0.0f, {.width = 80.0f, .height = 28.0f, .cornerRadius = 6.0f,
           .hoverBackground = colours.chosen, .selectedBackground = colours.tile, .selected = selected}), nodes::justify::middle{}),
           c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(name, 13.0f, colours.text, true))), name));
 }
 
-// The window's shape, as the program has it from its size: a phone's --
-// narrow and taller than it is wide -- shows one thing at a time and docks
-// its panels over the field, as Telegram's apps do.
-// The layout chosen in Settings holds it to one way whatever the size:
-// portrait is a phone's, landscape side by side. Every place that asks
-// whether the window shows one thing at a time asks this, not the size.
-struct window_shape {
-  float width = 0.0f, height = 0.0f;
-  config::layout_t layout = config::layout::automatic{};
-  // One thing at a time, the panels docked over the field.
-  [[nodiscard]] bool phone() const {
-    return spl::visit(spl::overloaded{[&](config::layout::automatic) { return width < 600.0f && height > width; },
-                                      [](config::layout::portrait) { return true; },
-                                      [](config::layout::landscape) { return false; }},
-                      layout);
-  }
-  // A page's list and what it opens one after the other (Manage, Accounts):
-  // a narrow window's, a portrait one's.
-  [[nodiscard]] bool narrow() const {
-    return spl::visit(spl::overloaded{[&](config::layout::automatic) { return width < 600.0f; },
-                                      [](config::layout::portrait) { return true; },
-                                      [](config::layout::landscape) { return false; }},
-                      layout);
-  }
-  friend bool operator==(const window_shape&, const window_shape&) = default;
-};
 // Where the popup's card goes: as tdesktop's panel, 345 wide or what the
 // window leaves, 278 to 640 high, its bottom right at the top right of the
 // button that opened it, kept inside; on a phone, docked along the window's
@@ -147,9 +121,6 @@ inline constexpr float kPopupTabsHigh = 40.0f;
   const float x = std::clamp(right - wide, kEdge, std::max(kEdge, window.width - wide - kEdge));
   return skia::SkRect::MakeXYWH(x, std::max(kEdge, bottom - high), wide, high);
 }
-// The height a docked panel takes from under the field: none where it is
-// a card.
-[[nodiscard]] inline float docked_height(const window_shape& window) { return window.phone() ? std::round(window.height * 0.4f) : 0.0f; }
 // A plugin's page in its slot: a node as it is; one that may not move (it
 // points at its own parts) built in place from its arguments.
 template <class Made> auto page_arguments(Made made) { return std::tuple{std::move(made)}; }
@@ -162,20 +133,20 @@ struct popup_pages<plugin_list<Features...>> {
   using page_t = typename decltype(page_type(contract::media_pages{}, type_tag<Feature>{}))::type;
   template <class Feature>
   using shown_t = typename decltype(shown_type(contract::media_pages{}, type_tag<Feature>{}))::type;
-  template <class Feature>
-  static auto made(const ui_needs& needs, const emoji_facts& facts) {
+  template <class Feature, class Needs>
+  static auto made(const Needs& needs, const emoji_facts& facts) {
     static_assert(requires { extend(contract::media_pages{}, type_tag<Feature>{}, needs, std::get<shown_t<Feature>>(facts.pages)); },
                   composition::broken<contract::media_pages, Feature>());
     return extend(contract::media_pages{}, type_tag<Feature>{}, needs, std::get<shown_t<Feature>>(facts.pages));
   }
   // Each in its slot, made as the popup is: shown where it is the page
   // chosen and offered.
-  template <class Feature>
-  static auto page_of(const ui_needs& needs, const emoji_facts& facts) {
+  template <class Feature, class Needs>
+  static auto page_of(const Needs& needs, const emoji_facts& facts) {
     namespace c = skiff::compose;
-    using node_t = composition::node_t<decltype(made<Feature>(needs, facts))>;
+    using node_t = composition::node_t<decltype(made<Feature, Needs>(needs, facts))>;
     const bool shown = facts.page == popup_page_t(page_t<Feature>{}) && page_available(facts, page_t<Feature>{});
-    auto slot = c::mount<node_t, bool>([&needs, &facts](bool) { return page_arguments(made<Feature>(needs, facts)); },
+    auto slot = c::mount<node_t, bool>([&needs, &facts](bool) { return page_arguments(made<Feature, Needs>(needs, facts)); },
                                        {.fillX = true, .grow = scene::axes::kY, .masking = true});
     slot.read(shown ? std::optional(true) : std::nullopt);
     return slot;
@@ -183,10 +154,11 @@ struct popup_pages<plugin_list<Features...>> {
   // Their column, there only while one of them is the page: shown with the
   // emoji's, it grew beside them, and took half the card -- the emoji in the
   // top half of it, their groups' bar over the field under it.
-  static auto pages(const ui_needs& needs, const emoji_facts& facts) {
+  template <class Needs>
+  static auto pages(const Needs& needs, const emoji_facts& facts) {
     return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY,
                                                               .visible = facts.page != popup_page_t(popup_page::emoji{})}),
-                                  page_of<Features>(needs, facts)...);
+                                  page_of<Features, Needs>(needs, facts)...);
   }
   static auto tabs(const palette& colours, const emoji_facts& facts, skiff::compose::Look look) {
     return skiff::compose::row(std::move(look),
@@ -200,12 +172,12 @@ using popup_pages_t = popup_pages<media_page_plugins>;
 // before.
 struct flick_pages {
   emoji_facts facts;
-  std::optional<request::select_emoji_page> operator()(bool on) const {
+  std::optional<select_emoji_page> operator()(bool on) const {
     static const auto kPages = all_pages(media_page_plugins{});
     const auto offered = kPages | std::views::filter([&](const popup_page_t& page) { return page_available(facts, page); }) | std::ranges::to<std::vector>();
     const auto at = static_cast<int>(std::ranges::find(offered, facts.page) - offered.begin());
     const int to = std::clamp(at + (on ? 1 : -1), 0, static_cast<int>(offered.size()) - 1);
-    return to == at ? std::nullopt : std::optional(request::select_emoji_page{offered[static_cast<std::size_t>(to)]});
+    return to == at ? std::nullopt : std::optional(select_emoji_page{offered[static_cast<std::size_t>(to)]});
   }
 };
 // The input's emoji, and each page a plugin gives the panel, as tdesktop's:
@@ -214,7 +186,8 @@ struct flick_pages {
 // it closing it (the window's). It stays open while emoji are picked, and
 // the input keeps the keys. On a phone, docked, its tabs under it and a
 // flick across it going through them.
-inline auto emoji_popup(const ui_needs& n, const emoji_facts& facts) {
+template <class Needs>
+auto emoji_popup(const Needs& n, const emoji_facts& facts) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const scene::Spec tabs_look{.fillX = true, .height = 36.0f, .depth = 1.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f}};
@@ -246,7 +219,18 @@ inline auto emoji_popup(const ui_needs& n, const emoji_facts& facts) {
   skiff::compose::state_of(card).setFloats(true);
   return SKIFF_NAMED(emoji_popup, c::column(c::vbox(0.0f, {.fill = true}), std::move(card)));
 }
-using emoji_popup_t = decltype(emoji_popup(std::declval<const ui_needs&>(), std::declval<const emoji_facts&>()));
 
-}  // namespace mux::ui
+// Its layer over the window: there while the panel is open, a tap off it
+// closing it. Made where the window is (a template on its needs): the
+// pages the plugins give it are found there.
+struct make_emoji_popup {
+  template <class Needs>
+  auto operator()(const Needs& n, const emoji_facts& facts) const { return emoji_popup(n, facts); }
+};
+constexpr type_tag<std::optional<emoji_facts>> facts_type(contract::window_layers, type_tag<feature>) { return {}; }
+template <class Needs>
+auto extend(contract::window_layers, type_tag<feature>, const Needs& needs) {
+  return skiff::compose::tapped_off(sends<::mux::ui::request::close_shown<emoji_facts>>{}, layer_made_by<emoji_facts, make_emoji_popup>(needs));
+}
 
+}  // namespace mux::plugins::emoji_picker

@@ -94,6 +94,9 @@ struct services {
   // Whole pictures a part wants fetched -- a plugin's (the viewer's) -- as
   // the pictures part fetches a message's: taken by it at the next frame.
   std::vector<std::pair<mux::account_id, std::string>> whole_wanted;
+  // The emoji panel to be put away -- a message sent from under it: by its
+  // part (a plugin's), at the next frame.
+  bool emoji_close_due = false;
   // The chat's list as the jumps part has it -- where a jump goes, and the
   // messages the reader sees, by the rows at the view's top and bottom --
   // read by the other parts; and what they ask of it: a message brought
@@ -262,16 +265,6 @@ struct services {
   }
   // The emoji panel open where it is put, or closed -- the field back where
   // it was; and whether it is open, as what is shown says.
-  void open_emoji(float right, float bottom) const {
-    const auto chosen = this->chosen();
-    const auto ops = chosen ? mux::ui::ops_of(ui, chosen->account) : mux::proto::account_ops{};
-    mux::ui::show(*showing, std::optional(mux::ui::emoji_facts{right, bottom, mux::ui::popup_page::emoji{},
-        ops.send_sticker, chosen && mux::ui::may_send_files(ui, chosen->account)}));
-  }
-  void close_emoji() const {
-    mux::ui::show<mux::ui::emoji_facts>(*showing, std::nullopt);
-  }
-  [[nodiscard]] bool emoji_open() const { return showing->root().emoji.fValue.has_value(); }
   // The keys given to a field: what is shown says which, and asks again with
   // a count raised -- the field takes them as it reads that.
   void ask_keys(mux::ui::keys_target which) const {

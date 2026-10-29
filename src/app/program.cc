@@ -51,7 +51,6 @@ import mux.app.looks;
 import mux.app.jumps;
 import mux.app.chat_view;
 import mux.app.chat_list;
-import mux.app.emoji;
 import mux.app.accounts;
 import mux.app.local_data;
 import mux.logic.links;
@@ -131,7 +130,6 @@ struct app : kept_settings {
   jumps_part jumps{shared};
   chat_view_part chat_view{shared};
   chat_list_part chat_list{shared, *this, colours};
-  emoji_part emoji{&shared};
   accounts_part accounts_screen{shared, *this};
   local_data_part local_data{shared, *this};
   // Each plugin's part that says it has one (contract::program_parts), after
@@ -322,7 +320,7 @@ struct app : kept_settings {
   auto parts() {
     return std::tuple_cat(
         std::tie(pictures, reading, outbox, settings, menu, notices, paging,
-                 rooms, preferences, manage, looks, jumps, chat_view, chat_list, emoji, accounts_screen, local_data),
+                 rooms, preferences, manage, looks, jumps, chat_view, chat_list, accounts_screen, local_data),
         std::apply([](auto&... theirs) { return std::tie(theirs...); }, plugin_parts));
   }
   template <class Request>
@@ -539,6 +537,15 @@ struct app : kept_settings {
   // nothing, where that plugin is not built. Where it is, its part is
   // offered the request first (route), and takes it.
   void apply(const request::typing&) {}
+  void apply(const request::toggle_emoji&) {}
+  void apply(const request::toggle_thread_emoji&) {}
+  void apply(const request::insert_emoji&) {}
+  // An emoji made a favourite from its menu: the client's, picker or not.
+  void apply(const request::favourite_emoji& one) {
+    shared.emoji.flip_emoji_favourite(one.emoji);
+    shared.close_text_menu();
+    mux::ui::show<mux::ui::menu_facts>(showing, std::nullopt);
+  }
   void apply(const request::open_picture&) {}
   void apply(const request::open_video&) {}
   void apply(const request::open_avatar&) {}

@@ -300,7 +300,6 @@ struct shown_root {
   skiff::model::Tracked<std::optional<passphrase_facts>> passphrase;
   skiff::model::Tracked<std::optional<menu_facts>> menu;
   skiff::model::Tracked<std::optional<text_menu_facts>> text_menu;
-  skiff::model::Tracked<std::optional<emoji_facts>> emoji;
   skiff::model::Tracked<std::optional<panel_facts>> panel;
   // What the speaker plays: the voice messages' buttons and times read it.
   skiff::model::Tracked<audio_shown> listening;
@@ -508,9 +507,6 @@ struct panel_made {
 struct make_menu {
   auto operator()(const ui_needs& n, const menu_facts& facts) const { return context_menu(n, facts); }
 };
-struct make_emoji_popup {
-  auto operator()(const ui_needs& n, const emoji_facts& facts) const { return emoji_popup(n, facts); }
-};
 struct make_text_menu_layer {
   auto operator()(const ui_needs& n, const text_menu_facts& facts) const { return text_menu_layer(n, facts); }
 };
@@ -553,7 +549,7 @@ struct plugin_layer_escapes<plugin_list<Features...>> {
 };
 template <class... Features, class... Tools, class... Layers>
 consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>, type_list<Layers...>) {
-  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_send_box, ::mux::ui::request::close_manage, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
+  return type_tag<std::variant<::mux::ui::request::close_menu, ::mux::ui::request::close_send_box, ::mux::ui::request::close_manage, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
                                decltype(closing_of(std::type_identity<Tools>{}))...,
                                ::mux::ui::request::close_shown<Layers>...>>{};
@@ -569,7 +565,6 @@ inline ::mux::ui::request::close_link closing_of(std::type_identity<link_facts>)
 inline ::mux::ui::request::close_person_info closing_of(std::type_identity<person_shown>) { return {}; }
 inline ::mux::ui::request::close_notice closing_of(std::type_identity<notice_facts>) { return {}; }
 inline ::mux::ui::request::close_settings closing_of(std::type_identity<settings_facts>) { return {}; }
-inline ::mux::ui::request::close_emoji closing_of(std::type_identity<emoji_facts>) { return {}; }
 inline ::mux::ui::request::close_menu closing_of(std::type_identity<menu_facts>) { return {}; }
 inline ::mux::ui::request::close_text_menu closing_of(std::type_identity<text_menu_facts>) { return {}; }
 
@@ -602,7 +597,7 @@ struct plugin_dialog_facts<plugin_list<Features...>> {
 using escape_order = typename joined<
     type_list<settings_facts, notice_facts, person_shown>, typename plugin_dialog_facts<dialog_plugins>::type,
     type_list<link_facts, leave_space_facts, room_settings_facts>,
-    tool_facts_list, type_list<send_facts, passphrase_facts, emoji_facts, menu_facts, text_menu_facts>,
+    tool_facts_list, type_list<send_facts, passphrase_facts, menu_facts, text_menu_facts>,
     typename plugin_layer_escapes<layer_plugins>::type>::type;
 template <class Model, class... Facts>
 [[nodiscard]] std::optional<escape_answer> escape_in(const Model& showing, type_list<Facts...>) {
@@ -722,7 +717,6 @@ inline auto window_body(const ui_needs& n) {
       // The layers over the dialogs: what moves in them (a panel scrolled)
       // does not hold what is under the dialogs frozen.
       c::column(c::vbox(0.0f, everywhere),
-          c::tapped_off(sends<request::close_emoji>{}, layer_made_by<emoji_facts, make_emoji_popup>(n)),
           layer_made_by<menu_facts, make_menu>(n),
           c::tapped_off(sends<request::close_text_menu>{}, layer_made_by<text_menu_facts, make_text_menu_layer>(n)),
           plugin_layers<layer_plugins>::made(n))));

@@ -13,6 +13,7 @@ import mux.ui;
 import mux.app.services;
 import mux.app.workers;
 import mux.plugin.gifs.types;
+import mux.plugin.emoji_picker.ui;
 
 export namespace mux::plugins::gifs {
 
@@ -61,7 +62,7 @@ struct part {
         };
       });
     }
-    ui::change_shown<std::optional<ui::emoji_facts>>(*s_->showing, [&](auto& now) {
+    ui::change_shown<std::optional<emoji_picker::emoji_facts>>(*s_->showing, [&](auto& now) {
       if (now)
         std::get<shown>(now->pages).paths = std::move(paths);
     });

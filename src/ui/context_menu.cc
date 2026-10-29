@@ -27,7 +27,6 @@ import mux.ui.messages;
 import :conversations;
 
 export import mux.ui.base;
-export import :emoji_popup;
 
 export namespace mux::ui {
 

@@ -50,7 +50,7 @@ inline auto grid(const ui::palette& colours, const std::vector<std::string>& pat
                   {.direction = nodes::direction::horizontal{}, .wrap = true}, std::move(cells)))))));
 }
 
-// Its page, in the media panel (mux.ui:emoji_popup).
+// Its page, in the media panel (the emoji picker's: mux.plugin.emoji_picker.ui).
 inline auto extend(contract::media_pages, type_tag<feature>, const ui::ui_needs& needs, const shown& now) {
   return grid(*needs.colours, now.paths);
 }

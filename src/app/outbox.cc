@@ -333,7 +333,7 @@ class outbox_part {
       sent.height = image->height();
       mux::ui::thumbnails().put("local:" + sent.local, std::move(image));
     }
-    s_->close_emoji();
+    s_->emoji_close_due = true;
     s_->go_live(*chosen);
     s_->newest_due = true;
     // Sent while answering: the answer, as a sticker or a text would be.
@@ -361,7 +361,7 @@ class outbox_part {
       return;
     s_->emoji.remember_sticker(one.sticker);
     if (!s_->single())
-      s_->close_emoji();
+      s_->emoji_close_due = true;
     s_->go_live(*chosen);
     s_->newest_due = true;
     // Sent while answering: the answer, as a text would be.

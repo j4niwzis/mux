@@ -145,7 +145,7 @@ inline auto page(const palette& colours, emoji_kept& kept) {
 }
 using page_t = decltype(page(std::declval<const palette&>(), std::declval<emoji_kept&>()));
 
-// Its page, in the media panel (mux.ui:emoji_popup).
+// Its page, in the media panel (the emoji picker's: mux.plugin.emoji_picker.ui).
 inline auto extend(contract::media_pages, type_tag<feature>, const ui_needs& needs, const shown&) {
   return page(*needs.colours, *needs.emoji);
 }

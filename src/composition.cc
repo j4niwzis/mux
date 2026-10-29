@@ -43,7 +43,8 @@ struct passphrases {
 struct matrix_account {
   static constexpr std::string_view name = "the Matrix account";
 };
-// The media panel's pages beside its emoji and stickers (mux.ui:emoji_popup):
+// The media panel's pages beside its emoji (the emoji picker's:
+// mux.plugin.emoji_picker.ui):
 //   page_type(c, f)  -> type_tag<its page>: in popup_page_t, what is shown
 //   shown_type(c, f) -> type_tag<what is shown on it>: in emoji_facts
 //   tab_name(page), shown_where(page, facts): of its page; opened(page),

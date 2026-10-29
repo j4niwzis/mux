@@ -3,4 +3,5 @@
 mux_plugin(gifs ORDER 30
   TYPES types.cc
   UI    ui.cc
-  APP   app.cc)
+  APP   app.cc
+  REQUIRES emoji_picker)

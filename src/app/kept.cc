@@ -82,7 +82,6 @@ struct kept_reactions {
     return {};
   }
   [[nodiscard]] write_kept on(skiff::model::Changed<chat_choices>, const chat_choices&) const { return {}; }
-  [[nodiscard]] write_kept on(skiff::model::Changed<std::vector<mux::config::proxy_settings>>, const auto&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<std::vector<mux::config::chat_placement>>, const auto&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<recently_used>, const recently_used&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::notification_settings>,
@@ -134,7 +133,41 @@ struct kept_settings {
   // What was used lately, the proxy profiles and the chats placed in other
   // lists, as the model holds them.
   [[nodiscard]] const recently_used& recent() const { return state.root().recent.fValue; }
-  [[nodiscard]] const std::vector<mux::config::proxy_settings>& proxies() const { return state.root().proxies.fValue; }
+  // The proxy profiles: the plugins' say (contract::proxy_profiles), none
+  // where none says.
+  [[nodiscard]] std::vector<mux::config::proxy_settings> proxies() const {
+    return this->proxies_said_by(composition::providers<contract::proxy_profiles, enabled_plugins>{});
+  }
+  template <class... Features>
+  [[nodiscard]] std::vector<mux::config::proxy_settings> proxies_said_by(plugin_list<Features...>) const {
+    std::vector<mux::config::proxy_settings> out;
+    ((out = proxy_profiles(contract::proxy_profiles{}, type_tag<Features>{}, this->plugin_settings<plugin_settings_t<Features>>())), ...);
+    return out;
+  }
+  // The same, of a settings file not yet taken (the accounts started before
+  // what is kept is: mux.app.program's begin).
+  [[nodiscard]] static std::vector<mux::config::proxy_settings> proxies_in(const mux::config::file& saved) {
+    return proxies_in_by(saved, composition::providers<contract::proxy_profiles, enabled_plugins>{});
+  }
+  template <class... Features>
+  [[nodiscard]] static std::vector<mux::config::proxy_settings> proxies_in_by(const mux::config::file& saved, plugin_list<Features...>) {
+    std::vector<mux::config::proxy_settings> out;
+    ((out = proxies_in_of<Features>(saved)), ...);
+    return out;
+  }
+  template <class Feature>
+  [[nodiscard]] static std::vector<mux::config::proxy_settings> proxies_in_of(const mux::config::file& saved) {
+    if (!saved.plugins)
+      return {};
+    const auto found = saved.plugins->find(std::string(Feature::name));
+    if (found == saved.plugins->end())
+      return {};
+    // The file's text kept for it, as read_plugin reads it.
+    const auto read = knot::try_read<plugin_settings_t<Feature>>(found->second.text);
+    if (!read)
+      return {};
+    return proxy_profiles(contract::proxy_profiles{}, type_tag<Feature>{}, *read);
+  }
   [[nodiscard]] const std::vector<mux::config::chat_placement>& placements() const { return state.root().placements.fValue; }
   // A part the model's root holds one of, changed: a copy changed, set
   // again where it changed.
@@ -464,7 +497,6 @@ struct kept_settings {
     looks_read.interface_scale = saved.interface_scale.value_or(100);
     const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
     const auto history_read = saved.history.value_or(mux::config::history_settings{});
-    const auto proxies_read = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
     looks_read.style = saved.style.value_or(mux::config::style_settings{});
     const auto notifications_read = saved.notifications.value_or(mux::config::notification_settings{});
     for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
@@ -505,7 +537,6 @@ struct kept_settings {
     root.sending.fValue = sending_read;
     root.history.fValue = history_read;
     root.looks.fValue = looks_read;
-    root.proxies.fValue = proxies_read;
     root.placements.fValue = placements_read;
     root.recent.fValue = recent_read;
     this->state = kept_model(std::move(root), kept_reactions{&due});
@@ -557,8 +588,6 @@ struct kept_settings {
       out.favourite_stickers = kept_of(this->recent().favourite_stickers);
     if (!this->recent().favourite_emoji.empty())
       out.favourite_emoji = kept_of(this->recent().favourite_emoji);
-    if (!this->proxies().empty())
-      out.proxies = this->proxies();
     if (auto said = this->plugins_said(mux::settings_plugins{}); !said.empty())
       out.plugins = std::move(said);
     out.theme = mux::config::said_of<mux::config::theme_said_t>(this->appearance().theme);

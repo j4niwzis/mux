@@ -196,7 +196,7 @@ TEST(Config, WhatIsWrongWithAMatrixAccount) {
 }
 
 // What an account keeps of itself -- its proxy's name, its receipts -- and
-// the program's proxy profiles, saved and read back as they were.
+// the proxies plugin's profiles, saved and read back as they were.
 TEST(Config, ProxiesAndTheirAccountsAreKept) {
   mux::vault::vault vault;
   scratch here;
@@ -205,8 +205,9 @@ TEST(Config, ProxiesAndTheirAccountsAreKept) {
   account.shared.read_receipts = false;
   account.shared.proxy = "tor";
   mux::config::file kept = mux::config::file_of(std::vector{account});
-  kept.proxies = std::vector<mux::config::proxy_settings>{
-      {.name = "tor", .kind = mux::config::proxy_kind::socks5{}, .host = "127.0.0.1", .port = 9050}};
+  // The profiles are the proxies plugin's own settings, kept under its name.
+  kept.plugins = std::map<std::string, knot::raw>{
+      {"proxies", knot::raw{R"([{"name":"tor","kind":"socks5","host":"127.0.0.1","port":9050}])"}}};
   ASSERT_TRUE(mux::config::save(where, kept, vault).has_value());
   const auto got = mux::config::load(where, vault);
   ASSERT_TRUE(got.has_value()) << got.error();

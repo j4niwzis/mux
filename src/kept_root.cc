@@ -54,8 +54,6 @@ struct kept_root {
   skiff::model::Tracked<mux::config::history_settings> history;
   // How the window looks.
   skiff::model::Tracked<mux::config::look_settings> looks;
-  // The proxy profiles, in their order.
-  skiff::model::Tracked<std::vector<mux::config::proxy_settings>> proxies;
   // The chats listed in other accounts' lists than their own.
   skiff::model::Tracked<std::vector<mux::config::chat_placement>> placements;
   skiff::model::Tracked<recently_used> recent;

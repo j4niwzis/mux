@@ -14,6 +14,13 @@ export namespace mux::plugins::proxies {
 struct feature {
   static constexpr std::string_view name = "proxies";
 };
+// Its own settings (contract::settings_kept), kept in the settings file
+// under its name: the profiles, in their order -- the ones accounts go
+// through (contract::proxy_profiles).
+consteval bool provides(contract::settings_kept, type_tag<feature>) { return true; }
+constexpr type_tag<std::vector<config::proxy_settings>> settings_type(contract::settings_kept, type_tag<feature>) { return {}; }
+consteval bool provides(contract::proxy_profiles, type_tag<feature>) { return true; }
+inline std::vector<config::proxy_settings> proxy_profiles(contract::proxy_profiles, type_tag<feature>, const std::vector<config::proxy_settings>& mine) { return mine; }
 
 // Its pages in Settings: the profiles, with or without the arrow back to
 // Settings' home (opened from an account: without); and one profile edited,

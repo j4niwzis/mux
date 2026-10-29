@@ -681,7 +681,7 @@ void app::refresh(std::source_location from) {
 // What is kept, applied: once at the start, or once the vault is opened.
 void app::begin(const mux::config::file& saved, std::vector<mux::config::account_t> extra, bool demo,
                 std::optional<std::string> error) {
-  const auto proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
+  const auto proxies = kept_settings::proxies_in(saved);
   for (const auto& one : mux::config::accounts_of(saved))
     if (mux::config::enabled_of(one) && !demo)
       net->start(one, proxies);

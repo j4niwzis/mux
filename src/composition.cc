@@ -59,6 +59,13 @@ struct settings_kept {
 struct start_renderer {
   static constexpr std::string_view name = "the renderer at the start";
 };
+// The proxy profiles accounts go through, by their names (mux.app.kept,
+// mux.app.network): proxy_profiles(c, f, its own settings) ->
+// std::vector<config::proxy_settings>; where none says, none -- and an
+// account naming one is not connected at all.
+struct proxy_profiles {
+  static constexpr std::string_view name = "the proxy profiles";
+};
 // Chats the chat list opens as a list of chats -- a forum's topics -- in
 // place of the chat, their rooms listed in them, not beside them
 // (mux.app.chat_list): opens_as_scope(c, f, services, conversation) ->

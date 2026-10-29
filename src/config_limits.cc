@@ -248,8 +248,6 @@ struct file {
   std::optional<std::vector<chat_placement>> placements;
   // The chats that chose for themselves whether their room events show.
   std::optional<std::vector<room_events_choice>> room_events;
-  // The proxy profiles accounts choose from.
-  std::optional<std::vector<proxy_settings>> proxies;
   // The theme, "dark" or "light", and what draws the window, "opengl" or
   // "software". Nothing said is dark and OpenGL.
   std::optional<style_settings> style;

@@ -928,4 +928,19 @@ auto accent_circles_for(Choose choose, const config::theme_t& in, bool with_them
 }
 
 
+// Someone found: their picture, name and ID; pressed, the chat with them --
+// in Start chat, and in the chat list where nothing joined matches.
+template <class Event>
+inline auto person_pick_row(const palette& colours, const found_person& one, Event event) {
+  const std::string name = one.name.empty() ? one.id : one.name;
+  return SKIFF_NAMED(person_pick_row, skiff::compose::onClick(std::move(event), skiff::compose::row(
+      skiff::compose::hbox(12.0f, {.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
+          .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
+      avatar_mark(avatar_of::person{}, one.id, name, 36.0f),
+      two_lines(colours, name, one.id, 14.0f, 2.0f)), name));
+}
+inline auto found_person_row(const palette& colours, const found_person& one) {
+  return person_pick_row(colours, one, request::start_direct{one.id});
+}
+using found_person_row_t = decltype(found_person_row(std::declval<const palette&>(), std::declval<const found_person&>()));
 }  // namespace mux::ui

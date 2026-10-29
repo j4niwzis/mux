@@ -61,7 +61,7 @@ struct drawer_account_row_of {
 // accounts under them, then a new chat, a new room, Settings and Quit, each
 // a full-width line with its icon.
 // The plugins' rows in the drawer (contract::drawer_rows), in their order --
-// New room, for one.
+// Start chat and New room, for two.
 template <class List>
 struct drawer_row_list;
 template <class... Features>
@@ -91,7 +91,6 @@ inline auto drawer_view(const ui_needs& n) {
                   c::listed<drawer_account>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), drawer_account_row_of{&colours})),
               c::styled({.margin = {0.0f, 0.0f, 6.0f, 0.0f}}, row_item(colours, "Manage accounts", sends<request::open_accounts>{}, icon::person{})),
               c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 6.0f, 0.0f}}, nodes::Box<>(colours.chosen)),
-              row_item(colours, "Start new chat", sends<request::open_new_chat>{}, icon::person{}),
               drawer_plugins::rows(colours),
               row_item(colours, "Settings", sends<request::open_settings>{}, icon::gear{}),
               row_item(colours, "Quit", sends<request::quit>{}, icon::power{}))))));

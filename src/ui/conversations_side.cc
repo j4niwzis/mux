@@ -27,7 +27,6 @@ import mux.plugins.ui;
 import :chat_list;
 import mux.ui.messages;
 import :header;
-import :info_new_chats;
 import :info_explore;
 import :list_shown;
 

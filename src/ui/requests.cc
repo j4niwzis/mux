@@ -761,9 +761,10 @@ struct flip_chat_room_events {};
 // A new chat: its box opened and closed; a direct chat with someone, or a
 // group, asked for.
 struct open_new_chat {};
-struct close_new_chat {};
 struct start_direct {
   std::string user;
+  // By which account: the one listed where none is said.
+  std::optional<mux::account_id> by{};
 };
 struct start_group {
   std::string name;

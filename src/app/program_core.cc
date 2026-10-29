@@ -145,16 +145,6 @@ void app::take_arriving(std::chrono::milliseconds most) {
                                  }
                                },
                                [&](const mux::change::people_found& found) {
-                                 mux::ui::change_shown<std::optional<mux::ui::new_chat_facts>>(showing, [&](auto& now) {
-                                   if (now && now->by == std::optional(found.by) && now->query == found.query) {
-                                     now->found = found.people;
-                                     now->rows = mux::ui::people_rows(*now);
-                                     for (const auto& person : found.people) {
-                                       if (person.avatar && !person.avatar->empty())
-                                         mux::ui::listed_avatars().emplace_back(person.id, *person.avatar);
-                                     }
-                                   }
-                                 });
                                  chat_list.found_people(found.query, found.people);
                                },
                                // A room looked up: its card filled, while it

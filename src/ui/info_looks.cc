@@ -29,7 +29,6 @@ import mux.ui.base;
 import mux.ui.messages;
 import :info_common;
 import :info_cards;
-import :info_new_chats;
 
 export namespace mux::ui {
 // What a chat looks like, chosen at a level -- every chat's, an account's,

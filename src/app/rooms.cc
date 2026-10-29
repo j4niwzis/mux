@@ -26,74 +26,6 @@ class rooms_part {
   rooms_part(const rooms_part&) = delete;
   rooms_part& operator=(const rooms_part&) = delete;
 
-  void apply(const request::open_room_invite& one) {
-    const auto* chat = s_->model->find(one.room);
-    if (!chat || !mux::ui::is_group(*chat) || chat->invite ||
-        !mux::proto::chat_rights(mux::ui::protocol_state_of(s_->ui, one.room.account), *chat).invite)
-      return;
-    mux::ui::new_chat_facts facts{.by = one.room.account, .inviting = one.room, .room_name = mux::ui::display_name(*chat)};
-    if (const auto* own = s_->model->accounts().find(one.room.account))
-      facts.people = own->conversations.values() | std::views::filter([](const auto& in) { return !mux::ui::is_group(in); }) | std::views::transform([&](const auto& in) { return mux::found_person{.id = mux::ui::contact_of(s_->ui, in), .name = mux::ui::display_name(in), .avatar = in.avatar}; }) | std::ranges::to<std::vector>();
-    std::ranges::sort(facts.people, {}, &mux::found_person::name);
-    facts.rows = mux::ui::people_rows(facts);
-    mux::ui::show(*s_->showing, std::optional(std::move(facts)));
-  }
-  void apply(const request::invite_to_room& one) {
-    const auto* chat = s_->model->find(one.room);
-    const mux::ui::new_chat_facts facts{.by = one.room.account};
-    if (!chat || !mux::ui::is_group(*chat) || chat->invite || !mux::ui::direct_address(facts, one.user) ||
-        !mux::proto::chat_rights(mux::ui::protocol_state_of(s_->ui, one.room.account), *chat).invite || s_->demo())
-      return;
-    s_->net->manage(one.room, mux::room_action::invite{one.user});
-    mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
-  }
-
-  // A new chat: its box; a direct chat or a group asked of the account whose
-  // chats are listed -- or, for a direct chat with someone it already has
-  // one with, that chat shown.
-  // Element's Start chat: those one has direct chats with to begin with, and
-  // one's own link to send.
-  // With no account to ask, said so: left silent, a press on the drawer's
-  // row did nothing at all -- a tester signed in to none pressed it again
-  // and again.
-  void apply(const request::open_new_chat&) {
-    const auto& current = s_->listed();
-    if (!current) {
-      mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
-      s_->notice("Start new chat", "No account is signed in: sign in to one in Manage accounts first.");
-      return;
-    }
-    std::vector<mux::found_person> known;
-    std::string link;
-    if (current) {
-      if (const mux::account* found = s_->model->accounts().find(*current))
-        for (const auto& [key, chat] : found->conversations)
-          if (!mux::ui::is_group(chat))
-            known.push_back({.id = mux::ui::contact_of(s_->ui, chat), .name = mux::ui::display_name(chat), .avatar = chat.avatar});
-      link = mux::proto::share_link(mux::ui::protocol_state_of(s_->ui, *current), current->address).value_or(std::string());
-    }
-    std::ranges::sort(known, {}, &mux::found_person::name);
-    mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
-    mux::ui::new_chat_facts facts{std::move(known), std::move(link), {}, {}, current};
-    facts.rows = mux::ui::people_rows(facts);
-    mux::ui::show(*s_->showing, std::optional(std::move(facts)));
-  }
-  void apply(const request::find_people& one) {
-    // Query changes belong to the shown dialog. Update suggestions even
-    // when this protocol has no server-side people directory.
-    mux::ui::change_shown<std::optional<mux::ui::new_chat_facts>>(*s_->showing, [&](auto& now) {
-      if (!now) return;
-      now->query = one.query;
-      now->found.clear();
-      now->rows = mux::ui::people_rows(*now);
-    });
-    s_->refresh_due = true;
-    const auto& facts = s_->showing->root().new_chat.fValue;
-    const auto by = facts ? facts->by : std::nullopt;
-    if (!by || s_->demo() || !mux::proto::offers(mux::ui::protocol_state_of(s_->ui, *by), mux::proto::feature::people_directory{}))
-      return;
-    s_->net->search_people(*by, one.query);
-  }
   void apply(const request::search_elsewhere& one) {
     const auto by = one.by ? one.by : s_->listed();
     if (!by || by != s_->listed() || s_->demo())
@@ -104,13 +36,10 @@ class rooms_part {
     if (mux::proto::offers(state, mux::proto::feature::people_directory{}))
       s_->net->search_people(*by, one.query);
   }
-  void apply(const request::close_new_chat&) { mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt); }
   void apply(const request::start_direct& one) {
-    const auto& facts = s_->showing->root().new_chat.fValue;
-    const auto current = facts ? facts->by : s_->listed();
+    const auto current = one.by ? one.by : s_->listed();
     if (!current || s_->demo())
       return;
-    mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
     for (const auto& [key, chat] : s_->model->accounts().at(*current).conversations)
       if (!mux::ui::is_group(chat) && mux::ui::contact_of(s_->ui, chat) == one.user) {
         s_->chat_due = chat.id;
@@ -146,7 +75,6 @@ class rooms_part {
     const auto& current = s_->listed();
     if (!current || s_->demo())
       return;
-    mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
     s_->net->create_group(*current, one.name);
     s_->notice("New group", "Making " + one.name + "…");
   }

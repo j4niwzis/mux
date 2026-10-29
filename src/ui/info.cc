@@ -31,7 +31,6 @@ import mux.ui.messages;
 
 export import :info_common;
 export import :info_cards;
-export import :info_new_chats;
 export import :info_looks;
 export import :info_explore;
 

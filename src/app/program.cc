@@ -534,6 +534,10 @@ struct app : kept_settings {
   void apply(const request::adopt_pack&) {}
   void apply(const request::explore_space&) {}
   void apply(const request::search_rooms&) {}
+  void apply(const request::open_new_chat&) {}
+  void apply(const request::open_room_invite&) {}
+  void apply(const request::invite_to_room&) {}
+  void apply(const request::find_people&) {}
   void apply(const request::open_new_room&) {}
   void apply(const request::open_new_room_in&) {}
   void apply(const request::create_room&) {}

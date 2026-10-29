@@ -34,7 +34,6 @@ struct part {
       return;
     const std::string own = proto::directory_server_of(ui::protocol_state_of(s_->ui, *by), by->address);
     ui::show(*s_->showing, ui::drawer_shown{false});
-    ui::show<ui::new_chat_facts>(*s_->showing, std::nullopt);
     const bool asking = !s_->demo();
     ui::show(*s_->showing, std::optional(shown{own, std::nullopt, asking, std::nullopt, by, own, {}}));
     if (asking)
@@ -49,7 +48,6 @@ struct part {
     if (!by || s_->demo())
       return;
     ui::show(*s_->showing, ui::drawer_shown{false});
-    ui::show<ui::new_chat_facts>(*s_->showing, std::nullopt);
     std::string name = one.name;
     if (const auto& chats = s_->model->accounts().at(*by).conversations; chats.contains(one.room))
       name = ui::display_name(chats.at(one.room));

@@ -199,7 +199,6 @@ struct stub {
   void open_manage() {}
   void close_dialog() {}
   void open_new_chat() {}
-  void close_new_chat() {}
   void start_direct(std::string) {}
   void start_group(std::string) {}
   void flip_room_events() {}
@@ -1380,16 +1379,16 @@ TEST(Protocols, XmppFormsAndEventControlsUseItsCapabilities) {
 }
 
 TEST(StartChat, XmppAddressesAndKnownContactsStayInItsForm) {
-  mux::ui::new_chat_facts facts{.people = {{"bob@example.org", "Bob"}},
+  mux::plugins::start_chat::shown facts{.people = {{"bob@example.org", "Bob"}},
       .by = mux::account_id{mux::protocol::xmpp{}, "alice@example.org"}};
-  EXPECT_FALSE(mux::ui::direct_address(facts, "@bob:example.org"));
-  EXPECT_TRUE(mux::ui::direct_address(facts, "new@example.org"));
+  EXPECT_FALSE(mux::plugins::start_chat::direct_address(facts, "@bob:example.org"));
+  EXPECT_TRUE(mux::plugins::start_chat::direct_address(facts, "new@example.org"));
   facts.query = "new@example.org";
-  const auto rows = mux::ui::people_rows(facts);
+  const auto rows = mux::plugins::start_chat::people_rows(facts);
   ASSERT_EQ(rows.size(), 1u);
   EXPECT_EQ((*rows.begin()).first, facts.query);
   facts.query = "bob";
-  const auto known = mux::ui::people_rows(facts);
+  const auto known = mux::plugins::start_chat::people_rows(facts);
   ASSERT_EQ(known.size(), 1u);
   EXPECT_EQ((*known.begin()).first, "bob@example.org");
 }
@@ -1400,17 +1399,16 @@ TEST(RoomInvites, PickerRequestsKeepTheRoomAccountForBothProtocols) {
   for (const auto& [account, room_id, user] : std::array{
       std::tuple{matrix, std::string("!room:example.org"), std::string("@bob:example.org")},
       std::tuple{xmpp, std::string("room@rooms.example.org"), std::string("bob@example.org")}}) {
-    mux::ui::new_chat_facts facts{.query = user, .by = account,
+    mux::plugins::start_chat::shown facts{.query = user, .by = account,
         .inviting = mux::conversation_id{account, room_id}, .room_name = "Lounge"};
-    const auto event = mux::ui::start_chat_request(facts);
+    // Picked: the user, whom the part invites to the room the dialog is for.
+    const auto event = mux::plugins::start_chat::start_chat_request(facts);
     ASSERT_TRUE(event.has_value());
-    const auto& invite = spl::get<mux::ui::request::invite_to_room>(*event);
-    EXPECT_EQ(invite.room, *facts.inviting);
-    EXPECT_EQ(invite.user, user);
+    EXPECT_EQ(event->user, user);
     facts.inviting.reset();
-    const auto direct = mux::ui::start_chat_request(facts);
+    const auto direct = mux::plugins::start_chat::start_chat_request(facts);
     ASSERT_TRUE(direct.has_value());
-    EXPECT_EQ(spl::get<mux::ui::request::start_direct>(*direct).user, user);
+    EXPECT_EQ(direct->user, user);
   }
 }
 
@@ -1454,10 +1452,10 @@ TEST(StartChat, BoundGoEmitsRealRequestsAndRowsIgnoreOtherModels) {
   struct cleanup { ~cleanup() { skiff::paint::defaultFont() = nullptr; } } clear;
   mux::ui::palette colours;
   const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.org"};
-  mux::ui::new_chat_facts facts{.query = "@bob:example.org", .by = alice};
-  facts.rows = mux::ui::people_rows(facts);
-  auto view = mux::ui::start_chat_view(colours, facts);
-  skiff::model::Model<mux::ui::new_chat_facts, skiff::bind::NoReactions> owner(facts);
+  mux::plugins::start_chat::shown facts{.query = "@bob:example.org", .by = alice};
+  facts.rows = mux::plugins::start_chat::people_rows(facts);
+  auto view = mux::plugins::start_chat::start_chat_view(colours, facts);
+  skiff::model::Model<mux::plugins::start_chat::shown, skiff::bind::NoReactions> owner(facts);
   mux::model other;
   skiff::bind::refresh(view, other.chats());
   skiff::bind::refresh(view, owner);
@@ -1465,14 +1463,12 @@ TEST(StartChat, BoundGoEmitsRealRequestsAndRowsIgnoreOtherModels) {
   auto& go = std::get<1>(std::get<2>(view.fParts).fParts);
   auto asked = go.onPress();
   ASSERT_TRUE(asked.has_value());
-  EXPECT_TRUE(spl::holds_alternative<mux::ui::request::start_direct>(*asked));
-  EXPECT_EQ(spl::get<mux::ui::request::start_direct>(*asked).user, "@bob:example.org");
+  EXPECT_EQ(asked->user, "@bob:example.org");
   facts.inviting = mux::conversation_id{alice, "!room:example.org"};
   go.read(facts);
   asked = go.onPress();
   ASSERT_TRUE(asked.has_value());
-  EXPECT_TRUE(spl::holds_alternative<mux::ui::request::invite_to_room>(*asked));
-  EXPECT_EQ(spl::get<mux::ui::request::invite_to_room>(*asked).room, *facts.inviting);
+  EXPECT_EQ(asked->user, "@bob:example.org");
 }
 
 TEST(Controls, MemoizedRoomIdKeepsCopyFeedbackWithoutAnOuterModelChange) {

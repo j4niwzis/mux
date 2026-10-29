@@ -3569,3 +3569,26 @@ TEST(RoomManagement, UploadedAvatarsStayInTheProfileDraftUntilSave) {
   EXPECT_EQ(box.facts.avatar, "mxc://example.org/new");
   EXPECT_FALSE(box.kept.profile);
 }
+
+TEST(Plugins, TypingSaysWhoIsTypingAsTelegramDoes) {
+  mux::conversation chat;
+  chat.members = {{.id = "@a:x.org", .name = "Ann"}, {.id = "@b:x.org", .name = "Bob"}, {.id = "@c:x.org", .name = "Cy"},
+                  {.id = "@d:x.org", .name = "Dee"}};
+  const auto said = [&] {
+    return extend(mux::contract::chat_status{}, mux::type_tag<mux::plugins::typing::feature>{}, std::as_const(chat));
+  };
+  EXPECT_FALSE(said());
+  chat.typing = {"@a:x.org"};
+  EXPECT_EQ(said().value_or(""), "Ann is typing…");
+  chat.typing = {"@a:x.org", "@b:x.org"};
+  EXPECT_EQ(said().value_or(""), "Ann and Bob are typing…");
+  chat.typing = {"@a:x.org", "@b:x.org", "@c:x.org", "@d:x.org"};
+  EXPECT_EQ(said().value_or(""), "Ann, Bob and 2 more are typing…");
+}
+
+TEST(Plugins, PreviewLineRunsWhitespaceTogetherAndCutsAtAWord) {
+  EXPECT_EQ(mux::plugins::previews::preview_line("  one\n\ttwo   three "), "one two three");
+  const std::string long_line = std::string(150, 'a') + " " + std::string(100, 'b');
+  const std::string cut = mux::plugins::previews::preview_line(long_line);
+  EXPECT_EQ(cut, std::string(150, 'a') + "…");
+}

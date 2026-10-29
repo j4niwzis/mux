@@ -291,7 +291,9 @@ struct side_bars {
 };
 // Settings' home page, its links after the client's own (mux.ui:settings_pages):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
-//   what it opens its plugin's own
+//   what it opens its plugin's own. needs_account(c, f) -> true, where it
+//   has one: the link shown only once there is an account (not on the
+//   sign-in page's Settings).
 struct settings_links {
   static constexpr std::string_view name = "Settings' links";
 };

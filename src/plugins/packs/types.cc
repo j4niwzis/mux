@@ -84,6 +84,8 @@ struct pack_save {};
 struct pack_delete {};
 
 consteval bool provides(contract::settings_links, type_tag<feature>) { return true; }
+// Its link opens the account's own packs: none before there is an account.
+consteval bool needs_account(contract::settings_links, type_tag<feature>) { return true; }
 consteval bool provides(contract::account_rows, type_tag<feature>) { return true; }
 // Its tab of a room's settings (the room_settings plugin's).
 consteval bool provides(room_settings::contract::tabs, type_tag<feature>) { return true; }

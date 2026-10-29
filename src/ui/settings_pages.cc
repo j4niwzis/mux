@@ -24,6 +24,7 @@ import mux.ui.base;
 import mux.composition;
 import mux.plugins.ui;
 import :drawer;
+import :header;
 
 export namespace mux::ui {
 
@@ -32,10 +33,22 @@ export namespace mux::ui {
 // Settings, as Telegram Desktop shows them: a box over the window, a list of
 // sections, and each section a page of the same box. The plugins' links
 // after the client's own (contract::settings_links).
+// A plugin's link, as it is; one that needs an account (needs_account),
+// only once there is one.
+template <class Feature>
+auto settings_link_of(const palette& colours) {
+  return extend(contract::settings_links{}, type_tag<Feature>{}, colours);
+}
+template <class Feature>
+  requires(needs_account(contract::settings_links{}, type_tag<Feature>{}))
+auto settings_link_of(const palette& colours) {
+  return skiff::compose::shown_for<chats_shown>([](const chats_shown& now) { return !now.none; },
+                                                extend(contract::settings_links{}, type_tag<Feature>{}, colours));
+}
 template <class... Features>
 auto settings_links_of(plugin_list<Features...>, const palette& colours) {
   return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      extend(contract::settings_links{}, type_tag<Features>{}, colours)...);
+      settings_link_of<Features>(colours)...);
 }
 inline auto settings_home(const palette& colours) {
   return SKIFF_NAMED(settings_home, skiff::compose::column(

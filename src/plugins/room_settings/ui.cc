@@ -134,7 +134,6 @@ struct room_settings_facts {
   // A space: whether it holds spaces, and whether it is shown as a forum.
   bool space = false;
   bool holds_spaces = false;
-  bool forum = false;
   bool hidden_from_home = false;  // a space whose rooms Home leaves out
   // The protocol the room is of: which tabs it has besides the client's own.
   protocol_t speaks;
@@ -247,7 +246,13 @@ template <class... Features>
 
 // The client's General: the room's events, receipts, previews, typing, Home,
 // leaving -- in a tab of its own, or under a plugin's page that hosts it.
-inline auto room_general_page(const palette& colours, const room_settings_facts& facts, bool has_page_header = false) {
+// The plugins' sections of it (contract::general_sections), after its own.
+template <class... Features>
+auto general_sections_of(plugin_list<Features...>, const auto& colours, const room_settings_facts& facts) {
+  return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                extend(contract::general_sections{}, type_tag<Features>{}, colours, facts)...);
+}
+inline auto room_general_page(const auto& colours, const room_settings_facts& facts, bool has_page_header = false) {
   namespace c = skiff::compose;
   using choices = config::chat_choices;
   return SKIFF_NAMED(room_general_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
@@ -258,17 +263,12 @@ inline auto room_general_page(const palette& colours, const room_settings_facts&
       chat_settings_view(colours, facts.chat),
       c::visible(facts.space, c::scoped<choices>(c::handlers(),
           c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              part_heading(colours, "Shown as"),
-              space_choice_row<&choices::forum>(colours, "One chat, its rooms as topics", !facts.holds_spaces),
-              explained(colours, facts.holds_spaces ? "A space that holds spaces is shown as a space."
-                  : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
-              c::shown_for<skiff::model::Field<&choices::forum>>([](bool forum) { return !forum; },
-                  space_choice_row<&choices::hidden_from_home>(colours, "Its rooms not in Home"))), facts.chat)),
+              space_choice_row<&choices::hidden_from_home>(colours, "Its rooms not in Home")), facts.chat)),
+      general_sections_of(composition::providers<contract::general_sections, enabled_plugins>{}, colours, facts),
       c::visible(facts.leavable, part_heading(colours, "Leave room")),
       c::styled({.width = 130.0f, .height = 32.0f},
           c::visible(facts.leavable, button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {})))));
 }
-using room_general_page_t = decltype(room_general_page(std::declval<const palette&>(), std::declval<const room_settings_facts&>()));
 
 using room_facts_t = std::optional<room_settings_facts>;
 

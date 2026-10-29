@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:list_shown -- What the chats screen's side column shows, as the
 // program says it: the account listed and its folder, the folder tabs and
-// the space bars, the forum open, what is searched and found, and the chats
+// the space bars, the list of chats open, what is searched and found, and the chats
 // listed. The program's (mux.app.chat_list) to work out and set; the side
 // column reads it and keeps nothing.
 export module mux.ui.lists:list_shown;
@@ -44,17 +44,17 @@ using folder_t = spl::variant<folder::all, folder::space, folder::group, folder:
 }
 
 // What a folder is worked out in (contract::chat_folders): the account
-// listed, its chats shown as forums, those hidden from Home, and the bars'
-// settings.
+// listed, its chats opened as lists of chats (contract::chat_scopes: a
+// forum), those hidden from Home, and the bars' settings.
 struct folder_context {
   const account* in = nullptr;
-  std::set<std::string> forums;
+  std::set<std::string> scopes;
   std::set<conversation_id> hidden_from_home;
   bool spaces_on = true, top_bar_on = true, home_hides_spaced = false;
   std::vector<config::space_placed> space_places;
 };
 // What the list is of, as the program keeps it: the account listed, its
-// folder, a forum gone to by Alt+Up or Alt+Down (lit, not opened), what is
+// folder, a list of chats gone to by Alt+Up or Alt+Down (lit, not opened), what is
 // typed in the search over it, and whether the bars are made big for a
 // finger.
 struct list_shown {
@@ -63,9 +63,10 @@ struct list_shown {
   std::optional<conversation_id> pointed;
   std::string search;
   bool big_bars = false;
-  // The forum open, its rooms listed (as chat_shown says): with the account
-  // and the folder, which list it is.
-  std::optional<std::string> forum;
+  // The chat open as a list of chats (a plugin's scope: a forum), its rooms
+  // listed (as chat_shown says): with the account and the folder, which
+  // list it is.
+  std::optional<std::string> scope;
   friend bool operator==(const list_shown&, const list_shown&) = default;
 };
 
@@ -87,13 +88,14 @@ struct space_icon_shown {
   friend bool operator==(const space_icon_shown&, const space_icon_shown&) = default;
 };
 // The side column, as the program works it out: the tabs (none where there
-// is only All), the bars and whether each is up, the forum open's name, and
+// is only All), the bars and whether each is up, the list of chats open's name, and
 // "No chats yet" where the account has none listed.
 struct side_shown {
   std::vector<folder_tab_shown> folders;
   std::vector<space_icon_shown> side_bar, top_bar;
   bool side_on = false, top_on = false;
-  std::optional<std::string> forum;
+  // The name of the chat open as a list of chats, over the list.
+  std::optional<std::string> scope;
   bool no_chats = false;
   // The chats' list up: not while messages found are in its place, and not
   // empty while the server's search is shown -- that taking the room.
@@ -134,8 +136,8 @@ struct screen_shown {
   float docked = 0.0f;
   // The keys caught before the field takes them, and whether each is live:
   // messages selected (Ctrl+C, Delete), the list over the field (Up, Down,
-  // Enter, Tab, Esc), a forum gone to (Alt+Right) or open (Alt+Left).
-  bool selecting = false, suggesting = false, pointing = false, in_forum = false;
+  // Enter, Tab, Esc), a list of chats gone to (Alt+Right) or open (Alt+Left).
+  bool selecting = false, suggesting = false, pointing = false, in_scope = false;
   friend bool operator==(const screen_shown&, const screen_shown&) = default;
 };
 // What a search in the chat found, in the chats' place while it is asked:
@@ -185,13 +187,13 @@ struct list_search {
 struct big_bars {
   bool on = false;
 };
-// Out of the forum open, to its row in the list, lit (Alt+Left).
-struct leave_forum {};
+// Out of the list of chats open, to its row in the list, lit (Alt+Left).
+struct leave_scope {};
 // A page of the messages up or down (PageUp, PageDown).
 struct page_messages {
   bool up = true;
 };
-// Into the forum gone to by Alt+Up or Alt+Down (Alt+Right).
+// Into the list of chats gone to by Alt+Up or Alt+Down (Alt+Right).
 struct open_pointed {};
 // A swipe across the chats screen on a phone's window: right, or left.
 struct screen_swipe {

@@ -505,7 +505,6 @@ struct kept_settings {
         chosen.bubbles = mux::config::bubble_look_of(*one.bubbles);
       if (one.panels)
         chosen.panels = mux::config::bubble_look_of(*one.panels);
-      chosen.forum = one.forum.value_or(false);
       chosen.hidden_from_home = one.hide_from_home.value_or(false);
     }
     const auto placements_read = saved.placements.value_or(std::vector<mux::config::chat_placement>{});
@@ -659,7 +658,6 @@ struct kept_settings {
           .typing = chosen.typing,
           .jump_search = chosen.jump_search,
           .wallpaper = chosen.wallpaper.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
-          .forum = chosen.forum ? std::optional<bool>(true) : std::nullopt,
           .hide_from_home = chosen.hidden_from_home ? std::optional<bool>(true) : std::nullopt,
           .bubbles = chosen.bubbles.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
           .panels = chosen.panels.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),

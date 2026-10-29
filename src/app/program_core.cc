@@ -447,8 +447,8 @@ void app::refresh_shown() {
   // what is kept, for the chat chosen.
   looks.read();
   const auto shown = showing.look<mux::ui::chat_shown>();
-  if (shown->forum && shared.listed() && !chat_list.is_forum({*shared.listed(), *shown->forum}))
-    mux::ui::change_shown<mux::ui::chat_shown>(showing, [](auto& now) { now.forum.reset(); });
+  if (shown->scope && shared.listed() && !chat_list.is_scope({*shared.listed(), *shown->scope}))
+    mux::ui::change_shown<mux::ui::chat_shown>(showing, [](auto& now) { now.scope.reset(); });
   shared.read_shown_now();
 }
 

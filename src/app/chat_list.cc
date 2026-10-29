@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.app.chat_list: what the chats screen's side lists, worked out by the
 // program -- the account listed and its folder, the folder tabs and the
-// space bars, the forum open, what the server search found, and the chats
+// space bars, the list of chats open, what the server search found, and the chats
 // listed: their order, their rows' views and heights. From what is kept and
 // the chats model, put in what is shown (mux.ui:list_shown) only where it
 // moved. A part of the program: it reaches the rest through the services.
@@ -57,6 +57,24 @@ struct folder_rules<plugin_list<Features...>> {
   }
 };
 using folder_plugins = folder_rules<composition::providers<contract::chat_folders, enabled_plugins>>;
+// What the plugins say of chats that open as a list of chats
+// (contract::chat_scopes): a forum, for one -- whether one does, and the row
+// it is listed by.
+template <class List>
+struct scope_rules;
+template <class... Features>
+struct scope_rules<plugin_list<Features...>> {
+  static bool opens(const services& shared, const mux::conversation& one) {
+    return (opens_as_scope(contract::chat_scopes{}, type_tag<Features>{}, shared, one) || ...);
+  }
+  template <class Events>
+  static std::optional<mux::conversation> row(const services& shared, const mux::conversation& one, const mux::account& in, const Events& events_of) {
+    std::optional<mux::conversation> made;
+    ((made = made ? made : scope_row(contract::chat_scopes{}, type_tag<Features>{}, shared, one, in, events_of)), ...);
+    return made;
+  }
+};
+using scope_plugins = scope_rules<composition::providers<contract::chat_scopes, enabled_plugins>>;
 
 class chat_list_part {
  public:
@@ -78,8 +96,8 @@ class chat_list_part {
                    : has(list.account) ? list.account
                    : now.accounts().empty() ? std::nullopt
                                             : std::optional<mux::account_id>(now.accounts().keyAt(0));
-    list.forum = chat.forum;
-    const inputs seen{now.chats().revision(), k_->state.revision(), list, chat.chosen, chat.forum, s_->drafts_revision,
+    list.scope = chat.scope;
+    const inputs seen{now.chats().revision(), k_->state.revision(), list, chat.chosen, chat.scope, s_->drafts_revision,
                       s_->showing->look<mux::ui::found_shown>()->count.has_value(), s_->showing->look<mux::ui::elsewhere_shown>()->found.has_value()};
     if (seen_ == seen)
       return;
@@ -134,7 +152,7 @@ class chat_list_part {
   // Ctrl+Up and Ctrl+Down answer the messages up and down, Up in an empty
   // field edits the last sent; Ctrl+C and Delete copy and delete what is
   // selected; Esc lets go of what is up, one thing at a time -- a forum
-  // gone into, a selection, the search, an answer, then the threads or the
+  // gone into (a list of chats), a selection, the search, an answer, then the threads or the
   // info, else the chat; Ctrl+Tab and Alt+Up and Alt+Down go through the
   // chats listed (a forum gone to, lit, not opened); Ctrl+End to the newest.
   template <class Asked>
@@ -150,8 +168,8 @@ class chat_list_part {
         this->apply(request::pick_folder{side.folders[place].folder});
       return;
     }
-    if (one.key == keys::kEscape && !any && !chat.chosen && chat.forum) {
-      asked(request::close_forum{});
+    if (one.key == keys::kEscape && !any && !chat.chosen && chat.scope) {
+      asked(request::close_scope{});
       return;
     }
     const bool stepping = (one.key == keys::kTab && one.control) || ((one.key == keys::kUp || one.key == keys::kDown) && one.alt);
@@ -203,17 +221,17 @@ class chat_list_part {
         asked(request::close_chat{});
     }
   }
-  // Out of the forum open, to its row, lit: Alt+Right goes back in.
+  // Out of the list of chats open, to its row, lit: Alt+Right goes back in.
   template <class Asked>
-  void apply(const request::leave_forum&, const Asked& asked) {
+  void apply(const request::leave_scope&, const Asked& asked) {
     const auto& chat = *s_->showing->look<mux::ui::chat_shown>();
     const auto& listed = s_->showing->look<mux::ui::list_shown>()->account;
-    if (!chat.forum || !listed)
+    if (!chat.scope || !listed)
       return;
-    this->point(mux::conversation_id{*listed, *chat.forum});
-    asked(request::close_forum{});
+    this->point(mux::conversation_id{*listed, *chat.scope});
+    asked(request::close_scope{});
   }
-  // Into the forum gone to (Alt+Right).
+  // Into the list of chats gone to (Alt+Right).
   template <class Asked>
   void apply(const request::open_pointed&, const Asked& asked) {
     if (const auto at = s_->showing->look<mux::ui::list_shown>()->pointed) {
@@ -238,7 +256,7 @@ class chat_list_part {
     else
       asked(request::close_chat{});
   }
-  // A forum gone to by Alt+Up or Alt+Down: lit, not opened.
+  // A list of chats gone to by Alt+Up or Alt+Down: lit, not opened.
   void point(std::optional<mux::conversation_id> at) {
     this->change([&](mux::ui::list_shown& list) { list.pointed = std::move(at); });
   }
@@ -271,11 +289,10 @@ class chat_list_part {
       now.info_width = std::clamp(across - x, 260.0f, std::max(260.0f, across - now.side_width - 300.0f));
     });
   }
-  // Whether a chat is shown as a forum: a space the user shows so, or a
-  // forum of its protocol's own.
-  [[nodiscard]] bool is_forum(const mux::conversation_id& id) const {
+  // Whether a chat opens as a list of chats, as a plugin says (a forum).
+  [[nodiscard]] bool is_scope(const mux::conversation_id& id) const {
     const mux::conversation* one = s_->model->find(id);
-    return one != nullptr && this->shown_as_forum(this->read_kept(s_->listed()), *one);
+    return one != nullptr && scope_plugins::opens(*s_, *one);
   }
   // Every chat listed, in order: what Ctrl+Tab and Alt+Up go through.
   [[nodiscard]] const std::vector<mux::conversation_id>& order() const { return order_; }
@@ -287,19 +304,19 @@ class chat_list_part {
     skiff::model::Revision chats = 0, kept = 0;
     mux::ui::list_shown list;
     std::optional<mux::conversation_id> chosen;
-    std::optional<std::string> forum;
+    std::optional<std::string> scope;
     std::uint64_t drafts = 0;
     bool found = false, elsewhere = false;
     friend bool operator==(const inputs&, const inputs&) = default;
   };
   // What is kept that the list reads: the chats in other accounts' lists and
-  // their strips, the chats muted, shown as forums, left out of Home; the
+  // their strips, the chats muted, left out of Home; the
   // bars' settings; and each chat's room events.
   struct kept_view {
     std::map<mux::account_id, std::vector<mux::conversation_id>> listed_in;
     std::set<mux::conversation_id> moved_out;
     std::map<mux::conversation_id, skia::SkColor> strips;
-    std::set<mux::conversation_id> muted, forums, hidden_from_home;
+    std::set<mux::conversation_id> muted, hidden_from_home;
     bool spaces_on = true, top_bar_on = true;
     std::vector<mux::config::space_placed> space_places;
     bool home_hides_spaced = false, home_hides_direct = false;
@@ -334,7 +351,6 @@ class chat_list_part {
             // The last placement of a chat says its strip, as it was written last.
             .strips = placements | std::views::reverse | std::views::filter(strip_shown) | std::views::transform(strip_of) | std::ranges::to<std::map>(),
             .muted = mux::chats_where<&mux::config::chat_choices::muted>(root),
-            .forums = mux::chats_where<&mux::config::chat_choices::forum>(root),
             .hidden_from_home = mux::chats_where<&mux::config::chat_choices::hidden_from_home>(root),
             .spaces_on = looks.spaces,
             .top_bar_on = looks.top_bar,
@@ -342,11 +358,6 @@ class chat_list_part {
             .home_hides_spaced = own ? own_or(mux::config::home_hides_of(*own), looks.home_hides_spaced) : looks.home_hides_spaced,
             .home_hides_direct = own ? own_or(mux::config::home_direct_of(*own), looks.home_hides_direct) : looks.home_hides_direct,
             .reads = k_->reads()};
-  }
-  // A chat shown as a forum: a space the user shows so, or a forum of its
-  // protocol's own.
-  [[nodiscard]] bool shown_as_forum(const kept_view& kept, const mux::conversation& one) const {
-    return one.space && (kept.forums.contains(one.id) || mux::proto::native_forum(mux::ui::protocol_state_of(s_->ui, one.id.account), one));
   }
   // Which room events a chat shows: in an encrypted room, who joins and who
   // is invited always -- each is given the room's key.
@@ -357,8 +368,8 @@ class chat_list_part {
     return filter;
   }
   // What a folder is worked out in, for the plugins that say what theirs
-  // are (contract::chat_folders): the account listed, its chats shown as
-  // forums, what is kept of the bars and of Home.
+  // are (contract::chat_folders): the account listed, its chats opened as
+  // lists of chats (forums), what is kept of the bars and of Home.
   [[nodiscard]] mux::ui::folder_context context_of(const mux::model& now, const kept_view& kept,
                                                    const std::optional<mux::account_id>& listed) const {
     mux::ui::folder_context ctx{.in = listed ? now.accounts().find(*listed) : nullptr,
@@ -368,7 +379,7 @@ class chat_list_part {
                                 .home_hides_spaced = kept.home_hides_spaced,
                                 .space_places = kept.space_places};
     if (ctx.in)
-      ctx.forums = ctx.in->conversations.values() | std::views::filter([&](const mux::conversation& one) { return this->shown_as_forum(kept, one); }) |
+      ctx.scopes = ctx.in->conversations.values() | std::views::filter([&](const mux::conversation& one) { return scope_plugins::opens(*s_, one); }) |
                    std::views::transform([](const mux::conversation& one) { return one.id.id; }) | std::ranges::to<std::set>();
     return ctx;
   }
@@ -393,7 +404,7 @@ class chat_list_part {
       list.folder = mux::ui::folder::all{};
   }
 
-  // The side: the tabs, the bars, the forum open, "No chats yet".
+  // The side: the tabs, the bars, the list of chats open, "No chats yet".
   [[nodiscard]] mux::ui::side_shown side_of(const mux::model& now, const kept_view& kept, const mux::ui::list_shown& list,
                                            const mux::ui::chat_shown& chat) const {
     mux::ui::side_shown out;
@@ -407,9 +418,9 @@ class chat_list_part {
     out.dragging = dragging_;
     out.account = list.account ? list.account->address : std::string();
     const mux::account* in = list.account ? now.accounts().find(*list.account) : nullptr;
-    const mux::conversation* forum = chat.forum && in ? in->conversations.find(*chat.forum) : nullptr;
-    if (forum && this->shown_as_forum(kept, *forum))
-      out.forum = mux::ui::display_name(*forum);
+    const mux::conversation* scope = chat.scope && in ? in->conversations.find(*chat.scope) : nullptr;
+    if (scope && scope_plugins::opens(*s_, *scope))
+      out.scope = mux::ui::display_name(*scope);
     return out;
   }
   // The bars: the plugins' (contract::chat_folders) -- the spaces'.
@@ -417,8 +428,8 @@ class chat_list_part {
     folder_plugins::bars_into(this->context_of(now, kept, list.account), list, out, s_->ui);
   }
 
-  // The chats listed: the account's in the folder chosen -- or the forum
-  // open -- with the other accounts' placed here, those searched for,
+  // The chats listed: the account's in the folder chosen -- or the list of
+  // chats open -- with the other accounts' placed here, those searched for,
   // invites first, then by their newest.
   [[nodiscard]] mux::ui::chat_listing listing_of(const mux::model& now, const kept_view& kept, const mux::ui::list_shown& list,
                                                  const mux::ui::chat_shown& chat) const {
@@ -433,9 +444,10 @@ class chat_list_part {
     const mux::ui::folder_context ctx = this->context_of(now, kept, list.account);
     const std::optional<std::set<std::string>> in_folder_rooms = folder_plugins::rooms_of(ctx, list.folder);
     const auto rooms_of = [](const mux::conversation& one) -> const std::vector<std::string>& { return one.children; };
-    // Forums: each listed as one chat; their rooms in them, not beside them.
-    const std::set<std::string> in_forums = in->conversations.values() | std::views::filter([&](const mux::conversation& one) { return this->shown_as_forum(kept, one); }) | std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::set>();
-    const mux::conversation* forum = chat.forum ? in->conversations.find(*chat.forum) : nullptr;
+    // Lists of chats (forums): each listed as one chat; their rooms in them,
+    // not beside them.
+    const std::set<std::string> in_scopes = in->conversations.values() | std::views::filter([&](const mux::conversation& one) { return scope_plugins::opens(*s_, one); }) | std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::set>();
+    const mux::conversation* scope = chat.scope ? in->conversations.find(*chat.scope) : nullptr;
     // What the plugins leave out of Home (what the account's spaces hold,
     // where it is chosen so) -- but direct messages.
     const bool home = list.folder == mux::ui::folder_t{mux::ui::folder::all{}};
@@ -448,12 +460,12 @@ class chat_list_part {
         return false;
       if (kept.home_hides_spaced && kept.home_hides_direct && home && direct(one))
         return false;
-      if (forum)
-        return !one.space && std::ranges::contains(forum->children, one.id.id);
-      // A folder of a plugin's, not a chat (a space) -- but a forum is one chat.
+      if (scope)
+        return !one.space && std::ranges::contains(scope->children, one.id.id);
+      // A folder of a plugin's, not a chat (a space) -- but a list of chats is one chat.
       if (folder_plugins::folder_chat(ctx, one))
         return false;
-      if (!one.space && in_forums.contains(one.id.id))
+      if (!one.space && in_scopes.contains(one.id.id))
         return false;
       return spl::visit(spl::overloaded{[](const mux::ui::folder::all&) { return true; },
                                         [&](const mux::ui::folder::space&) { return in_folder_rooms && in_folder_rooms->contains(one.id.id); },
@@ -481,37 +493,16 @@ class chat_list_part {
       const auto found = kept.strips.find(one->id);
       return found == kept.strips.end() ? std::nullopt : std::optional<skia::SkColor>(found->second);
     };
-    // A forum's row, as tdesktop's: the newest of its topics, their unread
-    // summed -- not the space's own.
-    for (const mux::conversation*& one : chats) {
-      if (!this->shown_as_forum(kept, *one))
-        continue;
-      mux::conversation made = *one;
-      made.timeline.clear();
-      made.read_up_to.reset();
-      made.detached = false;
-      made.unread = 0;
-      made.highlights = 0;
-      auto topics = one->children | std::views::transform([&](const std::string& child) { return in->conversations.find(child); }) | std::views::filter([](const mux::conversation* topic) { return topic != nullptr && !topic->space; });
-      made.unread = std::ranges::fold_left(topics | std::views::transform([&](const mux::conversation* topic) { return topic->unread_here(this->events_of(kept, *topic)); }),
-                                           std::int64_t{0}, std::plus{});
-      made.highlights = std::ranges::fold_left(topics | std::views::transform(&mux::conversation::highlights), decltype(made.highlights){0}, std::plus{});
-      const auto newest_in = [&](const mux::conversation* topic) { return mux::newest(*topic, this->events_of(kept, *topic)); };
-      auto with_one = topics | std::views::filter([&](const mux::conversation* topic) { return newest_in(topic) != nullptr; });
-      if (const auto best = std::ranges::max_element(with_one, {}, [&](const mux::conversation* topic) { return newest_in(topic)->at; });
-          best != std::ranges::end(with_one)) {
-        made.timeline.push_back(*newest_in(*best));
-        made.forum_topic = mux::ui::display_name(**best);
-        made.members = (*best)->members;
-      }
-      one = &out.forums.insert_or_assign(one->id, std::move(made)).first->second;
-    }
+    // A list of chats' row (a forum's): as its plugin makes it.
+    for (const mux::conversation*& one : chats)
+      if (auto made = scope_plugins::row(*s_, *one, *in, [&](const mux::conversation& topic) { return this->events_of(kept, topic); }))
+        one = &out.made_rows.insert_or_assign(one->id, std::move(*made)).first->second;
     // Invites first, as Element lists them; then by their newest.
     std::ranges::sort(chats, std::ranges::greater{}, [&](const mux::conversation* one) {
       const mux::message* last = mux::newest(*one, this->events_of(kept, *one));
       return std::pair{one->invite.has_value(), last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{}};
     });
-    // The chat open -- or, where Alt+Up or Alt+Down went to a forum, that.
+    // The chat open -- or, where Alt+Up or Alt+Down went to a list of chats, that.
     const auto is_chosen = [&](const mux::conversation* one) { return list.pointed ? *list.pointed == one->id : chat.chosen && *chat.chosen == one->id; };
     out.chats = chats | std::views::transform([&](const mux::conversation* one) {
                   const auto events = this->events_of(kept, *one);
@@ -575,8 +566,8 @@ class chat_list_part {
     this->put(mux::ui::elsewhere_shown{mux::ui::server_search_facts{std::move(rooms), people_, asked_by_, !rooms_came_ || !people_came_}});
   }
 
-  // To the next chat listed, or the one before -- from the forum gone to,
-  // where one is: a forum gone to, lit, not opened; a chat, opened.
+  // To the next chat listed, or the one before -- from the list of chats
+  // gone to, where one is: such a list gone to, lit, not opened; a chat, opened.
   template <class Asked>
   void step(bool back, const mux::ui::chat_shown& chat, const mux::ui::list_shown& list, const Asked& asked) {
     const auto at = std::ranges::find(order_, list.pointed ? *list.pointed : *chat.chosen);
@@ -585,8 +576,7 @@ class chat_list_part {
     const auto index = static_cast<std::size_t>(at - order_.begin());
     const std::size_t to = back ? (index == 0 ? order_.size() - 1 : index - 1) : (index + 1) % order_.size();
     const mux::conversation* next = s_->model->find(order_[to]);
-    const kept_view kept = this->read_kept(list.account);
-    if (next && this->shown_as_forum(kept, *next)) {
+    if (next && scope_plugins::opens(*s_, *next)) {
       this->point(order_[to]);
       return;
     }
@@ -614,7 +604,7 @@ class chat_list_part {
       now.selecting = s_->showing->look<mux::ui::selection_shown>()->count > 0;
       now.suggesting = s_->composer_list_up;
       now.pointing = s_->showing->look<mux::ui::list_shown>()->pointed.has_value();
-      now.in_forum = chat.forum.has_value();
+      now.in_scope = chat.scope.has_value();
     });
   }
   template <class Change>

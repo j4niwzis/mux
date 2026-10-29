@@ -251,14 +251,14 @@ struct chat_part {
 //
 // The keys caught before the field takes them, where the program says they
 // are live: Ctrl+C and Delete on the messages selected; Up, Down, Enter,
-// Tab and Esc on the list over the field; Alt+Right into the forum gone to,
-// Alt+Left out of the one open.
+// Tab and Esc on the list over the field; Alt+Right into the list of chats
+// gone to, Alt+Left out of the one open.
 // One answer type for all the screen's own handlers -- the keys it takes at
 // both phases and a swipe across it: they wrap one node, which (outside a
 // release build) answers as its outermost wrapper says, so each inner one's
 // answer is one of the outer one's.
 using capture_answer = std::variant<request::selection_copy, request::selection_delete, request::suggestion_step, request::suggestion_pick,
-                                    request::suggestion_close, request::open_pointed, request::leave_forum, request::screen_key,
+                                    request::suggestion_close, request::open_pointed, request::leave_scope, request::screen_key,
                                     request::screen_swipe>;
 struct capture_keys {
   std::optional<capture_answer> operator()(const screen_shown& now, const scene::key::down& press) const {
@@ -272,8 +272,8 @@ struct capture_keys {
       return request::selection_delete{};
     if (alt && press.key == keys::kRight && now.pointing)
       return request::open_pointed{};
-    if (alt && press.key == keys::kLeft && now.in_forum)
-      return request::leave_forum{};
+    if (alt && press.key == keys::kLeft && now.in_scope)
+      return request::leave_scope{};
     if (!now.suggesting || control || alt)
       return std::nullopt;
     if (press.key == keys::kUp || press.key == keys::kDown)

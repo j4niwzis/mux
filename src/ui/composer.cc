@@ -762,8 +762,9 @@ struct chat_shown {
   std::optional<std::string> thread_answer;
   // Or one of its messages being edited there: which.
   std::optional<std::string> thread_edit;
-  // The space opened as a forum, its rooms listed: by its id.
-  std::optional<std::string> forum;
+  // The chat opened as a list of chats (a plugin's scope: a forum), its
+  // rooms listed: by its id.
+  std::optional<std::string> scope;
 };
 // What the chat's field writes, as what is shown holds it: a plain message,
 // an answer or an edit, and what the bar over the field says of it.

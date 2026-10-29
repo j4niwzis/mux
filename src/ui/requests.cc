@@ -450,21 +450,18 @@ struct explore_space {
   std::string room;
   std::string name;  // as listed, where it is not joined: none, the chat's
 };
-// A space's own settings, as a room's Manage; it shown as a forum, or not;
-// the forum open in the chat list left.
+// A space's own settings, as a room's Manage; the list of chats open in the
+// chat list (a forum) left.
 struct manage_space {
   std::string room;
 };
 struct flip_home_hide {
   std::string room;
 };
-struct flip_forum {
-  std::string room;
-};
-struct close_forum {};
-// The settings of the forum open in the list: it is in no bar to be
-// right-pressed.
-struct manage_forum {};
+struct close_scope {};
+// The settings of the list of chats open in the list (a forum): it is in no
+// bar to be right-pressed.
+struct manage_scope {};
 struct search_rooms {
   std::string server;
   std::string query;

@@ -22,9 +22,10 @@ import mux.plugin.spaces.types;
 
 export namespace mux::plugins::spaces {
 
-// A space: a folder, not a chat listed -- but where it is shown as a forum.
+// A space: a folder, not a chat listed -- but where it opens as a list of
+// chats (a forum).
 inline bool is_folder(contract::chat_folders, type_tag<feature>, const ui::folder_context& ctx, const conversation& one) {
-  return one.space && !ctx.forums.contains(one.id.id);
+  return one.space && !ctx.scopes.contains(one.id.id);
 }
 // The rooms a space's folder shows: its own, and those of the spaces in
 // it, down every level -- each space once. None for a folder not a space's.
@@ -99,7 +100,7 @@ inline void space_bars(contract::chat_folders, type_tag<feature>, const ui::fold
       for (const mux::conversation& one : chats->values() | std::views::filter(&mux::conversation::space)) {
         for (const std::string& child : one.children) {
           const auto* found = chats->find(child);
-          if (found != nullptr && found->space && !ctx.forums.contains(found->id.id) && child != one.id.id && !parent_of.contains(child)) {
+          if (found != nullptr && found->space && !ctx.scopes.contains(found->id.id) && child != one.id.id && !parent_of.contains(child)) {
             parent_of.emplace(child, one.id.id);
             spaces_in[one.id.id].push_back(found);
           }
@@ -116,7 +117,7 @@ inline void space_bars(contract::chat_folders, type_tag<feature>, const ui::fold
       }
     if (chats)
       for (const mux::conversation& one : chats->values() | std::views::filter([&](const mux::conversation& one) {
-                              return one.space && !parent_of.contains(one.id.id) && !ctx.forums.contains(one.id.id);
+                              return one.space && !parent_of.contains(one.id.id) && !ctx.scopes.contains(one.id.id);
                             })) {
                               all.push_back({mux::config::space_item::space{one.id.id}, mux::ui::folder::space{one.id.id}, one.id.id, mux::ui::display_name(one)});
                             }

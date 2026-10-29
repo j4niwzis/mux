@@ -79,7 +79,7 @@ using side_folder_view = folder_tab_shown;
 struct side_list_place {
   std::optional<account_id> account;
   folder_t folder;
-  std::optional<std::string> forum;
+  std::optional<std::string> scope;
   friend bool operator==(const side_list_place&, const side_list_place&) = default;
 };
 struct side_chat_menu_facts {
@@ -179,18 +179,20 @@ auto side_found_row(const auto& colours, const search_result& one) {
       std::format("{}: {}", one.name, one.snippet)));
 }
 
-auto side_forum_head(const auto& colours) {
+// The chat open as a list of chats (a forum), over the list: back out of it,
+// its name, its settings.
+auto side_scope_head(const auto& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(side_forum_head, c::shown_for<side_shown>([](const side_shown& now) { return now.forum.has_value(); },
+  return SKIFF_NAMED(side_scope_head, c::shown_for<side_shown>([](const side_shown& now) { return now.scope.has_value(); },
       c::row(c::hbox(8.0f, {.fillX = true, .height = 40.0f,
           .padding = {0.0f, 8.0f, 0.0f, 8.0f}}),
           c::styled({.alignSelf = scene::align::kMiddle},
-              icon_button(colours, icon::back{}, sends<request::close_forum>{})),
+              icon_button(colours, icon::back{}, sends<request::close_scope>{})),
           c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-              c::text_for<side_shown>([](const side_shown& now) { return now.forum.value_or(""); },
+              c::text_for<side_shown>([](const side_shown& now) { return now.scope.value_or(""); },
                   elided(nodes::Text("", 15.0f, colours.text, true)))),
           c::styled({.alignSelf = scene::align::kMiddle},
-              icon_button(colours, icon::gear{}, sends<request::manage_forum>{})))));
+              icon_button(colours, icon::gear{}, sends<request::manage_scope>{})))));
 }
 struct side_search_typed {
   static constexpr bool kEveryEdit = true;
@@ -358,7 +360,7 @@ auto side_chats_for(const auto& needs) {
         side_menu_context{now.account, now.accounts, now.theme})};
   }, c::with_model<chats_model, side_chats_told>([needs](const chats_model& chats, const side_chats_told& now) {
     const auto find = [&](const conversation_id& id) -> const conversation* {
-      if (const auto forum = now.chats->forums.find(id); forum != now.chats->forums.end()) return &forum->second;
+      if (const auto made = now.chats->made_rows.find(id); made != now.chats->made_rows.end()) return &made->second;
       const account* owner = chats.root().accounts.find(id.account);
       return owner ? owner->conversations.find(id.id) : nullptr;
     };
@@ -368,7 +370,7 @@ auto side_chats_for(const auto& needs) {
         }) | std::ranges::to<std::vector>();
   }, std::move(viewport)));
   return SKIFF_NAMED(side_chats_for, c::projected<list_shown>([](const list_shown& now) {
-    return side_list_place{now.account, now.folder, now.forum};
+    return side_list_place{now.account, now.folder, now.scope};
   }, c::remembered_scroll<side_list_place, decltype(viewport)>(std::move(contents))));
 }
 struct side_found_row_make {
@@ -485,7 +487,7 @@ auto side_body_for(const auto& needs) {
   auto chats = c::shown_for<side_shown>([](const side_shown& now) { return now.chats_on; },
       c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), side_chats_for(needs)));
   auto rest = c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX}),
-      side_forum_head(colours), side_search_field(colours), side_bar_plugins::top(colours, true), side_folders_for(colours, side_pick_folder{}),
+      side_scope_head(colours), side_search_field(colours), side_bar_plugins::top(colours, true), side_folders_for(colours, side_pick_folder{}),
       c::shown_for<side_shown>([](const side_shown& now) { return now.no_chats; },
           c::styled({.margin = {12.0f, 16.0f, 0.0f, 16.0f}}, nodes::Text("No chats yet.", 13.0f, colours.dim))),
       std::move(chats),

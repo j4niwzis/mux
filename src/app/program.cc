@@ -536,7 +536,7 @@ struct app : kept_settings {
   void apply(const request::typing&) {}
   void apply(const request::open_manage&) {}
   void apply(const request::manage_space&) {}
-  void apply(const request::manage_forum&) {}
+  void apply(const request::manage_scope&) {}
   void apply(const request::pick_room_avatar&) {}
   void apply(const request::toggle_emoji&) {}
   void apply(const request::toggle_thread_emoji&) {}

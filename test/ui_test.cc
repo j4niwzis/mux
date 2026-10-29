@@ -437,14 +437,14 @@ TEST(Controls, SpaceSwitchReadsEachClickWithoutReplacingTheWidget) {
   using model_t = skiff::model::Model<choices, skiff::bind::NoReactions>;
   model_t model(choices{});
   mux::ui::palette colours;
-  auto row = mux::ui::space_choice_row<&choices::forum>(colours, "Topics");
+  auto row = mux::ui::space_choice_row<&choices::hidden_from_home>(colours, "Not in Home");
   skiff::bind::Binding<model_t> binding;
   binding.refresh(row, model);
   const auto id = std::get<1>(row.fParts).fState.id();
   stub requests;
   for (const bool expected : {true, false, true}) {
     ASSERT_TRUE(skiff::bind::press(row, model, scene::Path{1}, &requests));
-    EXPECT_EQ(model.root().forum, expected);
+    EXPECT_EQ(model.root().hidden_from_home, expected);
     binding.refresh(row, model);
     EXPECT_EQ(std::get<1>(row.fParts).fState.id(), id);
   }

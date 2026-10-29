@@ -75,12 +75,12 @@ struct conversation_view {
   std::optional<invite_info> invite;
   std::optional<skia::SkColor> strip;
   std::vector<proto::part::badge> badges;
-  std::optional<std::string> forum_topic;
+  std::optional<std::string> row_topic;
   friend bool operator==(const conversation_view&, const conversation_view&) = default;
 };
 inline constexpr float kConversationRowHeight = 62.0f;
 [[nodiscard]] inline float conversation_height(const conversation& one) {
-  return one.forum_topic && !one.timeline.empty() ? kConversationRowHeight + 20.0f : kConversationRowHeight;
+  return one.row_topic && !one.timeline.empty() ? kConversationRowHeight + 20.0f : kConversationRowHeight;
 }
 [[nodiscard]] inline conversation_view conversation_view_of(
     const ui_shared& shared, const conversation& one, bool chosen, bool muted,
@@ -88,7 +88,7 @@ inline constexpr float kConversationRowHeight = 62.0f;
   const message* last = newest(one, events);
   return {display_name(one), last ? std::optional<message>(*last) : std::nullopt,
           one.unread_here(events), chosen, muted, std::move(draft), one.invite, strip,
-          proto::row_badges(protocol_state_of(shared, one.id.account), one), one.forum_topic};
+          proto::row_badges(protocol_state_of(shared, one.id.account), one), one.row_topic};
 }
 
 // What the two preview lines say. Resolve the message, invite and draft
@@ -117,8 +117,8 @@ struct chat_preview {
     }();
     std::ranges::replace(text.text, '\n', ' ');
     std::erase_if(text.links, [](const nodes::Text::Link& link) { return !link.pill; });
-    if (one.forum_topic) out.topic = *one.forum_topic;
-    if (one.forum_topic || last.outgoing || is_group(one))
+    if (one.row_topic) out.topic = *one.row_topic;
+    if (one.row_topic || last.outgoing || is_group(one))
       out.sender = (last.outgoing ? std::string("You") : sender_name(one, last.sender)) + ":";
     if (auto media = media_line(last)) out.text = std::move(*media);
     else {
@@ -244,12 +244,13 @@ struct listed_chat {
   std::optional<skia::SkColor> strip;
   float height = kConversationRowHeight;
 };
-// Forums supply a synthetic conversation; other rows use the model's own.
+// A chat listed as a list of chats (a forum) has a row made for it by its
+// plugin (contract::chat_scopes); the others the model's own.
 struct chat_listing {
   std::vector<listed_chat> chats;
-  std::map<conversation_id, conversation> forums;
+  std::map<conversation_id, conversation> made_rows;
   [[nodiscard]] const conversation* find(const model& now, const conversation_id& id) const {
-    if (const auto made = forums.find(id); made != forums.end()) return &made->second;
+    if (const auto made = made_rows.find(id); made != made_rows.end()) return &made->second;
     return now.find(id);
   }
 };

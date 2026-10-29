@@ -24,7 +24,6 @@ struct room_events_choice {
   std::optional<bool> typing;    // others told one is typing
   std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
   std::optional<std::string> wallpaper;  // its background, as word_of(wallpaper_t) says it
-  std::optional<bool> forum;  // a space: shown as one chat, its rooms in it as topics
   std::optional<bool> hide_from_home;  // a space: its rooms not in Home
   std::optional<std::string> bubbles;    // its bubbles, as word_of(bubble_look) says them
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
@@ -160,7 +159,6 @@ struct chat_choices {
   std::optional<wallpaper_t> wallpaper;
   std::optional<bubble_look> bubbles;
   std::optional<bubble_look> panels;
-  bool forum = false;
   bool hidden_from_home = false;
   notify_choices notify;
   friend bool operator==(const chat_choices&, const chat_choices&) = default;

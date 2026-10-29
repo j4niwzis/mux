@@ -36,12 +36,12 @@ void app::apply(const request::choose& one) {
     this->take(request::show_invite{chat->id});
     return;
   }
-  // Chosen, by a press or a key: no forum left lit as gone to.
+  // Chosen, by a press or a key: no list of chats left lit as gone to.
   chat_list.point(std::nullopt);
-  // A space shown as a forum: its rooms listed in it, as tdesktop opens a
-  // forum's topics -- no chat opened.
-  if (chat_list.is_forum(one.which)) {
-    mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.forum = one.which.id; });
+  // A chat that opens as a list of chats (a plugin's: a forum): its rooms
+  // listed in it, as tdesktop opens a forum's topics -- no chat opened.
+  if (chat_list.is_scope(one.which)) {
+    mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.scope = one.which.id; });
     return;
   }
   // What was being written where the reader was: kept as its draft; and

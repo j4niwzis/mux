@@ -52,6 +52,12 @@ struct opened {
 struct presentation {
   static constexpr std::string_view name = "a room's settings' look";
 };
+// Sections of the client's General, after its own (a forum's switch):
+//   extend(c, f, palette, facts) -> its section, shown or not as the facts
+//   say -- made where the window makes the dialog
+struct general_sections {
+  static constexpr std::string_view name = "a room's settings' General sections";
+};
 }  // namespace contract
 
 consteval bool provides(::mux::contract::window_dialogs, type_tag<feature>) { return true; }

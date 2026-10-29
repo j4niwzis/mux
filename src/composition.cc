@@ -53,6 +53,15 @@ struct text_markup {
 struct settings_kept {
   static constexpr std::string_view name = "a plugin's own settings";
 };
+// Chats the chat list opens as a list of chats -- a forum's topics -- in
+// place of the chat, their rooms listed in them, not beside them
+// (mux.app.chat_list): opens_as_scope(c, f, services, conversation) ->
+// bool; scope_row(c, f, services, conversation, account, events_of) ->
+// std::optional<conversation>, the row it is listed by (its newest
+// topic's, their unread summed, for one), none for one not its own
+struct chat_scopes {
+  static constexpr std::string_view name = "the chat list's scopes";
+};
 // The Matrix account, made by a plugin over the client's own
 // (mux.proto.matrix.client, account_of): end-to-end encryption's.
 //   matrix_account_made(c, f, type_tag<Sink>) -> std::type_identity<its

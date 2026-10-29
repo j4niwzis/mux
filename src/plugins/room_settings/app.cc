@@ -41,13 +41,13 @@ class part {
     if (const auto chosen = s_->chosen())
       this->manage_chat(*chosen);
   }
-  // A space's settings, from its menu or from its forum.
+  // A space's settings, from its menu or from the list of chats open (a forum).
   void apply(const ui::request::manage_space& one) {
     if (const auto by = s_->listed())
       this->manage_chat(conversation_id{*by, one.room});
   }
-  void apply(const ui::request::manage_forum&) {
-    if (const auto& open = s_->showing->look<ui::chat_shown>()->forum)
+  void apply(const ui::request::manage_scope&) {
+    if (const auto& open = s_->showing->look<ui::chat_shown>()->scope)
       this->apply(ui::request::manage_space{*open});
   }
   // A tab picked: up, and on a narrow window in the tab list's place.
@@ -153,7 +153,6 @@ class part {
                                 const conversation* in = s_->model->find(conversation_id{chat->id.account, child});
                                 return in && in->space;
                               }),
-                              .forum = k.own_of<&app::chat_choices::forum>(chat->id),
                               .hidden_from_home = k.own_of<&app::chat_choices::hidden_from_home>(chat->id),
                               .speaks = chat->id.account.speaks};
     facts.chat = chat->id;

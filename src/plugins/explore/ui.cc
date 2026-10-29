@@ -65,7 +65,7 @@ auto room_row(const palette& colours, const directory_room& one, const std::stri
               one.members > 0 ? std::format("{} · {} members", one.alias, one.members) : one.alias, 12.0f, colours.dim))),
           c::visible(!one.topic.empty(), c::styled({.fillX = true}, elided(nodes::Text(one.topic, 13.0f, colours.text))))),
       c::styled({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle},
-          primary(widgets::Button<row_act>(colours.widgets, one.space ? "Open" : "Join",
+          skiff::compose::primary(widgets::Button<row_act>(colours.widgets, one.space ? "Open" : "Join",
               {one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space, one.name, by})))));
 }
 struct explore_draft { std::string query, server; };
@@ -108,7 +108,7 @@ auto explore_view(const palette& colours, const shown& facts) {
           c::visible(!facts.space, c::styled({.width = 170.0f, .relativeSize = scene::axes::kNone},
               model_field<&explore_draft::server>(colours, "Server", facts.own_server))),
           c::styled({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd},
-              primary(widgets::SendButton<submit_explore>(colours.widgets, "Search", {}))))),
+              skiff::compose::primary(widgets::SendButton<submit_explore>(colours.widgets, "Search", {}))))),
       c::visible(!status.empty(), c::styled({.fillX = true, .margin = {6.0f, 10.0f, 4.0f, 10.0f}},
           wrapped(nodes::Text(status, 13.0f, colours.dim)))),
       c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(

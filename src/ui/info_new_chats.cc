@@ -32,7 +32,6 @@ import mux.ui.base;
 import mux.ui.messages;
 import :info_common;
 import :info_cards;
-import :info_reactions;
 
 export namespace mux::ui {
 // A room made in a space, as its menu asks: the space, its name, and

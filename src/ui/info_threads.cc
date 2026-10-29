@@ -30,7 +30,6 @@ import mux.ui.base;
 import mux.ui.messages;
 import :info_common;
 import :info_cards;
-import :info_reactions;
 import :info_new_chats;
 import :info_looks;
 

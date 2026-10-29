@@ -29,7 +29,7 @@ import mux.protocols;
 import mux.ui.base;
 import mux.ui.messages;
 
-export import :info_common;
+export import mux.ui.cards;
 export import :info_cards;
 export import :info_looks;
 export import :info_explore;

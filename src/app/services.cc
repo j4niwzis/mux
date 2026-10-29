@@ -58,6 +58,9 @@ struct services {
   // Finding in the chat is open (a plugin's): Esc closes it, the head
   // stands aside for its bar.
   bool searching = false;
+  // The room a card is up for (a plugin's): the server's answer of it is
+  // the card's, not a pill's.
+  std::optional<std::string> card_room;
   bool rebuild_due = false;
   // Whether it is used by a finger -- a phone's screen -- as the host saw
   // last: a touch, or a mouse's press. Where it is, the input is not given

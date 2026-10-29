@@ -27,7 +27,7 @@ import mux.logic.links;
 import mux.protocols;
 import mux.ui.base;
 import mux.ui.messages;
-import :info_common;
+import mux.ui.cards;
 import :info_cards;
 
 export namespace mux::ui {

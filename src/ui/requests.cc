@@ -10,6 +10,7 @@ import skiff.scene;
 import mux.core;
 import mux.config;
 import mux.protocols;
+import mux.logic.links;
 import mux.plugins.types;
 import mux.composition;
 import skiff.bind;
@@ -414,7 +415,15 @@ struct not_implemented {
 };
 struct close_notice {};
 struct close_person_info {};
-struct close_room_card {};
+// A room not joined, from a link: its card, looking it up; an invite
+// chosen: its card, not a chat -- the room card plugin's.
+struct look_up_room {
+  mux::logic::link_step::join step;
+  mux::logic::link_t link;
+};
+struct show_invite {
+  mux::conversation_id chat;
+};
 // A space's rooms and spaces, joined or not, in Explore.
 struct explore_space {
   std::string room;
@@ -620,10 +629,7 @@ struct copy_text {
   std::string text;
 };
 struct settings_notifications {};
-struct join_room_card {};
 // The room card's room asked to be let into.
-struct knock_room_card {};
-struct decline_room_card {};
 // The input's emoji button pressed: where it is laid out, the panel opened
 // beside it.
 // The chat's list, as it comes to say it: whether its way down is wanted --

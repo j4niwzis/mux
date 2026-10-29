@@ -449,7 +449,7 @@ void look_as_its_content(const Node&, const palette&) {}
 //   void attach_files(), close_send_box(), send_files()  -- what is sent with the paperclip
 //   void open_member_info(std::string id)  -- a person's info, in the middle
 //   void close_person_info()
-//   void close_room_card(), join_room_card()  -- a room not joined, from a link: its card
+//   (a room not joined, from a link: the room card plugin's)
 //   void search_rooms(server, query), join_directory_room(room, server),
 //        search_elsewhere(query)  -- the chat list's search, where nothing joined matches,
 //        create_room(name, topic, open, alias, federate, encrypted)  -- rooms found and made

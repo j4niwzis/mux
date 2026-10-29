@@ -153,7 +153,7 @@ void app::take_arriving(std::chrono::milliseconds most) {
                                  // Asked for a pill: the room there or not, and
                                  // its picture, under the address it was named by.
                                  if (pictures.pill_rooms.contains(shown.asked) &&
-                                     !room_card.looking_at(shown.asked)) {
+                                     shared.card_room != shown.asked) {
                                    if (!shown.preview.id.empty()) {
                                      model->rooms_found.insert_or_assign(shown.asked, shown.preview.name);
                                      if (shown.preview.avatar)
@@ -161,7 +161,6 @@ void app::take_arriving(std::chrono::milliseconds most) {
                                    }
                                    return;
                                  }
-                                 room_card.previewed(shown);
                                },
                                [&](const mux::change::media_progress& how) {
                                  mux::ui::download_progress().insert_or_assign(how.source, how.done);

@@ -80,7 +80,7 @@ void app::follow(const mux::logic::link_t& where) {
                                // Its card first, as a person's: filled when
                                // its server answers, in woken(), and joined
                                // from there.
-                               room_card.look_up(step, where);
+                               this->take(request::look_up_room{step, where});
                              }},
              mux::logic::where_to(*model, where, by));
 }

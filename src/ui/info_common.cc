@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:info_common -- What a chat's and a person's info are made of: tiles, member rows, id lines, a person's facts.
+// mux.ui.cards -- What a chat's and a person's info are made of: tiles, member rows, id lines, a person's facts, a card's fit -- a module of its own, under the window, so a plugin's card (the room card's) is made of the same.
 module;
 #include "skiff/named.h"
-export module mux.ui:info_common;
+export module mux.ui.cards;
 
 import std;
 import splice;
@@ -137,5 +137,47 @@ struct person_facts {
   }
   return out;
 }
+
+// Measure a fitting card at its available width without losing the scroll
+// anchor's previous position. Both user and room cards use this viewport.
+inline float card_part_height(auto& node, const skia::SkRect& parent) {
+  const auto previous = skiff::compose::state_of(node).fLastConstraint;
+  scene::layout(node, skia::SkRect::MakeXYWH(previous.fLeft, previous.fTop, parent.width(), 0.0f));
+  return node.bounds().height() + skiff::compose::state_of(node).fMargin.totalY();
+}
+// Keep a short card compact; for a long one, size the scroll viewport to the
+// room the dialog gives the card rather than the content's unbounded height.
+// What a card holds beside its head and its details: the person's card
+// nothing; the room's its join button, and its decline where it is shown.
+template <class Top, class Scroll>
+float card_rest_height(std::tuple<Top, Scroll>&, const skia::SkRect&) {
+  return 0.0f;
+}
+template <class Top, class Scroll, class Join, class Decline>
+float card_rest_height(std::tuple<Top, Scroll, Join, Decline>& parts, const skia::SkRect& parent) {
+  auto& decline = std::get<3>(parts);
+  return card_part_height(std::get<2>(parts), parent) + (decline.visible() ? card_part_height(decline, parent) : 0.0f);
+}
+// A card: its head, its details scrolling, what it offers under them -- in
+// their places, which card_fit names.
+template <class... Parts> skiff::compose::Box<Parts...> card_box(skiff::compose::Look look, Parts... parts) {
+  look.fHorizontal = false;
+  return skiff::compose::Box<Parts...>(std::move(look), std::move(parts)...);
+}
+struct card_fit {
+  struct State {};
+  template <class N> static void prepare(N& card, State&) {
+    const skia::SkRect& parent = card.fState.fLastConstraint;
+    auto& scroll = std::get<1>(card.fParts);
+    const float details = card_part_height(std::get<0>(scroll.fChildren), parent);
+    const float others = card.fState.fPadding.totalY() + card_part_height(std::get<0>(card.fParts), parent) +
+                         card_rest_height(card.fParts, parent);
+    const float room = std::max(0.0f, parent.height() - others);
+    scroll.fState.fHeight = parent.height() > 0.0f ? std::min(details, room) : details;
+  }
+  template <class N> static void arrange(N&, State&) {}
+  template <class N> static bool settling(const N&, const State&) { return false; }
+  template <class N> static void settle(N&, State&) {}
+};
 
 }  // namespace mux::ui

@@ -46,7 +46,6 @@ import mux.app.notices;
 import mux.app.history;
 import mux.app.verification;
 import mux.app.rooms;
-import mux.app.room_card;
 import mux.app.preferences;
 import mux.app.manage;
 import mux.app.looks;
@@ -128,7 +127,6 @@ struct app : kept_settings {
   history_part paging{shared};
   verification_part verification{shared};
   rooms_part rooms{shared};
-  room_card_part room_card{shared};
   preferences_part preferences{shared, *this};
   manage_part manage{shared, *this};
   looks_part looks{shared, *this, colours};
@@ -304,7 +302,7 @@ struct app : kept_settings {
   auto parts() {
     return std::tuple_cat(
         std::tie(pictures, reading, outbox, settings, menu, notices, paging, verification,
-                 rooms, room_card, preferences, manage, looks, jumps, chat_view, chat_list, emoji, accounts_screen, local_data),
+                 rooms, preferences, manage, looks, jumps, chat_view, chat_list, emoji, accounts_screen, local_data),
         std::apply([](auto&... theirs) { return std::tie(theirs...); }, plugin_parts));
   }
   template <class Request>
@@ -534,6 +532,8 @@ struct app : kept_settings {
   void apply(const request::adopt_pack&) {}
   void apply(const request::explore_space&) {}
   void apply(const request::search_rooms&) {}
+  void apply(const request::look_up_room&) {}
+  void apply(const request::show_invite&) {}
   void apply(const request::open_new_chat&) {}
   void apply(const request::open_room_invite&) {}
   void apply(const request::invite_to_room&) {}

@@ -27,7 +27,7 @@ import mux.logic.links;
 import mux.protocols;
 import mux.ui.base;
 import mux.ui.messages;
-import :info_common;
+import mux.ui.cards;
 
 export namespace mux::ui {
 // A person's info, as tdesktop's profile layer: a box in the middle of the
@@ -98,48 +98,6 @@ inline auto profile_cover(const palette& colours, const std::string& key, const 
       profile_cover_details(profile_text_colours(colours, has_banner), key, facts)));
 }
 using profile_cover_t = decltype(profile_cover(std::declval<const palette&>(), "", std::declval<const person_facts&>()));
-
-// Measure a fitting card at its available width without losing the scroll
-// anchor's previous position. Both user and room cards use this viewport.
-inline float card_part_height(auto& node, const skia::SkRect& parent) {
-  const auto previous = skiff::compose::state_of(node).fLastConstraint;
-  scene::layout(node, skia::SkRect::MakeXYWH(previous.fLeft, previous.fTop, parent.width(), 0.0f));
-  return node.bounds().height() + skiff::compose::state_of(node).fMargin.totalY();
-}
-// Keep a short card compact; for a long one, size the scroll viewport to the
-// room the dialog gives the card rather than the content's unbounded height.
-// What a card holds beside its head and its details: the person's card
-// nothing; the room's its join button, and its decline where it is shown.
-template <class Top, class Scroll>
-float card_rest_height(std::tuple<Top, Scroll>&, const skia::SkRect&) {
-  return 0.0f;
-}
-template <class Top, class Scroll, class Join, class Decline>
-float card_rest_height(std::tuple<Top, Scroll, Join, Decline>& parts, const skia::SkRect& parent) {
-  auto& decline = std::get<3>(parts);
-  return card_part_height(std::get<2>(parts), parent) + (decline.visible() ? card_part_height(decline, parent) : 0.0f);
-}
-// A card: its head, its details scrolling, what it offers under them -- in
-// their places, which card_fit names.
-template <class... Parts> skiff::compose::Box<Parts...> card_box(skiff::compose::Look look, Parts... parts) {
-  look.fHorizontal = false;
-  return skiff::compose::Box<Parts...>(std::move(look), std::move(parts)...);
-}
-struct card_fit {
-  struct State {};
-  template <class N> static void prepare(N& card, State&) {
-    const skia::SkRect& parent = card.fState.fLastConstraint;
-    auto& scroll = std::get<1>(card.fParts);
-    const float details = card_part_height(std::get<0>(scroll.fChildren), parent);
-    const float others = card.fState.fPadding.totalY() + card_part_height(std::get<0>(card.fParts), parent) +
-                         card_rest_height(card.fParts, parent);
-    const float room = std::max(0.0f, parent.height() - others);
-    scroll.fState.fHeight = parent.height() > 0.0f ? std::min(details, room) : details;
-  }
-  template <class N> static void arrange(N&, State&) {}
-  template <class N> static bool settling(const N&, const State&) { return false; }
-  template <class N> static void settle(N&, State&) {}
-};
 
 struct person_message_act {
   using Answer = std::tuple<::mux::ui::request::message_person, ::mux::ui::request::close_person_info>;
@@ -246,91 +204,6 @@ inline dialog_look content_look(std::type_identity<person_shown>) {
 template <class Needs>
 auto make_content(const Needs& needs, const person_shown& shown) {
   return person_card(needs, shown);
-}
-
-// A room not joined, as a link names it, in the person card's layout: its
-// photo beside its name and how many are in it, what it is about, its ID to
-// copy, and a button to join it. What its server says (/room_summary) fills
-// it when it comes; till then, or where it says nothing, the address alone.
-// A room's card open: what was asked for, and what is known of it so far.
-struct room_card_facts {
-  std::string asked;
-  room_preview known;
-};
-inline auto room_cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line) {
-  return SKIFF_NAMED(room_cover, skiff::compose::row(
-      skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
-      avatar_mark(avatar_of::chat{}, key, name, 72.0f),
-      two_lines(colours, name, line, 17.0f, 6.0f, two_line_style{.selectable = true})));
-}
-using room_cover_t = decltype(room_cover(std::declval<const palette&>(), "", "", ""));
-
-struct join_room_card_act {
-  using Answer = std::variant<::mux::ui::request::knock_room_card, ::mux::ui::request::join_room_card>;
-  bool knock = false;  // asked to be let in, where it lets people knock
-  Answer operator()() const {
-    if (knock)
-      return ::mux::ui::request::knock_room_card{};
-    return ::mux::ui::request::join_room_card{};
-  }
-};
-// Its name, else its address, else what the link said.
-inline std::string room_card_name(const std::string& asked, const room_preview& known) {
-  return !known.name.empty() ? known.name : !known.alias.empty() ? known.alias : asked;
-}
-// Under the name: the address, where the name is not it, and how many.
-inline std::string room_card_line(const std::string& asked, const room_preview& known) {
-  std::string out = known.alias.empty() ? (known.name.empty() ? std::string() : asked) : known.alias;
-  if (out == room_card_name(asked, known))
-    out.clear();
-  if (known.members)
-    out += std::format("{}{} {}", out.empty() ? "" : " · ", *known.members, *known.members == 1 ? "member" : "members");
-  return out.empty() ? std::string("Room") : out;
-}
-// The details can be taller than the window. Only this column scrolls;
-// closing the card and accepting or declining an invite stay in reach.
-inline auto room_card_details(const palette& colours, const std::string& asked, const room_preview& known) {
-  namespace c = skiff::compose;
-  const std::string& key = known.id.empty() ? asked : known.id;
-  nodes::Text about(
-      !known.topic.empty()  ? known.topic
-      : !known.note.empty() ? known.note
-                            : std::string("No description"),
-      14.0f, known.topic.empty() ? colours.dim : colours.text);
-  about.setSelectable(true);
-  return SKIFF_NAMED(room_card_details, c::column(
-      c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      room_cover(colours, key, room_card_name(asked, known), room_card_line(asked, known)),
-      section_band(colours),
-      c::styled({.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}}, wrapped(std::move(about))),
-      id_line(colours, key, "")));
-}
-inline auto room_card(const palette& colours, const std::string& asked, const room_preview& known) {
-  namespace c = skiff::compose;
-  using close_act = sends<::mux::ui::request::close_room_card>;
-  using decline_act = sends<::mux::ui::request::decline_room_card>;
-  auto details = room_card_details(colours, asked, known);
-  const scene::Spec tile_spec{.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}};
-  return c::arranged<card_fit>({}, card_box(
-      c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
-      page_header<no_back, close_act>(colours, known.invite ? "Invite" : "Room info", {}, {}, false, true),
-      c::styled({.fillX = true}, nodes::ScrollContainer<decltype(details)>(std::move(details))),
-      c::styled(tile_spec, action_tile<join_room_card_act>(
-          colours, known.invite ? "Accept" : known.knock ? "Ask to join" : "Join",
-          icon::plus{}, {known.knock && !known.invite})),
-      c::visible(known.invite, c::styled(tile_spec,
-          action_tile<decline_act>(colours, "Decline", icon::close{}, {})))));
-}
-inline auto room_card(const ui_needs& n, const room_card_facts& facts) {
-  return room_card(*n.colours, facts.asked, facts.known);
-}
-using room_card_t = decltype(room_card(std::declval<const ui_needs&>(), std::declval<const room_card_facts&>()));
-inline dialog_look content_look(std::type_identity<room_card_facts>) {
-  return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}};
-}
-template <class Needs>
-auto make_content(const Needs& needs, const room_card_facts& facts) {
-  return room_card(needs, facts);
 }
 
 }  // namespace mux::ui

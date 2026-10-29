@@ -33,7 +33,7 @@ void app::apply(const request::choose& one) {
     net->ask_trust(one.which.account, mux::ui::contact_of(shared.ui, *chat));
   // An invite: its card -- who asked, Accept, Decline -- not a chat.
   if (const mux::conversation* chat = model->find(one.which); chat && chat->invite) {
-    room_card.invited(*chat);
+    this->take(request::show_invite{chat->id});
     return;
   }
   // Chosen, by a press or a key: no forum left lit as gone to.

@@ -11,6 +11,7 @@ import mux.core;
 import mux.config;
 import mux.protocols;
 import mux.plugins.types;
+import mux.composition;
 import skiff.bind;
 import skiff.model;
 
@@ -116,11 +117,27 @@ struct protocol_account_pages<protocol_list<Tags...>> {
   using type = typename joined<type_list<>,
                                typename account_page_types<decltype(proto::account_pages_of(::mux::state_of<Tags>{}))>::type...>::type;
 };
-// A page of an account's: the client's, or one of a protocol's.
+// Each plugin's own pages, as its account_pages lists them
+// (contract::account_pages).
+template <class List>
+struct plugin_page_types;
+template <class... Pages>
+struct plugin_page_types<composition::page_list<Pages...>> {
+  using type = type_list<Pages...>;
+};
+template <class>
+struct plugin_account_pages;
+template <class... Features>
+struct plugin_account_pages<plugin_list<Features...>> {
+  using type = typename joined<type_list<>,
+                               typename plugin_page_types<decltype(account_pages(contract::account_pages{}, type_tag<Features>{}))>::type...>::type;
+};
+using plugin_account_pages_t = typename plugin_account_pages<composition::providers<contract::account_pages, enabled_plugins>>::type;
+// A page of an account's: the client's, one of a protocol's, or a plugin's.
 using account_page_t = typename variant_of_types<typename joined<
     type_list<account_page::connection, account_page::privacy, account_page::notifications, account_page::chats,
               account_page::proxy, account_page::appearance>,
-    typename protocol_account_pages<protocols>::type>::type>::type;
+    typename protocol_account_pages<protocols>::type, plugin_account_pages_t>::type>::type;
 // What a protocol keeps of an account while its pages are open, as its
 // account_parts(state) lists them: one of them all, or none.
 template <class List>

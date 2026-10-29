@@ -181,7 +181,11 @@ inline auto account_pages_view(const palette& colours, const State& state, const
       return std::vector<account_page_link>{{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...};
     }(proto::account_pages_of(now));
   }, state);
-  auto groups = std::array{std::move(links), std::move(own),
+  // The plugins' pages (contract::account_pages), as a protocol's are listed.
+  auto plugins = []<class... Pages>(type_list<Pages...>) {
+    return std::vector<account_page_link>{{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...};
+  }(plugin_account_pages_t{});
+  auto groups = std::array{std::move(links), std::move(own), std::move(plugins),
       std::vector<account_page_link>{{"Proxy", account_page::proxy{}, icon::gear{}}}};
   auto rows = groups | std::views::join | std::views::transform([&](auto link) {
     return account_page_row(colours, std::move(link), selected);
@@ -468,7 +472,8 @@ using choose_one_t = decltype(choose_one(std::declval<const palette&>()));
 using detail_page_t = typename variant_of_types<typename joined<
     type_list<choose_one_t, editor_view_t, add_account_view_t, privacy_view_t, notifications_view_t, chats_page_t, appearance_view_t,
               proxy_view_t>,
-    typename protocol_page_views<typename protocol_account_pages<protocols>::type>::type>::type>::type;
+    typename protocol_page_views<typename protocol_account_pages<protocols>::type>::type,
+    typename protocol_page_views<plugin_account_pages_t>::type>::type>::type;
 // An account's page: a protocol's made over the facts it starts from --
 // read again as they move.
 [[nodiscard]] inline detail_page_t page_made(const ui_needs& n, const panel_detail::account& chosen, const config::theme_t& theme) {

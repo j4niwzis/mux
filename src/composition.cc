@@ -107,6 +107,16 @@ struct chat_header {
 struct settings_links {
   static constexpr std::string_view name = "Settings' links";
 };
+// An account's pages in Manage accounts, beside the client's and its
+// protocol's (mux.ui:accounts), as a protocol's own are made:
+//   account_pages(c, f) -> page_list<its pages...>; each page a type of
+//   its own, with page_title(page), page_icon(page) and page_view(page,
+//   palette, account_page_facts) -> its node, found by ADL
+template <class... Pages>
+struct page_list {};
+struct account_pages {
+  static constexpr std::string_view name = "an account's pages";
+};
 // Settings' pages (mux.ui:settings): a plugin's own page, opened by its
 // link (contract::settings_links):
 //   page_type(c, f) -> type_tag<its page>: what it shows, in settings_page_t

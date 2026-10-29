@@ -211,16 +211,23 @@ class outbox_part {
                   this->composing());
     this->compose(compose::plain{}, std::nullopt);
   }
-  // The chat's field edited: what is written, kept.
-  void apply(const request::chat_draft_edited& one) {
+  // The chat's field edited: what is written, kept -- and the chat told the
+  // user is typing while there is text in it, no longer once it is empty.
+  // Told nowhere since the chats screen became a function (df74e38): no
+  // typing notification went out at all (a tester's).
+  template <class Asked>
+  void apply(const request::chat_draft_edited& one, const Asked& asked) {
     s_->written_last = request::writing::chat{};
     s_->write_chat(one.now);
+    asked(request::typing{!mux::ui::composer_plain(s_->chat_writing()).empty()});
   }
   // Enter in the field, or its arrow: what is written, sent. Two asked for
   // before the first was handled send once: the draft emptied by the first.
   template <class Asked>
   void apply(const request::send_typed&, const Asked& asked) {
     this->send(mux::ui::composer_plain(s_->chat_writing()), asked);
+    // Sent: no longer typing.
+    asked(request::typing{false});
   }
 
   // Files: chosen with the paperclip, or dropped; the send box closed, or

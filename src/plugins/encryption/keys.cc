@@ -246,7 +246,7 @@ std::optional<std::string> encrypted_account<Sink>::share_room_key(const std::st
   // waits on it before it goes.
   const auto began = std::chrono::steady_clock::now();
   const struct slow_said {
-    account& of;
+    encrypted_account& of;
     const std::string& room;
     std::chrono::steady_clock::time_point began;
     ~slow_said() {

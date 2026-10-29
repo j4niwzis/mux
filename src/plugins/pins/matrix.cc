@@ -10,6 +10,7 @@ import knot;
 import loom.ev;
 import loom.state;
 import loom.cs.room_state;
+import loom.cs.rooms;
 import mux.core;
 import mux.proto.matrix.client;
 

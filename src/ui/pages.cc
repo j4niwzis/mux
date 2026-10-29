@@ -215,10 +215,27 @@ template <class Contract>
 using rows_of = row_list<Contract, composition::providers<Contract, enabled_plugins>>;
 using choice_row_plugins = rows_of<contract::choice_rows>;
 
+// Where what a page has by its type alone is not there: nothing in its
+// place -- known while compiling, not hidden.
+inline auto nothing_shown() {
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}));
+}
+// The room events field of a level, where its protocol's chats have room
+// events (proto::shows_room_events); nothing where they have none.
+template <class Protocol, class Choices>
+auto room_events_part(const auto&, choice_level_t) {
+  return nothing_shown();
+}
+template <class Protocol, class Choices>
+  requires(proto::shows_room_events<state_of<Protocol>>())
+auto room_events_part(const auto& colours, choice_level_t level) {
+  return event_kinds_field<Choices>(colours, level, proto::room_events_of<state_of<Protocol>>());
+}
 // A chat's own choices, bound to them in the model: its room events, how
 // far a jump searches -- Default as the level above; and the plugins' rows
-// (receipts, previews, typing), bound to theirs.
-inline auto chat_settings_view(const auto& colours, const conversation_id& chat) {
+// (receipts, previews, typing), bound to theirs. Of a protocol's chat.
+template <class Protocol>
+auto chat_settings_view(const auto& colours, const conversation_id& chat) {
   using choices = config::chat_choices;
   const choice_level_t level = choice_level::chat{};
   return SKIFF_NAMED(chat_settings_view, skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -226,10 +243,10 @@ inline auto chat_settings_view(const auto& colours, const conversation_id& chat)
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          event_kinds_field<choices>(colours, level, proto::room_event_kinds_of(state_before(chat.account.speaks))),
+          room_events_part<Protocol, choices>(colours, level),
           skiff::compose::bound<skiff::model::Field<&choices::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&choices::jump_search>>(colours, level))),
       chat),
-    choice_row_plugins::made(colours, level_place::chat{chat})));
+    choice_row_plugins::made(colours, level_place::chat_in<Protocol>{{chat}})));
 }
 
 // A chat's notifications on or off: off is muted -- the chat list's mute,

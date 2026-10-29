@@ -338,8 +338,11 @@ struct settings_pages {
   static constexpr std::string_view name = "Settings' pages";
 };
 // An account's page in Manage accounts, its rows under its connection
-// (mux.ui:accounts): extend(c, f, palette, address) -> its row, shown or
-// not as the account's protocol is -- what it opens its plugin's own
+// (mux.ui:accounts), a protocol's accounts' each: a plugin put on the
+// protocols it has a row for -- provides(account_rows<P>, f) for those --
+// and extend(c, f, palette, address) -> its row: what it opens its
+// plugin's own
+template <class Protocol>
 struct account_rows {
   static constexpr std::string_view name = "an account's rows";
 };

@@ -179,8 +179,27 @@ template <class Page, class State>
   using page_defaults::page_shown;
   return page_shown(Page{}, now);
 }
-template <class State>
-inline auto account_pages_view(const palette& colours, const State& state, const account_page_t& selected) {
+// The plugins' pages for a protocol's accounts (contract::account_pages):
+// those whose page says it is for them (page_shown(page, its state)) --
+// the list made while compiling, of that protocol's alone.
+template <class Protocol, class Page>
+inline constexpr bool page_for = page_shown_for<Page>(state_of<Protocol>{});
+template <class Protocol, class... Pages>
+auto plugin_pages_for(type_list<Pages...>) -> typename joined<type_list<>, std::conditional_t<page_for<Protocol, Pages>, type_list<Pages>, type_list<>>...>::type;
+template <class Protocol>
+using plugin_pages_of = decltype(plugin_pages_for<Protocol>(plugin_account_pages_t{}));
+template <class... Pages>
+std::vector<account_page_link> links_of(type_list<Pages...>) {
+  return {{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...};
+}
+template <class... Pages>
+std::vector<account_page_link> links_of(proto::account_page_list<Pages...>) {
+  return {{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...};
+}
+// A protocol's account's pages: the client's, its protocol's own, then the
+// plugins' for it.
+template <class Protocol>
+auto account_pages_view(const palette& colours, const account_page_t& selected) {
   namespace c = skiff::compose;
   std::vector<account_page_link> links{
       {"Connection", account_page::connection{}, icon::sliders{}},
@@ -188,43 +207,35 @@ inline auto account_pages_view(const palette& colours, const State& state, const
       {"Notifications", account_page::notifications{}, icon::bell{}},
       {"Appearance", account_page::appearance{}, icon::gear{}},
       {"Chats", account_page::chats{}, icon::people{}}};
-  auto own = spl::visit([](const auto& now) {
-    return []<class... Pages>(proto::account_page_list<Pages...>) {
-      return std::vector<account_page_link>{{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...};
-    }(proto::account_pages_of(now));
-  }, state);
-  // The plugins' pages (contract::account_pages), as a protocol's are listed:
-  // those for this account's protocol, where a page says (page_shown).
-  auto plugins = spl::visit([](const auto& now) {
-    return []<class... Pages>(type_list<Pages...>, const auto& of) {
-      const std::array<bool, sizeof...(Pages)> shown{page_shown_for<Pages>(of)...};
-      return std::views::zip(std::vector<account_page_link>{{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...}, shown) |
-             std::views::filter([](const auto& one) { return std::get<1>(one); }) |
-             std::views::transform([](const auto& one) { return std::get<0>(one); }) | std::ranges::to<std::vector>();
-    }(plugin_account_pages_t{}, now);
-  }, state);
-  auto groups = std::array{std::move(links), std::move(own), std::move(plugins)};
+  auto groups = std::array{std::move(links), links_of(proto::account_pages_of(state_of<Protocol>{})), links_of(plugin_pages_of<Protocol>{})};
   auto rows = groups | std::views::join | std::views::transform([&](auto link) {
     return account_page_row(colours, std::move(link), selected);
   }) | std::ranges::to<std::vector>();
   return SKIFF_NAMED(account_pages_view, c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 0.0f, 0.0f}}), std::move(rows)));
 }
-using account_pages = decltype(account_pages_view(std::declval<const palette&>(), std::declval<const protocol_state_t&>(),
-    std::declval<const account_page_t&>()));
-// Which page is up, of which protocol's state: the links made again where
-// either moves.
+// One protocol's list or another's, as the account chosen is.
+template <class>
+struct account_pages_of_list;
+template <class... Protocols>
+struct account_pages_of_list<protocol_list<Protocols...>> {
+  using type = spl::variant<decltype(account_pages_view<Protocols>(std::declval<const palette&>(), std::declval<const account_page_t&>()))...>;
+};
+using account_pages = typename account_pages_of_list<protocols>::type;
+// Which page is up, of which protocol: the links made again where either
+// moves.
 struct pages_key {
-  protocol_state_t state;
+  protocol_t speaks;
   account_page_t page;
   friend bool operator==(const pages_key& a, const pages_key& b) {
-    return a.state.index() == b.state.index() && a.page.index() == b.page.index();
+    return a.speaks.index() == b.speaks.index() && a.page.index() == b.page.index();
   }
 };
 inline auto pages_side(const palette& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(pages_side, c::projected<page_read>([](const page_read& now) { return now ? std::optional(pages_key{now->state, now->page}) : std::nullopt; },
-      c::mount<account_pages, pages_key>([at = &colours](const pages_key& now) { return std::tuple{account_pages_view(*at, now.state, now.page)}; },
-                                         {.fillX = true, .autoSize = scene::axes::kY})));
+  return SKIFF_NAMED(pages_side, c::projected<page_read>([](const page_read& now) { return now ? std::optional(pages_key{now->by.speaks, now->page}) : std::nullopt; },
+      c::mount<account_pages, pages_key>([at = &colours](const pages_key& now) {
+        return std::tuple{spl::visit([&]<class Protocol>(Protocol) { return account_pages(account_pages_view<Protocol>(*at, now.page)); }, now.speaks)};
+      }, {.fillX = true, .autoSize = scene::axes::kY})));
 }
 using pages_side_t = decltype(pages_side(std::declval<const palette&>()));
 
@@ -247,15 +258,17 @@ auto account_switch(const palette& colours, std::string text, On on, Allowed all
 }
 inline constexpr auto always = [](const config::account_t&) { return true; };
 
-// The plugins' rows on an account's page (contract::account_rows).
-template <class... Features>
+// The plugins' rows on a protocol's account's page (contract::account_rows<P>):
+// those put on that protocol's.
+template <class Protocol, class... Features>
 auto account_rows_of(plugin_list<Features...>, const palette& colours, const std::string& address) {
   return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      extend(contract::account_rows{}, type_tag<Features>{}, colours, address)...);
+      extend(contract::account_rows<Protocol>{}, type_tag<Features>{}, colours, address)...);
 }
 // The connection: its address, on or off and Remove; how it is now; and
 // its protocol's form.
-inline auto account_editor_view(const ui_needs& n, const std::string& address) {
+template <class Protocol>
+auto account_editor_view(const ui_needs& n, const std::string& address) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   using toggle_t = widgets::Toggle<flip_account>;
@@ -274,15 +287,33 @@ inline auto account_editor_view(const ui_needs& n, const std::string& address) {
                             },
                             c::styled({.fillX = true, .margin = {0.0f, 0.0f, 14.0f, 0.0f}}, elided(nodes::Text("", 13.0f, colours.dim)))),
       account_form_view(n),
-      account_rows_of(composition::providers<contract::account_rows, enabled_plugins>{}, colours, address)));
+      account_rows_of<Protocol>(composition::providers<contract::account_rows<Protocol>, enabled_plugins>{}, colours, address)));
 }
 
 // Privacy: whether it sends read receipts, and tells others one is typing;
 // and, where its protocol can (Matrix's), the mentions read shared with its
 // other sessions -- sealed there, where they are shared.
-inline auto account_privacy_view(const palette& colours, const std::string& address) {
+template <class Protocol>
+auto mentions_part(const palette&) {
+  return nothing_shown();
+}
+template <class Protocol>
+  requires(proto::offered_by<state_of<Protocol>, proto::feature::shared_mentions>())
+auto mentions_part(const palette& colours) {
   namespace c = skiff::compose;
-  const auto mentions = [](const page_read& now) { return now && config::mentions_choice_of(now->account).has_value(); };
+  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          account_switch<sends<request::flip_account_mentions_shared>>(colours, "Sync read mentions between sessions",
+              [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).shared; }, always),
+          account_switch<sends<request::flip_account_mentions_sealed>>(colours, "Encrypt them (with the recovery key)",
+              [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).sealed; },
+              [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).shared; }),
+          c::styled({.fillX = true}, wrapped(note_text(colours, "Which mentions you have read, kept with your account on its server, so "
+                                                                "your other sessions take them as read too. Encrypted, the server cannot "
+                                                                "read them; a session gets the key when it is restored with the recovery key."))));
+}
+template <class Protocol>
+auto account_privacy_view(const palette& colours, const std::string& address) {
+  namespace c = skiff::compose;
   return SKIFF_NAMED(account_privacy_view, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       section_title(colours, "PRIVACY"),
       account_switch<sends<request::flip_account_receipts>>(colours, "Send read receipts",
@@ -291,16 +322,8 @@ inline auto account_privacy_view(const palette& colours, const std::string& addr
                                                             "read their messages. Theirs are still shown, and "
                                                             "receipts are still kept here."))),
       // The plugins' rows on it (contract::account_privacy_rows): typing sent.
-      rows_of<contract::account_privacy_rows>::made(colours, level_place::account{address}),
-      c::shown_for<page_read>(mentions, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          account_switch<sends<request::flip_account_mentions_shared>>(colours, "Sync read mentions between sessions",
-              [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).shared; }, always),
-          account_switch<sends<request::flip_account_mentions_sealed>>(colours, "Encrypt them (with the recovery key)",
-              [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).sealed; },
-              [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).shared; }),
-          c::styled({.fillX = true}, wrapped(note_text(colours, "Which mentions you have read, kept with your account on its server, so "
-                                                                "your other sessions take them as read too. Encrypted, the server cannot "
-                                                                "read them; a session gets the key when it is restored with the recovery key.")))))));
+      rows_of<contract::account_privacy_rows>::made(colours, level_place::account_in<Protocol>{{address}}),
+      mentions_part<Protocol>(colours)));
 }
 
 // Notifications: whether what comes through it is told -- a message, an
@@ -329,17 +352,18 @@ inline auto account_notifications_view(const palette& colours, const std::string
 }
 
 // Its chats' own choices, bound to the account's in the model.
-inline auto account_chats_view(const palette& colours, std::string address) {
+template <class Protocol>
+auto account_chats_view(const palette& colours, std::string address) {
   using shared = config::account_shared;
   using skiff::compose::bound;
   const choice_level_t level = choice_level::account{};
-  auto rows = rows_of<contract::account_chat_rows>::made(colours, level_place::account{address});
+  auto rows = rows_of<contract::account_chat_rows>::made(colours, level_place::account_in<Protocol>{{address}});
   return SKIFF_NAMED(account_chats_view, skiff::compose::column(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
     skiff::compose::scoped<config::account_t>(
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          event_kinds_field<shared>(colours, level, proto::room_event_kinds_of(state_before(protocol_of(address)))),
+          room_events_part<Protocol, shared>(colours, level),
           bound<skiff::model::Field<&shared::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&shared::jump_search>>(colours, level))),
       std::move(address)),
     std::move(rows)));
@@ -353,7 +377,8 @@ struct set_colour {
 // chose another -- how its chats are, their looks, and its spaces in the
 // bars (the spaces plugin's section of its looks). Each as every
 // account's, until chosen here.
-inline auto account_chats_page(const ui_needs& n, const std::string& address, const config::theme_t& theme) {
+template <class Protocol>
+auto account_chats_page(const ui_needs& n, const std::string& address, const config::theme_t& theme) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const auto spaced = [](nodes::Text title) { return c::styled({.margin = {10.0f, 0.0f, 0.0f, 0.0f}}, std::move(title)); };
@@ -365,7 +390,7 @@ inline auto account_chats_page(const ui_needs& n, const std::string& address, co
       account_switch<sends<request::flip_account_strip>>(colours, "A strip on its chats in other lists",
           [](const config::account_t& one) { return config::strip_of(one); }, always),
       spaced(section_title(colours, "CHATS")),
-      account_chats_view(colours, address),
+      account_chats_view<Protocol>(colours, address),
       spaced(section_title(colours, "LOOKS")),
       level_section_plugins::made(colours, choice_level::account{}, *n.shared)));
 }
@@ -406,31 +431,47 @@ template <class... Pages>
 struct protocol_page_views<type_list<Pages...>> {
   using type = type_list<account_page_view_t<Pages>...>;
 };
-using editor_view_t = decltype(account_editor_view(std::declval<const ui_needs&>(), std::string()));
-using privacy_view_t = decltype(account_privacy_view(std::declval<const palette&>(), std::string()));
+template <class Protocol>
+using editor_view_t = decltype(account_editor_view<Protocol>(std::declval<const ui_needs&>(), std::string()));
+template <class Protocol>
+using privacy_view_t = decltype(account_privacy_view<Protocol>(std::declval<const palette&>(), std::string()));
 using notifications_view_t = decltype(account_notifications_view(std::declval<const palette&>(), std::string()));
-using chats_page_t = decltype(account_chats_page(std::declval<const ui_needs&>(), std::string(), config::theme_t{}));
+template <class Protocol>
+using chats_page_t = decltype(account_chats_page<Protocol>(std::declval<const ui_needs&>(), std::string(), config::theme_t{}));
 using appearance_view_t = decltype(account_appearance_view(std::declval<const palette&>(), std::string()));
 using choose_one_t = decltype(choose_one(std::declval<const palette&>()));
+// The client's pages that are a protocol's own type, for each protocol.
+template <class>
+struct client_page_views;
+template <class... Protocols>
+struct client_page_views<protocol_list<Protocols...>> {
+  using type = type_list<editor_view_t<Protocols>..., privacy_view_t<Protocols>..., chats_page_t<Protocols>...>;
+};
 using detail_page_t = typename variant_of_types<typename joined<
-    type_list<choose_one_t, editor_view_t, add_account_view_t, privacy_view_t, notifications_view_t, chats_page_t, appearance_view_t>,
+    type_list<choose_one_t, add_account_view_t, notifications_view_t, appearance_view_t>,
+    typename client_page_views<protocols>::type,
     typename protocol_page_views<typename protocol_account_pages<protocols>::type>::type,
     typename protocol_page_views<plugin_account_pages_t>::type>::type>::type;
 // An account's page: a protocol's made over the facts it starts from --
 // read again as they move.
-[[nodiscard]] inline detail_page_t page_made(const ui_needs& n, const panel_detail::account& chosen, const config::theme_t& theme) {
+// Of its protocol's type: the account's protocol read once, here.
+template <class Protocol>
+[[nodiscard]] detail_page_t page_made_for(const ui_needs& n, const panel_detail::account& chosen, const config::theme_t& theme) {
   const palette& colours = *n.colours;
   const std::string& address = chosen.address;
-  const account_page_facts facts{.by = account_id{protocol_of(address), address}, .page = chosen.page};
+  const account_page_facts facts{.by = account_id{Protocol{}, address}, .page = chosen.page};
   return spl::visit(spl::overloaded{
-                        [&](account_page::connection) { return detail_page_t(account_editor_view(n, address)); },
-                        [&](account_page::privacy) { return detail_page_t(account_privacy_view(colours, address)); },
+                        [&](account_page::connection) { return detail_page_t(account_editor_view<Protocol>(n, address)); },
+                        [&](account_page::privacy) { return detail_page_t(account_privacy_view<Protocol>(colours, address)); },
                         [&](account_page::notifications) { return detail_page_t(account_notifications_view(colours, address)); },
-                        [&](account_page::chats) { return detail_page_t(account_chats_page(n, address, theme)); },
+                        [&](account_page::chats) { return detail_page_t(account_chats_page<Protocol>(n, address, theme)); },
                         [&](account_page::appearance) { return detail_page_t(account_appearance_view(colours, address)); },
                         // A protocol's own: as its page_view makes it.
                         [&]<class Page>(Page page) { return detail_page_t(page_view(page, colours, facts)); }},
                     chosen.page);
+}
+[[nodiscard]] inline detail_page_t page_made(const ui_needs& n, const panel_detail::account& chosen, const config::theme_t& theme) {
+  return spl::visit([&]<class Protocol>(Protocol) { return page_made_for<Protocol>(n, chosen, theme); }, protocol_of(chosen.address));
 }
 [[nodiscard]] inline detail_page_t detail_made(const ui_needs& n, const detail_key& key) {
   return spl::visit(spl::overloaded{[&](panel_detail::none) { return detail_page_t(choose_one(*n.colours)); },

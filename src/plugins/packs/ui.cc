@@ -42,9 +42,9 @@ using namespace ::mux::ui;
 inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return settings_link(colours, "Emojis & Stickers", icon::smile{}, open{});
 }
-inline auto extend(contract::account_rows, type_tag<feature>, const palette& colours, const std::string& address) {
-  return skiff::compose::visible(proto::offers(state_before(protocol_of(address)), proto::feature::sticker_packs{}),
-                                 row_item(colours, "Emojis & Stickers", sends<open_account>{{address}}, icon::smile{}));
+template <class Protocol>
+auto extend(contract::account_rows<Protocol>, type_tag<feature>, const palette& colours, const std::string& address) {
+  return row_item(colours, "Emojis & Stickers", sends<open_account>{{address}}, icon::smile{});
 }
 // A room's settings' tab, where its protocol has packs: its packs, opened
 // in the dialog -- the list, Create pack and the editor all there.

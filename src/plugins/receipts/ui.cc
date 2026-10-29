@@ -57,7 +57,8 @@ inline auto extend(contract::choice_rows, type_tag<feature>, const auto& colours
 }
 
 // The same row on an account's Chats page (contract::account_chat_rows).
-inline auto extend(contract::account_chat_rows, type_tag<feature> f, const auto& colours, const level_place::account& place) {
+template <class Place>
+auto extend(contract::account_chat_rows, type_tag<feature> f, const auto& colours, const Place& place) {
   return extend(contract::choice_rows{}, f, colours, place);
 }
 

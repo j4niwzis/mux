@@ -52,6 +52,7 @@ struct room_creation {};     // rooms made
 struct sticker_packs {};     // packs of stickers and emoji, a room's and an account's
 struct history_context {};   // a window of history around a message, asked of the server
 struct identity_verification {};
+struct shared_mentions {};   // the mentions read, kept with the account on its server for its other sessions
 struct developer_tools {};  // a message's source, a room's state and account data, events of any type written  // people's and one's own sessions verified, by emoji
 }  // namespace feature
 
@@ -326,6 +327,12 @@ template <class State>
 consteval bool direct_chats_are_rooms() {
   using defaults::direct_rooms;
   return direct_rooms(State{});
+}
+// A protocol's room events to choose among, by its state's type.
+template <class State>
+std::vector<room_event_t> room_events_of() {
+  using defaults::room_event_kinds;
+  return room_event_kinds(State{});
 }
 // Whether a protocol's chats have room events to choose among (room_event_kinds).
 template <class State>

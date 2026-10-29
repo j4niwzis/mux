@@ -73,6 +73,16 @@ struct account {
 struct chat {
   conversation_id id;
 };
+// The same, of a protocol's: what a row offers there known from its type
+// (a choice its protocol's servers have, or not) while compiling.
+template <class Protocol>
+struct account_in : account {
+  using protocol = Protocol;
+};
+template <class Protocol>
+struct chat_in : chat {
+  using protocol = Protocol;
+};
 }  // namespace level_place
 [[nodiscard]] inline choice_level_t level_of(level_place::every) { return choice_level::everywhere{}; }
 [[nodiscard]] inline choice_level_t level_of(const level_place::account&) { return choice_level::account{}; }

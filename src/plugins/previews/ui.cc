@@ -95,15 +95,25 @@ inline std::optional<std::string> pressed_link(contract::message_cards, type_tag
   return shown.bounds().contains(x, y) ? std::optional(shown.fTag.url) : std::nullopt;
 }
 
-// Whether the choice of where cards come from is offered where a row is:
-// every chat's, always; an account's or a chat's, where its protocol's
-// servers fetch them (else they come from the sites, whatever is chosen).
-[[nodiscard]] inline bool server_fetches(level_place::every) { return true; }
-[[nodiscard]] inline bool server_fetches(const level_place::account& at) {
-  return proto::offers(state_before(proto::protocol_of(at.address)), proto::feature::server_previews{});
+// Whether the choice of where cards come from is offered where a row is,
+// known from the place's type: every chat's, always; a protocol's account's
+// or chat's, where its protocol's servers fetch them (else they come from
+// the sites, whatever is chosen).
+template <class Place>
+constexpr bool server_fetches = true;
+template <class Protocol>
+constexpr bool server_fetches<level_place::account_in<Protocol>> = proto::offered_by<state_of<Protocol>, proto::feature::server_previews>();
+template <class Protocol>
+constexpr bool server_fetches<level_place::chat_in<Protocol>> = proto::offered_by<state_of<Protocol>, proto::feature::server_previews>();
+template <class Place>
+auto direct_row(const auto&, const Place&) {
+  return nothing_shown();
 }
-[[nodiscard]] inline bool server_fetches(const level_place::chat& at) {
-  return proto::offers(state_before(at.id.account.speaks), proto::feature::server_previews{});
+template <class Place>
+  requires(server_fetches<Place>)
+auto direct_row(const auto& colours, const Place& place) {
+  using direct = skiff::model::Field<&choices::direct>;
+  return skiff::compose::bound<direct>(show_hide_field<previews_direct_setting, std::optional<bool>, direct>(colours, level_of(place)));
 }
 // Its rows among a level's choices (contract::choice_rows): cards shown or
 // not, and where they come from -- each Default as the level over it.
@@ -111,15 +121,14 @@ template <class Place>
 inline auto extend(contract::choice_rows, type_tag<feature>, const auto& colours, const Place& place) {
   namespace c = skiff::compose;
   using shown = skiff::model::Field<&choices::shown>;
-  using direct = skiff::model::Field<&choices::direct>;
   return choices_scoped<choices>(place, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::bound<shown>(show_hide_field<link_previews_setting, std::optional<bool>, shown>(colours, level_of(place))),
-      c::visible(server_fetches(place),
-          c::bound<direct>(show_hide_field<previews_direct_setting, std::optional<bool>, direct>(colours, level_of(place))))));
+      direct_row(colours, place)));
 }
 
 // The same row on an account's Chats page (contract::account_chat_rows).
-inline auto extend(contract::account_chat_rows, type_tag<feature> f, const auto& colours, const level_place::account& place) {
+template <class Place>
+auto extend(contract::account_chat_rows, type_tag<feature> f, const auto& colours, const Place& place) {
   return extend(contract::choice_rows{}, f, colours, place);
 }
 

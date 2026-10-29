@@ -287,12 +287,9 @@ auto general_sections_of(plugin_list<Features...>, const auto& colours, const ro
 // What the General has by its kind alone, known while compiling: the note
 // over the room events where its protocol has them; Leave where a room of
 // its is left. Where not, nothing in its place.
-inline auto nothing_here() {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}));
-}
 template <class Kind>
 auto room_events_note(const auto&) {
-  return nothing_here();
+  return nothing_shown();
 }
 template <class Kind>
   requires(proto::shows_room_events<state_of<typename Kind::protocol>>())
@@ -301,7 +298,7 @@ auto room_events_note(const auto& colours) {
 }
 template <class Kind>
 auto leave_part(const auto&) {
-  return nothing_here();
+  return nothing_shown();
 }
 template <class Kind>
   requires(Kind::leavable)
@@ -318,7 +315,7 @@ auto room_general_page(const auto& colours, const room_settings_of<Kind>& facts,
                                 .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       c::visible(!has_page_header, tab_heading(colours, general_title<Kind>())),
       room_events_note<Kind>(colours),
-      chat_settings_view(colours, facts.chat),
+      chat_settings_view<typename Kind::protocol>(colours, facts.chat),
       general_sections_of(composition::providers<contract::general_sections, enabled_plugins>{}, colours, facts),
       leave_part<Kind>(colours)));
 }

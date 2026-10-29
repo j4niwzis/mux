@@ -87,7 +87,12 @@ struct pack_delete {};
 consteval bool provides(contract::settings_links, type_tag<feature>) { return true; }
 // Its link opens the account's own packs: none before there is an account.
 consteval bool needs_account(contract::settings_links, type_tag<feature>) { return true; }
-consteval bool provides(contract::account_rows, type_tag<feature>) { return true; }
+// Its row on the accounts of the protocols that have packs.
+template <class Protocol>
+  requires(proto::offered_by<state_of<Protocol>, proto::feature::sticker_packs>())
+consteval bool provides(contract::account_rows<Protocol>, type_tag<feature>) {
+  return true;
+}
 // Its tab of a room's settings (the room_settings plugin's).
 consteval bool provides(room_settings::contract::tabs, type_tag<feature>) { return true; }
 // Put on the settings of every protocol's rooms whose protocol has sticker packs,

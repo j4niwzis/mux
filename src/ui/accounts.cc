@@ -375,7 +375,7 @@ inline auto account_chats_page(const ui_needs& n, const std::string& address, co
       spaced(section_title(colours, "CHATS")),
       account_chats_view(colours, address),
       spaced(section_title(colours, "LOOKS")),
-      look_choices(colours, choice_level::account{}),
+      level_section_plugins::made(colours, choice_level::account{}),
       spaced(section_title(colours, "SPACES")),
       c::projected<page_read>([](const page_read& now) { return now ? std::optional(home_way(now->account)) : std::nullopt; },
           c::mount<home_choice_t, std::size_t>([at = &colours](std::size_t way) { return std::tuple{home_choice(*at, way)}; },

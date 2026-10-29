@@ -27,14 +27,32 @@ import mux.config;
 import mux.logic.links;
 import mux.protocols;
 import mux.ui.base;
+import mux.plugins.ui.top;
 import mux.ui.messages;
 
 export import mux.ui.cards;
 export import :info_cards;
-export import :info_looks;
 export import :info_explore;
 
 export namespace mux::ui {
+// The plugins' sections on the pages a chat's looks are chosen on
+// (contract::level_sections), for the page's level, in their order -- the
+// background and bubbles pickers, for one.
+template <class List>
+struct level_section_list;
+template <class... Features>
+struct level_section_list<plugin_list<Features...>> {
+  template <class Feature>
+  static auto section_of(const palette& colours, choice_level_t level) -> decltype(extend(contract::level_sections{}, type_tag<Feature>{}, colours, level)) {
+    static_assert(requires { extend(contract::level_sections{}, type_tag<Feature>{}, colours, level); },
+                  composition::broken<contract::level_sections, Feature>());
+    return extend(contract::level_sections{}, type_tag<Feature>{}, colours, level);
+  }
+  static auto made(const palette& colours, choice_level_t level) {
+    return skiff::compose::column(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), section_of<Features>(colours, level)...);
+  }
+};
+using level_section_plugins = level_section_list<composition::providers<contract::level_sections, enabled_plugins>>;
 
 // A chat's info, as Telegram's profile: beside the chat, in one column that
 // scrolls -- its big avatar, name and how it is, its tiles (mute, Manage,

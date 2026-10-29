@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:info_looks -- Bubbles' and panels' looks picked, and a chat's background.
+// mux.plugin.looks.ui_top -- Bubbles' and panels' looks picked, and a chat's background.
 module;
 #include "skiff/named.h"
-export module mux.ui:info_looks;
+export module mux.plugin.looks.ui_top;
 
 import std;
 import splice;
@@ -28,9 +28,12 @@ import mux.protocols;
 import mux.ui.base;
 import mux.ui.messages;
 import mux.ui.cards;
-import :info_cards;
 
-export namespace mux::ui {
+import mux.composition;
+import mux.plugin.looks.types;
+
+export namespace mux::plugins::looks {
+using namespace ::mux::ui;
 // What a chat looks like, chosen at a level -- every chat's, an account's,
 // one chat's: its background (as the level over it says, the theme's, a
 // plain colour, or a picture of one's own), and how its bubbles and the
@@ -355,5 +358,12 @@ inline auto look_choices(const palette& colours, choice_level_t level) {
 using look_choices_t = decltype(look_choices(std::declval<const palette&>(), choice_level_t{}));
 
 
-}  // namespace mux::ui
 
+// Its pickers on the pages a level's looks are chosen on: Appearance (every
+// chat's), an account's page (its own), a room's Appearance tab (the
+// room's) -- mux.ui:appearance, :accounts, :room_settings.
+inline auto extend(contract::level_sections, type_tag<feature>, const palette& colours, choice_level_t level) {
+  return look_choices(colours, level);
+}
+
+}  // namespace mux::plugins::looks

@@ -205,8 +205,6 @@ struct app : kept_settings {
     if (plugins_took_files(paths, dropped))
       return;
     if (manage.took_files(paths, dropped)) return;
-    if (looks.took_files(paths, dropped))
-      return;
     if (profile_files_given(paths, dropped)) return;
     outbox.files_given(std::move(paths), dropped);
   }
@@ -556,6 +554,9 @@ struct app : kept_settings {
   void apply(const request::adopt_pack&) {}
   void apply(const request::explore_space&) {}
   void apply(const request::search_rooms&) {}
+  void apply(const request::set_wallpaper&) {}
+  void apply(const request::change_bubbles&) {}
+  void apply(const request::set_bubbles&) {}
   void apply(const request::look_up_room&) {}
   void apply(const request::show_invite&) {}
   void apply(const request::open_new_chat&) {}

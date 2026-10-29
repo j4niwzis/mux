@@ -167,7 +167,7 @@ inline auto looks_page(const palette& colours, const room_settings_facts& facts)
   return SKIFF_NAMED(looks_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Appearance"),
       c::scoped<config::chat_choices>(c::handlers(), style_controls(colours), facts.chat),
-      look_choices(colours, choice_level::chat{})));
+      level_section_plugins::made(colours, choice_level::chat{})));
 }
 template <class Up, class Page>
 auto client_page(Up up, Page page) {

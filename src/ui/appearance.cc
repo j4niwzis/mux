@@ -384,7 +384,7 @@ template <class Section> [[nodiscard]] auto held(Section section) { return std::
 inline auto appearance_page(const ui_needs& needs, const config::theme_t& theme, const config::accent_t&) {
   namespace c = skiff::compose;
   const palette& colours = *needs.colours;
-  auto looks = held(look_choices(colours, choice_level::everywhere{}));
+  auto looks = held(level_section_plugins::made(colours, choice_level::everywhere{}));
   looks->apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
   return c::Box(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::styled({.depth = 1.0f, .background = colours.sidebar},

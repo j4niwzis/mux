@@ -161,6 +161,13 @@ struct composer_top {
 struct drawer_rows {
   static constexpr std::string_view name = "the drawer's rows";
 };
+// On each page a chat's looks are chosen on, for its level -- Appearance
+// (every chat's), an account's page (its own), a room's Appearance tab
+// (the room's) (mux.ui:info): extend(c, f, palette, choice_level_t) -> its
+// section, the same node whatever the level
+struct level_sections {
+  static constexpr std::string_view name = "a level's sections";
+};
 // Settings' home page, its links after the client's own (mux.ui:proxies):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own

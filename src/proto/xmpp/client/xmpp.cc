@@ -1929,10 +1929,3 @@ template <class Sink>
 using account_of = account<Sink>;
 
 }  // namespace mux::proto::xmpp::client
-
-// The account's session, instantiated here, in the module's interface, once:
-// its bodies kept in what the module gives its importers, which take them
-// from it -- every unit instantiating the account made them again, 216 of
-// them (the compile's time trace). A definition, not an extern template:
-// importers still see the bodies, and inline them.
-template class tern::session<mux::net::stream&, mux::proto::xmpp::client::proto, tern::answering<>, mux::net::scheduler>;

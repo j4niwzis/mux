@@ -67,7 +67,6 @@ struct account_made_once {
     (void)one.index();
   }
 };
-template struct account_made_once<any_account>;
 
 // What an account type does beyond what every account does: whether it has
 // each call -- the account's own members, so that what is offered is what
@@ -880,4 +879,9 @@ struct network {
   }
 };
 
+}  // namespace mux::app
+
+// (Outside the exported declarations: an explicit instantiation is not one.)
+namespace mux::app {
+template struct account_made_once<any_account>;
 }  // namespace mux::app

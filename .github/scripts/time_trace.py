@@ -16,7 +16,7 @@ traces = [p for p in build.rglob("*.json")
           if p.stat().st_mtime >= began and "CMakeFiles" in p.parts and not p.name.startswith("compile_commands")]
 
 units = []
-by_kind = defaultdict(lambda: defaultdict(lambda: [0, 0]))  # kind -> detail -> [microseconds, count]
+by_kind = defaultdict(lambda: defaultdict(lambda: [0, 0, set()]))  # kind -> detail -> [microseconds, count, units]
 KINDS = {"Source": "files parsed (headers and module units read as text)",
          "ParseClass": "classes parsed",
          "InstantiateClass": "classes instantiated",
@@ -41,6 +41,7 @@ for path in traces:
             slot = by_kind[name][detail]
             slot[0] += dur
             slot[1] += 1
+            slot[2].add(path)
     if total:
         units.append((total, str(path.relative_to(build))))
 
@@ -52,8 +53,8 @@ for kind, said in KINDS.items():
     rows = sorted(by_kind[kind].items(), key=lambda kv: kv[1][0], reverse=True)[:25]
     if not rows:
         continue
-    out += ["", f"### {said} (summed over the units)", "", "| s | times | what |", "|---:|---:|---|"]
-    out += [f"| {us / 1e6:.1f} | {n} | `{detail or '(none)'}` |" for detail, (us, n) in rows]
+    out += ["", f"### {said} (summed over the units)", "", "| s | times | units | what |", "|---:|---:|---:|---|"]
+    out += [f"| {us / 1e6:.1f} | {n} | {len(where)} | `{detail or '(none)'}` |" for detail, (us, n, where) in rows]
 text = "\n".join(out) + "\n"
 print(text)
 (build / f"time-trace-{stage}.md").write_text(text)

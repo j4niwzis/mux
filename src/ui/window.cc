@@ -336,6 +336,32 @@ struct shown_root {
   skiff::model::Tracked<overlay_shown> overlay;
   skiff::model::Tracked<window_made> made;
 };
+
+// Where each part of what is shown is, found once -- here, in mux.ui's
+// interface -- for every unit that shows or looks at one to take from it:
+// the same search for a part (skiff::model's PathsTo) was made again in
+// each, 105 units for the menu's alone (the app stage's time trace).
+template <class Root, class T>
+struct shown_found {
+  static constexpr std::size_t count() { return 0; }
+};
+template <class Root, class T>
+struct shown_found<Root, skiff::model::Tracked<T>> {
+  static constexpr std::size_t count() { return skiff::model::kFound<T, Root> + shown_found<Root, T>::count(); }
+};
+template <class Root, class T>
+  requires skiff::model::Decomposable<T>
+struct shown_found<Root, T> {
+  template <class... Members>
+  static constexpr std::size_t members(skiff::model::Types<Members...>) {
+    return (shown_found<Root, Members>::count() + ... + std::size_t{0});
+  }
+  static constexpr std::size_t count() { return members(skiff::model::MemberTypes<T>{}); }
+};
+template <class Root>
+struct shown_paths_found {
+  static std::size_t found() { return shown_found<Root, Root>::count(); }
+};
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
 // A part that is always there -- the drawer out or back, the chat chosen --
@@ -778,3 +804,8 @@ using window = decltype(window_view(std::declval<const ui_needs&>()));
 // class's constexpr constructor in an explicit instantiation of it.)
 extern template void skiff::model::Model<mux::ui::shown_root, mux::ui::shown_reactions>::endBatch();
 
+
+// (Outside the exported declarations: an explicit instantiation is not one.)
+namespace mux::ui {
+template struct shown_paths_found<shown_root>;
+}  // namespace mux::ui

@@ -200,7 +200,6 @@ struct stub {
   void send_gif(std::string) {}
   void send_sticker(mux::emote) {}
   void play_audio(std::string) {}
-  void menu_pin() {}
   void menu_reactions() {}
   void close_reactions() {}
   void open_avatar(std::string) {}

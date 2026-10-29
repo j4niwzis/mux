@@ -327,7 +327,6 @@ struct shown_root {
   skiff::model::Tracked<chats_shown> chats_now;
   skiff::model::Tracked<chat_head_shown> head;
   skiff::model::Tracked<connection_shown> connections;
-  skiff::model::Tracked<pinned_shown> pinned;
   skiff::model::Tracked<banner_shown> banner;
   skiff::model::Tracked<suggestions_shown> suggested;
   skiff::model::Tracked<threads_shown> threads_list;

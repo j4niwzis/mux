@@ -264,7 +264,6 @@ inline auto chat_column(const ui_needs& n) {
       connection_bar_for<connection_shown>(*n.colours, &connection_shown::chat),
       search_bar_for(*n.colours),
       selection_bar(n),
-      pinned_bar_for(*n.colours),
       column_parts_t::column_of(n),
       protocol_view_for<head_view_holder, make_head_of>(n),
       c::shown_for<chat_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, chat_area(n))),
@@ -278,8 +277,8 @@ inline auto chat_column(const ui_needs& n) {
 using chat_column_t = decltype(chat_column(std::declval<const ui_needs&>()));
 // Its parts, by where they are in it.
 struct chat_part {
-  static constexpr std::size_t header = 0, connection = 1, search = 2, selection = 3, pinned = 4, plugins = 5,
-                               their_head = 6, area = 7, suggestions = 8, banner = 9, their_view = 10, line = 11;
+  static constexpr std::size_t header = 0, connection = 1, search = 2, selection = 3, plugins = 4,
+                               their_head = 5, area = 6, suggestions = 7, banner = 8, their_view = 9, line = 10;
 };
 
 // The chats screen: the side (its chats), the chat, and its info or its

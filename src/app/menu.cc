@@ -48,7 +48,6 @@ void part_apply(menu_part& self, const request::menu_copy_url&);
 void part_apply(menu_part& self, const request::menu_copy_image&);
 void part_apply(menu_part& self, const request::menu_thread&);
 void part_apply(menu_part& self, const request::menu_save&);
-void part_apply(menu_part& self, const request::menu_pin&);
 void part_apply(menu_part& self, const request::menu_select&);
 void part_apply(menu_part& self, const request::toggle_selected& one);
 void part_apply(menu_part& self, const request::selection_cancel&);
@@ -211,14 +210,6 @@ void part_apply(menu_part& self, const request::menu_save&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
   if (self.target_.media)
     self.pictures_->save(*self.target_.media, self.target_.media_name.empty() ? std::string("image") : self.target_.media_name);
-}
-
-void part_apply(menu_part& self, const request::menu_pin&) {
-  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  const auto& chosen = self.s_->chosen();
-  if (!chosen || self.s_->demo())
-    return;
-  self.s_->net->pin(*chosen, self.target_.id, !self.target_.pinned);
 }
 
 

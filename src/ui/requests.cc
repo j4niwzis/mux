@@ -280,18 +280,10 @@ struct return_to_chat {};
 // The chat's head pressed, off its buttons: its info, where the chat is
 // shown one thing at a time.
 struct head_pressed {};
-// The pinned bar pressed: to the pin it shows, and the bar on to the one
-// pinned before it.
 // The send box's Add more: other files chosen, to go with those in it --
 // a gallery -- its caption as written so far kept.
 struct attach_more {
   std::string caption;
-};
-struct pinned_pressed {};
-// The pinned bar swiped across: the pin before it (older) or after it,
-// shown in the bar -- nothing jumped to.
-struct pinned_step {
-  bool older = true;
 };
 struct menu_copy_link {};
 struct menu_copy_url {};
@@ -753,7 +745,6 @@ struct keep_whole {
   std::string to;  // the file it is written to
   std::string title, not_loaded, kept;
 };
-struct menu_pin {};
 // A message's reactions as the events they are, in a window of their own.
 // Link previews, at a level: on, off, or (at an account's or a chat's) as
 // the level over it says.

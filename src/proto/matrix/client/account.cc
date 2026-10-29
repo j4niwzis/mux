@@ -480,9 +480,6 @@ class account {
   // or the redaction of the account's own.
   void react(std::string room, std::string target, std::string key, bool on,
              std::optional<std::string> shortcode = std::nullopt);
-  // A message pinned in its room, or unpinned: the room's list as the last
-  // sync had it, with it put in or taken out, set as the room's state.
-  void pin(std::string room, std::string target, bool on);
 
   // The account leaves a room; the next sync says it has, and the room goes.
   void leave(std::string room);

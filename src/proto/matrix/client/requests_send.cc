@@ -147,42 +147,6 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
 }
 
 template <class Sink>
-void account<Sink>::pin(std::string room, std::string target, bool on) {
-  this->spawn_guarded([this, room = std::move(room), target = std::move(target), on] {
-    if (!api_)
-      return;
-    // The pins as the server has them now, read from its answer: the room's
-    // state as synced may not hold them (lazy loading, a room just joined),
-    // and a list made from nothing put this pin in place of all the others.
-    // Where the server cannot say, as synced.
-    std::vector<std::string> pinned;
-    if (const auto got = perform(*api_, loom::cs::get_room_state_with_key{
-            .room_id = room, .event_type = "m.room.pinned_events", .state_key = ""})) {
-      if (const auto typed = knot::try_read<loom::ev::m_room_pinned_events_content_t>(got->text))
-        pinned = typed->pinned;
-    } else if (const auto& server = got.error().server; !server || server->status != 404) {
-      if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
-        pinned = kept->second.state.pinned();
-    }
-    std::erase(pinned, target);
-    if (on)
-      pinned.push_back(target);
-    loom::ev::m_room_pinned_events_content_t content;
-    content.pinned = std::move(pinned);
-    if (auto done = perform(*api_, loom::cs::set_room_state_with_key{.room_id = room,
-                                                                     .event_type = "m.room.pinned_events",
-                                                                     .state_key = "",
-                                                                     .body = as_body(content)});
-        !done) {
-      log(id_, "could not {} {} in {}: {}", on ? "pin" : "unpin", target, room, done.error().said());
-      // Said, not only logged: a pin refused (too little power in the room)
-      // looked like a menu item that did nothing (a tester's).
-      sink_(change::notice{id_, on ? "Not pinned" : "Not unpinned", done.error().said()});
-    }
-  });
-}
-
-template <class Sink>
 void account<Sink>::leave(std::string room) {
   this->spawn_guarded([this, room = std::move(room)] {
     if (api_)

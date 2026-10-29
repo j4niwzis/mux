@@ -249,7 +249,6 @@ inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts
       item(facts.answerable && facts.selection && !facts.own && !facts.copied.empty(), "Quote & Reply", sends<request::menu_quote_reply>{}, icon::back{}),
       item(facts.editable && !facts.reaction && ((!facts.text.empty() && !facts.media) || facts.captioned), "Edit", sends<request::menu_edit>{},
            icon::sliders{}),
-      item(facts.pinnable, facts.pinned ? "Unpin" : "Pin", sends<request::menu_pin>{}, icon::check{}),
       item(!facts.copied.empty(), facts.selection ? "Copy Selected Text" : "Copy Text", sends<request::menu_copy>{}, icon::clip{}),
       item(!facts.link.empty(), "Copy Message Link", sends<request::menu_copy_link>{}, icon::info{}),
       item(!facts.pressed_link.empty(), "Copy Link", sends<request::menu_copy_url>{}, icon::clip{}),

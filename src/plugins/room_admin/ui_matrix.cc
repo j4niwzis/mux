@@ -229,19 +229,23 @@ auto choice_head(const auto& colours, std::string value) {
       c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 12.0f, colours.text)))));
 }
 // The compact head: the name chosen, nothing beside it.
+// Where nothing is chosen, what it says instead (an "Add a room..." of its
+// own).
 struct compact_choice_head {
   const palette* colours;
-  auto operator()(std::string value) const { return choice_head(*colours, std::move(value)); }
+  std::string empty;
+  auto operator()(std::string value) const { return choice_head(*colours, value.empty() ? empty : std::move(value)); }
 };
 template <class Choose>
-auto compact_choice(const auto& colours, std::vector<std::string> names, std::size_t selected, Choose choose) {
-  const auto value = selected < names.size() ? names[selected] : std::string();
-  const auto width = std::clamp(static_cast<float>(value.size()) * 6.5f + 32.0f, 72.0f, 180.0f);
+auto compact_choice(const auto& colours, std::vector<std::string> names, std::size_t selected, Choose choose,
+                    std::string empty = {}, float least = 72.0f) {
+  const auto value = selected < names.size() ? names[selected] : empty;
+  const auto width = std::clamp(static_cast<float>(value.size()) * 6.5f + 32.0f, least, std::max(180.0f, least));
   auto head = choice_head(colours, value);
   auto rows = names | std::views::transform([&](const auto& name) { return choice_menu_option(colours, name); }) | std::ranges::to<std::vector>();
   auto menu = widgets::ChoiceMenu<Choose, decltype(head), choice_menu_option_t, show_choice_menu<compact_choice_head>>(
       std::move(names), selected, std::move(choose), std::move(head), std::move(rows),
-      show_choice_menu<compact_choice_head>{&colours, {&colours}});
+      show_choice_menu<compact_choice_head>{&colours, {&colours, std::move(empty)}});
   menu.apply({.width = width, .relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle});
   return menu;
 }
@@ -249,13 +253,13 @@ auto compact_choice(const auto& colours, std::vector<std::string> names, std::si
 // where they do -- Key says its names, the one chosen, whether it does
 // anything now, and what its choices ask -- greyed where it does nothing.
 template <class Key, class Now, class Of>
-auto live_choice(const auto& colours, Now now, Of choose_of) {
+auto live_choice(const auto& colours, Now now, Of choose_of, std::string empty = {}, float least = 72.0f) {
   namespace c = skiff::compose;
   using choose_t = std::invoke_result_t<Of&, const Key&>;
   using menu_t = decltype(compact_choice(colours, {}, 0, std::declval<choose_t>()));
   return SKIFF_NAMED(live_choice, c::projected<facts_t>([now](const facts_t& facts) { return facts ? std::optional<Key>(now(facts)) : std::nullopt; },
-      c::mount<menu_t, Key>([at = &colours, choose_of](const Key& shown) {
-        auto menu = compact_choice(*at, shown.names, shown.selected, choose_of(shown));
+      c::mount<menu_t, Key>([at = &colours, choose_of, empty, least](const Key& shown) {
+        auto menu = compact_choice(*at, shown.names, shown.selected, choose_of(shown), empty, least);
         menu.apply(allowed_spec(shown.allowed));
         return std::tuple{std::move(menu)};
       },
@@ -487,7 +491,7 @@ auto space_children(const auto& colours, bool space) {
                          editable(now, power_need::change_settings{}),
                          addable | std::views::transform(&room_settings_facts::named_room::id) | std::ranges::to<std::vector>()};
       },
-          [](const child_key& key) { return choose_child{key.rooms}; })));
+          [](const child_key& key) { return choose_child{key.rooms}; }, "Add a room to this space…", 280.0f)));
 }
 // The room it continues, or continues in: opened.
 struct related_key {

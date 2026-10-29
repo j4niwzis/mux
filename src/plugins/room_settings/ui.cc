@@ -280,7 +280,12 @@ struct general_up {
 };
 // Whether a tab's row is listed: the client's General only where no tab of
 // a plugin's hosts it; every other tab, always.
-constexpr bool tab_listed(const auto&, const room_facts_t&) { return true; }
+// A plugin's, where this room has it (tab_shown: a Matrix room's tabs for a
+// Matrix room alone) -- said here, where the row reads it each time: the
+// row's own spec set it visible again over the visible() it was made in,
+// and an XMPP group chat's tabs were listed for a Matrix space (a tester's).
+template <class Tab>
+bool tab_listed(const Tab&, const room_facts_t& now) { return !now || tab_shown<Tab>(*now); }
 inline bool tab_listed(settings_tab::general, const room_facts_t& now) { return !now || general_on_its_own(*now); }
 // A tab's row: its icon and title, marked while it is up; pressed, it is.
 template <class Tab>
@@ -304,7 +309,8 @@ auto manage_tab_row(const auto& colours, Tab tab) {
 // opened; it reads them as they move.
 template <class Tab>
 auto plugin_tab_row(const auto& colours, const room_settings_facts& facts) {
-  return skiff::compose::visible(tab_shown<Tab>(facts), manage_tab_row(colours, Tab{}));
+  (void)facts;
+  return manage_tab_row(colours, Tab{});
 }
 template <class... Tabs>
 auto plugin_tab_rows(ui::type_list<Tabs...>, const auto& colours, const room_settings_facts& facts) {

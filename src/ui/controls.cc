@@ -314,7 +314,11 @@ inline auto choice_menu_option(const palette& colours, std::string name, bool ch
   namespace c = skiff::compose;
   return SKIFF_NAMED(choice_menu_option, c::row(c::hbox(0.0f, {.fillX = true, .height = 32.0f,
       .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = colours.chosen}),
-      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(name), 14.0f, chosen ? colours.accent : colours.text, chosen))));
+      // On one line, cut short with an ellipsis where the list is narrower
+      // than the name: wrapped, a long name in a narrow list overflowed its
+      // row onto the next ones (a tester's).
+      c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                elided(nodes::Text(std::move(name), 14.0f, chosen ? colours.accent : colours.text, chosen)))));
 }
 using choice_menu_head_t = decltype(choice_menu_head(std::declval<const palette&>(), std::string(), std::string()));
 using choice_menu_option_t = decltype(choice_menu_option(std::declval<const palette&>(), std::string()));

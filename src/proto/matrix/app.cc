@@ -555,13 +555,6 @@ template <class App>
 void program_told(App& app, const management_saved& one) {
   app_detail::change_manage(app, one.in, [&](ui::room_settings_facts& facts, manage_state& kept) { app_detail::saved_in(facts, kept, one); });
 }
-// An emoji verification, as it goes: its dialog.
-template <class App>
-void program_told(App& app, const verification_changed& one) {
-  app.verification.showing(one.by, one.txn);
-  mux::ui::show(app.showing, std::optional(ui::verification_view{one.user, one.device, one.step}));
-}
-
 // What Matrix keeps of an account whose pages are open, changed: where
 // they are open for that account.
 template <class App, class Change>

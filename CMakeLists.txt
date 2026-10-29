@@ -583,7 +583,7 @@ if(MUX_UI)
     FILES ${mux_protocol_app} ${mux_enabled_demo} ${mux_enabled_app} ${mux_plugin_app} ${mux_plugins_app}
           src/app/sink.cc ${mux_generated}/proto/accounts.cc src/proto/demo.cc src/app/network.cc src/app/workers.cc src/app/demo.cc
           src/app/store.cc src/app/requests.cc src/app/words.cc src/app/kept.cc src/app/services.cc src/app/pictures.cc src/app/drafts.cc
-          src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc
+          src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc
           src/app/rooms.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/jumps.cc src/app/chat_view.cc src/app/chat_list.cc src/app/emoji.cc src/app/accounts.cc
           src/app/local_data.cc src/app/history.cc src/proto/app.cc)
   target_sources(mux_app PRIVATE src/app/shown_binding.cc)

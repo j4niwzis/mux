@@ -44,7 +44,6 @@ import mux.app.settings;
 import mux.app.menu;
 import mux.app.notices;
 import mux.app.history;
-import mux.app.verification;
 import mux.app.rooms;
 import mux.app.preferences;
 import mux.app.manage;
@@ -125,7 +124,6 @@ struct app : kept_settings {
   settings_part settings{shared, *this, pictures};
   notices_part notices{shared};
   history_part paging{shared};
-  verification_part verification{shared};
   rooms_part rooms{shared};
   preferences_part preferences{shared, *this};
   manage_part manage{shared, *this};
@@ -323,7 +321,7 @@ struct app : kept_settings {
   // none of them takes, the program's own.
   auto parts() {
     return std::tuple_cat(
-        std::tie(pictures, reading, outbox, settings, menu, notices, paging, verification,
+        std::tie(pictures, reading, outbox, settings, menu, notices, paging,
                  rooms, preferences, manage, looks, jumps, chat_view, chat_list, emoji, accounts_screen, local_data),
         std::apply([](auto&... theirs) { return std::tie(theirs...); }, plugin_parts));
   }
@@ -541,6 +539,8 @@ struct app : kept_settings {
   // nothing, where that plugin is not built. Where it is, its part is
   // offered the request first (route), and takes it.
   void apply(const request::typing&) {}
+  void apply(const request::verify_person&) {}
+  void apply(const request::accept_identity&) {}
   void apply(const request::suggestion_step&) {}
   void apply(const request::suggestion_pick&) {}
   void apply(const request::suggestion_close&) {}

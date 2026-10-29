@@ -755,11 +755,6 @@ struct give_passphrase {
 struct verify_person {
   mux::conversation_id who;  // the account, and the person's ID
 };
-struct verify_accept_now {};
-struct verify_cancel_now {};
-struct verify_match {};
-struct verify_mismatch {};
-struct close_verification {};
 // The chosen account's room keys, to a file or from one.
 // Local data's encryption flipped from Storage: a passphrase asked for.
 struct flip_local_encryption {};

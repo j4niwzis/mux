@@ -27,13 +27,6 @@ struct management_saved {
   std::string error;
   std::optional<managed_state_event> saved_state;
 };
-struct verification_changed {
-  account_id by;
-  std::string txn;
-  std::string user;
-  std::string device;
-  verification_step_t step;
-};
 // This session, as Element's Cryptography section names it: its ID, and
 // its key (ed25519), to be compared with what another session shows.
 // Element's Security section: whether this session has the cross-signing
@@ -90,7 +83,7 @@ struct sign_in_page {
   std::string url;
 };
 
-using changes = change_list<management_loaded, management_saved, room_avatar_uploaded, session_given, registration_page, sign_in_page, verification_changed, security_state, sessions_listed, sessions_refused, uia_in_browser>;
+using changes = change_list<management_loaded, management_saved, room_avatar_uploaded, session_given, registration_page, sign_in_page, security_state, sessions_listed, sessions_refused, uia_in_browser>;
 constexpr type_tag<changes> changes_type(const state&) { return {}; }
 
 // As the command line says them.
@@ -102,9 +95,6 @@ inline std::string describe(const registration_page& one) { return one.account.a
 inline std::string describe(const sign_in_page& one) { return one.account.address + ": signing in on " + one.url; }
 inline std::string describe(const security_state& one) {
   return std::format("cross-signing {}, backup {}", one.cross_signing ? "set up" : "not set up", one.backup ? "on" : "off");
-}
-inline std::string describe(const verification_changed& one) {
-  return std::format("verifying {} {}: {}", one.user, one.device, one.txn);
 }
 inline std::string describe(const session_info& one) { return one.id + " " + one.name; }
 inline std::string describe(const sessions_listed& one) { return std::format("{} sessions", one.sessions.size()); }

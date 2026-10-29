@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.plugin.encryption.types -- What the encryption plugin names, and what it
-// says it provides: the Matrix account, made with end-to-end encryption.
+// says it provides: the Matrix account, made with end-to-end encryption;
+// the emoji verification's dialog; and a part of the program.
 // Light: mux.ui sees it.
 export module mux.plugin.encryption.types;
 
@@ -15,5 +16,26 @@ struct feature {
 };
 
 consteval bool provides(contract::matrix_account, type_tag<feature>) { return true; }
+
+// An emoji verification, as Element shows it: with whom, and where it is --
+// asked of you (Accept, Decline), waiting on them (Cancel), the 7 emoji to
+// compare with what their screen shows (They match, They don't match), done,
+// or stopped and why (OK).
+struct verification_view {
+  std::string user;
+  std::string device;
+  verification_step_t step;
+};
+// Its answers, asked of the program by the dialog; it is closed by
+// ui::request::close_shown<verification_view>, which its part answers as
+// its step allows.
+struct verify_accept_now {};
+struct verify_cancel_now {};
+struct verify_match {};
+struct verify_mismatch {};
+
+consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
+constexpr type_tag<verification_view> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
+consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
 
 }  // namespace mux::plugins::encryption

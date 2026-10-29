@@ -64,6 +64,7 @@ import mux.composition;
 import mux.proto.matrix.requests;
 import mux.proto.matrix.client;
 import mux.plugin.encryption.types;
+import mux.plugin.encryption.changes;
 import :account;
 
 // The members defined here are declared in :account.
@@ -157,7 +158,7 @@ bool encrypted_account<Sink>::send_plain(std::string type, const std::string& us
 }
 template <class Sink>
 void encrypted_account<Sink>::verification_said(const crypto::sas_state& state, verification_step_t step) {
-  sink_(proto::matrix::verification_changed{id_, state.txn, state.their_user, state.their_device, std::move(step)});
+  sink_(::mux::plugins::encryption::verification_changed{id_, state.txn, state.their_user, state.their_device, std::move(step)});
 }
 template <class Sink>
 void encrypted_account<Sink>::cancel_verification(const std::string& txn, std::string code, std::string reason) {

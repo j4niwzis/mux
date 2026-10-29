@@ -298,7 +298,6 @@ struct shown_root {
   // The pane adding an account: its protocol, the proxies, the one chosen.
   skiff::model::Tracked<add_account_shown> adding;
   skiff::model::Tracked<std::optional<send_facts>> sending;
-  skiff::model::Tracked<std::optional<verification_view>> verifying;
   skiff::model::Tracked<std::optional<passphrase_facts>> passphrase;
   skiff::model::Tracked<std::optional<menu_facts>> menu;
   skiff::model::Tracked<std::optional<viewer_facts>> viewer;
@@ -568,7 +567,7 @@ auto layer_for(const Needs &needs) {
 template <class Facts> ::mux::ui::request::close_shown<Facts> closing_of(std::type_identity<Facts>) { return {}; }
 template <class... Features, class... Tools>
 consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) {
-  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_manage, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
+  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_send_box, ::mux::ui::request::close_manage, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
                                decltype(closing_of(std::type_identity<Tools>{}))...>>{};
 }
@@ -591,9 +590,9 @@ inline ::mux::ui::request::close_text_menu closing_of(std::type_identity<text_me
 
 // ---- Esc, as what is shown says ------------------------------------------------
 // What Esc closes of a dialog or a layer up, by its facts: as closing_of
-// says; Settings a page back -- home, closed; a verification as its step
-// lets it (OK over, Cancel while it waits; not while the emoji are
-// compared); a passphrase never -- Esc goes on under it.
+// says; Settings a page back -- home, closed; a passphrase never -- Esc
+// goes on under it. (An emoji verification's, the encryption plugin's, as its
+// step lets it: its part answers its close_shown.)
 using escape_answer = typename decltype(window_answers_of(dialog_plugins{}, tool_facts_list{}))::type;
 template <class Facts> [[nodiscard]] std::optional<escape_answer> escape_of(const Facts&) {
   return escape_answer{closing_of(std::type_identity<Facts>{})};
@@ -603,13 +602,6 @@ template <class Facts> [[nodiscard]] std::optional<escape_answer> escape_of(cons
                                     [](const settings_page::library&) { return escape_answer{request::settings_about{}}; },
                                     [](const auto&) { return escape_answer{request::settings_home{}}; }},
                     facts.page);
-}
-[[nodiscard]] inline std::optional<escape_answer> escape_of(const verification_view& now) {
-  if (step_over(now.step))
-    return escape_answer{request::close_verification{}};
-  if (step_waits(now.step))
-    return escape_answer{request::verify_cancel_now{}};
-  return std::nullopt;
 }
 [[nodiscard]] inline std::optional<escape_answer> escape_of(const passphrase_facts&) { return std::nullopt; }
 // The dialogs and the layers, in the order they are drawn: Esc asks of the
@@ -623,7 +615,7 @@ struct plugin_dialog_facts<plugin_list<Features...>> {
 using escape_order = typename joined<
     type_list<settings_facts, notice_facts, person_shown>, typename plugin_dialog_facts<dialog_plugins>::type,
     type_list<link_facts, leave_space_facts, room_settings_facts>,
-    tool_facts_list, type_list<send_facts, passphrase_facts, verification_view, emoji_facts, menu_facts, viewer_facts, text_menu_facts>>::type;
+    tool_facts_list, type_list<send_facts, passphrase_facts, emoji_facts, menu_facts, viewer_facts, text_menu_facts>>::type;
 template <class Model, class... Facts>
 [[nodiscard]] std::optional<escape_answer> escape_in(const Model& showing, type_list<Facts...>) {
   std::optional<escape_answer> found;
@@ -738,8 +730,7 @@ inline auto window_body(const ui_needs& n) {
           std::move(sending),
           // A passphrase asked for: at the start, where local data is
           // encrypted; or to turn that on or off, or change it.
-          shown_made<passphrase_box_t, passphrase_facts>(n),
-          shown_made<verification_box, verification_view>(n))),
+          shown_made<passphrase_box_t, passphrase_facts>(n))),
       // The layers over the dialogs: what moves in them (a panel scrolled)
       // does not hold what is under the dialogs frozen.
       c::column(c::vbox(0.0f, everywhere),

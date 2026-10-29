@@ -64,6 +64,7 @@ import mux.composition;
 import mux.proto.matrix.requests;
 import mux.proto.matrix.client;
 import mux.plugin.encryption.types;
+import mux.plugin.encryption.changes;
 import :account;
 
 // The members defined here are declared in :account.

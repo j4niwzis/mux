@@ -857,6 +857,10 @@ struct window_shape {
 // a card.
 [[nodiscard]] inline float docked_height(const window_shape& window) { return window.phone() ? std::round(window.height * 0.4f) : 0.0f; }
 
+// The commit and branch built from: in a unit of their own (about_build.cc),
+// so a new commit recompiles that unit alone.
+std::string_view build_commit();
+std::string_view build_branch();
 }  // namespace mux::ui
 
 // mux's way of painting fills, for skiff to find wherever mux's tree is drawn.

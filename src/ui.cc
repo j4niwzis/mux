@@ -25,7 +25,6 @@ export import :settings_pages;
 export import :appearance;
 export import :storage;
 export import :settings;
-export import :about;
 export import :context_menu;
 export import :sending;
 export import :window;

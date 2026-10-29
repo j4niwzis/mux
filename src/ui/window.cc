@@ -547,7 +547,7 @@ struct plugin_layer_escapes<plugin_list<Features...>> {
 };
 template <class... Features, class... Tools, class... Layers>
 consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>, type_list<Layers...>) {
-  return type_tag<std::variant<::mux::ui::request::close_menu, ::mux::ui::request::close_send_box, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
+  return type_tag<std::variant<::mux::ui::request::close_menu, ::mux::ui::request::close_send_box, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
                                decltype(closing_of(std::type_identity<Tools>{}))...,
                                ::mux::ui::request::close_shown<Layers>...>>{};
@@ -578,7 +578,6 @@ template <class Facts> [[nodiscard]] std::optional<escape_answer> escape_of(cons
 }
 [[nodiscard]] inline std::optional<escape_answer> escape_of(const settings_facts& facts) {
   return spl::visit(spl::overloaded{[](settings_page::home) { return escape_answer{request::close_settings{}}; },
-                                    [](const settings_page::library&) { return escape_answer{request::settings_about{}}; },
                                     [](const auto&) { return escape_answer{request::settings_home{}}; }},
                     facts.page);
 }

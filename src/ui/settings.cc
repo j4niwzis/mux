@@ -19,15 +19,12 @@ import mux.plugins.ui;
 import :settings_pages;
 import :appearance;
 import :storage;
-import :about;
 
 export namespace mux::ui {
 
 // Settings' pages, each with what it shows.
 namespace settings_page {
 struct home {};
-struct about {};
-struct library { std::string name; };
 struct animations {};
 struct appearance {
   config::theme_t theme;
@@ -71,10 +68,10 @@ template <class... Pages>
 struct settings_pages_of<type_list<Pages...>> {
   using pages = spl::variant<settings_page::home, settings_page::animations, settings_page::appearance, settings_page::rendering,
                              settings_page::notifications, settings_page::files, settings_page::storage,
-                             settings_page::about, settings_page::library, Pages...>;
+                             Pages...>;
   using nodes = spl::variant<settings_home_t, animations_page_t,
                              appearance_page_t, rendering_page_t, storage_page_t, files_page_t,
-                             notifications_page_t, about_page_t, library_page_t, plugin_settings_node<Pages>...>;
+                             notifications_page_t, plugin_settings_node<Pages>...>;
 };
 using settings_plugins = typename plugin_settings_pages<composition::providers<contract::settings_pages, enabled_plugins>>::type;
 using settings_page_t = typename settings_pages_of<settings_plugins>::pages;
@@ -113,8 +110,6 @@ inline auto settings_view(const ui_needs& needs) {
                    [&](settings_page::storage) { page.template emplace<storage_page_t>(storage_page(c)); },
                    [&](settings_page::files) { page.template emplace<files_page_t>(files_page(c)); },
                    [&](settings_page::notifications) { page.template emplace<notifications_page_t>(notifications_page(c)); },
-                   [&](settings_page::about) { page.template emplace<about_page_t>(about_page(c)); },
-                   [&](const settings_page::library& one) { page.template emplace<library_page_t>(library_page(c, one.name)); },
                    // A plugin's page: its node, made from what it shows.
                    [&]<class Page>(const Page& one) {
                      page.template emplace<plugin_settings_node<Page>>(extend(contract::settings_pages{}, n, one));

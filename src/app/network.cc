@@ -54,6 +54,20 @@ struct account_list<mux::protocol_list<Tags...>> {
                                                   std::declval<std::optional<mux::net::proxy>>(), std::declval<post_change>()))...>;
 };
 using any_account = account_list<mux::protocols>::type;
+// What every holder of an account does with it -- made, moved, assigned,
+// asked which it is, let go -- instantiated here, in the module's interface,
+// once: its importers take the bodies from it instead of making them again,
+// each (341 of them, the app stage's time trace). Not an extern template:
+// the bodies stay theirs to inline.
+template <class Account>
+struct account_made_once {
+  static void made(Account& one, Account&& other) {
+    Account moved(std::move(other));
+    one = std::move(moved);
+    (void)one.index();
+  }
+};
+template struct account_made_once<any_account>;
 
 // What an account type does beyond what every account does: whether it has
 // each call -- the account's own members, so that what is offered is what

@@ -168,6 +168,20 @@ struct drawer_rows {
 struct level_sections {
   static constexpr std::string_view name = "a level's sections";
 };
+// What a folder of the chat list is beside the client's own (All, Direct
+// messages, a roster group) -- a space's (mux.app.chat_list), each asked
+// with the folder_context the list is worked out in:
+//   is_folder(c, f, ctx, chat) -> bool: a chat that is a folder, not listed
+//   folder_rooms(c, f, ctx, folder) -> std::optional<std::set<std::string>>:
+//   the rooms a folder it knows shows; none for the others
+//   out_of_home(c, f, ctx) -> std::set<std::string>: rooms Home leaves out
+//   folder_tabs(c, f, ctx, tabs&): its folders as tabs over the list
+//   keeps_folder(c, f, ctx, folder) -> bool: a folder it shows elsewhere
+//   (a bar), kept chosen though no tab lists it
+//   space_bars(c, f, ctx, list, side&, ui_shared&): the bars' icons
+struct chat_folders {
+  static constexpr std::string_view name = "the chat list's folders";
+};
 // Settings' home page, its links after the client's own (mux.ui:proxies):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own

@@ -43,6 +43,16 @@ using folder_t = spl::variant<folder::all, folder::space, folder::group, folder:
                     one);
 }
 
+// What a folder is worked out in (contract::chat_folders): the account
+// listed, its chats shown as forums, those hidden from Home, and the bars'
+// settings.
+struct folder_context {
+  const account* in = nullptr;
+  std::set<std::string> forums;
+  std::set<conversation_id> hidden_from_home;
+  bool spaces_on = true, top_bar_on = true, home_hides_spaced = false;
+  std::vector<config::space_placed> space_places;
+};
 // What the list is of, as the program keeps it: the account listed, its
 // folder, a forum gone to by Alt+Up or Alt+Down (lit, not opened), what is
 // typed in the search over it, and whether the bars are made big for a

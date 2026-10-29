@@ -298,7 +298,7 @@ struct part {
                                          this->said_push([&](push_shown& now) { now.status = "Refused: " + why.reason; });
                                        },
                                        [&](const mux::platform::push::no_distributor&) {
-                                         std::println(std::cerr, "[push] no UnifiedPush distributor on the session bus");
+                                         std::println(std::cerr, "[push] no UnifiedPush distributor found");
                                          this->said_push([](push_shown& now) {
                                            now.status = "No UnifiedPush distributor found (install ntfy, NextPush or KUnifiedPush)";
                                          });

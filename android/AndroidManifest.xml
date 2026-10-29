@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="io.github.j4niwzis.mux">
+    <!-- The UnifiedPush distributors installed, to choose from (Android 11 on). -->
+    <queries>
+        <intent>
+            <action android:name="org.unifiedpush.android.distributor.REGISTER" />
+        </intent>
+    </queries>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -23,5 +29,14 @@
         <!-- A notification's actions (mark as read, a reply typed in it),
              taken without bringing mux up. -->
         <receiver android:name="org.libsdl.nativeapp.Receiver" android:exported="false" />
+        <!-- UnifiedPush: the distributor's broadcasts to the app (the connector's actions). -->
+        <receiver android:name="org.libsdl.nativeapp.PushReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="org.unifiedpush.android.connector.MESSAGE" />
+                <action android:name="org.unifiedpush.android.connector.UNREGISTERED" />
+                <action android:name="org.unifiedpush.android.connector.NEW_ENDPOINT" />
+                <action android:name="org.unifiedpush.android.connector.REGISTRATION_FAILED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

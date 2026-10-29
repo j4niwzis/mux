@@ -11,51 +11,9 @@ extern "C" int SDL_TakeAndroidRequest(char *out, int size);
 export module mux.platform.notifications.backend;
 
 import std;
+import mux.platform.jni;
 
 namespace mux::platform::notifications::backend {
-
-// The JNI environment of this thread, with a frame its local references are
-// released with, and whatever exception a call threw cleared as it goes.
-class jni_frame {
- public:
-  jni_frame() : env_(static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv())) {
-    ready_ = env_ && env_->PushLocalFrame(64) == JNI_OK;
-  }
-  jni_frame(const jni_frame&) = delete;
-  jni_frame& operator=(const jni_frame&) = delete;
-  ~jni_frame() {
-    if (env_ && env_->ExceptionCheck())
-      env_->ExceptionClear();
-    if (ready_)
-      env_->PopLocalFrame(nullptr);
-  }
-  [[nodiscard]] JNIEnv* env() const { return ready_ ? env_ : nullptr; }
-  // Whether the last call threw: cleared, and said.
-  [[nodiscard]] bool threw() const {
-    if (!env_->ExceptionCheck())
-      return false;
-    env_->ExceptionClear();
-    return true;
-  }
-
- private:
-  JNIEnv* env_;
-  bool ready_ = false;
-};
-
-// UTF-8 as a java.lang.String: through new String(bytes, "UTF-8"), not
-// NewStringUTF, whose modified UTF-8 is not UTF-8 for what is past the BMP
-// (emoji). The bytes are copied into a Java array -- what JNI reads them from.
-jstring string_of(JNIEnv* env, std::string_view text) {
-  const auto bytes = text | std::views::transform([](char c) { return static_cast<jbyte>(c); }) | std::ranges::to<std::vector>();
-  jbyteArray array = env->NewByteArray(static_cast<jsize>(bytes.size()));
-  if (!array)
-    return nullptr;
-  env->SetByteArrayRegion(array, 0, static_cast<jsize>(bytes.size()), bytes.data());
-  jclass string_class = env->FindClass("java/lang/String");
-  return static_cast<jstring>(env->NewObject(string_class, env->GetMethodID(string_class, "<init>", "([BLjava/lang/String;)V"),
-                                             array, env->NewStringUTF("UTF-8")));
-}
 
 // mux's channels, a sound being the channel's from Android 8 on: messages
 // with the system's notification sound, and the same without -- where the

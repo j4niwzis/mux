@@ -53,6 +53,12 @@ struct text_markup {
 struct settings_kept {
   static constexpr std::string_view name = "a plugin's own settings";
 };
+// What draws the window, as it is made at the start (main):
+// renderer_at_start(c, f, its own settings) -> config::renderer_t; where
+// none says, OpenGL.
+struct start_renderer {
+  static constexpr std::string_view name = "the renderer at the start";
+};
 // Chats the chat list opens as a list of chats -- a forum's topics -- in
 // place of the chat, their rooms listed in them, not beside them
 // (mux.app.chat_list): opens_as_scope(c, f, services, conversation) ->

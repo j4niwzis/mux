@@ -228,7 +228,6 @@ struct stub {
   void clear_stored() {}
   void menu_quote_reply() {}
   void show_account(std::string) {}
-  void set_renderer(mux::config::renderer_t) {}
   void leave_chat() {}
   void close_chat() {}
   void toggle_mute_of(mux::conversation_id) {}

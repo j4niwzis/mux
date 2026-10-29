@@ -425,7 +425,6 @@ void look_as_its_content(const Node&, const palette&) {}
 //   void settings_appearance(), settings_rendering(), settings_storage()
 //   void clear_stored()  -- Storage (its limits are the model's)
 //   void settings_files()  -- Files (its switches are the model's)
-//   void set_renderer(config::renderer_t)  -- the theme and accent are the model's
 //   void proxy_kind(config::proxy_kind_t)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
 //   void close_notice()

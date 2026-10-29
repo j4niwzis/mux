@@ -862,9 +862,6 @@ struct proxy_kind {
 };
 struct clear_stored {};
 struct settings_appearance {};
-struct set_renderer {
-  mux::config::renderer_t renderer;
-};
 struct leave_chat {};
 // Out of the chat open, to the chats: a swipe across it, single.
 struct close_chat {};

@@ -131,17 +131,6 @@ inline constexpr std::int64_t kDeletedOnDiskMb = 256;
   return spl::visit([](auto one) { return bounds_of(one); }, which);
 }
 
-// How frames are drawn, read by the host at each one: only the damage
-// repainted, and it outlined; in step with the display; the frames a
-// second counted.
-struct frame_settings {
-  bool partial_redraw = false;
-  bool flash_redraws = false;
-  bool vsync = true;
-  bool show_fps = false;
-  friend bool operator==(const frame_settings&, const frame_settings&) = default;
-};
-
 // What a chat -- or a space, for its rooms -- chose for itself: each setting
 // a field, found in the model by its member pointer (Field<&chat_choices::
 // muted>); unsaid, as the level above.
@@ -163,7 +152,7 @@ struct chat_choices {
 };
 
 // How the window looks, for every account and chat that does not say: the
-// theme and its accent, the renderer for the next start, the window's
+// theme and its accent, the window's
 // opacity, scale and blur, the space bars and where each item is put, and
 // every chat's background, bubbles and panels.
 struct look_settings {
@@ -171,7 +160,6 @@ struct look_settings {
   theme_t theme = theme::tinted{};
   std::map<std::string, custom_theme> theme_overrides;
   accent_t accent = accent::theme_own{};
-  renderer_t renderer = renderer::opengl{};
   motion_t motion = motion::full{};
   enter_t enter = enter_key::automatic{};  // what Enter does in a message
   layout_t layout = layout::automatic{};
@@ -276,13 +264,6 @@ struct file {
   // How round avatars are, in percent: chats' and people's. None, round.
   std::optional<int> chat_avatar_rounding;
   std::optional<int> person_avatar_rounding;
-  std::optional<renderer_said_t> renderer;
-  // Only what changed repainted, into a frame kept between them.
-  std::optional<bool> partial_redraw;
-  // What each frame repainted, outlined: to see that only that is.
-  std::optional<bool> flash_redraws;
-  // Frames shown in step with the screen's refresh; off, as fast as drawn.
-  std::optional<bool> vsync;
   // The window's opacity in percent (none, 100: opaque); and whether the
   // chat's background is behind the whole window, not only its messages.
   std::optional<int> window_opacity;
@@ -295,10 +276,6 @@ struct file {
   std::optional<double> frost;
   // The old setting, read where the new is not there yet: a third of it.
   std::optional<int> frost_blur;
-  // Spaces in bars at all (none, yes); the bar along the top (none, yes);
-  // and where each item is put, in order.
-  // Frames a second, and the last frame's time, in the window's corner.
-  std::optional<bool> show_fps;
   // The interface's scale, in percent of the display's own (none, 100): as
   // Telegram Desktop's "Interface scale".
   std::optional<int> interface_scale;

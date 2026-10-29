@@ -700,7 +700,6 @@ struct app : kept_settings {
   // A limit halved or doubled, within its bounds: kept, and in force at once.
   // What is kept on disk, gone: the stored messages and the pictures, and
   // the pictures in memory, to be fetched again as they are wanted.
-  // The theme or the renderer chosen: kept, for the next start.
   // A theme chosen: its colours in place, and the window made again in them,
   // as it was -- the chats, the one chosen, the widths -- with Settings open
   // where it was.

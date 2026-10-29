@@ -41,10 +41,10 @@ inline auto animations_view(const palette& colours) {
 }
 
 // Settings' Rendering page: what draws the window, from the next start.
-// The Rendering page's frames: a toggle bound to each of frame_settings'
-// fields, in effect at once -- the host reads them as it draws.
+// The Rendering page's frames: a toggle bound to each of the plugin's own
+// settings' frame fields, in effect at once.
 inline auto frame_settings_view(const palette& colours) {
-  using frames = config::frame_settings;
+  using frames = kept;
   return SKIFF_NAMED(frame_settings_view, skiff::compose::column(
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
       spaced_title(colours, "FRAMES"), setting_switch<&frames::partial_redraw>(colours, "Partial redraw"),
@@ -58,7 +58,7 @@ inline auto frame_settings_view(const palette& colours) {
 }
 inline auto rendering_view(const palette& colours) {
   using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
-  using field = skiff::model::Field<&config::look_settings::renderer>;
+  using field = skiff::model::Field<&kept::renderer>;
   return SKIFF_NAMED(rendering_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Rendering", {}, {}, true, true)),

@@ -35,6 +35,13 @@ consteval auto plugin_settings_of(plugin_list<Features...>) {
   return type_tag<composition::aggregate_list<skiff::model::Tracked<plugin_settings_t<Features>>...>>{};
 }
 using plugin_settings_root = typename decltype(plugin_settings_of(settings_plugins{}))::type;
+// A type that is one of the plugins' own settings.
+template <class Settings, class... Features>
+consteval bool kept_by_one_of(plugin_list<Features...>) {
+  return (std::same_as<Settings, plugin_settings_t<Features>> || ...);
+}
+template <class Settings>
+concept plugin_kept = kept_by_one_of<Settings>(settings_plugins{});
 struct kept_root {
   // The accounts saved, by their addresses, in the order they are listed.
   skiff::model::Keyed<std::string, mux::config::account_t> accounts;
@@ -43,8 +50,6 @@ struct kept_root {
   skiff::model::Tracked<mux::config::notification_settings> notifications;
   // What is done to a picture dropped before it is sent.
   skiff::model::Tracked<mux::config::sending_settings> sending;
-  // How frames are drawn.
-  skiff::model::Tracked<mux::config::frame_settings> frames;
   // What is kept and shown of the history, for every chat that does not say.
   skiff::model::Tracked<mux::config::history_settings> history;
   // How much is kept, in memory and on disk.

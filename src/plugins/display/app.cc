@@ -22,7 +22,7 @@ struct part {
   }
   void apply(const open_rendering&) {
     if (s_->settings_open())
-      s_->settings_page(rendering_page{s_->kept->appearance().renderer});
+      s_->settings_page(rendering_page{s_->kept->plugin_settings<kept>().renderer});
   }
 };
 

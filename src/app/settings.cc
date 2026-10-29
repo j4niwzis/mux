@@ -76,10 +76,6 @@ class settings_part {
     if (s_->on_settings_page<mux::ui::settings_page::appearance>())
       s_->settings_page(mux::ui::settings_page::appearance{k_->appearance().theme, k_->appearance().accent});
   }
-  void apply(const request::set_renderer& one) {
-    k_->choose_field<&mux::config::look_settings::renderer>(one.renderer);
-    (void)k_->write();
-  }
 
   // What is stored, all of it cleared (the storage plugin's page asks).
   void apply(const request::clear_stored&) {

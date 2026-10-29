@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.app.kept: what the accounts file keeps for the program -- the
-// accounts, the proxy profiles, the chats muted, the theme, the renderer,
+// accounts, the proxy profiles, the chats muted, the theme,
 // how much moves, how much is kept, what is done to files sent -- and its
 // writing back. Held apart from what the program does with it: the parts
 // that change it write it.
@@ -17,6 +17,7 @@ import mux.logic.room_events;
 import skiff.model;
 import mux.kept_root;
 import mux.plugins.types;
+import mux.composition;
 
 export namespace mux::app {
 
@@ -96,7 +97,10 @@ struct kept_reactions {
     return {};
   }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::sending_settings>, const mux::config::sending_settings&) const { return {}; }
-  [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::frame_settings>, const mux::config::frame_settings&) const { return {}; }
+  // A plugin's own settings changed (contract::settings_kept): the file
+  // written again.
+  template <plugin_kept Settings>
+  [[nodiscard]] write_kept on(skiff::model::Changed<Settings>, const Settings&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::history_settings>, const mux::config::history_settings&) const { return {}; }
   [[nodiscard]] deleted_shown on(skiff::model::Changed<skiff::model::Field<&mux::config::history_settings::show_deleted>>, const auto&) const {
     return {};
@@ -164,6 +168,17 @@ struct kept_settings {
   [[nodiscard]] const Settings& plugin_settings() const { return *state.template look<Settings>(); }
   template <class Settings>
   void set_plugin_settings(Settings now) { this->set_part(std::move(now)); }
+  // What draws the window, as it is made: the plugins' say
+  // (contract::start_renderer) -- the last one's -- OpenGL where none says.
+  [[nodiscard]] mux::config::renderer_t renderer_at_start() const {
+    return this->renderer_said_by(composition::providers<contract::start_renderer, enabled_plugins>{});
+  }
+  template <class... Features>
+  [[nodiscard]] mux::config::renderer_t renderer_said_by(plugin_list<Features...>) const {
+    mux::config::renderer_t out = mux::config::renderer::opengl{};
+    ((out = renderer_at_start(contract::start_renderer{}, type_tag<Features>{}, this->plugin_settings<plugin_settings_t<Features>>())), ...);
+    return out;
+  }
   // A part the model's root holds one of, made what is given, whole.
   template <class Part>
   void set_part(Part now) {
@@ -171,8 +186,6 @@ struct kept_settings {
   }
   // How the window looks, as the model holds it.
   [[nodiscard]] const mux::config::look_settings& appearance() const { return state.root().looks.fValue; }
-  // How frames are drawn, as the model holds it: read by the host at each.
-  [[nodiscard]] const mux::config::frame_settings& frames() const { return state.root().frames.fValue; }
   // One setting of what the model keeps, chosen in its place by its member
   // pointer: a field of a part the root holds one of.
   template <auto M, class T>
@@ -452,11 +465,6 @@ struct kept_settings {
     if (saved.panels)
       looks_read.panels = mux::config::bubble_look_of(*saved.panels);
     looks_read.accent = mux::config::accent_of(saved.accent);
-    looks_read.renderer = mux::config::renderer_of(saved.renderer);
-    const mux::config::frame_settings frames_read{.partial_redraw = saved.partial_redraw.value_or(false),
-                                              .flash_redraws = saved.flash_redraws.value_or(false),
-                                              .vsync = saved.vsync.value_or(true),
-                                              .show_fps = saved.show_fps.value_or(false)};
     looks_read.window_opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
     looks_read.wallpaper_behind = saved.wallpaper_behind.value_or(false);
     looks_read.live_blur = saved.live_blur.value_or(false);
@@ -508,7 +516,6 @@ struct kept_settings {
     root.chats.putAll(chats);
     root.notifications.fValue = notifications_read;
     root.sending.fValue = sending_read;
-    root.frames.fValue = frames_read;
     root.history.fValue = history_read;
     root.limits.fValue = limits_read;
     root.looks.fValue = looks_read;
@@ -577,13 +584,6 @@ struct kept_settings {
     if (this->appearance().panels)
       out.panels = mux::config::word_of(*this->appearance().panels);
     out.accent = mux::config::said_of<mux::config::accent_said_t>(this->appearance().accent);
-    out.renderer = mux::config::said_of<mux::config::renderer_said_t>(this->appearance().renderer);
-    if (this->frames().partial_redraw)
-      out.partial_redraw = true;
-    if (this->frames().flash_redraws)
-      out.flash_redraws = true;
-    if (!this->frames().vsync)
-      out.vsync = false;
     if (this->appearance().window_opacity != 100)
       out.window_opacity = this->appearance().window_opacity;
     if (this->appearance().wallpaper_behind)
@@ -597,8 +597,6 @@ struct kept_settings {
     // came back round at every start.
     out.chat_avatar_rounding = this->appearance().chat_avatar_rounding;
     out.person_avatar_rounding = this->appearance().person_avatar_rounding;
-    if (this->frames().show_fps)
-      out.show_fps = true;
     if (this->appearance().interface_scale != 100)
       out.interface_scale = this->appearance().interface_scale;
     out.cache = this->limits();

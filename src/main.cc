@@ -175,7 +175,7 @@ int mux_main(int argc, char** argv) {
   if (config_note)
     program.shared.notice("The accounts file could not be read", *config_note);
   const skiff::platform::window::options how{
-      .title = "mux", .software = program.appearance().renderer == mux::config::renderer_t{mux::config::renderer::software{}},
+      .title = "mux", .software = program.renderer_at_start() == mux::config::renderer_t{mux::config::renderer::software{}},
       .transparent = opacity < 100, .programs = mux::config::state_path("gpu-programs").string()};
   const int code = on_page ? mux_run_on_page(program, how, kinds) : mux_run_in_window(program, how, kinds);
   return code;

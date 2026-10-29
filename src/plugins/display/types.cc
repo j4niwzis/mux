@@ -5,6 +5,7 @@
 export module mux.plugin.display.types;
 
 import std;
+import knot;
 import mux.core;
 import mux.config;
 import mux.composition;
@@ -22,6 +23,24 @@ struct rendering_page {
   config::renderer_t renderer;
   friend bool operator==(const rendering_page&, const rendering_page&) = default;
 };
+// Its own settings (contract::settings_kept), kept in the settings file
+// under its name: what draws the window, from the next start; how frames
+// are drawn -- only the damage repainted, and it outlined; in step with the
+// display; the frames a second counted -- in effect at once.
+struct kept {
+  config::renderer_t renderer = config::renderer::opengl{};
+  bool partial_redraw = false;
+  bool flash_redraws = false;
+  bool vsync = true;
+  bool show_fps = false;
+  friend bool operator==(const kept&, const kept&) = default;
+  friend consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>(); }
+};
+consteval bool provides(contract::settings_kept, type_tag<feature>) { return true; }
+constexpr type_tag<kept> settings_type(contract::settings_kept, type_tag<feature>) { return {}; }
+// The window made with the renderer chosen (main).
+consteval bool provides(contract::start_renderer, type_tag<feature>) { return true; }
+inline config::renderer_t renderer_at_start(contract::start_renderer, type_tag<feature>, const kept& mine) { return mine.renderer; }
 struct open_animations {};
 struct open_rendering {};
 

@@ -515,6 +515,24 @@ struct app : kept_settings {
   void apply(const request::banner_pressed&);
   void apply(const request::head_pressed&);
   void apply(const request::card_action&);
+  // What the window may ask that only a plugin does -- typing, the list over
+  // the composer, threads, a pack added from the emoji panel, Explore:
+  // nothing, where that plugin is not built. Where it is, its part is
+  // offered the request first (route), and takes it.
+  void apply(const request::typing&) {}
+  void apply(const request::suggestion_step&) {}
+  void apply(const request::suggestion_pick&) {}
+  void apply(const request::suggestion_close&) {}
+  void apply(const request::toggle_threads&) {}
+  void apply(const request::open_thread&) {}
+  void apply(const request::close_thread&) {}
+  void apply(const request::thread_send&) {}
+  void apply(const request::thread_answer_cancel&) {}
+  void apply(const request::thread_draft_edited&) {}
+  void apply(const request::send_in_thread&) {}
+  void apply(const request::adopt_pack&) {}
+  void apply(const request::explore_space&) {}
+  void apply(const request::search_rooms&) {}
   void apply(const request::quit&);
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);

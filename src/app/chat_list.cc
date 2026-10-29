@@ -676,7 +676,7 @@ class chat_list_part {
                                                        : mux::ui::pane_t{mux::ui::pane::chat{}};
       const bool beside = (chat.info_open || chat.threads_open) && chat.chosen.has_value();
       now.info_up = beside && !chat.threads_open;
-      now.threads_up = beside && chat.threads_open;
+      now.panel_up = beside && chat.threads_open;
       now.beside_edge = beside && !now.single;
       now.side_up = !now.single || !chat.chosen;
       now.side_edge = !now.single;

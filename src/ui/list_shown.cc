@@ -118,7 +118,7 @@ struct screen_shown {
   pane_t pane = pane::list{};
   // What is up, from those: the chats, the chat, its info or its threads
   // beside it (in its place, single), and the edges between them.
-  bool side_up = true, chat_up = true, info_up = false, threads_up = false, side_edge = true, beside_edge = false;
+  bool side_up = true, chat_up = true, info_up = false, panel_up = false, side_edge = true, beside_edge = false;
   // The panel docked under the field on a phone's window, as high as it is:
   // the chat standing over it.
   float docked = 0.0f;

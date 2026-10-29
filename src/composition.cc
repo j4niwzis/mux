@@ -107,6 +107,12 @@ struct chat_header {
 struct list_corner {
   static constexpr std::string_view name = "the list's corner";
 };
+// A panel beside the chat, in the info's place (mux.ui:conversations_screen):
+//   extend(c, f, ui_needs) -> its panel, shown while the screen says a
+//   plugin's panel is up (screen_shown::panel_up) -- the threads', for one
+struct beside_panels {
+  static constexpr std::string_view name = "the panels beside the chat";
+};
 // Settings' home page, its links after the client's own (mux.ui:proxies):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own

@@ -288,7 +288,6 @@ inline auto chat_header_for(const palette& colours) {
                           c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.dim)))))),
               c::shown_for<chat_head_shown>(chat, c::styled(middle, icon_button(colours, icon::search{}, sends<request::open_search>{}))),
               c::shown_for<chat_head_shown>(chat, chat_header_buttons::row_of(colours)),
-              c::shown_for<chat_head_shown>(chat, c::styled(middle, icon_button(colours, icon::threads{}, sends<request::toggle_threads>{}))),
               c::shown_for<chat_head_shown>(chat, c::styled(middle, icon_button(colours, icon::info{}, sends<request::toggle_info>{}))))),
       c::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)))));
 }

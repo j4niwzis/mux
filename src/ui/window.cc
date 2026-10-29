@@ -328,7 +328,6 @@ struct shown_root {
   skiff::model::Tracked<connection_shown> connections;
   skiff::model::Tracked<banner_shown> banner;
   skiff::model::Tracked<suggestions_shown> suggested;
-  skiff::model::Tracked<threads_shown> threads_list;
   // The window's shape, from its size: a phone's, or not.
   skiff::model::Tracked<window_shape> shape;
   // The looks, as their choices show them (app: refresh_shown).

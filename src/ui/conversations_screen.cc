@@ -344,8 +344,25 @@ struct screen_keys {
 struct screen_swiped {
   std::optional<request::screen_swipe> operator()(bool towards_left) const { return request::screen_swipe{!towards_left}; }
 };
-// The info's or the threads' column: as wide as the program says, all of
-// the window across on a phone's.
+// The plugins' panels beside the chat (contract::beside_panels), in their
+// order, in the info's place -- the threads', for one.
+template <class List>
+struct beside_panel_list;
+template <class... Features>
+struct beside_panel_list<plugin_list<Features...>> {
+  template <class Feature>
+  static auto panel_of(const ui_needs& n) -> decltype(extend(contract::beside_panels{}, type_tag<Feature>{}, n)) {
+    static_assert(requires { extend(contract::beside_panels{}, type_tag<Feature>{}, n); },
+                  composition::broken<contract::beside_panels, Feature>());
+    return extend(contract::beside_panels{}, type_tag<Feature>{}, n);
+  }
+  static auto made(const ui_needs& n) {
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillY = true}), panel_of<Features>(n)...);
+  }
+};
+using beside_plugins = beside_panel_list<composition::providers<contract::beside_panels, enabled_plugins>>;
+// The info's or a plugin's panel's column: as wide as the program says, all
+// of the window across on a phone's.
 [[nodiscard]] inline scene::Spec beside_width(const screen_shown& now) {
   return now.single ? scene::Spec{.width = 1.0f, .relativeSize = scene::axes::kBoth}
                     : scene::Spec{.width = now.info_width, .relativeSize = scene::axes::kY};
@@ -368,8 +385,8 @@ inline auto chats_screen(const ui_needs& n) {
                       c::shown_for<screen_shown>(up(&screen_shown::beside_edge), c::styled(edge, drag_edge(colours, resize_info_to{}, false))),
                       c::shown_for<screen_shown>(up(&screen_shown::info_up),
                           c::spec_for<screen_shown>(beside_width, c::column(c::vbox(0.0f, {.fillY = true}), info_panel(n)))),
-                      c::shown_for<screen_shown>(up(&screen_shown::threads_up),
-                          c::spec_for<screen_shown>(beside_width, c::column(c::vbox(0.0f, {.fillY = true}), threads_panel(n))))))))));
+                      c::shown_for<screen_shown>(up(&screen_shown::panel_up),
+                          c::spec_for<screen_shown>(beside_width, beside_plugins::made(n)))))))));
 }
 using chats_screen_t = decltype(chats_screen(std::declval<const ui_needs&>()));
 }  // namespace mux::ui

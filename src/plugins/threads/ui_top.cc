@@ -1,52 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:info_threads -- A room's threads, in the info's place.
+// mux.plugin.threads.ui_top -- Threads, as Element's panel: in place of the
+// chat's info, the room's threads, or one opened -- its root and answers as
+// the chat's own list has its messages, and a field to answer in it.
 module;
 #include "skiff/named.h"
-export module mux.ui:info_threads;
+export module mux.plugin.threads.ui_top;
 
 import std;
 import splice;
 import skia;
-import skiff.paint;
 import skiff.scene;
-import skiff.bind;
 import skiff.compose;
 import skiff.nodes.box;
-import skiff.nodes.flow;
-import skiff.nodes.icon;
-import skiff.nodes.image;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
-import skiff.widgets.pill;
-import skiff.widgets.button;
-import skiff.widgets.sliderbar;
-import skiff.widgets.textbox;
-import skiff.widgets.textarea;
+import mux.composition;
 import mux.core;
-import mux.config;
-import mux.logic.links;
-import mux.protocols;
 import mux.ui.base;
 import mux.ui.messages;
-import :info_common;
-import :info_cards;
-import :info_new_chats;
-import :info_looks;
+import mux.plugin.threads.types;
 
-export namespace mux::ui {
-// A thread in the list, as the program has it: its root, who wrote it and
-// what, how many answers and the latest's time.
-struct thread_root {
-  std::string root, sender, name, words, meta;
-  friend bool operator==(const thread_root&, const thread_root&) = default;
-};
-// The threads' panel, as the program says: the list -- the room's threads,
-// the latest active first -- or, a thread open, its answers.
-struct threads_shown {
-  bool listing = true;
-  std::vector<thread_root> roots;
-  friend bool operator==(const threads_shown&, const threads_shown&) = default;
-};
+export namespace mux::plugins::threads {
+using namespace ::mux::ui;
+
 // "3 replies \u00b7 12:34", the latest's author and words after it.
 [[nodiscard]] inline std::string flat_line(std::string text) {
   std::ranges::replace(text, '\n', ' ');
@@ -94,36 +70,35 @@ struct in_thread {
 inline auto threads_panel(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
-  const auto listing = [](const threads_shown& now) { return now.listing; };
-  const auto open = [](const threads_shown& now) { return !now.listing; };
+  const auto listing = [](const shown& now) { return now.listing; };
+  const auto open = [](const shown& now) { return !now.listing; };
   // Filling the column the screen sizes for it: as tall alone, it was 0
   // wide, its rows' text with no room at all.
   return SKIFF_NAMED(threads_panel, c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar}),
       c::row(c::hbox(8.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}}),
-             c::shown_for<threads_shown>(open, c::styled({.alignSelf = scene::align::kMiddle},
+             c::shown_for<shown>(open, c::styled({.alignSelf = scene::align::kMiddle},
                                                          icon_button(colours, icon::back{}, sends<request::close_thread>{}))),
-             c::text_for<threads_shown>([](const threads_shown& now) { return std::string(now.listing ? "Threads" : "Thread"); },
+             c::text_for<shown>([](const shown& now) { return std::string(now.listing ? "Threads" : "Thread"); },
                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text("", 16.0f, colours.text, true)))),
              c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::close{}, sends<request::toggle_threads>{}))),
       c::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)),
-      c::shown_for<threads_shown>([](const threads_shown& now) { return now.listing && now.roots.empty(); },
+      c::shown_for<shown>([](const shown& now) { return now.listing && now.roots.empty(); },
           c::styled({.margin = {16.0f, 16.0f, 0.0f, 16.0f}}, nodes::Text("No threads here yet.", 13.0f, colours.dim))),
-      c::shown_for<threads_shown>(listing,
+      c::shown_for<shown>(listing,
           c::styled({.fillX = true, .grow = scene::axes::kY},
-              nodes::ScrollContainer(c::projected<threads_shown>([](const threads_shown& now) { return now.roots; },
+              nodes::ScrollContainer(c::projected<shown>([](const shown& now) { return now.roots; },
                   c::listed<thread_root>(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}}),
                                          [&colours](const thread_root& one) { return thread_row(colours, one); }))))),
       // Across the panel and as tall as what its head and composer leave:
       // the list fills what it is put in, and said only to grow, it kept
       // its fill down too -- the panel's whole height, the composer pushed
       // under the window.
-      c::shown_for<threads_shown>(open, c::styled({.fillX = true, .relativeSize = scene::axes::kX, .grow = scene::axes::kY},
+      c::shown_for<shown>(open, c::styled({.fillX = true, .relativeSize = scene::axes::kX, .grow = scene::axes::kY},
                                                   timeline_list<thread_told, thread_list_tag>())),
-      c::shown_for<threads_shown>(open, composer_bar<in_thread>(n))));
+      c::shown_for<shown>(open, composer_bar<in_thread>(n))));
 }
-using threads_panel_t = decltype(threads_panel(std::declval<const ui_needs&>()));
-// Its field, where what is written into the thread is.
-inline constexpr std::size_t kThreadLine = 5;
 
-}  // namespace mux::ui
+// Its panel, beside the chat in the info's place (mux.ui:conversations_screen).
+inline auto extend(contract::beside_panels, type_tag<feature>, const ui_needs& needs) { return threads_panel(needs); }
 
+}  // namespace mux::plugins::threads

@@ -196,12 +196,6 @@ cme_declare_port(NAME knot PROVIDES knot
 set_property(GLOBAL APPEND PROPERTY MUX_ABOUT_PRIMARY_PACKAGES knot)
 mux_find_package(chevron 0.2 REQUIRED)
 mux_find_package(tern REQUIRED)
-# Of loom, what mux uses: the state a sync leaves, and the parts of the API it
-# calls -- logging in, sending, syncing, finding the homeserver.
-mux_find_package(loom 0.1.1 COMPONENTS state crypto cs-joining cs-leaving cs-login cs-registration cs-oauth_server_metadata cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-filter cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-presence cs-device_management cs-room_upgrades cs-directory cs-capabilities cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher cs-pushrules cs-voip REQUIRED)
-# End-to-end encryption: Olm and Megolm, by vodozemac -- the kazv project's
-# C++ bindings, a Rust library built by cargo through cmake-everywhere.
-mux_find_package(vodozemac REQUIRED)
 
 # One library of mux's modules, as the libraries it stands on have: modules
 # are what separates them. The window's two join it where the window is
@@ -210,6 +204,22 @@ mux_find_package(vodozemac REQUIRED)
 include(cmake/protocols.cmake)
 # The plugins turned on, each from its own folder (cmake/plugins.cmake).
 include(cmake/plugins.cmake)
+# Of loom, only what the protocols and plugins turned on ask for (their
+# LOOM): a build without encryption, calls or push compiles none of their
+# parts. None where Matrix is off. vodozemac -- the kazv project's C++
+# bindings of the Rust library, built by cargo through cmake-everywhere --
+# only where loom.crypto is asked for (end-to-end encryption).
+get_property(mux_loom_components GLOBAL PROPERTY MUX_LOOM_COMPONENTS)
+list(REMOVE_DUPLICATES mux_loom_components)
+set(mux_loom_libraries)
+if(mux_loom_components)
+  mux_find_package(loom 0.1.1 COMPONENTS ${mux_loom_components} REQUIRED)
+  list(APPEND mux_loom_libraries loom)
+  if("crypto" IN_LIST mux_loom_components)
+    mux_find_package(vodozemac REQUIRED)
+    list(APPEND mux_loom_libraries vodozemac::vodozemac)
+  endif()
+endif()
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
   FILES ${mux_protocol_core} ${mux_enabled_core} ${mux_plugin_types} ${mux_plugins_types}
@@ -249,7 +259,7 @@ set(mux_std_flags
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
   $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 target_compile_options(mux_modules PUBLIC ${mux_std_flags})
-target_link_libraries(mux_modules PUBLIC chevron tern loom vodozemac::vodozemac Boost::asio_core Boost::beast
+target_link_libraries(mux_modules PUBLIC chevron tern ${mux_loom_libraries} Boost::asio_core Boost::beast
   OpenSSL::SSL OpenSSL::Crypto)
 if(mux_context)
   target_link_libraries(mux_modules PUBLIC Boost::context)

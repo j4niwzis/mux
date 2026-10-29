@@ -37,13 +37,20 @@ set(MUX_EXTRA_PLUGINS "" CACHE STRING "Folders of third-party plugins, each with
 #             parts), then by name
 #   REQUIRES  the plugins it needs, turned on too
 #   LIBRARIES what it links -- a call's WebRTC -- linked with the window
+#   LOOM      the parts of loom it needs where Matrix is on (crypto,
+#             cs-voip, ...): loom is built with what is asked, no more
 # And what it says of itself, on Settings' Plugins page (the catalog
 # plugin; mux.plugins.info): SUMMARY, a line of what it does; REPO, where
 # its source is (mux's own: mux's repository); LICENSE, its SPDX identifier
 # (mux's own: mux's, AGPL-3.0-only); and its folder's README.md, put in
 # the program whole (#embed).
 function(mux_plugin name)
-  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER;REPO;LICENSE;SUMMARY" "CHANGES;TYPES;UI;UI_TOP;APP;MATRIX;XMPP;REQUIRES;LIBRARIES")
+  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER;REPO;LICENSE;SUMMARY" "CHANGES;TYPES;UI;UI_TOP;APP;MATRIX;XMPP;REQUIRES;LIBRARIES;LOOM")
+  # The parts of loom it needs, where Matrix is on: asked for with the
+  # protocol's own, and only then.
+  if(MUX_PROTOCOL_MATRIX)
+    set_property(GLOBAL APPEND PROPERTY MUX_LOOM_COMPONENTS ${one_LOOM})
+  endif()
   if(NOT DEFINED one_ORDER)
     message(FATAL_ERROR "src/plugins/${name}/CMakeLists.txt: mux_plugin(${name}) needs its ORDER.")
   endif()

@@ -13,4 +13,5 @@ mux_plugin(encryption ORDER 2
   TYPES  types.cc
   UI     ui.cc ui_page.cc
   APP    app.cc
-  MATRIX matrix.cc account.cc verification.cc keys.cc events.cc backup.cc)
+  MATRIX matrix.cc account.cc verification.cc keys.cc events.cc backup.cc
+  LOOM  crypto cs-keys cs-to_device cs-cross_signing cs-key_backup)

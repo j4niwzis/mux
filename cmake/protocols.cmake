@@ -23,7 +23,9 @@ set(mux_generated "${CMAKE_BINARY_DIR}/generated")
 #   ORDER   its place in the list -- protocol_t's alternatives follow it, and
 #           the first is where an address no protocol owns goes -- then by name
 function(mux_protocol name)
-  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER" "CONFIG;CORE;UI;UI_IMPL;APP;SPLIT;POINTS")
+  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER" "CONFIG;CORE;UI;UI_IMPL;APP;SPLIT;POINTS;LOOM")
+  # The parts of loom it needs (mux_find_package(loom COMPONENTS ...)).
+  set_property(GLOBAL APPEND PROPERTY MUX_LOOM_COMPONENTS ${one_LOOM})
   if(NOT DEFINED one_ORDER)
     message(FATAL_ERROR "src/proto/${name}/CMakeLists.txt: mux_protocol(${name}) needs its ORDER.")
   endif()

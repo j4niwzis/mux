@@ -24,4 +24,5 @@ mux_plugin(calls ORDER 40
   MATRIX    matrix.cc
   UI        ${media} ui.cc
   APP       app.cc
-  LIBRARIES ${libraries})
+  LIBRARIES ${libraries}
+  LOOM  cs-voip)

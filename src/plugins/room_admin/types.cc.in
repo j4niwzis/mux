@@ -14,12 +14,7 @@ export namespace mux::plugins::room_admin {
 
 using realizations = realization_list<@ADMIN_REALIZATIONS@>;
 // Its tabs, what it keeps while a room's settings are open, and what it
-// fills as they open: each protocol's (contract::tabs, kept, opened).
-constexpr auto room_tabs(room_settings::contract::tabs, type_tag<feature>) { return tabs_of(realizations{}); }
-constexpr auto kept_parts(room_settings::contract::kept, type_tag<feature>) { return kept_of(realizations{}); }
-template <class Facts>
-void room_opened(room_settings::contract::opened, type_tag<feature>, Facts& facts, const conversation& chat) {
-  opened_by(realizations{}, facts, chat);
-}
+// fills as they open: each protocol's realization says them for its rooms'
+// kind (types_<protocol>.cc) -- put straight on that kind's settings.
 
 }  // namespace mux::plugins::room_admin

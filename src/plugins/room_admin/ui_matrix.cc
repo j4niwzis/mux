@@ -39,7 +39,7 @@ import mux.plugin.room_admin.types;
 
 export namespace mux::proto::matrix::manage_detail {
 using namespace ::mux::ui;
-using ::mux::plugins::room_settings::room_settings_facts;
+using room_settings_facts = ::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>;
 
 // ---- what the pages read --------------------------------------------------------
 using facts_t = std::optional<room_settings_facts>;
@@ -1083,11 +1083,11 @@ inline ui::icon_t tab_icon(room) { return ui::icon::gear{}; }
 inline ui::icon_t tab_icon(members) { return ui::icon::person{}; }
 inline ui::icon_t tab_icon(roles) { return ui::icon::lock{}; }
 // Each tab's page.
-auto page_of(room, const auto& colours, const ::mux::plugins::room_settings::room_settings_facts& facts) { return manage_detail::general_page(colours, facts); }
-auto page_of(members, const auto& colours, const ::mux::plugins::room_settings::room_settings_facts& facts) { return manage_detail::members_page(colours, facts); }
-auto page_of(roles, const auto& colours, const ::mux::plugins::room_settings::room_settings_facts& facts) { return manage_detail::permissions_page(colours, facts); }
+auto page_of(room, const auto& colours, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>& facts) { return manage_detail::general_page(colours, facts); }
+auto page_of(members, const auto& colours, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>& facts) { return manage_detail::members_page(colours, facts); }
+auto page_of(roles, const auto& colours, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>& facts) { return manage_detail::permissions_page(colours, facts); }
 template <class Tab>
-auto make_manage_page(Tab tab, const ui::palette& colours, const ::mux::plugins::room_settings::room_settings_facts& facts)
+auto make_manage_page(Tab tab, const ui::palette& colours, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>& facts)
   requires requires { page_of(tab, colours, facts); }
 {
   return page_of(tab, colours, facts);
@@ -1097,10 +1097,8 @@ auto make_manage_page(Tab tab, const ui::palette& colours, const ::mux::plugins:
 export namespace mux::plugins::room_admin {
 // The dialog for a Matrix room, as Cinny's: a head over each page, and the
 // tabs a little wider.
-inline std::optional<room_settings::room_manage_style> admin_presented(matrix_admin, const ::mux::plugins::room_settings::room_settings_facts& facts,
+inline std::optional<room_settings::room_manage_style> admin_presented(matrix_admin, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>& facts,
                                                                          const ui::palette& colours) {
-  if (!proto::matrix::manage::matrix_room(facts))
-    return std::nullopt;
   return room_settings::room_manage_style{colours, true, 222.0f};
 }
 }  // namespace mux::plugins::room_admin

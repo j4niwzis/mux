@@ -219,6 +219,8 @@ inline std::vector<room_event_t> room_event_kinds(const auto&) {
 constexpr bool can_page_back(const auto&) { return true; }
 constexpr bool can_upload(const auto&) { return true; }
 constexpr bool offers(const auto&, const auto&) { return false; }
+// Whether its one-to-one chats are rooms, with a room's settings (Matrix's DMs).
+constexpr bool direct_rooms(const auto&) { return false; }
 constexpr bool owns_address(const auto&, std::string_view) { return false; }
 inline std::optional<std::string> share_link(const auto&, std::string_view) { return std::nullopt; }
 inline std::optional<std::string> room_link(const auto&, const conversation&) { return std::nullopt; }
@@ -308,6 +310,21 @@ inline constexpr struct offers_t {
     }, state);
   }
 } offers{};
+// The same, known from a protocol's state type alone, while compiling:
+// what a plugin is put on by (a room settings tab for the protocols that
+// have its feature).
+template <class State, class Feature>
+consteval bool offered_by() {
+  using defaults::offers;
+  return offers(State{}, Feature{});
+}
+// Whether a protocol's one-to-one chats are rooms (Matrix's), with a room's
+// settings; else a plain chat's.
+template <class State>
+consteval bool direct_chats_are_rooms() {
+  using defaults::direct_rooms;
+  return direct_rooms(State{});
+}
 
 inline constexpr struct can_page_back_t {
   template <class State>

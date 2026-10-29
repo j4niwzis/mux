@@ -24,7 +24,7 @@ using namespace ::mux::ui;
 
 template <class Colours>
 auto extend(room_settings::contract::general_sections, type_tag<feature>, const Colours& colours,
-            const room_settings::room_settings_facts& facts) {
+            const auto& facts) {
   namespace c = skiff::compose;
   using toggle_t = widgets::Toggle<sends<flip_forum>>;
   return SKIFF_NAMED(forum_section, c::visible(facts.space, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),

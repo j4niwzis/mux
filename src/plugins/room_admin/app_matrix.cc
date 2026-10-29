@@ -74,7 +74,7 @@ inline void assign_permission(power_needs& needs, const permission_t& target, st
 // press confirms first -- and the write it asks, where it asks one. A write
 // on its way makes the rest wait.
 struct manage_step {
-  ::mux::plugins::room_settings::room_settings_facts& facts;
+  ::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>& facts;
   manage_state& kept;
   using asked = std::optional<manage_ask_t>;
   [[nodiscard]] bool editable(const power_need_t& need) const { return !kept.pending && may(facts, need); }
@@ -355,7 +355,7 @@ struct manage_step {
 // says -- with the facts -- where they are up, for it.
 template <class Change>
 void change_manage(ui::shown_model& showing, const mux::conversation_id& in, Change change) {
-  const auto& open = *showing.look<std::optional<::mux::plugins::room_settings::room_settings_facts>>();
+  const auto& open = *showing.look<std::optional<::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>>>();
   if (!open || open->chat != in)
     return;
   auto now = *open;
@@ -364,7 +364,7 @@ void change_manage(ui::shown_model& showing, const mux::conversation_id& in, Cha
 }
 // A write done: what it changed of the room, in the facts; the drafts it
 // settles let go.
-inline void saved_in(::mux::plugins::room_settings::room_settings_facts& facts, manage_state& kept, const management_saved& one) {
+inline void saved_in(::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>& facts, manage_state& kept, const management_saved& one) {
   kept.pending = false;
   kept.error = one.error;
   if (!one.error.empty())
@@ -405,13 +405,13 @@ inline void saved_in(::mux::plugins::room_settings::room_settings_facts& facts, 
       [&](const room_change::set_need& change) { assign_need(rules.needs, change.need, change.level); },
       [&](const room_change::set_event_need& change) { rules.needs.events.insert_or_assign(change.event, change.level); },
       [&](const room_change::add_child& change) {
-        if (const auto child = std::ranges::find(facts.addable, change.room, &::mux::plugins::room_settings::room_settings_facts::named_room::id); child != facts.addable.end()) {
+        if (const auto child = std::ranges::find(facts.addable, change.room, &::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>::named_room::id); child != facts.addable.end()) {
           facts.children.push_back(*child);
           facts.addable.erase(child);
         }
       },
       [&](const room_change::remove_child& change) {
-        if (const auto child = std::ranges::find(facts.children, change.room, &::mux::plugins::room_settings::room_settings_facts::named_room::id); child != facts.children.end()) {
+        if (const auto child = std::ranges::find(facts.children, change.room, &::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>::named_room::id); child != facts.children.end()) {
           facts.addable.push_back(*child);
           facts.children.erase(child);
         }
@@ -430,7 +430,7 @@ struct matrix_glue {
 
   // Only the room and account that asked for the read take it.
   void take(const proto::matrix::management_loaded& one) {
-    proto::matrix::app_detail::change_manage(*s_->showing, one.in, [&](room_settings::room_settings_facts&, proto::matrix::manage_state& kept) {
+    proto::matrix::app_detail::change_manage(*s_->showing, one.in, [&](room_settings::protocol_settings<::mux::protocol::matrix>&, proto::matrix::manage_state& kept) {
       kept.data = one.data;
       kept.loading = false;
       kept.error = one.error;
@@ -438,7 +438,7 @@ struct matrix_glue {
   }
   // A room avatar uploaded: kept to be saved with the profile.
   void take(const proto::matrix::room_avatar_uploaded& one) {
-    proto::matrix::app_detail::change_manage(*s_->showing, one.in, [&](room_settings::room_settings_facts&, proto::matrix::manage_state& kept) {
+    proto::matrix::app_detail::change_manage(*s_->showing, one.in, [&](room_settings::protocol_settings<::mux::protocol::matrix>&, proto::matrix::manage_state& kept) {
       kept.pending = false;
       kept.error = one.error;
       if (one.error.empty())
@@ -446,14 +446,14 @@ struct matrix_glue {
     });
   }
   void take(const proto::matrix::management_saved& one) {
-    proto::matrix::app_detail::change_manage(*s_->showing, one.in, [&](room_settings::room_settings_facts& facts, proto::matrix::manage_state& kept) {
+    proto::matrix::app_detail::change_manage(*s_->showing, one.in, [&](room_settings::protocol_settings<::mux::protocol::matrix>& facts, proto::matrix::manage_state& kept) {
       proto::matrix::app_detail::saved_in(facts, kept, one);
     });
   }
   // A press on the pages: what the settings keep changed, and the write it
   // asks sent -- for the room being managed, by its account.
   void apply(const proto::matrix::request::manage_room& one) {
-    const auto& open = *s_->showing->look<std::optional<room_settings::room_settings_facts>>();
+    const auto& open = *s_->showing->look<std::optional<room_settings::protocol_settings<::mux::protocol::matrix>>>();
     if (!open)
       return;
     auto now = *open;

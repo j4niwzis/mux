@@ -182,6 +182,9 @@ struct message_footers {
 //   facts_type(c, f) -> type_tag<its facts>, in the plugin's types
 //   extend(c, f) -> type_tag<its box>, a dialog's content
 //   made from ui_needs and the facts (make_content, content_look)
+// Or several, each a type of its own (a room's settings: one for each kind):
+//   facts_types(c, f) -> composition::page_list<their facts...>
+//   extend(c, f, type_tag<facts>) -> type_tag<that one's box>
 // Closed by request::close_shown<its facts>, which its part takes.
 struct window_dialogs {
   static constexpr std::string_view name = "the window's dialogs";

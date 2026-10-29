@@ -26,15 +26,28 @@ import mux.plugin.room_settings.ui;
 
 export namespace mux::plugins::room_settings {
 
+// What a plugin fills as a kind's settings open where it has nothing for
+// that kind: nothing.
+namespace opened_defaults {
+inline void room_opened(contract::opened, const auto&, const auto&, auto&, const conversation&) {}
+}  // namespace opened_defaults
 // What the plugins fill of the facts as they open, in their order.
-template <class... Features>
-void filled_by(plugin_list<Features...>, room_settings_facts& facts, const conversation& chat) {
-  (room_opened(contract::opened{}, type_tag<Features>{}, facts, chat), ...);
+template <class Kind, class... Features>
+void filled_by(plugin_list<Features...>, room_settings_of<Kind>& facts, const conversation& chat) {
+  using opened_defaults::room_opened;
+  (room_opened(contract::opened{}, type_tag<Features>{}, type_tag<Kind>{}, facts, chat), ...);
 }
+// What its part takes for every kind, as templates: listed for the
+// runtime walks outside a release build, which cannot read a type out of a
+// template's apply.
+template <class... Kinds>
+auto requests_of(ui::type_list<Kinds...>)
+    -> proto::request_list<manage_tab<Kinds>..., ui::request::close_shown<room_settings_of<Kinds>>...>;
 
 class part {
  public:
   explicit part(app::services& shared) : s_(&shared) {}
+  using requests_taken = decltype(requests_of(room_kinds{}));
 
   // The room's settings: made from what the model knows of it now.
   void apply(const ui::request::open_manage&) {
@@ -51,24 +64,26 @@ class part {
       this->apply(ui::request::manage_space{*open});
   }
   // A tab picked: up, and on a narrow window in the tab list's place.
-  void apply(const manage_tab& one) {
-    this->change([&](room_settings_facts& now) {
+  template <class Kind>
+  void apply(const manage_tab<Kind>& one) {
+    this->change<Kind>([&](room_settings_of<Kind>& now) {
       now.tab = one.tab;
       now.navigation = false;
     });
   }
   // ←: an editor open on the tab closed first; else, on a narrow window,
-  // back to the tab list.
+  // back to the tab list. Of whichever kind is open.
   void apply(const manage_back&) {
-    this->change([](room_settings_facts& now) {
+    this->each_open([](auto& now) {
       if (!close_manage_editor(now))
         now.navigation = now.narrow;
     });
   }
   // ✕ or Esc: an editor open closed first; on a narrow window, the page back
   // to the tab list; else the settings shut.
-  void apply(const ui::request::close_shown<room_settings_facts>&) {
-    if (const auto& open = *s_->showing->look<std::optional<room_settings_facts>>()) {
+  template <class Kind>
+  void apply(const ui::request::close_shown<room_settings_of<Kind>>&) {
+    if (const auto& open = *s_->showing->look<std::optional<room_settings_of<Kind>>>()) {
       auto now = *open;
       const bool editor = close_manage_editor(now);
       if (editor || (now.narrow && !now.navigation)) {
@@ -77,24 +92,11 @@ class part {
         return;
       }
     }
-    ui::show<room_settings_facts>(*s_->showing, std::nullopt);
+    ui::show<room_settings_of<Kind>>(*s_->showing, std::nullopt);
     s_->managing.reset();
   }
   // Each frame, where they are up: narrow or not, as the window is.
-  void tick() {
-    const auto& open = *s_->showing->look<std::optional<room_settings_facts>>();
-    if (!open) {
-      s_->managing.reset();
-      return;
-    }
-    const bool narrow = s_->showing->look<ui::window_shape>()->narrow();
-    if (open->narrow != narrow)
-      this->change([&](room_settings_facts& now) {
-        // Turned narrow: the tab list first.
-        now.navigation = narrow;
-        now.narrow = narrow;
-      });
-  }
+  void tick() { this->tick_kinds(room_kinds{}); }
   // A room's avatar chosen from the files, and sent.
   void apply(const ui::request::pick_room_avatar& one) {
     if (s_->demo()) return;
@@ -110,7 +112,7 @@ class part {
     if (!kind || !skia::decodeImage(bytes->data(), bytes->size())) {
       s_->notice("Room Avatar", "Choose an image mux can show."); return true;
     }
-    this->change([&](room_settings_facts& now) {
+    this->each_open([&](auto& now) {
       if (now.chat == room)
         manage_avatar_sending(now);
     });
@@ -121,35 +123,51 @@ class part {
   }
 
  private:
-  // Settings, for a chat: what the model knows of it, what the program
-  // keeps for it, and what the plugins fill.
+  // Settings, for a chat: of its kind -- its protocol's rooms', or, where
+  // a one-to-one chat of its protocol is no room (XMPP's), a plain chat's --
+  // read once here, from its protocol's type.
   void manage_chat(const conversation_id& id) {
     const conversation* chat = s_->model->find(id);
     if (!chat)
       return;
+    const bool direct = chat->kind.template get_if<conversation_kind::direct>() != nullptr;
+    spl::visit([&]<class Protocol>(Protocol) {
+      if (direct && !proto::direct_chats_are_rooms<state_of<Protocol>>())
+        this->manage_as<room_kind::plain>(*chat);
+      else
+        this->manage_as<room_kind::room_of<Protocol>>(*chat);
+    }, chat->id.account.speaks);
+  }
+  // A kind's settings, for a chat: what the model knows of it, what the
+  // program keeps for it, and what the plugins fill.
+  template <class Kind>
+  void manage_as(const conversation& chat_ref) {
+    const conversation* chat = &chat_ref;
+    const conversation_id id = chat->id;
     s_->net->on_account_of(id, [room = id.id](auto& account)
         -> decltype(void(account.fetch_room_settings(room))) { account.fetch_room_settings(room); });
     auto& k = *s_->kept;
-    room_settings_facts facts{.id = chat->id.id,
-                              .name = chat->name,
-                              .topic = chat->topic.value_or(""),
-                              .avatar = chat->avatar,
-                              .alias = chat->alias,
-                              .other_aliases = chat->other_aliases,
-                              .encrypted = chat->encrypted,
-                              .group = chat->kind.template get_if<conversation_kind::direct>() == nullptr,
-                              .leavable = proto::can_leave(ui::protocol_state_of(s_->ui, chat->id.account), *chat),
-                              .theirs = chat->theirs,
-                              .notify = k.notify_choices_of(chat->id),
-                              .events_all = k.own_of<&app::chat_choices::room_events>(chat->id),
-                              .jump_search = k.own_of<&app::chat_choices::jump_search>(chat->id),
-                              .event_kinds = k.own_of<&app::chat_choices::room_event_kinds>(chat->id),
-                              .space = chat->space,
-                              .holds_spaces = std::ranges::any_of(chat->children, [&](const std::string& child) {
-                                const conversation* in = s_->model->find(conversation_id{chat->id.account, child});
-                                return in && in->space;
-                              }),
-                              .speaks = chat->id.account.speaks};
+    using facts_t = room_settings_of<Kind>;
+    facts_t facts{.id = chat->id.id,
+                  .name = chat->name,
+                  .topic = chat->topic.value_or(""),
+                  .avatar = chat->avatar,
+                  .alias = chat->alias,
+                  .other_aliases = chat->other_aliases,
+                  .encrypted = chat->encrypted,
+                  .group = chat->kind.template get_if<conversation_kind::direct>() == nullptr,
+                  .leavable = proto::can_leave(ui::protocol_state_of(s_->ui, chat->id.account), *chat),
+                  .theirs = their_part_of<Kind>(chat->theirs),
+                  .notify = k.notify_choices_of(chat->id),
+                  .events_all = k.own_of<&app::chat_choices::room_events>(chat->id),
+                  .jump_search = k.own_of<&app::chat_choices::jump_search>(chat->id),
+                  .event_kinds = k.own_of<&app::chat_choices::room_event_kinds>(chat->id),
+                  .space = chat->space,
+                  .holds_spaces = std::ranges::any_of(chat->children, [&](const std::string& child) {
+                    const conversation* in = s_->model->find(conversation_id{chat->id.account, child});
+                    return in && in->space;
+                  }),
+                  .speaks = chat->id.account.speaks};
     facts.chat = chat->id;
     facts.members = chat->members;
     // Its own choices there to be bound to, chosen or not.
@@ -159,7 +177,7 @@ class part {
     // name, to be added to it.
     if (const account* known = s_->model->accounts().find(chat->id.account)) {
       const auto named = [](const std::string& room, const conversation& one) {
-        return room_settings_facts::named_room{room, one.name.empty() ? room : one.name};
+        return ui::named_room{room, one.name.empty() ? room : one.name};
       };
       for (const auto& [room, one] : known->conversations) {
         if (one.space && std::ranges::contains(one.children, chat->id.id))
@@ -175,7 +193,7 @@ class part {
       for (const std::string& child : chat->children)
         if (!known->conversations.contains(child))
           facts.children.push_back({child, child});
-      std::ranges::sort(facts.addable, {}, &room_settings_facts::named_room::name);
+      std::ranges::sort(facts.addable, {}, &ui::named_room::name);
     }
     // What the plugins fill: room_admin's tab up first, what it keeps, the
     // levels it knows.
@@ -183,15 +201,62 @@ class part {
     facts.narrow = s_->showing->look<ui::window_shape>()->narrow();
     facts.navigation = facts.narrow;
     s_->managing = chat->id;
-    ui::show(*s_->showing, std::optional(facts));
+    close_room_settings(*s_->showing);
+    ui::show(*s_->showing, std::optional(std::move(facts)));
   }
-  template <class Change>
+  // The room's protocol part, as the kind holds it: the part where the kind
+  // has its type; none else (a plain chat's) -- by overloading.
+  template <class Kind>
+  struct part_into {
+    their_part_t<Kind> operator()(const auto&) const { return proto::no_room_part{}; }
+    template <class Part>
+      requires std::constructible_from<their_part_t<Kind>, const Part&>
+    their_part_t<Kind> operator()(const Part& part) const {
+      return part;
+    }
+  };
+  template <class Kind>
+  static their_part_t<Kind> their_part_of(const room_part_t& all) {
+    return spl::visit(part_into<Kind>{}, all);
+  }
+  // Each frame: the kind open, narrow or not as the window is -- shown again
+  // only where that changed. None open: no chat managed.
+  template <class... Kinds>
+  void tick_kinds(ui::type_list<Kinds...>) {
+    const bool narrow = s_->showing->look<ui::window_shape>()->narrow();
+    const bool any = (this->tick_kind<Kinds>(narrow) | ...);
+    if (!any)
+      s_->managing.reset();
+  }
+  template <class Kind>
+  bool tick_kind(bool narrow) {
+    const auto& open = *s_->showing->look<std::optional<room_settings_of<Kind>>>();
+    if (!open)
+      return false;
+    if (open->narrow != narrow)
+      this->change<Kind>([&](room_settings_of<Kind>& now) {
+        // Turned narrow: the tab list first.
+        now.navigation = narrow;
+        now.narrow = narrow;
+      });
+    return true;
+  }
+  template <class Kind, class Change>
   void change(Change change) {
-    if (const auto& open = *s_->showing->look<std::optional<room_settings_facts>>()) {
+    if (const auto& open = *s_->showing->look<std::optional<room_settings_of<Kind>>>()) {
       auto now = *open;
       change(now);
       ui::show(*s_->showing, std::optional(std::move(now)));
     }
+  }
+  // Whichever kind's settings are open, changed.
+  template <class Change, class... Kinds>
+  void each_open(Change change, ui::type_list<Kinds...>) {
+    (this->change<Kinds>(change), ...);
+  }
+  template <class Change>
+  void each_open(Change change) {
+    this->each_open(std::move(change), room_kinds{});
   }
 
   app::services* s_;

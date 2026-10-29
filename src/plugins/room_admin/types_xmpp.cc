@@ -8,6 +8,8 @@ import std;
 import splice;
 import mux.core;
 import mux.composition;
+import mux.plugin.room_settings.types;
+import :feature;
 import mux.proto;
 import mux.proto.xmpp;
 
@@ -19,15 +21,6 @@ struct roles {};
 constexpr std::string_view tab_title(room) { return "Room"; }
 constexpr std::string_view tab_title(configuration) { return "Configuration"; }
 constexpr std::string_view tab_title(roles) { return "Roles & Permissions"; }
-// Its tabs, an XMPP group chat's alone.
-template <class Facts>
-[[nodiscard]] bool muc_room_of(const Facts& facts) {
-  return facts.group &&
-         spl::visit(spl::overloaded{[](const ::mux::protocol::xmpp&) { return true; }, [](const auto&) { return false; }}, facts.speaks);
-}
-template <class Facts> bool tab_visible(room, const Facts& facts) { return muc_room_of(facts); }
-template <class Facts> bool tab_visible(configuration, const Facts& facts) { return muc_room_of(facts); }
-template <class Facts> bool tab_visible(roles, const Facts& facts) { return muc_room_of(facts); }
 
 }  // namespace mux::proto::xmpp::manage
 
@@ -37,9 +30,12 @@ export namespace mux::plugins::room_admin {
 // room's part the facts hold (muc_room), and opens on the client's General.
 struct xmpp_admin {
   using tabs = composition::page_list<proto::xmpp::manage::room, proto::xmpp::manage::configuration, proto::xmpp::manage::roles>;
-  using kept = composition::page_list<>;
-  template <class Facts>
-  static void opened(Facts&, const conversation&) {}
 };
+// An XMPP group chat's settings: its tabs, on that kind alone (a one-to-one
+// chat's settings are a plain chat's). It keeps nothing of its own beside
+// the room's part the facts hold (muc_room), and opens on the client's
+// General.
+using xmpp_kind = room_settings::room_kind::room_of<::mux::protocol::xmpp>;
+constexpr xmpp_admin::tabs room_tabs(room_settings::contract::tabs, type_tag<feature>, type_tag<xmpp_kind>) { return {}; }
 
 }  // namespace mux::plugins::room_admin

@@ -13,6 +13,8 @@ import chevron.escape;
 
 export namespace mux::proto::matrix {
 constexpr bool offers(const state&, feature::server_previews) { return true; }
+// A DM is a room: its settings a room's.
+constexpr bool direct_rooms(const state&) { return true; }
 
 
 inline std::string directory_server(const state&, std::string_view address) {

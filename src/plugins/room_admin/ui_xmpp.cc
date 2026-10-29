@@ -37,7 +37,7 @@ import mux.plugin.room_admin.types;
 
 export namespace mux::proto::xmpp::manage_detail {
 using namespace ::mux::ui;
-using ::mux::plugins::room_settings::room_settings_facts;
+using room_settings_facts = ::mux::plugins::room_settings::protocol_settings<::mux::protocol::xmpp>;
 inline const muc_room& settings_of(const room_settings_facts& facts) {
   static const muc_room empty;
   return spl::visit(spl::overloaded{[](const muc_room& room) -> const muc_room& { return room; },
@@ -552,23 +552,23 @@ inline ui::icon_t tab_icon(room) { return ui::icon::people{}; }
 inline ui::icon_t tab_icon(configuration) { return ui::icon::gear{}; }
 inline ui::icon_t tab_icon(roles) { return ui::icon::people{}; }
 // Each tab's page, made again from the room as the server says it.
-auto page_of(room, const auto& colours, const ::mux::plugins::room_settings::room_settings_facts&) {
+auto page_of(room, const auto& colours, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::xmpp>&) {
   using namespace manage_detail;
-  return made_from<room_page_t<decltype(colours)>, room_basis>(colours, [](const ::mux::plugins::room_settings::room_settings_facts& facts) { return room_basis{settled(settings_of(facts)), facts.topic}; },
+  return made_from<room_page_t<decltype(colours)>, room_basis>(colours, [](const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::xmpp>& facts) { return room_basis{settled(settings_of(facts)), facts.topic}; },
                                             [](const auto& at, const room_basis& basis) { return room_page(at, basis); });
 }
-auto page_of(configuration, const auto& colours, const ::mux::plugins::room_settings::room_settings_facts&) {
+auto page_of(configuration, const auto& colours, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::xmpp>&) {
   using namespace manage_detail;
-  return made_from<configuration_page_t<decltype(colours)>, muc_room>(colours, [](const ::mux::plugins::room_settings::room_settings_facts& facts) { return settled(settings_of(facts)); },
+  return made_from<configuration_page_t<decltype(colours)>, muc_room>(colours, [](const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::xmpp>& facts) { return settled(settings_of(facts)); },
                                                    [](const auto& at, const muc_room& room) { return configuration_page(at, room); });
 }
-auto page_of(roles, const auto& colours, const ::mux::plugins::room_settings::room_settings_facts&) {
+auto page_of(roles, const auto& colours, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::xmpp>&) {
   using namespace manage_detail;
-  return made_from<roles_page_t<decltype(colours)>, roles_basis>(colours, [](const ::mux::plugins::room_settings::room_settings_facts& facts) { return roles_basis{settled(settings_of(facts)), facts.id}; },
+  return made_from<roles_page_t<decltype(colours)>, roles_basis>(colours, [](const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::xmpp>& facts) { return roles_basis{settled(settings_of(facts)), facts.id}; },
                                               [](const auto& at, const roles_basis& basis) { return roles_page(at, basis); });
 }
 template <class Tab>
-auto make_manage_page(Tab tab, const ui::palette& colours, const ::mux::plugins::room_settings::room_settings_facts& facts)
+auto make_manage_page(Tab tab, const ui::palette& colours, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::xmpp>& facts)
   requires requires { page_of(tab, colours, facts); }
 {
   return page_of(tab, colours, facts);
@@ -578,7 +578,7 @@ auto make_manage_page(Tab tab, const ui::palette& colours, const ::mux::plugins:
 
 export namespace mux::plugins::room_admin {
 // The dialog for an XMPP group chat: the client's own look.
-inline std::optional<room_settings::room_manage_style> admin_presented(xmpp_admin, const ::mux::plugins::room_settings::room_settings_facts&, const ui::palette&) {
+inline std::optional<room_settings::room_manage_style> admin_presented(xmpp_admin, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::xmpp>&, const ui::palette&) {
   return std::nullopt;
 }
 }  // namespace mux::plugins::room_admin

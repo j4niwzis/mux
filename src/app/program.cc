@@ -360,11 +360,22 @@ struct app : kept_settings {
   }
   template <class Part>
   using part_applied = typename skiff::bind::takes::loophole::Read<part_apply_tag<Part>, probe_part_apply<Part>()>::type;
+  // What a part takes through an apply templated on what it is for (a
+  // room's settings, one kind each): the loophole cannot read those, so the
+  // part lists them (requests_taken: a proto::request_list).
   template <class Part>
-  void served_by_part(std::vector<skiff::bind::rt::Served>& out, Part&) {
+    requires requires { typename Part::requests_taken; }
+  void served_listed(std::vector<skiff::bind::rt::Served>& out, Part&) {
+    served_each(out, typename Part::requests_taken{});
+  }
+  template <class Part>
+  void served_listed(std::vector<skiff::bind::rt::Served>&, Part&) {}
+  template <class Part>
+  void served_by_part(std::vector<skiff::bind::rt::Served>& out, Part& part) {
     served_each(out, skiff::bind::takes::Applied<Part>{});
     served_each(out, skiff::bind::takes::AppliedWith<Part, taker>{});
     served_each(out, part_applied<Part>{});
+    served_listed(out, part);
   }
   template <class... Tags>
   void served_protocols(std::vector<skiff::bind::rt::Served>& out, mux::protocol_list<Tags...>) {

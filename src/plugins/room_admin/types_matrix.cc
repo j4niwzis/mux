@@ -10,6 +10,8 @@ import std;
 import splice;
 import mux.core;
 import mux.composition;
+import mux.plugin.room_settings.types;
+import :feature;
 import mux.proto;
 import mux.proto.matrix;
 import mux.proto.matrix.requests;
@@ -31,14 +33,6 @@ constexpr bool hosts_general(room) { return true; }
 constexpr std::string_view tab_title(room) { return "General"; }
 constexpr std::string_view tab_title(members) { return "Members"; }
 constexpr std::string_view tab_title(roles) { return "Permissions"; }
-// Its tabs, a Matrix room's alone.
-template <class Facts>
-[[nodiscard]] bool matrix_room(const Facts& facts) {
-  return spl::visit(spl::overloaded{[](const ::mux::protocol::matrix&) { return true; }, [](const auto&) { return false; }}, facts.speaks);
-}
-template <class Facts> bool tab_visible(room, const Facts& facts) { return matrix_room(facts); }
-template <class Facts> bool tab_visible(members, const Facts& facts) { return matrix_room(facts); }
-template <class Facts> bool tab_visible(roles, const Facts& facts) { return matrix_room(facts); }
 }  // namespace manage
 // What a page has open: an editor, or a list unfolded.
 enum class editor { profile, powers, power };
@@ -162,12 +156,19 @@ struct matrix_admin {
   using kept = composition::page_list<proto::matrix::manage_state>;
   template <class Facts>
   static void opened(Facts& facts, const conversation& chat) {
-    if (!proto::matrix::manage::matrix_room(facts))
-      return;
     proto::matrix::manage_facts(chat, facts);
     facts.tab = proto::matrix::manage::room{};
     facts.manage = proto::matrix::manage_state{};
   }
 };
+// A Matrix room's settings: its tabs, what it keeps, what it fills -- on
+// that kind alone.
+using matrix_kind = room_settings::room_kind::room_of<::mux::protocol::matrix>;
+constexpr matrix_admin::tabs room_tabs(room_settings::contract::tabs, type_tag<feature>, type_tag<matrix_kind>) { return {}; }
+constexpr matrix_admin::kept kept_parts(room_settings::contract::kept, type_tag<feature>, type_tag<matrix_kind>) { return {}; }
+template <class Facts>
+void room_opened(room_settings::contract::opened, type_tag<feature>, type_tag<matrix_kind>, Facts& facts, const conversation& chat) {
+  matrix_admin::opened(facts, chat);
+}
 
 }  // namespace mux::plugins::room_admin

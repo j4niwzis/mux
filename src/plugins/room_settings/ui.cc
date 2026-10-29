@@ -4,7 +4,8 @@
 // its protocol, packs', devtools'), then the client's (General,
 // Notifications, Appearance) -- and the tab up beside them, under its head.
 // As the program says: the tab, the tab list up in its place on a narrow
-// window, and what a plugin keeps while they are open (room_settings_facts).
+// window, and what a plugin keeps while they are open (room_settings_of,
+// one type for each kind: a Matrix room's, an XMPP group chat's, a plain chat's).
 // Every page is made once as they open and shown while its tab is up: what
 // is typed in one stays as tabs are switched. A press asks the program.
 //
@@ -60,40 +61,97 @@ inline icon_t tab_icon(looks) { return icon::eye{}; }
 struct nothing_kept {
   friend bool operator==(nothing_kept, nothing_kept) = default;
 };
-// The plugins' tabs (contract::tabs), in their order; what they keep
-// (contract::kept).
+// What a plugin says of a kind of room's settings where it says nothing:
+// no tabs, nothing kept -- each plugin put straight on the kinds it has
+// tabs for (contract::tabs, kept), no list filtered.
+namespace tab_defaults {
+constexpr composition::page_list<> room_tabs(contract::tabs, const auto&, const auto&) { return {}; }
+constexpr composition::page_list<> kept_parts(contract::kept, const auto&, const auto&) { return {}; }
+constexpr bool hosts_general(const auto&) { return false; }
+inline bool manage_close_editor(const auto&, auto&) { return false; }
+inline bool manage_editor_header(const auto&, const auto&) { return false; }
+constexpr void avatar_sending(auto&) {}
+}  // namespace tab_defaults
+template <class Kind, class Feature>
+consteval auto tabs_said(type_tag<Feature>) {
+  using tab_defaults::room_tabs;
+  return room_tabs(contract::tabs{}, type_tag<Feature>{}, type_tag<Kind>{});
+}
+template <class Kind, class Feature>
+consteval auto kept_said(type_tag<Feature>) {
+  using tab_defaults::kept_parts;
+  return kept_parts(contract::kept{}, type_tag<Feature>{}, type_tag<Kind>{});
+}
+// The plugins' tabs for a kind (contract::tabs), in their order; what they
+// keep for it (contract::kept).
 template <class List>
 struct listed_types;
 template <class... Ts>
 struct listed_types<composition::page_list<Ts...>> {
   using type = ui::type_list<Ts...>;
 };
-template <class>
+template <class Kind, class>
 struct plugin_tabs_of;
-template <class... Features>
-struct plugin_tabs_of<plugin_list<Features...>> {
-  using type = typename ui::joined<ui::type_list<>,
-                                   typename listed_types<decltype(room_tabs(contract::tabs{}, type_tag<Features>{}))>::type...>::type;
+template <class Kind, class... Features>
+struct plugin_tabs_of<Kind, plugin_list<Features...>> {
+  using type = typename ui::joined<ui::type_list<>, typename listed_types<decltype(tabs_said<Kind>(type_tag<Features>{}))>::type...>::type;
 };
-using plugin_tabs_t = typename plugin_tabs_of<composition::providers<contract::tabs, enabled_plugins>>::type;
-template <class>
+template <class Kind>
+using plugin_tabs_t = typename plugin_tabs_of<Kind, composition::providers<contract::tabs, enabled_plugins>>::type;
+template <class Kind, class>
 struct plugin_kept_of;
-template <class... Features>
-struct plugin_kept_of<plugin_list<Features...>> {
+template <class Kind, class... Features>
+struct plugin_kept_of<Kind, plugin_list<Features...>> {
   using type = typename ui::joined<ui::type_list<nothing_kept>,
-                                   typename listed_types<decltype(kept_parts(contract::kept{}, type_tag<Features>{}))>::type...>::type;
+                                   typename listed_types<decltype(kept_said<Kind>(type_tag<Features>{}))>::type...>::type;
 };
-// A tab of a room's settings, and what a plugin keeps while they are open.
+// A tab of a kind's settings, and what a plugin keeps while they are open.
+template <class Kind>
 using manage_tab_t = typename ui::variant_of_types<typename ui::joined<
-    ui::type_list<settings_tab::general, settings_tab::notifications, settings_tab::looks>, plugin_tabs_t>::type>::type;
+    ui::type_list<settings_tab::general, settings_tab::notifications, settings_tab::looks>, plugin_tabs_t<Kind>>::type>::type;
+template <class Kind>
 using manage_part_t = typename ui::variant_of_types<
-    typename plugin_kept_of<composition::providers<contract::kept, enabled_plugins>>::type>::type;
+    typename plugin_kept_of<Kind, composition::providers<contract::kept, enabled_plugins>>::type>::type;
+// The protocol's part of a room, as a kind's settings hold it: its
+// protocol's parts alone (Matrix: its rules and levels; XMPP: a MUC's
+// configuration); a plain chat's, none.
+template <class List>
+struct their_parts_of;
+template <class... Parts>
+struct their_parts_of<proto::room_part_list<Parts...>> {
+  using type = spl::variant<proto::no_room_part, Parts...>;
+};
+template <class Kind>
+struct their_part;
+template <class Protocol>
+struct their_part<room_kind::room_of<Protocol>> {
+  using type = typename their_parts_of<decltype(::mux::room_parts_of(::mux::state_of<Protocol>{}))>::type;
+};
+template <>
+struct their_part<room_kind::plain> {
+  using type = spl::variant<proto::no_room_part>;
+};
+template <class Kind>
+using their_part_t = typename their_part<Kind>::type;
 
+// The kinds, one dialog each: a room of each protocol turned on, and a
+// plain chat.
+template <class>
+struct kinds_of;
+template <class... Protocols>
+struct kinds_of<protocol_list<Protocols...>> {
+  using type = ui::type_list<room_kind::plain, room_kind::room_of<Protocols>...>;
+};
+using room_kinds = typename kinds_of<protocols>::type;
 
-// A room's settings open: what they show of it, as the program made them as
-// they opened -- the room, its choices, what its protocol's part says,
-// what the plugins filled and keep.
-struct room_settings_facts {
+// A room's settings open, of one kind -- a Matrix room's and an XMPP group
+// chat's two types, each with its own tabs and its protocol's part alone:
+// what they show of it, as the program made them as they opened -- the
+// room, its choices, what its protocol's part says, what the plugins filled
+// and keep.
+template <class Kind>
+struct room_settings_of {
+  using kind = Kind;
   std::string id;  // the room's ID
   std::string name;
   std::string topic;
@@ -103,8 +161,8 @@ struct room_settings_facts {
   bool encrypted = false;
   bool group = true;
   bool leavable = true;
-  // Its protocol's part (Matrix: its rules and levels), for its pages.
-  room_part_t theirs;
+  // Its protocol's part, for its pages.
+  their_part_t<Kind> theirs;
   // Its notifications, as chosen for it (muted: off).
   config::notify_choices notify;
   // Which of its room events it shows, as chosen for it: none chosen is as
@@ -128,7 +186,7 @@ struct room_settings_facts {
   // A space: whether it holds spaces, and whether it is shown as a forum.
   bool space = false;
   bool holds_spaces = false;
-  // The protocol the room is of: which tabs it has besides the client's own.
+  // The protocol the chat is of: the room events it can show.
   protocol_t speaks;
   // Those whose level is not the default: Element's privileged users.
   struct person {
@@ -142,63 +200,47 @@ struct room_settings_facts {
   // What the dialog shows, as the program says: the tab up; on a narrow
   // window, whether the tab list is up in place of the page; and what the
   // plugin keeps while it is open.
-  manage_tab_t tab = settings_tab::general{};
+  manage_tab_t<Kind> tab = settings_tab::general{};
   bool narrow = false, navigation = false;
-  manage_part_t manage;
+  manage_part_t<Kind> manage;
 };
+// A protocol's rooms' settings: room_admin's pages are made for these.
+template <class Protocol>
+using protocol_settings = room_settings_of<room_kind::room_of<Protocol>>;
 
 // What its dialog asks of the program: a tab picked; ← (an editor open
 // closed first, then the page, to the tab list on a narrow window). Closed
-// by request::close_shown<room_settings_facts>.
+// by request::close_shown<room_settings_of<Kind>>.
+template <class Kind>
 struct manage_tab {
-  manage_tab_t tab;
+  manage_tab_t<Kind> tab;
 };
 struct manage_back {};
 
 // ---- what the plugins' tabs say of themselves (contract::tabs) ----------------------
-namespace tab_defaults {
-constexpr bool tab_visible(const auto&, const auto&) { return true; }
-constexpr bool hosts_general(const auto&) { return false; }
-inline bool manage_close_editor(const auto&, auto&) { return false; }
-inline bool manage_editor_header(const auto&, const auto&) { return false; }
-constexpr void avatar_sending(auto&) {}
-}  // namespace tab_defaults
-template <class Tab>
-[[nodiscard]] bool tab_shown(const room_settings_facts& facts) {
-  using tab_defaults::tab_visible;
-  return tab_visible(Tab{}, facts);
-}
 template <class Tab>
 [[nodiscard]] constexpr bool tab_hosts_general() {
   using tab_defaults::hosts_general;
   return hosts_general(Tab{});
 }
-// Whether a tab of a plugin's this room has holds the client's General
+// Whether a tab of a plugin's this kind has holds the client's General
 // under its own page (Matrix's: the room's name, topic and address): one
-// General, not two.
-// Asked only of the tabs that say they host it -- theirs said with their
-// types -- whether this room has them.
-template <class Tab>
-  requires(tab_hosts_general<Tab>())
-[[nodiscard]] bool hosted_by(const room_settings_facts& facts) {
-  return tab_shown<Tab>(facts);
-}
-template <class Tab>
-[[nodiscard]] bool hosted_by(const room_settings_facts&) {
-  return false;
-}
+// General, not two -- known from the kind's tabs, while compiling.
 template <class... Tabs>
-[[nodiscard]] bool general_hosted(ui::type_list<Tabs...>, const room_settings_facts& facts) {
-  return (hosted_by<Tabs>(facts) || ...);
+[[nodiscard]] constexpr bool general_hosted(ui::type_list<Tabs...>) {
+  return (tab_hosts_general<Tabs>() || ...);
 }
-[[nodiscard]] inline bool general_on_its_own(const room_settings_facts& facts) { return !general_hosted(plugin_tabs_t{}, facts); }
+template <class Kind>
+inline constexpr bool general_on_its_own = !general_hosted(plugin_tabs_t<Kind>{});
 // What the client's General is called: General where it is a tab of its
 // own; Preferences where another's page holds it.
-[[nodiscard]] inline std::string general_title(const room_settings_facts& facts) {
-  return general_on_its_own(facts) ? std::string("General") : std::string("Preferences");
+template <class Kind>
+[[nodiscard]] std::string general_title() {
+  return general_on_its_own<Kind> ? std::string("General") : std::string("Preferences");
 }
 // A room avatar being sent: what a plugin keeps shows it pending.
-inline void manage_avatar_sending(room_settings_facts& facts) {
+template <class Kind>
+void manage_avatar_sending(room_settings_of<Kind>& facts) {
   spl::visit([](auto& part) {
     using tab_defaults::avatar_sending;
     avatar_sending(part);
@@ -206,7 +248,8 @@ inline void manage_avatar_sending(room_settings_facts& facts) {
 }
 // What the tab up closes first, by its plugin: an editor open on it.
 // Whether it did.
-inline bool close_manage_editor(room_settings_facts& facts) {
+template <class Kind>
+bool close_manage_editor(room_settings_of<Kind>& facts) {
   return spl::visit([&](const auto& tab) {
     return spl::visit([&](auto& part) {
       using tab_defaults::manage_close_editor;
@@ -215,7 +258,8 @@ inline bool close_manage_editor(room_settings_facts& facts) {
   }, facts.tab);
 }
 // Whether the tab's page shows an editor, with a way back over it.
-[[nodiscard]] inline bool manage_editor_up(const room_settings_facts& facts) {
+template <class Kind>
+[[nodiscard]] bool manage_editor_up(const room_settings_of<Kind>& facts) {
   return spl::visit([&](const auto& tab) {
     return spl::visit([&](const auto& part) {
       using tab_defaults::manage_editor_header;
@@ -230,8 +274,8 @@ struct room_manage_style {
   bool page_header = false;
   float navigation_width = 220.0f;
 };
-template <class... Features>
-[[nodiscard]] room_manage_style presented(plugin_list<Features...>, const room_settings_facts& facts, const auto& colours) {
+template <class Kind, class... Features>
+[[nodiscard]] room_manage_style presented(plugin_list<Features...>, const room_settings_of<Kind>& facts, const auto& colours) {
   std::optional<room_manage_style> found;
   ((found = found ? found : room_presented(contract::presentation{}, type_tag<Features>{}, facts, colours)), ...);
   return found.value_or(room_manage_style{colours});
@@ -240,17 +284,17 @@ template <class... Features>
 // The client's General: the room's events, receipts, previews, typing, Home,
 // leaving -- in a tab of its own, or under a plugin's page that hosts it.
 // The plugins' sections of it (contract::general_sections), after its own.
-template <class... Features>
-auto general_sections_of(plugin_list<Features...>, const auto& colours, const room_settings_facts& facts) {
+template <class Kind, class... Features>
+auto general_sections_of(plugin_list<Features...>, const auto& colours, const room_settings_of<Kind>& facts) {
   return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                                 extend(contract::general_sections{}, type_tag<Features>{}, colours, facts)...);
 }
-inline auto room_general_page(const auto& colours, const room_settings_facts& facts, bool has_page_header = false) {
+template <class Kind>
+auto room_general_page(const auto& colours, const room_settings_of<Kind>& facts, bool has_page_header = false) {
   namespace c = skiff::compose;
-  using choices = config::chat_choices;
   return SKIFF_NAMED(room_general_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
                                 .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
-      c::visible(!has_page_header, tab_heading(colours, general_title(facts))),
+      c::visible(!has_page_header, tab_heading(colours, general_title<Kind>())),
       c::visible(!proto::room_event_kinds_of(state_before(facts.speaks)).empty(),
           explained(colours, "Room events shown in this room, for you: As above follows the inherited settings.")),
       chat_settings_view(colours, facts.chat),
@@ -260,77 +304,80 @@ inline auto room_general_page(const auto& colours, const room_settings_facts& fa
           c::visible(facts.leavable, button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {})))));
 }
 
-using room_facts_t = std::optional<room_settings_facts>;
+template <class Kind>
+using room_facts_t = std::optional<room_settings_of<Kind>>;
 
 // Whether a tab is the one up.
-template <class Tab>
+template <class Kind, class Tab>
 struct tab_up {
-  bool operator()(const room_facts_t& now) const {
+  bool operator()(const room_facts_t<Kind>& now) const {
     return now && !now->navigation &&
            spl::visit(spl::overloaded{[](const Tab&) { return true; }, [](const auto&) { return false; }}, now->tab);
   }
 };
 // Whether the client's General is up: its own tab, or a tab hosting it.
-template <class... Tabs>
-[[nodiscard]] bool hosting_up(ui::type_list<Tabs...>, const room_facts_t& now) {
-  return ((tab_hosts_general<Tabs>() && tab_up<Tabs>{}(now)) || ...);
+template <class Kind, class... Tabs>
+[[nodiscard]] bool hosting_up(ui::type_list<Tabs...>, const room_facts_t<Kind>& now) {
+  return ((tab_hosts_general<Tabs>() && tab_up<Kind, Tabs>{}(now)) || ...);
 }
+template <class Kind>
 struct general_up {
-  bool operator()(const room_facts_t& now) const { return now && (tab_up<settings_tab::general>{}(now) || hosting_up(plugin_tabs_t{}, now)); }
+  bool operator()(const room_facts_t<Kind>& now) const {
+    return now && (tab_up<Kind, settings_tab::general>{}(now) || hosting_up<Kind>(plugin_tabs_t<Kind>{}, now));
+  }
 };
-// Whether a tab's row is listed: the client's General only where no tab of
-// a plugin's hosts it; every other tab, always.
-// A plugin's, where this room has it (tab_shown: a Matrix room's tabs for a
-// Matrix room alone) -- said here, where the row reads it each time: the
-// row's own spec set it visible again over the visible() it was made in,
-// and an XMPP group chat's tabs were listed for a Matrix space (a tester's).
-template <class Tab>
-bool tab_listed(const Tab&, const room_facts_t& now) { return !now || tab_shown<Tab>(*now); }
-inline bool tab_listed(settings_tab::general, const room_facts_t& now) { return !now || general_on_its_own(*now); }
 // A tab's row: its icon and title, marked while it is up; pressed, it is.
-template <class Tab>
+// Every row made is listed: the kind's tabs are its own, known while
+// compiling.
+template <class Kind, class Tab>
 auto manage_tab_row(const auto& colours, Tab tab) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(manage_tab_row, c::spec_for<room_facts_t>([](const room_facts_t& now) { return scene::Spec{.visible = tab_listed(Tab{}, now), .selected = tab_up<Tab>{}(now)}; },
-      c::onPress(sends<manage_tab>{{manage_tab_t{tab}}},
+  return SKIFF_NAMED(manage_tab_row, c::spec_for<room_facts_t<Kind>>([](const room_facts_t<Kind>& now) { return scene::Spec{.selected = tab_up<Kind, Tab>{}(now)}; },
+      c::onPress(sends<manage_tab<Kind>>{{manage_tab_t<Kind>{tab}}},
           c::row(c::hbox(8.0f, {.fillX = true, .height = 40.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner,
                                 .hoverBackground = colours.background, .selectedBackground = colours.tile}),
                  c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, icon_mark(colours, tab_icon(tab))),
-                 c::applied<room_facts_t>([](const room_facts_t& now) { return tab_up<Tab>{}(now); },
+                 c::applied<room_facts_t<Kind>>([](const room_facts_t<Kind>& now) { return tab_up<Kind, Tab>{}(now); },
                                           [](nodes::Text& title, bool up) { title.setBold(up); },
                                           c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                                                     elided(nodes::Text(std::string(tab_title(tab)), 14.0f, colours.text))))))));
 }
+// The client's tabs: General only where no tab of the kind's hosts it.
+template <class Kind>
+auto client_tab_rows(const auto& colours) {
+  namespace c = skiff::compose;
+  if constexpr (general_on_its_own<Kind>)
+    return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), manage_tab_row<Kind>(colours, settings_tab::general{}),
+                     manage_tab_row<Kind>(colours, settings_tab::notifications{}), manage_tab_row<Kind>(colours, settings_tab::looks{}));
+  else
+    return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                     manage_tab_row<Kind>(colours, settings_tab::notifications{}), manage_tab_row<Kind>(colours, settings_tab::looks{}));
+}
 
-
-// The plugins' rows, those this room has; and each one's page, shown while
+// The plugins' rows, those of this kind; and each one's page, shown while
 // its tab is up: made by its plugin (make_manage_page, found by ADL with its
 // tab where the window makes the dialog), from the facts as the settings
 // opened; it reads them as they move.
-template <class Tab>
-auto plugin_tab_row(const auto& colours, const room_settings_facts& facts) {
-  (void)facts;
-  return manage_tab_row(colours, Tab{});
-}
-template <class... Tabs>
-auto plugin_tab_rows(ui::type_list<Tabs...>, const auto& colours, const room_settings_facts& facts) {
+template <class Kind, class... Tabs>
+auto plugin_tab_rows(ui::type_list<Tabs...>, const auto& colours) {
   return SKIFF_NAMED(plugin_tab_rows, skiff::compose::column(skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                plugin_tab_row<Tabs>(colours, facts)...));
+                                manage_tab_row<Kind>(colours, Tabs{})...));
 }
-template <class Tab>
-auto plugin_page(const auto& colours, const room_settings_facts& facts) {
+template <class Kind, class Tab>
+auto plugin_page(const auto& colours, const room_settings_of<Kind>& facts) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(plugin_page, c::shown_for<room_facts_t>(tab_up<Tab>{},
+  return SKIFF_NAMED(plugin_page, c::shown_for<room_facts_t<Kind>>(tab_up<Kind, Tab>{},
       c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), make_manage_page(Tab{}, colours, facts))));
 }
-template <class... Tabs>
-auto plugin_pages(ui::type_list<Tabs...>, const auto& colours, const room_settings_facts& facts) {
+template <class Kind, class... Tabs>
+auto plugin_pages(ui::type_list<Tabs...>, const auto& colours, const room_settings_of<Kind>& facts) {
   return SKIFF_NAMED(plugin_pages, skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                plugin_page<Tabs>(colours, facts)...));
+                                plugin_page<Kind, Tabs>(colours, facts)...));
 }
 
 // The client's pages: Notifications and Appearance (General above).
-inline auto notifications_page(const palette& colours, const room_settings_facts& facts) {
+template <class Kind>
+auto notifications_page(const palette& colours, const room_settings_of<Kind>& facts) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(notifications_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Notifications"), chat_notify_view(colours, facts.chat),
@@ -340,41 +387,44 @@ inline auto notifications_page(const palette& colours, const room_settings_facts
                                                      12.0f, colours.dim)))));
 }
 // (The looks plugins' sections under it, found where the window makes it.)
-inline auto looks_page(const auto& colours, const ui_shared& shared, const room_settings_facts& facts) {
+template <class Kind>
+auto looks_page(const auto& colours, const ui_shared& shared, const room_settings_of<Kind>& facts) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(looks_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Appearance"),
       c::scoped<config::chat_choices>(c::handlers(), style_controls(colours), facts.chat),
       level_section_plugins::made(colours, choice_level::chat{}, shared)));
 }
-template <class Up, class Page>
+template <class Kind, class Up, class Page>
 auto client_page(Up up, Page page) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(client_page, c::shown_for<room_facts_t>(up, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(page))));
+  return SKIFF_NAMED(client_page, c::shown_for<room_facts_t<Kind>>(up, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(page))));
 }
 
 // The tab up's title: Preferences for the client's General where another's
 // page holds it, else the tab's. (Asked where the window makes the dialog:
 // a plugin's tab_title is found there.)
-template <class Needs>
-[[nodiscard]] std::string manage_title(const room_settings_facts& facts) {
-  return spl::visit(spl::overloaded{[&](settings_tab::general) { return general_title(facts); },
+template <class Needs, class Kind>
+[[nodiscard]] std::string manage_title(const room_settings_of<Kind>& facts) {
+  return spl::visit(spl::overloaded{[](settings_tab::general) { return general_title<Kind>(); },
                                     [](const auto& one) { return std::string(tab_title(one)); }},
                     facts.tab);
 }
 
-// The settings, for a room: made once as they open (content_persistent),
-// again only for another room (content_matches).
-template <class Needs>
-auto room_settings_view(const Needs& n, const room_settings_facts& facts) {
+// The settings, for a room of a kind: made once as they open
+// (content_persistent), again only for another room (content_matches).
+template <class Needs, class Kind>
+auto room_settings_view(const Needs& n, const room_settings_of<Kind>& facts) {
   namespace c = skiff::compose;
+  using facts_t = room_facts_t<Kind>;
+  using closed = ::mux::ui::request::close_shown<room_settings_of<Kind>>;
   // Its needs' palette, as they are: what the plugins' tabs, pages and
   // looks are asked of with, found where the window makes this.
   const auto& colours = *n.colours;
   const room_manage_style presentation = presented(composition::providers<contract::presentation, enabled_plugins>{}, facts, colours);
-  const auto narrow_page = [](const room_facts_t& now) { return now && now->narrow && !now->navigation; };
-  const auto tabs_up = [](const room_facts_t& now) { return !now || !now->narrow || now->navigation; };
-  const auto page_up = [](const room_facts_t& now) { return !now || !now->narrow || !now->navigation; };
+  const auto narrow_page = [](const facts_t& now) { return now && now->narrow && !now->navigation; };
+  const auto tabs_up = [](const facts_t& now) { return !now || !now->narrow || now->navigation; };
+  const auto page_up = [](const facts_t& now) { return !now || !now->narrow || !now->navigation; };
   const float across = presentation.navigation_width;
   return SKIFF_NAMED(room_settings_view, c::column(c::vbox(0.0f, {.fill = true, .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = colours.background,
                                   .masking = true}),
@@ -382,14 +432,14 @@ auto room_settings_view(const Needs& n, const room_settings_facts& facts) {
       // window's page.
       c::visible(!presentation.page_header,
           c::row(c::hbox(12.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
-                 c::shown_for<room_facts_t>(narrow_page, icon_button(colours, icon::back{}, sends<manage_back>{})),
+                 c::shown_for<facts_t>(narrow_page, icon_button(colours, icon::back{}, sends<manage_back>{})),
                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                            elided(nodes::Text("Room Settings - " + facts.name, 18.0f, colours.text, true))),
-                 icon_button(colours, icon::close{}, sends<::mux::ui::request::close_shown<room_settings_facts>>{}))),
+                 icon_button(colours, icon::close{}, sends<closed>{}))),
       c::row(c::hbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
           // The tabs: across the window where it is narrow.
-          c::shown_for<room_facts_t>(tabs_up,
-              c::spec_for<room_facts_t>([across](const room_facts_t& now) {
+          c::shown_for<facts_t>(tabs_up,
+              c::spec_for<facts_t>([across](const facts_t& now) {
                 return now && now->narrow ? scene::Spec{.width = 1.0f, .relativeSize = scene::axes::kBoth}
                                           : scene::Spec{.width = across, .relativeSize = scene::axes::kY};
               },
@@ -398,47 +448,62 @@ auto room_settings_view(const Needs& n, const room_settings_facts& facts) {
                              c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .shrink = scene::axes::kX,
                                         .alignSelf = scene::align::kMiddle},
                                        elided(nodes::Text(facts.name, 18.0f, colours.text, true))),
-                             c::shown_for<room_facts_t>([](const room_facts_t& now) { return now && now->narrow && now->navigation; },
-                                                        icon_button(colours, icon::close{}, sends<::mux::ui::request::close_shown<room_settings_facts>>{}))),
-                      plugin_tab_rows(plugin_tabs_t{}, colours, facts),
-                      manage_tab_row(colours, settings_tab::general{}),
-                      manage_tab_row(colours, settings_tab::notifications{}),
-                      manage_tab_row(colours, settings_tab::looks{})))),
+                             c::shown_for<facts_t>([](const facts_t& now) { return now && now->narrow && now->navigation; },
+                                                        icon_button(colours, icon::close{}, sends<closed>{}))),
+                      plugin_tab_rows<Kind>(plugin_tabs_t<Kind>{}, colours),
+                      client_tab_rows<Kind>(colours)))),
           // The tab up, under its head where the look has one.
-          c::shown_for<room_facts_t>(page_up,
+          c::shown_for<facts_t>(page_up,
               c::column(c::vbox(0.0f, {.fillY = true, .relativeSize = scene::axes::kY, .grow = scene::axes::kX, .background = colours.background}),
                   c::visible(presentation.page_header,
                       c::row(c::hbox(12.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
-                             c::shown_for<room_facts_t>([](const room_facts_t& now) { return now && (manage_editor_up(*now) || now->narrow); },
+                             c::shown_for<facts_t>([](const facts_t& now) { return now && (manage_editor_up(*now) || now->narrow); },
                                                         icon_button(colours, icon::back{}, sends<manage_back>{})),
-                             c::text_for<room_facts_t>([](const room_facts_t& now) { return now ? manage_title<Needs>(*now) : std::string(); },
+                             c::text_for<facts_t>([](const facts_t& now) { return now ? manage_title<Needs>(*now) : std::string(); },
                                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text("", 20.0f, colours.text, true)))),
-                             icon_button(colours, icon::close{}, sends<::mux::ui::request::close_shown<room_settings_facts>>{}))),
+                             icon_button(colours, icon::close{}, sends<closed>{}))),
                   // Another tab: shown from its top.
                   c::styled({.fillX = true, .relativeSize = scene::axes::kX, .grow = scene::axes::kY},
-                      c::projected<room_facts_t>([](const room_facts_t& now) { return now ? now->tab.index() : std::size_t{0}; },
+                      c::projected<facts_t>([](const facts_t& now) { return now ? now->tab.index() : std::size_t{0}; },
                           c::restarted_scroll<std::size_t>(nodes::ScrollContainer(
                               c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                        client_page(tab_up<settings_tab::notifications>{}, notifications_page(colours, facts)),
-                                        client_page(tab_up<settings_tab::looks>{}, looks_page(colours, *n.shared, facts)),
-                                        plugin_pages(plugin_tabs_t{}, colours, facts),
+                                        client_page<Kind>(tab_up<Kind, settings_tab::notifications>{}, notifications_page(colours, facts)),
+                                        client_page<Kind>(tab_up<Kind, settings_tab::looks>{}, looks_page(colours, *n.shared, facts)),
+                                        plugin_pages(plugin_tabs_t<Kind>{}, colours, facts),
                                         // Under a plugin's page, where it hosts the General.
-                                        client_page(general_up{}, room_general_page(colours, facts, presentation.page_header && general_on_its_own(facts)))))))))))));
+                                        client_page<Kind>(general_up<Kind>{}, room_general_page(colours, facts, presentation.page_header && general_on_its_own<Kind>))))))))))));
 }
-inline dialog_look content_look(std::type_identity<room_settings_facts>) { return {.size = dialog_size::fixed{802.0f, 684.0f}}; }
-template <class Needs>
-auto make_content(const Needs& needs, const room_settings_facts& facts) {
+template <class Kind>
+dialog_look content_look(std::type_identity<room_settings_of<Kind>>) { return {.size = dialog_size::fixed{802.0f, 684.0f}}; }
+template <class Needs, class Kind>
+auto make_content(const Needs& needs, const room_settings_of<Kind>& facts) {
   return room_settings_view(needs, facts);
 }
 // The same room's settings stand while they are up.
-inline bool content_matches(const room_settings_facts& was, const room_settings_facts& now) { return was.chat == now.chat; }
+template <class Kind>
+bool content_matches(const room_settings_of<Kind>& was, const room_settings_of<Kind>& now) { return was.chat == now.chat; }
 
-// Its dialog, among the window's (contract::window_dialogs): its box made
-// where the window asks for it, with the window's needs.
-constexpr type_tag<room_settings_facts> facts_type(::mux::contract::window_dialogs, type_tag<feature>) { return {}; }
-template <class Needs = ui_needs>
-constexpr auto extend(::mux::contract::window_dialogs, type_tag<feature>) {
-  return type_tag<decltype(room_settings_view(std::declval<const Needs&>(), std::declval<const room_settings_facts&>()))>{};
+// Its dialogs, among the window's (contract::window_dialogs): one for each
+// kind, its box made where the window asks for it, with the window's needs.
+template <class... Kinds>
+constexpr composition::page_list<room_settings_of<Kinds>...> settings_facts_of(ui::type_list<Kinds...>) { return {}; }
+constexpr auto facts_types(::mux::contract::window_dialogs, type_tag<feature>) { return settings_facts_of(room_kinds{}); }
+template <class Facts, class Needs = ui_needs>
+constexpr auto extend(::mux::contract::window_dialogs, type_tag<feature>, type_tag<Facts>) {
+  return type_tag<decltype(room_settings_view(std::declval<const Needs&>(), std::declval<const Facts&>()))>{};
+}
+
+// Each kind's settings, closed where any is open: what opens another dialog
+// over them closes them first (devtools').
+template <class Showing, class... Kinds>
+void close_room_settings(Showing& showing, ui::type_list<Kinds...>) {
+  // show() is the window's (mux.ui), found by ADL on the model where this
+  // is instantiated: this module does not import the window.
+  (show(showing, std::optional<room_settings_of<Kinds>>{}), ...);
+}
+template <class Showing>
+void close_room_settings(Showing& showing) {
+  close_room_settings(showing, room_kinds{});
 }
 
 }  // namespace mux::plugins::room_settings

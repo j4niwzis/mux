@@ -54,7 +54,7 @@ struct part {
       return open->in;
     const auto chosen = s_->managed();
     if (chosen)
-      ui::show<room_settings::room_settings_facts>(*s_->showing, std::nullopt);
+      room_settings::close_room_settings(*s_->showing);
     return chosen;
   }
 

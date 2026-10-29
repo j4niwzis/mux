@@ -26,7 +26,7 @@ struct xmpp_glue {
   void take(const proto::xmpp::muc_settings_loaded& loaded) {
     const auto chosen = s_->managed();
     if (!chosen || chosen->account != loaded.account || chosen->id != loaded.room) return;
-    if (const auto& open = *s_->showing->look<std::optional<room_settings::room_settings_facts>>()) {
+    if (const auto& open = *s_->showing->look<std::optional<room_settings::protocol_settings<::mux::protocol::xmpp>>>()) {
       auto now = *open;
       now.theirs = loaded.settings;
       ui::show(*s_->showing, std::optional(std::move(now)));
@@ -71,7 +71,7 @@ struct xmpp_glue {
   // and the page shown again from it.
   template <class Change>
   void change_room(const conversation_id& in, Change change) {
-    const auto& open = *s_->showing->look<std::optional<room_settings::room_settings_facts>>();
+    const auto& open = *s_->showing->look<std::optional<room_settings::protocol_settings<::mux::protocol::xmpp>>>();
     if (!open || open->chat != in)
       return;
     auto now = *open;

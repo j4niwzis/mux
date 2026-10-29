@@ -297,9 +297,6 @@ inline auto extend(contract::message_menu, type_tag<feature>, const palette& col
 // account data and an event composed.
 constexpr std::string_view tab_title(room_tab) { return "Developer Tools"; }
 inline icon_t tab_icon(room_tab) { return icon::terminal{}; }
-inline bool tab_visible(room_tab, const room_settings::room_settings_facts& facts) {
-  return proto::offers(state_before(facts.speaks), proto::feature::developer_tools{});
-}
 inline auto developer_switch(const palette& colours) {
   namespace c = skiff::compose;
   using toggle_t = widgets::Toggle<sends<flip_tools>>;
@@ -311,7 +308,7 @@ template <class Asked>
 auto tool_button(const palette& colours, std::string label) {
   return skiff::compose::styled({.width = 200.0f, .height = 34.0f}, widgets::Button<sends<Asked>>(colours.widgets, std::move(label), {}));
 }
-inline auto make_manage_page(room_tab, const palette& colours, const room_settings::room_settings_facts& facts) {
+inline auto make_manage_page(room_tab, const palette& colours, const auto& facts) {
   namespace c = skiff::compose;
   const auto tools_on = [](const kept& now) { return now.tools; };
   return SKIFF_NAMED(devtools_tab_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),

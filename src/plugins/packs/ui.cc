@@ -50,10 +50,7 @@ inline auto extend(contract::account_rows, type_tag<feature>, const palette& col
 // in the dialog -- the list, Create pack and the editor all there.
 constexpr std::string_view tab_title(room_tab) { return "Emojis & Stickers"; }
 inline icon_t tab_icon(room_tab) { return icon::smile{}; }
-inline bool tab_visible(room_tab, const room_settings::room_settings_facts& facts) {
-  return proto::offers(state_before(facts.speaks), proto::feature::sticker_packs{});
-}
-inline auto make_manage_page(room_tab, const palette& colours, const room_settings::room_settings_facts&) {
+inline auto make_manage_page(room_tab, const palette& colours, const auto&) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(room_tab_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Emojis & Stickers"),

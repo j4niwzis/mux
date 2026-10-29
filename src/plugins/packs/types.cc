@@ -8,6 +8,7 @@ export module mux.plugin.packs.types;
 import std;
 import mux.core;
 import mux.composition;
+import mux.proto;
 import mux.plugin.room_settings.types;
 
 export namespace mux::plugins::packs {
@@ -89,7 +90,14 @@ consteval bool needs_account(contract::settings_links, type_tag<feature>) { retu
 consteval bool provides(contract::account_rows, type_tag<feature>) { return true; }
 // Its tab of a room's settings (the room_settings plugin's).
 consteval bool provides(room_settings::contract::tabs, type_tag<feature>) { return true; }
-constexpr composition::page_list<room_tab> room_tabs(room_settings::contract::tabs, type_tag<feature>) { return {}; }
+// Put on the settings of every protocol's rooms whose protocol has sticker packs,
+// known from its type while compiling.
+template <class Protocol>
+  requires(proto::offered_by<state_of<Protocol>, proto::feature::sticker_packs>())
+constexpr composition::page_list<room_tab> room_tabs(room_settings::contract::tabs, type_tag<feature>,
+                                                     type_tag<room_settings::room_kind::room_of<Protocol>>) {
+  return {};
+}
 consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
 constexpr type_tag<shown> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }

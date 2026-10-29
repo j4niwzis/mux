@@ -199,11 +199,31 @@ struct drawer_shown {
 using dialog_plugins = composition::providers<contract::window_dialogs, enabled_plugins>;
 template <class Feature>
 using dialog_facts_t = typename decltype(facts_type(contract::window_dialogs{}, type_tag<Feature>{}))::type;
+// A plugin's dialog: its facts, its box made by its plugin. A plugin has
+// one (facts_type) or several, each a type of its own (facts_types: a
+// room's settings, a kind each).
+template <class Feature, class Facts>
+struct dialog_entry {};
+template <class Feature, class... Facts>
+auto entries_of(composition::page_list<Facts...>) -> type_list<dialog_entry<Feature, Facts>...>;
+template <class Feature>
+auto dialogs_said(type_tag<Feature>) -> type_list<dialog_entry<Feature, dialog_facts_t<Feature>>>;
+template <class Feature>
+  requires requires { facts_types(contract::window_dialogs{}, type_tag<Feature>{}); }
+auto dialogs_said(type_tag<Feature>)
+    -> decltype(entries_of<Feature>(facts_types(contract::window_dialogs{}, type_tag<Feature>{})));
+template <class>
+struct dialog_entries_of;
 template <class... Features>
-consteval auto dialogs_shown_of(plugin_list<Features...>) {
-  return type_tag<composition::aggregate_list<skiff::model::Tracked<std::optional<dialog_facts_t<Features>>>...>>{};
+struct dialog_entries_of<plugin_list<Features...>> {
+  using type = typename joined<type_list<>, decltype(dialogs_said(type_tag<Features>{}))...>::type;
+};
+using dialog_entries = typename dialog_entries_of<dialog_plugins>::type;
+template <class... Features, class... Facts>
+consteval auto dialogs_shown_of(type_list<dialog_entry<Features, Facts>...>) {
+  return type_tag<composition::aggregate_list<skiff::model::Tracked<std::optional<Facts>>...>>{};
 }
-using dialogs_shown_t = typename decltype(dialogs_shown_of(dialog_plugins{}))::type;
+using dialogs_shown_t = typename decltype(dialogs_shown_of(dialog_entries{}))::type;
 // The dialogs protocols have of their own (dialogs(state): a list of what
 // each shows -- Matrix's developer tools, for one): each its facts' part of
 // what is shown, as a plugin's; its content made by its dialog_content,
@@ -570,10 +590,10 @@ template <class... Features>
 struct plugin_layer_escapes<plugin_list<Features...>> {
   using type = typename joined<type_list<>, typename optional_inner<layer_facts_t<Features>>::type...>::type;
 };
-template <class... Features, class... Tools, class... Layers>
-consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>, type_list<Layers...>) {
+template <class... Features, class... Dialogs, class... Tools, class... Layers>
+consteval auto window_answers_of(type_list<dialog_entry<Features, Dialogs>...>, type_list<Tools...>, type_list<Layers...>) {
   return type_tag<std::variant<::mux::ui::request::close_menu, ::mux::ui::request::close_send_box, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
-                               ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
+                               ::mux::ui::request::close_shown<Dialogs>...,
                                decltype(closing_of(std::type_identity<Tools>{}))...,
                                ::mux::ui::request::close_shown<Layers>...>>{};
 }
@@ -596,7 +616,7 @@ inline ::mux::ui::request::close_text_menu closing_of(std::type_identity<text_me
 // goes on under it. (An emoji verification's, the encryption plugin's, as its
 // step lets it: its part answers its close_shown.)
 using escape_answer =
-    typename decltype(window_answers_of(dialog_plugins{}, tool_facts_list{}, typename plugin_layer_escapes<layer_plugins>::type{}))::type;
+    typename decltype(window_answers_of(dialog_entries{}, tool_facts_list{}, typename plugin_layer_escapes<layer_plugins>::type{}))::type;
 template <class Facts> [[nodiscard]] std::optional<escape_answer> escape_of(const Facts&) {
   return escape_answer{closing_of(std::type_identity<Facts>{})};
 }
@@ -608,14 +628,14 @@ template <class Facts> [[nodiscard]] std::optional<escape_answer> escape_of(cons
 [[nodiscard]] inline std::optional<escape_answer> escape_of(const passphrase_facts&) { return std::nullopt; }
 // The dialogs and the layers, in the order they are drawn: Esc asks of the
 // top-most up first.
-template <class Features>
+template <class Entries>
 struct plugin_dialog_facts;
-template <class... Features>
-struct plugin_dialog_facts<plugin_list<Features...>> {
-  using type = type_list<dialog_facts_t<Features>...>;
+template <class... Features, class... Facts>
+struct plugin_dialog_facts<type_list<dialog_entry<Features, Facts>...>> {
+  using type = type_list<Facts...>;
 };
 using escape_order = typename joined<
-    type_list<settings_facts, notice_facts, person_shown>, typename plugin_dialog_facts<dialog_plugins>::type,
+    type_list<settings_facts, notice_facts, person_shown>, typename plugin_dialog_facts<dialog_entries>::type,
     type_list<link_facts>,
     tool_facts_list, type_list<send_facts, passphrase_facts, menu_facts, text_menu_facts>,
     typename plugin_layer_escapes<layer_plugins>::type>::type;
@@ -659,18 +679,25 @@ shown_in<Content, Facts> shown_made(const ui_needs& n) {
 // window is instantiated (mux.plugins.ui).
 template <class List>
 struct plugin_dialogs;
-template <class... Features>
-struct plugin_dialogs<plugin_list<Features...>> {
-  template <class Feature>
+template <class... Features, class... Facts>
+struct plugin_dialogs<type_list<dialog_entry<Features, Facts>...>> {
+  // A plugin's one dialog's box; or, of one with several, the box for these
+  // facts.
+  template <class Feature, class Of>
   static auto box_of() -> decltype(extend(contract::window_dialogs{}, type_tag<Feature>{})) {
     static_assert(requires { extend(contract::window_dialogs{}, type_tag<Feature>{}); },
                   composition::broken<contract::window_dialogs, Feature>());
     return extend(contract::window_dialogs{}, type_tag<Feature>{});
   }
-  template <class Feature>
-  using box_t = typename decltype(box_of<Feature>())::type;
+  template <class Feature, class Of>
+    requires requires { extend(contract::window_dialogs{}, type_tag<Feature>{}, type_tag<Of>{}); }
+  static auto box_of() {
+    return extend(contract::window_dialogs{}, type_tag<Feature>{}, type_tag<Of>{});
+  }
+  template <class Feature, class Of>
+  using box_t = typename decltype(box_of<Feature, Of>())::type;
   static auto made(const ui_needs& n) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), shown_made<box_t<Features>, dialog_facts_t<Features>>(n)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), shown_made<box_t<Features, Facts>, Facts>(n)...);
   }
 };
 // The protocols' dialogs, each made by its dialog_content from its facts.
@@ -725,7 +752,7 @@ inline auto window_body(const ui_needs& n) {
           // A person's info, in the middle, as tdesktop's profile layer;
           // a room not joined, from a link: its card, as a person's.
           shown_made<person_card_t, person_shown>(n),
-          plugin_dialogs<dialog_plugins>::made(n),
+          plugin_dialogs<dialog_entries>::made(n),
           shown_made<link_box_t, link_facts>(n),
           tool_dialogs(n, tool_facts_list{}),
           std::move(sending),

@@ -526,7 +526,7 @@ inline auto extend(contract::level_sections, type_tag<feature>, const palette& c
 // (room_settings' general_sections).
 template <class Colours>
 auto extend(room_settings::contract::general_sections, type_tag<feature>, const Colours& colours,
-            const room_settings::room_settings_facts& facts) {
+            const auto& facts) {
   namespace c = skiff::compose;
   using toggle_t = widgets::Toggle<sends<request::flip_home_hide>>;
   return SKIFF_NAMED(home_section, c::visible(facts.space,

@@ -30,13 +30,12 @@ import mux.plugins.types;
 import mux.ui.base;
 import mux.plugins.ui.top;
 import mux.ui.proto;
-import :chat_list;
+import mux.ui.lists;
 import mux.ui.messages;
 import :header;
 import :info;
 
 export import :conversations_side;
-import :list_shown;
 
 export namespace mux::ui {
 

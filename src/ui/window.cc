@@ -27,6 +27,7 @@ import :header;
 import :info;
 import :room_settings;
 import mux.ui.messages;
+import mux.ui.lists;
 import :conversations;
 import :accounts;
 import :drawer;

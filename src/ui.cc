@@ -13,8 +13,7 @@ export module mux.ui;
 export import mux.ui.base;
 export import mux.ui.messages;
 
-export import :chat_list;
-export import :list_shown;
+export import mux.ui.lists;
 export import :header;
 export import :info;
 export import :room_settings;

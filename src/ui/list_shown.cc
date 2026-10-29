@@ -4,7 +4,7 @@
 // the space bars, the forum open, what is searched and found, and the chats
 // listed. The program's (mux.app.chat_list) to work out and set; the side
 // column reads it and keeps nothing.
-export module mux.ui:list_shown;
+export module mux.ui.lists:list_shown;
 
 import std;
 import splice;

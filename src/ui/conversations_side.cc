@@ -24,11 +24,10 @@ import mux.protocols;
 import mux.config;
 import mux.ui.base;
 import mux.plugins.ui;
-import :chat_list;
+import mux.ui.lists;
 import mux.ui.messages;
 import :header;
 import :info_explore;
-import :list_shown;
 
 // Bars and tabs are keyed by their values, ordered for memo reconciliation.
 export namespace mux::config::space_item {

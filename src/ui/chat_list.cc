@@ -2,7 +2,7 @@
 // mux.ui:chat_list -- A chat in the list.
 module;
 #include "skiff/named.h"
-export module mux.ui:chat_list;
+export module mux.ui.lists:chat_list;
 
 import std;
 import skia;

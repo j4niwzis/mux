@@ -9,6 +9,8 @@ import mux.core;
 import mux.ui;
 import mux.app.services;
 import mux.app.commands;
+import mux.app.network;
+import mux.plugin.commands.matrix;
 import mux.plugin.commands.types;
 
 export namespace mux::plugins::commands {
@@ -150,10 +152,28 @@ struct part {
       this->act().notice("/jump-to-date", "Nothing from then yet: that is after the newest message.");
       return;
     }
-    if (from == messages.begin() && messages.front().at > *when)
-      this->act().notice("/jump-to-date", "Older messages are not loaded yet: here is the oldest loaded. Scroll up to load more.");
+    // Among what is loaded: gone to. Earlier: the server asked for the event
+    // from then (Matrix's timestamp_to_event), gone to with what is around
+    // it once it says -- the oldest loaded meanwhile.
+    if (from == messages.begin() && messages.front().at > *when) {
+      asked_at_ = chat;
+      s_->net->ask(chat->account, event_at_asked{chat->id, when->time_since_epoch().count()});
+    }
     this->act().jump(from->id, asked);
   }
+  // The server's answer: its event gone to, where the chat asked is open.
+  void take(const event_at& one) {
+    if (asked_at_ != one.in)
+      return;
+    asked_at_.reset();
+    if (!one.event) {
+      this->act().notice("/jump-to-date", "The server found no message from then.");
+      return;
+    }
+    if (s_->chosen() == one.in)
+      s_->jump_due = ui::request::jump_to_message{*one.event};
+  }
+  std::optional<conversation_id> asked_at_;
   void apply(const help&) {
     this->act().notice("Commands", app::kCommands | std::views::transform([](const app::command_said& one) {
                                      return std::format("{} -- {}", one.usage, one.summary);

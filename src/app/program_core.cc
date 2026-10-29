@@ -617,6 +617,8 @@ void app::before_frame() {
     this->open_chat(*chat, std::nullopt);
   if (auto link = std::exchange(shared.link_due, std::nullopt))
     this->follow(*link);
+  if (auto jump = std::exchange(shared.jump_due, std::nullopt))
+    this->apply(*jump);
   if (std::exchange(shared.rebuild_due, false))
     this->rebuild_in_theme();
   if (std::exchange(shared.refresh_due, false))

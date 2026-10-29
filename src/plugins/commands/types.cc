@@ -7,6 +7,7 @@ export module mux.plugin.commands.types;
 import std;
 import mux.core;
 import mux.composition;
+export import mux.plugin.commands.changes;
 
 export namespace mux::plugins::commands {
 

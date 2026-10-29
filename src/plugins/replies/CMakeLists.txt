@@ -6,5 +6,4 @@ mux_plugin(replies ORDER 3
   SUMMARY "Replies: a message answered from its menu, a swipe or a reaction's row, the field then said to answer it."
   TYPES types.cc
   UI    ui.cc
-  UI_TOP ui_top.cc
   APP   app.cc)

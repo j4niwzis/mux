@@ -238,19 +238,6 @@ struct plugin_trailers<plugin_list<Features...>> {
   }
 };
 using trailers_t = plugin_trailers<composition::providers<contract::message_trailers, enabled_plugins>>;
-// What plugins put above the text (contract::message_heads): the first
-// one's that has a head for the message.
-template <class List>
-struct plugin_heads;
-template <class... Features>
-struct plugin_heads<plugin_list<Features...>> {
-  static std::optional<message_head> made(head_facts facts) {
-    std::optional<message_head> out;
-    ((out ? void() : void(out = head_of(contract::message_heads{}, type_tag<Features>{}, facts))), ...);
-    return out;
-  }
-};
-using heads_t = plugin_heads<composition::providers<contract::message_heads, enabled_plugins>>;
 // The message a message's head shows, as its plugin says (head_waits_for):
 // fetched where it is not there; the row made again once it is.
 template <class... Features>
@@ -261,6 +248,56 @@ template <class... Features>
 }
 [[nodiscard]] inline std::optional<std::string> head_message_of(const message& said) {
   return heads_wait_for(composition::providers<contract::message_heads, enabled_plugins>{}, said);
+}
+// A message's head: the quote of the message its plugin says it shows
+// (head_message_of: a reply's, the one it answers) -- who wrote it, a line
+// of it, or a picture's thumbnail and caption, a file's name; pressed, that
+// message. A text that opens with its only quote, of that message: that
+// quote in the head, marked "quoted", and not again in the text (`shown`
+// taken from) -- only where the message says all of it.
+[[nodiscard]] inline std::optional<message_head> quoted_head(head_facts f) {
+  namespace c = skiff::compose;
+  const auto shows = head_message_of(f.said);
+  if (!shows)
+    return std::nullopt;
+  const message* found = held_message(f.in, *shows);
+  const bool known = found != nullptr;
+  std::optional<std::string> header_quote;
+  {
+    mentioned taken = f.shown;
+    if (const auto quote = take_opening_quote(taken); quote && found && squeezed(quote_line_of(*found, f.in, f.now)).contains(squeezed(*quote))) {
+      header_quote = quote;
+      f.shown = std::move(taken);
+    }
+  }
+  std::optional<std::string> pictured;
+  std::string line = header_quote ? *header_quote : known ? quote_line_of(*found, f.in, f.now) : std::string("not loaded");
+  if (known && found->attachment) {
+    if (is_picture(found->attachment->kind))
+      pictured = found->attachment->source;
+    if (line.empty())
+      line = is_picture(found->attachment->kind) ? std::string("Photo") : found->attachment->name;
+  }
+  if (!header_quote)
+    std::ranges::replace(line, '\n', ' ');
+  const bool with_picture = pictured.has_value();
+  const std::string from = known ? (found->outgoing ? std::string("You") : sender_name(f.in, found->sender)) : std::string("A message");
+  // The bubble at least as wide as the head asks -- its name, "quoted"
+  // after it, and its line up to maxSignatureSize -- so that a short answer
+  // to a long message does not stretch its bubble to the full width.
+  float least = 160.0f;
+  if (skia::SkFont* font = skiff::paint::defaultFont()) {
+    skiff::paint::Painter measure(nullptr, *font);
+    const float who = measure.measure(from, 13.0f) + (header_quote ? 8.0f + std::ceil(measure.measure("quoted", 11.0f)) : 0.0f);
+    const float words_wide = std::max(who, std::min(measure.measure(line, 13.0f), kReplyLineMax));
+    const float around = (with_picture && !header_quote ? 7.0f + 32.0f + 4.0f : 11.0f) + 6.0f + 2.0f * kBubblePadX;
+    least = std::min(std::ceil(words_wide) + around, kBubbleMaxWidth + 2.0f * kBubblePadX);
+  }
+  return message_head{c::onClick(request::jump_to_message{*shows, header_quote, f.said.id},
+                                 quote_row(f.colours, known ? avatar_colour(found->sender) : f.colours.accent, from, std::move(line),
+                                           header_quote ? std::nullopt : std::move(pictured), header_quote.has_value(), known && found->sticker),
+                                 "Go to the message answered"),
+                      least};
 }
 
 // What plugins put in the bubble after its text and blocks
@@ -926,7 +963,7 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   // What goes above it, as a plugin says (contract::message_heads) -- the
   // quote of the message it answers, the replies' -- which may take the
   // text's opening quote into it.
-  std::optional<message_head> head = heads_t::made(head_facts{colours, in, said, now, shown});
+  std::optional<message_head> head = quoted_head(head_facts{colours, in, said, now, shown});
   // The quote's colour: the accent on theirs; on one's own, the text's, as
   // tdesktop's outgoing blockquote -- not the accent on its accent.
   const skia::SkColor quote_colour = mine ? colours.text : colours.accent;

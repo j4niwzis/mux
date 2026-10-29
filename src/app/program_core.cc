@@ -529,6 +529,17 @@ void app::before_frame() {
       *showing.look<mux::ui::window_shape>() !=
       mux::ui::window_shape{box.width(), box.height() + skiff::scene::hostWork().keyboardTaken, this->appearance().layout})
     mux::ui::show(showing, mux::ui::window_shape{box.width(), box.height() + skiff::scene::hostWork().keyboardTaken, this->appearance().layout});
+  // A text menu up over what is shown now: kept above a phone's on-screen
+  // keyboard that came up after it opened -- placed against the window as
+  // it was then, it stayed under the keys (a tester's).
+  if (const auto& menu = *showing.look<std::optional<mux::ui::text_menu_facts>>()) {
+    const float lowest = std::max(0.0f, scene.viewport().height() - menu->height);
+    if (menu->y > lowest) {
+      auto now = *menu;
+      now.y = lowest;
+      mux::ui::show(showing, std::optional(std::move(now)));
+    }
+  }
   if (showing.look<mux::ui::screen_shown>()->docked != shared.ui.docked_panel_height)
     mux::ui::change_shown<mux::ui::screen_shown>(showing, [&](mux::ui::screen_shown& now) { now.docked = shared.ui.docked_panel_height; });
   if (model->expire_typing())

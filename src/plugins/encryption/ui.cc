@@ -7,6 +7,8 @@ module;
 #include "skiff/named.h"
 export module mux.plugin.encryption.ui;
 
+export import :page;
+
 import std;
 import splice;
 import mux.composition;

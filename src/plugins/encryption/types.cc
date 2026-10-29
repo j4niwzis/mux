@@ -37,5 +37,10 @@ struct verify_mismatch {};
 consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
 constexpr type_tag<verification_view> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
+// Its page of a Matrix account's: Encryption -- device verification, the key
+// backup, room keys.
+struct security_page {};
+consteval bool provides(contract::account_pages, type_tag<feature>) { return true; }
+constexpr composition::page_list<security_page> account_pages(contract::account_pages, type_tag<feature>) { return {}; }
 
 }  // namespace mux::plugins::encryption

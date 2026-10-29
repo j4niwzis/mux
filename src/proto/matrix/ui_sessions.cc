@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui.proto.matrix:sessions -- The account's Sessions and Encryption pages.
+// mux.ui.proto.matrix:sessions -- The account's Sessions page, and what the
+// encryption plugin's page reads of the account too.
 module;
 #include "skiff/named.h"
 export module mux.ui.proto.matrix:sessions;
@@ -205,23 +206,13 @@ inline auto password_row(const palette& colours) {
                  c::styled({.width = 96.0f, .height = 34.0f}, widgets::Button<scene::NoAction>(colours.widgets, "Sign out", {})))))));
 }
 
-// Device verification, as Cinny puts it over the sessions: cross-signing set
-// up here, or brought back with the recovery key -- the Privacy page's own
-// rows, the same buttons. Without it, a session verified by emoji is
-// trusted only by the client that verified it, and nothing is signed.
-// Element's last resort under them: new cross-signing keys, the dialog
-// saying what it undoes; and its Secure Backup, made anew or deleted.
+// The account's sessions: listed, renamed, signed out. (Device verification
+// over them -- cross-signing, the key backup -- is the encryption plugin's
+// page.)
 inline auto account_sessions(const palette& colours, const account_page_facts&) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(account_sessions, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      section_title(colours, "DEVICE VERIFICATION"),
-      c::text_for<facts_t>(security_said, note(colours, "")),
-      row_if<sends<request::setup_cross_signing>>(colours, "Set up cross-signing…", std::not_fn(cross_signing)),
-      row_if<sends<request::restore_cross_signing>>(colours, "Restore with the recovery key…", std::not_fn(cross_signing)),
-      row_item(colours, "Reset your identity…", sends<request::reset_identity>{}),
-      row_if<sends<request::reset_backup>>(colours, "Reset the key backup", cross_signing),
-      row_if<sends<request::delete_backup>>(colours, "Delete the key backup", backed_up),
-      c::styled({.margin = {14.0f, 0.0f, 0.0f, 0.0f}}, section_title(colours, "SESSIONS")),
+      section_title(colours, "SESSIONS"),
       c::shown_for<facts_t>([](const facts_t& now) { return !kept_of(now).refused.empty(); },
           c::text_for<facts_t>([](const facts_t& now) { return kept_of(now).refused; },
                                c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.error))))),
@@ -230,8 +221,6 @@ inline auto account_sessions(const palette& colours, const account_page_facts&) 
       c::projected<facts_t>([](const facts_t& now) { return now ? std::optional(sessions_of(now)) : std::nullopt; },
           c::mount<sessions_list_t, sessions_key>([at = &colours](const sessions_key& key) { return std::tuple{sessions_list(*at, key)}; },
                                                   {.fillX = true, .autoSize = scene::axes::kY})),
-      // Element's: every session of one's own not verified, signed out.
-      row_item(colours, "Sign out unverified sessions…", sends<request::sign_out_unverified>{}),
       c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).needs_password; }, password_row(colours)),
       c::shown_for<facts_t>([](const facts_t& now) { return sessions_of(now).others.size() > 1; },
           c::styled({.width = 260.0f, .height = 34.0f, .margin = {8.0f, 0.0f, 0.0f, 0.0f}},
@@ -241,48 +230,6 @@ inline auto account_sessions(const palette& colours, const account_page_facts&) 
                 button_for<sends<request::refresh_sessions>>(colours.widgets, "Refresh", {}))));
 }
 using account_sessions_t = decltype(account_sessions(std::declval<const palette&>(), std::declval<const account_page_facts&>()));
-
-// ---- the account's Encryption page ----------------------------------------------
-// As Element's Cryptography: room keys to verified sessions only; this
-// session, its ID and its key in fours, to be compared with what another
-// session shows; its room keys exported or imported, as Element does them;
-// cross-signing set up, or restored.
-// This session, as its account's protocol state says it, once known.
-[[nodiscard]] inline std::string session_line(const facts_t& now) {
-  if (!now)
-    return {};
-  return spl::visit(spl::overloaded{[](const state& known) {
-                                      if (known.device_id.empty())
-                                        return std::string();
-                                      const std::string grouped = known.ed25519 | std::views::enumerate | std::views::transform([](const auto& at) {
-                                            const auto [index, letter] = at;
-                                            return index > 0 && index % 4 == 0 ? std::string{' ', letter} : std::string(1, letter);
-                                          }) | std::views::join | std::ranges::to<std::string>();
-                                      return std::format("Session ID: {}\nSession key: {}", known.device_id, grouped);
-                                    },
-                                    [](const auto&) { return std::string(); }},
-                    now->state);
-}
-inline auto encryption_page(const palette& colours, const account_page_facts&) {
-  namespace c = skiff::compose;
-  using flip = sends<::mux::ui::request::flip_only_verified>;
-  using toggle_t = toggle_for<flip>;
-  return SKIFF_NAMED(encryption_page, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      section_title(colours, "ENCRYPTION"),
-      c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
-             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                       elided(nodes::Text("Never send encrypted messages to unverified sessions", 15.0f, colours.text))),
-             c::applied<facts_t>([](const facts_t& now) { return now && config::only_verified_of(now->account); },
-                                 [](toggle_t& toggle, bool on) { toggle.setOn(on); },
-                                 c::styled({.alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, flip{})))),
-      c::shown_for<facts_t>([](const facts_t& now) { return !session_line(now).empty(); },
-                            c::text_for<facts_t>(session_line, nodes::Text("", 13.0f, colours.dim))),
-      row_item(colours, "Export room keys…", sends<request::export_room_keys>{}),
-      row_item(colours, "Import room keys…", sends<request::import_room_keys>{}),
-      row_item(colours, "Set up cross-signing…", sends<request::setup_cross_signing>{}),
-      row_item(colours, "Restore with the recovery key…", sends<request::restore_cross_signing>{})));
-}
-using encryption_page_t = decltype(encryption_page(std::declval<const palette&>(), std::declval<const account_page_facts&>()));
 
 }  // namespace mux::proto::matrix::settings_detail
 
@@ -299,12 +246,6 @@ inline auto page_view(profile, const ui::palette& colours, const ui::account_pag
   return ui::profile_page<profile_policy>(colours, first);
 }
 inline ui::request::refresh_profile asked_as_it_opens(profile, const account_id& by) { return {by}; }
-
-constexpr std::string_view page_title(encryption) { return "Encryption"; }
-inline ui::icon_t page_icon(encryption) { return ui::icon::check{}; }
-inline auto page_view(encryption, const ui::palette& colours, const ui::account_page_facts& first) {
-  return settings_detail::encryption_page(colours, first);
-}
 
 constexpr std::string_view page_title(sessions) { return "Sessions"; }
 inline ui::icon_t page_icon(sessions) { return ui::icon::info{}; }

@@ -224,7 +224,9 @@ struct room_settings_tabs {
 // protocol's (mux.ui:accounts), as a protocol's own are made:
 //   account_pages(c, f) -> page_list<its pages...>; each page a type of
 //   its own, with page_title(page), page_icon(page) and page_view(page,
-//   palette, account_page_facts) -> its node, found by ADL
+//   palette, account_page_facts) -> its node, found by ADL; and, where it
+//   is for some protocols' accounts only, page_shown(page, their state)
+//   -> whether it is listed for that one
 template <class... Pages>
 struct page_list {};
 struct account_pages {

@@ -167,6 +167,17 @@ inline auto account_page_row(const palette& colours, account_page_link link, con
 // The client's pages, then its protocol's own, then Proxy: the one up lit.
 // Protocol UI overloads arrive after mux.ui is imported; resolved where the
 // program instantiates it.
+// Whether a plugin's account page is shown for an account of this
+// protocol: as it says (page_shown(page, state), found by ADL), else for
+// every account.
+namespace page_defaults {
+constexpr bool page_shown(const auto&, const auto&) { return true; }
+}  // namespace page_defaults
+template <class Page, class State>
+[[nodiscard]] constexpr bool page_shown_for(const State& now) {
+  using page_defaults::page_shown;
+  return page_shown(Page{}, now);
+}
 template <class State>
 inline auto account_pages_view(const palette& colours, const State& state, const account_page_t& selected) {
   namespace c = skiff::compose;
@@ -181,10 +192,16 @@ inline auto account_pages_view(const palette& colours, const State& state, const
       return std::vector<account_page_link>{{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...};
     }(proto::account_pages_of(now));
   }, state);
-  // The plugins' pages (contract::account_pages), as a protocol's are listed.
-  auto plugins = []<class... Pages>(type_list<Pages...>) {
-    return std::vector<account_page_link>{{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...};
-  }(plugin_account_pages_t{});
+  // The plugins' pages (contract::account_pages), as a protocol's are listed:
+  // those for this account's protocol, where a page says (page_shown).
+  auto plugins = spl::visit([](const auto& now) {
+    return []<class... Pages>(type_list<Pages...>, const auto& of) {
+      const std::array<bool, sizeof...(Pages)> shown{page_shown_for<Pages>(of)...};
+      return std::views::zip(std::vector<account_page_link>{{std::string(page_title(Pages{})), account_page_t{Pages{}}, page_icon(Pages{})}...}, shown) |
+             std::views::filter([](const auto& one) { return std::get<1>(one); }) |
+             std::views::transform([](const auto& one) { return std::get<0>(one); }) | std::ranges::to<std::vector>();
+    }(plugin_account_pages_t{}, now);
+  }, state);
   auto groups = std::array{std::move(links), std::move(own), std::move(plugins)};
   auto rows = groups | std::views::join | std::views::transform([&](auto link) {
     return account_page_row(colours, std::move(link), selected);

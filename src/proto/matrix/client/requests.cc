@@ -215,7 +215,7 @@ void account<Sink>::find_message_at(std::string room, std::int64_t at) {
       // Newest first: past the first from before then, the last seen from
       // then on is the one.
       for (const auto& one : page->chunk) {
-        if (one.origin_server_ts.value_or(at) < at) {
+        if (one.origin_server_ts < at) {
           sink_(change::message_found_at{in, found});
           return;
         }

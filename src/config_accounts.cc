@@ -174,25 +174,6 @@ struct decrypt {
 [[nodiscard]] inline std::optional<std::int64_t>& jump_search_in(account_t& one) {
   return one.shared.jump_search;
 }
-// An account's chats' background, as word_of(wallpaper_t) says it.
-[[nodiscard]] inline const std::optional<std::string>& wallpaper_of(const account_t& one) {
-  return one.shared.wallpaper;
-}
-[[nodiscard]] inline std::optional<std::string>& wallpaper_in(account_t& one) {
-  return one.shared.wallpaper;
-}
-[[nodiscard]] inline const std::optional<std::string>& bubbles_of(const account_t& one) {
-  return one.shared.bubbles;
-}
-[[nodiscard]] inline std::optional<std::string>& bubbles_in(account_t& one) {
-  return one.shared.bubbles;
-}
-[[nodiscard]] inline const std::optional<std::string>& panels_of(const account_t& one) {
-  return one.shared.panels;
-}
-[[nodiscard]] inline std::optional<std::string>& panels_in(account_t& one) {
-  return one.shared.panels;
-}
 [[nodiscard]] inline const std::optional<bool>& link_previews_of(const account_t& one) {
   return one.shared.link_previews;
 }

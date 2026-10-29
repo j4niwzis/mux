@@ -197,12 +197,7 @@ struct search_result {
 };
 // What each level holds of the looks, as the program last said: none, as
 // the level over it. For the choices to show what is chosen where.
-struct looks_held {
-  std::optional<config::wallpaper_t> wallpaper;
-  std::optional<config::bubble_look> bubbles;
-  std::optional<config::bubble_look> panels;
-  friend bool operator==(const looks_held&, const looks_held&) = default;
-};
+using looks_held = config::looks_held;
 // The looks the window shows, as the program holds them: handed down with
 // the colours (ui_needs).
 struct looks_shown {

@@ -135,43 +135,6 @@ struct chat_settings {
     if (!out.theme) out.theme = appearance().theme;
     return out;
   }
-  // A chat's look: the lowest level's that has one -- its own or its
-  // space's, its account's, every chat's -- what it leaves unsaid taken
-  // from the levels over it, in turn.
-  template <auto In>
-  [[nodiscard]] config::bubble_look look_of(const std::optional<std::string>& account_word, const std::optional<config::bubble_look>& everywhere,
-                                            const conversation_id& chat) const {
-    std::vector<config::bubble_look> levels;
-    if (const auto own = this->own_or_space<In>(chat))
-      levels.push_back(*own);
-    if (account_word)
-      levels.push_back(config::bubble_look_of(*account_word));
-    if (everywhere)
-      levels.push_back(*everywhere);
-    if (levels.empty())
-      return config::bubble_look{};
-    return std::ranges::fold_left(levels | std::views::drop(1), levels.front(), [](config::bubble_look below, const config::bubble_look& above) {
-      return config::filled_from(std::move(below), above);
-    });
-  }
-  [[nodiscard]] config::bubble_look panels_of(const conversation_id& chat) const {
-    const auto* account = this->settings_of(chat.account.address);
-    return this->look_of<&config::chat_choices::panels>(account ? config::panels_of(*account) : std::nullopt, this->appearance().panels, chat);
-  }
-  [[nodiscard]] config::bubble_look bubbles_of(const conversation_id& chat) const {
-    const auto* account = this->settings_of(chat.account.address);
-    return this->look_of<&config::chat_choices::bubbles>(account ? config::bubbles_of(*account) : std::nullopt, this->appearance().bubbles, chat);
-  }
-  // A chat's background: its own, else its account's, else every chat's,
-  // else the theme's.
-  [[nodiscard]] config::wallpaper_t wallpaper_of(const conversation_id& chat) const {
-    if (const auto own = this->own_or_space<&config::chat_choices::wallpaper>(chat))
-      return *own;
-    if (const auto* account = this->settings_of(chat.account.address))
-      if (const auto& chosen = config::wallpaper_of(*account))
-        return config::wallpaper_of(std::string_view(*chosen));
-    return this->appearance().wallpaper.value_or(config::wallpaper_t{config::wallpaper::theme{}});
-  }
   // A flag in effect for a chat: its own or its space's, else its
   // account's (as Of reads it), else every account's.
   template <auto M, class Of, class Everyone>

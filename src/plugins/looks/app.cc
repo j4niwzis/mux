@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.plugin.looks.app -- The looks' part of the program: a chat's
-// background and the bubbles' and panels' look set at a level -- every
+// background and the bubbles' and panels' look set at a level, in its own
+// settings -- every
 // chat's, the chosen account's (on its page), or the chat's own -- as the
 // level over it says, the theme's, plain, or a picture chosen, copied into
 // mux's data so that it stays. The looks in effect are read by the
@@ -59,39 +60,65 @@ struct part {
     if (auto asked = bubbles_asked(mux::ui::looks_picked_of(s_->looks), one))
       this->apply(*asked);
   }
-  // Bubbles, at a level: a look, or as the level over it says.
+  // Bubbles or panels, at a level: a look, or as the level over it says.
   void apply(const ui::request::set_bubbles& one) {
-    // Where each level keeps the look asked for: the bubbles', or the panels'.
-    auto& known = spl::visit(
-        spl::overloaded{[this](mux::config::look_part::bubbles) -> mux::config::bubble_look& { return s_->looks.bubbles_everywhere; },
-                           [this](mux::config::look_part::panels) -> mux::config::bubble_look& { return s_->looks.panels_everywhere; }},
-        one.part);
+    const auto word = one.look ? std::optional<std::string>(mux::config::word_of(*one.look)) : std::nullopt;
+    const bool set = this->change_at(one.level, [&](words& level) {
+      spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) { level.bubbles = word; },
+                                 [&](mux::config::look_part::panels) { level.panels = word; }},
+                 one.part);
+    });
+    if (!set)
+      return;
+    // Every chat's, where the window reads it, at once.
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
-                                       spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) { s_->kept->choose_field<&mux::config::look_settings::bubbles>(one.look); },
-                                                                  [&](mux::config::look_part::panels) { s_->kept->choose_field<&mux::config::look_settings::panels>(one.look); }},
-                                                  one.part);
-                                       known = one.look.value_or(mux::config::bubble_look{});
-                                     },
-                                     [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](mux::config::account_t& account) {
-                                         auto& kept = spl::visit(
-                                             spl::overloaded{[&](mux::config::look_part::bubbles) -> std::optional<std::string>& { return mux::config::bubbles_in(account); },
-                                                                [&](mux::config::look_part::panels) -> std::optional<std::string>& { return mux::config::panels_in(account); }},
-                                             one.part);
-                                         kept = one.look ? std::optional<std::string>(mux::config::word_of(*one.look)) : std::nullopt;
-                                       });
-                                     },
-                                     [&](mux::choice_level::chat) {
-                                       const auto chosen = s_->managed();
-                                       if (!chosen)
-                                         return;
-                                       spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) { s_->kept->choose<&mux::app::chat_choices::bubbles>(*chosen, one.look); },
-                                                                  [&](mux::config::look_part::panels) { s_->kept->choose<&mux::app::chat_choices::panels>(*chosen, one.look); }},
-                                                  one.part);
-                                     }},
-                  one.level);
+                                 spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) {
+                                                              s_->looks.bubbles_everywhere = one.look.value_or(mux::config::bubble_look{});
+                                                            },
+                                                            [&](mux::config::look_part::panels) {
+                                                              s_->looks.panels_everywhere = one.look.value_or(mux::config::bubble_look{});
+                                                            }},
+                                            one.part);
+                               },
+                               [](const auto&) {}},
+               one.level);
+  }
+
+  // A level's words changed, in the plugin's own settings: every chat's;
+  // the account's whose page is open; the chat Manage is for. Kept, and
+  // the window shown them. Whether there was such a level.
+  template <class Change>
+  bool change_at(const mux::choice_level_t& level, Change change) {
+    auto now = s_->kept->plugin_settings<kept>();
+    const bool there = spl::visit(
+        spl::overloaded{[&](mux::choice_level::everywhere) {
+                          change(now.everywhere);
+                          return true;
+                        },
+                        [&](mux::choice_level::account) {
+                          const auto chosen = mux::ui::chosen_of(*s_->showing->look<std::optional<mux::ui::panel_facts>>());
+                          if (!chosen)
+                            return false;
+                          change(now.accounts[std::string(*chosen)]);
+                          return true;
+                        },
+                        [&](mux::choice_level::chat) {
+                          const auto chat = s_->managed();
+                          if (!chat)
+                            return false;
+                          change(chat_at(now, *chat));
+                          return true;
+                        }},
+        level);
+    if (!there)
+      return false;
+    // A level that says nothing is not kept.
+    std::erase_if(now.accounts, [](const auto& one) { return one.second == words{}; });
+    std::erase_if(now.chats, [](const chat_words& one) { return one.look == words{}; });
+    s_->kept->set_plugin_settings(std::move(now));
     (void)s_->kept->write();
     s_->refresh_due = true;
+    return true;
   }
 
   // The picture chosen for a background: copied into mux's data, by a name
@@ -119,25 +146,10 @@ struct part {
   // A background set at a level -- none: as the level over it says -- kept;
   // its choices read it as the looks move (looks_picked).
   void set_at(const mux::choice_level_t& level, std::optional<mux::config::wallpaper_t> chosen) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { s_->kept->choose_field<&mux::config::look_settings::wallpaper>(chosen); },
-                                     [&](mux::choice_level::account) {
-                                       s_->with_chosen_account([&](mux::config::account_t& account) {
-                                         mux::config::wallpaper_in(account) =
-                                             chosen ? std::optional<std::string>(mux::config::word_of(*chosen)) : std::nullopt;
-                                       });
-                                     },
-                                     [&](mux::choice_level::chat) {
-                                       // The chat Manage is for: a space, where its settings are open.
-                                       const auto chat = s_->managed();
-                                       if (!chat)
-                                         return;
-                                       s_->kept->choose<&mux::app::chat_choices::wallpaper>(*chat, chosen);
-                                     }},
-                  level);
-    (void)s_->kept->write();
-    s_->refresh_due = true;
+    (void)this->change_at(level, [&](words& at) {
+      at.wallpaper = chosen ? std::optional<std::string>(mux::config::word_of(*chosen)) : std::nullopt;
+    });
   }
-
 };
 
 // Its part, among the program's (mux.app.program).

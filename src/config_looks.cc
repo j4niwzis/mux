@@ -252,6 +252,23 @@ using look_part_t = spl::variant<look_part::bubbles, look_part::panels>;
   return out;
 }
 
+// What a level holds of a chat's looks -- every chat's, an account's, a
+// chat's own -- none of one: as the level over it says.
+struct looks_held {
+  std::optional<wallpaper_t> wallpaper;
+  std::optional<bubble_look> bubbles;
+  std::optional<bubble_look> panels;
+  friend bool operator==(const looks_held&, const looks_held&) = default;
+};
+// A chat's looks in effect: its background, and how its bubbles and its
+// panels look.
+struct looks_in_effect {
+  wallpaper_t wallpaper = wallpaper::theme{};
+  bubble_look bubbles;
+  bubble_look panels;
+  friend bool operator==(const looks_in_effect&, const looks_in_effect&) = default;
+};
+
 // What is asked of a background at a level: as the level over it says, the
 // theme's, plain, or a picture to choose.
 namespace wallpaper_pick {

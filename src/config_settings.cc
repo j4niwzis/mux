@@ -103,9 +103,6 @@ struct account_shared {
   std::optional<bool> show_receipts;
   std::optional<bool> link_previews;
   std::optional<bool> previews_direct;  // link previews fetched from the site itself
-  std::optional<std::string> wallpaper;  // its chats' background, as word_of(wallpaper_t) says it
-  std::optional<std::string> bubbles;    // its chats' bubbles, as word_of(bubble_look) says them
-  std::optional<std::string> panels;     // its panels' look
   std::optional<std::int64_t> jump_search;
   std::optional<bool> notify;
   std::optional<bool> notify_sound;

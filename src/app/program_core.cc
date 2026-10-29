@@ -354,8 +354,6 @@ void app::show_looks() {
   window.behind = now.wallpaper_behind;
   window.frost = now.frost_blur;
   window.chosen = now.window_opacity;
-  shared.looks.bubbles_everywhere = now.bubbles.value_or(mux::config::bubble_look{});
-  shared.looks.panels_everywhere = now.panels.value_or(mux::config::bubble_look{});
   shared.refresh_due = true;
 }
 // What the model's reactions asked for: the file written, UnifiedPush's

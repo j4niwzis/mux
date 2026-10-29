@@ -191,7 +191,7 @@ struct kept_settings {
   void set_plugin_settings(Settings now) { this->set_part(std::move(now)); }
   // What draws the window, as it is made: the plugins' say
   // (contract::start_renderer) -- the last one's -- OpenGL where none says.
-  [[nodiscard]] mux::config::renderer_t renderer_at_start() const {
+  [[nodiscard]] mux::config::renderer_t renderer_chosen() const {
     return this->renderer_said_by(composition::providers<contract::start_renderer, enabled_plugins>{});
   }
   template <class... Features>
@@ -270,16 +270,28 @@ struct kept_settings {
   [[nodiscard]] auto own_or_space(const conversation_id& chat) const {
     return this->reads().own_or_space<M>(chat);
   }
-  [[nodiscard]] mux::config::bubble_look panels_of(const conversation_id& chat) {
-    return this->reads().panels_of(chat);
+  // A chat's looks in effect -- none: every chat's -- and what a level
+  // holds of them, for the chat settings are for: the plugins' say
+  // (contract::chat_looks); where none says, the theme's background, solid
+  // bubbles, and nothing held.
+  [[nodiscard]] mux::config::looks_in_effect looks_in_effect(const std::optional<conversation_id>& chat) const {
+    return this->looks_said_by(composition::providers<contract::chat_looks, enabled_plugins>{}, chat);
   }
-  [[nodiscard]] mux::config::bubble_look bubbles_of(const conversation_id& chat) {
-    return this->reads().bubbles_of(chat);
+  template <class... Features>
+  [[nodiscard]] mux::config::looks_in_effect looks_said_by(plugin_list<Features...>, const std::optional<conversation_id>& chat) const {
+    mux::config::looks_in_effect out;
+    ((out = chat_looks_in_effect(contract::chat_looks{}, type_tag<Features>{}, this->plugin_settings<plugin_settings_t<Features>>(), space_above, chat)), ...);
+    return out;
   }
-  // A chat's background: its own, else its account's, else every chat's,
-  // else the theme's.
-  [[nodiscard]] mux::config::wallpaper_t wallpaper_of(const conversation_id& chat) {
-    return this->reads().wallpaper_of(chat);
+  [[nodiscard]] mux::config::looks_held looks_held_at(const mux::choice_level_t& level, const std::optional<conversation_id>& managed) const {
+    return this->held_said_by(composition::providers<contract::chat_looks, enabled_plugins>{}, level, managed);
+  }
+  template <class... Features>
+  [[nodiscard]] mux::config::looks_held held_said_by(plugin_list<Features...>, const mux::choice_level_t& level,
+                                                    const std::optional<conversation_id>& managed) const {
+    mux::config::looks_held out;
+    ((out = chat_looks_held(contract::chat_looks{}, type_tag<Features>{}, this->plugin_settings<plugin_settings_t<Features>>(), level, managed)), ...);
+    return out;
   }
   // What notifies, as the model holds it; changed by its edits: one
   // setting in its place, by its member pointer, or all of them at once.
@@ -479,12 +491,6 @@ struct kept_settings {
                                     .favourite_emoji = emotes_of(saved.favourite_emoji)};
     looks_read.theme = mux::config::theme_of(saved.theme);
     looks_read.theme_overrides = saved.theme_overrides.value_or(std::map<std::string, mux::config::custom_theme>{});
-    if (saved.wallpaper)
-      looks_read.wallpaper = mux::config::wallpaper_of(std::string_view(*saved.wallpaper));
-    if (saved.bubbles)
-      looks_read.bubbles = mux::config::bubble_look_of(*saved.bubbles);
-    if (saved.panels)
-      looks_read.panels = mux::config::bubble_look_of(*saved.panels);
     looks_read.accent = mux::config::accent_of(saved.accent);
     looks_read.window_opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
     looks_read.wallpaper_behind = saved.wallpaper_behind.value_or(false);
@@ -517,12 +523,6 @@ struct kept_settings {
       chosen.typing = one.typing;
       chosen.previews_direct = one.previews_direct;
       chosen.jump_search = one.jump_search;
-      if (one.wallpaper)
-        chosen.wallpaper = mux::config::wallpaper_of(std::string_view(*one.wallpaper));
-      if (one.bubbles)
-        chosen.bubbles = mux::config::bubble_look_of(*one.bubbles);
-      if (one.panels)
-        chosen.panels = mux::config::bubble_look_of(*one.panels);
     }
     const auto placements_read = saved.placements.value_or(std::vector<mux::config::chat_placement>{});
     for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
@@ -592,12 +592,6 @@ struct kept_settings {
       out.plugins = std::move(said);
     out.theme = mux::config::said_of<mux::config::theme_said_t>(this->appearance().theme);
     if (!this->appearance().theme_overrides.empty()) out.theme_overrides = this->appearance().theme_overrides;
-    if (this->appearance().wallpaper)
-      out.wallpaper = mux::config::word_of(*this->appearance().wallpaper);
-    if (this->appearance().bubbles)
-      out.bubbles = mux::config::word_of(*this->appearance().bubbles);
-    if (this->appearance().panels)
-      out.panels = mux::config::word_of(*this->appearance().panels);
     out.accent = mux::config::said_of<mux::config::accent_said_t>(this->appearance().accent);
     if (this->appearance().window_opacity != 100)
       out.window_opacity = this->appearance().window_opacity;
@@ -646,9 +640,6 @@ struct kept_settings {
           .previews_direct = chosen.previews_direct,
           .typing = chosen.typing,
           .jump_search = chosen.jump_search,
-          .wallpaper = chosen.wallpaper.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
-          .bubbles = chosen.bubbles.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
-          .panels = chosen.panels.transform([](const auto& look) { return std::string(mux::config::word_of(look)); }),
           .style = chosen.style};
       if (one != mux::config::room_events_choice{.account = one.account, .conversation = one.conversation})
         choices.push_back(one);

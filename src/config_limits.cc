@@ -23,9 +23,6 @@ struct room_events_choice {
   std::optional<bool> previews_direct;  // fetched from the site itself, not the server
   std::optional<bool> typing;    // others told one is typing
   std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
-  std::optional<std::string> wallpaper;  // its background, as word_of(wallpaper_t) says it
-  std::optional<std::string> bubbles;    // its bubbles, as word_of(bubble_look) says them
-  std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   style_settings style;
   friend bool operator==(const room_events_choice&, const room_events_choice&) = default;
 };
@@ -144,17 +141,13 @@ struct chat_choices {
   std::optional<bool> previews_direct;
   std::optional<bool> typing;
   std::optional<std::int64_t> jump_search;
-  std::optional<wallpaper_t> wallpaper;
-  std::optional<bubble_look> bubbles;
-  std::optional<bubble_look> panels;
   notify_choices notify;
   friend bool operator==(const chat_choices&, const chat_choices&) = default;
 };
 
 // How the window looks, for every account and chat that does not say: the
-// theme and its accent, the window's
-// opacity, scale and blur, the space bars and where each item is put, and
-// every chat's background, bubbles and panels.
+// theme and its accent, the window's opacity, scale and blur. (Every
+// chat's background, bubbles and panels are the looks plugin's.)
 struct look_settings {
   style_settings style;
   theme_t theme = theme::tinted{};
@@ -168,9 +161,6 @@ struct look_settings {
   bool live_blur = false;
   double frost_blur = 10.0;
   int interface_scale = 100;  // in percent of the display's
-  std::optional<wallpaper_t> wallpaper;
-  std::optional<bubble_look> bubbles;
-  std::optional<bubble_look> panels;
   // How round avatars are, in percent: chats' and people's apart. Unset is 100.
   std::optional<int> chat_avatar_rounding;
   std::optional<int> person_avatar_rounding;
@@ -254,11 +244,6 @@ struct file {
   std::optional<theme_said_t> theme;
   std::optional<std::map<std::string, custom_theme>> theme_overrides;
   std::optional<accent_said_t> accent;
-  // Every chat's background, as word_of(wallpaper_t) says it; none, the theme's.
-  std::optional<std::string> wallpaper;
-  // Every chat's bubbles, as word_of(bubble_look) says them; none, solid.
-  std::optional<std::string> bubbles;
-  std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   // How round avatars are, in percent: chats' and people's. None, round.
   std::optional<int> chat_avatar_rounding;
   std::optional<int> person_avatar_rounding;

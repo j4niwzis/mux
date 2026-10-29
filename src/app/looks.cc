@@ -39,31 +39,28 @@ class looks_part {
   // chat's. Put where they moved.
   void read() {
     const mux::chat_settings reads = k_->reads();
-    const auto& looks = k_->appearance();
     const auto& history = k_->history();
     const auto& chosen = s_->showing->look<mux::ui::chat_shown>()->chosen;
     const std::optional<mux::conversation_id> managed = s_->managed();
     auto& shown = s_->looks;
-    shown.at(mux::choice_level::everywhere{}) = {looks.wallpaper, looks.bubbles, looks.panels};
+    // What each level holds, and every chat's looks: the plugins' say.
+    for (const mux::choice_level_t level : {mux::choice_level_t{mux::choice_level::everywhere{}}, mux::choice_level_t{mux::choice_level::account{}},
+                                            mux::choice_level_t{mux::choice_level::chat{}}})
+      shown.at(level) = k_->looks_held_at(level, managed);
+    const auto everywhere = k_->looks_in_effect(std::nullopt);
+    shown.bubbles_everywhere = everywhere.bubbles;
+    shown.panels_everywhere = everywhere.panels;
     mux::ui::room_events_picked events{.everywhere = {history.show_room_events, history.room_event_kinds}};
     const mux::config::account_t* account = managed ? reads.settings_of(managed->account.address) : nullptr;
-    shown.at(mux::choice_level::account{}) =
-        account ? mux::ui::looks_held{mux::config::wallpaper_of(*account).transform([](const std::string& word) { return mux::config::wallpaper_of(std::string_view(word)); }),
-                                      mux::config::bubbles_of(*account).transform([](const std::string& word) { return mux::config::bubble_look_of(word); }),
-                                      mux::config::panels_of(*account).transform([](const std::string& word) { return mux::config::bubble_look_of(word); })}
-                : mux::ui::looks_held{};
     if (account)
       events.account = {mux::config::room_events_of(*account), mux::config::room_event_kinds_of(*account)};
-    shown.at(mux::choice_level::chat{}) =
-        managed ? mux::ui::looks_held{reads.own_of<&mux::config::chat_choices::wallpaper>(*managed), reads.own_of<&mux::config::chat_choices::bubbles>(*managed),
-                                      reads.own_of<&mux::config::chat_choices::panels>(*managed)}
-                : mux::ui::looks_held{};
     if (managed)
       events.chat = {reads.own_of<&mux::config::chat_choices::room_events>(*managed), reads.own_of<&mux::config::chat_choices::room_event_kinds>(*managed)};
-    shown.panels = chosen ? reads.panels_of(*chosen) : looks.panels.value_or(mux::config::bubble_look{});
+    const auto in_effect = chosen ? k_->looks_in_effect(*chosen) : everywhere;
+    shown.panels = in_effect.panels;
     if (mux::ui::show_panels(s_->paint, shown.panels, shown.window, *colours_))
       s_->scene->repaintAll();
-    const auto wallpaper = chosen ? reads.wallpaper_of(*chosen) : looks.wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}});
+    const auto& wallpaper = in_effect.wallpaper;
     this->put(mux::ui::behind_shown{wallpaper});
     this->put(mux::ui::chat_backdrop_shown{wallpaper, shown.window.behind, static_cast<float>(shown.window.opacity) / 100.0f});
     this->put(std::move(events));

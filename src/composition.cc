@@ -66,6 +66,15 @@ struct start_renderer {
 struct proxy_profiles {
   static constexpr std::string_view name = "the proxy profiles";
 };
+// A chat's looks -- its background, its bubbles', its panels' -- chosen at
+// a level (mux.app.kept, mux.app.looks): chat_looks_in_effect(c, f, its own
+// settings, the space each chat is in, the chat -- none, every chat's) ->
+// config::looks_in_effect; chat_looks_held(c, f, its own settings, a level,
+// the chat settings are for) -> config::looks_held, what the level holds.
+// Where none says: the theme's background, solid bubbles, nothing held.
+struct chat_looks {
+  static constexpr std::string_view name = "a chat's looks";
+};
 // Chats the chat list opens as a list of chats -- a forum's topics -- in
 // place of the chat, their rooms listed in them, not beside them
 // (mux.app.chat_list): opens_as_scope(c, f, services, conversation) ->

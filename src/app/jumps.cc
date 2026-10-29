@@ -179,7 +179,7 @@ class jumps_part {
       going_.reset();
     const mux::conversation* chat = in ? s_->model->find(*in) : nullptr;
     // Its bubbles as its levels say: set before its rows are made.
-    s_->looks.bubbles = in ? s_->kept->reads().bubbles_of(*in) : mux::config::bubble_look{};
+    s_->looks.bubbles = in ? s_->kept->looks_in_effect(*in).bubbles : mux::config::bubble_look{};
     ++looks_;
     if (chat && !going_) {
       unread_from_ = first_unread_here(*chat);
@@ -514,7 +514,7 @@ class jumps_part {
     const auto in = this->chosen();
     if (!in)
       return;
-    if (auto now = s_->kept->reads().bubbles_of(*in); now != s_->looks.bubbles) {
+    if (auto now = s_->kept->looks_in_effect(*in).bubbles; now != s_->looks.bubbles) {
       s_->looks.bubbles = std::move(now);
       this->looks_changed();
     }

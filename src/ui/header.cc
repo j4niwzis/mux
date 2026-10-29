@@ -212,6 +212,25 @@ struct header_buttons<plugin_list<Features...>> {
   }
 };
 using chat_header_buttons = header_buttons<composition::providers<contract::chat_header, enabled_plugins>>;
+// What plugins say of a chat in its head (contract::chat_status): the
+// first that says something, in their order.
+template <class List>
+struct status_list;
+template <class... Features>
+struct status_list<plugin_list<Features...>> {
+  template <class Feature>
+  static std::optional<std::string> of(const conversation& one) {
+    static_assert(requires { extend(contract::chat_status{}, type_tag<Feature>{}, one); },
+                  composition::broken<contract::chat_status, Feature>());
+    return extend(contract::chat_status{}, type_tag<Feature>{}, one);
+  }
+  static std::optional<std::string> said(const conversation& one) {
+    std::optional<std::string> found;
+    ((found = found ? found : of<Features>(one)), ...);
+    return found;
+  }
+};
+using chat_status_plugins = status_list<composition::providers<contract::chat_status, enabled_plugins>>;
 
 // What the head shows: the chat's key and name, and how it is -- or no chat
 // -- and whether a back arrow goes before it, to the chats (shown one thing
@@ -242,17 +261,10 @@ inline constexpr float kChatHeadHeight = 56.0f;
   std::string about = proto::chat_status(protocol_state_of(shared, one->id.account), *one, now)
                           .value_or(is_group(*one) ? std::format("{} member{}", count, count == 1 ? "" : "s")
                                                    : presence_of(shared, now, one->id.account, contact_of(shared, *one)));
-  // Who is typing, by their names, as Telegram says it: one, two ("A and
-  // B"), three ("A, B and C"); past three, the first two and how many more.
-  if (!one->typing.empty()) {
-    const auto names = one->typing | std::views::transform([&](const std::string& who) { return sender_name(*one, who); }) | std::ranges::to<std::vector>();
-    switch (names.size()) {
-      case 1: about = names[0] + " is typing\u2026"; break;
-      case 2: about = std::format("{} and {} are typing\u2026", names[0], names[1]); break;
-      case 3: about = std::format("{}, {} and {} are typing\u2026", names[0], names[1], names[2]); break;
-      default: about = std::format("{}, {} and {} more are typing\u2026", names[0], names[1], names.size() - 2);
-    }
-  }
+  // What plugins say of it now, over that (contract::chat_status): who is
+  // typing, for one.
+  if (auto said = chat_status_plugins::said(*one))
+    about = std::move(*said);
   // What its protocol says of it after (proto::header_badges): Matrix's
   // shield, for one.
   about = std::ranges::fold_left(proto::header_badges(protocol_state_of(shared, one->id.account), *one, now), std::move(about),

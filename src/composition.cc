@@ -122,6 +122,13 @@ struct list_corner {
 struct beside_panels {
   static constexpr std::string_view name = "the panels beside the chat";
 };
+// What a chat's head says of it under its name, over what its protocol
+// says (mux.ui:header): extend(c, f, conversation) ->
+// std::optional<std::string>, none where it has nothing to say now -- who
+// is typing, for one; the first that says something says it
+struct chat_status {
+  static constexpr std::string_view name = "the chat's status";
+};
 // Settings' home page, its links after the client's own (mux.ui:proxies):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own

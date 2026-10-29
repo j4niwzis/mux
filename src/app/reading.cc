@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.app.reading: what the user has read, and that they are typing. Their
-// own reads are always kept -- in the model and on disk, which is what the
-// unread counts come from -- and told to the server only where the
-// account's privacy lets it; so is typing, at most every twenty seconds
-// while it goes on.
+// mux.app.reading: what the user has read. Their own reads are always kept
+// -- in the model and on disk, which is what the unread counts come from --
+// and told to the server only where the account's privacy lets it. (That
+// they are typing: the typing plugin's.)
 export module mux.app.reading;
 
 import std;
@@ -60,24 +59,8 @@ class reading_part {
       s_->net->mark_read(which, id);
   }
 
-  // The user typing in the chosen chat, or not: said as the logic of it
-  // says, where the account's privacy lets it.
-  void apply(const request::typing& one) {
-    if (s_->demo())
-      return;
-    // As the chat, its space, its account or every account says.
-    const auto allowed = [&](const conversation_id& in) { return s_->kept->typing_sent(in); };
-    auto step = logic::typing_after(typing_, one.on, s_->chosen(), std::chrono::steady_clock::now(), allowed);
-    for (const auto& said : step.say)
-      spl::visit(spl::overloaded{[&](const logic::typing_said::started& it) { s_->net->typing(it.in, true); },
-                            [&](const logic::typing_said::stopped& it) { s_->net->typing(it.in, false); }},
-                 said);
-    typing_ = step.next;
-  }
-
  private:
   services* s_;
-  logic::typing_state typing_;
 };
 
 }  // namespace mux::app

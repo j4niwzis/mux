@@ -822,7 +822,6 @@ struct start_group {
 // The developer tools: an event's source, the room's state, an event sent.
 struct menu_view_source {};
 // A message's edit history, as mux saw its edits come.
-struct menu_edit_history {};
 // Messages selected, as tdesktop selects them: from a message's menu, a
 // press on one while some are, and what the selection bar does with them.
 struct menu_select {};
@@ -849,7 +848,6 @@ struct close_manage {};
 struct room_act {
   mux::room_action_t action;
 };
-struct close_edit_history {};
 // A plugin's dialog closed (contract::window_dialogs): by its facts, the part
 // of what is shown it is; taken by its plugin's part.
 template <class Facts>

@@ -176,7 +176,6 @@ struct stub {
   void start_call(mux::conversation_id) {}
   void call_chosen() {}
   void dismiss_call() {}
-  void menu_edit_history() {}
   void menu_select() {}
   void toggle_selected(std::string) {}
   void selection_forward() {}
@@ -213,7 +212,6 @@ struct stub {
   void menu_pin() {}
   void menu_reactions() {}
   void close_reactions() {}
-  void close_edit_history() {}
   void open_avatar(std::string) {}
   void open_manage() {}
   void menu_forward() {}
@@ -2463,14 +2461,14 @@ TEST(History, ReactionsTargetEachEditAndNeverGuessMissingEditIds) {
   mux::message message{.id = "$original", .body = {"third", std::nullopt}, .edited = true};
   message.versions = {{{"first", std::nullopt}, {}, "$original"}, {{"second", std::nullopt}, {}, "$edit1"}};
   message.latest_edit_event = "$edit2";
-  const auto versions = mux::ui::edit_versions_of(message);
+  const auto versions = mux::plugins::edit_history::edit_versions_of(message);
   ASSERT_EQ(versions.size(), 3u);
   EXPECT_EQ(versions[0].id, "$original");
   EXPECT_EQ(versions[1].id, "$edit1");
   EXPECT_EQ(versions[2].id, "$edit2");
   message.versions[1].event.clear();
   message.latest_edit_event.clear();
-  const auto legacy = mux::ui::edit_versions_of(message);
+  const auto legacy = mux::plugins::edit_history::edit_versions_of(message);
   EXPECT_EQ(legacy[0].id, "$original");
   EXPECT_TRUE(legacy[1].id.empty());
   EXPECT_TRUE(legacy[2].id.empty());

@@ -43,7 +43,6 @@ void part_apply(menu_part& self, const request::menu_copy_image&);
 void part_apply(menu_part& self, const request::menu_thread&);
 void part_apply(menu_part& self, const request::menu_save&);
 void part_apply(menu_part& self, const request::menu_pin&);
-void part_apply(menu_part& self, const request::close_edit_history&);
 void part_apply(menu_part& self, const request::menu_forward&);
 void forward_from(menu_part& self, const conversation_id& chosen, std::vector<std::string> events);
 void part_apply(menu_part& self, const request::close_forward&);
@@ -57,7 +56,6 @@ void part_apply(menu_part& self, const request::selection_delete&);
 void part_apply(menu_part& self, const request::selection_delete_confirm&);
 void part_apply(menu_part& self, const request::selection_forward&);
 void keep_selection(menu_part& self);
-void part_apply(menu_part& self, const request::menu_edit_history&);
 void part_apply(menu_part& self, const request::forward_to& one);
 void part_apply(menu_part& self, const request::menu_delete&);
 void part_apply(menu_part& self, const request::menu_react& one);
@@ -222,7 +220,6 @@ void part_apply(menu_part& self, const request::menu_pin&) {
   self.s_->net->pin(*chosen, self.target_.id, !self.target_.pinned);
 }
 
-void part_apply(menu_part& self, const request::close_edit_history&) { mux::ui::show<mux::ui::history_facts>(*self.s_->showing, std::nullopt); }
 
 void part_apply(menu_part& self, const request::menu_forward&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
@@ -371,24 +368,6 @@ void keep_selection(menu_part& self) {
   // selection stays the same. Refresh its actions too; equal facts do not
   // change the shown model's revision.
   show_selection(self);
-}
-
-void part_apply(menu_part& self, const request::menu_edit_history&) {
-  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  const auto& chosen = self.s_->chosen();
-  const mux::conversation* chat = chosen ? self.s_->model->find(*chosen) : nullptr;
-  if (!chat)
-    return;
-  const auto in_threads = chat->threads | std::views::values | std::views::join;
-  const auto is_it = [&](const mux::message& one) { return one.id == self.target_.id; };
-  const mux::message* found = nullptr;
-  if (const auto at = std::ranges::find_if(chat->timeline, is_it); at != chat->timeline.end())
-    found = &*at;
-  else if (const auto there = std::ranges::find_if(in_threads, is_it); there != std::ranges::end(in_threads))
-    found = &*there;
-  if (!found || found->versions.empty())
-    return;
-  mux::ui::show(*self.s_->showing, std::optional(mux::ui::history_facts{chat->id, *found, self.s_->model}));
 }
 
 void part_apply(menu_part& self, const request::forward_to& one) {

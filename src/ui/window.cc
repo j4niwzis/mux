@@ -255,7 +255,6 @@ struct shown_root {
   dialogs_shown_t dialogs;
   // Each protocol's own dialogs'.
   tools_shown_t tools;
-  skiff::model::Tracked<std::optional<history_facts>> history;
   skiff::model::Tracked<std::optional<forward_facts>> forwarding;
   skiff::model::Tracked<std::optional<wallpaper_facts>> wallpaper;
   skiff::model::Tracked<std::optional<person_shown>> person;
@@ -553,7 +552,7 @@ auto layer_for(const Needs &needs) {
 template <class Facts> ::mux::ui::request::close_shown<Facts> closing_of(std::type_identity<Facts>) { return {}; }
 template <class... Features, class... Tools>
 consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) {
-  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_edit_history, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_proxies, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
+  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_proxies, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
                                decltype(closing_of(std::type_identity<Tools>{}))...>>{};
 }
@@ -572,7 +571,6 @@ inline ::mux::ui::request::close_manage closing_of(std::type_identity<room_setti
 inline ::mux::ui::request::close_marks closing_of(std::type_identity<marks_facts>) { return {}; }
 inline ::mux::ui::request::close_leave_space closing_of(std::type_identity<leave_space_facts>) { return {}; }
 inline ::mux::ui::request::close_link closing_of(std::type_identity<link_facts>) { return {}; }
-inline ::mux::ui::request::close_edit_history closing_of(std::type_identity<history_facts>) { return {}; }
 inline ::mux::ui::request::close_room_card closing_of(std::type_identity<room_card_facts>) { return {}; }
 inline ::mux::ui::request::close_person_info closing_of(std::type_identity<person_shown>) { return {}; }
 inline ::mux::ui::request::close_notice closing_of(std::type_identity<notice_facts>) { return {}; }
@@ -620,7 +618,7 @@ struct plugin_dialog_facts<plugin_list<Features...>> {
 };
 using escape_order = typename joined<
     type_list<settings_facts, notice_facts, person_shown, room_card_facts>, typename plugin_dialog_facts<dialog_plugins>::type,
-    type_list<history_facts, link_facts, leave_space_facts, marks_facts, room_settings_facts, forward_facts, new_chat_facts, new_room_facts,
+    type_list<link_facts, leave_space_facts, marks_facts, room_settings_facts, forward_facts, new_chat_facts, new_room_facts,
               packs_facts, wallpaper_facts, explore_facts>,
     tool_facts_list, type_list<send_facts, passphrase_facts, verification_view, emoji_facts, menu_facts, viewer_facts, text_menu_facts>>::type;
 template <class Model, class... Facts>
@@ -731,7 +729,6 @@ inline auto window_body(const ui_needs& n) {
           shown_made<person_card_t, person_shown>(n),
           shown_made<room_card_t, room_card_facts>(n),
           plugin_dialogs<dialog_plugins>::made(n),
-          shown_made<edit_history_box, history_facts>(n),
           shown_made<link_box_t, link_facts>(n),
           shown_made<leave_space_box_t, leave_space_facts>(n),
           shown_made<marks_box, marks_facts>(n),

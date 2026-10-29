@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:info_reactions -- The list dialogs: a message's edit history, and the
-// marks not yet seen; what a list dialog is made of.
+// mux.ui:info_reactions -- The list dialogs: the marks not yet seen; what a
+// list dialog is made of.
 module;
 #include "skiff/named.h"
 export module mux.ui:info_reactions;
@@ -34,69 +34,6 @@ import :info_cards;
 export namespace mux::ui {
 // A list dialog's rows, under its top bar: the box as high as it is, the
 // list scrolling in what is left of it, its rows one under another.
-// A message's edit history, as AyuGram Desktop's: each version of it the
-// chat's own bubble, on the chat's colour, oldest first, each at the time
-// it was written -- the message as it is now last, the list scrolled to it.
-// A message's earlier versions open: in which chat, the message, the chats.
-struct history_facts {
-  conversation_id in;
-  message said;
-  const model* known = nullptr;
-};
-// Version IDs are the events that wrote their bodies. Legacy histories
-// without edit IDs remain readable, but do not guess a reaction target.
-[[nodiscard]] inline std::vector<message> edit_versions_of(const message& now, const conversation* chat = nullptr) {
-  const auto as_message = [&](const mux::body& body, auto at, std::string id) {
-    message out = now;
-    out.id = std::move(id);
-    out.body = body;
-    out.at = at;
-    out.versions.clear();
-    out.latest_edit_event.clear();
-    out.edited = false;
-    out.reactions.clear();
-    out.reaction_events.clear();
-    if (chat)
-      if (const auto* event = held_message(*chat, out.id)) {
-        out.reactions = event->reactions;
-        out.reaction_events = event->reaction_events;
-        out.redacted = event->redacted;
-      }
-    return out;
-  };
-  auto versions = std::views::iota(std::size_t{0}, now.versions.size()) | std::views::transform([&](std::size_t i) { return as_message(now.versions[i].body, i == 0 ? now.at : now.versions[i - 1].until,
-          now.versions[i].event.empty() && i == 0 ? now.id : now.versions[i].event); }) | std::ranges::to<std::vector>();
-  versions.push_back(as_message(now.body, now.versions.empty() ? now.at : now.versions.back().until,
-      now.latest_edit_event.empty() && now.versions.empty() ? now.id : now.latest_edit_event));
-  return versions;
-}
-// A version of the message, as the chat shows it: its menu that of a
-// version, not edited again.
-auto edit_history_row(const ui_needs& n, const conversation& in, const message& event, const model* known) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(edit_history_row, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
-                   message_alone(n, in, event, true, true, known, true)));
-}
-auto edit_history_panel(const ui_needs& n, const history_facts& facts) {
-  namespace c = skiff::compose;
-  const auto& chat = chat_or_none(facts.known, facts.in);
-  const auto versions = edit_versions_of(facts.said, &chat);
-  auto rows = versions | std::views::transform([&](const message& event) {
-    return edit_history_row(n, chat, event, facts.known);
-  }) | std::ranges::to<std::vector>();
-  auto list = dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)));
-  list.scrollToEnd(false);
-  return SKIFF_NAMED(edit_history_panel, c::column(list_dialog(560.0f),
-      page_header<no_back, sends<request::close_edit_history>>(*n.colours, "Edit History", {}, {}, false, true), std::move(list)));
-}
-using edit_history_box = decltype(edit_history_panel(std::declval<const ui_needs&>(), std::declval<const history_facts&>()));
-auto make_content(const ui_needs& n, const history_facts& facts) {
-  return edit_history_panel(n, facts);
-}
-inline dialog_look content_look(std::type_identity<history_facts>) {
-  return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 560.0f}};
-}
-
 // What a mark list shows of each: the message, and for a reaction to it who
 // reacted and with what.
 struct mark_entry {

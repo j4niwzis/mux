@@ -259,7 +259,6 @@ inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts
       menu_rows_t::rows(colours, kept, facts),
       item(facts.can.forward, "Forward", sends<request::menu_forward>{}, icon::send{}),
       item(facts.can.view_source && !facts.link.empty(), "View Source", sends<request::menu_view_source>{}, icon::info{}),
-      item(facts.history, "Edit History", sends<request::menu_edit_history>{}, icon::pencil{}),
       item(!facts.id.empty(), "Select", sends<request::menu_select>{}, icon::check{}),
       item(facts.deletable, "Delete", sends<request::menu_delete>{}, icon::close{}),
       c::styled({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band)),

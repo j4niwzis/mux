@@ -18,6 +18,7 @@ import mux.ui;
 import mux.proto;
 import mux.protocols;
 import mux.app.services;
+import mux.app.commands;
 import mux.plugin.suggestions.types;
 import mux.plugin.suggestions.ui;
 
@@ -69,6 +70,10 @@ struct part {
                                    if (const auto sign = text.rfind('@'); sign != std::string::npos)
                                      mux::ui::put_mention(now, sign, picked.title, picked.id);
                                  },
+                                 [&](const command_asked&) {
+                                   // The command's name, and a space for what follows it.
+                                   now = mux::ui::plain_draft("/" + picked.title + " ");
+                                 },
                                  [&](const emoji_asked&) {
                                    const auto colon = text.rfind(':');
                                    if (colon == std::string::npos)
@@ -90,8 +95,11 @@ struct part {
   struct emoji_asked {
     friend bool operator==(emoji_asked, emoji_asked) = default;
   };
+  struct command_asked {
+    friend bool operator==(command_asked, command_asked) = default;
+  };
   struct asked_t {
-    spl::variant<mention_asked, emoji_asked> kind;
+    spl::variant<mention_asked, emoji_asked, command_asked> kind;
     std::string query;
     mux::conversation_id in;
     friend bool operator==(const asked_t&, const asked_t&) = default;
@@ -108,6 +116,9 @@ struct part {
     return std::string(after);
   }
   static std::optional<asked_t> asked_in(const std::string& text, const mux::conversation& chat) {
+    // A command being named: a '/' first, and no space after it yet.
+    if (text.starts_with('/') && !text.starts_with("//") && text.find_first_of(" \n") == std::string::npos)
+      return asked_t{command_asked{}, text.substr(1), chat.id};
     if (auto query = after_sign(text, '@', " \n", 0); query && mux::ui::is_group(chat))
       return asked_t{mention_asked{}, std::move(*query), chat.id};
     if (auto query = after_sign(text, ':', " \n:", 2))
@@ -126,6 +137,16 @@ struct part {
                                  }) | std::views::take(6) | std::views::transform([](const mux::member& one) {
                                    return suggestion{.person = true, .id = one.id, .title = one.name.empty() ? one.id : one.name,
                                                               .sub = one.id};
+                                 }) | std::ranges::to<std::vector>();
+                        },
+                        [&](const command_asked&) {
+                          // The plugins' commands (contract::slash_commands)
+                          // whose names start with what is typed.
+                          return app::kCommands | std::views::filter([&](const app::command_said& one) {
+                                   return lower(std::string(one.name)).starts_with(wanted);
+                                 }) | std::views::take(8) | std::views::transform([](const app::command_said& one) {
+                                   return suggestion{.glyph = "/", .title = std::string(one.name),
+                                                     .sub = std::format("{} -- {}", one.usage, one.summary)};
                                  }) | std::ranges::to<std::vector>();
                         },
                         [&](const emoji_asked&) {

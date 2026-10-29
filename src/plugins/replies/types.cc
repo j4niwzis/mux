@@ -22,7 +22,9 @@ struct quote_reply {};
 
 consteval bool provides(contract::message_menu, type_tag<feature>) { return true; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
-// What a reply shows of the message it answers, above its text.
+// What a reply shows of the message it answers, above its text: that
+// message, fetched where it is not there, the row made again once it is.
 consteval bool provides(contract::message_heads, type_tag<feature>) { return true; }
+inline std::optional<std::string> head_waits_for(contract::message_heads, type_tag<feature>, const message& said) { return said.replies_to; }
 
 }  // namespace mux::plugins::replies

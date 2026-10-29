@@ -126,7 +126,20 @@ struct message_menu {
 //   head_of(c, f, head_facts&) -> std::optional<message_head>: the node --
 //   a quoted line, pressed to go where it says -- and how wide the bubble
 //   is at least for it; it may take what it shows out of the text (the
-//   facts' `shown`). The first plugin's that has one.
+//   facts' `shown`). The first plugin's that has one. And, in its types,
+//   head_waits_for(c, f, message) -> std::optional<std::string>: the
+//   message its head shows, where it shows one -- fetched where it is not
+//   there, the row made again once it is (mux.ui:timeline, mux.app.pictures).
+// A plugin's slash commands (mux.app.commands): slash_commands(c, f) ->
+// command_list<its commands...>, each a type with static name, usage and
+// summary, made from what follows its name (its `arguments`). Typed in the
+// field, "/name arguments", it is not sent: it is asked of the program, and
+// its plugin's part takes it as it takes any request.
+template <class... Commands>
+struct command_list {};
+struct slash_commands {
+  static constexpr std::string_view name = "slash commands";
+};
 struct message_heads {
   static constexpr std::string_view name = "a message's head";
 };

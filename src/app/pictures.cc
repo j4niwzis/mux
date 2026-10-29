@@ -389,11 +389,13 @@ class pictures_part {
             }
             // A message quoted that is neither in the timeline nor fetched:
             // fetched on its own, once.
-            if (said.replies_to && !mux::ui::held_message(one, *said.replies_to) && this->quote_due(*said.replies_to))
-              s_->net->fetch_quoted(one.id, *said.replies_to);
+            // (The message a plugin's head shows: the one a reply answers.)
+            const auto shown_above = mux::ui::head_message_of(said);
+            if (shown_above && !mux::ui::held_message(one, *shown_above) && this->quote_due(*shown_above))
+              s_->net->fetch_quoted(one.id, *shown_above);
             // And of a picture a message made quotes, for its quote.
-            if (said.replies_to)
-              if (const message* quoted = mux::ui::held_message(one, *said.replies_to);
+            if (shown_above)
+              if (const message* quoted = mux::ui::held_message(one, *shown_above);
                   quoted && quoted->attachment && is_picture(quoted->attachment->kind))
                 this->want_thumbnail(id, quoted->attachment->source);
           };

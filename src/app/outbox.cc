@@ -17,6 +17,7 @@ import mux.ui;
 import mux.app.network;
 import mux.app.requests;
 import mux.app.services;
+import mux.app.commands;
 import mux.app.drafts;
 import mux.app.jumps;
 import mux.logic.sending;
@@ -225,6 +226,14 @@ class outbox_part {
   // before the first was handled send once: the draft emptied by the first.
   template <class Asked>
   void apply(const request::send_typed&, const Asked& asked) {
+    // A slash command a plugin has (contract::slash_commands): asked of the
+    // program, not sent -- the field emptied as for a message sent.
+    if (const auto typed = command_in(mux::ui::composer_plain(s_->chat_writing()));
+        typed && ask_command(all_commands{}, *typed, asked)) {
+      s_->write_chat(mux::ui::plain_draft(""));
+      asked(request::typing{false});
+      return;
+    }
     this->send(mux::ui::composer_plain(s_->chat_writing()), asked);
     // Sent: no longer typing.
     asked(request::typing{false});

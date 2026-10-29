@@ -251,6 +251,17 @@ struct plugin_heads<plugin_list<Features...>> {
   }
 };
 using heads_t = plugin_heads<composition::providers<contract::message_heads, enabled_plugins>>;
+// The message a message's head shows, as its plugin says (head_waits_for):
+// fetched where it is not there; the row made again once it is.
+template <class... Features>
+[[nodiscard]] std::optional<std::string> heads_wait_for(plugin_list<Features...>, const message& said) {
+  std::optional<std::string> out;
+  ((out ? void() : void(out = head_waits_for(contract::message_heads{}, type_tag<Features>{}, said))), ...);
+  return out;
+}
+[[nodiscard]] inline std::optional<std::string> head_message_of(const message& said) {
+  return heads_wait_for(composition::providers<contract::message_heads, enabled_plugins>{}, said);
+}
 
 // What plugins put in the bubble after its text and blocks
 // (contract::message_cards) -- a link's preview -- in their order, each in

@@ -263,8 +263,8 @@ struct timeline_rows {
                                 .unread_start = told.unread_from && said.id == *told.unread_from,
                                 .frost = told.frost,
                                 .looks = told.looks};
-             if (said.replies_to) {
-               const message* quoted = held_message(*chat, *said.replies_to);
+             if (const auto shown_above = head_message_of(said)) {
+               const message* quoted = held_message(*chat, *shown_above);
                facts.quote_said = quoted ? std::optional(quoted->body) : std::nullopt;
                facts.quote_known = quoted != nullptr;
              }

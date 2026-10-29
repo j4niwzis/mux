@@ -790,7 +790,20 @@ class model {
       const bool moved = ordered_at(*kept) != ordered_at(one.message);
       auto reactions = std::move(kept->reactions);
       auto reaction_events = std::move(kept->reaction_events);
+      // Its edits kept too, where what came knows fewer of them: the original
+      // event read again -- a page back, the disk -- put its first text back
+      // over the edited one as the chat was scrolled (a tester's).
+      const bool keeps_edits = kept->edited && (!one.message.edited || one.message.versions.size() < kept->versions.size());
+      std::optional<message> edited_copy;
+      if (keeps_edits)
+        edited_copy = *kept;
       *kept = one.message;
+      if (edited_copy) {
+        kept->body = std::move(edited_copy->body);
+        kept->edited = true;
+        kept->latest_edit_event = std::move(edited_copy->latest_edit_event);
+        kept->versions = std::move(edited_copy->versions);
+      }
       for (auto& [key, who] : reactions)
         kept->reactions[key].insert(who.begin(), who.end());
       for (auto& each : reaction_events)

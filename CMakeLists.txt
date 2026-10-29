@@ -382,6 +382,11 @@ endforeach()
 if(MUX_UI)
   mux_find_package(SDL3 REQUIRED)
   # Sound: voice messages are Opus in Ogg; audio files are that or Vorbis.
+  # On a page, no x86 intrinsics: Emscripten says its processor is x86, and
+  # opus built its SSE and AVX2 paths into mux.wasm, where they never run.
+  if(MUX_BROWSER)
+    cme_options(opus "OPUS_DISABLE_INTRINSICS ON")
+  endif()
   mux_find_package(Opus REQUIRED)
   mux_find_package(Vorbis REQUIRED)
   # Video, as tdesktop plays it: FFmpeg -- the system's where it has one,

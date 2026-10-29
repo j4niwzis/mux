@@ -222,21 +222,26 @@ consteval bool same_group(Group, Group) {
 }
 template <class... Features>
 struct choice_row_list<plugin_list<Features...>> {
-  // Every plugin's row: a chat's, every chat's.
   template <class Place>
   static auto made(const auto& colours, const Place& place) {
     return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                                   extend(contract::choice_rows{}, type_tag<Features>{}, colours, place)...);
   }
-  // Those of one group: an account's pages, each its own.
-  template <class Group, class Place>
-  static auto made_in(const auto& colours, const Place& place) {
-    return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                  skiff::compose::visible(same_group(Group{}, group_of_row(type_tag<Features>{})),
-                                                          extend(contract::choice_rows{}, type_tag<Features>{}, colours, place))...);
-  }
 };
-using choice_row_plugins = choice_row_list<composition::providers<contract::choice_rows, enabled_plugins>>;
+// The plugins of a list whose rows are of one group, in order: a page made
+// of only its own rows -- the others not in its tree at all.
+template <class Group, class List>
+struct rows_in;
+template <class Group, class... Features>
+struct rows_in<Group, plugin_list<Features...>> {
+  using type = typename composition::joined<
+      std::conditional_t<same_group(Group{}, group_of_row(type_tag<Features>{})), plugin_list<Features>, plugin_list<>>...>::type;
+};
+using all_choice_rows = composition::providers<contract::choice_rows, enabled_plugins>;
+// A group's rows: an account's pages, each its own.
+template <class Group>
+using choice_rows_in = choice_row_list<typename rows_in<Group, all_choice_rows>::type>;
+using choice_row_plugins = choice_row_list<all_choice_rows>;
 
 // A chat's own choices, bound to them in the model: its room events, how
 // far a jump searches -- Default as the level above; and the plugins' rows

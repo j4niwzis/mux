@@ -88,9 +88,11 @@ inline std::string local_part(const state&, std::string_view address) {
     address.remove_prefix(1);
   return std::string(address.substr(0, address.find(':')));
 }
-// A room's rules and levels, as Matrix keeps them in a chat's part: none
-// kept, the defaults.
-[[nodiscard]] inline const room_rules& rules_of(const room_part_t& part) {
+// A room's rules and levels, as Matrix keeps them in a chat's part -- the
+// model's union of every protocol's parts, or a Matrix room's settings'
+// own (Matrix's alone): none kept, the defaults.
+template <class... Parts>
+[[nodiscard]] const room_rules& rules_of(const spl::variant<Parts...>& part) {
   static const room_rules none{};
   return spl::visit(spl::overloaded{[](const room_rules& kept) -> const room_rules& { return kept; },
                                           [](const auto&) -> const room_rules& { return none; }},
@@ -98,7 +100,8 @@ inline std::string local_part(const state&, std::string_view address) {
 }
 [[nodiscard]] inline const room_rules& rules_of(const conversation& in) { return rules_of(in.theirs); }
 // And to change: the part made Matrix's where it was none.
-[[nodiscard]] inline room_rules& rules_in(room_part_t& part) {
+template <class... Parts>
+[[nodiscard]] room_rules& rules_in(spl::variant<Parts...>& part) {
   return spl::visit(spl::overloaded{[](room_rules& kept) -> room_rules& { return kept; },
                                           [&](auto&) -> room_rules& { return part.template emplace<room_rules>(); }},
                        part);

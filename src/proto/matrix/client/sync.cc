@@ -82,7 +82,7 @@ void account<Sink>::say(connection_t state) { sink_(change::connection_changed{i
 
 template <class Sink>
 auto account<Sink>::homeserver() -> std::optional<http::url> {
-  if (how_.homeserver)
+  if (how_.homeserver && !how_.homeserver->empty())
     return http::url::parse(*how_.homeserver);
   if (auto name = http::url::parse(server_name_)) {
     http::connection discovery(*loop_, *tls_, *name, how_.proxy);
@@ -207,7 +207,11 @@ void account<Sink>::run() {
   const auto base = homeserver();
   if (!base) {
     log(id_, "no homeserver found");
-    say(connection::failed{"no homeserver for " + how_.user_id});
+    // Named by hand, but not as an address mux speaks to: said as such.
+    if (how_.homeserver && !how_.homeserver->empty())
+      say(connection::failed{"homeserver address not understood: " + *how_.homeserver + " (https:// only)"});
+    else
+      say(connection::failed{"no homeserver for " + how_.user_id});
     return;
   }
   // Several at once for what is asked while the long poll waits.

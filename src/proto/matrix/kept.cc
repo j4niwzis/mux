@@ -59,8 +59,14 @@ template <class Entry>
 const std::optional<std::vector<Entry>>& legacy_entries(const legacy_accounts<Entry>& all) {
   return all.matrix;
 }
-// A server named by hand: the homeserver, in place of what .well-known says.
-inline void server_given(kept& one, std::string server, std::optional<std::int64_t>) { one.homeserver = std::move(server); }
+// A server named by hand: the homeserver, in place of what .well-known says;
+// its port, where one is given apart, put on it; nothing given, none kept.
+inline void server_given(kept& one, std::string server, std::optional<std::int64_t> port) {
+  if (server.empty())
+    one.homeserver.reset();
+  else
+    one.homeserver = port ? std::format("{}:{}", server, *port) : std::move(server);
+}
 
 constexpr type_tag<kept> kept_type(const state&) { return {}; }
 constexpr std::string_view protocol_word(const kept&) { return "matrix"; }

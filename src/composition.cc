@@ -182,6 +182,15 @@ struct level_sections {
 struct chat_folders {
   static constexpr std::string_view name = "the chat list's folders";
 };
+// Bars beside the chat list, of folders a plugin knows -- the spaces' --
+// in the side column (mux.ui:conversations_side): side_lane(c, f, palette),
+// its lane down the side; top_bar(c, f, palette, big), its bar in the head
+// (or under the search, big); wrap_side(c, f, palette, column), the column
+// wrapped -- its menus over it, its icons dragged between its bars. One
+// plugin at most
+struct side_bars {
+  static constexpr std::string_view name = "the side's bars";
+};
 // Settings' home page, its links after the client's own (mux.ui:proxies):
 //   extend(c, f, palette) -> its row, settings_link(...) as the others are:
 //   what it opens its plugin's own

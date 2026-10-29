@@ -15,5 +15,6 @@ struct feature {
 
 consteval bool provides(contract::chat_folders, type_tag<feature>) { return true; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
+consteval bool provides(contract::side_bars, type_tag<feature>) { return true; }
 
 }  // namespace mux::plugins::spaces

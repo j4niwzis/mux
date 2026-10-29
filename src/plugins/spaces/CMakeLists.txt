@@ -4,5 +4,6 @@
 # nested a level down. Built where MUX_PLUGIN_SPACES is on
 # (cmake/plugins.cmake).
 mux_plugin(spaces ORDER 5
-  TYPES types.cc
-  APP   app.cc)
+  TYPES  types.cc
+  UI_TOP ui_top.cc
+  APP    app.cc)

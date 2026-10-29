@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:storage -- Settings: storage and files.
+// mux.plugin.storage.ui -- Settings' Storage page -- whether what mux keeps
+// on disk is sealed, how much is kept in memory and on disk, clearing it,
+// deleted messages, every chat's room events and what they show -- and its
+// Files page -- what is done to a picture dropped on the window before it
+// is sent -- linked from Settings' home (contract::settings_links,
+// settings_pages).
 module;
 #include "skiff/named.h"
-export module mux.ui:storage;
+export module mux.plugin.storage.ui;
 
 import std;
 import splice;
@@ -18,11 +23,13 @@ import skiff.widgets.model;
 import skiff.bind;
 import mux.core;
 import mux.config;
+import mux.composition;
 import mux.ui.base;
-import :accounts;
-import :settings_pages;
+import mux.plugin.storage.types;
 
-export namespace mux::ui {
+export namespace mux::plugins::storage {
+
+using namespace ::mux::ui;
 
 // A limit, as the model holds it, shown with a step down and up: halved or
 // doubled within its bounds, the whole of the limits set again.
@@ -68,7 +75,6 @@ auto limit_stepper(const palette& colours, std::string what, std::string_view un
 // messages are shown, and how much of them is kept; and every chat's room
 // events. The limits and the history's switch are the model's widgets; the
 // seal, the clearing and every chat's choices are asked as before.
-struct local_seal { bool on = false; };
 inline auto seal_settings_view(const palette& colours) {
   using field = skiff::model::Field<&local_seal::on>;
   return SKIFF_NAMED(seal_settings_view, skiff::compose::column(
@@ -139,13 +145,12 @@ inline auto storage_settings_view(const palette& colours) {
                              "where it was, with all it said and its "
                              "time, marked removed.")));
   }
-inline auto storage_page(const palette& colours) {
-  return SKIFF_NAMED(storage_page, skiff::compose::column(
+inline auto storage_view(const palette& colours) {
+  return SKIFF_NAMED(storage_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Storage", {}, {}, true, true),
       storage_settings_view(colours)));
 }
-using storage_page_t = decltype(storage_page(std::declval<const palette&>()));
 
 
 // Settings' Files page: what is done to a picture dropped on the window
@@ -160,13 +165,22 @@ inline auto files_settings_view(const palette& colours) {
       spaced_note(colours, "Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
                            "It is cut out of the file; the picture itself is sent as it is, not compressed again.")));
 }
-inline auto files_page(const palette& colours) {
+inline auto files_view(const palette& colours) {
   using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
-  return SKIFF_NAMED(files_page, skiff::compose::column(
+  return SKIFF_NAMED(files_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Files", {}, {}, true, true)),
       files_settings_view(colours)));
 }
-using files_page_t = decltype(files_page(std::declval<const palette&>()));
 
-}  // namespace mux::ui
+
+// Settings' links to them, and the pages.
+inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                settings_link(colours, "Storage", icon::clip{}, open_storage{}),
+                                settings_link(colours, "Files", icon::send{}, open_files{}));
+}
+inline auto extend(contract::settings_pages, const ui_needs& n, const storage_page&) { return storage_view(*n.colours); }
+inline auto extend(contract::settings_pages, const ui_needs& n, const files_page&) { return files_view(*n.colours); }
+
+}  // namespace mux::plugins::storage

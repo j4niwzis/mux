@@ -861,6 +861,11 @@ struct window_shape {
 // so a new commit recompiles that unit alone.
 std::string_view build_commit();
 std::string_view build_branch();
+// Whether what mux keeps on disk is sealed, as the window shows it.
+struct local_seal {
+  bool on = false;
+  friend bool operator==(const local_seal&, const local_seal&) = default;
+};
 }  // namespace mux::ui
 
 // mux's way of painting fills, for skiff to find wherever mux's tree is drawn.

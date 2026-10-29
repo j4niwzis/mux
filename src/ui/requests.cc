@@ -362,7 +362,6 @@ struct message_person {
   mux::conversation_id who;
 };
 struct attach_files {};
-struct settings_files {};
 struct close_send_box {};
 // The files in the send box sent, with the caption written there.
 struct send_files {
@@ -871,7 +870,6 @@ struct typing {
 struct proxy_kind {
   mux::config::proxy_kind_t kind;
 };
-struct settings_storage {};
 struct clear_stored {};
 struct settings_appearance {};
 struct set_renderer {

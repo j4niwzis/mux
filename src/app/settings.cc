@@ -88,14 +88,7 @@ class settings_part {
     (void)k_->write();
   }
 
-  // Storage: how much is kept, halved or doubled within its bounds; and all
-  // of it cleared.
-  void apply(const request::settings_storage&) {
-    if (s_->settings_open()) {
-      mux::ui::show(*s_->showing, mux::ui::local_seal{s_->vault->on()});
-      s_->settings_page(mux::ui::settings_page::storage{k_->limits(), k_->history(), s_->vault->on()});
-    }
-  }
+  // What is stored, all of it cleared (the storage plugin's page asks).
   void apply(const request::clear_stored&) {
     std::error_code failed;
     std::filesystem::remove_all(mux::config::state_path("messages"), failed);
@@ -104,11 +97,6 @@ class settings_part {
     s_->refresh_due = true;
   }
 
-  // Files sent: their metadata cut out, their names made plain.
-  void apply(const request::settings_files&) {
-    if (s_->settings_open())
-      s_->settings_page(mux::ui::settings_page::files{k_->sending()});
-  }
   // Room events, for every chat that has not chosen, nor its account.
   void apply(const request::flip_room_events&) {
     k_->choose_field<&mux::config::history_settings::show_room_events>(!k_->history().show_room_events);

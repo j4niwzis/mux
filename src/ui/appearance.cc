@@ -21,7 +21,6 @@ import mux.ui.base;
 import :accounts;
 import :settings_pages;
 import :info;
-import :storage;
 import skiff.widgets.sliderbar;
 import skiff.bind;
 

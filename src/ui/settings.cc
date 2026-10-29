@@ -18,7 +18,6 @@ import mux.composition;
 import mux.plugins.ui;
 import :settings_pages;
 import :appearance;
-import :storage;
 
 export namespace mux::ui {
 
@@ -28,14 +27,6 @@ struct home {};
 struct appearance {
   config::theme_t theme;
   config::accent_t accent;
-};
-struct files {
-  config::sending_settings now;
-};
-struct storage {
-  config::cache_limits limits;
-  config::history_settings history;
-  bool sealed = false;
 };
 }  // namespace settings_page
 // The plugins' pages among them (contract::settings_pages): each its own
@@ -60,10 +51,9 @@ struct settings_pages_of;
 template <class... Pages>
 struct settings_pages_of<type_list<Pages...>> {
   using pages = spl::variant<settings_page::home, settings_page::appearance,
-                             settings_page::files, settings_page::storage,
                              Pages...>;
   using nodes = spl::variant<settings_home_t,
-                             appearance_page_t, storage_page_t, files_page_t,
+                             appearance_page_t,
                              plugin_settings_node<Pages>...>;
 };
 using settings_plugins = typename plugin_settings_pages<composition::providers<contract::settings_pages, enabled_plugins>>::type;
@@ -98,8 +88,6 @@ inline auto settings_view(const ui_needs& needs) {
     spl::visit(spl::overloaded{
                    [&](settings_page::home) { page.template emplace<settings_home_t>(settings_home(c)); },
                    [&](const settings_page::appearance& one) { page.template emplace<appearance_page_t>(appearance_page(n, one.theme, one.accent)); },
-                   [&](settings_page::storage) { page.template emplace<storage_page_t>(storage_page(c)); },
-                   [&](settings_page::files) { page.template emplace<files_page_t>(files_page(c)); },
                    // A plugin's page: its node, made from what it shows.
                    [&]<class Page>(const Page& one) {
                      page.template emplace<plugin_settings_node<Page>>(extend(contract::settings_pages{}, n, one));

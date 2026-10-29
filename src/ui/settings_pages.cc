@@ -44,8 +44,6 @@ inline auto settings_home(const palette& colours) {
           page_header<sends<request::close_settings>, sends<request::close_settings>>(colours, "Settings", {}, {}, false, true)),
       settings_link(colours, "Accounts", icon::person{}, request::open_accounts{}),
       settings_link(colours, "Appearance", icon::eye{}, request::settings_appearance{}),
-      settings_link(colours, "Storage", icon::clip{}, request::settings_storage{}),
-      settings_link(colours, "Files", icon::send{}, request::settings_files{}),
       settings_links_of(composition::providers<contract::settings_links, enabled_plugins>{}, colours)));
 }
 using settings_home_t = decltype(settings_home(std::declval<const palette&>()));

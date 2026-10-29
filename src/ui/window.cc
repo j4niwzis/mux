@@ -39,8 +39,14 @@ export namespace mux::ui {
 
 // Text editing commands are data; the menu is composed from ordinary rows.
 // Keep the editor's focus so a command still reaches its original selection.
-using text_menu_action = spl::variant<request::favourite_emoji, request::copy_text, request::text_key, request::text_formatting,
-    request::selection_copy, request::selection_forward, request::selection_delete, request::selection_cancel>;
+template <class List>
+struct text_menu_action_of;
+template <class... Features>
+struct text_menu_action_of<plugin_list<Features...>> {
+  using type = spl::variant<request::favourite_emoji, request::copy_text, request::text_key, request::text_formatting,
+      request::selection_copy, request::selection_delete, request::selection_cancel, request::selection_asked<Features>...>;
+};
+using text_menu_action = typename text_menu_action_of<composition::providers<contract::selection_actions, enabled_plugins>>::type;
 struct text_menu_item {
   std::string label;
   std::string shortcut;
@@ -112,11 +118,22 @@ inline std::vector<text_menu_item> text_menu_items(std::string text, std::option
   return items;
 }
 // Messages selected: copied, forwarded, deleted, or let go.
-inline std::vector<text_menu_item> selection_menu_items(std::size_t count, bool forwardable, bool deletable) {
-  return {{std::format("Copy {} messages", count), "Ctrl+C", request::selection_copy{}},
-          {"Forward selected", "", request::selection_forward{}, forwardable},
-          {"Delete selected\u2026", "Delete", request::selection_delete{}, deletable},
-          {"Clear selection", "Esc", request::selection_cancel{}, true, true}};
+// The plugins' actions among them (contract::selection_actions), each where
+// it is offered: a bit of `offered` each, in their order.
+template <class... Features>
+void selection_plugin_items(std::vector<text_menu_item>& items, plugin_list<Features...>, std::uint64_t offered) {
+  std::size_t at = 0;
+  ((items.push_back({std::format("{} selected", label(contract::selection_actions{}, type_tag<Features>{})), "",
+                     request::selection_asked<Features>{}, ((offered >> at) & 1u) != 0}),
+    ++at),
+   ...);
+}
+inline std::vector<text_menu_item> selection_menu_items(std::size_t count, std::uint64_t offered, bool deletable) {
+  std::vector<text_menu_item> items{{std::format("Copy {} messages", count), "Ctrl+C", request::selection_copy{}}};
+  selection_plugin_items(items, composition::providers<contract::selection_actions, enabled_plugins>{}, offered);
+  items.push_back({"Delete selected\u2026", "Delete", request::selection_delete{}, deletable});
+  items.push_back({"Clear selection", "Esc", request::selection_cancel{}, true, true});
+  return items;
 }
 // A text menu, where the pointer was pressed -- a right press, a long one
 // on a phone. A field's: Cut and Copy where something is selected and it is
@@ -255,7 +272,6 @@ struct shown_root {
   dialogs_shown_t dialogs;
   // Each protocol's own dialogs'.
   tools_shown_t tools;
-  skiff::model::Tracked<std::optional<forward_facts>> forwarding;
   skiff::model::Tracked<std::optional<wallpaper_facts>> wallpaper;
   skiff::model::Tracked<std::optional<person_shown>> person;
   skiff::model::Tracked<std::optional<room_card_facts>> room;
@@ -552,7 +568,7 @@ auto layer_for(const Needs &needs) {
 template <class Facts> ::mux::ui::request::close_shown<Facts> closing_of(std::type_identity<Facts>) { return {}; }
 template <class... Features, class... Tools>
 consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) {
-  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_forward, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_proxies, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
+  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_verification, ::mux::ui::request::verify_cancel_now, ::mux::ui::request::close_send_box, ::mux::ui::request::close_explore, ::mux::ui::request::close_wallpaper, ::mux::ui::request::close_packs, ::mux::ui::request::close_new_room, ::mux::ui::request::close_new_chat, ::mux::ui::request::close_manage, ::mux::ui::request::close_marks, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_room_card, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_proxies, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
                                decltype(closing_of(std::type_identity<Tools>{}))...>>{};
 }
@@ -566,7 +582,6 @@ inline ::mux::ui::request::close_wallpaper closing_of(std::type_identity<wallpap
 inline ::mux::ui::request::close_packs closing_of(std::type_identity<packs_facts>) { return {}; }
 inline ::mux::ui::request::close_new_room closing_of(std::type_identity<new_room_facts>) { return {}; }
 inline ::mux::ui::request::close_new_chat closing_of(std::type_identity<new_chat_facts>) { return {}; }
-inline ::mux::ui::request::close_forward closing_of(std::type_identity<forward_facts>) { return {}; }
 inline ::mux::ui::request::close_manage closing_of(std::type_identity<room_settings_facts>) { return {}; }
 inline ::mux::ui::request::close_marks closing_of(std::type_identity<marks_facts>) { return {}; }
 inline ::mux::ui::request::close_leave_space closing_of(std::type_identity<leave_space_facts>) { return {}; }
@@ -618,7 +633,7 @@ struct plugin_dialog_facts<plugin_list<Features...>> {
 };
 using escape_order = typename joined<
     type_list<settings_facts, notice_facts, person_shown, room_card_facts>, typename plugin_dialog_facts<dialog_plugins>::type,
-    type_list<link_facts, leave_space_facts, marks_facts, room_settings_facts, forward_facts, new_chat_facts, new_room_facts,
+    type_list<link_facts, leave_space_facts, marks_facts, room_settings_facts, new_chat_facts, new_room_facts,
               packs_facts, wallpaper_facts, explore_facts>,
     tool_facts_list, type_list<send_facts, passphrase_facts, verification_view, emoji_facts, menu_facts, viewer_facts, text_menu_facts>>::type;
 template <class Model, class... Facts>
@@ -733,7 +748,6 @@ inline auto window_body(const ui_needs& n) {
           shown_made<leave_space_box_t, leave_space_facts>(n),
           shown_made<marks_box, marks_facts>(n),
           shown_made<room_settings_t, room_settings_facts>(n),
-          shown_made<forward_box, forward_facts>(n),
           shown_made<start_chat_box, new_chat_facts>(n),
           shown_made<create_room_box, new_room_facts>(n),
           shown_made<packs_box_t, packs_facts>(n),

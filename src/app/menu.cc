@@ -15,6 +15,8 @@ import mux.app.services;
 import mux.app.outbox;
 import mux.app.pictures;
 import mux.logic.messages;
+import mux.composition;
+import mux.plugins.types;
 
 export namespace mux::app {
 
@@ -25,8 +27,12 @@ struct menu_part {
   request::message_menu target_;
   std::set<std::string> selected_;
   std::optional<conversation_id> selected_chat_;
-  std::optional<std::pair<conversation_id, std::vector<std::string>>> forwarding_;
   std::optional<std::pair<conversation_id, std::vector<std::string>>> deleting_;
+
+  // A plugin's action on the messages selected (contract::selection_actions):
+  // they are handed to its part, and the selection let go.
+  template <class Feature, class Asked>
+  void apply(const request::selection_asked<Feature>&, const Asked& asked);
 };
 
 void part_apply(menu_part& self, const request::message_menu& one);
@@ -43,9 +49,6 @@ void part_apply(menu_part& self, const request::menu_copy_image&);
 void part_apply(menu_part& self, const request::menu_thread&);
 void part_apply(menu_part& self, const request::menu_save&);
 void part_apply(menu_part& self, const request::menu_pin&);
-void part_apply(menu_part& self, const request::menu_forward&);
-void forward_from(menu_part& self, const conversation_id& chosen, std::vector<std::string> events);
-void part_apply(menu_part& self, const request::close_forward&);
 void part_apply(menu_part& self, const request::menu_view_source&);
 void part_apply(menu_part& self, const request::menu_select&);
 void part_apply(menu_part& self, const request::toggle_selected& one);
@@ -54,14 +57,13 @@ void part_apply(menu_part& self, const request::selection_span&);
 void part_apply(menu_part& self, const request::selection_copy&);
 void part_apply(menu_part& self, const request::selection_delete&);
 void part_apply(menu_part& self, const request::selection_delete_confirm&);
-void part_apply(menu_part& self, const request::selection_forward&);
 void keep_selection(menu_part& self);
-void part_apply(menu_part& self, const request::forward_to& one);
 void part_apply(menu_part& self, const request::menu_delete&);
 void part_apply(menu_part& self, const request::menu_react& one);
 void part_apply(menu_part& self, const request::react& one);
 [[nodiscard]] std::vector<const message*> selected_messages(const menu_part& self);
 void show_selection(menu_part& self);
+[[nodiscard]] std::uint64_t offered_on(const menu_part& self, const conversation_id& chat);
 
 void part_apply(menu_part& self, const request::message_menu& one) {
   self.target_ = one;
@@ -71,7 +73,7 @@ void part_apply(menu_part& self, const request::message_menu& one) {
     const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
     if (chat && !chosen.empty()) {
       const auto now = mux::ui::protocol_state_of(self.s_->ui, chat->id.account);
-      self.s_->show_text_menu(mux::ui::selection_menu_items(chosen.size(), mux::ui::ops_of(self.s_->ui, chat->id.account).forward,
+      self.s_->show_text_menu(mux::ui::selection_menu_items(chosen.size(), offered_on(self, chat->id),
           std::ranges::any_of(chosen, [&](const message* item) { return proto::may_delete(now, *chat, item->outgoing); })));
       return;
     }
@@ -221,27 +223,6 @@ void part_apply(menu_part& self, const request::menu_pin&) {
 }
 
 
-void part_apply(menu_part& self, const request::menu_forward&) {
-  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  const auto& chosen = self.s_->chosen();
-  if (!chosen)
-    return;
-  forward_from(self, *chosen, {self.target_.id});
-}
-
-void forward_from(menu_part& self, const conversation_id& chosen, std::vector<std::string> events) {
-  self.forwarding_ = std::pair{chosen, std::move(events)};
-  std::vector<mux::ui::forward_target> chats;
-  for (const auto& [id, account] : self.s_->model->accounts())
-    if (id == chosen.account)
-      for (const auto& [key, one] : account.conversations)
-        chats.push_back({one.id, mux::ui::display_name(one)});
-  std::ranges::sort(chats, {}, &mux::ui::forward_target::name);
-  mux::ui::show(*self.s_->showing, std::optional(mux::ui::forward_facts{std::move(chats)}));
-}
-
-void part_apply(menu_part& self, const request::close_forward&) { mux::ui::show<mux::ui::forward_facts>(*self.s_->showing, std::nullopt); }
-
 void part_apply(menu_part& self, const request::menu_view_source&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
   if (const auto& chosen = self.s_->chosen(); chosen && !self.s_->demo())
@@ -342,15 +323,6 @@ void part_apply(menu_part& self, const request::selection_delete_confirm&) {
   if (self.selected_chat_ == pending->first) show_selection(self);
 }
 
-void part_apply(menu_part& self, const request::selection_forward&) {
-  self.s_->close_text_menu();
-  if (!self.selected_chat_ || !mux::ui::ops_of(self.s_->ui, self.selected_chat_->account).forward || selected_messages(self).empty())
-    return;
-  forward_from(self, *self.selected_chat_, selected_messages(self) | std::views::transform([](const message* one) { return one->id; }) | std::ranges::to<std::vector>());
-  self.selected_.clear();
-  show_selection(self);
-}
-
 void keep_selection(menu_part& self) {
   if (self.selected_.empty())
     return;
@@ -368,23 +340,6 @@ void keep_selection(menu_part& self) {
   // selection stays the same. Refresh its actions too; equal facts do not
   // change the shown model's revision.
   show_selection(self);
-}
-
-void part_apply(menu_part& self, const request::forward_to& one) {
-  mux::ui::show<mux::ui::forward_facts>(*self.s_->showing, std::nullopt);
-  if (!self.forwarding_ || self.s_->demo())
-    return;
-  const auto [from, events] = *std::exchange(self.forwarding_, std::nullopt);
-  const auto* chat = self.s_->model->find(from);
-  auto sources = events | std::views::transform([&](const std::string& id) {
-    const message* kept = chat ? mux::ui::held_message(*chat, id) : nullptr;
-    return kept ? mux::logic::forward_source_of(*kept) : forward_source{.event = id};
-  }) | std::ranges::to<std::vector>();
-  self.s_->net->forward(from, std::move(sources), one.to);
-  self.s_->notice("Forward", "Forwarded to " + [&] {
-    const conversation* to = self.s_->model->find(one.to);
-    return to ? mux::ui::display_name(*to) : one.to.id;
-  }());
 }
 
 void part_apply(menu_part& self, const request::menu_delete&) {
@@ -431,18 +386,44 @@ void part_apply(menu_part& self, const request::react& one) {
 
 void show_selection(menu_part& self) {
   const conversation* chat = self.selected_chat_ ? self.s_->model->find(*self.selected_chat_) : nullptr;
-  const auto ops = chat ? mux::ui::ops_of(self.s_->ui, chat->id.account) : mux::proto::account_ops{};
   const auto chosen = selected_messages(self);
   const auto now = chat ? mux::ui::protocol_state_of(self.s_->ui, chat->id.account) : mux::protocol_state_t{};
   const bool available = chat && proto::available(now);
   const bool deletable = available && std::ranges::any_of(chosen, [&](const message* one) { return proto::may_delete(now, *chat, one->outgoing); });
-  const mux::ui::selection_shown shown{chosen.size(), available && ops.forward, deletable};
+  const mux::ui::selection_shown shown{chosen.size(), available ? offered_on(self, chat->id) : 0u, deletable};
   if (*self.s_->showing->look<mux::ui::selection_shown>() != shown)
     mux::ui::show(*self.s_->showing, shown);
   // The messages marked as selected: their rows read it, and while any are,
   // a press on one selects it or lets it go.
   if (self.s_->showing->look<mux::ui::message_marks>()->selected != self.selected_)
     mux::ui::change_shown<mux::ui::message_marks>(*self.s_->showing, [&](mux::ui::message_marks& marks) { marks.selected = self.selected_; });
+}
+
+// The plugins' actions offered on the messages selected in a chat: a bit
+// each, in their order (contract::selection_actions).
+template <class... Features>
+std::uint64_t offered_of(plugin_list<Features...>, const mux::ui::ui_shared& shared, const conversation_id& chat) {
+  std::uint64_t out = 0;
+  std::size_t at = 0;
+  ((out |= allowed(contract::selection_actions{}, type_tag<Features>{}, shared, chat) ? std::uint64_t{1} << at : 0u, ++at), ...);
+  return out;
+}
+std::uint64_t offered_on(const menu_part& self, const conversation_id& chat) {
+  return offered_of(composition::providers<contract::selection_actions, enabled_plugins>{}, self.s_->ui, chat);
+}
+
+template <class Feature, class Asked>
+void menu_part::apply(const request::selection_asked<Feature>&, const Asked& asked) {
+  s_->close_text_menu();
+  if (!selected_chat_)
+    return;
+  auto events = selected_messages(*this) | std::views::transform([](const message* one) { return one->id; }) | std::ranges::to<std::vector>();
+  if (events.empty())
+    return;
+  const conversation_id in = *selected_chat_;
+  selected_.clear();
+  show_selection(*this);
+  asked(request::selection_taken<Feature>{in, std::move(events)});
 }
 
 }  // namespace mux::app

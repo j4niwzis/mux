@@ -178,7 +178,6 @@ struct stub {
   void dismiss_call() {}
   void menu_select() {}
   void toggle_selected(std::string) {}
-  void selection_forward() {}
   void selection_copy() {}
   void selection_delete() {}
   void selection_cancel() {}
@@ -214,15 +213,12 @@ struct stub {
   void close_reactions() {}
   void open_avatar(std::string) {}
   void open_manage() {}
-  void menu_forward() {}
   void menu_view_source() {}
   void close_dialog() {}
   void open_new_chat() {}
   void close_new_chat() {}
   void start_direct(std::string) {}
   void start_group(std::string) {}
-  void close_forward() {}
-  void forward_to(mux::conversation_id) {}
   void flip_room_events() {}
   void flip_account_room_events() {}
   void flip_chat_room_events() {}
@@ -1971,9 +1967,10 @@ TEST(Selection, TelegramActionsHaveWidthAndDispatchOnDesktopAndPhone) {
     ui_state ui;
     auto bar = mux::ui::selection_bar(ui.needs(program));
     scene::Scene<decltype(bar)> window{std::move(bar)};
-    ui.show(window.root(), mux::ui::selection_shown{2, true, true});
+    ui.show(window.root(), mux::ui::selection_shown{2, 1u, true});
     window.layoutIfNeeded(skia::SkRect::MakeWH(width, 60.0f));
-    auto& forward = std::get<0>(window.root().fParts);
+    // The plugins' actions, in a row of their own: Forward the first.
+    auto& forward = std::get<0>(std::get<0>(window.root().fParts).fParts);
     auto& remove = std::get<1>(window.root().fParts);
     auto& clear = std::get<3>(window.root().fParts);
     EXPECT_EQ(std::get<0>(forward.fParts).text(), "Forward 2");
@@ -1990,7 +1987,7 @@ TEST(Selection, TelegramActionsHaveWidthAndDispatchOnDesktopAndPhone) {
     router.setLayers(layers);
     struct sink {
       int forwarded = 0, deleted = 0, cleared = 0;
-      void take(const mux::ui::request::selection_forward&) { ++forwarded; }
+      void take(const mux::ui::request::selection_asked<mux::plugins::forward::feature>&) { ++forwarded; }
       void take(const mux::ui::request::selection_delete&) { ++deleted; }
       void take(const mux::ui::request::selection_cancel&) { ++cleared; }
     } requests;
@@ -2005,7 +2002,7 @@ TEST(Selection, TelegramActionsHaveWidthAndDispatchOnDesktopAndPhone) {
     EXPECT_EQ(requests.forwarded, 1);
     EXPECT_EQ(requests.deleted, 1);
     EXPECT_EQ(requests.cleared, 1);
-    ui.show(window.root(), mux::ui::selection_shown{3, true, false});
+    ui.show(window.root(), mux::ui::selection_shown{3, 1u, false});
     window.layoutIfNeeded(skia::SkRect::MakeWH(width, 60.0f));
     EXPECT_TRUE(forward.visible());
     EXPECT_TRUE(remove.visible());

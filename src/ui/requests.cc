@@ -828,7 +828,6 @@ struct menu_select {};
 struct toggle_selected {
   std::string id;
 };
-struct selection_forward {};
 struct selection_copy {};
 struct selection_delete {};
 struct selection_delete_confirm {};
@@ -837,10 +836,14 @@ struct selection_span {
   bool selected = true;
 };
 struct selection_cancel {};
-struct menu_forward {};
-struct close_forward {};
-struct forward_to {
-  mux::conversation_id to;
+// A plugin's action on the messages selected (contract::selection_actions):
+// asked by its button, and the messages handed to its part.
+template <class Feature>
+struct selection_asked {};
+template <class Feature>
+struct selection_taken {
+  mux::conversation_id in;
+  std::vector<std::string> events;
 };
 struct open_manage {};
 struct pick_room_avatar { conversation_id room; };

@@ -101,6 +101,15 @@ struct chat_column {
 struct chat_header {
   static constexpr std::string_view name = "the chat's head";
 };
+// What can be done with the messages selected, beside Delete in the selection
+// bar (mux.ui:header) and in their text menu (mux.ui:window):
+//   label(c, f) -> what it says: "<label> 3" on the bar, "<label> selected"
+//   in the menu; allowed(c, f, ui_shared, chat) -> whether it is offered
+//   there. Pressed, request::selection_asked<f>: the selection's owner hands
+//   the messages over as request::selection_taken<f>, which its part takes.
+struct selection_actions {
+  static constexpr std::string_view name = "the selection's actions";
+};
 // The program's parts (mux.app.program): extend(c, f, services&) -> a part,
 // offered the requests as the program's own are.
 // A part may also take the model's changes (take(change), as they come)

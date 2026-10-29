@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:info_new_chats -- Where a message is forwarded to; Start chat; Create a room.
+// mux.ui:info_new_chats -- Start chat; Create a room.
 module;
 #include "skiff/named.h"
 export module mux.ui:info_new_chats;
@@ -42,81 +42,6 @@ struct new_room_place {
   std::string name;
   bool make_space = false;
 };
-
-// A chat to forward to: its id and name.
-struct forward_target {
-  conversation_id id;
-  std::string name;
-};
-
-// Where to forward a message, as tdesktop's box: the account's chats, with
-// a field to find one by its name; a press sends it there.
-// Where a message may be forwarded to: the chats asked among.
-struct forward_facts {
-  std::vector<forward_target> chats;
-};
-struct forward_draft {
-  std::string query;
-};
-struct forward_events {};
-inline auto forward_row(const palette& colours, const forward_target& one) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(forward_row, c::onPress(
-      sends<::mux::ui::request::forward_to>{one.id},
-      c::row(c::hbox(12.0f, {.fillX = true,
-                             .height = 50.0f,
-                             .padding = {0.0f, 20.0f, 0.0f, 20.0f},
-                             .hoverBackground = colours.chosen}),
-             avatar_mark(avatar_of::chat{}, one.id.id, one.name, 36.0f),
-             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                       elided(nodes::Text(one.name, 15.0f, colours.text)))),
-      one.name));
-}
-// The chats whose names have what is typed, in any case.
-inline std::vector<forward_target> matching_forward_targets(const std::vector<forward_target>& all, std::string_view text) {
-  const std::string wanted = mux::logic::folded(text);
-  return all | std::views::filter([&](const forward_target& one) {
-    return wanted.empty() || mux::logic::folded(one.name).contains(wanted);
-  }) | std::ranges::to<std::vector>();
-}
-inline auto forward_view(const palette& colours, const std::vector<forward_target>& chats) {
-  namespace c = skiff::compose;
-  using close_act = sends<::mux::ui::request::close_forward>;
-  using query = skiff::model::Field<&forward_draft::query>;
-  auto field = widgets::TextField<std::string>(colours.widgets, "Search");
-  field.setSearchIcon(true);
-  return SKIFF_NAMED(forward_view, c::local<forward_draft>(
-      forward_events{},
-      c::column(
-          c::vbox(0.0f, {.fillX = true, .height = 520.0f}),
-          page_header<no_back, close_act>(colours, "Forward to…", {}, {}, false, true),
-          c::styled({.fillX = true, .height = 34.0f, .margin = {0.0f, 16.0f, 8.0f, 16.0f}},
-                    c::bound<query>(std::move(field))),
-          c::styled({.fillX = true, .grow = scene::axes::kY},
-                    nodes::ScrollContainer(
-                        c::projected<query>(
-                            [all = chats](const std::string& text) {
-                              return matching_forward_targets(all, text);
-                            },
-                            c::listed<forward_target>(
-                                c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                                [colours = &colours](const forward_target& one) {
-                                  return forward_row(*colours, one);
-                                }))))),
-      forward_draft{}));
-}
-inline auto forward_view(const ui_needs& n, const forward_facts& facts) {
-  return forward_view(*n.colours, facts.chats);
-}
-using forward_box_t = decltype(forward_view(std::declval<const ui_needs&>(), std::declval<const forward_facts&>()));
-using forward_box = forward_box_t;
-inline dialog_look content_look(std::type_identity<forward_facts>) {
-  return {.size = dialog_size::fixed{400.0f, 520.0f}};
-}
-template <class Needs>
-auto make_content(const Needs& needs, const forward_facts& facts) {
-  return forward_view(needs, facts);
-}
 
 // Someone found: their picture, name and ID; pressed, the chat with them --
 // in Start chat, and in the chat list where nothing joined matches.

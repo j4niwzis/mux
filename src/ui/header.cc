@@ -370,11 +370,26 @@ using composer_banner_t = decltype(composer_banner_for(std::declval<const palett
 // done with them.
 struct selection_shown {
   std::size_t count = 0;
-  bool forwardable = false;
+  // The plugins' actions offered (contract::selection_actions): a bit each,
+  // in their order.
+  std::uint64_t offered = 0;
   bool deletable = false;
   friend bool operator==(const selection_shown&, const selection_shown&) = default;
 };
-// As tdesktop's top bar: Forward and Delete carry the selection count,
+// The plugins' actions on the selection, each its button where it is offered.
+using selection_plugins = composition::providers<contract::selection_actions, enabled_plugins>;
+template <class... Features, std::size_t... I, class Make>
+auto selection_actions_of(plugin_list<Features...>, std::index_sequence<I...>, Make make) {
+  namespace c = skiff::compose;
+  return c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+      c::shown_if<selection_shown>([](const selection_shown& now) { return ((now.offered >> I) & 1u) != 0; },
+          make(::mux::ui::request::selection_asked<Features>{}, std::string(label(contract::selection_actions{}, type_tag<Features>{}))))...);
+}
+template <class... Features>
+auto selection_actions_of(plugin_list<Features...> list, auto make) {
+  return selection_actions_of(list, std::index_sequence_for<Features...>{}, std::move(make));
+}
+// As tdesktop's top bar: the plugins' actions (Forward) and Delete carry the selection count,
 // Clear stays at the right. Copy remains in the context menu and Ctrl+C.
 // Buttons size from their text instead of relying on Button's zero width.
 auto selection_bar(const ui_needs& n) {
@@ -402,8 +417,7 @@ auto selection_bar(const ui_needs& n) {
       c::onKey(scene::keys::kEscape, ::mux::ui::request::selection_cancel{},
           c::row(c::hbox(8.0f, {.fillX = true, .height = kChatHeadHeight,
                                .padding = {0.0f, 12.0f, 1.0f, 12.0f}, .background = colours.sidebar}),
-              c::shown_if<selection_shown>([](const selection_shown& now) { return now.forwardable; },
-                  selected_action(::mux::ui::request::selection_forward{}, "Forward")),
+              selection_actions_of(selection_plugins{}, selected_action),
               c::spec_for<selection_shown>([](const selection_shown& now) { return scene::Spec{.disabled = !now.deletable}; },
                   selected_action(::mux::ui::request::selection_delete{}, "Delete")),
               c::styled({.grow = scene::axes::kX}, nodes::Box<>(skia::SkColor{0})),

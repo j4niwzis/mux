@@ -37,10 +37,8 @@ class outbox_part {
   void compose(compose_t now, std::optional<mux::ui::compose_context> said) {
     mux::ui::show(*s_->showing, mux::ui::chat_compose{std::move(now), std::move(said)});
   }
-  // What is written answers a message, or edits one: said over the field.
-  void answer(std::string id, std::string title, std::string line) {
-    this->compose(compose::reply{std::move(id)}, mux::ui::compose_context{mux::ui::icon::reply{}, std::move(title), std::move(line)});
-  }
+  // What is written edits a message: said over the field. (Answering one is
+  // the replies plugin's.)
   void edit(std::string id, const std::string& text) {
     // What was being written kept, to be put back when the edit is let go --
     // from before the first edit, where one edit steps to another.

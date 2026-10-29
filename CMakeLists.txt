@@ -346,9 +346,13 @@ set(mux_skiff_options)
 if(MUX_BROWSER)
   list(APPEND mux_skiff_options "SKIFF_WEB ON" "SKIFF_EMSCRIPTEN_THREADS ON")
 endif()
-# The page: skiff.web's document is Blitz's.
+# The page: skiff.web's document is Blitz's; else skiff's own, in memory --
+# said either way: an option once given stays in skiff's cache, and a
+# build turned from MUX_PAGE ON to OFF went on building Blitz.
 if(MUX_PAGE)
   list(APPEND mux_skiff_options "SKIFF_WEB_DOM blitz")
+else()
+  list(APPEND mux_skiff_options "SKIFF_WEB_DOM memory")
 endif()
 if(MUX_UI)
   # Skia's features, each an option asking for its component: GL to draw on

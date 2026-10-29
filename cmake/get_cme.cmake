@@ -17,12 +17,12 @@
 # remembered, and a pin that differs from it wins -- while -DCME_VERSION=
 # on the command line still stands until this file says something else.
 #
-# The registry revision containing the call dependencies and Android fixes.
+# The registry revision whose meson ports leave a machine-provided dependency to its own .pc.
 # Its archive is pinned by digest along with its commit.
-set(CME_PINNED "8c3cbd971797fd31caf683115ebf84c8c48c5104")
-set(CME_PINNED_SHA256 "7454bdc204054b868a222c274055a371aaa6190e17fa02bca5ac08f655a00851")
+set(CME_PINNED "cbdaf0a51a43d24c942aae6021e53a06411bb5ca")
+set(CME_PINNED_SHA256 "a412ed4a0c2aa0ec2412dc44cc470aa721277b42d4e24a771b592587f29a769e")
 set(CME_PINNED_URL
-  "https://github.com/j4niwzis/cmake-everywhere/archive/8c3cbd971797fd31caf683115ebf84c8c48c5104.tar.gz")
+  "https://github.com/j4niwzis/cmake-everywhere/archive/cbdaf0a51a43d24c942aae6021e53a06411bb5ca.tar.gz")
 if(NOT "${CME_PIN_APPLIED}" STREQUAL "${CME_PINNED}")
   set(CME_VERSION "${CME_PINNED}" CACHE STRING
     "cmake-everywhere release" FORCE)

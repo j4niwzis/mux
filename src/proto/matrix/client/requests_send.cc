@@ -24,7 +24,6 @@ import loom.cs.room_summary;
 import loom.cs.list_public_rooms;
 import loom.cs.space_hierarchy;
 import loom.cs.room_send;
-import loom.cs.voip;
 import loom.cs.rooms;
 import loom.crypto;
 import loom.cs.keys;

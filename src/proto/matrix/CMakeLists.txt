@@ -17,4 +17,4 @@ mux_protocol(matrix ORDER 20
         cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations
         cs-threads_list cs-profile cs-presence cs-device_management cs-room_upgrades cs-directory
         cs-capabilities cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher
-        cs-pushrules cs-voip)
+        cs-pushrules)

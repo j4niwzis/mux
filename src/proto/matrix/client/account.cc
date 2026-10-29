@@ -21,7 +21,6 @@ import loom.cs.message_pagination;
 import loom.cs.receipts;
 import loom.cs.redaction;
 import loom.cs.room_send;
-import loom.cs.voip;
 import loom.cs.rooms;
 import loom.cs.room_upgrades;
 import loom.cs.knocking;

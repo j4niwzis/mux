@@ -206,17 +206,17 @@ struct kept_settings {
   [[nodiscard]] auto own_of(const conversation_id& chat) const {
     return this->reads().own_of<M>(chat);
   }
-  // One setting of a chat's, chosen: the chat forgotten where it then has
-  // nothing chosen.
+  // One setting of a chat's, chosen. Its entry stays where it then has
+  // nothing chosen: a room's settings open are bound to it, and taken away
+  // -- Default pressed, a chat unmuted -- their buttons edited nothing until
+  // the dialog was opened again (a tester's). What is saved leaves out what
+  // is not chosen, so an empty one costs nothing in the file.
   template <auto M, class T>
   void choose(const conversation_id& chat, T now) {
     const chat_choices* had = state.root().chats.find(chat);
     chat_choices next = had == nullptr ? chat_choices{} : *had;
     next.*M = now;
-    if (next == chat_choices{}) {
-      if (had != nullptr)
-        (void)state.apply(skiff::model::take<chat_choices>(chat));
-    } else if (had == nullptr) {
+    if (had == nullptr) {
       (void)state.apply(skiff::model::put<chat_choices>(chat, std::move(next)));
     } else {
       // Only the one setting, in its place: what shows it is told, and

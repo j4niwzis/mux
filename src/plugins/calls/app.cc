@@ -34,6 +34,39 @@ namespace call_state {
 }
 using call_state_t = spl::variant<call_state::starting, call_state::ringing_out, call_state::ringing_in,
                                 call_state::connecting, call_state::connected>;
+// The addresses their description (an offer, an answer) carries in its
+// own lines (a=candidate), by kind: what a browser offers where it has no
+// STUN or TURN server is its host addresses alone, hidden behind mDNS names
+// (.local) that nothing outside its network resolves -- nothing to reach it
+// by, whatever relay is here. Read from the SDP for the call's log.
+struct sdp_candidates {
+  std::size_t host = 0, named = 0, srflx = 0, prflx = 0, relay = 0;
+};
+[[nodiscard]] inline sdp_candidates candidates_in(std::string_view sdp) {
+  static constexpr std::array<std::pair<std::string_view, std::size_t sdp_candidates::*>, 4> kinds{
+      {{"host", &sdp_candidates::host}, {"srflx", &sdp_candidates::srflx}, {"prflx", &sdp_candidates::prflx}, {"relay", &sdp_candidates::relay}}};
+  sdp_candidates out;
+  for (const auto line : sdp | std::views::split('\n')) {
+    const std::string_view text(line);
+    if (!text.starts_with("a=candidate:"))
+      continue;
+    const auto words = text | std::views::split(' ') | std::views::transform([](auto w) { return std::string_view(w); }) |
+                       std::ranges::to<std::vector>();
+    const auto typ = std::ranges::find(words, std::string_view("typ"));
+    if (typ == words.end() || typ + 1 == words.end())
+      continue;
+    const std::string_view kind = std::string_view(*(typ + 1)).substr(0, (typ + 1)->find_first_of("\r"));
+    if (const auto found = std::ranges::find(kinds, kind, &std::pair<std::string_view, std::size_t sdp_candidates::*>::first); found != kinds.end())
+      ++(out.*(found->second));
+    if (words.size() > 4 && words[4].ends_with(".local"))
+      ++out.named;
+  }
+  return out;
+}
+[[nodiscard]] inline std::string candidates_said(const sdp_candidates& in) {
+  return std::format("{} host ({} behind .local names), {} srflx, {} prflx, {} relay", in.host, in.named, in.srflx, in.prflx, in.relay);
+}
+
 struct active_call {
   conversation_id in;
   std::string id;
@@ -56,6 +89,8 @@ struct active_call {
   // (TURN) its account's server gave, the candidates gathered here and those
   // the other side sent.
   std::size_t relays = 0, ours = 0, theirs = 0;
+  // What their description carried of its own (a=candidate lines).
+  sdp_candidates in_theirs;
   std::chrono::steady_clock::time_point ring_until = std::chrono::steady_clock::now() + std::chrono::seconds(60);
   std::unique_ptr<mux::calls::media_session<app::wake_window>> media;
 };
@@ -256,8 +291,10 @@ class part {
       this->signal(call_said_t{call_said::hangup{call_end::failed{}}});
       // Why, as far as can be told: nothing from the other side; no relay
       // to go through; or no route even through one.
-      mux::log_line(current_->in.account.address, std::format("call {}: timed out connecting -- {} relay(s), {} candidate(s) here, {} from them",
-                                                              current_->id, current_->relays, current_->ours, current_->theirs));
+      mux::log_line(current_->in.account.address, std::format("call {}: timed out connecting -- {} relay(s), {} candidate(s) here, {} from them, "
+                                                              "their description: {}",
+                                                              current_->id, current_->relays, current_->ours, current_->theirs,
+                                                              candidates_said(current_->in_theirs)));
       this->end(current_->theirs == 0 ? "Connection timed out: the other side sent nothing to connect to -- its client may not have taken the call"
                 : current_->relays == 0 ? "Connection timed out: no direct route between you, and your server offers no relay (TURN)"
                                         : "Connection timed out: no route between you, even through your server's relay (TURN)");
@@ -311,6 +348,8 @@ class part {
                           .their_party = one.party, .their_sender = one.sender, .offer = invite.offer, .version = invite.version});
     current_->ring_until = std::chrono::steady_clock::now() +
                            std::chrono::duration_cast<std::chrono::steady_clock::duration>(remaining);
+    current_->in_theirs = candidates_in(invite.offer.sdp);
+    mux::log_line(one.in.account.address, std::format("call {}: their offer carries {}", one.call, candidates_said(current_->in_theirs)));
     this->show();
   }
   void answered(const call_signalled& one, const call_said::answer& answer) {
@@ -328,6 +367,8 @@ class part {
       return;
     current_->their_party = one.party;
     current_->their_sender = one.sender;
+    current_->in_theirs = candidates_in(answer.it.sdp);
+    mux::log_line(one.in.account.address, std::format("call {}: their answer carries {}", one.call, candidates_said(current_->in_theirs)));
     current_->media->answered(answer.it);
     add_early_candidates();
     this->signal(call_said_t{call_said::select_answer{one.party}});

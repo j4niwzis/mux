@@ -81,6 +81,25 @@ class encrypted_account : public account<Sink> {
 
  public:
   using account<Sink>::account;
+  // The account's own, named here for the members below, public as they are there.
+  using base::connected;
+  using base::edit;
+  using base::id;
+  using base::request;
+  using base::send;
+  using base::sign_out_sessions;
+  using base::start;
+  using base::state_;
+  using base::synced;
+  using base::uia_;
+  using base::uia_answer;
+  using base::upload;
+  using base::whole;
+  using typename base::uia_password;
+  using typename base::uia_browser;
+  using typename base::uia_none;
+  using typename base::uia_cross_signing;
+  using typename base::pending_uia;
 
   // What the account asks of encryption (its hooks, called through whole()).
   void start_crypto();
@@ -216,15 +235,12 @@ class encrypted_account : public account<Sink> {
   void export_room_keys(std::string path, std::string passphrase);
   void import_room_keys(std::string path, std::string passphrase);
 
- private:
+ protected:
   using base::api_;
-  using base::connected;
   using base::done;
-  using base::edit;
   using base::encrypted_by;
   using base::event;
   using base::how_;
-  using base::id;
   using base::id_;
   using base::kept_file;
   using base::keys_of;
@@ -232,29 +248,14 @@ class encrypted_account : public account<Sink> {
   using base::members;
   using base::perform;
   using base::remember_encrypted;
-  using base::request;
   using base::run;
   using base::say;
-  using base::send;
   using base::send_room_event;
-  using base::sign_out_sessions;
   using base::sink_;
   using base::spawn_guarded;
-  using base::start;
-  using base::state_;
-  using base::synced;
   using base::telling_history_;
   using base::told;
   using base::transaction;
-  using base::uia_;
-  using base::uia_answer;
-  using base::upload;
-  using base::whole;
-  using typename base::uia_password;
-  using typename base::uia_browser;
-  using typename base::uia_none;
-  using typename base::uia_cross_signing;
-  using typename base::pending_uia;
   using typename base::late_news_while;
 
   // End-to-end encryption: this device's machine, made once the device is

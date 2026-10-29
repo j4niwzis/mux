@@ -106,11 +106,15 @@ struct part {
     if (line.empty())
       line = logic::reply_line(said, text);
     // A thread's root or answer, its thread open: answered there.
+    // The field that answers it given the keys -- on a phone, its keyboard
+    // up at once, as Telegram's: what answers is typed next.
     if (said && s_->thread_open() == (said->thread ? *said->thread : said->id)) {
       s_->answer_in_thread(id, ui::compose_context{ui::icon::reply{}, std::move(title), std::move(line)});
+      s_->ask_keys(ui::keys::thread{});
       return;
     }
     ui::show(*s_->showing, ui::chat_compose{ui::compose::reply{id}, ui::compose_context{ui::icon::reply{}, std::move(title), std::move(line)}});
+    s_->ask_keys(ui::keys::chat{});
   }
 };
 

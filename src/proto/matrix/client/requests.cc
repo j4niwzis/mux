@@ -197,7 +197,8 @@ void account<Sink>::find_message_at(std::string room, std::int64_t at) {
       return;
     const conversation_id in{id_, room};
     using by_time = loom::cs::get_event_by_timestamp;
-    if (const auto got = perform(*api_, by_time{.room_id = room, .ts = at, .dir = by_time::dir_values::f{}})) {
+    if (const auto got = perform(*api_, by_time{.room_id = room, .ts = at, .dir = by_time::dir_values::f{}}, std::chrono::seconds(60),
+                                 http::lane::background)) {
       sink_(change::message_found_at{in, got->event_id});
       return;
     }
@@ -205,7 +206,10 @@ void account<Sink>::find_message_at(std::string room, std::int64_t at) {
     std::optional<std::string> from;
     std::optional<std::string> found;
     for (int pages = 0; pages < 50; ++pages) {
-      const auto page = perform(*api_, paged{.room_id = room, .from = from, .dir = paged::dir_values::b{}, .limit = 100});
+      // In the pool's background lane: a message sent meanwhile never waits
+      // behind the pages.
+      const auto page = perform(*api_, paged{.room_id = room, .from = from, .dir = paged::dir_values::b{}, .limit = 100},
+                                std::chrono::seconds(60), http::lane::background);
       if (!page)
         break;
       // Newest first: past the first from before then, the last seen from

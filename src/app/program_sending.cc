@@ -22,6 +22,13 @@ namespace mux::app {
 
 void app::apply(const request::switch_account& one) {
   auto& screen = root();
+  // What was being written in the chat left: kept as its draft, and the
+  // field emptied. Left in the field, the next chat opened put its own
+  // draft over it -- paragraphs written were gone (a user's).
+  if (const auto& chosen = shared.chosen()) {
+    drafts.keep(*chosen, mux::ui::draft_text(shared.chat_writing()));
+    shared.write_chat({});
+  }
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) {
     now.current = mux::account_id{mux::ui::protocol_of(one.address), one.address};
     now.chosen.reset();

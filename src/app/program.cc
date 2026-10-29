@@ -172,11 +172,14 @@ struct app : kept_settings {
   }
   // Files picked for a plugin (one asked for them), not the outbox.
   template <class Part>
+    requires requires(Part& part, const std::vector<std::string>& paths, bool dropped) { { part.took_files(paths, dropped) } -> std::same_as<bool>; }
   static bool part_took_files(Part& part, const std::vector<std::string>& paths, bool dropped) {
-    if constexpr (requires { { part.took_files(paths, dropped) } -> std::same_as<bool>; })
-      return part.took_files(paths, dropped);
-    else
-      return false;
+    return part.took_files(paths, dropped);
+  }
+  // One that asks for none.
+  template <class Part>
+  static bool part_took_files(Part&, const std::vector<std::string>&, bool) {
+    return false;
   }
   bool plugins_took_files(const std::vector<std::string>& paths, bool dropped) {
     return std::apply([&](auto&... part) { return (part_took_files(part, paths, dropped) || ...); }, plugin_parts);

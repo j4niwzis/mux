@@ -18,8 +18,62 @@ import skiff.model;
 import mux.kept_root;
 import mux.plugins.types;
 import mux.composition;
+import mux.levels;
 
 export namespace mux::app {
+
+// A plugin's settings as the file has them: as they are; a level_choices',
+// its levels -- every chat's, each account's by its address, each chat's.
+template <class T>
+struct chat_said {
+  std::string account;
+  std::string conversation;
+  T choices;
+  friend bool operator==(const chat_said&, const chat_said&) = default;
+  friend consteval auto json_schema(knot::type<chat_said>) { return knot::schema<chat_said>(); }
+};
+template <class T>
+struct levels_said {
+  T every;
+  std::map<std::string, T> accounts;
+  std::vector<chat_said<T>> chats;
+  friend bool operator==(const levels_said&, const levels_said&) = default;
+  friend consteval auto json_schema(knot::type<levels_said>) { return knot::schema<levels_said>(); }
+};
+template <class Settings>
+struct settings_said {
+  using type = Settings;
+  static const Settings& said(const Settings& kept) { return kept; }
+  static Settings kept(Settings said) { return said; }
+};
+template <class T>
+struct settings_said<level_choices<T>> {
+  using type = levels_said<T>;
+  static levels_said<T> said(const level_choices<T>& kept) {
+    return {.every = kept.every.fValue.choices,
+            .accounts = std::views::zip(kept.accounts.keys(), kept.accounts.values()) |
+                        std::views::filter([](const auto& one) { return std::get<1>(one).choices != T{}; }) |
+                        std::views::transform([](const auto& one) { return std::pair{std::get<0>(one), std::get<1>(one).choices}; }) |
+                        std::ranges::to<std::map>(),
+            .chats = std::views::zip(kept.chats.keys(), kept.chats.values()) |
+                     std::views::filter([](const auto& one) { return std::get<1>(one).choices != T{}; }) |
+                     std::views::transform([](const auto& one) {
+                       return chat_said<T>{std::get<0>(one).account.address, std::get<0>(one).id, std::get<1>(one).choices};
+                     }) |
+                     std::ranges::to<std::vector>()};
+  }
+  static level_choices<T> kept(levels_said<T> said) {
+    level_choices<T> out;
+    out.every.fValue.choices = std::move(said.every);
+    out.accounts.putAll(said.accounts | std::views::transform([](const auto& one) {
+                          return std::pair{one.first, account_choice<T>{one.second}};
+                        }));
+    out.chats.putAll(said.chats | std::views::transform([](const chat_said<T>& one) {
+                       return std::pair{conversation_id{{proto::protocol_of(one.account), one.account}, one.conversation}, chat_choice<T>{one.choices}};
+                     }));
+    return out;
+  }
+};
 
 using chat_choices = mux::config::chat_choices;
 
@@ -87,6 +141,13 @@ struct kept_reactions {
   // written again.
   template <plugin_kept Settings>
   [[nodiscard]] write_kept on(skiff::model::Changed<Settings>, const Settings&) const { return {}; }
+  // A plugin's choices changed at a level (mux.levels): the same.
+  template <class T>
+  [[nodiscard]] write_kept on(skiff::model::Changed<every_choice<T>>, const every_choice<T>&) const { return {}; }
+  template <class T>
+  [[nodiscard]] write_kept on(skiff::model::Changed<account_choice<T>>, const account_choice<T>&) const { return {}; }
+  template <class T>
+  [[nodiscard]] write_kept on(skiff::model::Changed<chat_choice<T>>, const chat_choice<T>&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::history_settings>, const mux::config::history_settings&) const { return {}; }
   [[nodiscard]] deleted_shown on(skiff::model::Changed<skiff::model::Field<&mux::config::history_settings::show_deleted>>, const auto&) const {
     return {};
@@ -156,10 +217,11 @@ struct kept_settings {
     if (found == saved.plugins->end())
       return {};
     // The file's text kept for it, as read_plugin reads it.
-    const auto read = knot::try_read<plugin_settings_t<Feature>>(found->second.text);
+    using settings = plugin_settings_t<Feature>;
+    const auto read = knot::try_read<typename settings_said<settings>::type>(found->second.text);
     if (!read)
       return {};
-    return proxy_profiles(contract::proxy_profiles{}, type_tag<Feature>{}, *read);
+    return proxy_profiles(contract::proxy_profiles{}, type_tag<Feature>{}, settings_said<settings>::kept(*read));
   }
   [[nodiscard]] const std::vector<mux::config::chat_placement>& placements() const { return state.root().placements.fValue; }
   // A part the model's root holds one of, changed: a copy changed, set
@@ -353,6 +415,41 @@ struct kept_settings {
   void ensure_chat(const conversation_id& chat) {
     if (this->state.root().chats.find(chat) == nullptr)
       (void)state.apply(skiff::model::put<chat_choices>(chat, chat_choices{}));
+    this->ensure_levels(settings_plugins{}, chat);
+  }
+  // A chat's, or an account's, entry in each plugin's level choices: there
+  // for its rows to bind to (mux.levels).
+  template <class... Features>
+  void ensure_levels(plugin_list<Features...>, const conversation_id& chat) {
+    (this->ensure_level(this->plugin_settings<plugin_settings_t<Features>>(), chat), ...);
+    this->ensure_account_levels(chat.account.address);
+  }
+  void ensure_account_levels(const std::string& address) { this->ensure_account_levels_of(settings_plugins{}, address); }
+  template <class... Features>
+  void ensure_account_levels_of(plugin_list<Features...>, const std::string& address) {
+    (this->ensure_level(this->plugin_settings<plugin_settings_t<Features>>(), address), ...);
+  }
+  template <class Settings, class Key>
+  void ensure_level(const Settings&, const Key&) {}
+  template <class T>
+  void ensure_level(const level_choices<T>& levels, const conversation_id& chat) {
+    if (levels.chats.find(chat) == nullptr)
+      (void)state.apply(skiff::model::put<chat_choice<T>>(chat, chat_choice<T>{}));
+  }
+  template <class T>
+  void ensure_level(const level_choices<T>& levels, const std::string& address) {
+    if (levels.accounts.find(address) == nullptr)
+      (void)state.apply(skiff::model::put<account_choice<T>>(address, account_choice<T>{}));
+  }
+  // What the timeline does for a chat: the plugins' say (contract::chat_flags).
+  [[nodiscard]] chat_flags flags_of(const conversation_id& chat) const {
+    return this->flags_said_by(composition::providers<contract::chat_flags, enabled_plugins>{}, chat);
+  }
+  template <class... Features>
+  [[nodiscard]] chat_flags flags_said_by(plugin_list<Features...>, const conversation_id& chat) const {
+    chat_flags out;
+    (flags_for(contract::chat_flags{}, type_tag<Features>{}, this->plugin_settings<plugin_settings_t<Features>>(), space_above, chat, out), ...);
+    return out;
   }
   bool remove_account(std::string_view address) {
     return this->settings_of(address) != nullptr && state.apply(skiff::model::take<mux::config::account_t>(std::string(address)));
@@ -378,9 +475,6 @@ struct kept_settings {
   // space's, its account's, else every account's.
   [[nodiscard]] bool typing_sent(const conversation_id& chat) {
     return this->reads().typing_sent(chat);
-  }
-  [[nodiscard]] bool receipts_shown(const conversation_id& chat) {
-    return this->reads().receipts_shown(chat);
   }
   // Whether a chat shows what is done in it: its own choice, else its
   // account's, else every account's.
@@ -507,7 +601,6 @@ struct kept_settings {
       chosen.style = one.style;
       chosen.room_events = one.show;
       chosen.room_event_kinds = one.kinds;
-      chosen.receipts = one.receipts;
       chosen.previews = one.previews;
       chosen.typing = one.typing;
       chosen.previews_direct = one.previews_direct;
@@ -543,14 +636,14 @@ struct kept_settings {
     const auto found = plugins_unread_.find(std::string(Feature::name));
     if (found == plugins_unread_.end())
       return;
-    if (auto read = knot::try_read<settings>(found->second.text))
-      this->set_part(std::move(*read));
+    if (auto read = knot::try_read<typename settings_said<settings>::type>(found->second.text))
+      this->set_part(settings_said<settings>::kept(std::move(*read)));
     plugins_unread_.erase(found);
   }
   template <class... Features>
   [[nodiscard]] std::map<std::string, knot::raw> plugins_said(mux::plugin_list<Features...>) const {
     auto out = plugins_unread_;
-    (out.insert_or_assign(std::string(Features::name), knot::raw{knot::to_json_string(this->plugin_settings<mux::plugin_settings_t<Features>>())}), ...);
+    (out.insert_or_assign(std::string(Features::name), knot::raw{knot::to_json_string(settings_said<mux::plugin_settings_t<Features>>::said(this->plugin_settings<mux::plugin_settings_t<Features>>()))}), ...);
     return out;
   }
   // What the file kept for plugins not turned on now.
@@ -621,7 +714,6 @@ struct kept_settings {
           .conversation = chat.id,
           .show = chosen.room_events,
           .kinds = chosen.room_event_kinds,
-          .receipts = chosen.receipts,
           .previews = chosen.previews,
           .previews_direct = chosen.previews_direct,
           .typing = chosen.typing,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.plugin.receipts.ui -- Who has read up to a message, as Element shows
 // it: their small faces at the row's right under it, three at most and the
-// rest counted.
+// rest counted. Its row among a level's choices for chats.
 module;
 #include "skiff/named.h"
 export module mux.plugin.receipts.ui;
@@ -12,6 +12,8 @@ import skiff.compose;
 import skiff.nodes.text;
 import mux.composition;
 import mux.core;
+import mux.levels;
+import skiff.model;
 import mux.ui.base;
 import mux.plugin.receipts.types;
 
@@ -44,5 +46,14 @@ inline std::optional<readers_row_t> extend(contract::message_footers, type_tag<f
   return readers_row(facts.colours, facts.in, facts.readers);
 }
 constexpr float footer_height(contract::message_footers, type_tag<feature>) { return kReadersHeight; }
+
+// Its row among a level's choices (contract::choice_rows): faces shown,
+// hidden, or as the level over it says.
+template <class Place>
+inline auto extend(contract::choice_rows, type_tag<feature>, const auto& colours, const Place& place) {
+  using field = skiff::model::Field<&choices::shown>;
+  return choices_scoped<choices>(place, skiff::compose::bound<field>(
+      show_hide_field<receipts_setting, std::optional<bool>, field>(colours, level_of(place))));
+}
 
 }  // namespace mux::plugins::receipts

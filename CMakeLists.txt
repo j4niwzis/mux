@@ -213,7 +213,7 @@ include(cmake/plugins.cmake)
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
   FILES ${mux_protocol_core} ${mux_enabled_core} ${mux_plugin_types} ${mux_plugins_types}
-        ${mux_plugin_changes} ${mux_plugins_changes} src/core_ids.cc src/proto/changes.cc src/proto/proto.cc src/proto/protocols.cc
+        ${mux_plugin_changes} ${mux_plugins_changes} src/core_ids.cc src/levels.cc src/proto/changes.cc src/proto/proto.cc src/proto/protocols.cc
         src/core.cc ${mux_fibers} src/net.cc src/http_types.cc ${mux_http_connection} src/http.cc src/preview.cc src/media.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc src/logic/notifications.cc
         src/logic/link_base.cc src/proto/links.cc

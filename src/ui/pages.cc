@@ -39,6 +39,7 @@ import :controls;
 import :themes;
 import :names;
 import :forms;
+import mux.levels;
 
 export namespace mux::ui {
 
@@ -182,17 +183,46 @@ struct named_room {
   std::string name;
 };
 
-// A chat's own choices, bound to them in the model: receipts, previews,
-// where previews come from, typing sent -- Default as the level above.
-inline auto chat_settings_view(const palette& colours, const conversation_id& chat) {
+// A plugin's row bound to its choices where it is put (mux.levels): every
+// chat's, an account's, a chat's.
+template <class T, class Node>
+auto choices_scoped(level_place::every, Node node) {
+  return skiff::compose::scoped<every_choice<T>>(skiff::compose::handlers(), std::move(node));
+}
+template <class T, class Node>
+auto choices_scoped(const level_place::account& at, Node node) {
+  return skiff::compose::scoped<account_choice<T>>(skiff::compose::handlers(), std::move(node), at.address);
+}
+template <class T, class Node>
+auto choices_scoped(const level_place::chat& at, Node node) {
+  return skiff::compose::scoped<chat_choice<T>>(skiff::compose::handlers(), std::move(node), at.id);
+}
+// The rows plugins put among a level's choices for chats
+// (contract::choice_rows), in their order.
+template <class List>
+struct choice_row_list;
+template <class... Features>
+struct choice_row_list<plugin_list<Features...>> {
+  template <class Place>
+  static auto made(const auto& colours, const Place& place) {
+    return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                  extend(contract::choice_rows{}, type_tag<Features>{}, colours, place)...);
+  }
+};
+using choice_row_plugins = choice_row_list<composition::providers<contract::choice_rows, enabled_plugins>>;
+
+// A chat's own choices, bound to them in the model: previews, where
+// previews come from, typing sent -- Default as the level above; and the
+// plugins' rows, bound to theirs.
+inline auto chat_settings_view(const auto& colours, const conversation_id& chat) {
   using choices = config::chat_choices;
   const choice_level_t level = choice_level::chat{};
-  return SKIFF_NAMED(chat_settings_view, skiff::compose::scoped<choices>(
+  return SKIFF_NAMED(chat_settings_view, skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+    skiff::compose::scoped<choices>(
       skiff::compose::handlers(),
       skiff::compose::column(
           skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           event_kinds_field<choices>(colours, level, proto::room_event_kinds_of(state_before(chat.account.speaks))),
-          skiff::compose::bound<skiff::model::Field<&choices::receipts>>(show_hide_field<receipts_setting, std::optional<bool>, skiff::model::Field<&choices::receipts>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::previews>>(
               show_hide_field<link_previews_setting, std::optional<bool>, skiff::model::Field<&choices::previews>>(colours, level)),
           skiff::compose::visible(proto::offers(state_before(chat.account.speaks), proto::feature::server_previews{}),
@@ -200,7 +230,8 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
                   show_hide_field<previews_direct_setting, std::optional<bool>, skiff::model::Field<&choices::previews_direct>>(colours, level))),
           skiff::compose::bound<skiff::model::Field<&choices::typing>>(show_hide_field<typing_setting, std::optional<bool>, skiff::model::Field<&choices::typing>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&choices::jump_search>>(colours, level))),
-      chat));
+      chat),
+    choice_row_plugins::made(colours, level_place::chat{chat})));
 }
 
 // A chat's notifications on or off: off is muted -- the chat list's mute,

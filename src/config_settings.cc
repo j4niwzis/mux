@@ -100,7 +100,6 @@ struct account_shared {
   std::optional<bool> send_typing;  // others' typing is always shown
   std::optional<bool> room_events;
   std::optional<room_event_kinds> room_event_kinds;
-  std::optional<bool> show_receipts;
   std::optional<bool> link_previews;
   std::optional<bool> previews_direct;  // link previews fetched from the site itself
   std::optional<std::int64_t> jump_search;

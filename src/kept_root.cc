@@ -11,6 +11,7 @@ import mux.config;
 import mux.logic.room_events;
 import mux.composition;
 import mux.plugins.types;
+import mux.levels;
 
 export namespace mux {
 
@@ -30,9 +31,19 @@ struct recently_used {
 template <class Feature>
 using plugin_settings_t = typename decltype(settings_type(contract::settings_kept{}, type_tag<Feature>{}))::type;
 using settings_plugins = composition::providers<contract::settings_kept, enabled_plugins>;
+// Each held as a tracked part; a plugin's level choices (mux.levels) as
+// they are -- their levels are tracked parts of their own.
+template <class Settings>
+struct held_setting {
+  using type = skiff::model::Tracked<Settings>;
+};
+template <class T>
+struct held_setting<level_choices<T>> {
+  using type = level_choices<T>;
+};
 template <class... Features>
 consteval auto plugin_settings_of(plugin_list<Features...>) {
-  return type_tag<composition::aggregate_list<skiff::model::Tracked<plugin_settings_t<Features>>...>>{};
+  return type_tag<composition::aggregate_list<typename held_setting<plugin_settings_t<Features>>::type...>>{};
 }
 using plugin_settings_root = typename decltype(plugin_settings_of(settings_plugins{}))::type;
 // A type that is one of the plugins' own settings.
@@ -165,10 +176,6 @@ struct chat_settings {
                                                           this->history().send_typing.value_or(true));
   }
   // Whether a chat shows who has read up to where.
-  [[nodiscard]] bool receipts_shown(const conversation_id& chat) const {
-    return this->in_effect<&config::chat_choices::receipts>(chat, [](const config::account_t& a) { return config::show_receipts_of(a); },
-                                                            this->history().show_receipts);
-  }
   // Whether a chat shows what is done in it.
   [[nodiscard]] bool room_events_shown(const conversation_id& chat) const {
     return this->in_effect<&config::chat_choices::room_events>(chat, [](const config::account_t& a) { return config::room_events_of(a); },

@@ -115,7 +115,6 @@ struct room_settings_facts {
   std::optional<bool> previews;
   std::optional<bool> previews_direct;  // where its previews come from: its own choice
   // Whether it shows who has read up to where, as chosen for it.
-  std::optional<bool> receipts;
   // How far a jump's search pages back in it, as chosen for it.
   std::optional<std::int64_t> jump_search;
   std::optional<config::room_event_kinds> event_kinds;

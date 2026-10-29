@@ -18,7 +18,6 @@ struct room_events_choice {
   std::string conversation;  // the chat's id in it
   std::optional<bool> show;  // all of them
   std::optional<room_event_kinds> kinds;  // each kind
-  std::optional<bool> receipts;  // who has read up to where, as faces
   std::optional<bool> previews;  // a card for a message's first link
   std::optional<bool> previews_direct;  // fetched from the site itself, not the server
   std::optional<bool> typing;    // others told one is typing
@@ -136,7 +135,6 @@ struct chat_choices {
   bool muted = false;
   std::optional<bool> room_events;
   std::optional<room_event_kinds> room_event_kinds;
-  std::optional<bool> receipts;
   std::optional<bool> previews;
   std::optional<bool> previews_direct;
   std::optional<bool> typing;
@@ -185,7 +183,6 @@ struct history_settings {
   bool show_room_events = true;
   // Who has read up to where, as Element shows it: small faces under the
   // message each person read up to. Off unless chosen.
-  bool show_receipts = false;
   // A card under a message for its first link, fetched through the
   // account's server. On unless turned off.
   bool link_previews = true;

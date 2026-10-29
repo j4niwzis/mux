@@ -25,6 +25,7 @@ import mux.config;
 import mux.composition;
 import mux.ui.base;
 import mux.plugin.storage.types;
+import mux.levels;
 
 export namespace mux::plugins::storage {
 
@@ -88,7 +89,7 @@ inline auto seal_settings_view(const palette& colours) {
       skiff::compose::shown_if<field>([](bool on) { return on; },
           settings_link(colours, "Change the passphrase", icon::pencil{}, request::change_passphrase{}))));
 }
-inline auto storage_settings_view(const palette& colours) {
+inline auto storage_settings_view(const auto& colours) {
     namespace limit = config::limit;
     using skiff::compose::bound;
     auto clear = settings_link(colours, "Clear stored messages and pictures", icon::close{}, request::clear_stored{});
@@ -123,9 +124,6 @@ inline auto storage_settings_view(const palette& colours) {
         limit_stepper<limit::deleted_on_disk>(colours, "On disk", "MB"),
         spaced_title(colours, "ROOM EVENTS"),
         event_kinds_field<config::history_settings>(colours, choice_level::everywhere{}),
-        bound<skiff::model::Field<&config::history_settings::show_receipts>>(
-            show_hide_field<receipts_setting, bool, skiff::model::Field<&config::history_settings::show_receipts>>(
-                colours, choice_level::everywhere{})),
         bound<skiff::model::Field<&config::history_settings::link_previews>>(
             show_hide_field<link_previews_setting, bool, skiff::model::Field<&config::history_settings::link_previews>>(
                 colours, choice_level::everywhere{})),
@@ -138,13 +136,14 @@ inline auto storage_settings_view(const palette& colours) {
         bound<skiff::model::Field<&config::history_settings::send_typing>>(
             show_hide_field<typing_setting, std::optional<bool>, skiff::model::Field<&config::history_settings::send_typing>>(
                 colours, choice_level::everywhere{})),
+        choice_row_plugins::made(colours, level_place::every{}),
         spaced_note(colours, "Deleted messages are kept on disk, apart from "
                              "the rest and up to their own size, the "
                              "oldest going first past it. Shown, one stays "
                              "where it was, with all it said and its "
                              "time, marked removed.")));
   }
-inline auto storage_view(const palette& colours) {
+inline auto storage_view(const auto& colours) {
   return SKIFF_NAMED(storage_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Storage", {}, {}, true, true),
@@ -157,6 +156,6 @@ inline auto extend(contract::settings_links, type_tag<feature>, const palette& c
   return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                                 settings_link(colours, "Storage", icon::clip{}, open_storage{}));
 }
-inline auto extend(contract::settings_pages, const ui_needs& n, const storage_page&) { return storage_view(*n.colours); }
+inline auto extend(contract::settings_pages, const auto& n, const storage_page&) { return storage_view(*n.colours); }
 
 }  // namespace mux::plugins::storage

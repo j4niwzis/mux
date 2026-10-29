@@ -145,7 +145,6 @@ class part {
                               .typing = k.own_of<&app::chat_choices::typing>(chat->id),
                               .previews = k.own_of<&app::chat_choices::previews>(chat->id),
                               .previews_direct = k.own_of<&app::chat_choices::previews_direct>(chat->id),
-                              .receipts = k.own_of<&app::chat_choices::receipts>(chat->id),
                               .jump_search = k.own_of<&app::chat_choices::jump_search>(chat->id),
                               .event_kinds = k.own_of<&app::chat_choices::room_event_kinds>(chat->id),
                               .space = chat->space,

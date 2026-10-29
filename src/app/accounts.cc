@@ -268,6 +268,8 @@ class accounts_part {
                      mux::ui::show<mux::ui::account_form_facts>(*s_->showing, std::nullopt);
                    },
                    [&](const mux::ui::panel_detail::account& one) {
+                     // The plugins' choices for its chats there for its rows to bind to.
+                     k_->ensure_account_levels(one.address);
                      const auto* found = k_->settings_of(one.address);
                      if (found == nullptr)
                        return;

@@ -187,12 +187,6 @@ struct decrypt {
 [[nodiscard]] inline std::optional<bool>& previews_direct_in(account_t& one) {
   return one.shared.previews_direct;
 }
-[[nodiscard]] inline const std::optional<bool>& show_receipts_of(const account_t& one) {
-  return one.shared.show_receipts;
-}
-[[nodiscard]] inline std::optional<bool>& show_receipts_in(account_t& one) {
-  return one.shared.show_receipts;
-}
 [[nodiscard]] inline const std::optional<bool>& room_events_of(const account_t& one) {
   return one.shared.room_events;
 }

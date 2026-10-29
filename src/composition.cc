@@ -75,6 +75,19 @@ struct proxy_profiles {
 struct chat_looks {
   static constexpr std::string_view name = "a chat's looks";
 };
+// What the timeline does for a chat, as a plugin's choices say (mux.app.jumps):
+// flags_for(c, f, its own settings, the space each chat is in, the chat,
+// chat_flags&) -- it sets the flags that are its own.
+struct chat_flags {
+  static constexpr std::string_view name = "a chat's flags";
+};
+// Rows of a plugin's among a level's choices for chats -- every chat's
+// (Storage), an account's (its Chats page), a chat's (its General tab)
+// (mux.ui:pages): extend(c, f, colours, level_place::every / account /
+// chat) -> its node, bound to its level_choices where it is (choices_scoped).
+struct choice_rows {
+  static constexpr std::string_view name = "a level's choice rows";
+};
 // Chats the chat list opens as a list of chats -- a forum's topics -- in
 // place of the chat, their rooms listed in them, not beside them
 // (mux.app.chat_list): opens_as_scope(c, f, services, conversation) ->

@@ -1414,9 +1414,9 @@ TEST(RoomInvites, PickerRequestsKeepTheRoomAccountForBothProtocols) {
 
 TEST(Controls, ScalarSettingsIgnoreOtherModelsAndChangeOnlyTheirNamedField) {
   using choices = mux::config::chat_choices;
-  using field = skiff::model::Field<&choices::receipts>;
+  using field = skiff::model::Field<&choices::previews>;
   mux::ui::palette colours;
-  auto view = mux::ui::show_hide_field<mux::ui::receipts_setting, std::optional<bool>, field>(
+  auto view = mux::ui::show_hide_field<mux::ui::link_previews_setting, std::optional<bool>, field>(
       colours, mux::choice_level::chat{});
   // The window model contains many bools and optional bools. This control
   // belongs to the settings model, even when the window binding walks it.
@@ -1424,7 +1424,7 @@ TEST(Controls, ScalarSettingsIgnoreOtherModelsAndChangeOnlyTheirNamedField) {
   skiff::bind::Binding<decltype(shown)> window_binding;
   window_binding.refresh(view, shown);
   choices initial;
-  initial.receipts = false;
+  initial.previews = false;
   initial.typing = true;
   skiff::model::Model<choices, skiff::bind::NoReactions> model(initial);
   skiff::bind::Binding<decltype(model)> binding;
@@ -1432,7 +1432,7 @@ TEST(Controls, ScalarSettingsIgnoreOtherModelsAndChangeOnlyTheirNamedField) {
   EXPECT_TRUE(std::get<3>(view.fParts).fState.fSelected);
   ASSERT_TRUE(skiff::bind::press(view, model, scene::Path{2}));
   binding.refresh(view, model);
-  EXPECT_EQ(model.root().receipts, true);
+  EXPECT_EQ(model.root().previews, true);
   EXPECT_EQ(model.root().typing, true);
   EXPECT_TRUE(std::get<2>(view.fParts).fState.fSelected);
   auto limit = mux::ui::jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&choices::jump_search>>(
@@ -1441,7 +1441,7 @@ TEST(Controls, ScalarSettingsIgnoreOtherModelsAndChangeOnlyTheirNamedField) {
   binding.refresh(limit, model);
   ASSERT_TRUE(skiff::bind::press(limit, model, scene::Path{2, 0}));
   EXPECT_EQ(model.root().jump_search, 500);
-  EXPECT_EQ(model.root().receipts, true);
+  EXPECT_EQ(model.root().previews, true);
 }
 
 }

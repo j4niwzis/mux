@@ -568,6 +568,34 @@ class account {
     sink_(std::move(change));
   }
   [[nodiscard]] std::string party() const { return how_.device_id.value_or("mux"); }
+  // Work of a plugin's on the account's own fiber, where what follows may be
+  // read and done: requests waited for in turn, as the account's own are.
+  template <class Work>
+  void on_fiber(Work work) {
+    this->spawn_guarded(std::move(work));
+  }
+  // The account as synced -- its account data, the rooms joined and their
+  // state -- read on its fiber: what a plugin's requests are made from.
+  [[nodiscard]] const loom::client::state& synced() const { return state_; }
+  // A request made of the server on the account's fiber, its answer as
+  // the account's own are read.
+  template <class Endpoint>
+  auto request(const Endpoint& endpoint) {
+    return this->perform(*api_, endpoint);
+  }
+  [[nodiscard]] bool connected() const { return static_cast<bool>(api_); }
+  // A file put on the server: its mxc:// URL, or why not.
+  auto upload(const std::string& bytes, std::string_view name, std::string_view mime) {
+    return this->upload_content(bytes, name, mime);
+  }
+  // Account data a plugin set, kept as the server now has it, and every
+  // chat made again from it -- its emoji, where a pack was taken on.
+  void account_data_set(std::string type, loom::ev::account_data_event event) {
+    snapshot_dirty_ = true;
+    state_.account_data.insert_or_assign(std::move(type), std::move(event));
+    for (const auto& room : state_.joined)
+      conversation(conversation_id{id_, room.first}, room.second);
+  }
 
  private:
   void say(connection_t state);

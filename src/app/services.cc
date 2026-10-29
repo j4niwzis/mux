@@ -91,6 +91,9 @@ struct services {
   // the model has it.
   std::optional<mux::conversation_id> chat_due;
   std::optional<mux::logic::link_t> link_due;
+  // Whole pictures a part wants fetched -- a plugin's (the viewer's) -- as
+  // the pictures part fetches a message's: taken by it at the next frame.
+  std::vector<std::pair<mux::account_id, std::string>> whole_wanted;
   // The chat's list as the jumps part has it -- where a jump goes, and the
   // messages the reader sees, by the rows at the view's top and bottom --
   // read by the other parts; and what they ask of it: a message brought

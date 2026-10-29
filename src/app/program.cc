@@ -539,6 +539,9 @@ struct app : kept_settings {
   // nothing, where that plugin is not built. Where it is, its part is
   // offered the request first (route), and takes it.
   void apply(const request::typing&) {}
+  void apply(const request::open_picture&) {}
+  void apply(const request::open_video&) {}
+  void apply(const request::open_avatar&) {}
   void apply(const request::verify_person&) {}
   void apply(const request::accept_identity&) {}
   void apply(const request::suggestion_step&) {}

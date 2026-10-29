@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:viewer -- The picture viewer.
+// mux.plugin.viewer.ui -- The media viewer: a picture or a video seen whole,
+// over the window (contract::window_layers).
 module;
 #include "skiff/named.h"
-export module mux.ui:viewer;
+export module mux.plugin.viewer.ui;
 
 import std;
 import skia;
@@ -19,8 +20,13 @@ import mux.platform.video;
 import mux.core;
 import mux.config;
 import mux.ui.base;
+import mux.composition;
+import skiff.bind;
+import mux.plugin.viewer.types;
 
-export namespace mux::ui {
+export namespace mux::plugins::viewer {
+
+using namespace ::mux::ui;
 
 // A picture seen whole, as tdesktop's media viewer -- but over this window,
 // not in one of its own: dark behind; at the top, who sent it and when, and
@@ -28,17 +34,6 @@ export namespace mux::ui {
 // rest, zoomed by the wheel or the buttons, dragged about when larger than
 // the room. A press on the dark around it closes it; the whole picture
 // replaces its thumbnail when it has come.
-// A picture or a video open: its source (a video's thumbnail), who sent
-// it, its name, when; and a video's own source, played once it is there.
-struct viewer_facts {
-  std::string source;
-  std::string sender;
-  std::string name;
-  std::string when;
-  std::string video;
-  // The video's file, once it is there: played.
-  std::optional<std::filesystem::path> file;
-};
 // The viewer's menu let go.
 struct viewer_menu_closed {};
 // The viewer's menu, where a right press on the picture opened it: the
@@ -92,23 +87,6 @@ struct viewer_events {
     return skiff::model::over<viewer_view>(skiff::model::setTo(std::move(next)));
   }
 };
-// What is coming, as the program has it: the whole picture, or a video's
-// file -- how far, and whether its download was stopped.
-struct viewer_load {
-  bool coming = false;
-  std::optional<float> progress;
-  bool stopped = false;
-  friend bool operator==(const viewer_load&, const viewer_load&) = default;
-};
-// A video playing in the viewer, as the program plays it: its frame (a
-// number, newer as one comes), where it is, how long.
-struct video_shown {
-  std::string source;
-  bool playing = false;
-  double at = 0.0, length = 0.0;
-  std::uint64_t frame = 0;
-  friend bool operator==(const video_shown&, const video_shown&) = default;
-};
 // The frames of the video playing, by its source: the program's.
 [[nodiscard]] inline std::map<std::string, skia::Sp<skia::SkImage>, std::less<>>& video_frames() {
   static std::map<std::string, skia::Sp<skia::SkImage>, std::less<>> frames;
@@ -145,8 +123,8 @@ struct viewer_picture {
 }
 // Seeking: where along its bar a video was pressed.
 struct seek_to {
-  using Answer = request::video_seek;
-  request::video_seek operator()(float share) const { return {share}; }
+  using Answer = video_seek;
+  video_seek operator()(float share) const { return {share}; }
 };
 // A picture or a video seen whole, as tdesktop's media viewer -- over this
 // window, dark behind; at the top who sent it and when, and zoom out and
@@ -160,14 +138,21 @@ inline auto picture_viewer(const ui_needs& n, const viewer_facts& facts) {
   const palette& colours = *n.colours;
   const skia::SkColor white = skia::colorSetARGB(255, 255, 255, 255);
   const scene::Spec middle{.alignSelf = scene::align::kMiddle};
-  auto loader = c::shown_for<viewer_load>([](const viewer_load& now) { return now.coming; },
-      c::applied<viewer_load>([](const viewer_load& now) { return now; },
-          [](widgets::RadialLoader<sends<request::press_loader>>& turning, const viewer_load& now) {
-            turning.setProgress(now.progress);
-            turning.setStopped(now.stopped);
-          },
-          c::styled({.place = scene::anchor::kCentre},
-                    widgets::RadialLoader<sends<request::press_loader>>(44.0f, {{facts.video.empty() ? facts.source : facts.video}}))));
+  // Its loader, while the whole picture or the video's file comes: pressed,
+  // its download stopped or asked again -- a picture's by the client's own
+  // request, a video's by this plugin's.
+  const auto loader_of = [&]<class Pressed>(std::type_identity<Pressed>, bool here, Pressed pressed) {
+    return c::visible(here, c::shown_for<viewer_progress>([](const viewer_progress& now) { return now.load.coming; },
+        c::applied<viewer_progress>([](const viewer_progress& now) { return now.load; },
+            [](widgets::RadialLoader<sends<Pressed>>& turning, const viewer_load& now) {
+              turning.setProgress(now.progress);
+              turning.setStopped(now.stopped);
+            },
+            c::styled({.place = scene::anchor::kCentre}, widgets::RadialLoader<sends<Pressed>>(44.0f, {std::move(pressed)})))));
+  };
+  auto loader = c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
+      loader_of(std::type_identity<request::press_loader>{}, facts.video.empty(), request::press_loader{facts.source}),
+      loader_of(std::type_identity<press_video_loader>{}, !facts.video.empty(), press_video_loader{facts.video}));
   auto menu = c::bound<skiff::model::Field<&viewer_view::menu>>(c::mount<decltype(viewer_menu(colours, facts.source, 0.0f, 0.0f)), std::pair<float, float>>(
       [at = &colours, source = facts.source](const std::pair<float, float>& where) {
         return std::tuple{viewer_menu(*at, source, where.first, where.second)};
@@ -175,7 +160,7 @@ inline auto picture_viewer(const ui_needs& n, const viewer_facts& facts) {
       {.place = scene::anchor::kTopLeft, .fill = true}));
   return SKIFF_NAMED(picture_viewer, c::local<viewer_view>(viewer_events{},
       c::onKeys([](const scene::key::down& press) {
-                  return press.key == scene::keys::kSpace ? std::optional(request::toggle_video{}) : std::nullopt;
+                  return press.key == scene::keys::kSpace ? std::optional(toggle_video{}) : std::nullopt;
                 },
           c::column(c::vbox(0.0f, {.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)}),
               c::row(c::hbox(8.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}}),
@@ -186,22 +171,29 @@ inline auto picture_viewer(const ui_needs& n, const viewer_facts& facts) {
                      c::styled(middle, icon_button(colours, icon::minus{}, sends<skiff::compose::ZoomBy<viewer_tag>>{{1.0f / 1.25f}}, white)),
                      c::styled(middle, icon_button(colours, icon::plus{}, sends<skiff::compose::ZoomBy<viewer_tag>>{{1.25f}}, white)),
                      c::styled(middle, icon_button(colours, icon::download{}, sends<request::save_picture>{{facts.source}}, white)),
-                     c::styled(middle, icon_button(colours, icon::close{}, sends<request::close_picture>{}, white))),
+                     c::styled(middle, icon_button(colours, icon::close{}, sends<::mux::ui::request::close_shown<viewer_facts>>{}, white))),
               c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
                   c::zoomable_for<viewer_view, viewer_tag>([](const viewer_view& now) { return skiff::compose::ZoomView{now.zoom, now.x, now.y}; },
-                      48.0f, request::close_picture{}, request::toggle_video{},
+                      48.0f, ::mux::ui::request::close_shown<viewer_facts>{}, toggle_video{},
                       nodes::Image<viewer_picture>({facts.source, facts.video}),
                       {.fill = true, .masking = true}),
                   std::move(loader), std::move(menu)),
-              c::shown_for<video_shown>([](const video_shown& now) { return now.length > 0.0; },
+              c::shown_for<viewer_progress>([](const viewer_progress& now) { return now.video.length > 0.0; },
                   c::row(c::hbox(12.0f, {.fillX = true, .height = 44.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
-                         c::applied<video_shown>([](const video_shown& now) { return now.length > 0.0 ? static_cast<float>(now.at / now.length) : 0.0f; },
+                         c::applied<viewer_progress>([](const viewer_progress& now) { return now.video.length > 0.0 ? static_cast<float>(now.video.at / now.video.length) : 0.0f; },
                              [](widgets::SliderBar<seek_to>& bar, float share) { bar.setFraction(share); },
                              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, widgets::SliderBar<seek_to>(colours.widgets, seek_to{}))),
-                         c::text_for<video_shown>([](const video_shown& now) { return clock_of_seconds(now.at) + " / " + clock_of_seconds(now.length); },
+                         c::text_for<viewer_progress>([](const viewer_progress& now) { return clock_of_seconds(now.video.at) + " / " + clock_of_seconds(now.video.length); },
                              c::styled(middle, nodes::Text("", 13.0f, white)))))))));
 }
 using picture_viewer_t = decltype(picture_viewer(std::declval<const ui_needs&>(), std::declval<const viewer_facts&>()));
 
-}  // namespace mux::ui
+struct make_viewer {
+  auto operator()(const ui_needs& n, const viewer_facts& facts) const { return picture_viewer(n, facts); }
+};
+// Its layer, over the window: there while a picture is open in it.
+inline auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
+  return layer_made_by<viewer_facts, make_viewer>(needs);
+}
 
+}  // namespace mux::plugins::viewer

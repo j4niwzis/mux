@@ -372,7 +372,8 @@ struct open_picture {
   std::string source;
   std::string sender, name, when;
 };
-// The viewer's loader pressed: its download stopped, or started again.
+// A picture's loader pressed -- the viewer's, for one: its download
+// stopped, or started again.
 struct press_loader {
   std::string source;
 };
@@ -392,7 +393,6 @@ struct save_picture {
 struct open_avatar {
   std::string key;
 };
-struct close_picture {};
 struct open_file {
   std::string source;
   std::string name;
@@ -916,10 +916,6 @@ struct suggestion_close {};
 struct thread_send {};
 struct thread_answer_cancel {};
 // The video in the viewer: paused or played on; and gone to a share of it.
-struct toggle_video {};
-struct video_seek {
-  float share = 0.0f;
-};
 // One of a person's card's buttons of its protocol's own: by where it is
 // among them.
 struct card_action {

@@ -172,15 +172,8 @@ class pictures_part {
                             // when the server could not produce a thumbnail.
                             shown(mux::ui::thumbnails(), picture.source, 860);
                           },
-                          // A video: into its file, and played where the viewer waits for it.
-                          [&](const media_use::to_watch&) {
-                            videos_fetching_.erase(picture.source);
-                            const auto where = video_file(picture.source);
-                            std::error_code failed;
-                            std::filesystem::create_directories(where.parent_path(), failed);
-                            std::ofstream(where, std::ios::binary) << picture.bytes;
-                            this->play_video_file(picture.source, where);
-                          },
+                          // A video to watch: the viewer's (a plugin's part takes it).
+                          [](const media_use::to_watch&) {},
                           // Saved where the dialog said, where it said; else into Downloads.
                           [&](const media_use::to_save& one) {
                             if (save_path_)
@@ -435,88 +428,16 @@ class pictures_part {
     fetches_.clear();
   }
 
-  // The viewer: over the window, with the thumbnail at once and the whole
-  // picture when it comes -- from the disk, or from the account.
-  void apply(const request::open_picture& one) {
-    mux::ui::show(*s_->showing, std::optional(mux::ui::viewer_facts{one.source, one.sender, one.name, one.when, {}, std::nullopt}));
-    const auto& chosen = s_->chosen();
-    if (chosen)
-      this->want_whole(chosen->account, one.source);
-  }
-  void apply(const request::close_picture&) { mux::ui::show<mux::ui::viewer_facts>(*s_->showing, std::nullopt); }
-  // A video: the viewer on its thumbnail at once; the video from its file
-  // where it was fetched before, else fetched, the loader showing how far.
-  void apply(const request::open_video& one) {
-    mux::ui::show(*s_->showing, std::optional(mux::ui::viewer_facts{one.source, one.sender, one.name, one.when, one.video, std::nullopt}));
-    videos_.insert(one.video);
-    mux::ui::stopped_downloads().erase(one.video);
-    this->watch(one.video);
-  }
-  void watch(const std::string& video) {
-    if (const auto where = video_file(video); std::filesystem::exists(where)) {
-      this->play_video_file(video, where);
-      return;
-    }
-    if (const auto& chosen = s_->chosen(); chosen && videos_fetching_.insert(video).second)
-      s_->net->fetch_media(chosen->account, video, media_use::to_watch{}, 0);
-  }
-  // A video's file come: played, where the viewer is still up for it.
-  void play_video_file(const std::string& video, const std::filesystem::path& file) {
-    auto now = s_->showing->root().viewer.fValue;
-    if (!now || now->video != video)
-      return;
-    now->file = file;
-    mux::ui::show(*s_->showing, std::move(now));
-  }
-  // Each frame, while the viewer is up: what it has coming -- the whole
-  // picture, or the video's file, how far -- and the video played once its
-  // file is here, its frame put where the viewer draws it from.
-  void viewer_tick() {
-    const auto& facts = s_->showing->root().viewer.fValue;
-    if (!facts) {
-      if (player_) {
-        mux::ui::video_frames().erase(played_);
-        player_.reset();
-        played_.clear();
-      }
-      this->put(mux::ui::viewer_load{});
-      this->put(mux::ui::video_shown{});
-      return;
-    }
-    if (!facts->video.empty() && facts->file && played_ != facts->video) {
-      player_ = mux::platform::video::player::open(*facts->file);
-      played_ = facts->video;
-    }
-    if (player_) {
-      const double now = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
-      if (player_->advance(now) && player_->picture()) {
-        mux::ui::video_frames().insert_or_assign(played_, player_->picture());
-        mux::ui::viewer_waiters().wake();
-        ++frame_;
-      }
-      this->put(mux::ui::video_shown{played_, !player_->paused(), player_->position(), player_->length(), frame_});
-    }
-    const std::string& loading = facts->video.empty() ? facts->source : facts->video;
-    const bool coming = facts->video.empty() ? !mux::ui::whole_pictures().has(facts->source) : !player_;
-    this->put(mux::ui::viewer_load{coming, coming ? mux::ui::progress_of(loading) : std::nullopt, mux::ui::stopped_downloads().contains(loading)});
-  }
-  // The video in the viewer paused or played on; gone to a share of it.
-  void apply(const request::toggle_video&) {
-    if (player_)
-      player_->toggle();
-  }
-  void apply(const request::video_seek& one) {
-    if (player_)
-      player_->seek(one.share * player_->length());
-  }
   template <class Part>
   void put(Part now) {
     if (*s_->showing->look<Part>() != now)
       mux::ui::show(*s_->showing, std::move(now));
   }
-  // Where a video is kept once fetched: a file of its own, named by it.
-  [[nodiscard]] static std::filesystem::path video_file(std::string_view source) {
-    return mux::config::cache_path("videos") / mux::config::file_name_of(source);
+  // Each frame: the whole pictures other parts asked for (services::
+  // whole_wanted) -- the viewer's, for one -- fetched as a message's are.
+  void asked_tick() {
+    for (auto& [of, source] : std::exchange(s_->whole_wanted, {}))
+      this->want_whole(of, source);
   }
   // The viewer's cross: the whole picture's download stopped, the thumbnail
   // left; pressed again (an arrow then), asked for again.
@@ -524,18 +445,6 @@ class pictures_part {
     const auto& chosen = s_->chosen();
     if (!chosen)
       return;
-    // A video's: its download stopped, or asked again.
-    if (videos_.contains(one.source)) {
-      if (videos_fetching_.erase(one.source)) {
-        s_->net->cancel_media(chosen->account, one.source);
-        mux::ui::download_progress().erase(one.source);
-        mux::ui::stopped_downloads().insert(one.source);
-      } else {
-        mux::ui::stopped_downloads().erase(one.source);
-        this->watch(one.source);
-      }
-      return;
-    }
     if (fetches_.forget(one.source)) {
       s_->net->cancel_media(chosen->account, one.source);
       mux::ui::download_progress().erase(one.source);
@@ -653,43 +562,6 @@ class pictures_part {
     save_path_ = std::move(path);
     if (const auto& chosen = s_->chosen())
       s_->net->fetch_media(chosen->account, source, media_use::to_save{name}, 0);
-  }
-  // An avatar pressed: its picture in the viewer. A chat's by the chat's id;
-  // a person's by theirs, as the chat being read knows them -- a member, or
-  // the other side of a direct chat, whose avatar is the chat's.
-  void apply(const request::open_avatar& one) {
-    const auto& chosen = s_->chosen();
-    const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
-    if (!chat)
-      return;
-    std::optional<std::string> source;
-    std::string shown = one.key;
-    if (one.key == chat->id.id) {
-      source = chat->avatar;
-      shown = mux::ui::display_name(*chat);
-    } else if (const auto found = std::ranges::find(chat->members, one.key, &member::id); found != chat->members.end()) {
-      source = found->avatar;
-      if (!found->name.empty())
-        shown = found->name;
-    }
-    if ((!source || source->empty()) && !mux::ui::is_group(*chat) && one.key == mux::ui::contact_of(s_->ui, *chat)) {
-      source = chat->avatar;
-      shown = mux::ui::display_name(*chat);
-    }
-    // Someone not in the chat -- a forwarded message's sender, whose card was
-    // opened from the forward: their profile, as the account fetched it for
-    // the card, which drew its avatar from it. Looked for only among the
-    // members, the press on that avatar did nothing.
-    if (!source || source->empty())
-      if (const auto* kept = s_->model->accounts().find(chat->id.account))
-        if (const auto found = kept->profiles.find(one.key); found != kept->profiles.end() && found->second.avatar) {
-          source = found->second.avatar;
-          if (found->second.name && !found->second.name->empty())
-            shown = *found->second.name;
-        }
-    if (!source || source->empty())
-      return;
-    this->apply(request::open_picture{*source, shown, "avatar", ""});
   }
 
  private:
@@ -960,12 +832,6 @@ class pictures_part {
   }
   // The links whose previews were asked for, not to be asked twice.
   std::set<std::string> links_asked_;
-  // Videos opened, and those being fetched.
-  std::set<std::string> videos_, videos_fetching_;
-  // The video playing in the viewer, by its source; its frames counted.
-  std::unique_ptr<mux::platform::video::player> player_;
-  std::string played_;
-  std::uint64_t frame_ = 0;
 
 public:
   // Rooms asked of for a message's pill: what their server says goes to the

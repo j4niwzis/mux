@@ -522,7 +522,7 @@ void app::before_frame() {
   chat_view.show();
   chat_list.show();
   manage.show();
-  pictures.viewer_tick();
+  pictures.asked_tick();
   // Whether Esc lets go of something up: a dialog, a layer, the drawer.
   if (const mux::ui::overlay_shown up{mux::ui::escape_in(showing, mux::ui::escape_order{}).has_value() || showing.look<mux::ui::drawer_shown>()->out};
       *showing.look<mux::ui::overlay_shown>() != up)

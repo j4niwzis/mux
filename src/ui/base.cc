@@ -804,6 +804,29 @@ struct mux_paint : scene::Painting {
     return &aside->second;
   return nullptr;
 }
+// A layer holding Node while its part of what is shown holds its facts --
+// made from them, with what the program handed the window -- and nothing
+// where they are gone: a message's menu, a plugin's (the viewer).
+template <class Needs> struct layer_arguments {
+  Needs needs;
+  template <class Facts> auto operator()(const Facts &facts) const {
+    return std::tie(needs, facts);
+  }
+};
+// A layer made by a function of what it shows: its node made anew as that
+// changes (Make: the function, as a type).
+template <class Needs, class Make> struct layer_made {
+  Needs needs;
+  template <class Facts> auto operator()(const Facts& facts) const { return std::tuple{Make{}(needs, facts)}; }
+};
+template <class Facts, class Needs, class Make>
+using made_layer = skiff::compose::Mounted<std::invoke_result_t<Make, const Needs&, const Facts&>, Facts, layer_made<Needs, Make>>;
+template <class Facts, class Make, class Needs>
+auto layer_made_by(const Needs& needs) {
+  return skiff::bind::Bound<std::optional<Facts>, made_layer<Facts, Needs, Make>>(std::in_place, layer_made<Needs, Make>{needs},
+                                                                              scene::Spec{.place = scene::anchor::kTopLeft, .fill = true}, true);
+}
+
 }  // namespace mux::ui
 
 // mux's way of painting fills, for skiff to find wherever mux's tree is drawn.

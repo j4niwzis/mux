@@ -29,5 +29,4 @@ export import :settings;
 export import :about;
 export import :context_menu;
 export import :sending;
-export import :viewer;
 export import :window;

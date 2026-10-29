@@ -34,7 +34,6 @@ import :drawer;
 import :settings;
 import :context_menu;
 import :sending;
-import :viewer;
 
 export namespace mux::ui {
 
@@ -300,11 +299,7 @@ struct shown_root {
   skiff::model::Tracked<std::optional<send_facts>> sending;
   skiff::model::Tracked<std::optional<passphrase_facts>> passphrase;
   skiff::model::Tracked<std::optional<menu_facts>> menu;
-  skiff::model::Tracked<std::optional<viewer_facts>> viewer;
   skiff::model::Tracked<std::optional<text_menu_facts>> text_menu;
-  // What the viewer has coming, and the video it plays: the program's.
-  skiff::model::Tracked<viewer_load> viewer_coming;
-  skiff::model::Tracked<video_shown> video;
   skiff::model::Tracked<std::optional<emoji_facts>> emoji;
   skiff::model::Tracked<std::optional<panel_facts>> panel;
   // What the speaker plays: the voice messages' buttons and times read it.
@@ -510,28 +505,6 @@ struct panel_made {
   [[nodiscard]] Panels make(const panel_facts&) const { return Panels(std::in_place_type<accounts_panel>, accounts_view(*needs)); }
 };
 
-// A layer holding Node while its part of what is shown holds its facts --
-// made from them, with what the program handed the window -- and nothing
-// where they are gone: a message's menu.
-template <class Needs> struct layer_arguments {
-  Needs needs;
-  template <class Facts> auto operator()(const Facts &facts) const {
-    return std::tie(needs, facts);
-  }
-};
-// A layer made by a function of what it shows: its node made anew as that
-// changes (Make: the function, as a type).
-template <class Needs, class Make> struct layer_made {
-  Needs needs;
-  template <class Facts> auto operator()(const Facts& facts) const { return std::tuple{Make{}(needs, facts)}; }
-};
-template <class Facts, class Needs, class Make>
-using made_layer = skiff::compose::Mounted<std::invoke_result_t<Make, const Needs&, const Facts&>, Facts, layer_made<Needs, Make>>;
-template <class Facts, class Make, class Needs>
-auto layer_made_by(const Needs& needs) {
-  return skiff::bind::Bound<std::optional<Facts>, made_layer<Facts, Needs, Make>>(std::in_place, layer_made<Needs, Make>{needs},
-                                                                              scene::Spec{.place = scene::anchor::kTopLeft, .fill = true}, true);
-}
 struct make_menu {
   auto operator()(const ui_needs& n, const menu_facts& facts) const { return context_menu(n, facts); }
 };
@@ -540,9 +513,6 @@ struct make_emoji_popup {
 };
 struct make_text_menu_layer {
   auto operator()(const ui_needs& n, const text_menu_facts& facts) const { return text_menu_layer(n, facts); }
-};
-struct make_viewer {
-  auto operator()(const ui_needs& n, const viewer_facts& facts) const { return picture_viewer(n, facts); }
 };
 template <class Content, class Facts, class Needs>
 using shown_layer =
@@ -565,11 +535,28 @@ auto layer_for(const Needs &needs) {
 // What Esc on a dialog or a layer asks for, by its facts type, unless said
 // otherwise below: close_shown of it.
 template <class Facts> ::mux::ui::request::close_shown<Facts> closing_of(std::type_identity<Facts>) { return {}; }
-template <class... Features, class... Tools>
-consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>) {
-  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_picture, ::mux::ui::request::close_send_box, ::mux::ui::request::close_manage, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
+// The plugins' layers Esc closes: those whose facts are a std::optional
+// (a picture in the viewer), by close_shown of what is in it.
+template <class Facts>
+struct optional_inner {
+  using type = type_list<>;
+};
+template <class Facts>
+struct optional_inner<std::optional<Facts>> {
+  using type = type_list<Facts>;
+};
+template <class Features>
+struct plugin_layer_escapes;
+template <class... Features>
+struct plugin_layer_escapes<plugin_list<Features...>> {
+  using type = typename joined<type_list<>, typename optional_inner<layer_facts_t<Features>>::type...>::type;
+};
+template <class... Features, class... Tools, class... Layers>
+consteval auto window_answers_of(plugin_list<Features...>, type_list<Tools...>, type_list<Layers...>) {
+  return type_tag<std::variant<::mux::ui::request::close_emoji, ::mux::ui::request::close_menu, ::mux::ui::request::close_send_box, ::mux::ui::request::close_manage, ::mux::ui::request::close_leave_space, ::mux::ui::request::close_link, ::mux::ui::request::close_person_info, ::mux::ui::request::close_notice, ::mux::ui::request::close_settings, ::mux::ui::request::settings_home, ::mux::ui::request::settings_about, ::mux::ui::request::close_drawer, ::mux::ui::request::close_text_menu,
                                ::mux::ui::request::close_shown<dialog_facts_t<Features>>...,
-                               decltype(closing_of(std::type_identity<Tools>{}))...>>{};
+                               decltype(closing_of(std::type_identity<Tools>{}))...,
+                               ::mux::ui::request::close_shown<Layers>...>>{};
 }
 // What Esc on a dialog or a layer asks for, by its facts' type: a plugin's
 // its close_shown; the window's own each its request. A dialog of the
@@ -584,7 +571,6 @@ inline ::mux::ui::request::close_notice closing_of(std::type_identity<notice_fac
 inline ::mux::ui::request::close_settings closing_of(std::type_identity<settings_facts>) { return {}; }
 inline ::mux::ui::request::close_emoji closing_of(std::type_identity<emoji_facts>) { return {}; }
 inline ::mux::ui::request::close_menu closing_of(std::type_identity<menu_facts>) { return {}; }
-inline ::mux::ui::request::close_picture closing_of(std::type_identity<viewer_facts>) { return {}; }
 inline ::mux::ui::request::close_text_menu closing_of(std::type_identity<text_menu_facts>) { return {}; }
 
 
@@ -593,7 +579,8 @@ inline ::mux::ui::request::close_text_menu closing_of(std::type_identity<text_me
 // says; Settings a page back -- home, closed; a passphrase never -- Esc
 // goes on under it. (An emoji verification's, the encryption plugin's, as its
 // step lets it: its part answers its close_shown.)
-using escape_answer = typename decltype(window_answers_of(dialog_plugins{}, tool_facts_list{}))::type;
+using escape_answer =
+    typename decltype(window_answers_of(dialog_plugins{}, tool_facts_list{}, typename plugin_layer_escapes<layer_plugins>::type{}))::type;
 template <class Facts> [[nodiscard]] std::optional<escape_answer> escape_of(const Facts&) {
   return escape_answer{closing_of(std::type_identity<Facts>{})};
 }
@@ -615,7 +602,8 @@ struct plugin_dialog_facts<plugin_list<Features...>> {
 using escape_order = typename joined<
     type_list<settings_facts, notice_facts, person_shown>, typename plugin_dialog_facts<dialog_plugins>::type,
     type_list<link_facts, leave_space_facts, room_settings_facts>,
-    tool_facts_list, type_list<send_facts, passphrase_facts, emoji_facts, menu_facts, viewer_facts, text_menu_facts>>::type;
+    tool_facts_list, type_list<send_facts, passphrase_facts, emoji_facts, menu_facts, text_menu_facts>,
+    typename plugin_layer_escapes<layer_plugins>::type>::type;
 template <class Model, class... Facts>
 [[nodiscard]] std::optional<escape_answer> escape_in(const Model& showing, type_list<Facts...>) {
   std::optional<escape_answer> found;
@@ -736,7 +724,6 @@ inline auto window_body(const ui_needs& n) {
       c::column(c::vbox(0.0f, everywhere),
           c::tapped_off(sends<request::close_emoji>{}, layer_made_by<emoji_facts, make_emoji_popup>(n)),
           layer_made_by<menu_facts, make_menu>(n),
-          layer_made_by<viewer_facts, make_viewer>(n),
           c::tapped_off(sends<request::close_text_menu>{}, layer_made_by<text_menu_facts, make_text_menu_layer>(n)),
           plugin_layers<layer_plugins>::made(n))));
 }

@@ -20,6 +20,7 @@ import mux.app.kept;
 import mux.app.network;
 import mux.app.services;
 import mux.plugin.spaces.types;
+import mux.plugin.spaces.ui_top;
 
 export namespace mux::plugins::spaces {
 

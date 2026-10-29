@@ -87,7 +87,7 @@ class part {
   }
   [[nodiscard]] static account_id chosen_id(const config::account_t& account) {
     const std::string address(config::address_of(account));
-    return account_id{protocol_of(address), address};
+    return account_id{ui::protocol_of(address), address};
   }
   void confirm(bool match) {
     if (shown_)

@@ -27,6 +27,9 @@ import mux.plugin.notifications.types;
 export namespace mux::plugins::notifications {
 
 struct part {
+  // Made with the services: its other members (the history of what was
+  // told) are not to be made from an empty list.
+  explicit part(app::services* shared) : s_(shared) {}
   app::services* s_ = nullptr;
 
   // What arrived, as a batch: each live message notified as the settings

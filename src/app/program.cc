@@ -118,7 +118,7 @@ struct app : kept_settings {
   pictures_part pictures{shared};
   drafts_part drafts{shared};
   reading_part reading{shared};
-  outbox_part outbox{shared, drafts, this->sending()};
+  outbox_part outbox{shared, drafts, shared.sending};
   menu_part menu{&shared, &outbox, &pictures};
   settings_part settings{shared, *this, pictures};
   notices_part notices{shared};

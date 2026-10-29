@@ -24,10 +24,6 @@ struct part {
     ui::show(*s_->showing, ui::local_seal{s_->vault->on()});
     s_->settings_page(storage_page{s_->kept->plugin_settings<config::cache_limits>(), s_->kept->history(), s_->vault->on()});
   }
-  void apply(const open_files&) {
-    if (s_->settings_open())
-      s_->settings_page(files_page{s_->kept->sending()});
-  }
   // Each frame: the limits as kept, in force -- at the start, once local
   // data is opened, and as the page changes them.
   void tick() {

@@ -50,9 +50,6 @@ struct deleted_shown {
   [[nodiscard]] constexpr int key() const { return 0; }
 };
 // How much moves chosen: the window's paint told.
-struct motion_chosen {
-  [[nodiscard]] constexpr int key() const { return 0; }
-};
 // A chat's choices changed or gone, or what notifies: the file is written
 // again. UnifiedPush turned on or off: its connector with it.
 // What the reactions asked for since the program last looked: each a
@@ -62,7 +59,6 @@ struct kept_due {
   bool write = false;
   bool looks = false;
   bool restyle = false;
-  bool motion = false;
   bool deleted = false;
   bool opacity = false;
 };
@@ -74,7 +70,6 @@ struct kept_reactions {
   skiff::model::Nothing on(const write_kept&) const { return mark(&kept_due::write); }
   skiff::model::Nothing on(const looks_changed&) const { return mark(&kept_due::looks); }
   skiff::model::Nothing on(const restyle_wanted&) const { return mark(&kept_due::restyle); }
-  skiff::model::Nothing on(const motion_chosen&) const { return mark(&kept_due::motion); }
   skiff::model::Nothing on(const deleted_shown&) const { return mark(&kept_due::deleted); }
   skiff::model::Nothing on(const opacity_chosen&) const { return mark(&kept_due::opacity); }
   skiff::model::Nothing mark(bool kept_due::*what) const {
@@ -88,7 +83,6 @@ struct kept_reactions {
                               const mux::config::notification_settings&) const {
     return {};
   }
-  [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::sending_settings>, const mux::config::sending_settings&) const { return {}; }
   // A plugin's own settings changed (contract::settings_kept): the file
   // written again.
   template <plugin_kept Settings>
@@ -111,7 +105,6 @@ struct kept_reactions {
   [[nodiscard]] restyle_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::person_avatar_rounding>>, const auto&) const {
     return {};
   }
-  [[nodiscard]] motion_chosen on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::motion>>, const auto&) const { return {}; }
   [[nodiscard]] opacity_chosen on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::window_opacity>>, const auto&) const {
     return {};
   }
@@ -179,8 +172,6 @@ struct kept_settings {
     if (!(next == had))
       this->set_part(std::move(next));
   }
-  // What is done to a picture dropped before it is sent, as the model holds it.
-  [[nodiscard]] const mux::config::sending_settings& sending() const { return state.root().sending.fValue; }
   // What is kept and shown of the history, as the model holds it.
   [[nodiscard]] const mux::config::history_settings& history() const { return state.root().history.fValue; }
   // A plugin's own settings (contract::settings_kept), as the model holds
@@ -472,7 +463,6 @@ struct kept_settings {
     std::map<conversation_id, chat_choices> chats;
     const auto accounts_read = mux::config::accounts_of(saved);
     this->foreign_accounts = mux::config::foreign_of(saved);
-    looks_read.motion = mux::config::motion_of(saved.motion);
     looks_read.enter = mux::config::enter_of(saved.enter);
     looks_read.layout = mux::config::layout_of(saved.layout);
     // The account shown last, shown again once it is in the model: accounts
@@ -501,7 +491,6 @@ struct kept_settings {
     looks_read.chat_avatar_rounding = saved.chat_avatar_rounding;
     looks_read.person_avatar_rounding = saved.person_avatar_rounding;
     looks_read.interface_scale = saved.interface_scale.value_or(100);
-    const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
     const auto history_read = saved.history.value_or(mux::config::history_settings{});
     looks_read.style = saved.style.value_or(mux::config::style_settings{});
     const auto notifications_read = saved.notifications.value_or(mux::config::notification_settings{});
@@ -534,7 +523,6 @@ struct kept_settings {
                          }));
     root.chats.putAll(chats);
     root.notifications.fValue = notifications_read;
-    root.sending.fValue = sending_read;
     root.history.fValue = history_read;
     root.looks.fValue = looks_read;
     root.placements.fValue = placements_read;
@@ -571,7 +559,6 @@ struct kept_settings {
     // Copied: the file is made of a contiguous list of them.
     const auto listed = this->accounts().values() | std::ranges::to<std::vector>();
     auto out = mux::config::file_of(listed, foreign_accounts);
-    out.motion = mux::config::said_of<mux::config::motion_said_t>(this->appearance().motion);
     out.enter = mux::config::said_of<mux::config::enter_said_t>(this->appearance().enter);
     out.layout = mux::config::said_of<mux::config::layout_said_t>(this->appearance().layout);
     out.last_account = this->recent().last_account;
@@ -608,7 +595,6 @@ struct kept_settings {
     out.person_avatar_rounding = this->appearance().person_avatar_rounding;
     if (this->appearance().interface_scale != 100)
       out.interface_scale = this->appearance().interface_scale;
-    out.sending = this->sending();
     out.history = this->history();
     out.style = this->appearance().style;
     out.notifications = this->notifications();

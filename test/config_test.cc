@@ -94,12 +94,11 @@ TEST(Config, TheChoicesWordsAreReadAsChoices) {
   scratch here;
   fs::create_directories(here.dir);
   const fs::path where = here.dir / "accounts.json";
-  std::ofstream(where) << R"({"theme": "dark", "accent": "cyan", "motion": "spinning"})";
+  std::ofstream(where) << R"({"theme": "dark", "accent": "cyan"})";
   const auto got = mux::config::load(where, vault);
   ASSERT_TRUE(got.has_value());
   EXPECT_EQ(mux::config::theme_of(got->theme), mux::config::theme_t{mux::config::theme::night{}});
   EXPECT_EQ(mux::config::accent_of(got->accent), mux::config::accent_t{mux::config::accent::blue{}});
-  EXPECT_EQ(mux::config::motion_of(got->motion), mux::config::motion_t{mux::config::motion::full{}});
 }
 
 TEST(Config, AnOldFileIsNotReadAsEmpty) {

@@ -48,8 +48,6 @@ struct kept_root {
   skiff::model::Keyed<conversation_id, mux::config::chat_choices> chats;
   // What notifies, and how.
   skiff::model::Tracked<mux::config::notification_settings> notifications;
-  // What is done to a picture dropped before it is sent.
-  skiff::model::Tracked<mux::config::sending_settings> sending;
   // What is kept and shown of the history, for every chat that does not say.
   skiff::model::Tracked<mux::config::history_settings> history;
   // How the window looks.

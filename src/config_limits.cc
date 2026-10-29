@@ -153,7 +153,6 @@ struct look_settings {
   theme_t theme = theme::tinted{};
   std::map<std::string, custom_theme> theme_overrides;
   accent_t accent = accent::theme_own{};
-  motion_t motion = motion::full{};
   enter_t enter = enter_key::automatic{};  // what Enter does in a message
   layout_t layout = layout::automatic{};
   int window_opacity = 100;
@@ -217,9 +216,6 @@ struct file {
   std::optional<std::map<std::string, knot::raw>> plugins;
   // The accounts, of every protocol, in order.
   std::optional<std::vector<saved_account>> accounts;
-  // How much the window moves: "none", "reduced" (sections unfold, panels
-  // just appear) or "full". Nothing said is full.
-  std::optional<motion_said_t> motion;
   std::optional<enter_said_t> enter;
   // How the window is laid out: "portrait" (one thing at a time), "landscape"
   // (side by side) or "automatic", as its shape says. Nothing said is
@@ -262,7 +258,6 @@ struct file {
   // The interface's scale, in percent of the display's own (none, 100): as
   // Telegram Desktop's "Interface scale".
   std::optional<int> interface_scale;
-  std::optional<sending_settings> sending;
   std::optional<history_settings> history;
   std::optional<notification_settings> notifications;
   std::optional<std::vector<chat_notify>> chat_notify;

@@ -24,10 +24,12 @@ struct rendering_page {
   friend bool operator==(const rendering_page&, const rendering_page&) = default;
 };
 // Its own settings (contract::settings_kept), kept in the settings file
-// under its name: what draws the window, from the next start; how frames
+// under its name: how much the window moves (put in force by its part);
+// what draws the window, from the next start; how frames
 // are drawn -- only the damage repainted, and it outlined; in step with the
 // display; the frames a second counted -- in effect at once.
 struct kept {
+  config::motion_t motion = config::motion::full{};
   config::renderer_t renderer = config::renderer::opengl{};
   bool partial_redraw = false;
   bool flash_redraws = false;

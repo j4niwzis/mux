@@ -59,6 +59,9 @@ struct services {
   // changed, to be told to the caches and the disk after the event.
   mux::config::cache_limits limits;
   bool limits_due = true;
+  // What is done to a picture dropped before it is sent, in force: what a
+  // plugin (the files plugin's settings) says; nothing where none does.
+  mux::config::sending_settings sending;
   mailbox_type* box = nullptr;
   actions* ask = nullptr;
   skiff::scene::Scene<window_type>* scene = nullptr;

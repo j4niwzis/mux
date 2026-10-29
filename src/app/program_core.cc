@@ -365,8 +365,6 @@ void app::settle_model() {
     (void)this->write();
   if (due.looks)
     this->show_looks();
-  if (due.motion)
-    skiff::paint::motionLevel() = motion_of(this->appearance().motion);
   if (due.deleted) {
     model->show_deleted = this->history().show_deleted;
     shared.refresh_due = true;
@@ -723,7 +721,6 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
     this->drafts.load();
   this->model->show_deleted = this->history().show_deleted;
   this->settings.apply_limits();
-  skiff::paint::motionLevel() = motion_of(this->appearance().motion);
   this->config_error = std::move(error);
   this->refresh();
 }

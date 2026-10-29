@@ -23,7 +23,7 @@ export namespace mux::plugins::display {
 using namespace ::mux::ui;
 
 inline auto motion_settings_view(const palette& colours) {
-  using field = skiff::model::Field<&config::look_settings::motion>;
+  using field = skiff::model::Field<&kept::motion>;
   return SKIFF_NAMED(motion_settings_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       wrapped(skiff::compose::styled({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}},

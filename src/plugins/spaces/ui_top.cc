@@ -111,6 +111,15 @@ struct space_menu_rows<plugin_list<Features...>> {
 };
 using space_menu_plugins = space_menu_rows<composition::providers<contract::space_menu, enabled_plugins>>;
 
+// A space's icon pressed: the folder it is, picked.
+template <class Pick>
+struct pick_side_folder {
+  using Answer = std::invoke_result_t<Pick&, const folder_t&>;
+  Pick pick;
+  folder_t which;
+  Answer operator()() { return std::invoke(pick, which); }
+};
+
 template <class Pick>
 auto side_space_icon(const auto& colours, const config::space_item_t& item,
                      folder_t which, std::string key, std::string name,
@@ -137,13 +146,6 @@ auto side_space_icon(const auto& colours, const config::space_item_t& item,
 }
 
 
-template <class Pick>
-struct pick_side_folder {
-  using Answer = std::invoke_result_t<Pick&, const folder_t&>;
-  Pick pick;
-  folder_t which;
-  Answer operator()() { return std::invoke(pick, which); }
-};
 
 
 struct set_bars_act {

@@ -43,21 +43,6 @@ struct security_state {
   bool cross_signing = false;
   bool backup = false;
 };
-// What the developer tools show: a title over some JSON or an answer; and a
-// room's state, every event of it, by type and key.
-struct devtools_text {
-  std::string title;
-  std::string text;
-};
-struct state_entry {
-  std::string type;
-  std::string key;
-  std::string json;
-};
-struct state_listed {
-  conversation_id in;
-  std::vector<state_entry> entries;
-};
 // The account's sessions, this one's ID among them.
 struct sessions_listed {
   account_id by;
@@ -105,7 +90,7 @@ struct sign_in_page {
   std::string url;
 };
 
-using changes = change_list<management_loaded, management_saved, room_avatar_uploaded, session_given, registration_page, sign_in_page, verification_changed, security_state, devtools_text, state_listed, sessions_listed, sessions_refused, uia_in_browser>;
+using changes = change_list<management_loaded, management_saved, room_avatar_uploaded, session_given, registration_page, sign_in_page, verification_changed, security_state, sessions_listed, sessions_refused, uia_in_browser>;
 constexpr type_tag<changes> changes_type(const state&) { return {}; }
 
 // As the command line says them.
@@ -115,11 +100,6 @@ inline std::string describe(const management_saved& one) { return one.error.empt
 inline std::string describe(const session_given& one) { return one.account.address + " was given a session"; }
 inline std::string describe(const registration_page& one) { return one.account.address + ": registering on " + one.url; }
 inline std::string describe(const sign_in_page& one) { return one.account.address + ": signing in on " + one.url; }
-inline std::string describe(const devtools_text& one) { return one.title + "\n" + one.text; }
-inline std::string describe(const state_entry& one) { return one.type + " " + one.key; }
-inline std::string describe(const state_listed& one) {
-  return std::format("{} state events of {}", one.entries.size(), one.in.id);
-}
 inline std::string describe(const security_state& one) {
   return std::format("cross-signing {}, backup {}", one.cross_signing ? "set up" : "not set up", one.backup ? "on" : "off");
 }

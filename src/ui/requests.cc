@@ -791,8 +791,6 @@ struct start_direct {
 struct start_group {
   std::string name;
 };
-// The developer tools: an event's source, the room's state, an event sent.
-struct menu_view_source {};
 // A message's edit history, as mux saw its edits come.
 // Messages selected, as tdesktop selects them: from a message's menu, a
 // press on one while some are, and what the selection bar does with them.

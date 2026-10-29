@@ -257,7 +257,6 @@ inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts
       item(facts.picture.has_value(), "Copy Image", sends<request::menu_copy_image>{}, icon::clip{}),
       item(facts.media.has_value(), "Save As\u2026", sends<request::menu_save>{}, icon::send{}),
       menu_rows_t::rows(colours, kept, facts),
-      item(facts.can.view_source && !facts.link.empty(), "View Source", sends<request::menu_view_source>{}, icon::info{}),
       item(!facts.id.empty(), "Select", sends<request::menu_select>{}, icon::check{}),
       item(facts.deletable, "Delete", sends<request::menu_delete>{}, icon::close{}),
       c::styled({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band)),

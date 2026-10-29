@@ -443,11 +443,6 @@ class account {
   // again with its session; or let go.
   void continue_uia();
   void cancel_uia() { uia_.reset(); }
-  // The developer tools, as Element's: an event as the server has it; the
-  // room's state, every event of it; and an event of any type sent.
-  void view_source(std::string room, std::string event);
-  void list_state(std::string room);
-  void send_custom(std::string room, std::string type, std::optional<std::string> state_key, std::string json);
   // A sticker sent: an m.sticker, its picture's URL and its name -- an
   // answer to a message, where one is being answered.
   void send_sticker(std::string room, mux::emote sticker, std::optional<std::string> reply_to = std::nullopt);
@@ -579,6 +574,15 @@ class account {
     return this->perform(*api_, endpoint);
   }
   [[nodiscard]] bool connected() const { return static_cast<bool>(api_); }
+  // An event of any type sent to a room, its content as typed (a JSON
+  // object) -- encrypted where the room is, a relation it says kept out of
+  // the ciphertext: what a plugin's developer tools send.
+  auto send_written(std::string room, std::string type, const std::string& json) {
+    const auto typed = knot::try_read<crypto::relation_part>(json);
+    return this->send_room_event(loom::cs::send_message{.room_id = std::move(room), .event_type = std::move(type),
+                                                        .txn_id = this->transaction(), .body = knot::raw{json}},
+                                 typed ? typed->relates_to : std::nullopt);
+  }
   // A file put on the server: its mxc:// URL, or why not.
   auto upload(const std::string& bytes, std::string_view name, std::string_view mime) {
     return this->upload_content(bytes, name, mime);

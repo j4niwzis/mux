@@ -22,6 +22,7 @@ constexpr bool offers(const state&, feature::people_directory) { return true; }
 constexpr bool offers(const state&, feature::room_directory) { return true; }
 constexpr bool offers(const state&, feature::room_creation) { return true; }
 constexpr bool offers(const state&, feature::sticker_packs) { return true; }
+constexpr bool offers(const state&, feature::developer_tools) { return true; }
 constexpr bool offers(const state&, feature::history_context) { return true; }
 constexpr bool offers(const state&, feature::identity_verification) { return true; }
 
@@ -41,7 +42,7 @@ inline std::optional<std::string> message_link(const state&, const conversation&
 // developer tools, as Element's -- some JSON to read and copy, a room's
 // state, an event of any type sent -- and a step of interactive auth done
 // in the browser.
-constexpr dialog_list<tool::devtools_text, tool::devtools_state, tool::send_custom_form, tool::uia_step> dialogs(const state&) { return {}; }
+constexpr dialog_list<tool::uia_step> dialogs(const state&) { return {}; }
 // Its own account pages: its encryption, and its sessions under
 // cross-signing and the key backup.
 namespace settings {
@@ -229,24 +230,19 @@ inline bool may_delete(const state&, const conversation& chat, bool outgoing) {
 }
 
 // ---- a room's settings (Manage), as Cinny's -------------------------------------
-// Its tabs beside the client's: General, Members, Permissions, Emojis &
-// Stickers, Developer Tools.
+// Its tabs beside the client's: General, Members, Permissions.
 namespace manage {
 struct room {};
 struct members {};
 struct roles {};
-struct advanced {};
 }  // namespace manage
-constexpr manage_tab_list<manage::room, manage::members, manage::roles, manage::advanced> manage_tabs(const state&) { return {}; }
+constexpr manage_tab_list<manage::room, manage::members, manage::roles> manage_tabs(const state&) { return {}; }
 constexpr manage::room manage_initial_tab(const state&) { return {}; }
 // The client's General shown under Matrix's own (the room's name, topic,
 // address): one General tab, not two.
 constexpr manage::room manage_general_host(const state&) { return {}; }
-// The developer tools' state events: their list, one shown, one edited, a
-// new one written.
-enum class state_screen { overview, view, edit, compose };
 // What a page has open: an editor, or a list unfolded.
-enum class editor { profile, powers, power, state_events, account_data, account_form };
+enum class editor { profile, powers, power };
 // What Matrix keeps while the settings are open: what the server said of the
 // room beyond what the chat has (its addresses, its directory listing, its
 // versions, power tags, members, account data and state), what is being
@@ -268,12 +264,7 @@ struct manage_state {
   std::set<std::int64_t> deleted_powers;
   bool local_addresses_expanded = false;
   std::set<std::string> selected_aliases;
-  state_screen state_page = state_screen::overview;
-  std::string expanded_state_type, state_type, state_key, state_json, state_source;
-  bool expanded_state = false, expanded_account_data = false, account_editor = false;
-  // The account data chosen to edit, its draft made from it.
-  std::string account_type, account_json;
-  std::uint32_t profile_round = 0, address_round = 0, custom_round = 0, state_round = 0, account_round = 0;
+  std::uint32_t profile_round = 0, address_round = 0, custom_round = 0;
 };
 constexpr manage_part_list<manage_state> manage_parts(const state&) { return {}; }
 // A permission a page sets: a thing done (power_need), or an event's type --
@@ -316,11 +307,6 @@ struct delete_power { std::string power; };
 struct edit_power { std::int64_t power = 0; };
 struct delete_tag { std::int64_t power = 0; };
 struct apply_tags { bool reset = false; };
-struct state_open { state_screen target = state_screen::overview; std::string type, key; };
-struct state_expand { std::string type; };
-struct save_state { std::string type, key, json; };
-struct save_account_data { std::string type, json; };
-struct choose_account_data { std::size_t index = 0; };
 }  // namespace manage_change
 using manage_change_t = spl::variant<
     manage_change::edit, manage_change::encryption, manage_change::directory, manage_change::address, manage_change::expand_addresses,
@@ -329,8 +315,7 @@ using manage_change_t = spl::variant<
     manage_change::upgrade, manage_change::cancel_upgrade, manage_change::member_power, manage_change::permission,
     manage_change::apply_permissions, manage_change::add_custom_permission, manage_change::remove_custom_permission,
     manage_change::save_power, manage_change::delete_power, manage_change::edit_power, manage_change::delete_tag,
-    manage_change::apply_tags, manage_change::state_open, manage_change::state_expand,
-    manage_change::save_state, manage_change::save_account_data, manage_change::choose_account_data>;
+    manage_change::apply_tags>;
 namespace request {
 struct manage_room {
   manage_change_t change;
@@ -345,17 +330,6 @@ inline bool manage_close_editor(roles, manage_state& kept) {
   kept.powers_editor = false;
   return true;
 }
-inline bool manage_close_editor(advanced, manage_state& kept) {
-  if (kept.pending)
-    return true;
-  if (kept.state_page != state_screen::overview) {
-    kept.state_page = state_screen::overview;
-    return true;
-  }
-  return std::exchange(kept.account_editor, false);
-}
-// Whether the tab's page shows an editor, with a way back over it.
-inline bool manage_editor_header(advanced, const manage_state& kept) { return kept.state_page != state_screen::overview; }
 }  // namespace manage
 
 // Element's slash commands: the command's word read once into a type
@@ -574,12 +548,12 @@ template <class Action>
 constexpr request_list<request::setup_cross_signing, request::restore_cross_signing, request::reset_identity,
                        request::sign_out_unverified, request::reset_backup, request::delete_backup, request::export_room_keys,
                        request::import_room_keys, request::verify_session, request::change_account,
-                       request::refresh_sessions, request::verify_them, request::explore_state,
-                       request::open_send_custom, request::send_custom, request::change_room, request::manage_room,
+                       request::refresh_sessions, request::verify_them,
+                       request::change_room, request::manage_room,
                        request::slash,
                        request::continue_uia,
-                       request::cancel_uia, request::close_tool<tool::devtools_text>, request::close_tool<tool::devtools_state>,
-                       request::close_tool<tool::send_custom_form>, request::close_tool<tool::uia_step>>
+                       request::cancel_uia, 
+                       request::close_tool<tool::uia_step>>
 requests_of(const state&) {
   return {};
 }

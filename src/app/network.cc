@@ -63,7 +63,9 @@ template <class Account>
   return {.react = requires { &Account::react; },
           .forward = requires { &Account::forward; },
           .threads = requires { &Account::list_threads; },
-          .view_source = requires { &Account::view_source; },
+          // The developer tools' (a plugin's) source and state: read from what
+          // the account has synced, through its door for plugins.
+          .view_source = requires(Account& account) { account.synced(); },
           .send_file = requires { &Account::send_file; },
           .send_sticker = requires { &Account::send_sticker; },
           .typing = requires { &Account::typing; },
@@ -310,11 +312,6 @@ struct network {
                 ask_if_able(ask, *account);
             },
             one.account);
-    });
-  }
-  void view_source(const mux::conversation_id& in, std::string event) {
-    on_account_of(in, [room = in.id, event = std::move(event)](auto& account) -> decltype(void(account.view_source(room, event))) {
-      account.view_source(room, event);
     });
   }
   // A sticker sent into a chat by the account it is of.

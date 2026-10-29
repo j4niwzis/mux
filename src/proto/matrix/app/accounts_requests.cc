@@ -30,9 +30,6 @@ template void account<mux::app::post_change>::change_room(std::string room, mux:
 template void account<mux::app::post_change>::fetch_room_settings(std::string room);
 template void account<mux::app::post_change>::create_direct(std::string user);
 template void account<mux::app::post_change>::send_sticker(std::string room, mux::emote sticker, std::optional<std::string> reply_to);
-template void account<mux::app::post_change>::view_source(std::string room, std::string event);
-template void account<mux::app::post_change>::list_state(std::string room);
-template void account<mux::app::post_change>::send_custom(std::string room, std::string type, std::optional<std::string> state_key, std::string json);
 template void account<mux::app::post_change>::fetch_preview(std::string url);
 template void account<mux::app::post_change>::search_directory(std::string server, std::string query, std::optional<std::string> since);
 template void account<mux::app::post_change>::explore_space(std::string room);

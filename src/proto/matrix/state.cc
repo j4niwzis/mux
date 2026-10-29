@@ -189,7 +189,6 @@ struct managed_member {
   membership_view_t membership;
   std::int64_t timestamp = 0;
 };
-struct managed_account_data { std::string type, json; };
 struct managed_state_event { std::string type, key, json, content_json; };
 // One of the account's sessions (Matrix's devices), as Element lists them:
 // its ID, its name, and where and when it was last seen.
@@ -207,8 +206,6 @@ struct room_management {
   std::string default_version;
   std::map<std::string, power_tag> tags;
   std::vector<managed_member> members;
-  std::vector<managed_account_data> account_data;
-  std::vector<managed_state_event> state_events;
 };
 // What Matrix changes of a room beyond what every protocol does: who may
 // join, who reads its history, who has a say and what a thing done asks,
@@ -248,7 +245,6 @@ struct create_alias { std::string alias; };
 struct delete_alias { std::string alias; };
 struct delete_aliases { std::vector<std::string> aliases; };
 struct set_addresses { std::optional<std::string> main; std::vector<std::string> published; };
-struct set_account_data { std::string type, json; };
 struct set_state_event { std::string type, key, json; };
 struct set_profile { std::optional<std::string> name, topic, avatar; };
 // A space's room or space: listed in it (m.space.child), or no longer.
@@ -263,7 +259,7 @@ using room_change_t = spl::variant<room_change::set_join_rule, room_change::set_
                                       room_change::encrypt, room_change::set_need, room_change::upgrade,
                                       room_change::set_event_need, room_change::add_child, room_change::remove_child,
                                       room_change::set_permissions, room_change::set_tags, room_change::set_directory,
-                                      room_change::create_alias, room_change::delete_alias, room_change::delete_aliases, room_change::set_addresses, room_change::set_profile, room_change::set_account_data, room_change::set_state_event>;
+                                      room_change::create_alias, room_change::delete_alias, room_change::delete_aliases, room_change::set_addresses, room_change::set_profile, room_change::set_state_event>;
 
 constexpr room_part_list<room_rules> room_parts(const state&) { return {}; }
 

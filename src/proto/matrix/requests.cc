@@ -85,14 +85,6 @@ struct refresh_sessions {};
 struct change_account {
   account_change_t change;
 };
-// The developer tools: the room's state explored, an event of any type sent.
-struct explore_state {};
-struct open_send_custom {};
-struct send_custom {
-  std::string type;
-  std::optional<std::string> state_key;
-  std::string json;
-};
 // The other person of a direct chat verified by emoji, from the banner
 // that says they are not.
 struct verify_them {
@@ -170,21 +162,6 @@ passphrases(const state&) {
 }
 
 namespace tool {
-struct devtools_text {
-  std::string title, text;
-  friend bool operator==(const devtools_text&, const devtools_text&) = default;
-};
-struct devtools_entry {
-  std::string type, key, json;
-  friend bool operator==(const devtools_entry&, const devtools_entry&) = default;
-};
-struct devtools_state {
-  std::vector<devtools_entry> entries;
-  friend bool operator==(const devtools_state&, const devtools_state&) = default;
-};
-struct send_custom_form {
-  friend bool operator==(send_custom_form, send_custom_form) = default;
-};
 struct uia_step {
   std::string what, url;
   friend bool operator==(const uia_step&, const uia_step&) = default;
@@ -197,9 +174,6 @@ struct close_tool {};
 }  // namespace request
 namespace tool {
 // What Esc on each asks for.
-inline request::close_tool<devtools_text> closing_of(std::type_identity<devtools_text>) { return {}; }
-inline request::close_tool<devtools_state> closing_of(std::type_identity<devtools_state>) { return {}; }
-inline request::close_tool<send_custom_form> closing_of(std::type_identity<send_custom_form>) { return {}; }
 inline request::close_tool<uia_step> closing_of(std::type_identity<uia_step>) { return {}; }
 }  // namespace tool
 

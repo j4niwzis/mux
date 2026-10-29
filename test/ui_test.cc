@@ -205,7 +205,6 @@ struct stub {
   void close_reactions() {}
   void open_avatar(std::string) {}
   void open_manage() {}
-  void menu_view_source() {}
   void close_dialog() {}
   void open_new_chat() {}
   void close_new_chat() {}
@@ -3322,51 +3321,6 @@ TEST(RoomManagement, CustomEventOverridesCanBeAddedEditedAndRemovedBeforeApply) 
   EXPECT_TRUE(manage::standard_permission_events().contains("m.room.name"));
 }
 
-TEST(RoomManagement, StateEventsGroupByTypeAndOpenTheSelectedKeyAndContent) {
-  namespace matrix = mux::proto::matrix;
-  namespace manage = matrix::manage_detail;
-  manage_test_box box;
-  box.kept.data.state_events = {{"org.example.z", "b", "full-b", "content-b"},
-      {"org.example.a", "", "full-default", "content-default"}, {"org.example.z", "a", "full-a", "content-a"}};
-  const auto groups = manage::grouped_state_events(box.kept.data);
-  ASSERT_EQ(groups.size(), 2u);
-  EXPECT_EQ(groups.begin()->first, "org.example.a");
-  EXPECT_EQ(groups.at("org.example.z").front().key, "a");
-  manage::state_navigation<manage_test_box>{&box, manage::state_screen::view, "org.example.z", "b"}();
-  EXPECT_EQ(box.kept.state_page, manage::state_screen::view);
-  EXPECT_EQ(box.kept.state_key, "b");
-  EXPECT_EQ(box.kept.state_source, "full-b");
-  EXPECT_EQ(box.kept.state_json, "content-b");
-  manage::state_navigation<manage_test_box>{&box, manage::state_screen::compose, "org.example.z", ""}();
-  EXPECT_EQ(box.kept.state_page, manage::state_screen::compose);
-  EXPECT_EQ(box.kept.state_type, "org.example.z");
-  EXPECT_TRUE(box.kept.state_key.empty());
-  EXPECT_EQ(box.kept.state_json, "{}");
-}
-
-TEST(RoomManagement, StateSaveKeepsFailedDraftAndReturnsToTheAcknowledgedEvent) {
-  namespace matrix = mux::proto::matrix;
-  namespace manage = matrix::manage_detail;
-  manage_test_box box;
-  box.facts.mine = 100;
-  box.kept.state_page = manage::state_screen::edit;
-  manage::developer_draft<manage_test_box> draft{&box};
-  draft.state_type = "org.example.state"; draft.state_key = "key"; draft.state_json = "{\"enabled\":true}";
-  manage::preserve_draft(draft);
-  const auto asked = manage::developer_events<manage_test_box>{&box}.on(manage::save_state_event{}, draft);
-  ASSERT_TRUE(asked.fEvent);
-  manage::completed(&box, matrix::management_saved{box.facts.chat, asked.fEvent->change, "Invalid JSON"});
-  EXPECT_EQ(box.kept.state_page, manage::state_screen::edit);
-  EXPECT_EQ(box.kept.state_json, draft.state_json);
-  EXPECT_EQ(box.kept.error, "Invalid JSON");
-  const matrix::managed_state_event saved{draft.state_type, draft.state_key, "acknowledged full event", draft.state_json};
-  manage::completed(&box, matrix::management_saved{box.facts.chat, asked.fEvent->change, {}, saved});
-  EXPECT_EQ(box.kept.state_page, manage::state_screen::view);
-  EXPECT_EQ(box.kept.state_source, saved.json);
-  ASSERT_EQ(box.kept.data.state_events.size(), 1u);
-  EXPECT_EQ(box.kept.data.state_events.front().key, "key");
-}
-
 TEST(Appearance, GraphiteHasItsOwnPaletteAndAllAccentChoices) {
   const mux::config::theme_t theme = mux::config::theme::graphite{};
   const auto palette = mux::ui::palette_of(theme, mux::config::accent::theme_own{}, 100);
@@ -3439,50 +3393,6 @@ TEST(Appearance, ThemeConfigurationValidatesColorsAndPreservesAlpha) {
   EXPECT_FALSE(std::get<1>(invalid).fEvent);
   const auto reset = mux::ui::theme_details_events{}.on(mux::ui::reset_theme_details{}, draft);
   EXPECT_FALSE(reset.fEvent.custom);
-}
-
-TEST(RoomManagement, DeveloperToolsReadTheRememberedPreferenceAndStateSourceIsSelectable) {
-  namespace manage = mux::proto::matrix::manage_detail;
-  manage_test_box box;
-  box.looks.developer_tools = true;
-  EXPECT_FALSE(manage::toggle_developer_tools<manage_test_box>{&box}().enabled);
-  box.looks.developer_tools = false;
-  EXPECT_TRUE(manage::toggle_developer_tools<manage_test_box>{&box}().enabled);
-  const auto source = manage::state_event_source(box.colours, "{\"type\":\"m.room.name\"}");
-  EXPECT_TRUE(source.selectable());
-}
-
-TEST(RoomManagement, StateListKeyTapOpensTheSelectedEventThroughLocalHandlers) {
-  namespace manage = mux::proto::matrix::manage_detail;
-  manage_test_box box;
-  box.kept.expanded_state_type = "org.example.state";
-  box.kept.data.state_events = {{"org.example.state", "key", "full event", "content"}};
-  auto list = skiff::compose::local<manage::developer_draft<manage_test_box>>(manage::developer_events<manage_test_box>{&box},
-      manage::state_event_list(&box), manage::developer_draft<manage_test_box>{&box});
-  scene::Scene<decltype(list)> view{std::move(list)};
-  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
-  model_t model(0);
-  struct sink { void take(skiff::model::Nothing) {} } requests;
-  skiff::bind::Binding<model_t> binding;
-  binding.refresh(view.root(), model);
-  view.layoutIfNeeded(skia::SkRect::MakeWH(600.0f, 500.0f));
-  auto& groups = std::get<1>(std::get<1>(view.root().fParts).fParts).fParts;
-  auto& expanded = std::get<1>(groups.front().fParts);
-  auto& keys = std::get<1>(expanded.fParts).fParts;
-  ASSERT_EQ(keys.size(), 1u);
-  const auto bounds = keys.front().bounds();
-  scene::hostWork().pressed.clear();
-  scene::InputRouter router;
-  const std::array layers{scene::InputRouter::Layer{view.handle(), false}};
-  router.setLayers(layers);
-  router.pointer(scene::PointerEvent{scene::pointer::down{bounds.centerX(), bounds.centerY()}});
-  router.pointer(scene::PointerEvent{scene::pointer::up{bounds.centerX(), bounds.centerY()}});
-  const auto presses = std::exchange(scene::hostWork().pressed, {});
-  ASSERT_EQ(presses.size(), 1u);
-  for (const auto& path : presses) ASSERT_TRUE(skiff::bind::press(view.root(), model, path, &requests));
-  EXPECT_EQ(box.kept.state_page, manage::state_screen::view);
-  EXPECT_EQ(box.kept.state_key, "key");
-  EXPECT_EQ(box.kept.state_source, "full event");
 }
 
 TEST(RoomManagement, AddressFieldHasOneLineAndStaysInsideItsRoundedBackground) {
@@ -3560,26 +3470,6 @@ TEST(RoomManagement, MatrixKeepsNativeSettingsAndThemeAlongsideProtocolPages) {
   EXPECT_EQ(std::get<1>(dialog.pane_header().fParts).text(), "Permissions");
 }
 
-TEST(RoomManagement, StateEditorUsesThePageHeaderToReturnToDeveloperTools) {
-  namespace matrix = mux::proto::matrix;
-  namespace manage = matrix::manage_detail;
-  mux::ui::palette colours;
-  mux::ui::looks_shown looks;
-  mux::ui::room_settings_facts facts;
-  facts.speaks = mux::protocol::matrix{};
-  mux::ui::room_settings<stub> dialog(&colours, &looks, facts);
-  auto& kept = dialog.template part<matrix::state>();
-  kept.state_page = manage::state_screen::view;
-  dialog.show_tab(matrix::manage::advanced{});
-  dialog.update(0.0);
-  EXPECT_TRUE(std::get<0>(dialog.pane_header().fParts).visible());
-  EXPECT_EQ(std::get<1>(dialog.pane_header().fParts).text(), "Developer Tools");
-  std::get<1>(dialog.pane_header().fParts).onPress();
-  dialog.update(0.0);
-  EXPECT_EQ(kept.state_page, manage::state_screen::overview);
-  EXPECT_FALSE(std::get<0>(dialog.pane_header().fParts).visible());
-}
-
 TEST(RoomManagement, CompactSelectorsLeaveRoomForTheirLabels) {
   auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
   auto face = manager ? manager->matchFamilyStyle("DejaVu Sans", skia::SkFontStyle()) : nullptr;
@@ -3626,7 +3516,7 @@ TEST(RoomManagement, EncryptionChangesOnlyAfterConfirmationAndAcknowledgement) {
   EXPECT_FALSE(enable());
 }
 
-TEST(RoomManagement, SwitchingPagesPreservesTypedProfileAndDeveloperDrafts) {
+TEST(RoomManagement, SwitchingPagesPreservesTypedProfileDrafts) {
   namespace manage = mux::proto::matrix::manage_detail;
   manage_test_box box;
   box.facts.name = "Garden";
@@ -3635,9 +3525,6 @@ TEST(RoomManagement, SwitchingPagesPreservesTypedProfileAndDeveloperDrafts) {
   EXPECT_EQ(box.kept.profile->name, "New garden");
   EXPECT_EQ(box.kept.local_address, "garden");
   EXPECT_EQ(box.kept.upgrade_creators, "@bob:example.org");
-  manage::preserve_draft(manage::developer_draft<manage_test_box>{&box, "m.tag", "{}"});
-  EXPECT_EQ(box.kept.account_type, "m.tag");
-  EXPECT_EQ(box.kept.account_json, "{}");
 }
 
 TEST(RoomManagement, NarrowScreensStartWithNavigationAndReturnToIt) {

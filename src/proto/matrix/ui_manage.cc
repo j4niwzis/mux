@@ -1067,193 +1067,6 @@ auto permissions_page(const auto& colours, const room_settings_facts&) {
           action(colours, "Permissions", ask(manage_change::edit{editor::powers, false}))))));
 }
 
-// ---- Developer Tools: the room's state events and account data --------------------
-enum class state_row_kind { add, type, key };
-template <class Act>
-auto state_list_row(const auto& colours, std::string label, std::string detail, Act act, state_row_kind kind = state_row_kind::type, bool expanded = false) {
-  namespace c = skiff::compose;
-  // Pressed, it asks what act makes (onPress): given to onClick, act itself
-  // -- the callable -- was the event sent, which a release build's walk
-  // could not take, and only the debug build's ran.
-  auto spoken = label;
-  return SKIFF_NAMED(state_list_row, c::onPress(std::move(act), c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f},
-                                                          .cornerRadius = colours.widgets.fCorner, .hoverBackground = colours.chosen}),
-      c::visible(kind != state_row_kind::key,
-          c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle},
-                    nodes::Icon(shape_of(kind == state_row_kind::add ? icon_t{icon::plus{}} : expanded ? icon_t{icon::down{}} : icon_t{icon::right{}}), colours.dim))),
-      c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                elided(nodes::Text(std::move(label), 12.0f, colours.text))),
-      c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(detail), 12.0f, colours.dim)),
-      c::visible(kind == state_row_kind::key,
-          c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::right{}), colours.dim)))), std::move(spoken)));
-}
-// The state events, by their types: each type unfolded to its keys.
-struct state_group {
-  std::string type;
-  std::vector<std::string> keys;
-  friend bool operator==(const state_group&, const state_group&) = default;
-};
-struct state_list_key {
-  std::vector<state_group> groups;
-  std::string expanded;
-  friend bool operator==(const state_list_key&, const state_list_key&) = default;
-};
-[[nodiscard]] inline state_list_key state_list_of(const facts_t& now) {
-  const auto& kept = kept_of(now);
-  std::map<std::string, std::vector<std::string>> groups;
-  for (const managed_state_event& event : kept.data.state_events) { groups[event.type].push_back(event.key); }
-  return {groups | std::views::transform([](auto& group) {
-            std::ranges::sort(group.second);
-            return state_group{group.first, std::move(group.second)};
-          }) | std::ranges::to<std::vector>(),
-          kept.expanded_state_type};
-}
-auto state_event_list(const auto& colours, const state_list_key& key) {
-  namespace c = skiff::compose;
-  using open = manage_change::state_open;
-  return SKIFF_NAMED(state_event_list, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      setting_tile(colours, "Events", "", nodes::Text(std::format("Total: {}", key.groups.size()), 12.0f, colours.dim)),
-      cutout(colours, {}, state_list_row(colours, "Add New", "", ask(open{state_screen::compose, "", ""}), state_row_kind::add),
-          c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.groups | std::views::transform([&](const state_group& group) {
-            const bool expanded = key.expanded == group.type;
-            return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                state_list_row(colours, group.type, std::to_string(group.keys.size()), ask(manage_change::state_expand{group.type}), state_row_kind::type, expanded),
-                c::visible(expanded, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 0.0f, 0.0f, 16.0f},
-                                                              .padding = {0.0f, 0.0f, 0.0f, 8.0f}, .border = scene::Border{colours.band, 1.0f}}),
-                    state_list_row(colours, "Add New", "", ask(open{state_screen::compose, group.type, ""}), state_row_kind::add),
-                    c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), group.keys | std::views::transform([&](const std::string& one) {
-                      return state_list_row(colours, one.empty() ? "Default" : "\"" + one + "\"", "", ask(open{state_screen::view, group.type, one}),
-                                            state_row_kind::key);
-                    }) | std::ranges::to<std::vector>()))));
-          }) | std::ranges::to<std::vector>()))));
-}
-template <class P> using state_event_list_t = decltype(state_event_list(std::declval<P>(), state_list_key{}));
-// A state event edited or written: its draft made from the one open.
-struct state_draft {
-  std::string type, key, json;
-  friend bool operator==(const state_draft&, const state_draft&) = default;
-};
-struct state_basis {
-  std::uint32_t round = 0;
-  bool composing = false;
-  state_draft first;
-  friend bool operator==(const state_basis&, const state_basis&) = default;
-};
-auto state_editor(const auto& colours, const state_basis& basis) {
-  namespace c = skiff::compose;
-  using draft = state_draft;
-  const auto not_pending = [](const facts_t& now) { return !kept_of(now).pending; };
-  const auto save = [](const draft& now) { return request::manage_room{manage_change::save_state{now.type, now.key, now.json}}; };
-  return SKIFF_NAMED(state_editor, c::local<draft>(c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::visible(!basis.composing, section(colours, "State Event", tile(colours, basis.first.type, basis.first.key,
-          c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth}),
-              action_asking<draft>(colours, "Save", save, not_pending, action_style::success),
-              action_if(colours, "Cancel", ask(manage_change::state_open{state_screen::view, basis.first.type, basis.first.key}), not_pending))))),
-      c::visible(basis.composing, c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&draft::type>(colours, "State Event Type", "")),
-              action_asking<draft>(colours, "Send", save, not_pending, action_style::success)),
-          model_field<&draft::key>(colours, "State Key (Optional)", ""))),
-      section(colours, "JSON Content", model_area<&draft::json>(colours, "", "{}", 20))),
-      basis.first));
-}
-template <class P> using state_editor_t = decltype(state_editor(std::declval<P>(), state_basis{}));
-// Account data written: its draft made from the one chosen.
-struct account_draft {
-  std::string type, json;
-  friend bool operator==(const account_draft&, const account_draft&) = default;
-};
-struct account_basis {
-  std::uint32_t round = 0;
-  account_draft first;
-  friend bool operator==(const account_basis&, const account_basis&) = default;
-};
-auto account_editor(const auto& colours, const account_basis& basis) {
-  namespace c = skiff::compose;
-  using draft = account_draft;
-  return SKIFF_NAMED(account_editor, c::local<draft>(section(colours, "Account Data",
-      model_field<&draft::type>(colours, "Type", ""),
-      model_area<&draft::json>(colours, "Content", "{}", 12),
-      c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          action_asking<draft>(colours, "Save", [](const draft& now) { return request::manage_room{manage_change::save_account_data{now.type, now.json}}; },
-                               [](const facts_t& now) { return !kept_of(now).pending; }),
-          action(colours, "Cancel", ask(manage_change::edit{editor::account_form, false})))),
-      basis.first));
-}
-template <class P> using account_editor_t = decltype(account_editor(std::declval<P>(), account_basis{}));
-struct choose_account_data {
-  using Answer = request::manage_room;
-  Answer operator()(std::size_t index) const { return {manage_change::choose_account_data{index}}; }
-};
-// The developer tools as they are kept: on, or off.
-auto developer_switch(const auto& colours) {
-  namespace c = skiff::compose;
-  using toggle_t = widgets::Toggle<sends<::mux::ui::request::flip_developer_tools>>;
-  return SKIFF_NAMED(developer_switch, c::applied<looks_picked>([](const looks_picked& now) { return now.developer_tools; }, [](toggle_t& toggle, bool on) { toggle.setOnNow(on); },
-                                  c::styled({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, {}))));
-}
-auto developer_page(const auto& colours, const room_settings_facts& first) {
-  namespace c = skiff::compose;
-  const auto tools_on = [](const looks_picked& now) { return now.developer_tools; };
-  return SKIFF_NAMED(developer_page, c::column(page_look(),
-      status_line(colours, [](const facts_t& now) { return kept_of(now).pending ? std::string("Saving…") : kept_of(now).error; }),
-      c::shown_for<facts_t>([](const facts_t& now) { return !kept_of(now).account_editor && kept_of(now).state_page == state_screen::overview; },
-          c::column(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              section(colours, "Options",
-                  tile(colours, "Enable Developer Tools", "", developer_switch(colours)),
-                  c::shown_for<looks_picked>(tools_on, tile(colours, "Room ID", "Copy room ID to clipboard. (\"" + first.id + "\")",
-                                                           action(colours, "Copy", sends<::mux::ui::request::copy_text>{{first.id}})))),
-              c::shown_for<looks_picked>(tools_on, section(colours, "Data",
-                  tile(colours, "New Message Event", "Create and send a new message event within the room.",
-                       action(colours, "Compose", sends<request::open_send_custom>{})),
-                  card(colours,
-                      setting_tile(colours, "Room State", "State events of the room.",
-                          action_said(colours, "Room state", [](const facts_t& now) { return std::string(kept_of(now).expanded_state ? "Collapse" : "Expand"); },
-                                      ask(manage_change::edit{editor::state_events}), [](const facts_t&) { return true; })),
-                      c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).expanded_state; },
-                          rows_of<state_event_list_t<decltype(colours)>, state_list_key>(state_list_of, [at = &colours](const state_list_key& key) { return state_event_list(*at, key); }))),
-                  card(colours,
-                      setting_tile(colours, "Account Data", "Private personalization data stored within room.",
-                          action_said(colours, "Account data", [](const facts_t& now) { return std::string(kept_of(now).expanded_account_data ? "Collapse" : "Expand"); },
-                                      ask(manage_change::edit{editor::account_data}), [](const facts_t&) { return true; })),
-                      c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).expanded_account_data; },
-                          c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                              action(colours, "Add New", ask(manage_change::edit{editor::account_form, true})),
-                              live_choice<choice_key>(colours, [](const facts_t& now) {
-                                auto names = kept_of(now).data.account_data | std::views::transform(&managed_account_data::type) | std::ranges::to<std::vector>();
-                                const auto count = names.size();
-                                return choice_key{std::move(names), count, true};
-                              },
-                                  [](const choice_key&) { return choose_account_data{}; })))))))),
-      c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).state_page != state_screen::overview; },
-          c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).state_page == state_screen::view; },
-                  c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                      setting_tile(colours, "State Event", "",
-                          c::shown_for<facts_t>([](const facts_t& now) {
-                            return facts_of(now).mine >= required(rules_now(now).needs, permission_t{event_permission{kept_of(now).state_type}});
-                          },
-                              action(colours, "Edit", ask(manage_change::state_open{state_screen::edit, "", ""})))),
-                      card(colours, c::text_for<facts_t>([](const facts_t& now) { return kept_of(now).state_source; }, [&] {
-                        auto text = nodes::Text("", 13.0f, colours.text);
-                        text.setMonospace(true);
-                        text.setSelectable(true);
-                        return wrapped(std::move(text));
-                      }())))),
-              c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).state_page != state_screen::view; },
-                  rows_of<state_editor_t<decltype(colours)>, state_basis>([](const facts_t& now) {
-                    const auto& kept = kept_of(now);
-                    return state_basis{kept.state_round, kept.state_page == state_screen::compose,
-                                       {kept.state_type, kept.state_key, kept.state_json.empty() ? std::string("{}") : kept.state_json}};
-                  },
-                      [at = &colours](const state_basis& basis) { return state_editor(*at, basis); })))),
-      c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).account_editor; },
-          rows_of<account_editor_t<decltype(colours)>, account_basis>([](const facts_t& now) {
-            const auto& kept = kept_of(now);
-            return account_basis{kept.account_round, {kept.account_type, kept.account_json.empty() ? std::string("{}") : kept.account_json}};
-          },
-              [at = &colours](const account_basis& basis) { return account_editor(*at, basis); }))));
-}
 }  // namespace mux::proto::matrix::manage_detail
 
 // ---- the tabs: their titles, icons and pages ----------------------------------------
@@ -1273,27 +1086,23 @@ export namespace mux::proto::matrix::manage {
 constexpr std::string_view tab_title(room) { return "General"; }
 constexpr std::string_view tab_title(members) { return "Members"; }
 constexpr std::string_view tab_title(roles) { return "Permissions"; }
-constexpr std::string_view tab_title(advanced) { return "Developer Tools"; }
 inline ui::icon_t tab_icon(room) { return ui::icon::gear{}; }
 inline ui::icon_t tab_icon(members) { return ui::icon::person{}; }
 inline ui::icon_t tab_icon(roles) { return ui::icon::lock{}; }
-inline ui::icon_t tab_icon(advanced) { return ui::icon::terminal{}; }
 // What these pages may ask, whatever their trees: outside a release build
 // each is held erased (made in its own unit, manage_*.cc), so the dialog
 // that holds them is not made again for every change of a page.
-using manage_out = skiff::model::Types<request::manage_room, request::open_send_custom, ui::request::open_url, ui::request::pick_room_avatar,
-                                       ui::request::flip_developer_tools, ui::request::copy_text,
+using manage_out = skiff::model::Types<request::manage_room, ui::request::open_url, ui::request::pick_room_avatar,
+                                       ui::request::copy_text,
                                        ui::request::open_member_info>;
 using erased_page = skiff::compose::Erased<manage_out>;
 erased_page manage_page_erased(room, const ui::palette&, const ui::room_settings_facts&);
 erased_page manage_page_erased(members, const ui::palette&, const ui::room_settings_facts&);
 erased_page manage_page_erased(roles, const ui::palette&, const ui::room_settings_facts&);
-erased_page manage_page_erased(advanced, const ui::palette&, const ui::room_settings_facts&);
 // Each tab's page.
 auto page_of(room, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::general_page(colours, facts); }
 auto page_of(members, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::members_page(colours, facts); }
 auto page_of(roles, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::permissions_page(colours, facts); }
-auto page_of(advanced, const auto& colours, const ui::room_settings_facts& facts) { return manage_detail::developer_page(colours, facts); }
 template <class Tab>
 auto make_manage_page(Tab tab, const ui::palette& colours, const ui::room_settings_facts& facts)
   requires requires { page_of(tab, colours, facts); }

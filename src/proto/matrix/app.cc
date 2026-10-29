@@ -80,17 +80,6 @@ void import_room_keys(Net& net, const account_id& by, std::string path, std::str
   net.on_account(by, [path = std::move(path), passphrase = std::move(passphrase)](auto& account) -> decltype(void(account.import_room_keys(path, passphrase))) { account.import_room_keys(path, passphrase); });
 }
 
-template <class Net>
-void list_state(Net& net, const conversation_id& in) {
-  net.on_account_of(in, [room = in.id](auto& account) -> decltype(void(account.list_state(room))) { account.list_state(room); });
-}
-
-template <class Net>
-void send_custom(Net& net, const conversation_id& in, std::string type, std::optional<std::string> key, std::string json) {
-  net.on_account_of(in, [room = in.id, type = std::move(type), key = std::move(key), json = std::move(json)](auto& account) -> decltype(void(account.send_custom(room, type, key, json))) {
-    account.send_custom(room, type, key, json);
-  });
-}
 
 }  // namespace mux::proto::matrix::ops
 
@@ -182,16 +171,6 @@ struct manage_step {
         kept.power_form = one.open;
         if (one.open)
           kept.editing_power.reset();
-        break;
-      case editor::state_events: kept.expanded_state = !kept.expanded_state; break;
-      case editor::account_data: kept.expanded_account_data = !kept.expanded_account_data; break;
-      case editor::account_form:
-        kept.account_editor = one.open;
-        if (one.open) {
-          kept.account_type.clear();
-          kept.account_json.clear();
-          ++kept.account_round;
-        }
         break;
     }
     return std::nullopt;
@@ -441,50 +420,6 @@ struct manage_step {
     for (std::int64_t value : kept.deleted_powers) { tags.erase(std::to_string(value)); }
     return submit(room_change::set_tags{std::move(tags)});
   }
-  // The developer tools' state events: one opened, written, the list.
-  asked operator()(const manage_change::state_open& one) {
-    if (kept.pending)
-      return std::nullopt;
-    if (one.target == state_screen::view && !one.type.empty()) {
-      const auto event = std::ranges::find_if(kept.data.state_events, [&](const managed_state_event& each) { return each.type == one.type && each.key == one.key; });
-      if (event == kept.data.state_events.end())
-        return std::nullopt;
-      kept.state_type = event->type;
-      kept.state_key = event->key;
-      kept.state_source = event->json;
-      kept.state_json = event->content_json;
-    }
-    if (one.target == state_screen::compose) {
-      kept.state_type = one.type;
-      kept.state_key = one.key;
-      kept.state_json = "{}";
-    }
-    kept.state_page = one.target;
-    kept.error.clear();
-    ++kept.state_round;
-    return std::nullopt;
-  }
-  asked operator()(const manage_change::state_expand& one) {
-    kept.expanded_state_type = kept.expanded_state_type == one.type ? std::string() : one.type;
-    return std::nullopt;
-  }
-  asked operator()(const manage_change::save_state& one) {
-    if (one.type.empty() || facts.mine < required(rules().needs, permission_t{event_permission{one.type}}))
-      return std::nullopt;
-    return submit(room_change::set_state_event{one.type, one.key, one.json});
-  }
-  asked operator()(const manage_change::save_account_data& one) {
-    return one.type.empty() ? std::nullopt : submit(room_change::set_account_data{one.type, one.json});
-  }
-  asked operator()(const manage_change::choose_account_data& one) {
-    if (one.index < kept.data.account_data.size()) {
-      kept.account_type = kept.data.account_data[one.index].type;
-      kept.account_json = kept.data.account_data[one.index].json;
-    }
-    kept.account_editor = true;
-    ++kept.account_round;
-    return std::nullopt;
-  }
 };
 
 // What Matrix keeps of the settings open for a room, changed as `change`
@@ -552,22 +487,6 @@ inline void saved_in(ui::room_settings_facts& facts, manage_state& kept, const m
           facts.children.erase(child);
         }
       },
-      [&](const room_change::set_state_event& change) {
-        kept.state_json = change.json;
-        if (one.saved_state) {
-          kept.state_source = one.saved_state->json;
-          kept.state_json = one.saved_state->content_json;
-          const auto found = std::ranges::find_if(kept.data.state_events, [&](const managed_state_event& event) {
-            return event.type == change.type && event.key == change.key;
-          });
-          if (found == kept.data.state_events.end())
-            kept.data.state_events.push_back(*one.saved_state);
-          else
-            *found = *one.saved_state;
-        }
-        kept.state_page = kept.state_page == state_screen::compose ? state_screen::overview : state_screen::view;
-        ++kept.state_round;
-      },
       [&](const room_change::create_alias&) { ++kept.address_round; },
       [&](const room_change::delete_aliases&) { kept.selected_aliases.clear(); },
       [](const auto&) {}},
@@ -613,18 +532,6 @@ void program_told(App& app, const uia_in_browser& asked) {
   app.take(mux::ui::request::open_url{asked.url});
   mux::ui::show(app.showing, std::optional(tool::uia_step{asked.what, asked.url}));
 }
-// What the developer tools asked, shown.
-template <class App>
-void program_told(App& app, const devtools_text& shown) {
-  mux::ui::show(app.showing, std::optional(tool::devtools_text{shown.title, shown.text}));
-}
-// The room's state, for the developer tools.
-template <class App>
-void program_told(App& app, const state_listed& listed) {
-  mux::ui::show(app.showing, std::optional(tool::devtools_state{listed.entries | std::views::transform([](const state_entry& one) {
-                                                              return tool::devtools_entry{one.type, one.key, one.json};
-                                                            }) | std::ranges::to<std::vector>()}));
-}
 // Only the room and account that requested the read may receive it.
 template <class App>
 void program_told(App& app, const management_loaded& one) {
@@ -632,17 +539,6 @@ void program_told(App& app, const management_loaded& one) {
     kept.data = one.data;
     kept.loading = false;
     kept.error = one.error;
-    // The state event shown, as it is now.
-    if (kept.state_page != state_screen::view)
-      return;
-    const auto found = std::ranges::find_if(kept.data.state_events, [&](const managed_state_event& event) {
-      return event.type == kept.state_type && event.key == kept.state_key;
-    });
-    if (found != kept.data.state_events.end()) {
-      kept.state_source = found->json;
-      kept.state_json = found->content_json;
-      ++kept.state_round;
-    }
   });
 }
 // A room avatar uploaded: kept to be saved with the profile.
@@ -877,27 +773,6 @@ void program_asked(App& app, const manage_room& one) {
   mux::ui::show(app.showing, std::optional(std::move(now)));
   if (asked)
     spl::visit(spl::overloaded{[&](room_change_t& change) { program_asked(app, change_room{std::move(change)}); }}, *asked);
-}
-// The developer tools: for the room being managed, by its account.
-template <class App>
-void program_asked(App& app, const explore_state&) {
-  const auto chosen = app.shared.managed();
-  if (!chosen || app.shared.demo())
-    return;
-  mux::ui::show<mux::ui::room_settings_facts>(app.showing, std::nullopt);
-  ops::list_state(*app.net, *chosen);
-}
-template <class App>
-void program_asked(App& app, const open_send_custom&) {
-  mux::ui::show<mux::ui::room_settings_facts>(app.showing, std::nullopt);
-  mux::ui::show(app.showing, std::optional(tool::send_custom_form{}));
-}
-template <class App>
-void program_asked(App& app, const send_custom& one) {
-  const auto chosen = app.shared.managed();
-  if (!chosen || app.shared.demo())
-    return;
-  ops::send_custom(*app.net, *chosen, one.type, one.state_key, one.json);
 }
 template <class App>
 void program_asked(App& app, const verify_them& one) {

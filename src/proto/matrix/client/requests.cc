@@ -322,8 +322,6 @@ void account<Sink>::fetch_room_settings(std::string room) {
       out.data.members = mapped | std::views::filter([](const auto& member) { return member.has_value(); }) | std::views::transform([](const auto& member) { return *member; }) | std::ranges::to<std::vector<proto::matrix::managed_member>>();
     } else failure(members);
     if (const auto kept = state_.joined.find(room); kept != state_.joined.end()) {
-      out.data.state_events = kept->second.state.events | std::views::transform([](const auto& entry) { return proto::matrix::managed_state_event{entry.first.first, entry.first.second, knot::to_pretty_json_string(entry.second), knot::to_pretty_json_string(entry.second.content)}; }) | std::ranges::to<std::vector<proto::matrix::managed_state_event>>();
-      out.data.account_data = kept->second.account_data | std::views::transform([](const auto& entry) { return proto::matrix::managed_account_data{entry.first, knot::to_pretty_json_string(entry.second.content)}; }) | std::ranges::to<std::vector<proto::matrix::managed_account_data>>();
     }
     sink_(std::move(out));
   });
@@ -440,11 +438,6 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
                     joined->second.state.events.insert_or_assign(std::pair{one.type, one.key}, *event);
                 }
               }
-            },
-            [&](const proto::matrix::room_change::set_account_data& one) {
-              if (!knot::try_read<std::map<std::string, knot::raw>>(one.json)) { error = "The content must be a JSON object."; return; }
-              told("save account data", perform(*api_, loom::cs::set_account_data_per_room{
-                  .user_id = id_.address, .room_id = room, .type = one.type, .body = knot::raw{one.json}}));
             },
             [&](const proto::matrix::room_change::set_profile& one) {
               if (one.name) { loom::ev::m_room_name_content_t content; content.name = *one.name; set("m.room.name", content); }
@@ -718,62 +711,6 @@ void account<Sink>::send_sticker(std::string room, mux::emote sticker, std::opti
                                       relates_to_of(content));
     if (!sent)
       log(id_, "could not send a sticker to {}: {}", room, sent.error().said());
-  });
-}
-
-template <class Sink>
-void account<Sink>::view_source(std::string room, std::string event) {
-  this->spawn_guarded([this, room = std::move(room), event = std::move(event)] {
-    if (!api_)
-      return;
-    auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = event});
-    if (!got) {
-      sink_(proto::matrix::devtools_text{"Source of " + event, "Not fetched: " + got.error().said()});
-      return;
-    }
-    sink_(proto::matrix::devtools_text{"Source of " + event, knot::to_pretty_json_string(*got)});
-  });
-}
-
-template <class Sink>
-void account<Sink>::list_state(std::string room) {
-  this->spawn_guarded([this, room = std::move(room)] {
-    std::vector<proto::matrix::state_entry> entries;
-    if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
-      for (const auto& [key, one] : kept->second.state.events)
-        entries.push_back({key.first, key.second, knot::to_pretty_json_string(one)});
-    sink_(proto::matrix::state_listed{{id_, room}, std::move(entries)});
-  });
-}
-
-template <class Sink>
-void account<Sink>::send_custom(std::string room, std::string type, std::optional<std::string> state_key,
-                                std::string json) {
-  this->spawn_sending([this, room = std::move(room), type = std::move(type), state_key = std::move(state_key),
-                json = std::move(json)] {
-    const std::string title = "Sent " + type;
-    // Only an object is a content: read as one, its keys' values left as text.
-    if (!knot::try_read<std::map<std::string, knot::raw>>(json)) {
-      sink_(proto::matrix::devtools_text{title, "Not sent: the content is not a JSON object."});
-      return;
-    }
-    if (!api_) {
-      sink_(proto::matrix::devtools_text{title, "Not sent: not connected."});
-      return;
-    }
-    if (state_key) {
-      auto done = perform(*api_, loom::cs::set_room_state_with_key{
-                                     .room_id = room, .event_type = type, .state_key = *state_key, .body = knot::raw{json}});
-      sink_(proto::matrix::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
-    } else {
-      auto done = this->send_room_event(loom::cs::send_message{
-                                     .room_id = room, .event_type = type, .txn_id = this->transaction(), .body = knot::raw{json}},
-                                     [&] -> std::optional<knot::raw> {
-                                       const auto typed = knot::try_read<crypto::relation_part>(json);
-                                       return typed ? typed->relates_to : std::nullopt;
-                                     }());
-      sink_(proto::matrix::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
-    }
   });
 }
 

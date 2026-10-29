@@ -49,7 +49,6 @@ void part_apply(menu_part& self, const request::menu_copy_image&);
 void part_apply(menu_part& self, const request::menu_thread&);
 void part_apply(menu_part& self, const request::menu_save&);
 void part_apply(menu_part& self, const request::menu_pin&);
-void part_apply(menu_part& self, const request::menu_view_source&);
 void part_apply(menu_part& self, const request::menu_select&);
 void part_apply(menu_part& self, const request::toggle_selected& one);
 void part_apply(menu_part& self, const request::selection_cancel&);
@@ -222,12 +221,6 @@ void part_apply(menu_part& self, const request::menu_pin&) {
   self.s_->net->pin(*chosen, self.target_.id, !self.target_.pinned);
 }
 
-
-void part_apply(menu_part& self, const request::menu_view_source&) {
-  mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);
-  if (const auto& chosen = self.s_->chosen(); chosen && !self.s_->demo())
-    self.s_->net->view_source(*chosen, self.target_.id);
-}
 
 void part_apply(menu_part& self, const request::menu_select&) {
   mux::ui::show<mux::ui::menu_facts>(*self.s_->showing, std::nullopt);

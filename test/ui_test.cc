@@ -15,6 +15,7 @@ import mux.core;
 import mux.config;
 import mux.kept_root;
 import mux.plugins.ui;
+import mux.plugins.ui.top;
 import mux.ui;
 import mux.protocols;
 import mux.logic.room_events;
@@ -862,17 +863,17 @@ TEST(Forms, PassphraseSubmissionReadsBoundModel) {
 }
 TEST(Forms, LeaveSpaceChoicesAndRoomsAreModelEdits) {
   struct sink {
-    std::optional<mux::ui::request::leave_space> saved;
+    std::optional<mux::plugins::spaces::leave_space> saved;
     bool cancelled = false;
-    void take(const mux::ui::request::leave_space& request) { saved = request; }
-    void take(const mux::ui::request::close_leave_space&) { cancelled = true; }
+    void take(const mux::plugins::spaces::leave_space& request) { saved = request; }
+    void take(const mux::ui::request::close_shown<mux::plugins::spaces::leave_space_facts>&) { cancelled = true; }
   } requests;
   skiff::model::Model<int, skiff::bind::NoReactions> model(0);
   mux::ui::palette colours;
-  mux::ui::leave_space_facts facts;
+  mux::plugins::spaces::leave_space_facts facts;
   facts.name = "Space";
   facts.rooms = {{"one", "One"}, {"two", "Two"}};
-  auto box = mux::ui::leave_space_box(colours, facts);
+  auto box = mux::plugins::spaces::leave_space_box(colours, facts);
   skiff::bind::Binding<decltype(model)> binding;
   binding.refresh(box, model);
   ASSERT_TRUE(skiff::bind::press(box, model, skiff::scene::Path{6, 1}, &requests));

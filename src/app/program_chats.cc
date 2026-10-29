@@ -101,7 +101,7 @@ void app::apply(const request::leave_chat&) {
   }
   // A space: Element's box first, for which of its rooms to leave with it.
   if (one->space) {
-    this->apply(request::open_leave_space{*chosen});
+    this->route(request::open_leave_space{*chosen});
     return;
   }
   if (!ask.demo)
@@ -109,26 +109,13 @@ void app::apply(const request::leave_chat&) {
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) { now.info_open = false; });
 }
 
+// A space left where no plugin asks which of its rooms go with it (the
+// spaces plugin's box): it alone.
 void app::apply(const request::open_leave_space& one) {
-  const mux::conversation* space = model->find(one.space);
-  if (!space)
-    return;
-  mux::ui::leave_space_facts facts{.space = one.space, .name = space->name.empty() ? one.space.id : space->name};
-  for (const std::string& child : space->children)
-    if (const mux::conversation* room = model->find(mux::conversation_id{one.space.account, child}))
-      facts.rooms.push_back({child, room->name.empty() ? child : room->name});
-  mux::ui::show(showing, std::optional(std::move(facts)));
-}
-void app::apply(const request::leave_space& one) {
-  mux::ui::show<mux::ui::leave_space_facts>(showing, std::nullopt);
-  if (ask.demo)
-    return;
-  for (const std::string& room : one.rooms)
-    net->leave(mux::conversation_id{one.space.account, room});
-  net->leave(one.space);
+  if (!ask.demo)
+    net->leave(one.space);
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) { now.info_open = false; });
 }
-void app::apply(const request::close_leave_space&) { mux::ui::show<mux::ui::leave_space_facts>(showing, std::nullopt); }
 
 void app::apply(const request::back&) { this->show_conversations(); }
 

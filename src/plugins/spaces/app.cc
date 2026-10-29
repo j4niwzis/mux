@@ -16,6 +16,7 @@ import mux.core;
 import mux.config;
 import mux.ui;
 import mux.app.kept;
+import mux.app.network;
 import mux.app.services;
 import mux.plugin.spaces.types;
 
@@ -183,6 +184,29 @@ inline void space_bars(contract::chat_folders, type_tag<feature>, const ui::fold
 // (or the direct chats), at a level.
 struct part {
   app::services* s_ = nullptr;
+
+  // Leaving a space: Element's box first, for which of its rooms to leave
+  // with it; then they and it left.
+  void apply(const ui::request::open_leave_space& one) {
+    const conversation* space = s_->model->find(one.space);
+    if (!space)
+      return;
+    leave_space_facts facts{.space = one.space, .name = space->name.empty() ? one.space.id : space->name};
+    for (const std::string& child : space->children)
+      if (const conversation* room = s_->model->find(conversation_id{one.space.account, child}))
+        facts.rooms.push_back({child, room->name.empty() ? child : room->name});
+    ui::show(*s_->showing, std::optional(std::move(facts)));
+  }
+  void apply(const leave_space& one) {
+    ui::show<leave_space_facts>(*s_->showing, std::nullopt);
+    if (s_->demo())
+      return;
+    for (const std::string& room : one.rooms)
+      s_->net->leave(conversation_id{one.space.account, room});
+    s_->net->leave(one.space);
+    ui::change_shown<ui::chat_shown>(*s_->showing, [](ui::chat_shown& now) { now.info_open = false; });
+  }
+  void apply(const ui::request::close_shown<leave_space_facts>&) { ui::show<leave_space_facts>(*s_->showing, std::nullopt); }
 
   // A bar's order, as a drag left it: its items put there in that order --
   // the one moved taken out of the bar it came from, and from hidden.

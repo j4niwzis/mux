@@ -15,6 +15,8 @@ struct feature {
 
 consteval bool provides(contract::chat_folders, type_tag<feature>) { return true; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
+// Its box for leaving a space (its facts and box with its pieces above mux.ui.base).
+consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
 consteval bool provides(contract::side_bars, type_tag<feature>) { return true; }
 
 }  // namespace mux::plugins::spaces

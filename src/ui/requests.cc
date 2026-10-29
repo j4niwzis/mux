@@ -508,11 +508,6 @@ struct open_new_room {};
 struct open_leave_space {
   mux::conversation_id space;
 };
-struct leave_space {
-  mux::conversation_id space;
-  std::vector<std::string> rooms;
-};
-struct close_leave_space {};
 // Create a room -- or a space -- in a space, from its menu.
 struct open_new_room_in {
   mux::conversation_id space;

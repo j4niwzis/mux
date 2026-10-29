@@ -30,6 +30,10 @@ struct registering {
 struct unregistering {
   static constexpr const char* action = "org.unifiedpush.android.distributor.UNREGISTER";
 };
+struct acknowledging {  // a message taken (AND_3's MESSAGE_ACK), by its id
+  static constexpr const char* action = "org.unifiedpush.android.distributor.MESSAGE_ACK";
+  std::string_view id;
+};
 
 jobject activity_of() { return static_cast<jobject>(SDL_GetAndroidActivity()); }
 
@@ -100,6 +104,11 @@ void put_extras(JNIEnv* env, const jni_frame& frame, jobject activity, jobject i
                           env->NewStringUTF("pi"), pi);
 }
 void put_extras(JNIEnv*, const jni_frame&, jobject, jobject, const unregistering&) {}
+void put_extras(JNIEnv* env, const jni_frame&, jobject, jobject intent, const acknowledging& asked) {
+  env->CallObjectMethod(intent, env->GetMethodID(env->FindClass("android/content/Intent"), "putExtra",
+                                                 "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;"),
+                        env->NewStringUTF("id"), string_of(env, asked.id));
+}
 
 // A broadcast to the distributor, by the connection's token.
 template <class Asked>
@@ -139,6 +148,8 @@ std::vector<event> said_of(std::string_view text, std::string_view token, const 
         return {event{endpoint{std::string(value)}}};
       return {event{registered{distributor}}, event{endpoint{std::string(value)}}};
     case 1:
+      if (!value.empty())
+        (void)tell_distributor(acknowledging{value}, distributor, std::string(token));
       return {event{message{}}};
     case 2:
       return {event{unregistered{}}};

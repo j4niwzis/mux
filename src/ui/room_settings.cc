@@ -111,6 +111,16 @@ auto protocol_pages(manage_tab_list<Tabs...>, const palette& colours, const room
   return SKIFF_NAMED(protocol_pages, skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                                 protocol_page<Tabs>(colours, facts)...));
 }
+// The plugins' rows and pages (contract::room_settings_tabs): made as a
+// protocol's are, a row each listed where its tab_visible says.
+template <class... Tabs>
+auto plugin_tab_rows(type_list<Tabs...>, const palette& colours, const room_settings_facts& facts) {
+  return protocol_tab_rows(manage_tab_list<Tabs...>{}, colours, facts);
+}
+template <class... Tabs>
+auto plugin_pages(type_list<Tabs...>, const palette& colours, const room_settings_facts& facts) {
+  return protocol_pages(manage_tab_list<Tabs...>{}, colours, facts);
+}
 // Each protocol's, one of them for a room: by its index in the protocols'
 // list (two protocols may make the same types).
 template <class Tag, class... Tags>
@@ -209,6 +219,7 @@ inline auto room_settings_view(const ui_needs& n, const room_settings_facts& fac
                              c::shown_for<room_facts_t>([](const room_facts_t& now) { return now && now->narrow && now->navigation; },
                                                         icon_button(colours, icon::close{}, sends<request::close_manage>{}))),
                       c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_rows_of(colours, facts)),
+                      plugin_tab_rows(plugin_room_tabs_t{}, colours, facts),
                       manage_tab_row(colours, settings_tab::general{}),
                       manage_tab_row(colours, settings_tab::notifications{}),
                       manage_tab_row(colours, settings_tab::looks{})))),
@@ -230,6 +241,7 @@ inline auto room_settings_view(const ui_needs& n, const room_settings_facts& fac
                                         client_page(tab_up<settings_tab::notifications>{}, notifications_page(colours, facts)),
                                         client_page(tab_up<settings_tab::looks>{}, looks_page(colours, facts)),
                                         c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), protocol_pages_of(colours, facts)),
+                                        plugin_pages(plugin_room_tabs_t{}, colours, facts),
                                         // Under the protocol's page, where its General hosts it.
                                         client_page(general_up{}, room_general_page(colours, facts, presentation.page_header && general_on_its_own(facts)))))))))))));
 }

@@ -28,6 +28,8 @@ import skiff.compose;
 import skiff.widgets.pill;
 import mux.core;
 import mux.config;
+import mux.composition;
+import mux.plugins.types;
 import mux.protocols;
 import skiff.widgets.textbox;
 import :base;
@@ -99,14 +101,30 @@ struct manage_part_union<manage_part_list<Ps...>> {
 template <class... As, class... Bs, class... Rest>
 struct manage_part_union<manage_part_list<As...>, manage_part_list<Bs...>, Rest...>
     : manage_part_union<manage_part_list<As..., Bs...>, Rest...> {};
+// The plugins' tabs (contract::room_settings_tabs), as their room_tabs list them.
+template <class List>
+struct plugin_tab_types;
+template <class... Tabs>
+struct plugin_tab_types<composition::page_list<Tabs...>> {
+  using type = type_list<Tabs...>;
+};
+template <class>
+struct plugin_room_tabs;
+template <class... Features>
+struct plugin_room_tabs<plugin_list<Features...>> {
+  using type = typename joined<type_list<>,
+      typename plugin_tab_types<decltype(room_tabs(contract::room_settings_tabs{}, type_tag<Features>{}))>::type...>::type;
+};
+using plugin_room_tabs_t = typename plugin_room_tabs<composition::providers<contract::room_settings_tabs, enabled_plugins>>::type;
 template <class>
 struct manage_lists;
 template <class... Tags>
 struct manage_lists<protocol_list<Tags...>> {
-  // Every tab a room can have: the client's, then each protocol's.
+  // Every tab a room can have: the client's, each protocol's, the plugins'.
   using protocol_tabs = typename joined<type_list<>, typename tab_types<decltype(manage_tabs_of(state_of<Tags>{}))>::type...>::type;
   using tabs = typename variant_of_types<
-      typename joined<type_list<settings_tab::general, settings_tab::notifications, settings_tab::looks>, protocol_tabs>::type>::type;
+      typename joined<type_list<settings_tab::general, settings_tab::notifications, settings_tab::looks>, protocol_tabs,
+                      plugin_room_tabs_t>::type>::type;
   using parts = typename manage_part_union<manage_part_list<>, decltype(manage_parts_of(state_of<Tags>{}))...>::type;
 };
 // A tab of a room's settings, and what its protocol keeps while they are open.

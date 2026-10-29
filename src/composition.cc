@@ -114,6 +114,15 @@ struct settings_links {
 struct window_state {
   static constexpr std::string_view name = "the window's state";
 };
+// A room's settings, their tabs after the client's and its protocol's
+// (mux.ui:room_settings), as a protocol's own are made:
+//   room_tabs(c, f) -> page_list<its tabs...>; each tab a type of its own,
+//   with tab_title(tab), tab_icon(tab), make_manage_page(tab, palette,
+//   room_settings_facts) and, where not every room has it,
+//   tab_visible(tab, facts) -- found by ADL
+struct room_settings_tabs {
+  static constexpr std::string_view name = "a room's settings' tabs";
+};
 // An account's pages in Manage accounts, beside the client's and its
 // protocol's (mux.ui:accounts), as a protocol's own are made:
 //   account_pages(c, f) -> page_list<its pages...>; each page a type of

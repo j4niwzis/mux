@@ -285,6 +285,9 @@ class account {
   // room: the token before it asked of the room's /context, then paged back
   // from there as load_older does.
   void load_older_before(std::string room, std::string event);
+  // The first message of a room from `at` (milliseconds since the epoch)
+  // on: said as change::message_found_at.
+  void find_message_at(std::string room, std::int64_t at);
   // A window of a room's history around a message (/context), in place of
   // its timeline; and a window paged forward, to the newest.
   void load_context(std::string room, std::string target);

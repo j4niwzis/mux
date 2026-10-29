@@ -365,6 +365,12 @@ struct history_position {
   conversation_id in;
   std::optional<std::string> from;
 };
+// The first message of a chat from a time on, as its account found it
+// (find_message_at): none where there is none from then.
+struct message_found_at {
+  conversation_id in;
+  std::optional<std::string> id;
+};
 // An event the server says is not there -- not found, or not this user's
 // to see: the marks on it let go, for nothing will ever show it.
 struct event_missing {
@@ -380,7 +386,7 @@ struct event_missing {
 // change list -- changes_type(state), found by ADL in its folder (mux.proto.
 // <p>.changes), none where it gives none; and the plugins', in one list
 // (mux.plugins.changes) -- all one variant.
-using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved, change::threads_listed>;
+using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::message_found_at, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved, change::threads_listed>;
 namespace changes_defaults {
 constexpr type_tag<change_list<>> changes_type(const auto&) { return {}; }
 }  // namespace changes_defaults
@@ -1198,6 +1204,8 @@ class model {
   void on(const change::history_position& one) {
     this->in_chat(one.in, [&](conversation& where) { where.history_from = one.from; });
   }
+  // Told to whoever asked (a command): nothing of the model.
+  void on(const change::message_found_at&) {}
   void on(const change::event_missing& one) {
     this->in_chat(one.in, [&](conversation& where) {
     for (auto* marks : {&where.unread_mentions, &where.unread_reactions})

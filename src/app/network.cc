@@ -846,6 +846,19 @@ struct network {
             one.account);
     });
   }
+  // The first message of a chat from a time on (milliseconds since the
+  // epoch), where its account can find it: said as change::message_found_at.
+  void find_message_at(const mux::conversation_id& in, std::int64_t at) {
+    loop.post([this, in, at] {
+      for (auto& one : accounts)
+        spl::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                ask_if_able([&](auto& a) -> decltype(void(a.find_message_at(in.id, at))) { a.find_message_at(in.id, at); }, *account);
+            },
+            one.account);
+    });
+  }
   void load_older(const mux::conversation_id& in, std::string from) {
     loop.post([this, in, from = std::move(from)] {
       for (auto& one : accounts)

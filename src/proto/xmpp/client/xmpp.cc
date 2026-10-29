@@ -1010,6 +1010,37 @@ class account {
     });
   }
 
+  // The first message of a conversation from a time on (milliseconds since
+  // the epoch): its archive asked from then, for one (XEP-0313's start) --
+  // its id as archived() names it. None where the archive has none.
+  void find_message_at(std::string with, std::int64_t at) {
+    this->spawn_guarded([this, with = std::move(with), at] {
+      if (!session_)
+        return;
+      const bool room = rooms_.contains(with);
+      const conversation_id in{id_, with};
+      const auto since = std::chrono::floor<std::chrono::seconds>(std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(at)));
+      tern::mam::query asked{.filter = tern::mam::filter(room ? std::nullopt : std::optional<std::string>(with), std::format("{:%FT%TZ}", since)),
+                             .page = tern::rsm::set{.max = 1}};
+      const auto page = session_->try_archive(std::move(asked), room ? std::optional<std::string>(with) : std::nullopt);
+      std::optional<std::string> found;
+      if (page && !page->results.empty()) {
+        const auto& one = page->results.front();
+        const auto id_of = [&](const auto* got) {
+          if (got && !found)
+            found = got->id.value_or(one.id);
+        };
+        if (one.forwarded.message) {
+          const auto& got = *one.forwarded.message;
+          id_of(got.template get_if<tern::basic::message_chat<tern::forward::plain>>());
+          id_of(got.template get_if<tern::basic::message_normal<tern::forward::plain>>());
+          id_of(got.template get_if<tern::basic::message_groupchat<tern::forward::plain>>());
+        }
+      }
+      sink_(change::message_found_at{in, found});
+    });
+  }
+
   // A message of the archive, as history: under its own id, so that one
   // already had live is the same message.
   void archived(const conversation_id& in, const tern::mam::result& one, bool room) {

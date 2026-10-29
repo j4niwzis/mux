@@ -15,6 +15,7 @@ import loom.cs.joining;
 import loom.cs.leaving;
 import loom.cs.login;
 import loom.cs.message_pagination;
+import loom.cs.room_event_by_timestamp;
 import loom.cs.event_context;
 import loom.cs.receipts;
 import loom.cs.redaction;
@@ -182,6 +183,45 @@ void account<Sink>::load_older(std::string room, std::string from) {
     // -- at its top all along -- page back again at every one, for ever.
     const bool start = got->chunk.empty() || !got->end || *got->end == from;
     sink_(change::history_position{in, start ? std::nullopt : got->end});
+  });
+}
+
+// The first message of a room from a time on, on the account's fiber, as
+// straight-line code: its server asked (MSC3030's timestamp_to_event);
+// where it cannot say, the room paged back from its newest, a page at a
+// time, until a page reaches before then -- the earliest seen from then on.
+template <class Sink>
+void account<Sink>::find_message_at(std::string room, std::int64_t at) {
+  this->spawn_guarded([this, room = std::move(room), at] {
+    if (!api_)
+      return;
+    const conversation_id in{id_, room};
+    using by_time = loom::cs::get_event_by_timestamp;
+    if (const auto got = perform(*api_, by_time{.room_id = room, .ts = at, .dir = by_time::dir_values::f{}})) {
+      sink_(change::message_found_at{in, got->event_id});
+      return;
+    }
+    using paged = loom::cs::get_room_events;
+    std::optional<std::string> from;
+    std::optional<std::string> found;
+    for (int pages = 0; pages < 50; ++pages) {
+      const auto page = perform(*api_, paged{.room_id = room, .from = from, .dir = paged::dir_values::b{}, .limit = 100});
+      if (!page)
+        break;
+      // Newest first: past the first from before then, the last seen from
+      // then on is the one.
+      for (const auto& one : page->chunk) {
+        if (one.origin_server_ts.value_or(at) < at) {
+          sink_(change::message_found_at{in, found});
+          return;
+        }
+        found = one.event_id;
+      }
+      if (page->chunk.empty() || !page->end || page->end == from)
+        break;
+      from = page->end;
+    }
+    sink_(change::message_found_at{in, found});
   });
 }
 

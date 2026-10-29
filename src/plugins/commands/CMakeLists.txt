@@ -6,8 +6,5 @@
 # (cmake/plugins.cmake).
 mux_plugin(commands ORDER 21
   SUMMARY "Slash commands typed in the field: /shrug, /rainbow, /raw, /open, /join, /react, /jump-to-date, /help, and the plugins' own."
-  CHANGES changes.cc
-  TYPES   types.cc
-  MATRIX  matrix.cc
-  APP     app.cc
-  LOOM    cs-room_event_by_timestamp)
+  TYPES types.cc
+  APP   app.cc)

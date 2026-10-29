@@ -10,7 +10,6 @@ import mux.ui;
 import mux.app.services;
 import mux.app.commands;
 import mux.app.network;
-import mux.plugin.commands.matrix;
 import mux.plugin.commands.types;
 
 export namespace mux::plugins::commands {
@@ -152,89 +151,31 @@ struct part {
       this->act().notice("/jump-to-date", "Nothing from then yet: that is after the newest message.");
       return;
     }
-    // Among what is loaded: gone to. Earlier: the server asked for the event
-    // from then (Matrix's timestamp_to_event), gone to with what is around
-    // it once it says -- the oldest loaded meanwhile.
+    // Among what is loaded: gone to.
+    // Earlier than what is loaded: its account asked for the first message
+    // from then (find_message_at -- its server, its archive, or its history
+    // paged back on its own fiber), gone to when it says; the oldest loaded
+    // meanwhile.
     if (from == messages.begin() && messages.front().at > *when) {
-      // Earlier than what is loaded: the server asked where it can say
-      // (Matrix's timestamp_to_event), and the history paged back here
-      // until it reaches then -- for XMPP, or where the server says nothing.
-      // Both at once: an account that cannot be asked (an XMPP one) is not,
-      // and the paging finds it; one that answers first is gone with.
-      asked_at_ = chat;
-      s_->net->ask(chat->account, event_at_asked{chat->id, when->time_since_epoch().count()});
-      this->seek(*chat, *when);
+      sought_ = chat;
+      s_->net->find_message_at(*chat, when->time_since_epoch().count());
     }
     this->act().jump(from->id, asked);
   }
-  // The history paged back until its oldest message is from then -- a page
-  // asked, the next asked as the last comes (its account tells where the
-  // history goes on from: change::history_position), nothing done between:
-  // then the chat's first message from then gone to. At the room's beginning,
-  // or past a bound of pages, its oldest, and a word.
-  struct seeking {
-    conversation_id in;
-    std::chrono::sys_time<std::chrono::milliseconds> when;
-    int pages = 0;
-  };
-  void seek(const conversation_id& in, std::chrono::sys_time<std::chrono::milliseconds> when) {
-    seeking_ = seeking{in, when};
-    this->advance(true);
-  }
-  // A page come, for the chat sought in: on, or done.
-  void take(const change::history_position& one) {
-    if (seeking_ && seeking_->in == one.in)
-      this->advance(one.from.has_value() && !one.from->empty());
-  }
-  void advance(bool more) {
-    auto& now = *seeking_;
-    const conversation* chat = s_->model->find(now.in);
-    if (!chat || s_->chosen() != now.in) {
-      seeking_.reset();
+  // The account's answer: its message gone to, where the chat asked of is
+  // still open.
+  void take(const change::message_found_at& one) {
+    if (sought_ != one.in)
+      return;
+    sought_.reset();
+    if (!one.id) {
+      this->act().notice("/jump-to-date", "Nothing found from then: here is the oldest message loaded.");
       return;
     }
-    const auto& timeline = chat->timeline;
-    const auto done = [&](std::string_view word) {
-      const auto from = std::ranges::find_if(timeline, [&](const message& each) { return each.at >= now.when && !each.id.empty(); });
-      if (from != timeline.end())
-        s_->jump_due = ui::request::jump_to_message{from->id};
-      if (!word.empty())
-        this->act().notice("/jump-to-date", std::string(word));
-      seeking_.reset();
-    };
-    if (!timeline.empty() && timeline.front().at <= now.when) {
-      done({});
-      return;
-    }
-    if (!more || (!chat->history_from && timeline.empty())) {
-      done("That is before the chat's beginning as its server keeps it: here is its oldest message.");
-      return;
-    }
-    if (now.pages == 50) {
-      done("Still not that far back after 50 pages: here is the oldest loaded. Ask again to go further.");
-      return;
-    }
-    ++now.pages;
-    if (chat->history_from)
-      s_->net->load_older(chat->id, *chat->history_from);
-    else
-      s_->net->load_older_before(chat->id, timeline.front().id);
-  }
-  // The server's answer: its event gone to, where the chat asked is open.
-  void take(const event_at& one) {
-    if (asked_at_ != one.in)
-      return;
-    asked_at_.reset();
-    // None found by the server: the paging goes on.
-    if (!one.event)
-      return;
-    // Found: gone to, the paging let go.
-    seeking_.reset();
     if (s_->chosen() == one.in)
-      s_->jump_due = ui::request::jump_to_message{*one.event};
+      s_->jump_due = ui::request::jump_to_message{*one.id};
   }
-  std::optional<conversation_id> asked_at_;
-  std::optional<seeking> seeking_;
+  std::optional<conversation_id> sought_;
   void apply(const help&) {
     this->act().notice("Commands", app::kCommands | std::views::transform([](const app::command_said& one) {
                                      return std::format("{} -- {}", one.usage, one.summary);

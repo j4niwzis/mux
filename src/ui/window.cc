@@ -237,6 +237,16 @@ consteval auto layers_shown_of(plugin_list<Features...>) {
   return type_tag<composition::aggregate_list<skiff::model::Tracked<layer_facts_t<Features>>...>>{};
 }
 using layers_shown_t = typename decltype(layers_shown_of(layer_plugins{}))::type;
+// And what they keep among what is shown (contract::window_state): a value
+// of each's own.
+using state_plugins = composition::providers<contract::window_state, enabled_plugins>;
+template <class Feature>
+using plugin_state_t = typename decltype(state_type(contract::window_state{}, type_tag<Feature>{}))::type;
+template <class... Features>
+consteval auto states_shown_of(plugin_list<Features...>) {
+  return type_tag<composition::aggregate_list<skiff::model::Tracked<plugin_state_t<Features>>...>>{};
+}
+using states_shown_t = typename decltype(states_shown_of(state_plugins{}))::type;
 // Whether something is up that Esc lets go of, as the program says.
 struct overlay_shown {
   bool escapes = false;
@@ -258,6 +268,7 @@ struct shown_root {
   skiff::model::Tracked<thread_compose> thread_composing;
   // Each plugin's layer's: a call, for one.
   layers_shown_t layers;
+  states_shown_t plugin_states;
   skiff::model::Tracked<selection_shown> selection;
   // What is written in the chat's field and the thread's, as the program
   // keeps it.

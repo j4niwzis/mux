@@ -107,6 +107,13 @@ struct chat_header {
 struct settings_links {
   static constexpr std::string_view name = "Settings' links";
 };
+// What a plugin keeps among what the window shows, beside its dialogs and
+// layers (mux.ui:window): state_type(c, f) -> type_tag<a value of its own>,
+// one of it held in the shown model -- set by its part (ui::show), read by
+// its nodes (shown_for, text_for); a proxy editor's error line, for one
+struct window_state {
+  static constexpr std::string_view name = "the window's state";
+};
 // An account's pages in Manage accounts, beside the client's and its
 // protocol's (mux.ui:accounts), as a protocol's own are made:
 //   account_pages(c, f) -> page_list<its pages...>; each page a type of

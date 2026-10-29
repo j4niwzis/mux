@@ -164,6 +164,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: sh tools/prune_caches.sh "web-emsdk6.0.13-v1-" "web-emsdk6.0.13-v1-${{ github.sha }}"
+      # What mux.wasm is made of: each function's code size by its name, the
+      # biggest first, and the symbol map -- the binary itself has no names.
+      - name: Size of mux.wasm by function
+        run: |
+          python3 tools/wasm_sizes.py build-web/mux.wasm build-web/mux.js.symbols > build-web/wasm-sizes.txt || true
+          head -60 build-web/wasm-sizes.txt || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-sizes-${{ github.sha }}
+          path: |
+            build-web/wasm-sizes.txt
+            build-web/mux.js.symbols
+          if-no-files-found: ignore
       - name: Browser smoke checks
         run: |
           npm install --no-save --prefix /tmp/mux-web-check playwright@1.62.1

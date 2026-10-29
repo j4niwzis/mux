@@ -473,6 +473,11 @@ if(MUX_UI)
   # The emoji face the window draws emoji with, as tdesktop has its own:
   # Noto Color Emoji, fetched once at a pinned commit and checked, and put
   # in the binary by emoji_font.c's #embed.
+  # Not on a page: the browser draws the words, emoji among them, with its
+  # own faces -- the 25 MB were most of mux.wasm's data and drew nothing.
+  if(MUX_BROWSER)
+    target_sources(mux_modules PRIVATE src/emoji_font_none.c)
+  else()
   set(mux_emoji_dir ${CMAKE_BINARY_DIR}/fonts)
   set(mux_emoji_font ${mux_emoji_dir}/NotoColorEmoji-Regular.ttf)
   if(NOT EXISTS ${mux_emoji_font})
@@ -485,6 +490,7 @@ if(MUX_UI)
   target_sources(mux_modules PRIVATE src/emoji_font.c)
   set_property(SOURCE src/emoji_font.c APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_emoji_dir})
   set_property(SOURCE src/emoji_font.c APPEND PROPERTY OBJECT_DEPENDS ${mux_emoji_font})
+  endif()
   # Telegram's chat pattern, as tdesktop lays it over a theme's gradient:
   # its art/background.tgv (GPL-3.0, combined under AGPL-3.0's section 13),
   # fetched once at a pinned commit and checked, and put in the binary by

@@ -11,6 +11,9 @@ target_link_options(mux PRIVATE
   -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=268435456 -sMAXIMUM_MEMORY=2147483648
   -sSTACK_SIZE=8388608 -sPTHREAD_POOL_SIZE=12 -sEXIT_RUNTIME=1
   -sFORCE_FILESYSTEM=1 -sFETCH -lidbfs.js
+  # Each function's name by its index, beside the stripped binary: what its
+  # code is made of, to be measured (tools: the size report).
+  --emit-symbol-map
   "-sEXPORTED_RUNTIME_METHODS=ccall,UTF8ToString"
   "-sEXPORTED_FUNCTIONS=${mux_browser_exports}")
 set(mux_web_dir "${CMAKE_CURRENT_BINARY_DIR}/web")

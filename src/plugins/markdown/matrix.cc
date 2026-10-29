@@ -1,31 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.logic.markdown -- What is typed, as Element sends it: the Markdown in
-// it -- quotes, code, emphasis, strong, strike, links, lists -- made the HTML
-// Matrix carries beside the text (org.matrix.custom.html). Text with none of
-// it has no HTML: it is sent as it is.
-export module mux.logic.markdown;
+// mux.plugin.markdown.matrix -- What is typed, as Element sends it: the
+// Markdown in it -- quotes, code, emphasis, strong, strike, links, lists --
+// made the HTML Matrix carries beside the text (org.matrix.custom.html),
+// with the field's runs where they are. Text with none of either has no
+// HTML: it is sent as it is. Found where the account is made
+// (mux.plugins.matrix), by the account's written_html.
+export module mux.plugin.markdown.matrix;
 
 import std;
 import chevron.escape;
+import mux.composition;
+import mux.logic.formatting;
+import mux.plugin.markdown.types;
 
-export namespace mux::logic {
+export namespace mux::plugins::markdown {
 
-
-// A run of the text formatted in the field -- bold, a link -- by byte
-// offsets in the whole text, and the tags it is written with.
-struct html_run {
-  std::size_t first = 0;
-  std::size_t last = 0;
-  std::string open;
-  std::string close;
-  std::optional<std::string> replacement;
-};
-// The runs a line is written with: they, and where the whole text they
-// count in starts -- the line a view into it.
-struct runs_in {
-  const char* origin = nullptr;
-  const std::vector<html_run>* runs = nullptr;
-};
+using logic::html_run;
+using logic::runs_in;
 
 // A line's inline Markdown: `code` first (nothing inside it is Markdown),
 // then [text](url), **strong**, ~~strike~~, *emphasis* and _emphasis_.
@@ -250,4 +241,10 @@ struct runs_in {
   return html;
 }
 
-}  // namespace mux::logic
+// Its markup, as the account asks it (contract::text_markup).
+inline std::optional<std::string> markup_html(contract::text_markup, type_tag<feature>, std::string_view text,
+                                              const std::vector<html_run>& runs) {
+  return markdown_html(text, runs);
+}
+
+}  // namespace mux::plugins::markdown

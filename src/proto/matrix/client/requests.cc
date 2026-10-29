@@ -51,7 +51,7 @@ import mux.core;
 import mux.http;
 import mux.net;
 import loom.cs.pusher;
-import mux.logic.markdown;
+import mux.logic.formatting;
 import :account;
 
 // The members defined here are declared in :account, and exported there.

@@ -48,7 +48,7 @@ import mux.core;
 import mux.http;
 import mux.net;
 import loom.cs.pusher;
-import mux.logic.markdown;
+import mux.logic.formatting;
 import mux.logic.reactions;
 import :account;
 import :requests;
@@ -57,9 +57,11 @@ import :requests_more;
 // The members defined here are declared in :account, and exported there.
 namespace mux::proto::matrix::client {
 
-// Defined further down, beside send: a message made HTML.
-[[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes,
-                                                        const std::vector<styled_run>& styles = {});
+// Defined further down, beside send: a message made HTML, read as the
+// sink's plugins read it (written_html).
+template <class Plugins>
+[[nodiscard]] std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes,
+                                                 const std::vector<styled_run>& styles = {});
 
 template <class Sink>
 void account<Sink>::edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles) {
@@ -67,7 +69,7 @@ void account<Sink>::edit(std::string room, std::string event, std::string text, 
     if (!api_)
       return;
     // Made HTML as a message sent is: its runs and its Markdown, the room's emoji.
-    const auto html = html_of(text, emotes_in(room), styles);
+    const auto html = html_of<typename heard_plugins<Sink>::type>(text, emotes_in(room), styles);
     const auto content = loom::client::edit_message(event, text, html);
     if (this->send_room_event(loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
@@ -86,7 +88,7 @@ void account<Sink>::edit_caption(std::string room, std::string event, std::strin
       return;
     const auto content = loom::client::edit_picture(
         event, loom::client::media_said{.uri = picture.source, .name = picture.name, .caption = caption,
-                                        .caption_html = caption.empty() ? std::nullopt : html_of(caption, emotes_in(room), {}),
+                                        .caption_html = caption.empty() ? std::nullopt : html_of<typename heard_plugins<Sink>::type>(caption, emotes_in(room), {}),
                                         .mimetype = picture.mimetype, .size = picture.size},
         picture.width, picture.height);
     if (this->send_room_event(loom::cs::send_message{.room_id = room,
@@ -243,14 +245,15 @@ void account<Sink>::leave(std::string room) {
                                     }},
                     run.style);
 }
-[[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes,
-                                                        const std::vector<styled_run>& styles) {
+template <class Plugins>
+[[nodiscard]] std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes,
+                                                 const std::vector<styled_run>& styles) {
   auto valid = styles | std::views::filter([&](const styled_run& run) {
     return run.first < run.last && run.last <= body.size();
   });
   const std::vector<mux::logic::html_run> runs =
       valid | std::views::transform([&](const styled_run& run) { return html_run_of(run, body); }) | std::ranges::to<std::vector<mux::logic::html_run>>();
-  if (auto marked = mux::logic::markdown_html(body, runs))
+  if (auto marked = written_html<Plugins>(body, runs))
     return emotes.empty() ? *marked : emotes_in_html(*marked, emotes);
   return with_emotes(body, emotes);
 }
@@ -287,7 +290,7 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
         run.last += run.last > at ? grown : 0;
       }
     }
-    const auto html = html_of(marked, emotes_in(room), styles);
+    const auto html = html_of<typename heard_plugins<Sink>::type>(marked, emotes_in(room), styles);
     sink_(change::message_added{message{
         .in = in,
         .id = txn,
@@ -440,7 +443,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
                  reply_to = std::move(reply_to), styles = std::move(styles)] {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
-    const auto html = html_of(body, emotes_in(room), styles);
+    const auto html = html_of<typename heard_plugins<Sink>::type>(body, emotes_in(room), styles);
     sink_(change::message_added{message{.in = in,
                                         .id = txn,
                                         .sender = id_.address,

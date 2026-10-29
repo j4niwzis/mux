@@ -12,7 +12,7 @@ import mux.logic.links;
 import mux.logic.messages;
 import mux.logic.forwarding;
 import mux.logic.blurhash;
-import mux.logic.markdown;
+import mux.logic.formatting;
 import mux.logic.reactions;
 
 #include "gtest/gtest-macros.h"
@@ -185,11 +185,11 @@ TEST(Blurhash, DecodesAndRefusesWhatIsNotOne) {
 
 }  // namespace
 
-TEST(Markdown, PreservedEmojiSourcesReplaceRepeatedLabelsInsideFormattedText) {
+TEST(Formatting, PreservedEmojiSourcesReplaceRepeatedLabelsInsideFormattedText) {
   const std::string image = R"(<img data-mx-emoticon src="mxc://remote/cat" alt=":cat:" height="32">)";
   const std::vector<mux::logic::html_run> runs{{0, 13, "<strong>", "</strong>"},
       {2, 7, {}, {}, image}, {8, 13, {}, {}, image}};
-  EXPECT_EQ(mux::logic::markdown_html("a :cat: :cat: z", runs),
+  EXPECT_EQ(mux::logic::runs_html("a :cat: :cat: z", runs),
       "<strong>a " + image + " " + image + "</strong> z");
 }
 

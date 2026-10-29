@@ -33,6 +33,7 @@ import loom.cs.wellknown;
 import mux.config;
 import mux.core;
 import mux.composition;
+import mux.logic.formatting;
 import mux.proto.matrix.requests;
 import mux.http;
 import mux.net;
@@ -177,6 +178,21 @@ struct account_made<Sink, plugin_list<Maker>> {
 template <class Sink>
 using account_of =
     typename account_made<Sink, composition::providers<contract::matrix_account, typename heard_plugins<Sink>::type>>::type;
+
+// What is typed, as HTML: read as markup by the plugin that reads it
+// (contract::text_markup: Markdown, the markdown plugin's) -- found by ADL
+// where the account is made -- else the field's runs alone.
+inline std::optional<std::string> written_html_by(plugin_list<>, std::string_view text, const std::vector<logic::html_run>& runs) {
+  return logic::runs_html(text, runs);
+}
+template <class Markup>
+std::optional<std::string> written_html_by(plugin_list<Markup>, std::string_view text, const std::vector<logic::html_run>& runs) {
+  return markup_html(contract::text_markup{}, type_tag<Markup>{}, text, runs);
+}
+template <class Plugins>
+std::optional<std::string> written_html(std::string_view text, const std::vector<logic::html_run>& runs = {}) {
+  return written_html_by(composition::providers<contract::text_markup, Plugins>{}, text, runs);
+}
 
 // A message shown as being sent: marked not sent where its fiber ends
 // before the server's answer is told -- by anything at all. Only a refusal

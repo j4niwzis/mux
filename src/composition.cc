@@ -36,6 +36,13 @@ namespace contract {
 struct passphrases {
   static constexpr std::string_view name = "the passphrases asked";
 };
+// What is typed read as markup -- Markdown -- before it is sent, beside the
+// runs the field formatted (mux.proto.matrix.client: written_html):
+//   markup_html(c, f, text, runs) -> std::optional<std::string>, the HTML
+//   of both; none where neither has any. One plugin at most
+struct text_markup {
+  static constexpr std::string_view name = "the text's markup";
+};
 // The Matrix account, made by a plugin over the client's own
 // (mux.proto.matrix.client, account_of): end-to-end encryption's.
 //   matrix_account_made(c, f, type_tag<Sink>) -> std::type_identity<its

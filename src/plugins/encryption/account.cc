@@ -59,7 +59,7 @@ import loom.cs.profile;
 import loom.cs.presence;
 import loom.cs.device_management;
 import loom.cs.pusher;
-import mux.logic.markdown;
+import mux.logic.formatting;
 import loom.names;
 import loom.cs.voip;
 import mux.logic.reactions;

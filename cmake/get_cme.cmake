@@ -17,12 +17,12 @@
 # remembered, and a pin that differs from it wins -- while -DCME_VERSION=
 # on the command line still stands until this file says something else.
 #
-# The registry revision whose meson ports leave a machine-provided dependency to its own .pc.
+# cmake-everywhere v0.2.53: meson ports leave a machine-provided dependency to its own .pc.
 # Its archive is pinned by digest along with its commit.
-set(CME_PINNED "cbdaf0a51a43d24c942aae6021e53a06411bb5ca")
-set(CME_PINNED_SHA256 "a412ed4a0c2aa0ec2412dc44cc470aa721277b42d4e24a771b592587f29a769e")
+set(CME_PINNED "v0.2.53")
+set(CME_PINNED_SHA256 "bbbbeb647136ecf338d146e45f7c34d366ca602e40d6eb7656ae5b4fbe43a633")
 set(CME_PINNED_URL
-  "https://github.com/j4niwzis/cmake-everywhere/archive/cbdaf0a51a43d24c942aae6021e53a06411bb5ca.tar.gz")
+  "https://github.com/j4niwzis/cmake-everywhere/releases/download/v0.2.53/cmake-everywhere-0.2.53.tar.gz")
 if(NOT "${CME_PIN_APPLIED}" STREQUAL "${CME_PINNED}")
   set(CME_VERSION "${CME_PINNED}" CACHE STRING
     "cmake-everywhere release" FORCE)

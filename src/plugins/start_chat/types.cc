@@ -16,17 +16,28 @@ struct feature {
   static constexpr std::string_view name = "start chat";
 };
 
-// Start chat open: the people known, one's own link, those found for what
-// is typed, by which account; the rows shown; and, inviting to a room
-// instead, which and its name.
-struct shown {
+// Start chat open, by a protocol's account, as its own type: the people
+// known, those found for what is typed; the rows shown; and one's own link
+// to send. Inviting to a room instead, another type: which room, its name.
+template <class Protocol>
+struct start_of {
+  using protocol = Protocol;
   std::vector<found_person> people;
-  std::string own_link;
   std::vector<found_person> found;
   std::string query;
-  std::optional<account_id> by;
+  account_id by;
   skiff::model::Keyed<std::string, found_person> rows;
-  std::optional<conversation_id> inviting;
+  std::string own_link;
+};
+template <class Protocol>
+struct invite_of {
+  using protocol = Protocol;
+  std::vector<found_person> people;
+  std::vector<found_person> found;
+  std::string query;
+  account_id by;
+  skiff::model::Keyed<std::string, found_person> rows;
+  conversation_id inviting;
   std::string room_name;
 };
 
@@ -38,7 +49,6 @@ struct pick {
 
 consteval bool provides(contract::drawer_rows, type_tag<feature>) { return true; }
 consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
-constexpr type_tag<shown> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
 
 }  // namespace mux::plugins::start_chat

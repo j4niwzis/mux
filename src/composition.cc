@@ -122,6 +122,14 @@ struct media_pages {
 struct message_menu {
   static constexpr std::string_view name = "a message's menu";
 };
+// What goes above a message's text, in its bubble (mux.ui.messages:message):
+//   head_of(c, f, head_facts&) -> std::optional<message_head>: the node --
+//   a quoted line, pressed to go where it says -- and how wide the bubble
+//   is at least for it; it may take what it shows out of the text (the
+//   facts' `shown`). The first plugin's that has one.
+struct message_heads {
+  static constexpr std::string_view name = "a message's head";
+};
 // A message's trailers: what goes after its text, at the foot of its bubble,
 // that its time sits beside (mux.ui:message):
 //   extend(c, f, trailer_facts) -> std::optional<its node>:

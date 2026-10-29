@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.plugin.replies.types -- What the replies plugin names, and what it
-// says it provides: its rows of a message's menu, and a part of the program.
+// says it provides: its rows of a message's menu, the head of a reply's
+// bubble, and a part of the program.
 // Light: mux.ui sees it.
 export module mux.plugin.replies.types;
 
@@ -21,5 +22,7 @@ struct quote_reply {};
 
 consteval bool provides(contract::message_menu, type_tag<feature>) { return true; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
+// What a reply shows of the message it answers, above its text.
+consteval bool provides(contract::message_heads, type_tag<feature>) { return true; }
 
 }  // namespace mux::plugins::replies

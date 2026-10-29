@@ -74,6 +74,24 @@ export namespace mux::ui {
       c::styled({.fillX = true}, std::move(text))));
 }
 using quote_row_t = decltype(quote_row(std::declval<const palette&>(), skia::SkColor{}, std::string{}, std::string{}));
+// What a plugin puts above a message's text (contract::message_heads): a
+// quoted line, pressed to go where it says -- the replies', the message
+// answered -- and the bubble's least width for it.
+using head_node_t = decltype(skiff::compose::onClick(request::jump_to_message{}, quote_row(std::declval<const palette&>(), skia::SkColor{},
+                                                                                          std::string{}, std::string{})));
+struct message_head {
+  head_node_t node;
+  float least_width = 0.0f;
+};
+// What a plugin is given to make it from: the message, its chat, and its
+// text as it will be shown -- the plugin may take a part of it into its head.
+struct head_facts {
+  const palette& colours;
+  const conversation& in;
+  const message& said;
+  const model* now;
+  mentioned& shown;
+};
 
 // A protocol's own sticker nodes, and its making of one for a message:
 // none by default -- the picture.
@@ -220,6 +238,19 @@ struct plugin_trailers<plugin_list<Features...>> {
   }
 };
 using trailers_t = plugin_trailers<composition::providers<contract::message_trailers, enabled_plugins>>;
+// What plugins put above the text (contract::message_heads): the first
+// one's that has a head for the message.
+template <class List>
+struct plugin_heads;
+template <class... Features>
+struct plugin_heads<plugin_list<Features...>> {
+  static std::optional<message_head> made(head_facts facts) {
+    std::optional<message_head> out;
+    ((out ? void() : void(out = head_of(contract::message_heads{}, type_tag<Features>{}, facts))), ...);
+    return out;
+  }
+};
+using heads_t = plugin_heads<composition::providers<contract::message_heads, enabled_plugins>>;
 
 // What plugins put in the bubble after its text and blocks
 // (contract::message_cards) -- a link's preview -- in their order, each in
@@ -881,15 +912,10 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   // shown in the reply's header, as the part answered, and not again in the
   // text -- only where that message says all of it.
   mentioned shown = shown_text_of(in, said, now);
-  std::optional<std::string> header_quote;
-  if (said.replies_to) {
-    const message* answered = held_message(in, *said.replies_to);
-    mentioned taken = shown;
-    if (const auto quote = take_opening_quote(taken); quote && answered && squeezed(quote_line_of(*answered, in, now)).contains(squeezed(*quote))) {
-      header_quote = quote;
-      shown = std::move(taken);
-    }
-  }
+  // What goes above it, as a plugin says (contract::message_heads) -- the
+  // quote of the message it answers, the replies' -- which may take the
+  // text's opening quote into it.
+  std::optional<message_head> head = heads_t::made(head_facts{colours, in, said, now, shown});
   // The quote's colour: the accent on theirs; on one's own, the text's, as
   // tdesktop's outgoing blockquote -- not the accent on its accent.
   const skia::SkColor quote_colour = mine ? colours.text : colours.accent;
@@ -916,43 +942,12 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
                            marks_fragment{pieces.front().styles, quote_colour}, bubble_words_t(std::move(words))));
   // The plugins' cards: the first link's preview, where it has come.
   auto cards = cards_t::built(card_facts{colours, said, first_link_of(said), now, f.previews_shown});
-  // What it answers, in the timeline, in a thread or fetched aside: pressed,
-  // that message -- the part the header shows marked there.
-  std::optional<decltype(c::onClick(request::jump_to_message{}, quote_row(colours, 0, "", "")))> quote;
-  if (said.replies_to) {
-    const message* found = held_message(in, *said.replies_to);
-    const bool known = found != nullptr;
-    // A picture's: its thumbnail, and its caption or "Photo"; a file's: its
-    // name; else its text.
-    std::optional<std::string> pictured;
-    std::string line = header_quote ? *header_quote : known ? quote_line_of(*found, in, now) : std::string("not loaded");
-    if (known && found->attachment) {
-      if (is_picture(found->attachment->kind))
-        pictured = found->attachment->source;
-      if (line.empty())
-        line = is_picture(found->attachment->kind) ? std::string("Photo") : found->attachment->name;
-    }
-    if (!header_quote)
-      std::ranges::replace(line, '\n', ' ');
-    const bool with_picture = pictured.has_value();
-    const std::string from = known ? (found->outgoing ? std::string("You") : sender_name(in, found->sender)) : std::string("A message");
-    // The bubble at least as wide as the quote asks -- its name, "quoted"
-    // after it, and its line up to maxSignatureSize -- so that a short answer
-    // to a long message does not stretch its bubble to the full width.
-    if (skia::SkFont* font = skiff::paint::defaultFont()) {
-      skiff::paint::Painter measure(nullptr, *font);
-      const float who = measure.measure(from, 13.0f) + (header_quote ? 8.0f + std::ceil(measure.measure("quoted", 11.0f)) : 0.0f);
-      const float words_wide = std::max(who, std::min(measure.measure(line, 13.0f), kReplyLineMax));
-      const float around = (with_picture && !header_quote ? 7.0f + 32.0f + 4.0f : 11.0f) + 6.0f + 2.0f * kBubblePadX;
-      rules.base_min = std::min(std::ceil(words_wide) + around, kBubbleMaxWidth + 2.0f * kBubblePadX);
-    } else {
-      rules.base_min = 160.0f;
-    }
+  // Its head: the bubble at least as wide as it asks.
+  std::optional<head_node_t> quote;
+  if (head) {
+    rules.base_min = head->least_width;
     spec.minWidth = rules.base_min;
-    quote.emplace(c::onClick(request::jump_to_message{*said.replies_to, header_quote, said.id},
-                             quote_row(colours, known ? avatar_colour(found->sender) : colours.accent, from, std::move(line),
-                                       header_quote ? std::nullopt : std::move(pictured), header_quote.has_value(), known && found->sticker),
-                             "Go to the message answered"));
+    quote.emplace(std::move(head->node));
   }
   // A sticker's: no bubble under it, so what is over it -- a forward's line,
   // the quote of what it answers -- each on a small plate of its own, as

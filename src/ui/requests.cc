@@ -513,10 +513,6 @@ struct open_new_room_in {
 // Threads: their panel opened or closed, one opened or let go (back to the
 // list), an answer sent in one, one begun from a message's menu.
 // A chat background: its dialog, for a level; what is chosen there.
-struct open_wallpaper {
-  mux::choice_level_t level;
-};
-struct close_wallpaper {};
 // Spaces: a bar's order, as a drag left it -- the item moved out of the
 // bar it came from, where it came from one; an item's bars, as chosen;
 // the bars at all, and the top one.

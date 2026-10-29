@@ -254,12 +254,6 @@ struct panel_ease_t {
   skiff::paint::Tween t{1.0f, 260.0f};
   float from = 1.0f, to = 1.0f;
 };
-// A chat background's dialog, for a level.
-struct open_wallpaper_at {
-  using Answer = ::mux::ui::request::open_wallpaper;
-  choice_level_t level;
-  ::mux::ui::request::open_wallpaper operator()() { return ::mux::ui::request::open_wallpaper{level}; }
-};
 // A background's picture, read from where mux keeps it and decoded once.
 inline skia::Sp<skia::SkImage> wallpaper_picture(const std::string& path) {
   static std::map<std::string, skia::Sp<skia::SkImage>> read;

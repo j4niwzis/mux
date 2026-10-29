@@ -94,8 +94,6 @@ class looks_part {
     (void)k_->write();
     s_->refresh_due = true;
   }
-  void apply(const request::open_wallpaper& one) { mux::ui::show(*s_->showing, std::optional(mux::ui::wallpaper_facts{one.level})); }
-  void apply(const request::close_wallpaper&) { mux::ui::show<mux::ui::wallpaper_facts>(*s_->showing, std::nullopt); }
   // A background chosen: the theme's, plain, or as the level over it says,
   // set at once; a picture, chosen first in the system's dialog (took_files).
   void apply(const request::set_wallpaper& one) {
@@ -202,7 +200,6 @@ class looks_part {
                                      }},
                   level);
     (void)k_->write();
-    mux::ui::show<mux::ui::wallpaper_facts>(*s_->showing, std::nullopt);
     s_->refresh_due = true;
   }
 

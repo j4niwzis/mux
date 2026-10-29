@@ -356,23 +356,6 @@ inline auto look_choices(const palette& colours, choice_level_t level) {
 }
 using look_choices_t = decltype(look_choices(std::declval<const palette&>(), choice_level_t{}));
 
-// A chat background and its looks chosen, at a level, in a dialog.
-struct wallpaper_facts {
-  choice_level_t level;
-};
-inline auto wallpaper_box(const ui_needs& n, const wallpaper_facts& facts) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(wallpaper_box, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}}),
-      page_header(*n.colours, "Chat background and looks", no_back{}, sends<request::close_wallpaper>{}, false, true),
-      look_choices(*n.colours, facts.level)));
-}
-using wallpaper_box_t = decltype(wallpaper_box(std::declval<const ui_needs&>(), std::declval<const wallpaper_facts&>()));
-// The dialog it is shown in.
-inline dialog_look content_look(std::type_identity<wallpaper_facts>) { return {.size = dialog_size::fitting{380.0f}}; }
-template <class Needs>
-auto make_content(const Needs& needs, const wallpaper_facts& facts) {
-  return wallpaper_box(needs, facts);
-}
 
 }  // namespace mux::ui
 

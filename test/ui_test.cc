@@ -135,8 +135,6 @@ struct stub {
   void search_elsewhere(std::string) {}
   void open_packs() {}
   void toggle_threads() {}
-  void open_wallpaper(mux::choice_level_t) {}
-  void close_wallpaper() {}
   void set_bubbles(mux::choice_level_t, std::optional<mux::config::bubble_look>,
                    mux::config::look_part_t = mux::config::look_part::bubbles{}) {}
   void set_frost_blur(int) {}

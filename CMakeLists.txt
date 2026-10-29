@@ -219,7 +219,7 @@ target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_gener
         src/logic/link_base.cc src/proto/links.cc
         src/logic/forwarding.cc src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
         src/logic/blurhash.cc src/logic/emoji.cc src/logic/reactions.cc src/logic/markdown.cc src/logic/room_events.cc
-        ${mux_plugin_matrix} ${mux_plugins_matrix})
+        ${mux_plugin_matrix} ${mux_plugins_matrix} ${mux_plugin_xmpp} ${mux_plugins_xmpp})
 target_compile_features(mux_modules PUBLIC cxx_std_26)
 # The emoji's keywords, as Unicode's CLDR annotates them in English and in
 # Russian -- what the emoji search matches besides the names, as Telegram's

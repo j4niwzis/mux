@@ -9,6 +9,7 @@ import mux.core;
 // What the plugins hear of a Matrix account's events: found where the
 // account is made.
 import mux.plugins.matrix;
+import mux.plugins.xmpp;
 import mux.config;
 import mux.net;
 import mux.preview;

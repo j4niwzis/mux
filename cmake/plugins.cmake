@@ -25,22 +25,28 @@ list(TRANSFORM mux_plugin_folders REPLACE "/CMakeLists.txt$" "")
 #   MATRIX    what it hears of a Matrix account's events, and sends: seen
 #             where the account is made (mux.plugins.matrix); built where
 #             MUX_PROTOCOL_MATRIX is on -- mux.plugin.<name>.matrix
+#   XMPP      what it asks of an XMPP account, through its door for plugins
+#             (mux.plugins.xmpp); built where MUX_PROTOCOL_XMPP is on --
+#             mux.plugin.<name>.xmpp
 #   ORDER     its place among the plugins (where they come in turn: tabs,
 #             parts), then by name
 #   REQUIRES  the plugins it needs, turned on too
 #   LIBRARIES what it links -- a call's WebRTC -- linked with the window
 function(mux_plugin name)
-  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER" "CHANGES;TYPES;UI;UI_TOP;APP;MATRIX;REQUIRES;LIBRARIES")
+  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER" "CHANGES;TYPES;UI;UI_TOP;APP;MATRIX;XMPP;REQUIRES;LIBRARIES")
   if(NOT DEFINED one_ORDER)
     message(FATAL_ERROR "src/plugins/${name}/CMakeLists.txt: mux_plugin(${name}) needs its ORDER.")
   endif()
   if(NOT MUX_PROTOCOL_MATRIX)
     set(one_MATRIX)
   endif()
+  if(NOT MUX_PROTOCOL_XMPP)
+    set(one_XMPP)
+  endif()
   if(one_CHANGES)
     set_property(GLOBAL APPEND PROPERTY MUX_PLUGINS_WITH_CHANGES ${name})
   endif()
-  foreach(layer IN ITEMS CHANGES TYPES UI UI_TOP APP MATRIX)
+  foreach(layer IN ITEMS CHANGES TYPES UI UI_TOP APP MATRIX XMPP)
     list(TRANSFORM one_${layer} PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
     set_property(GLOBAL APPEND PROPERTY MUX_PLUGIN_${layer} ${one_${layer}})
     if(one_${layer})
@@ -85,7 +91,7 @@ else()
   set(mux_all_plugins OFF)
 endif()
 get_property(mux_plugin_libraries GLOBAL PROPERTY MUX_PLUGIN_LIBRARIES)
-foreach(layer IN ITEMS CHANGES TYPES UI UI_TOP APP MATRIX)
+foreach(layer IN ITEMS CHANGES TYPES UI UI_TOP APP MATRIX XMPP)
   string(TOLOWER "${layer}" lower)
   get_property(mux_plugin_${lower} GLOBAL PROPERTY MUX_PLUGIN_${layer})
   get_property(mux_plugin_modules_${lower} GLOBAL PROPERTY MUX_PLUGIN_MODULES_${layer})
@@ -128,3 +134,6 @@ mux_plugins_module(mux_plugins_changes mux.plugins.changes "mux.core.ids;${mux_p
 # What the plugins hear of a Matrix account's events: imported where the
 # account is made, so that it finds them (mux.app.network).
 mux_plugins_module(mux_plugins_matrix mux.plugins.matrix "${mux_plugin_modules_matrix}" "")
+# What the plugins ask of an XMPP account: imported where its asks are put to
+# the account (mux.app.network).
+mux_plugins_module(mux_plugins_xmpp mux.plugins.xmpp "${mux_plugin_modules_xmpp}" "")

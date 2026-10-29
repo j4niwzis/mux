@@ -862,6 +862,26 @@ class account {
     });
   }
 
+  // What a plugin's XMPP side (mux.plugins.xmpp) does through the account:
+  // work on the account's own loop, where what follows may be done; a query
+  // asked of an entity, its answer read as the account's own are (only
+  // while connected); the account's server; and a change told to the
+  // program.
+  template <class Work>
+  void on_fiber(Work work) {
+    this->spawn_guarded(std::move(work));
+  }
+  [[nodiscard]] bool connected() const { return static_cast<bool>(session_); }
+  template <class Query, class Asked>
+  auto request(Asked asked) {
+    return session_->template try_request<Query>(std::move(asked));
+  }
+  [[nodiscard]] const std::string& server() const { return domain_; }
+  template <class Change>
+  void tell_program(Change change) {
+    sink_(std::move(change));
+  }
+
   // XEP-0030: a MUC service lists its rooms; an account domain lists its
   // services first. Searches are local because disco has no search query.
   void search_directory(std::string server, std::string query, std::optional<std::string> since = std::nullopt) {

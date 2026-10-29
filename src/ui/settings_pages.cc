@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:proxies -- Settings: the home page, animations.
+// mux.ui:settings_pages -- Settings: the home page, animations. (Proxies are the proxies plugin's: src/plugins/proxies.)
 module;
 #include "skiff/named.h"
-export module mux.ui:proxies;
+export module mux.ui:settings_pages;
 
 import std;
 import splice;

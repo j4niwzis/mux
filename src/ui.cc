@@ -22,7 +22,7 @@ export import :add_account;
 export import :account_forms;
 export import :accounts;
 export import :drawer;
-export import :proxies;
+export import :settings_pages;
 export import :appearance;
 export import :storage;
 export import :settings;

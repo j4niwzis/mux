@@ -16,7 +16,7 @@ import mux.config;
 import mux.ui.base;
 import mux.composition;
 import mux.plugins.ui;
-import :proxies;
+import :settings_pages;
 import :appearance;
 import :storage;
 import :about;

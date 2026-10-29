@@ -20,7 +20,7 @@ import mux.core;
 import mux.config;
 import mux.ui.base;
 import :accounts;
-import :proxies;
+import :settings_pages;
 
 export namespace mux::ui {
 

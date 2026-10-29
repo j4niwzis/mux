@@ -276,6 +276,10 @@ struct program_parts {
 
 export namespace mux::composition {
 
+// A plugin's list of pages, tabs or parts, as its contracts ask it
+// (account_pages, settings_pages, room_settings' tabs): named here too.
+using ::mux::contract::page_list;
+
 namespace defaults {
 consteval bool provides(const auto&, const auto&) { return false; }
 }  // namespace defaults

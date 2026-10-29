@@ -322,6 +322,8 @@ class account {
   void send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles = {});
   // The user directory searched: people_found for what was asked.
   void search_people(std::string term);
+  // Room keys sent only to verified sessions, or not: the account's choice.
+  void set_only_verified(bool on);
   // A room's gap since the last sync, from where the sync left it back to
   // the event it had last: its events put in the timeline by their time --
   // between what was there and what the sync brought, where nothing pages

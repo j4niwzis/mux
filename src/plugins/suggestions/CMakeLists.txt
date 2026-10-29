@@ -1,5 +1,6 @@
 # The list over the chat's composer, as Telegram's: the members matching
-# what follows an @, the emoji matching what follows a ':', or the slash
+# what follows an @, the rooms whose address matches what follows a #, the
+# emoji matching what follows a ':', or the slash
 # commands matching what follows a '/' at the start -- Up and
 # Down through it, Enter, Tab or a press picks, Esc closes it. Built where
 # MUX_PLUGIN_SUGGESTIONS is on (cmake/plugins.cmake).

@@ -70,6 +70,11 @@ struct part {
                                    if (const auto sign = text.rfind('@'); sign != std::string::npos)
                                      mux::ui::put_mention(now, sign, picked.title, picked.id);
                                  },
+                                 [&](const alias_asked&) {
+                                   // The # and what follows it made the room's address, and a space.
+                                   if (const auto sign = text.rfind('#'); sign != std::string::npos)
+                                     mux::ui::put_over_end(now, sign, picked.sub + " ");
+                                 },
                                  [&](const command_asked&) {
                                    // The command's name, and a space for what follows it.
                                    now = mux::ui::plain_draft("/" + picked.title + " ");
@@ -98,8 +103,11 @@ struct part {
   struct command_asked {
     friend bool operator==(command_asked, command_asked) = default;
   };
+  struct alias_asked {
+    friend bool operator==(alias_asked, alias_asked) = default;
+  };
   struct asked_t {
-    spl::variant<mention_asked, emoji_asked, command_asked> kind;
+    spl::variant<mention_asked, emoji_asked, command_asked, alias_asked> kind;
     std::string query;
     mux::conversation_id in;
     friend bool operator==(const asked_t&, const asked_t&) = default;
@@ -121,6 +129,8 @@ struct part {
       return asked_t{command_asked{}, text.substr(1), chat.id};
     if (auto query = after_sign(text, '@', " \n", 0); query && mux::ui::is_group(chat))
       return asked_t{mention_asked{}, std::move(*query), chat.id};
+    if (auto query = after_sign(text, '#', " \n", 0))
+      return asked_t{alias_asked{}, std::move(*query), chat.id};
     if (auto query = after_sign(text, ':', " \n:", 2))
       return asked_t{emoji_asked{}, std::move(*query), chat.id};
     return std::nullopt;
@@ -138,6 +148,25 @@ struct part {
                                    return suggestion{.person = true, .id = one.id, .title = one.name.empty() ? one.id : one.name,
                                                               .sub = one.id};
                                  }) | std::ranges::to<std::vector>();
+                        },
+                        [&](const alias_asked&) {
+                          // The rooms of the chat's account with an address
+                          // -- their canonical alias, or one of their others
+                          // -- matching what is typed, by it or by name.
+                          std::vector<suggestion> rooms;
+                          if (const mux::account* account = s_->model->accounts().find(chat.id.account))
+                            for (const mux::conversation& room : account->conversations.values()) {
+                              if (rooms.size() == 6)
+                                break;
+                              const auto address = room.alias ? room.alias : room.other_aliases.empty()
+                                                                                 ? std::optional<std::string>()
+                                                                                 : std::optional(room.other_aliases.front());
+                              if (!address || (!lower(*address).contains(wanted) && !lower(room.name).contains(wanted)))
+                                continue;
+                              rooms.push_back({.person = true, .id = room.id.id, .title = room.name.empty() ? *address : room.name,
+                                               .sub = *address});
+                            }
+                          return rooms;
                         },
                         [&](const command_asked&) {
                           // The plugins' commands (contract::slash_commands)

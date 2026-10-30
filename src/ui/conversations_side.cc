@@ -482,11 +482,13 @@ struct side_bar_list<plugin_list<>> {
 };
 template <class Feature>
 struct side_bar_list<plugin_list<Feature>> {
-  static auto lane(const palette& colours) { return side_lane(contract::side_bars{}, type_tag<Feature>{}, colours); }
-  static auto top(const palette& colours, bool big) { return top_bar(contract::side_bars{}, type_tag<Feature>{}, colours, big); }
+  // Built here, under the program's rules: bars that hold pieces (the
+  // spaces' faces) come as builders.
+  static auto lane(const palette& colours) { return a::built_any(side_lane(contract::side_bars{}, type_tag<Feature>{}, colours)); }
+  static auto top(const palette& colours, bool big) { return a::built_any(top_bar(contract::side_bars{}, type_tag<Feature>{}, colours, big)); }
   template <class Surface>
   static auto wrap(const palette& colours, Surface surface) {
-    return wrap_side(contract::side_bars{}, type_tag<Feature>{}, colours, std::move(surface));
+    return a::built_any(wrap_side(contract::side_bars{}, type_tag<Feature>{}, colours, std::move(surface)));
   }
 };
 using side_bar_plugins = side_bar_list<composition::providers<contract::side_bars, enabled_plugins>>;

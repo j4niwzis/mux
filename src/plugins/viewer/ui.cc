@@ -164,7 +164,7 @@ inline auto picture_viewer(const ui_needs& n, const viewer_facts& facts) {
                 },
           c::column(c::vbox(0.0f, {.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)}),
               c::row(c::hbox(8.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}}),
-                     avatar_mark(avatar_of::person{}, facts.sender, facts.name, 36.0f),
+                     face_spot(avatar_of::person{}, facts.sender, facts.name, 36.0f),
                      two_lines(colours, facts.name, facts.when, 14.0f, 2.0f,
                                two_line_style{.first_ink = white, .second_ink = skia::colorSetARGB(255, 200, 200, 200)}),
                      c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::SkColor{0})),

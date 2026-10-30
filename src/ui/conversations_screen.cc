@@ -75,10 +75,12 @@ struct composer_top_list;
 template <class... Features>
 struct composer_top_list<plugin_list<Features...>> {
   template <class Feature>
-  static auto node_of(const palette& colours) -> decltype(extend(contract::composer_top{}, type_tag<Feature>{}, colours)) {
+  // Built here, under the program's rules: one that holds pieces (the
+  // suggestions' faces) comes as a builder.
+  static auto node_of(const palette& colours) -> decltype(a::built_any(extend(contract::composer_top{}, type_tag<Feature>{}, colours))) {
     static_assert(requires { extend(contract::composer_top{}, type_tag<Feature>{}, colours); },
                   composition::broken<contract::composer_top, Feature>());
-    return extend(contract::composer_top{}, type_tag<Feature>{}, colours);
+    return a::built_any(extend(contract::composer_top{}, type_tag<Feature>{}, colours));
   }
   static auto made(const palette& colours) {
     return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), node_of<Features>(colours)...);

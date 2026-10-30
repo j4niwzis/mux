@@ -86,6 +86,17 @@ elseif(MUX_NO_RTTI)
   string(APPEND CMAKE_CXX_FLAGS " /GR-")
 endif()
 
+# Full BMIs outside a release build. There a view is not inline
+# (MUX_INLINE_IN_RELEASE), and a reduced BMI leaves out the definition of a
+# function that is not inline -- also one whose deduced type is a class
+# local to it, as every view's is (SKIFF_NAMED): clang 23 then recursed
+# without end looking up names over that class in a unit importing it
+# through another module (scene.cc, window_host.cc; reproduced and reported:
+# shared mux/clang-crash). A full BMI keeps the definitions.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options($<$<AND:$<COMPILE_LANGUAGE:CXX>,$<NOT:$<CONFIG:Release>>>:-fno-modules-reduced-bmi>)
+endif()
+
 set(MUX_CONSTEXPR_STEPS 300000000 CACHE STRING
   "clang's -fconstexpr-steps for mux and the family of libraries under it")
 foreach(family IN ITEMS ALEF CHEVRON TERN KNOT LOOM SPLICE)

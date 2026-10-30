@@ -41,9 +41,10 @@ inline auto drawer_account_row(const palette& colours, const drawer_account& one
   auto row = c::onPress(sends<request::switch_account>{{one.address}},
       c::row(c::hbox(14.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen,
                              .selectedBackground = colours.chosen, .focusBackground = colours.chosen, .selected = one.current}),
-             // Its text, a piece the plugins shape where it is put (the avatars
-             // plugin's picture beside it).
-             a::built(drawer_account_text(colours, one)),
+             // Its text, a piece the plugins shape (the avatars plugin's
+             // picture beside it): the row a builder, made under the rules
+             // the list is built under.
+             drawer_account_text(colours, one),
              c::visible(one.current, c::styled({.alignSelf = scene::align::kMiddle}, icon_mark(colours, icon::check{})))),
       one.address);
   return row;
@@ -81,7 +82,7 @@ inline auto drawer_view(const ui_needs& n) {
   return SKIFF_NAMED(drawer_view, c::column(c::vbox(0.0f, {.fill = true}),
       c::styled({.margin = {18.0f, 20.0f, 14.0f, 20.0f}}, nodes::Text("mux", 20.0f, colours.text, true)),
       c::styled({.fillX = true, .grow = scene::axes::kY},
-          nodes::ScrollContainer(c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::scrolled(c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
               c::projected<drawer_accounts>([](const drawer_accounts& now) { return now.accounts; },
                   c::listed<drawer_account>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), drawer_account_row_of{&colours})),
               c::styled({.margin = {0.0f, 0.0f, 6.0f, 0.0f}}, row_item(colours, "Manage accounts", sends<request::open_accounts>{}, icon::person{})),

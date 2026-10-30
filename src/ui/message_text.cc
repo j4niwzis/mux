@@ -521,12 +521,7 @@ using code_piece_t = decltype(code_piece(std::declval<const palette&>(), std::de
 
 // A card and the words after it are one composed part of the message,
 // interleaved with code blocks rather than appended below them.
-// A link's card in a message, marked with its address: what a press over it
-// is a link to.
-struct linked_card {
-  std::string url;
-};
-using link_card_marked = skiff::compose::Marked<linked_card, link_card_t>;
+// A link's card in a message: pressed, its own link (link_card's onClick).
 inline auto link_piece(const palette& colours, const mentioned_card& card, const text_piece& words,
                        const model* now, skia::SkColor quote) {
   auto after = nodes::BasicText<message_pictures>(words.text, 13.0f, colours.text);
@@ -537,7 +532,7 @@ inline auto link_piece(const palette& colours, const mentioned_card& card, const
   after.setStyles(words.styles, quote);
   after.setShrinksToLines(true);
   return SKIFF_NAMED(link_piece, skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
-      link_card_marked(card_of(colours, card.url, card.where, now), linked_card{card.url}),
+      card_of(colours, card.url, card.where, now),
       skiff::compose::visible(!words.text.empty(), std::move(after))));
 }
 using link_piece_t = decltype(link_piece(std::declval<const palette&>(), std::declval<const mentioned_card&>(),
@@ -684,23 +679,17 @@ struct code_kind {};
 struct link_kind {};
 struct disclosure_kind {};
 using code_piece_m = skiff::compose::Marked<code_kind, code_piece_t>;
-using link_piece_m = skiff::compose::Marked<link_kind, link_piece_t>;
-using disclosure_piece_m = skiff::compose::Marked<disclosure_kind, disclosure_piece_t>;
-using message_piece = spl::variant<code_piece_m, link_piece_m, disclosure_piece_m>;
-
-[[nodiscard]] std::optional<std::string> message_link_at(const std::vector<message_piece>& pieces, float x, float y) {
-  for (const auto& piece : pieces) {
-    const auto url = spl::visit(spl::overloaded{[](const code_piece_m&) -> std::optional<std::string> { return std::nullopt; },
-        [](const disclosure_piece_m&) -> std::optional<std::string> { return std::nullopt; },
-        [&](const link_piece_m& link) -> std::optional<std::string> {
-          const link_card_marked* card = skiff::scene::findNode<link_card_marked>(const_cast<link_piece_m&>(link));
-          return card && card->bounds().contains(x, y) ? std::optional{card->fTag.url} : std::nullopt;
-        }}, piece);
-    if (url)
-      return url;
-  }
-  return std::nullopt;
+// A link's and a disclosure's hold pieces (a card's face): builders, marked
+// as they are built.
+template <class Kind, class B>
+auto marked_kind(B piece) {
+  return skiff::compose::lifted([](auto made) { return skiff::compose::Marked<Kind, decltype(made)>(std::move(made)); }, std::move(piece));
 }
+using link_piece_m = decltype(marked_kind<link_kind>(std::declval<link_piece_t>()));
+using disclosure_piece_m = decltype(marked_kind<disclosure_kind>(std::declval<disclosure_piece_t>()));
+// A block of a message, after its words: a variant one of whose kinds holds
+// a builder, built where the row is (skiff builds the kind it holds).
+using message_piece = spl::variant<code_piece_m, link_piece_m, disclosure_piece_m>;
 
 // A forward's line over its message, as Telegram's: "Forwarded from" and
 // the sender -- a person's pill, its avatar drawn by the message's pictures,

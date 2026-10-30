@@ -708,6 +708,13 @@ template <class... Parts> skiff::compose::Box<Parts...> bubble_box(skiff::compos
   look.fHorizontal = false;
   return skiff::compose::Box<Parts...>(std::move(look), std::move(parts)...);
 }
+// One whose parts hold pieces (its blocks: a link card's face): a builder of
+// it, built as its parts are.
+template <class... Parts>
+  requires skiff::compose::any_builder<Parts...>
+auto bubble_box(skiff::compose::Look look, Parts... parts) {
+  return skiff::compose::lifted([](skiff::compose::Look l, auto... p) { return bubble_box(std::move(l), std::move(p)...); }, std::move(look), std::move(parts)...);
+}
 // The bubble's colour as its chat's look has it: solid, or at its opacity --
 // over what is behind it, frosted where it is so.
 [[nodiscard]] skia::SkColor plate_of(const palette& colours, const config::bubble_look& look, bool mine) {
@@ -977,9 +984,9 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   std::vector<message_piece> blocks;
   for (std::size_t i = 1; i + 1 < pieces.size(); i += 2) {
     if (pieces[i].disclosure)
-      blocks.emplace_back(std::in_place_type<disclosure_piece_m>, disclosure_piece(colours, shown, pieces[i + 1], now, quote_colour));
+      blocks.emplace_back(std::in_place_type<disclosure_piece_m>, marked_kind<disclosure_kind>(disclosure_piece(colours, shown, pieces[i + 1], now, quote_colour)));
     else if (pieces[i].card)
-      blocks.emplace_back(std::in_place_type<link_piece_m>, link_piece(colours, *pieces[i].card, pieces[i + 1], now, quote_colour));
+      blocks.emplace_back(std::in_place_type<link_piece_m>, marked_kind<link_kind>(link_piece(colours, *pieces[i].card, pieces[i + 1], now, quote_colour)));
     else
       blocks.emplace_back(std::in_place_type<code_piece_m>, code_piece(colours, pieces[i], pieces[i + 1], quote_colour, quote_colour, colours.text));
   }

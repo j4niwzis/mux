@@ -11,6 +11,8 @@ import mux.ui.base;
 
 namespace mux::ui {
 skiff::compose::Held message_body_held(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model* now) {
-  return skiff::compose::Held(skiff::compose::erased(message_body(n, in, f, now)));
+  // Outside a release build a piece's rules are the table's: what holds
+  // pieces (a link card's face) is built here under it.
+  return skiff::compose::Held(skiff::compose::erased(skiff::compose::built(message_body(n, in, f, now), skiff::compose::table_rules{})));
 }
 }  // namespace mux::ui

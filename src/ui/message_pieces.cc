@@ -35,7 +35,9 @@ export namespace mux::ui {
   return said.redacted ? std::string("removed ") : said.edited ? std::string("edited ") : std::string();
 }
 
-// A protocol link's card, composed from its stripe, avatar and two lines.
+// A protocol link's card, composed from its stripe, its chat's face (where
+// faces go: the avatars plugin's) and two lines. A builder: built where the
+// message's row is.
 inline auto link_card(const palette& colours, std::string where, std::string avatar_id,
                       std::string avatar_name, std::string title, std::string said) {
   namespace c = skiff::compose;
@@ -48,7 +50,7 @@ inline auto link_card(const palette& colours, std::string where, std::string ava
   return SKIFF_NAMED(link_card, c::onClick(request::open_url{std::move(where)},
       c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth, .margin = {4.0f, 0.0f, 2.0f, 0.0f}}),
           c::styled({.width = 3.0f, .height = 36.0f, .cornerRadius = 1.5f}, nodes::Box<>(colours.accent)),
-          c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(avatar_of::chat{}, std::move(avatar_id), std::move(avatar_name), 32.0f)),
+          c::styled({.alignSelf = scene::align::kMiddle}, face_spot(avatar_of::chat{}, std::move(avatar_id), std::move(avatar_name), 32.0f)),
           c::column(c::vbox(1.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
               line(std::move(title), colours.accent, true), line(std::move(said), colours.dim, false))),
       "Open linked room or message"));

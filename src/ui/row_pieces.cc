@@ -28,11 +28,7 @@ struct drawer_account {
   friend bool operator==(const drawer_account&, const drawer_account&) = default;
 };
 // Its text: its address over its protocol and state.
-// What a rule on a row's text sees: whose it is -- a person or a room.
-struct face_facts {
-  std::string id;
-  std::string name;
-};
+// (What a rule on a row's text sees, face_facts, is the base's: whose it is.)
 inline constexpr struct drawer_account_text_fn : skiff::compose::piece<drawer_account_text_fn> {
   using facts_type = face_facts;
   static face_facts facts(const palette&, const drawer_account& one) { return {one.address, one.address}; }

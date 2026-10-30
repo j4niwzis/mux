@@ -153,10 +153,11 @@ struct info_member_row {
   const palette* colours = nullptr;
   auto operator()(const std::tuple<std::string, info_member>& item) const {
     const info_member& one = std::get<1>(item);
-    return member_row(*colours, one.who, one.how);
+    return a::built(member_row(*colours, one.who, one.how));
   }
 };
-using info_member_rows_t = nodes::MemoRows<std::string, info_member, member_row_t, info_member_row>;
+using info_member_row_t = decltype(a::built(member_row(std::declval<const palette&>(), std::declval<const member&>(), "")));
+using info_member_rows_t = nodes::MemoRows<std::string, info_member, info_member_row_t, info_member_row>;
 
 // The panel: its column, and its left edge. Near the end of the members
 // made, with more, it asks for the next few (request::info_more).

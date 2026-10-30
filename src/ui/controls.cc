@@ -99,6 +99,12 @@ struct open_avatar_of {
   std::string id;
   Answer operator()() const { return id.empty() ? Answer() : Answer(request::open_avatar{id}); }
 };
+// What a rule on a piece about someone sees: whose it is -- a person's or a
+// room's id, and their name (the avatars plugin's picture of them).
+struct face_facts {
+  std::string id;
+  std::string name;
+};
 template <class Kind>
 auto avatar_button(Kind kind, std::string id, std::string_view shown, float size) {
   return SKIFF_NAMED(avatar_button, skiff::compose::onPress(open_avatar_of{id}, avatar_mark(kind, id, shown, size), "Open picture"));

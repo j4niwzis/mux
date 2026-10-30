@@ -433,20 +433,29 @@ template <class Rows> [[nodiscard]] auto dialog_list(Rows rows) {
   return found == nullptr ? none : *found;
 }
 
-// A member as a list shows them: their avatar, their name over how they
-// are, their role; pressed, their info.
+// A member's name over how they are: a piece, about them (the avatars
+// plugin's picture of them beside it).
+inline constexpr struct member_text_fn : skiff::compose::piece<member_text_fn> {
+  using facts_type = face_facts;
+  static face_facts facts(const palette&, const member& one, const std::string&) { return {one.id, one.name.empty() ? one.id : one.name}; }
+  auto make(const palette& colours, const member& one, std::string how) const {
+    return two_lines(colours, one.name.empty() ? one.id : one.name, std::move(how), 14.0f, 4.0f);
+  }
+} member_text{};
+// A member as a list shows them: their name over how they are, their role;
+// pressed, their info. A builder (its text a piece): built where the
+// program's rules are known.
 inline auto member_row(const palette& colours, const member& one, std::string how) {
+  namespace c = skiff::compose;
   const std::string name = one.name.empty() ? one.id : one.name;
-  return skiff::compose::recorded(skiff::compose::onClick(request::open_member_info{one.id}, skiff::compose::row(
-      skiff::compose::hbox(12.0f, {.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f},
-          .hoverBackground = colours.chosen}),
-      avatar_mark(avatar_of::person{}, one.id, name, 40.0f), two_lines(colours, name, std::move(how), 14.0f, 4.0f),
-      skiff::compose::visible(one.role.has_value(), skiff::compose::styled(
+  return c::recorded(c::onClick(request::open_member_info{one.id}, c::row(
+      c::hbox(12.0f, {.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen}),
+      member_text(colours, one, std::move(how)),
+      c::visible(one.role.has_value(), c::styled(
           {.alignSelf = scene::align::kStart, .margin = {10.0f, 0.0f, 0.0f, 0.0f}},
           widgets::Pill(one.role.value_or(""), {.plate = skia::colorSetARGB(255, 62, 52, 96),
               .text = skia::colorSetARGB(255, 190, 170, 250), .size = 12.0f, .height = 20.0f, .padX = 8.0f})))), name));
 }
-using member_row_t = decltype(member_row(std::declval<const palette&>(), std::declval<const member&>(), ""));
 // The plugins' sections on the pages a chat's looks are chosen on
 // (contract::level_sections), for the page's level, in their order -- the
 // background and bubbles pickers, for one.

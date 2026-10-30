@@ -481,7 +481,7 @@ auto room_settings_view(const Needs& n, const room_settings_of<Kind>& facts) {
                   // Another tab: shown from its top.
                   c::styled({.fillX = true, .relativeSize = scene::axes::kX, .grow = scene::axes::kY},
                       c::projected<facts_t>([](const facts_t& now) { return now ? now->tab.index() : std::size_t{0}; },
-                          c::restarted_scroll<std::size_t>(nodes::ScrollContainer(
+                          c::restarted_scroll<std::size_t>(c::scrolled(
                               c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                                         client_page<Kind>(tab_up<Kind, settings_tab::notifications>{}, notifications_page(colours, facts)),
                                         client_page<Kind>(tab_up<Kind, settings_tab::looks>{}, looks_page(colours, *n.shared, facts)),

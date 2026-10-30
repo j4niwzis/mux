@@ -46,6 +46,10 @@ struct message_line {
   std::optional<bool> deleted;
   std::optional<std::string> sender;
   std::optional<std::int64_t> at;
+  // Where it stands, where that is not its time: what came live after what
+  // was there, whatever its sender's clock said -- kept, or a restart put it
+  // back by its time.
+  std::optional<std::int64_t> order;
   std::optional<std::string> plain;
   std::optional<std::string> html;
   std::optional<std::string> reply;
@@ -555,6 +559,8 @@ class message_store {
       one.sender = o.sender.value_or("");
       if (o.at)
         one.at = time_point(std::chrono::milliseconds(*o.at));
+      if (o.order)
+        one.local_order = time_point(std::chrono::milliseconds(*o.order));
       one.body.plain = o.plain.value_or("");
       one.body.html = std::move(o.html);
       one.replies_to = std::move(o.reply);
@@ -628,6 +634,9 @@ class message_store {
         .id = one.id,
         .sender = one.sender,
         .at = static_cast<std::int64_t>(one.at.time_since_epoch().count()),
+        .order = one.local_order && *one.local_order != one.at
+                     ? std::optional(static_cast<std::int64_t>(one.local_order->time_since_epoch().count()))
+                     : std::nullopt,
         .plain = one.body.plain,
         .html = one.body.html,
         .reply = one.replies_to,

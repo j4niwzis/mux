@@ -294,19 +294,23 @@ struct reactions {
 };    // each reaction, as a line of its own: hidden unless chosen
 struct unreactions {
   friend bool operator==(unreactions, unreactions) = default;
+};    // each answer in a thread, in the chat's timeline too: hidden unless chosen
+struct thread_answers {
+  friend bool operator==(thread_answers, thread_answers) = default;
 };    // each reaction taken back, as a line of its own: hidden unless chosen
 }  // namespace room_event
 using room_event_t =
     spl::variant<room_event::joins, room_event::invites, room_event::names, room_event::avatars, room_event::room_name,
                  room_event::topic, room_event::room_avatar, room_event::address, room_event::pins,
                  room_event::permissions, room_event::access, room_event::encryption, room_event::other,
-                 room_event::unreadable, room_event::reactions, room_event::unreactions>;
+                 room_event::unreadable, room_event::reactions, room_event::unreactions, room_event::thread_answers>;
 inline constexpr std::size_t kRoomEventKinds = spl::variant_size_v<room_event_t>;
 inline const std::array<room_event_t, kRoomEventKinds> all_room_events{
     room_event::joins{},     room_event::invites{}, room_event::names{},       room_event::avatars{},
     room_event::room_name{}, room_event::topic{},   room_event::room_avatar{}, room_event::address{},
     room_event::pins{},      room_event::permissions{}, room_event::access{},  room_event::encryption{},
-    room_event::other{},     room_event::unreadable{}, room_event::reactions{}, room_event::unreactions{}};
+    room_event::other{},     room_event::unreadable{}, room_event::reactions{}, room_event::unreactions{},
+    room_event::thread_answers{}};
 // Which kinds of room event a chat shows, as its choices resolve: each by
 // its place in room_event_t.
 struct room_event_filter {

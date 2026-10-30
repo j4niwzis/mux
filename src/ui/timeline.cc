@@ -132,15 +132,23 @@ struct timeline_rows {
     return in ? in->conversations.find(told.of->id) : nullptr;
   }
   // The thread's root and answers, or the chat's timeline: kept as they are,
-  // seen, not copied -- the root found among what the chat holds.
+  // seen, not copied -- the root found among what the chat holds. Where the
+  // chat shows its threads' answers in the timeline too (room events: thread
+  // answers), the timeline and every thread's answers in one order, by
+  // where each is in time -- each a pointer into where the chat keeps it.
   struct seen {
     const message* root = nullptr;
     const std::vector<message>* answers = nullptr;
     const std::vector<message>* timeline = nullptr;
+    const std::vector<const message*>* merged = nullptr;
     [[nodiscard]] std::size_t size() const {
+      if (merged)
+        return merged->size();
       return timeline ? timeline->size() : (root ? 1u : 0u) + (answers ? answers->size() : 0u);
     }
     [[nodiscard]] const message& at(std::size_t i) const {
+      if (merged)
+        return *(*merged)[i];
       if (timeline)
         return (*timeline)[i];
       if (root)
@@ -152,10 +160,34 @@ struct timeline_rows {
     const conversation* chat = chat_of(now, told);
     if (!chat)
       return {};
+    if (!told.thread && told.filter.shows(room_event::thread_answers{}) && !chat->threads.empty())
+      return {.merged = &merged_of(now, told, *chat)};
     if (!told.thread)
       return {.timeline = &chat->timeline};
     const auto found = chat->threads.find(*told.thread);
     return {.root = held_message(*chat, *told.thread), .answers = found == chat->threads.end() ? nullptr : &found->second};
+  }
+  // The chat's timeline and its threads' answers in one order, made again
+  // only where the chat changed since (its revision): pointers into where it
+  // keeps them, which a change may move.
+  [[nodiscard]] static const std::vector<const message*>& merged_of(const chats_model& now, const Told& told, const conversation& chat) {
+    struct made {
+      skiff::model::Revision at = 0;
+      std::vector<const message*> all;
+    };
+    thread_local std::map<const conversation*, made> kept;
+    if (kept.size() > 64)
+      kept.clear();
+    made& one = kept[&chat];
+    const auto at = revision(now, told);
+    if (one.at == at && !one.all.empty())
+      return one.all;
+    one.at = at;
+    one.all = chat.timeline | std::views::transform([](const message& said) { return &said; }) | std::ranges::to<std::vector>();
+    for (const auto& [root, answers] : chat.threads)
+      one.all.append_range(answers | std::views::transform([](const message& said) { return &said; }));
+    std::ranges::stable_sort(one.all, {}, [](const message* said) { return said->local_order.value_or(said->at); });
+    return one.all;
   }
   static skiff::model::Revision revision(const chats_model& now, const Told& told) {
     if (!told.of)

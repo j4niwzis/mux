@@ -326,6 +326,7 @@ MUX_INLINE_IN_RELEASE auto menu_button(const palette& colours) {
 [[nodiscard]] constexpr std::string_view label_of(room_event::unreadable) { return "Events mux cannot read"; }
 [[nodiscard]] constexpr std::string_view label_of(room_event::reactions) { return "Reactions, each as a line"; }
 [[nodiscard]] constexpr std::string_view label_of(room_event::unreactions) { return "Reactions taken back"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::thread_answers) { return "Thread answers, in the timeline too"; }
 
 // The existing dropdown's head and option rows, built with combinators.
 // Selection and pointer capture are shared with the widget library.

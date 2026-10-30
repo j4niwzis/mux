@@ -66,14 +66,14 @@ inline auto seen_row(const palette& colours, const std::vector<seen_reader>& rea
   return SKIFF_NAMED(seen_row, c::hovering(seen_row_says{},
       c::row(c::hbox(0.0f, {.fillX = true, .height = kSeenHeight, .padding = {9.0f, kSeenRight, 7.0f, 44.0f}, .hoverBackground = colours.chosen}),
              c::styled({.place = scene::anchor::kCentreLeft, .x = 15.0f - 44.0f}, icon_mark(colours, icon::check{})),
-             a::built(seen_summary(colours, readers, said)))));
+             seen_summary(colours, readers, said))));
 }
 // A reader in the list: pressed, the menu closed and their card opened.
 inline auto reader_row(const palette& colours, const seen_reader& one) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(reader_row, c::onClick(std::tuple{request::close_menu{}, request::open_member_info{one.id}},
       c::row(c::hbox(14.0f, {.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = colours.chosen}),
-             a::built(reader_text(colours, one))),
+             reader_text(colours, one)),
       one.name));
 }
 // The readers, scrolling where there are more than fit: at most about
@@ -88,7 +88,7 @@ inline auto seen_list(const palette& colours, const std::vector<seen_reader>& re
       c::column(c::vbox(0.0f, {.width = kSeenListWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f}, .cornerRadius = 10.0f,
                                .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .masking = true}),
                 c::styled({.fill = true},
-                          nodes::ScrollContainer(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                          c::scrolled(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                               readers | std::views::transform([&](const seen_reader& one) { return reader_row(colours, one); }) | std::ranges::to<std::vector>()))))));
 }
 

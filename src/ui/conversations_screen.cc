@@ -315,7 +315,6 @@ template <class List>
 struct beside_panel_list;
 template <class... Features>
 struct beside_panel_list<plugin_list<Features...>> {
-  template <class Feature>
   // Built here, where the program's rules are known: a panel that holds
   // pieces (the threads', its messages) comes as a builder.
   template <class Feature>

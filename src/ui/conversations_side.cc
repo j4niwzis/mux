@@ -171,9 +171,9 @@ auto side_found_row(const palette& colours, const search_result& one) {
   return c::with_cursor(scene::cursor::arrow{}, c::onClick(request::search_pick{one.index},
       c::row(c::hbox(10.0f, {.fillX = true, .height = 56.0f,
           .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen}),
-          // Its text, a piece the plugins shape where it is put: the avatars
-          // plugin's picture of who said it beside it.
-          a::built(found_row_text(colours, one))),
+          // Its text, a piece the plugins shape: the avatars plugin's
+          // picture of who said it beside it.
+          found_row_text(colours, one)),
       std::format("{}: {}", one.name, one.snippet)));
 }
 
@@ -325,8 +325,8 @@ auto side_folders_for(const auto& colours, Pick pick) {
 
 // A chat row is a function of the list's model snapshot. Choosing it sends
 // a request; its list-item label and selection are part of the same tree.
-// Put together here, above the plugins: its text put in through a::built,
-// where they shape it.
+// Its text a piece the plugins shape: the row a builder, built with the
+// list's rows (built_maker).
 inline auto conversation_row(const ui_needs& needs, const conversation& one,
                              const conversation_view& view, const room_event_filter& events) {
   namespace c = skiff::compose;
@@ -339,7 +339,7 @@ inline auto conversation_row(const ui_needs& needs, const conversation& one,
                   .height = conversation_height(one),
                   .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen,
                   .selectedBackground = colours.selected, .focusBackground = colours.chosen, .selected = view.chosen}),
-                  a::built(chat_row_text(needs, one, view, preview)),
+                  chat_row_text(needs, one, view, preview),
                   c::visible(view.strip.has_value(), c::styled(
                       {.place = scene::anchor::kCentreLeft, .x = -8.0f, .width = 4.0f, .height = 38.0f, .cornerRadius = 2.0f},
                       nodes::Box<>(view.strip.value_or(0u))))), view.name))));
@@ -366,15 +366,16 @@ inline constexpr auto make_side_chat_row = [](const side_chat_item& item) {
 struct side_chats_view {};
 auto side_chats_for(const auto& needs) {
   namespace c = skiff::compose;
-  using row = std::invoke_result_t<decltype(make_side_chat_row), const side_chat_item&>;
-  using rows = nodes::MemoRows<conversation_id, side_chat_view, row, std::remove_cv_t<decltype(make_side_chat_row)>>;
-  auto line = c::styled({.fillX = true, .autoSize = scene::axes::kY}, rows(make_side_chat_row));
+  // Its rows builders (their text pieces): made, as they come, under the
+  // rules the list is built under.
+  auto line = c::styled({.fillX = true, .autoSize = scene::axes::kY},
+                        c::memo_rows<conversation_id, side_chat_view, side_chat_item>(make_side_chat_row, nodes::Stack{}));
   // The view that scrolls, marked: what keeps each list's offset finds it
   // under what tells it the list.
   auto scroll = c::virtual_rows<side_chat_item>([](const side_chat_item& item) {
     return conversation_height(*std::get<2>(item));
-  }, c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(line))));
-  c::Marked<side_chats_view, decltype(scroll)> viewport(std::move(scroll));
+  }, c::styled({.fillX = true, .grow = scene::axes::kY}, c::scrolled(std::move(line))));
+  auto viewport = c::marked_as<side_chats_view>(std::move(scroll));
   auto contents = c::projected<listing_shown>([](const listing_shown& now) {
     return side_chats_told{now.listing, std::make_shared<const side_menu_context>(
         side_menu_context{now.account, now.accounts, now.theme})};
@@ -402,11 +403,10 @@ struct side_found_row_make {
 };
 auto side_found_for(const auto& colours) {
   namespace c = skiff::compose;
-  using row = std::invoke_result_t<side_found_row_make, const std::pair<std::size_t, side_found_view>&>;
-  using rows = nodes::MemoRows<std::size_t, side_found_view, row, side_found_row_make>;
   auto contents = c::projected<found_shown>([](const found_shown& now) {
     return now.results | std::views::transform([](const search_result& one) { return std::pair{one.index, side_found_of(one)}; }) | std::ranges::to<std::vector>();
-  }, c::styled({.fillX = true, .autoSize = scene::axes::kY}, rows(side_found_row_make{&colours})));
+  }, c::styled({.fillX = true, .autoSize = scene::axes::kY},
+                c::memo_rows<std::size_t, side_found_view, std::pair<std::size_t, side_found_view>>(side_found_row_make{&colours}, nodes::Stack{})));
   return SKIFF_NAMED(side_found_for, c::shown_for<found_shown>([](const found_shown& now) { return now.count.has_value(); },
       c::projected<found_shown>([](const found_shown& now) { return now; },
           c::restarted_scroll<found_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(contents)))))));

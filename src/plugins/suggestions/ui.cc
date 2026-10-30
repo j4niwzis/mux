@@ -26,8 +26,14 @@ using namespace ::mux::ui;
 // goes where faces go.
 using suggestion_mark = spl::variant<nodes::Text, nodes::Image<from_emotes>>;
 [[nodiscard]] inline suggestion_mark mark_of(const palette& colours, const suggestion& one) {
-  if (one.person || one.picture.empty())
-    return suggestion_mark(std::in_place_index<0>, nodes::Text(one.person ? std::string() : one.glyph, 22.0f, colours.text));
+  if (one.person) {
+    // Hidden: a variant is no node to wrap in visible.
+    suggestion_mark none(std::in_place_index<0>, nodes::Text(std::string(), 22.0f, colours.text));
+    spl::get<0>(none).setVisible(false);
+    return none;
+  }
+  if (one.picture.empty())
+    return suggestion_mark(std::in_place_index<0>, nodes::Text(one.glyph, 22.0f, colours.text));
   suggestion_mark mark(std::in_place_index<1>, from_emotes{one.picture});
   spl::get<1>(mark).apply({.width = 28.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle});
   return mark;
@@ -42,7 +48,7 @@ auto suggestion_row(const palette& colours, Pick pick, const suggestion& one) {
       c::hbox(10.0f, {.fillX = true, .height = 44.0f, .padding = {0.0f, 14.0f, 0.0f, 14.0f},
                      .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .selected = one.lit}),
       c::visible(one.person, face_spot(avatar_of::person{}, one.id, one.title, 28.0f)),
-      c::visible(!one.person, mark_of(colours, one)),
+      mark_of(colours, one),
       two_lines(colours, one.title, one.sub, 14.0f, 1.0f)), one.title));
 }
 // Its list, over the composer (mux.ui:conversations_screen).

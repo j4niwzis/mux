@@ -215,10 +215,29 @@ template <class Contract>
 using rows_of = row_list<Contract, composition::providers<Contract, enabled_plugins>>;
 using choice_row_plugins = rows_of<contract::choice_rows>;
 
+// A face where the core puts one (contract::faces): the first plugin's that
+// draws one; none where none does -- known while compiling. Asked only where
+// the plugins' UI layer is seen (its extend found there): from under it, it
+// does not compile, never silently faceless.
+template <class Kind>
+auto face_by(plugin_list<>, const palette&, Kind, const std::string&, std::string_view, float);
+template <class Kind, class First, class... Rest>
+auto face_by(plugin_list<First, Rest...>, const palette& colours, Kind kind, const std::string& id, std::string_view name, float size) {
+  return extend(contract::faces{}, type_tag<First>{}, colours, kind, id, name, size);
+}
+template <class Kind>
+auto face_of(const palette& colours, Kind kind, const std::string& id, std::string_view name, float size) {
+  return face_by(composition::providers<contract::faces, enabled_plugins>{}, colours, kind, id, name, size);
+}
+
 // Where what a page has by its type alone is not there: nothing in its
 // place -- known while compiling, not hidden.
 inline auto nothing_shown() {
   return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}));
+}
+template <class Kind>
+auto face_by(plugin_list<>, const palette&, Kind, const std::string&, std::string_view, float) {
+  return nothing_shown();
 }
 // The room events field of a level, where its protocol's chats have room
 // events (proto::shows_room_events); nothing where they have none.

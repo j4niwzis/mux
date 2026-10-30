@@ -64,7 +64,7 @@ inline auto seen_row(const palette& colours, const std::vector<seen_reader>& rea
                  return c::styled({.place = scene::anchor::kCentreRight,
                                    .x = faces_width + 8.0f - static_cast<float>(i) * (kSeenFace - kSeenOverlap),
                                    .border = scene::Border{colours.sidebar, 2.0f}},
-                                  avatar_mark(avatar_of::person{}, readers[i].id, readers[i].name, kSeenFace));
+                                  face_of(colours, avatar_of::person{}, readers[i].id, readers[i].name, kSeenFace));
                }) | std::ranges::to<std::vector>();
   const std::string said = readers.empty() ? std::string("Nobody Viewed")
                            : readers.size() == 1 ? readers.front().name
@@ -81,7 +81,7 @@ inline auto reader_row(const palette& colours, const seen_reader& one) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(reader_row, c::onClick(std::tuple{request::close_menu{}, request::open_member_info{one.id}},
       c::row(c::hbox(14.0f, {.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = colours.chosen}),
-             avatar_mark(avatar_of::person{}, one.id, one.name, 30.0f),
+             face_of(colours, avatar_of::person{}, one.id, one.name, 30.0f),
              c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
                        elided(nodes::Text(one.name, 13.0f, colours.text)),
                        elided(nodes::Text(one.at ? clock_of(*one.at) : std::string("seen"), 12.0f, colours.dim)))),

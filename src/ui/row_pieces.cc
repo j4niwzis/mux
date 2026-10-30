@@ -124,4 +124,15 @@ inline constexpr struct seen_summary_fn : skiff::compose::piece<seen_summary_fn>
   }
 } seen_summary{};
 
+// A person's name over how they are, at the top of their card, each to
+// select -- a piece, about them (the avatars plugin's picture of them
+// beside it, pressed to open it).
+inline constexpr struct person_cover_text_fn : skiff::compose::piece<person_cover_text_fn> {
+  using facts_type = face_facts;
+  static face_facts facts(const palette&, const std::string& key, const std::string& name, const std::string&) { return {key, name}; }
+  auto make(const palette& colours, const std::string&, std::string name, std::string status) const {
+    return two_lines(colours, std::move(name), std::move(status), 17.0f, 6.0f, two_line_style{.selectable = true});
+  }
+} person_cover_text{};
+
 }  // namespace mux::ui

@@ -26,6 +26,8 @@ import mux.config;
 import mux.logic.links;
 import mux.protocols;
 import mux.ui.base;
+import mux.ui.lists;
+import mux.ui.shaping;
 import mux.ui.messages;
 import mux.ui.cards;
 
@@ -47,8 +49,9 @@ static_assert(std::equality_comparable<person_shown>);
 auto person_cover(const palette& colours, const std::string& key, const person_facts& facts) {
   return SKIFF_NAMED(person_cover, skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
-      avatar_button(avatar_of::person{}, key, facts.name, 72.0f),
-      two_lines(colours, facts.name, facts.status, 17.0f, 6.0f, two_line_style{.selectable = true})));
+      // Their name and how they are, a piece built here, under the
+      // program's rules (the avatars plugin's picture beside it).
+      a::built(person_cover_text(colours, key, facts.name, facts.status))));
 }
 using person_cover_t = decltype(person_cover(std::declval<const palette&>(), "", std::declval<const person_facts&>()));
 

@@ -54,6 +54,18 @@ struct face_beside {
                                                                   avatar_mark(avatar_of::person{}, f.sender, f.name, kBubbleAvatar), f.name))));
   }
 };
+// A picture of `size` to press (opening it), then the text, `gap` apart:
+// a row that grows across, as the text did.
+template <class Kind>
+struct button_beside {
+  float size;
+  float gap;
+  auto operator()(auto text, const auto& facts) const {
+    namespace c = skiff::compose;
+    return c::row(c::hbox(gap, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+                  c::styled({.alignSelf = scene::align::kMiddle}, avatar_button(Kind{}, facts.id, facts.name, size)), std::move(text));
+  }
+};
 // A chat's or a person's big picture above their heading, in the middle;
 // pressed, the picture opened.
 template <class Kind>
@@ -98,7 +110,8 @@ constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
          on<chat_heading_fn>(around(picture_above<avatar_of::chat>{96.0f})) |
          on<member_text_fn>(around(picture_beside<avatar_of::person>{40.0f, 12.0f})) |
          on<person_pick_text_fn>(around(picture_beside<avatar_of::person>{36.0f, 12.0f})) |
-         on<seen_summary_fn>(around(seen_faces{}));
+         on<seen_summary_fn>(around(seen_faces{})) |
+         on<person_cover_text_fn>(around(button_beside<avatar_of::person>{72.0f, 16.0f}));
 }
 
 }  // namespace mux::plugins::avatars

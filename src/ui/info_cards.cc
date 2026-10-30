@@ -49,9 +49,9 @@ static_assert(std::equality_comparable<person_shown>);
 auto person_cover(const palette& colours, const std::string& key, const person_facts& facts) {
   return SKIFF_NAMED(person_cover, skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
-      // Their name and how they are, a piece built here, under the
-      // program's rules (the avatars plugin's picture beside it).
-      a::built(person_cover_text(colours, key, facts.name, facts.status))));
+      // Their name and how they are, a piece (the avatars plugin's picture
+      // beside it): the card a builder, built as its dialog opens.
+      person_cover_text(colours, key, facts.name, facts.status)));
 }
 using person_cover_t = decltype(person_cover(std::declval<const palette&>(), "", std::declval<const person_facts&>()));
 
@@ -221,7 +221,7 @@ inline auto person_card(const palette& colours, const ui_shared& shared,
   return c::arranged<card_fit>({}, card_box(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
       page_header<no_back, close_act>(colours, "User info", {}, {}, false, true),
-      c::styled({.fillX = true}, nodes::ScrollContainer<decltype(details)>(std::move(details)))));
+      c::styled({.fillX = true}, c::scrolled(std::move(details)))));
 }
 inline auto person_card(const ui_needs& n, const person_shown& shown) {
   return person_card(*n.colours, *n.shared, shown.account, shown.key, shown.facts);

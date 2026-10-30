@@ -500,15 +500,17 @@ void told(Content& made, const Facts& facts) {
 }
 template <class Content, class Facts>
 void told(Content&, const Facts&) {}
-template <class Content, class Needs, class Facts>
+// Built under the rules the window was built under (Rules): a content that
+// holds pieces is a builder until then.
+template <class Content, class Needs, class Facts, class Rules>
   requires requires(const Needs& needs, const Facts& facts) { make_content(needs, facts); }
-[[nodiscard]] Content content_made(std::type_identity<Content>, const Needs& needs, const Facts& facts) {
-  Content made = a::built_any(make_content(needs, facts));
+[[nodiscard]] Content content_made(std::type_identity<Content>, const Needs& needs, const Facts& facts, const Rules& rules) {
+  Content made = skiff::compose::built(make_content(needs, facts), rules);
   told(made, facts);
   return made;
 }
-template <class Content, class Needs, class Facts>
-[[nodiscard]] Content content_made(std::type_identity<Content>, const Needs& needs, const Facts& facts) {
+template <class Content, class Needs, class Facts, class Rules>
+[[nodiscard]] Content content_made(std::type_identity<Content>, const Needs& needs, const Facts& facts, const Rules&) {
   return Content(needs, facts);
 }
 // What a dialog of Content shows, made from its Facts with what the program
@@ -516,9 +518,10 @@ template <class Content, class Needs, class Facts>
 // say it may be dismissed.
 template <class Content, class Facts>
 using dialog_of = widgets::Dialog<Content, facts_emptied<Facts>>;
-template <class Content, class Facts>
+template <class Content, class Facts, class Rules>
 struct dialog_made {
   const ui_needs* needs = nullptr;
+  Rules rules;
   void put(dialog_of<Content, Facts>& dialog, const Facts& facts) const {
     if (!dialog.shown())
       look_as_its_content(dialog, *needs->colours, dialog_look_of(std::type_identity<Content>{}, std::type_identity<Facts>{}, rank<2>{}));
@@ -526,7 +529,7 @@ struct dialog_made {
       dialog.setDismissable(*dismissable);
   }
   [[nodiscard]] bool stands(Content& up, const Facts& was, const Facts& now) const { return content_stands(up, was, now, rank<3>{}); }
-  [[nodiscard]] Content make(const Facts& facts) const { return content_made(std::type_identity<Content>{}, *needs, facts); }
+  [[nodiscard]] Content make(const Facts& facts) const { return content_made(std::type_identity<Content>{}, *needs, facts, rules); }
 };
 
 
@@ -687,17 +690,26 @@ auto frame_made(const ui_needs& n, Screen screen, Drawer drawer) {
 }
 // A dialog of Content, bound to its Facts' part of what is shown, looking
 // as its content declares.
-template <class Content, class Facts>
-using shown_in = skiff::bind::Bound<std::optional<Facts>, widgets::Shown<dialog_of<Content, Facts>, Facts, dialog_made<Content, Facts>>>;
-template <class Content, class Facts>
-shown_in<Content, Facts> shown_made(const ui_needs& n) {
-  // Over everything under it, out of the flow of what it is put in: the
-  // dialogs are put one after another in one column, and each fills it --
-  // in its flow, the second was laid out a window's height below the first,
-  // the third two, and none but the first was ever seen.
-  shown_in<Content, Facts> made(std::in_place, dialog_made<Content, Facts>{&n});
-  made.apply({.place = scene::anchor::kTopLeft});
-  return made;
+template <class Content, class Facts, class Rules>
+using shown_in = skiff::bind::Bound<std::optional<Facts>, widgets::Shown<dialog_of<Content, Facts>, Facts, dialog_made<Content, Facts, Rules>>>;
+// What a content made as Raw is, built under Rules: a builder's what it
+// builds; a node itself.
+template <class Raw, class Rules>
+using content_built_t = decltype(skiff::compose::built(std::declval<Raw>(), std::declval<const Rules&>()));
+// A builder of the dialog: built with the window, its contents made, as it
+// opens, under the rules the window was built under.
+template <class Raw, class Facts>
+auto shown_made(const ui_needs& n) {
+  return skiff::compose::Builder{[at = &n]<class Rules>(const Rules& rules) {
+    using content = content_built_t<Raw, Rules>;
+    // Over everything under it, out of the flow of what it is put in: the
+    // dialogs are put one after another in one column, and each fills it --
+    // in its flow, the second was laid out a window's height below the
+    // first, the third two, and none but the first was ever seen.
+    shown_in<content, Facts, Rules> made(std::in_place, dialog_made<content, Facts, Rules>{at, rules});
+    made.apply({.place = scene::anchor::kTopLeft});
+    return made;
+  }};
 }
 // The plugins' dialogs, each its box -- from its extend(), found where the
 // window is instantiated (mux.plugins.ui).
@@ -718,10 +730,10 @@ struct plugin_dialogs<type_list<dialog_entry<Features, Facts>...>> {
   static auto box_of() {
     return extend(contract::window_dialogs{}, type_tag<Feature>{}, type_tag<Of>{});
   }
-  // What the dialog holds: its box, built where it is a builder (it holds
-  // pieces, built under the program's rules).
+  // What the dialog holds: its box -- a builder where it holds pieces,
+  // built as the dialog opens.
   template <class Feature, class Of>
-  using box_t = decltype(a::built_any(std::declval<typename decltype(box_of<Feature, Of>())::type>()));
+  using box_t = typename decltype(box_of<Feature, Of>())::type;
   static auto made(const ui_needs& n) {
     return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), shown_made<box_t<Features, Facts>, Facts>(n)...);
   }
@@ -763,8 +775,10 @@ inline auto window_body(const ui_needs& n) {
   behind.setVisible(n.looks->window.behind);
   auto frame = frame_made(n, chats_screen(n), drawer_view(n));
   // The files to send: as wide as 440 at most, as high as they are.
-  auto sending = shown_made<send_box_t, send_facts>(n);
-  sending.setWidthFittingContent(440.0f);
+  auto sending = skiff::compose::lifted([](auto made) {
+    made.setWidthFittingContent(440.0f);
+    return made;
+  }, shown_made<send_box_t, send_facts>(n));
   return SKIFF_NAMED(window_body, c::column(c::vbox(0.0f, {.fill = true}),
       c::frozen_under(c::vbox(0.0f, {.fill = true}),
       c::column(c::vbox(0.0f, everywhere), c::styled(everywhere, nodes::Box<>(n.colours->background)), std::move(behind), std::move(frame)),

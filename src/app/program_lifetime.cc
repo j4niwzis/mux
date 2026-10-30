@@ -12,8 +12,9 @@ app::app(const mux::ui::palette& theme_colours, const mux::ui::window_look_t& wi
   shared.paint.looks = &shared.looks;
   shared.paint.colours = &colours;
   jumps.made_with(mux::ui::bubble_needs{.colours = &colours, .looks = &shared.looks, .shared = &shared.ui});
+  // The plugins' rules on the window's pieces, outside a release build in
+  // skiff's table (in one, folded into the pieces while compiling).
+  mux::ui::a::register_all();
 }
-// Stopping: outside a release build, the shaping rules that never applied
-// said (mux.ui:shaping).
-app::~app() { mux::ui::a::report_unused(); }
+app::~app() = default;
 }

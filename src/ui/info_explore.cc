@@ -16,7 +16,7 @@ import mux.core;
 import mux.logic.text;
 import mux.logic.links;
 import mux.ui.base;
-// Its rows' text, pieces the plugins shape where they are put (a::part).
+// Its rows' text, pieces the plugins shape where they are put (a::built).
 import mux.ui.lists;
 import mux.ui.shaping;
 export namespace mux::ui {
@@ -43,7 +43,7 @@ struct directory_join {
 auto directory_room_row(const palette& colours, const directory_room& one, const std::string& server, std::optional<account_id> by = std::nullopt) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(directory_room_row, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}}),
-      a::part(directory_room_text, colours, one),
+      a::built(directory_room_text(colours, one)),
       c::styled({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle},
           primary(widgets::Button<directory_join>(colours.widgets, one.space ? "Open" : "Join",
               {one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space, one.name, by})))));

@@ -28,7 +28,7 @@ import mux.plugins.ui.top;
 import mux.ui.lists;
 import mux.ui.messages;
 import :header;
-// What the plugins shape a piece with, where it is put (a::part).
+// What the plugins shape a piece with, where it is put (a::built).
 import mux.ui.shaping;
 import :info_explore;
 
@@ -173,7 +173,7 @@ auto side_found_row(const palette& colours, const search_result& one) {
           .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen}),
           // Its text, a piece the plugins shape where it is put: the avatars
           // plugin's picture of who said it beside it.
-          a::part(found_row_text, colours, one)),
+          a::built(found_row_text(colours, one))),
       std::format("{}: {}", one.name, one.snippet)));
 }
 
@@ -325,7 +325,7 @@ auto side_folders_for(const auto& colours, Pick pick) {
 
 // A chat row is a function of the list's model snapshot. Choosing it sends
 // a request; its list-item label and selection are part of the same tree.
-// Put together here, above the plugins: its text put in through a::part,
+// Put together here, above the plugins: its text put in through a::built,
 // where they shape it.
 inline auto conversation_row(const ui_needs& needs, const conversation& one,
                              const conversation_view& view, const room_event_filter& events) {
@@ -339,7 +339,7 @@ inline auto conversation_row(const ui_needs& needs, const conversation& one,
                   .height = conversation_height(one),
                   .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen,
                   .selectedBackground = colours.selected, .focusBackground = colours.chosen, .selected = view.chosen}),
-                  a::part(chat_row_text, needs, one, view, preview),
+                  a::built(chat_row_text(needs, one, view, preview)),
                   c::visible(view.strip.has_value(), c::styled(
                       {.place = scene::anchor::kCentreLeft, .x = -8.0f, .width = 4.0f, .height = 38.0f, .cornerRadius = 2.0f},
                       nodes::Box<>(view.strip.value_or(0u))))), view.name))));

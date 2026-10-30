@@ -2,7 +2,7 @@
 // mux.ui.lists:row_pieces -- The text of rows the window puts together above
 // the plugins (mux.ui): pieces of their own, under them, so that a plugin's
 // rule may name them -- an account in the drawer, who read a message, a
-// room in a server's directory -- and shape them where they are put (a::part).
+// room in a server's directory -- and shape them where they are put (a::built).
 module;
 #include "skiff/named.h"
 export module mux.ui.lists:row_pieces;
@@ -26,16 +26,25 @@ struct drawer_account {
   friend bool operator==(const drawer_account&, const drawer_account&) = default;
 };
 // Its text: its address over its protocol and state.
-inline constexpr struct drawer_account_text_fn {
-  auto operator()(const palette& colours, const drawer_account& one) const {
+// What a rule on a row's text sees: whose it is -- a person or a room.
+struct face_facts {
+  std::string id;
+  std::string name;
+};
+inline constexpr struct drawer_account_text_fn : skiff::compose::piece<drawer_account_text_fn> {
+  using facts_type = face_facts;
+  static face_facts facts(const palette&, const drawer_account& one) { return {one.address, one.address}; }
+  auto make(const palette& colours, const drawer_account& one) const {
     return two_lines(colours, one.address, std::format("{} · {}", one.protocol, one.how), 14.0f, 3.0f,
                      two_line_style{.second_ink = one.failed ? colours.error : colours.dim, .show_second = true});
   }
 } drawer_account_text{};
 
 // Who read a message, in the menu's list: their name over when.
-inline constexpr struct reader_text_fn {
-  auto operator()(const palette& colours, const seen_reader& one) const {
+inline constexpr struct reader_text_fn : skiff::compose::piece<reader_text_fn> {
+  using facts_type = face_facts;
+  static face_facts facts(const palette&, const seen_reader& one) { return {one.id, one.name}; }
+  auto make(const palette& colours, const seen_reader& one) const {
     namespace c = skiff::compose;
     return SKIFF_NAMED(reader_text, c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
         elided(nodes::Text(one.name, 13.0f, colours.text)),
@@ -44,8 +53,10 @@ inline constexpr struct reader_text_fn {
 } reader_text{};
 
 // A room in a server's directory: its name, its address and members, its topic.
-inline constexpr struct directory_room_text_fn {
-  auto operator()(const palette& colours, const directory_room& one) const {
+inline constexpr struct directory_room_text_fn : skiff::compose::piece<directory_room_text_fn> {
+  using facts_type = face_facts;
+  static face_facts facts(const palette&, const directory_room& one) { return {one.id, one.name.empty() ? one.alias : one.name}; }
+  auto make(const palette& colours, const directory_room& one) const {
     namespace c = skiff::compose;
     return SKIFF_NAMED(directory_room_text, c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
                                                                      .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}),

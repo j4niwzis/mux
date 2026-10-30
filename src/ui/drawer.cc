@@ -16,7 +16,7 @@ import skiff.nodes.text;
 import mux.core;
 import mux.config;
 import mux.ui.base;
-// Its rows' text, pieces the plugins shape where they are put (a::part).
+// Its rows' text, pieces the plugins shape where they are put (a::built).
 import mux.ui.lists;
 import mux.ui.shaping;
 import mux.plugins.ui;
@@ -43,7 +43,7 @@ inline auto drawer_account_row(const palette& colours, const drawer_account& one
                              .selectedBackground = colours.chosen, .focusBackground = colours.chosen, .selected = one.current}),
              // Its text, a piece the plugins shape where it is put (the avatars
              // plugin's picture beside it).
-             a::part(drawer_account_text, colours, one),
+             a::built(drawer_account_text(colours, one)),
              c::visible(one.current, c::styled({.alignSelf = scene::align::kMiddle}, icon_mark(colours, icon::check{})))),
       one.address);
   return row;

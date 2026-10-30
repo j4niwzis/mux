@@ -17,52 +17,35 @@ export namespace mux::plugins::avatars {
 
 using namespace ::mux::ui;
 
-// The picture, then the text: a row that grows across, as the text did.
-struct beside_avatar {
-  auto operator()(auto text, const ui_needs&, const conversation& one, const conversation_view& view, const chat_preview&) const {
-    namespace c = skiff::compose;
-    return c::row(c::hbox(12.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
-                  avatar_mark(avatar_of::chat{}, one.id.id, view.name, 46.0f), std::move(text));
-  }
-};
-// A search result's: the picture of who said it, then the text.
-struct beside_sender {
-  auto operator()(auto text, const palette&, const search_result& one) const {
+// A search result's: who said it (its facts the sender's).
+struct found_picture {
+  auto operator()(auto text, const found_row_facts& f) const {
     namespace c = skiff::compose;
     return c::row(c::hbox(10.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
-                  c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(avatar_of::person{}, one.sender, one.name, 40.0f)),
-                  std::move(text));
+                  c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(avatar_of::person{}, f.sender, f.name, 40.0f)), std::move(text));
   }
 };
 // A picture of `size`, then the text, `gap` apart: a row that grows across,
 // as the text did.
 template <class Kind>
-auto picture_beside(auto text, Kind kind, const std::string& id, std::string_view name, float size, float gap) {
-  namespace c = skiff::compose;
-  return c::row(c::hbox(gap, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
-                c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(kind, id, name, size)), std::move(text));
-}
-// An account in the drawer; who read a message; a room in a directory.
-struct beside_account {
-  auto operator()(auto text, const palette&, const drawer_account& one) const {
-    return picture_beside(std::move(text), avatar_of::person{}, one.address, one.address, 38.0f, 14.0f);
+struct picture_beside {
+  float size;
+  float gap;
+  auto operator()(auto text, const auto& facts) const {
+    namespace c = skiff::compose;
+    return c::row(c::hbox(gap, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+                  c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(Kind{}, facts.id, facts.name, size)), std::move(text));
   }
 };
-struct beside_reader {
-  auto operator()(auto text, const palette&, const seen_reader& one) const {
-    return picture_beside(std::move(text), avatar_of::person{}, one.id, one.name, 30.0f, 14.0f);
-  }
-};
-struct beside_room {
-  auto operator()(auto text, const palette&, const directory_room& one) const {
-    return picture_beside(std::move(text), avatar_of::chat{}, one.id, one.name.empty() ? one.alias : one.name, 40.0f, 12.0f);
-  }
-};
+// The chat list's chats, the search's results, the drawer's accounts, who
+// read a message, a directory's rooms: each its picture beside its text.
 constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
-  using namespace shaping;
-  return on<chat_row_text_fn>(around(beside_avatar{})) | on<found_row_text_fn>(around(beside_sender{})) |
-         on<drawer_account_text_fn>(around(beside_account{})) | on<reader_text_fn>(around(beside_reader{})) |
-         on<directory_room_text_fn>(around(beside_room{}));
+  using namespace skiff::compose;
+  return on<chat_row_text_fn>(around(picture_beside<avatar_of::chat>{46.0f, 12.0f})) |
+         on<found_row_text_fn>(around(found_picture{})) |
+         on<drawer_account_text_fn>(around(picture_beside<avatar_of::person>{38.0f, 14.0f})) |
+         on<reader_text_fn>(around(picture_beside<avatar_of::person>{30.0f, 14.0f})) |
+         on<directory_room_text_fn>(around(picture_beside<avatar_of::chat>{40.0f, 12.0f}));
 }
 
 }  // namespace mux::plugins::avatars

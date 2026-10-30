@@ -209,10 +209,19 @@ inline auto chat_preview_line(const ui_needs& needs, const conversation& one,
 
 // A chat row's text -- its name and time, its topic, a line of its last
 // message: a piece the plugins may shape where it is put into its row,
-// above them (mux.ui:conversations_side, a::part) -- the avatars plugin's
+// above them (mux.ui:conversations_side, a::built) -- the avatars plugin's
 // picture put beside it there.
-inline constexpr struct chat_row_text_fn {
-  auto operator()(const ui_needs& needs, const conversation& one, const conversation_view& view, const chat_preview& preview) const {
+// What a rule on it sees: the chat, by its ID and name.
+struct chat_row_facts {
+  std::string id;
+  std::string name;
+};
+inline constexpr struct chat_row_text_fn : skiff::compose::piece<chat_row_text_fn> {
+  using facts_type = chat_row_facts;
+  static chat_row_facts facts(const ui_needs&, const conversation& one, const conversation_view& view, const chat_preview&) {
+    return {one.id.id, view.name};
+  }
+  auto make(const ui_needs& needs, const conversation& one, const conversation_view& view, const chat_preview& preview) const {
     namespace c = skiff::compose;
     const palette& colours = *needs.colours;
     return SKIFF_NAMED(chat_row_text_view, c::column(c::vbox(6.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
@@ -227,9 +236,16 @@ inline constexpr struct chat_row_text_fn {
 
 // A search result's text -- who said it and when, a line of it: a piece
 // the plugins may shape where it is put into its row (mux.ui:
-// conversations_side, a::part) -- the avatars plugin's picture beside it.
-inline constexpr struct found_row_text_fn {
-  auto operator()(const palette& colours, const search_result& one) const {
+// conversations_side, a::built) -- the avatars plugin's picture beside it.
+// What a rule on it sees: who said it.
+struct found_row_facts {
+  std::string sender;
+  std::string name;
+};
+inline constexpr struct found_row_text_fn : skiff::compose::piece<found_row_text_fn> {
+  using facts_type = found_row_facts;
+  static found_row_facts facts(const palette&, const search_result& one) { return {one.sender, one.name}; }
+  auto make(const palette& colours, const search_result& one) const {
     namespace c = skiff::compose;
     return SKIFF_NAMED(found_row_text_view, c::column(c::vbox(4.0f,
         {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),

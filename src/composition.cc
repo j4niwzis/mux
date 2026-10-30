@@ -26,63 +26,13 @@ struct plugin_list {};
 // The contracts the client's own parts own, named low enough that a
 // plugin's types can say they provide them; each what it asks is said where
 // it is used.
-// What a plugin shapes the window's pieces with (contract::shapes): rules,
-// each a piece -- by the type of the function object that makes it, where
-// the piece is written -- and what is done with it there, applied where the
-// piece is put into its parent, above the plugins (mux.ui:shaping, a::part).
-//   on<Piece>(around(f)): f(node, the piece's own arguments...) -> what
-//   stands in its place, of any type; rules joined with |.
-namespace shaping {
-template <class F>
-struct around_t {
-  F f;
-};
-template <class F>
-constexpr around_t<F> around(F f) {
-  return {f};
-}
-template <class Piece, class Verb>
-struct rule {
-  Verb verb;
-};
-template <class Piece>
-struct on_t {
-  template <class Verb>
-  constexpr rule<Piece, Verb> operator()(Verb verb) const {
-    return {verb};
-  }
-};
-template <class Piece>
-inline constexpr on_t<Piece> on{};
-template <class... Rules>
-struct rules {
-  std::tuple<Rules...> all;
-};
-template <class Piece, class Verb>
-constexpr std::tuple<rule<Piece, Verb>> as_tuple(rule<Piece, Verb> one) {
-  return {one};
-}
-template <class... Rules>
-constexpr std::tuple<Rules...> as_tuple(rules<Rules...> some) {
-  return some.all;
-}
-template <class... Rules>
-constexpr rules<Rules...> rules_of_tuple(std::tuple<Rules...> all) {
-  return {all};
-}
-template <class T>
-concept rule_set = requires(T one) { as_tuple(one); };
-template <rule_set A, rule_set B>
-constexpr auto operator|(A a, B b) {
-  return rules_of_tuple(std::tuple_cat(as_tuple(a), as_tuple(b)));
-}
-}  // namespace shaping
 
 namespace contract {
-// The pieces a plugin shapes (shaping::): its rules, in its UI_TOP layer --
-// where it may name the pieces -- gathered in plugin order above every
-// plugin (mux.ui:shaping):
-//   shape_rules(c, f) -> shaping::on<Piece>(around(f)) | ...
+// The pieces a plugin shapes: its rules (skiff.compose's on<Piece>(before /
+// after / around / instead / drop), joined with |), in its UI_TOP layer --
+// where it may name the pieces -- gathered in plugin order above every plugin
+// (mux.ui.shaping), the program's rules every piece is built under:
+//   shape_rules(c, f) -> on<Piece>(around(f)) | ...
 struct shapes {
   static constexpr std::string_view name = "the pieces of the window shaped";
 };

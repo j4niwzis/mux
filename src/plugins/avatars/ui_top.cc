@@ -55,7 +55,8 @@ struct face_beside {
   }
 };
 // The chat list's chats, the search's results, the drawer's accounts, who
-// read a message, a directory's rooms: each its picture beside its text.
+// read a message, a directory's rooms, a notification's chat: each its
+// picture beside its text.
 constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
   using namespace skiff::compose;
   return on<chat_row_text_fn>(around(picture_beside<avatar_of::chat>{46.0f, 12.0f})) |
@@ -63,7 +64,8 @@ constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
          on<drawer_account_text_fn>(around(picture_beside<avatar_of::person>{38.0f, 14.0f})) |
          on<reader_text_fn>(around(picture_beside<avatar_of::person>{30.0f, 14.0f})) |
          on<directory_room_text_fn>(around(picture_beside<avatar_of::chat>{40.0f, 12.0f})) |
-         on<bubble_piece_fn>(around(face_beside{}));
+         on<bubble_piece_fn>(around(face_beside{})) |
+         on<toast_text_fn>(around(picture_beside<avatar_of::chat>{44.0f, 12.0f}));
 }
 
 }  // namespace mux::plugins::avatars

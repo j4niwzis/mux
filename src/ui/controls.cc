@@ -708,17 +708,6 @@ struct chat_choice_values {
   std::optional<std::int64_t> jump_search;
 };
 
-// A notification as mux shows it itself, as Telegram Desktop's own: a card
-// in a small window of its own -- the chat's avatar beside the title over
-// the text.
-inline auto toast_card(const palette& colours, std::string key, std::string title, std::string text) {
-  return SKIFF_NAMED(toast_card, skiff::compose::row(
-      skiff::compose::hbox(12.0f, {.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar,
-          .border = scene::Border{colours.band, 1.0f}}),
-      avatar_mark(avatar_of::chat{}, key, title, 44.0f), two_lines(colours, title, std::move(text), 14.0f, 4.0f)));
-}
-using toast_card_t = decltype(toast_card(std::declval<const palette&>(), "", "", ""));
-
 // What a message being written answers or edits, as shown over the field:
 // its icon, its title ("Reply to <name>", "Edit message"), a line of it.
 struct compose_context {

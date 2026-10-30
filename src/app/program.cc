@@ -22,6 +22,7 @@ import mux.platform.push;
 import mux.platform.system;
 import mux.protocols;
 import mux.ui;
+import mux.ui.shaping;
 import mux.ui.proto;
 import mux.app.proto;
 import skiff.paint;
@@ -671,10 +672,14 @@ struct app : kept_settings {
   // The notifications mux shows itself, for the host to put up; one pressed;
   // the window's focus -- the notices part's.
   using toast_due = mux::app::toast_due;
-  using toast_card = mux::ui::toast_card_t;
+  // Built here, under the program's rules: its text a piece (the avatars
+  // plugin's picture of the chat beside it).
   static auto make_toast(const mux::ui::palette& colours, std::string key, std::string title, std::string text) {
-    return mux::ui::toast_card(colours, std::move(key), std::move(title), std::move(text));
+    return mux::ui::a::built(mux::ui::toast_card(colours, std::move(key), std::move(title), std::move(text)));
   }
+  // Said by its expression, not make_toast's: a member's deduced return type
+  // is not known inside its class.
+  using toast_card = decltype(mux::ui::a::built(mux::ui::toast_card(std::declval<const mux::ui::palette&>(), "", "", "")));
   template <class Part>
     requires requires(Part& part) { { part.take_toasts() } -> std::same_as<std::vector<toast_due>>; }
   static void toasts_of(Part& part, std::vector<toast_due>& out) {

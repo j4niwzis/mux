@@ -2,7 +2,8 @@
 // mux.ui.lists:row_pieces -- The text of rows the window puts together above
 // the plugins (mux.ui): pieces of their own, under them, so that a plugin's
 // rule may name them -- an account in the drawer, who read a message, a
-// room in a server's directory -- and shape them where they are put (a::built).
+// room in a server's directory, a notification's card -- and shape them
+// where they are put (a::built).
 module;
 #include "skiff/named.h"
 export module mux.ui.lists:row_pieces;
@@ -67,5 +68,23 @@ inline constexpr struct directory_room_text_fn : skiff::compose::piece<directory
         c::visible(!one.topic.empty(), c::styled({.fillX = true}, elided(nodes::Text(one.topic, 13.0f, colours.text))))));
   }
 } directory_room_text{};
+
+// A notification as mux shows it itself, as Telegram Desktop's own: a card
+// in a small window of its own, the title over the text -- a piece, about
+// its chat (the avatars plugin's picture of it beside the text).
+inline constexpr struct toast_text_fn : skiff::compose::piece<toast_text_fn> {
+  using facts_type = face_facts;
+  static face_facts facts(const palette&, const std::string& key, const std::string& title, const std::string&) { return {key, title}; }
+  auto make(const palette& colours, const std::string&, std::string title, std::string text) const {
+    return two_lines(colours, std::move(title), std::move(text), 14.0f, 4.0f);
+  }
+} toast_text{};
+inline auto toast_card(const palette& colours, std::string key, std::string title, std::string text) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(toast_card, c::row(
+      c::hbox(12.0f, {.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar,
+                      .border = scene::Border{colours.band, 1.0f}}),
+      toast_text(colours, std::move(key), std::move(title), std::move(text))));
+}
 
 }  // namespace mux::ui

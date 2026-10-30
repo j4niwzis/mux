@@ -9,6 +9,7 @@ module;
 export module mux.ui.lists:row_pieces;
 
 import std;
+import skia;
 import skiff.scene;
 import skiff.compose;
 import skiff.nodes.text;
@@ -86,5 +87,23 @@ inline auto toast_card(const palette& colours, std::string key, std::string titl
                       .border = scene::Border{colours.band, 1.0f}}),
       toast_text(colours, std::move(key), std::move(title), std::move(text))));
 }
+
+// A chat's heading in its info: its name over how it is, in the middle,
+// each to select -- a piece, about the chat (the avatars plugin's big
+// picture of it above).
+inline constexpr struct chat_heading_fn : skiff::compose::piece<chat_heading_fn> {
+  using facts_type = face_facts;
+  static face_facts facts(const palette&, const std::string& key, const std::string& name, const std::string&) { return {key, name}; }
+  auto make(const palette& colours, const std::string&, std::string name, std::string status) const {
+    namespace c = skiff::compose;
+    const auto centred = [](std::string text, float size, skia::SkColor colour, bool bold) {
+      auto node = nodes::Text(std::move(text), size, colour, bold);
+      node.setSelectable(true);
+      return c::styled({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}}, elided(std::move(node)));
+    };
+    return SKIFF_NAMED(chat_heading, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+        centred(std::move(name), 17.0f, colours.text, true), centred(std::move(status), 13.0f, colours.dim, false)));
+  }
+} chat_heading{};
 
 }  // namespace mux::ui

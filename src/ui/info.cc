@@ -27,6 +27,8 @@ import mux.config;
 import mux.logic.links;
 import mux.protocols;
 import mux.ui.base;
+import mux.ui.lists;
+import mux.ui.shaping;
 import mux.plugins.ui.top;
 import mux.ui.messages;
 
@@ -73,20 +75,14 @@ struct info_view {
 // is; the tiles; what it is about, its addresses; its ID.
 inline auto info_head(const palette& colours, const info_view& shown) {
   namespace c = skiff::compose;
-  const auto centred = [&](std::string text, float size, skia::SkColor colour, bool bold) {
-    auto node = nodes::Text(std::move(text), size, colour, bold);
-    node.setSelectable(true);
-    return c::styled({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}}, elided(std::move(node)));
-  };
   auto description = wrapped(c::styled({.fillX = true}, nodes::Text(shown.topic, 14.0f, colours.text)));
   description.setSelectable(true);
   description.setLinks(link_spans_in(shown.topic), colours.accent);
   return SKIFF_NAMED(info_head, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::row(c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}), nodes::justify::end{}),
                    icon_button(colours, icon::close{}, sends<request::toggle_info>{})),
-      c::styled({.alignSelf = scene::align::kMiddle}, avatar_button(avatar_of::chat{}, shown.key, shown.name, 96.0f)),
-      centred(shown.name, 17.0f, colours.text, true),
-      centred(shown.status, 13.0f, colours.dim, false),
+      // Its name and how it is, a piece (the avatars plugin's picture above).
+      chat_heading(colours, shown.key, shown.name, shown.status),
       info_tiles(colours, shown.muted, shown.leavable),
       section_band(colours),
       c::visible(!shown.topic.empty(), c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}}),
@@ -95,7 +91,11 @@ inline auto info_head(const palette& colours, const info_view& shown) {
               shown.addresses | std::views::transform([&](const std::string& address) { return id_line(colours, address, "", "Address"); }) | std::ranges::to<std::vector>()),
       id_line(colours, shown.key, shown.copied)));
 }
-using info_head_t = decltype(info_head(std::declval<const palette&>(), std::declval<const info_view&>()));
+// Built where it is mounted, under the program's rules: the panel a node.
+inline auto info_head_built(const palette& colours, const info_view& shown) {
+  return a::built(info_head(colours, shown));
+}
+using info_head_t = decltype(info_head_built(std::declval<const palette&>(), std::declval<const info_view&>()));
 // The members' head: how many, and a way to invite where one may.
 struct info_members_heading {
   std::size_t count = 0;
@@ -173,7 +173,7 @@ inline auto info_panel(const ui_needs& n) {
               sends<request::info_more>{},
               nodes::ScrollContainer(c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   c::projected<info_shown>([](const info_shown& now) { return std::optional(now.head); },
-                      c::mount<info_head_t, info_view>([at = &colours](const info_view& view) { return std::tuple{info_head(*at, view)}; },
+                      c::mount<info_head_t, info_view>([at = &colours](const info_view& view) { return std::tuple{info_head_built(*at, view)}; },
                                                        {.fillX = true, .autoSize = scene::axes::kY})),
                   // Its files, as Element X's Files: what it holds that is
                   // a file -- not to go to another client for them (a

@@ -54,6 +54,17 @@ struct face_beside {
                                                                   avatar_mark(avatar_of::person{}, f.sender, f.name, kBubbleAvatar), f.name))));
   }
 };
+// A chat's or a person's big picture above their heading, in the middle;
+// pressed, the picture opened.
+template <class Kind>
+struct picture_above {
+  float size;
+  auto operator()(auto heading, const auto& facts) const {
+    namespace c = skiff::compose;
+    return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                     c::styled({.alignSelf = scene::align::kMiddle}, avatar_button(Kind{}, facts.id, facts.name, size)), std::move(heading));
+  }
+};
 // The chat list's chats, the search's results, the drawer's accounts, who
 // read a message, a directory's rooms, a notification's chat: each its
 // picture beside its text.
@@ -65,7 +76,8 @@ constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
          on<reader_text_fn>(around(picture_beside<avatar_of::person>{30.0f, 14.0f})) |
          on<directory_room_text_fn>(around(picture_beside<avatar_of::chat>{40.0f, 12.0f})) |
          on<bubble_piece_fn>(around(face_beside{})) |
-         on<toast_text_fn>(around(picture_beside<avatar_of::chat>{44.0f, 12.0f}));
+         on<toast_text_fn>(around(picture_beside<avatar_of::chat>{44.0f, 12.0f})) |
+         on<chat_heading_fn>(around(picture_above<avatar_of::chat>{96.0f}));
 }
 
 }  // namespace mux::plugins::avatars

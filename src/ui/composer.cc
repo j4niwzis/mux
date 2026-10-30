@@ -630,10 +630,6 @@ struct draft_told {
   return at == text.size() || std::isspace(static_cast<unsigned char>(text[at])) != 0 ||
          (std::ispunct(static_cast<unsigned char>(text[at])) != 0 && text[at] != '_' && text[at] != '-');
 }
-[[nodiscard]] inline std::string_view local_part(std::string_view id) {
-  const std::string_view bare = id.starts_with('@') ? id.substr(1) : id;
-  return bare.substr(0, bare.find(':'));
-}
 [[nodiscard]] inline std::optional<mention> typed_mention_at(std::string_view text, std::size_t at, const std::vector<member>& members) {
   // What follows the "@" as each member may be written: the longest that
   // the text has there, ending a word.
@@ -643,7 +639,9 @@ struct draft_told {
   };
   const auto found = members | std::views::transform([&](const member& one) {
                        const std::string_view id = one.id.starts_with('@') ? std::string_view(one.id).substr(1) : std::string_view(one.id);
-                       return std::array{id, std::string_view(one.name), local_part(one.id)} | std::views::filter(fits) |
+                       // Its local part as its protocol says it (mux.ui.base:names).
+                       const std::string local = local_part(one.id);
+                       return std::array<std::string_view, 3>{id, one.name, local} | std::views::filter(fits) |
                               std::views::transform([&](std::string_view written) { return mention{std::string(text.substr(at, written.size() + 1)), one.id, at}; }) |
                               std::ranges::to<std::vector>();
                      }) |

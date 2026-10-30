@@ -776,12 +776,23 @@ class model {
   // gives); a timestamp is the sender's server's clock, and a server a
   // minute ahead put its messages below one sent after them -- one's own
   // shown above what was there before it (the user's).
+  // But not one that comes late: a message sent long before the last shown
+  // and only now come -- from a server that was slow to send it, or one
+  // answered and so known elsewhere first -- is put where its time is, as
+  // Telegram's is; at the end, a 14:28 stood after 16:19 (the user's).
+  // Late is more than a clock is ever off by.
+  static constexpr auto kLate = std::chrono::minutes(5);
   template <std::ranges::bidirectional_range Messages>
     requires std::ranges::common_range<Messages>
   static void place_local(message& one, const Messages& messages, bool live) {
-    if (pending(one) || live)
-      one.local_order = std::ranges::empty(messages) ? one.at :
-          std::max(one.at, ordered_at(*std::ranges::prev(std::ranges::end(messages))));
+    if (std::ranges::empty(messages)) {
+      if (pending(one) || live)
+        one.local_order = one.at;
+      return;
+    }
+    const auto last = ordered_at(*std::ranges::prev(std::ranges::end(messages)));
+    if (pending(one) || (live && one.at + kLate >= last))
+      one.local_order = std::max(one.at, last);
   }
   void add_to(conversation& where, change::message_added one) {
     if (spl::visit(spl::overloaded{[&](const placement::in_window& window) { return this->refused(where.id, window.around); },

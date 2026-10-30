@@ -61,7 +61,9 @@ struct part {
     if (shown.thread_edit) {
       const std::string id = *shown.thread_edit;
       auto styles = mux::ui::composer_styles(s_->thread_writing());
-      auto mentions = mux::ui::composer_mentions(s_->thread_writing());
+      const auto chosen_now = s_->managed();
+      const mux::conversation* chat = chosen_now ? s_->model->find(*chosen_now) : nullptr;
+      auto mentions = mux::ui::composer_mentions(s_->thread_writing(), chat ? chat->members : std::vector<mux::member>{});
       s_->write_thread({});
       s_->stop_thread_answer();
       if (const auto chosen = s_->managed()) {
@@ -72,8 +74,10 @@ struct part {
       }
       return;
     }
+    const auto chosen_now = s_->managed();
+    const mux::conversation* chat = chosen_now ? s_->model->find(*chosen_now) : nullptr;
     ui::request::send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(s_->thread_writing()),
-                                      mux::ui::composer_mentions(s_->thread_writing())};
+                                      mux::ui::composer_mentions(s_->thread_writing(), chat ? chat->members : std::vector<mux::member>{})};
     s_->write_thread({});
     s_->stop_thread_answer();
     this->apply(asked);

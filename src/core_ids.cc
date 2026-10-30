@@ -629,10 +629,12 @@ struct account_deleter_of<Sink, Account> {
   using type = typename Sink::account_deleter;
 };
 
-// Someone mentioned in what is sent: the name as written in it, and who.
+// Someone mentioned in what is sent: the name as written in it, and who --
+// and where in its plain text the name is (a pill's, or one typed by hand).
 struct mention {
   std::string name;
   std::string user;
+  std::size_t at = 0;
   friend bool operator==(const mention&, const mention&) = default;
 };
 

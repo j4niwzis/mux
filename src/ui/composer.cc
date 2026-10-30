@@ -622,9 +622,57 @@ struct draft_told {
 [[nodiscard]] inline bool composer_empty(const composer_doc& doc) { return doc.text.empty(); }
 // What is written, as a draft is kept between chats: plain, as it reads.
 [[nodiscard]] std::string draft_text(const composer_doc& doc) { return widgets::document::plain(doc); }
-// Who is mentioned in it: its pills, as they are now.
-[[nodiscard]] inline std::vector<mention> composer_mentions(const composer_doc& doc) {
-  return doc.atoms | std::views::filter([](const widgets::TextAtom& one) { return !one.picture; }) | std::views::transform([](const widgets::TextAtom& one) { return mention{one.plain, one.target}; }) | std::ranges::to<std::vector>();
+// Mentions typed by hand: "@" where a word starts, then one of the chat's
+// members -- their whole id (its "@" the one typed), their name, or their
+// id's local part -- the longest the text has there that ends where a word
+// does.
+[[nodiscard]] inline bool word_edge(std::string_view text, std::size_t at) {
+  return at == text.size() || std::isspace(static_cast<unsigned char>(text[at])) != 0 ||
+         (std::ispunct(static_cast<unsigned char>(text[at])) != 0 && text[at] != '_' && text[at] != '-');
+}
+[[nodiscard]] inline std::string_view local_part(std::string_view id) {
+  const std::string_view bare = id.starts_with('@') ? id.substr(1) : id;
+  return bare.substr(0, bare.find(':'));
+}
+[[nodiscard]] inline std::optional<mention> typed_mention_at(std::string_view text, std::size_t at, const std::vector<member>& members) {
+  // What follows the "@" as each member may be written: the longest that
+  // the text has there, ending a word.
+  const std::string_view after = text.substr(at + 1);
+  const auto fits = [&](std::string_view written) {
+    return !written.empty() && after.starts_with(written) && word_edge(text, at + 1 + written.size());
+  };
+  const auto found = members | std::views::transform([&](const member& one) {
+                       const std::string_view id = one.id.starts_with('@') ? std::string_view(one.id).substr(1) : std::string_view(one.id);
+                       return std::array{id, std::string_view(one.name), local_part(one.id)} | std::views::filter(fits) |
+                              std::views::transform([&](std::string_view written) { return mention{std::string(text.substr(at, written.size() + 1)), one.id, at}; }) |
+                              std::ranges::to<std::vector>();
+                     }) |
+                     std::views::join | std::ranges::to<std::vector>();
+  const auto longest = std::ranges::max_element(found, {}, [](const mention& one) { return one.name.size(); });
+  return longest == found.end() ? std::nullopt : std::optional<mention>(*longest);
+}
+[[nodiscard]] inline std::vector<mention> typed_mentions(std::string_view text, const std::vector<member>& members) {
+  return std::views::iota(std::size_t{0}, text.size()) |
+         std::views::filter([&](std::size_t at) { return text[at] == '@' && (at == 0 || word_edge(text, at - 1)); }) |
+         std::views::transform([&](std::size_t at) { return typed_mention_at(text, at, members); }) |
+         std::views::filter([](const std::optional<mention>& one) { return one.has_value(); }) |
+         std::views::transform([](const std::optional<mention>& one) { return *one; }) | std::ranges::to<std::vector>();
+}
+// Who is mentioned in it: its pills, as they are now, and those typed by
+// hand that no pill is over -- in the order they are in its text.
+[[nodiscard]] inline std::vector<mention> composer_mentions(const composer_doc& doc, const std::vector<member>& members) {
+  auto pills = doc.atoms | std::views::filter([](const widgets::TextAtom& one) { return !one.picture; }) |
+               std::views::transform([&](const widgets::TextAtom& one) {
+                 return mention{one.plain, one.target, widgets::document::plainOffset(doc, one.first)};
+               }) | std::ranges::to<std::vector>();
+  const auto under_pill = [&](const mention& typed) {
+    return std::ranges::any_of(pills, [&](const mention& pill) { return typed.at < pill.at + pill.name.size() && pill.at < typed.at + typed.name.size(); });
+  };
+  auto all = typed_mentions(widgets::document::plain(doc), members) | std::views::filter([&](const mention& one) { return !under_pill(one); }) |
+             std::ranges::to<std::vector>();
+  all.append_range(pills);
+  std::ranges::sort(all, {}, &mention::at);
+  return all;
 }
 // How what is written is formatted, by offsets in its plain text: its runs,
 // and each custom emoji's picture as a run of its own.

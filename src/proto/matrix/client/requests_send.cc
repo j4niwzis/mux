@@ -69,11 +69,14 @@ struct mentions_marked {
 };
 [[nodiscard]] inline mentions_marked marked_mentions(const std::string& body, const std::vector<mention>& mentions, std::vector<styled_run>& styles) {
   mentions_marked out{body, {}};
-  std::size_t from = 0;
+  std::size_t from = 0, grown_before = 0;
   for (const mention& one : mentions) {
     if (!std::ranges::contains(out.users, one.user))
       out.users.push_back(one.user);
-    const auto at = out.marked.find(one.name, from);
+    // Where it is said to be, past what the links before it grew; else its
+    // name's next place.
+    const std::size_t said_at = one.at + grown_before;
+    const auto at = said_at >= from && out.marked.compare(said_at, one.name.size(), one.name) == 0 ? said_at : out.marked.find(one.name, from);
     if (at == std::string::npos)
       continue;
     const std::string label = one.name | std::views::transform([](char c) {
@@ -84,6 +87,7 @@ struct mentions_marked {
     from = at + link.size();
     // The runs moved with it: past it by what it grew, over it to its end.
     const std::size_t grown = link.size() - one.name.size();
+    grown_before += grown;
     for (styled_run& run : styles) {
       run.first += run.first > at ? grown : 0;
       run.last += run.last > at ? grown : 0;

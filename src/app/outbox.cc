@@ -463,7 +463,9 @@ class outbox_part {
     s_->go_live(to);
     s_->newest_due = true;
     // Who was picked from the @ list for it, its pills: sent as mentions.
-    auto mentions = mux::ui::composer_mentions(s_->chat_writing());
+    // Typed by hand, a member's name or id after an "@" too.
+    const mux::conversation* chat = s_->model->find(to);
+    auto mentions = mux::ui::composer_mentions(s_->chat_writing(), chat ? chat->members : std::vector<mux::member>{});
     // How it is formatted: its runs, as the draft has them.
     auto styles = mux::ui::composer_styles(s_->chat_writing());
     spl::visit(spl::overloaded{[&](const compose::plain&) {

@@ -39,8 +39,7 @@ export namespace mux::ui {
 // userpics of 22 at the right, 17 in, each 8 over the next, in a ring of the
 // menu's colour. Pointed at, every reader in a list beside the menu: a
 // userpic of 30, 13 in, the name 57 in, and under it when they read.
-inline constexpr float kSeenHeight = 33.0f, kSeenFace = 22.0f, kSeenOverlap = 8.0f, kSeenRight = 17.0f;
-inline constexpr std::size_t kSeenMostFaces = 3;
+inline constexpr float kSeenHeight = 33.0f, kSeenRight = 17.0f;
 // The row and the list, pointed at or left: the list open while either is.
 struct seen_row_hovered {
   bool on = false;
@@ -59,25 +58,15 @@ struct seen_list_says {
 };
 inline auto seen_row(const palette& colours, const std::vector<seen_reader>& readers) {
   namespace c = skiff::compose;
-  const std::size_t shown = std::min(kSeenMostFaces, readers.size());
-  const float faces_width = shown ? kSeenFace + static_cast<float>(shown - 1) * (kSeenFace - kSeenOverlap) : 0.0f;
-  // The faces out of the flow, in the room at the right: the first the
-  // rightmost, 17 in from the edge, each next 14 to its left.
-  auto faces = std::views::iota(std::size_t{0}, shown) | std::views::transform([&](std::size_t i) {
-                 return c::styled({.place = scene::anchor::kCentreRight,
-                                   .x = faces_width + 8.0f - static_cast<float>(i) * (kSeenFace - kSeenOverlap),
-                                   .border = scene::Border{colours.sidebar, 2.0f}},
-                                  avatar_mark(avatar_of::person{}, readers[i].id, readers[i].name, kSeenFace));
-               }) | std::ranges::to<std::vector>();
   const std::string said = readers.empty() ? std::string("Nobody Viewed")
                            : readers.size() == 1 ? readers.front().name
                                                  : std::to_string(readers.size()) + " Seen";
+  // What it says, a piece about the first readers (the avatars plugin's
+  // faces of them at its right).
   return SKIFF_NAMED(seen_row, c::hovering(seen_row_says{},
-      c::row(c::hbox(0.0f, {.fillX = true, .height = kSeenHeight,
-                            .padding = {9.0f, kSeenRight + (shown ? faces_width + 8.0f : 0.0f), 7.0f, 44.0f}, .hoverBackground = colours.chosen}),
+      c::row(c::hbox(0.0f, {.fillX = true, .height = kSeenHeight, .padding = {9.0f, kSeenRight, 7.0f, 44.0f}, .hoverBackground = colours.chosen}),
              c::styled({.place = scene::anchor::kCentreLeft, .x = 15.0f - 44.0f}, icon_mark(colours, icon::check{})),
-             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(said, 13.0f, colours.text))),
-             c::many(c::hbox(), std::move(faces)))));
+             a::built(seen_summary(colours, readers, said)))));
 }
 // A reader in the list: pressed, the menu closed and their card opened.
 inline auto reader_row(const palette& colours, const seen_reader& one) {

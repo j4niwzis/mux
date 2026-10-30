@@ -102,4 +102,26 @@ inline constexpr struct chat_heading_fn : skiff::compose::piece<chat_heading_fn>
   }
 } chat_heading{};
 
+// Who read a message, as the menu's first row says it: how many, or who --
+// a piece, about the first few readers (the avatars plugin's faces of them
+// at its right, overlapping).
+inline constexpr float kSeenFace = 22.0f, kSeenOverlap = 8.0f;
+inline constexpr std::size_t kSeenMostFaces = 3;
+struct seen_faces_facts {
+  std::vector<face_facts> faces;
+  skia::SkColor ring = 0;
+};
+inline constexpr struct seen_summary_fn : skiff::compose::piece<seen_summary_fn> {
+  using facts_type = seen_faces_facts;
+  static seen_faces_facts facts(const palette& colours, const std::vector<seen_reader>& readers, const std::string&) {
+    return {readers | std::views::take(kSeenMostFaces) | std::views::transform([](const seen_reader& one) { return face_facts{one.id, one.name}; }) |
+                std::ranges::to<std::vector>(),
+            colours.sidebar};
+  }
+  auto make(const palette& colours, const std::vector<seen_reader>&, std::string said) const {
+    namespace c = skiff::compose;
+    return c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(said), 13.0f, colours.text)));
+  }
+} seen_summary{};
+
 }  // namespace mux::ui

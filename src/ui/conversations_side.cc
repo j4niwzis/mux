@@ -166,18 +166,14 @@ auto side_folder_tab(const auto& colours, std::string name, folder_t which,
           std::move(name))));
 }
 
-auto side_found_row(const auto& colours, const search_result& one) {
+auto side_found_row(const palette& colours, const search_result& one) {
   namespace c = skiff::compose;
   return c::with_cursor(scene::cursor::arrow{}, c::onClick(request::search_pick{one.index},
       c::row(c::hbox(10.0f, {.fillX = true, .height = 56.0f,
           .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen}),
-          c::styled({.alignSelf = scene::align::kMiddle},
-              avatar_mark(avatar_of::person{}, one.sender, one.name, 40.0f)),
-          c::column(c::vbox(4.0f,
-              {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
-              name_time_line(one.name, std::format("{:%d.%m.%y}", std::chrono::floor<std::chrono::days>(one.at)),
-                             colours.text, colours.dim, 12.0f),
-              c::styled({.fillX = true}, elided(nodes::Text(one.snippet, 13.0f, colours.dim))))),
+          // Its text, a piece the plugins shape where it is put: the avatars
+          // plugin's picture of who said it beside it.
+          a::part(found_row_text, colours, one)),
       std::format("{}: {}", one.name, one.snippet)));
 }
 

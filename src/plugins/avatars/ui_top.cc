@@ -25,8 +25,17 @@ struct beside_avatar {
                   avatar_mark(avatar_of::chat{}, one.id.id, view.name, 46.0f), std::move(text));
   }
 };
+// A search result's: the picture of who said it, then the text.
+struct beside_sender {
+  auto operator()(auto text, const palette&, const search_result& one) const {
+    namespace c = skiff::compose;
+    return c::row(c::hbox(10.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+                  c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(avatar_of::person{}, one.sender, one.name, 40.0f)),
+                  std::move(text));
+  }
+};
 constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
-  return shaping::on<chat_row_text_fn>(shaping::around(beside_avatar{}));
+  return shaping::on<chat_row_text_fn>(shaping::around(beside_avatar{})) | shaping::on<found_row_text_fn>(shaping::around(beside_sender{}));
 }
 
 }  // namespace mux::plugins::avatars

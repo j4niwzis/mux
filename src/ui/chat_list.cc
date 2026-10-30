@@ -225,6 +225,20 @@ inline constexpr struct chat_row_text_fn {
   }
 } chat_row_text{};
 
+// A search result's text -- who said it and when, a line of it: a piece
+// the plugins may shape where it is put into its row (mux.ui:
+// conversations_side, a::part) -- the avatars plugin's picture beside it.
+inline constexpr struct found_row_text_fn {
+  auto operator()(const palette& colours, const search_result& one) const {
+    namespace c = skiff::compose;
+    return SKIFF_NAMED(found_row_text_view, c::column(c::vbox(4.0f,
+        {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+        name_time_line(one.name, std::format("{:%d.%m.%y}", std::chrono::floor<std::chrono::days>(one.at)),
+                       colours.text, colours.dim, 12.0f),
+        c::styled({.fillX = true}, elided(nodes::Text(one.snippet, 13.0f, colours.dim)))));
+  }
+} found_row_text{};
+
 struct listed_chat {
   conversation_id id;
   conversation_view view;

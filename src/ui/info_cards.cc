@@ -195,32 +195,35 @@ auto person_card_details(const palette& colours, const ui_shared& shared,
       c::visible(!theirs.empty(), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(theirs)))));
 }
 
-template <class Protocol>
-auto person_card(const palette& colours, const ui_shared& shared,
-                 const account_id& account, const std::string& key, const person_facts& facts) {
+// What the card holds of its protocol's: its details, one type for each
+// protocol -- the account's protocol read once, here -- in a column, as the
+// side's accounts and pages are (a dialog's own content stays one type).
+template <class>
+struct person_details_of;
+template <class... Protocols>
+struct person_details_of<protocol_list<Protocols...>> {
+  using type = spl::variant<decltype(person_card_details<Protocols>(std::declval<const palette&>(), std::declval<const ui_shared&>(),
+                                                                    std::declval<const account_id&>(), std::string(),
+                                                                    std::declval<const person_facts&>()))...>;
+};
+using person_details_t = typename person_details_of<protocols>::type;
+inline auto person_card(const palette& colours, const ui_shared& shared,
+                        const account_id& account, const std::string& key, const person_facts& facts) {
   namespace c = skiff::compose;
   using close_act = sends<::mux::ui::request::close_person_info>;
-  auto details = person_card_details<Protocol>(colours, shared, account, key, facts);
+  auto details = c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      spl::visit([&]<class Protocol>(Protocol) {
+        return person_details_t(person_card_details<Protocol>(colours, shared, account, key, facts));
+      }, account.speaks));
   return c::arranged<card_fit>({}, card_box(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
       page_header<no_back, close_act>(colours, "User info", {}, {}, false, true),
       c::styled({.fillX = true}, nodes::ScrollContainer<decltype(details)>(std::move(details)))));
 }
-// The card of the person's account's protocol: one type for each, the
-// account's protocol read once, here.
-template <class>
-struct person_cards_of;
-template <class... Protocols>
-struct person_cards_of<protocol_list<Protocols...>> {
-  using type = spl::variant<decltype(person_card<Protocols>(std::declval<const palette&>(), std::declval<const ui_shared&>(),
-                                                            std::declval<const account_id&>(), std::string(), std::declval<const person_facts&>()))...>;
-};
-using person_card_t = typename person_cards_of<protocols>::type;
-inline person_card_t person_card(const ui_needs& n, const person_shown& shown) {
-  return spl::visit([&]<class Protocol>(Protocol) {
-    return person_card_t(person_card<Protocol>(*n.colours, *n.shared, shown.account, shown.key, shown.facts));
-  }, shown.account.speaks);
+inline auto person_card(const ui_needs& n, const person_shown& shown) {
+  return person_card(*n.colours, *n.shared, shown.account, shown.key, shown.facts);
 }
+using person_card_t = decltype(person_card(std::declval<const ui_needs&>(), std::declval<const person_shown&>()));
 // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
 // it shows, a 24th of the window down within 20 and 40.
 inline dialog_look content_look(std::type_identity<person_shown>) {

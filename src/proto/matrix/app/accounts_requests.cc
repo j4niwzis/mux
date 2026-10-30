@@ -42,7 +42,7 @@ template void account<mux::app::post_change>::search_people(std::string term);
 template void account<mux::app::post_change>::list_threads(std::string room);
 template void account<mux::app::post_change>::load_thread(std::string room, std::string root);
 template void account<mux::app::post_change>::load_thread_older(std::string room, std::string root);
-template void account<mux::app::post_change>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles);
+template void account<mux::app::post_change>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles, std::vector<mention> mentions);
 template void account<mux::app::post_change>::catch_up(std::string room, std::string from, std::string until);
 template void account<mux::app::post_change>::preview_room(std::string room, std::vector<std::string> via);
 template void account<mux::app::post_change>::fetch_profile(std::string user);
@@ -64,7 +64,7 @@ template void account<mux::app::post_change>::fetch_quoted(std::string room, std
 template void account<mux::app::post_change>::load_context(std::string room, std::string target);
 template void account<mux::app::post_change>::load_newer(std::string room, std::string from);
 template void account<mux::app::post_change>::fetch_avatar(std::string source, std::string of);
-template void account<mux::app::post_change>::edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles);
+template void account<mux::app::post_change>::edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles, std::vector<mention> mentions);
 template void account<mux::app::post_change>::edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture);
 template void account<mux::app::post_change>::remove(std::string room, std::string event);
 template void account<mux::app::post_change>::react(std::string room, std::string target, std::string key, bool on, std::optional<std::string> shortcode);

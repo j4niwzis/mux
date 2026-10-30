@@ -334,7 +334,8 @@ class account {
   // The page of its answers before those loaded: as the chat's history, as
   // its panel reaches its top.
   void load_thread_older(std::string room, std::string root);
-  void send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles = {});
+  void send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles = {},
+                      std::vector<mention> mentions = {});
   // The user directory searched: people_found for what was asked.
   void search_people(std::string term);
   // Room keys sent only to verified sessions, or not: the account's choice.
@@ -423,7 +424,7 @@ class account {
                  std::optional<video_look> video = std::nullopt);
 
   // A message of one's own edited (m.replace): the new text in its place.
-  void edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles = {});
+  void edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles = {}, std::vector<mention> mentions = {});
   // A message removed (redacted).
   void remove(std::string room, std::string event);
 

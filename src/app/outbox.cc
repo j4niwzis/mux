@@ -487,7 +487,7 @@ class outbox_part {
                             else if (picture)
                               s_->net->edit_caption(to, one.id, std::move(text), *said->attachment);
                             else
-                              s_->net->edit(to, one.id, std::move(text), std::move(styles));
+                              s_->net->edit(to, one.id, std::move(text), std::move(styles), std::move(mentions));
                           }},
                this->composing());
     this->compose(compose::plain{}, std::nullopt);

@@ -601,6 +601,8 @@ struct send_in_thread {
   std::string text;
   std::optional<std::string> reply_to;  // an answer in it answered
   std::vector<styled_run> styles;
+  // Who it mentions: its pills, sent as a message's are.
+  std::vector<mention> mentions;
 };
 struct menu_thread {};
 struct adopt_pack {

@@ -58,14 +58,51 @@ template <class Plugins>
 [[nodiscard]] std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes,
                                                  const std::vector<styled_run>& styles = {});
 
+// What is written with each mention a link to its person in its Markdown,
+// as Element sends a pill -- the body keeps the name as written -- and the
+// runs moved with it; and who they are, as m.mentions says (Matrix 1.7):
+// what their clients notify by. A message's, a thread's answer's, an
+// edit's alike.
+struct mentions_marked {
+  std::string marked;
+  std::vector<std::string> users;
+};
+[[nodiscard]] inline mentions_marked marked_mentions(const std::string& body, const std::vector<mention>& mentions, std::vector<styled_run>& styles) {
+  mentions_marked out{body, {}};
+  std::size_t from = 0;
+  for (const mention& one : mentions) {
+    if (!std::ranges::contains(out.users, one.user))
+      out.users.push_back(one.user);
+    const auto at = out.marked.find(one.name, from);
+    if (at == std::string::npos)
+      continue;
+    const std::string label = one.name | std::views::transform([](char c) {
+                                return c == '[' || c == ']' || c == '\\' ? std::string{'\\', c} : std::string{c};
+                              }) | std::views::join | std::ranges::to<std::string>();
+    const std::string link = std::format("[{}](https://matrix.to/#/{})", label, one.user);
+    out.marked.replace(at, one.name.size(), link);
+    from = at + link.size();
+    // The runs moved with it: past it by what it grew, over it to its end.
+    const std::size_t grown = link.size() - one.name.size();
+    for (styled_run& run : styles) {
+      run.first += run.first > at ? grown : 0;
+      run.last += run.last > at ? grown : 0;
+    }
+  }
+  return out;
+}
+
 template <class Sink>
-void account<Sink>::edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles) {
-  this->spawn_sending([this, room = std::move(room), event = std::move(event), text = std::move(text), styles = std::move(styles)] {
+void account<Sink>::edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles, std::vector<mention> mentions) {
+  this->spawn_sending([this, room = std::move(room), event = std::move(event), text = std::move(text), styles = std::move(styles),
+                       mentions = std::move(mentions)]() mutable {
     if (!api_)
       return;
-    // Made HTML as a message sent is: its runs and its Markdown, the room's emoji.
-    const auto html = html_of<typename heard_plugins<Sink>::type>(text, emotes_in(room), styles);
-    const auto content = loom::client::edit_message(event, text, html);
+    // Made HTML as a message sent is: its mentions links, its runs and its
+    // Markdown, the room's emoji.
+    const auto said = marked_mentions(text, mentions, styles);
+    const auto html = html_of<typename heard_plugins<Sink>::type>(said.marked, emotes_in(room), styles);
+    const auto content = loom::client::edit_message(event, text, html, said.users);
     if (this->send_room_event(loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
                                               .txn_id = this->transaction(),
@@ -270,31 +307,8 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
     const std::string txn = local ? *local : this->transaction();
     const conversation_id in{id_, room};
     log(id_, "send {}: begun in {}{}", txn, room, api_ ? "" : " (not connected: it will be marked not sent)");
-    // Each mention a link to its person in the Markdown, as Element sends a
-    // pill: the body keeps the name as written.
-    std::string marked = body;
-    std::size_t from = 0;
-    for (const mention& one : mentions) {
-      const auto at = marked.find(one.name, from);
-      if (at == std::string::npos)
-        continue;
-      std::string label;
-      for (const char c : one.name) {
-        if (c == '[' || c == ']' || c == '\\')
-          label += '\\';
-        label += c;
-      }
-      const std::string link = std::format("[{}](https://matrix.to/#/{})", label, one.user);
-      marked.replace(at, one.name.size(), link);
-      from = at + link.size();
-      // The runs moved with it: past it by what it grew, over it to its end.
-      const std::size_t grown = link.size() - one.name.size();
-      for (styled_run& run : styles) {
-        run.first += run.first > at ? grown : 0;
-        run.last += run.last > at ? grown : 0;
-      }
-    }
-    const auto html = html_of<typename heard_plugins<Sink>::type>(marked, emotes_in(room), styles);
+    const auto marked = marked_mentions(body, mentions, styles);
+    const auto html = html_of<typename heard_plugins<Sink>::type>(marked.marked, emotes_in(room), styles);
     sink_(change::message_added{message{
         .in = in,
         .id = txn,
@@ -308,11 +322,7 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
     unsent<Sink> pending{sink_, in, txn};
     if (!api_)
       return;
-    loom::client::text_said said{.body = body, .html = html, .reply_to = reply_to};
-    // Who is mentioned, as Matrix 1.7 says it: what their clients notify by.
-    for (const mention& one : mentions)
-      said.mentions.push_back(one.user);
-    const auto content = loom::client::text_message(said);
+    const auto content = loom::client::text_message(loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .mentions = marked.users});
     this->send_text(in, room, txn, as_body(content), relates_to_of(content));
     pending.settled = true;
   });
@@ -442,12 +452,15 @@ void account<Sink>::load_thread_older(std::string room, std::string root) {
 }
 
 template <class Sink>
-void account<Sink>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles) {
+void account<Sink>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to,
+                                  std::vector<styled_run> styles, std::vector<mention> mentions) {
   this->spawn_sending([this, room = std::move(room), body = std::move(body), root = std::move(root), latest = std::move(latest),
-                 reply_to = std::move(reply_to), styles = std::move(styles)] {
+                 reply_to = std::move(reply_to), styles = std::move(styles), mentions = std::move(mentions)]() mutable {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
-    const auto html = html_of<typename heard_plugins<Sink>::type>(body, emotes_in(room), styles);
+    // Its mentions links and m.mentions, as a message sent in the room has.
+    const auto marked = marked_mentions(body, mentions, styles);
+    const auto html = html_of<typename heard_plugins<Sink>::type>(marked.marked, emotes_in(room), styles);
     sink_(change::message_added{message{.in = in,
                                         .id = txn,
                                         .sender = id_.address,
@@ -463,7 +476,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
     if (!api_)
       return;
     const auto content = loom::client::text_message(
-        loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .thread = root, .thread_latest = latest});
+        loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .mentions = marked.users, .thread = root, .thread_latest = latest});
     this->send_text(in, room, txn, as_body(content), relates_to_of(content));
     pending.settled = true;
   });

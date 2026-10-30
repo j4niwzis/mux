@@ -233,13 +233,14 @@ struct network {
         box->push(mux::change_t{mux::change::delivery_changed{to, local, mux::delivery::failed{}}});
     });
   }
-  void edit(const mux::conversation_id& in, std::string id, std::string text, std::vector<mux::styled_run> styles = {}) {
-    loop.post([this, in, id = std::move(id), text = std::move(text), styles = std::move(styles)] {
+  void edit(const mux::conversation_id& in, std::string id, std::string text, std::vector<mux::styled_run> styles = {},
+            std::vector<mux::mention> mentions = {}) {
+    loop.post([this, in, id = std::move(id), text = std::move(text), styles = std::move(styles), mentions = std::move(mentions)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->edit(in.id, id, text, styles);
+                account->edit(in.id, id, text, styles, mentions);
             },
             one.account);
     });
@@ -558,14 +559,14 @@ struct network {
     });
   }
   void send_in_thread(const mux::conversation_id& in, std::string body, std::string root, std::string latest,
-                      std::optional<std::string> reply_to, std::vector<mux::styled_run> styles) {
+                      std::optional<std::string> reply_to, std::vector<mux::styled_run> styles, std::vector<mux::mention> mentions = {}) {
     loop.post([this, in, body = std::move(body), root = std::move(root), latest = std::move(latest),
-               reply_to = std::move(reply_to), styles = std::move(styles)] {
+               reply_to = std::move(reply_to), styles = std::move(styles), mentions = std::move(mentions)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.send_in_thread(in.id, body, root, latest, reply_to, styles))) { a.send_in_thread(in.id, body, root, latest, reply_to, styles); }, *account);
+                ask_if_able([&](auto& a) -> decltype(void(a.send_in_thread(in.id, body, root, latest, reply_to, styles, mentions))) { a.send_in_thread(in.id, body, root, latest, reply_to, styles, mentions); }, *account);
             },
             one.account);
     });

@@ -1211,7 +1211,9 @@ class account {
   }
 
   // A message of one's own corrected (XEP-0308): the new text in its place.
-  void edit(std::string to, std::string id, std::string text, std::vector<mux::styled_run> styles = {}) {
+  // Its mentions are its text's: XMPP sends none apart (no XEP-0372
+  // references yet).
+  void edit(std::string to, std::string id, std::string text, std::vector<mux::styled_run> styles = {}, std::vector<mux::mention> = {}) {
     text = styled_body(std::move(text), styles);
     this->spawn_guarded([this, to = bare(to), id = std::move(id), text = std::move(text)] {
       if (!session_)

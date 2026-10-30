@@ -61,17 +61,19 @@ struct part {
     if (shown.thread_edit) {
       const std::string id = *shown.thread_edit;
       auto styles = mux::ui::composer_styles(s_->thread_writing());
+      auto mentions = mux::ui::composer_mentions(s_->thread_writing());
       s_->write_thread({});
       s_->stop_thread_answer();
       if (const auto chosen = s_->managed()) {
         if (s_->demo())
           s_->box->push(mux::change_t{mux::change::message_edited{*chosen, id, mux::body{text, std::nullopt}}});
         else
-          s_->net->edit(*chosen, id, text, std::move(styles));
+          s_->net->edit(*chosen, id, text, std::move(styles), std::move(mentions));
       }
       return;
     }
-    ui::request::send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(s_->thread_writing())};
+    ui::request::send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(s_->thread_writing()),
+                                      mux::ui::composer_mentions(s_->thread_writing())};
     s_->write_thread({});
     s_->stop_thread_answer();
     this->apply(asked);
@@ -132,7 +134,7 @@ struct part {
     std::string latest = one.root;
     if (const auto found = chat->threads.find(one.root); found != chat->threads.end() && !found->second.empty())
       latest = found->second.back().id;
-    s_->net->send_in_thread(*chosen, one.text, one.root, latest, one.reply_to, one.styles);
+    s_->net->send_in_thread(*chosen, one.text, one.root, latest, one.reply_to, one.styles, one.mentions);
   }
 
   [[nodiscard]] skiff::model::Revision revision_of(const mux::conversation_id& chat) const {

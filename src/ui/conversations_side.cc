@@ -50,7 +50,7 @@ auto server_search_arguments(const auto& colours, const server_search_facts& fac
     return directory_room_row(colours, room, std::string(), facts.by);
   }) | std::ranges::to<std::vector>();
   auto people = facts.people | std::views::take(30) | std::views::transform([&](const auto& person) {
-    return a::built(found_person_row(colours, person));
+    return found_person_row(colours, person);
   }) | std::ranges::to<std::vector>();
   const scene::Spec caption{.margin = {6.0f, 16.0f, 2.0f, 16.0f}};
   return std::tuple{
@@ -62,12 +62,16 @@ auto server_search_arguments(const auto& colours, const server_search_facts& fac
       c::visible(facts.waiting || (facts.rooms.empty() && facts.people.empty()), c::styled(caption,
           wrapped(nodes::Text(facts.waiting ? "Searching the server…" : "No rooms or people found.", 13.0f, colours.dim))))};
 }
-template <class P> using server_search_content_t = decltype(std::apply([](auto&&... parts) {
-  return skiff::compose::Box(std::forward<decltype(parts)>(parts)...);
-}, server_search_arguments(std::declval<P>(), std::declval<const server_search_facts&>())));
+// What it shows: a column of them -- a builder (its rows' texts pieces),
+// mounted as one is, made under the rules the list is built under.
+auto server_search_content(const auto& colours, const server_search_facts& facts) {
+  return std::apply([](auto&&... parts) { return skiff::compose::column(std::forward<decltype(parts)>(parts)...); },
+                    server_search_arguments(colours, facts));
+}
+template <class P> using server_search_content_t = decltype(server_search_content(std::declval<P>(), std::declval<const server_search_facts&>()));
 auto server_search_list(const auto& colours) {
   return SKIFF_NAMED(server_search_list, skiff::compose::mount<server_search_content_t<decltype(colours)>, server_search_facts>(
-      [colours = &colours](const auto& facts) { return server_search_arguments(*colours, facts); },
+      [colours = &colours](const auto& facts) { return std::tuple{server_search_content(*colours, facts)}; },
       {.fillX = true, .autoSize = scene::axes::kY}));
 }
 

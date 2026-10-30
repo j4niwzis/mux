@@ -810,7 +810,10 @@ inline auto window_view(const ui_needs& n) {
                   c::mount_now<window_body_t, std::uint64_t>([at = &n](std::uint64_t) { return std::tuple{window_body(*at)}; }, std::uint64_t{0},
                                                              {.fill = true}))))));
 }
-using window = decltype(window_view(std::declval<const ui_needs&>()));
+// The window as its scene holds it: built once, here, under the program's
+// rules -- every view under it a builder until then.
+inline auto window_built(const ui_needs& n) { return a::built_any(window_view(n)); }
+using window = decltype(window_built(std::declval<const ui_needs&>()));
 
 // The emote pictures the window wants fetched: those its panels and menus
 // drew without their pictures (drained) -- the custom emoji the list over

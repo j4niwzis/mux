@@ -34,6 +34,6 @@ template class skiff::scene::Scene<mux::app::window_type>;
 
 namespace mux::app {
 window_scene::window_scene(const mux::ui::ui_needs& needs)
-    : fScene(std::in_place, mux::ui::window_view(needs)) {}
+    : fScene(std::in_place, mux::ui::window_built(needs)) {}
 window_scene::~window_scene() { std::destroy_at(&fScene); }
 }

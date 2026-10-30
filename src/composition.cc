@@ -79,6 +79,14 @@ constexpr auto operator|(A a, B b) {
 }  // namespace shaping
 
 namespace contract {
+// A sender's face beside their messages in a group (mux.ui.messages:
+// message): the first plugin's that draws one, placed where the core places
+// it -- its layout the core's --
+//   extend(c, f, palette, sender, name, size) -> its node
+// none where no plugin draws one.
+struct message_faces {
+  static constexpr std::string_view name = "a sender's face beside their messages";
+};
 // The pieces a plugin shapes (shaping::): its rules, in its UI_TOP layer --
 // where it may name the pieces -- gathered in plugin order above every
 // plugin (mux.ui:shaping):

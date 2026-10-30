@@ -12,5 +12,7 @@ app::app(const mux::ui::palette& theme_colours, const mux::ui::window_look_t& wi
   shared.paint.colours = &colours;
   jumps.made_with(mux::ui::bubble_needs{.colours = &colours, .looks = &shared.looks, .shared = &shared.ui});
 }
-app::~app() = default;
+// Stopping: outside a release build, the shaping rules that never applied
+// said (mux.ui:shaping).
+app::~app() { mux::ui::a::report_unused(); }
 }

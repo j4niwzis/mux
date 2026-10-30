@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// MUX_INLINE_IN_RELEASE: what a view is declared with. Meant to be inline in
-// a release build and not outside one -- a view's code, and the nodes it
-// makes, emitted once in the unit it is written in, not again in scene.cc.
-//
-// Inline in every build for now: a view's type is the class SKIFF_NAMED
-// makes inside it, and a class local to a function that is not inline is
-// no entity another unit can name -- the window, the toasts' window and
-// the program, instantiating scenes and walks over those types elsewhere,
-// crashed clang (Scene<Named<toast_card, Held>>, in window_toasts). Not
-// inline outside a release build once what a view returns there names no
-// class of its own (held, its name kept in its state).
+// MUX_INLINE_IN_RELEASE: what a view is declared with -- inline in a release
+// build, where the window is folded whole and its views inline with it;
+// outside one, not: a view's code, and the nodes it makes, emitted once, in
+// the unit it is written in, and only called by the window's -- not all of
+// them made again in scene.cc, the unit the window is built in (half a
+// thousand seconds of a debug build's compile, the user's limit a hundred).
+// A macro, as the user said: only the preprocessor makes a keyword depend on
+// the build. Included in a unit's global module fragment.
 #pragma once
 
+#if defined(SKIFF_ERASED_WALKS) && !defined(SKIFF_CONCRETE_COMBINATORS)
+#define MUX_INLINE_IN_RELEASE
+#else
 #define MUX_INLINE_IN_RELEASE inline
+#endif

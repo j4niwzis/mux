@@ -26,32 +26,65 @@ struct plugin_list {};
 // The contracts the client's own parts own, named low enough that a
 // plugin's types can say they provide them; each what it asks is said where
 // it is used.
-// The pieces of the window a plugin may shape (contract::shape): each a tag
-// type -- a name, never laid out -- declared here, the piece written as it
-// is with it beside its name (SKIFF_NAMED_AS / SKIFF_NAMED_OF), and what it
-// is made from where a plugin needs it. A piece is one where it is a
-// template made where the plugins are seen (the window, a list): a plugin
-// on a piece that is not fails to compile, never silently.
-namespace views {
-// A chat's row in the list: its text -- its name and time, its topic, its
-// last message -- as it stands in the row (mux.ui.lists:chat_list).
-struct chat_row;
-struct chat_row_facts {
-  std::string id;    // the chat's ID, in its account
-  std::string name;  // as the list says it
+// What a plugin shapes the window's pieces with (contract::shapes): rules,
+// each a piece -- by the type of the function object that makes it, where
+// the piece is written -- and what is done with it there, applied where the
+// piece is put into its parent, above the plugins (mux.ui:shaping, a::part).
+//   on<Piece>(around(f)): f(node, the piece's own arguments...) -> what
+//   stands in its place, of any type; rules joined with |.
+namespace shaping {
+template <class F>
+struct around_t {
+  F f;
 };
-}  // namespace views
+template <class F>
+constexpr around_t<F> around(F f) {
+  return {f};
+}
+template <class Piece, class Verb>
+struct rule {
+  Verb verb;
+};
+template <class Piece>
+struct on_t {
+  template <class Verb>
+  constexpr rule<Piece, Verb> operator()(Verb verb) const {
+    return {verb};
+  }
+};
+template <class Piece>
+inline constexpr on_t<Piece> on{};
+template <class... Rules>
+struct rules {
+  std::tuple<Rules...> all;
+};
+template <class Piece, class Verb>
+constexpr std::tuple<rule<Piece, Verb>> as_tuple(rule<Piece, Verb> one) {
+  return {one};
+}
+template <class... Rules>
+constexpr std::tuple<Rules...> as_tuple(rules<Rules...> some) {
+  return some.all;
+}
+template <class... Rules>
+constexpr rules<Rules...> rules_of_tuple(std::tuple<Rules...> all) {
+  return {all};
+}
+template <class T>
+concept rule_set = requires(T one) { as_tuple(one); };
+template <rule_set A, rule_set B>
+constexpr auto operator|(A a, B b) {
+  return rules_of_tuple(std::tuple_cat(as_tuple(a), as_tuple(b)));
+}
+}  // namespace shaping
 
 namespace contract {
-// A piece of the window, shaped (views::): every plugin providing
-// shape<Tag> in turn, in plugin order -- each given what the one before
-// made, of any type, and what the piece is made from where it says --
-// returns what the piece is then, of any type:
-//   extend(c, f, Node node[, const Facts& facts]) -> its node
-// Nothing provides it: the piece as it was written, the same type.
-template <class Tag>
-struct shape {
-  static constexpr std::string_view name = "a piece of the window shaped";
+// The pieces a plugin shapes (shaping::): its rules, in its UI_TOP layer --
+// where it may name the pieces -- gathered in plugin order above every
+// plugin (mux.ui:shaping):
+//   shape_rules(c, f) -> shaping::on<Piece>(around(f)) | ...
+struct shapes {
+  static constexpr std::string_view name = "the pieces of the window shaped";
 };
 // What a plugin asks a passphrase (or the account's password) for, in the
 // client's passphrase dialog (mux.ui.base:forms), beside the client's and

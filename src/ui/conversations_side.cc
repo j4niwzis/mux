@@ -28,6 +28,8 @@ import mux.plugins.ui.top;
 import mux.ui.lists;
 import mux.ui.messages;
 import :header;
+// What the plugins shape a piece with, where it is put (a::part).
+import :shaping;
 import :info_explore;
 
 export namespace mux::ui {
@@ -323,6 +325,28 @@ auto side_folders_for(const auto& colours, Pick pick) {
   return SKIFF_NAMED(side_folders_for, c::projected<side_shown>([](const side_shown& now) {
     return now.folders | std::views::transform([](const side_folder_view& tab) { return std::pair{tab.folder, tab}; }) | std::ranges::to<std::vector>();
   }, std::move(tabs)));
+}
+
+// A chat row is a function of the list's model snapshot. Choosing it sends
+// a request; its list-item label and selection are part of the same tree.
+// Put together here, above the plugins: its text put in through a::part,
+// where they shape it.
+inline auto conversation_row(const ui_needs& needs, const conversation& one,
+                             const conversation_view& view, const room_event_filter& events) {
+  namespace c = skiff::compose;
+  const palette& colours = *needs.colours;
+  const chat_preview preview = preview_of(one, view, events);
+  return c::recorded(c::with_cursor(scene::cursor::arrow{},
+      c::said(scene::SemanticRole{scene::semantic_role::list_item{}}, view.chosen,
+          c::onClick(request::choose{one.id},
+              c::row(c::hbox(12.0f, {.fillX = true,
+                  .height = conversation_height(one),
+                  .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen,
+                  .selectedBackground = colours.selected, .focusBackground = colours.chosen, .selected = view.chosen}),
+                  a::part(chat_row_text, needs, one, view, preview),
+                  c::visible(view.strip.has_value(), c::styled(
+                      {.place = scene::anchor::kCentreLeft, .x = -8.0f, .width = 4.0f, .height = 38.0f, .cornerRadius = 2.0f},
+                      nodes::Box<>(view.strip.value_or(0u))))), view.name))));
 }
 
 struct side_chat_view {

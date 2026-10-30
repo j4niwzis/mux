@@ -16,8 +16,6 @@ import mux.core;
 import mux.config;
 import mux.ui.base;
 import mux.ui.messages;
-// The plugins that shape a row (contract::shape<views::chat_row>), seen where it is made.
-import mux.plugins.ui;
 
 export namespace mux::ui {
 
@@ -209,37 +207,23 @@ inline auto chat_preview_line(const ui_needs& needs, const conversation& one,
       protocol_row_of(*needs.shared, one), chat_unread(colours, view)));
 }
 
-// A chat row is a function of the list's model snapshot. Choosing it sends
-// a request; its list-item label and selection are part of the same tree.
-inline auto conversation_row(const ui_needs& needs, const conversation& one,
-                             const conversation_view& view, const room_event_filter& events) {
-  namespace c = skiff::compose;
-  const palette& colours = *needs.colours;
-  const chat_preview preview = preview_of(one, view, events);
-  return c::recorded(c::with_cursor(scene::cursor::arrow{},
-      c::said(scene::SemanticRole{scene::semantic_role::list_item{}}, view.chosen,
-          c::onClick(request::choose{one.id},
-              c::row(c::hbox(12.0f, {.fillX = true,
-                  .height = conversation_height(one),
-                  .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen,
-                  .selectedBackground = colours.selected, .focusBackground = colours.chosen, .selected = view.chosen}),
-                  // Its text, a piece plugins shape (views::chat_row): its
-                  // picture is the avatars plugin's, put beside it.
-                  SKIFF_NAMED_OF(views::chat_row, chat_row_text, (views::chat_row_facts{one.id.id, view.name}),
-                      c::column(c::vbox(6.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
-                                               .alignSelf = scene::align::kMiddle}),
-                          name_time_line(view.name, preview.time, view.chosen ? colours.selected_text : colours.text,
-                                         view.chosen ? colours.selected_text : colours.dim, 13.0f),
-                          c::visible(preview.topic.has_value(), c::styled({.fillX = true},
-                              elided(nodes::Text(preview.topic.value_or(""), 13.0f,
-                                                view.chosen ? colours.selected_text : colours.text)))),
-                          chat_preview_line(needs, one, view, preview))),
-                  c::visible(view.strip.has_value(), c::styled(
-                      {.place = scene::anchor::kCentreLeft, .x = -8.0f, .width = 4.0f, .height = 38.0f, .cornerRadius = 2.0f},
-                      nodes::Box<>(view.strip.value_or(0u))))), view.name))));
-}
-using conversation_row_t = decltype(conversation_row(std::declval<const ui_needs&>(),
-    std::declval<const conversation&>(), std::declval<const conversation_view&>(), std::declval<const room_event_filter&>()));
+// A chat row's text -- its name and time, its topic, a line of its last
+// message: a piece the plugins may shape where it is put into its row,
+// above them (mux.ui:conversations_side, a::part) -- the avatars plugin's
+// picture put beside it there.
+inline constexpr struct chat_row_text_fn {
+  auto operator()(const ui_needs& needs, const conversation& one, const conversation_view& view, const chat_preview& preview) const {
+    namespace c = skiff::compose;
+    const palette& colours = *needs.colours;
+    return SKIFF_NAMED(chat_row_text_view, c::column(c::vbox(6.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
+                                                                  .alignSelf = scene::align::kMiddle}),
+        name_time_line(view.name, preview.time, view.chosen ? colours.selected_text : colours.text,
+                       view.chosen ? colours.selected_text : colours.dim, 13.0f),
+        c::visible(preview.topic.has_value(), c::styled({.fillX = true},
+            elided(nodes::Text(preview.topic.value_or(""), 13.0f, view.chosen ? colours.selected_text : colours.text)))),
+        chat_preview_line(needs, one, view, preview)));
+  }
+} chat_row_text{};
 
 struct listed_chat {
   conversation_id id;
@@ -258,14 +242,5 @@ struct chat_listing {
     return now.find(id);
   }
 };
-using chat_item = std::tuple<conversation_id, conversation_view, const conversation*, const listed_chat*, const ui_needs*>;
-inline constexpr auto make_chat_row = [](const chat_item& item) {
-  const auto& [id, view, one, listed, needs] = item;
-  return conversation_row(*needs, *one, view, listed->events);
-};
-using chat_rows = nodes::MemoRows<conversation_id, conversation_view, conversation_row_t, std::remove_cv_t<decltype(make_chat_row)>>;
-inline auto make_chat_rows() {
-  return SKIFF_NAMED(make_chat_rows, skiff::compose::styled({.fillX = true, .autoSize = scene::axes::kY}, chat_rows(make_chat_row)));
-}
 
 }  // namespace mux::ui

@@ -294,7 +294,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin 5b357639aca8eef85d28428a1a83cd01bacced6a)
+set(mux_skiff_pin 4ce1ac17cdcda625950fa90168b909df2db310f5)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
@@ -535,7 +535,7 @@ if(MUX_UI)
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_pattern})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src ${mux_generated}
     FILES ${mux_protocol_ui} ${mux_enabled_ui} ${mux_plugin_ui} ${mux_plugins_ui} ${mux_plugin_ui_top} ${mux_plugins_ui_top} ${mux_platform_sources} src/ui.cc
-          src/kept_root.cc src/ui_base.cc src/ui_messages.cc src/ui_lists.cc src/ui/base.cc src/ui/requests.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/list_shown.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_explore.cc src/ui/info.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations.cc src/ui/forms.cc src/ui/pages.cc src/ui/account_forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/settings_pages.cc src/ui/appearance.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/window.cc
+          src/kept_root.cc src/ui_base.cc src/ui_messages.cc src/ui_lists.cc src/ui/base.cc src/ui/requests.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/list_shown.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_explore.cc src/ui/info.cc src/ui/composer.cc src/ui/timeline.cc src/ui/shaping.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations.cc src/ui/forms.cc src/ui/pages.cc src/ui/account_forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/settings_pages.cc src/ui/appearance.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/window.cc
           src/proto/ui.cc)
   target_sources(mux_modules PRIVATE ${mux_protocol_ui_impl})
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets skiff::window Opus::opus Vorbis::vorbisfile

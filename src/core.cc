@@ -771,10 +771,15 @@ class model {
   static bool message_before(const message& a, const message& b) {
     return ordered_at(a) < ordered_at(b);
   }
+  // One's own echo, and whatever comes live: after what is there already,
+  // whatever its time says. The live order is the server's (the order a sync
+  // gives); a timestamp is the sender's server's clock, and a server a
+  // minute ahead put its messages below one sent after them -- one's own
+  // shown above what was there before it (the user's).
   template <std::ranges::bidirectional_range Messages>
     requires std::ranges::common_range<Messages>
-  static void place_local(message& one, const Messages& messages) {
-    if (pending(one))
+  static void place_local(message& one, const Messages& messages, bool live) {
+    if (pending(one) || live)
       one.local_order = std::ranges::empty(messages) ? one.at :
           std::max(one.at, ordered_at(*std::ranges::prev(std::ranges::end(messages))));
   }
@@ -783,7 +788,8 @@ class model {
                                    [](const auto&) { return false; }},
                    one.where))
       return;
-    if (spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, one.where)) {
+    const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, one.where);
+    if (live) {
       std::erase(where.typing, one.message.sender);
       if (where.typing.empty())
         typing_until_.erase(one.message.in);
@@ -791,7 +797,9 @@ class model {
     if (message* kept = one.message.id.empty() ? nullptr : message_in(where, one.message.id)) {
       // Come again -- a page, the disk, a window around it: its reactions
       // kept, which what came may not carry.
-      if (pending(one.message))
+      // Still on its way, or come live -- the server's copy of one's own
+      // echo: where it stands. Its server's time does not move it back.
+      if (pending(one.message) || live)
         one.message.local_order = kept->local_order.value_or(ordered_at(*kept));
       const bool moved = ordered_at(*kept) != ordered_at(one.message);
       auto reactions = std::move(kept->reactions);
@@ -830,10 +838,8 @@ class model {
     // timeline; its root's summary brought up to date.
     if (one.message.thread) {
       auto& answers = where.threads[*one.message.thread];
-      place_local(one.message, answers);
+      place_local(one.message, answers, live);
       answers.insert(std::ranges::upper_bound(answers, one.message, message_before), one.message);
-      const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }},
-                                      one.where);
       note_answer(where, *one.message.thread, one.message, live);
       return;
     }
@@ -842,7 +848,7 @@ class model {
     // Keep a local echo after what was visible when it was sent, even if
     // this machine's clock is behind. Sending completion carries no server
     // timestamp and must not move it back into history.
-    place_local(one.message, where.timeline);
+    place_local(one.message, where.timeline, live);
     // Both history and live events use the same chronological insertion.
     // A linear search also tolerates clock-skewed entries from an older client;
     // upper_bound requires a sorted range.

@@ -1241,6 +1241,13 @@ auto bubble_of(const auto& n, const auto& in, const auto& f, const auto* now) {
 // swipe shows, the unread bar over it, who has read it under it. Swiped
 // left, it is answered; washed while it is selected, flashed where a jump
 // went to it; coming in moving where it has just come (arrives).
+// A sender's face (contract::message_faces): the first plugin's that draws
+// one; none where none does -- known while compiling.
+inline auto face_of(plugin_list<>, const palette&, const std::string&, const std::string&, float) { return nothing_shown(); }
+template <class First, class... Rest>
+auto face_of(plugin_list<First, Rest...>, const palette& colours, const std::string& sender, const std::string& name, float size) {
+  return extend(contract::message_faces{}, type_tag<First>{}, colours, sender, name, size);
+}
 auto message_row(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model* now, bool arrives) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
@@ -1258,7 +1265,8 @@ auto message_row(const bubble_needs& n, const conversation& in, const bubble_fac
                                                .alpha = face_shown ? static_cast<float>(element_opacity_of(looks.bubbles, &config::element_opacity::avatars)) / 100.0f
                                                                    : 0.0f},
                                               c::onPress(open_face{said.sender, face_shown},
-                                                         face_of(colours, avatar_of::person{}, said.sender, sender_name(in, said.sender), kBubbleAvatar),
+                                                         face_of(composition::providers<contract::message_faces, enabled_plugins>{}, colours,
+                                                                 said.sender, sender_name(in, said.sender), kBubbleAvatar),
                                                          sender_name(in, said.sender))));
   const nodes::Justify justify = said.service                    ? nodes::Justify{nodes::justify::middle{}}
                                  : said.outgoing && !as_lines ? nodes::Justify{nodes::justify::end{}}

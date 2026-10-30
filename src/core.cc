@@ -733,21 +733,48 @@ class model {
         this->on(reaction);
     }
   }
+  // What is left of a deleted message where only that it was is shown: the
+  // user's own -- what they deleted, gone from it -- or the server's emptied
+  // copy. Shown as "Message deleted" where it was (a tester's: their own
+  // deleted showed nothing at all, the setting on).
+  static void emptied(message& one) {
+    one.body = {};
+    one.versions.clear();
+    one.edited = false;
+    one.attachment.reset();
+    one.album.clear();
+    one.sticker = false;
+    one.forwarded.reset();
+  }
   void add_message(const change::message_added& one) {
-    // A deleted one, read back from the disk: only where deleted messages
-    // are kept, and something of it is left to show.
-    if (one.message.redacted &&
-        (!show_deleted || one.message.outgoing ||
-         (one.message.body.plain.empty() && !one.message.body.html && !one.message.attachment))) {
-      // The server's emptied copy of one held whole: that one marked, as a
-      // deletion told live would -- not replaced by what is left of it.
-      if (show_deleted && !one.message.outgoing)
-        this->in_chat(one.message.in, [&](conversation& where) {
-          if (message* kept = message_in(where, one.message.id); kept && !kept->outgoing) {
-            kept->redacted = true;
-            in_latest(where, one.message.id, [](message& latest) { latest.redacted = true; });
-          }
-        });
+    // A deleted one -- read back from the disk, or the server's copy -- only
+    // where deleted messages are shown.
+    if (one.message.redacted && !show_deleted)
+      return;
+    if (one.message.redacted) {
+      // One held whole: marked, as a deletion told live would -- not replaced
+      // by the server's emptied copy; the user's own emptied.
+      bool held = false;
+      this->in_chat(one.message.in, [&](conversation& where) {
+        if (message* kept = message_in(where, one.message.id)) {
+          held = true;
+          kept->redacted = true;
+          if (kept->outgoing)
+            emptied(*kept);
+          in_latest(where, one.message.id, [&](message& latest) {
+            latest.redacted = true;
+            if (latest.outgoing)
+              emptied(latest);
+          });
+        }
+      });
+      if (held)
+        return;
+    }
+    if (one.message.redacted && one.message.outgoing) {
+      auto placeholder = one;
+      emptied(placeholder.message);
+      this->in_chat(one.message.in, [&](conversation& where) { this->add_to(where, std::move(placeholder)); });
       return;
     }
     this->in_chat(one.message.in, [&](conversation& where) {
@@ -1008,13 +1035,20 @@ class model {
     // removed where the message it was on is not here to match it: gone too.
     for (auto* marks : {&where.unread_reactions, &where.unread_mentions})
       std::erase_if(*marks, [&](const unread_mark& mark) { return mark.event == one.id; });
-    // Kept where deleted messages are -- but never the user's own: what they
-    // deleted themselves goes, whatever is kept of others'.
-    const message* found = message_in(where, one.id);
-    if (show_deleted && !(found && found->outgoing)) {
-      if (message* kept = message_in(where, one.id))
+    // Kept where deleted messages are shown: another's whole, marked; the
+    // user's own emptied -- what they deleted gone, "Message deleted" where
+    // it was.
+    if (show_deleted) {
+      if (message* kept = message_in(where, one.id)) {
         kept->redacted = true;
-      in_latest(where, one.id, [](message& kept) { kept.redacted = true; });
+        if (kept->outgoing)
+          emptied(*kept);
+      }
+      in_latest(where, one.id, [](message& kept) {
+        kept.redacted = true;
+        if (kept.outgoing)
+          emptied(kept);
+      });
       return;
     }
     std::erase_if(where.timeline, [&](const message& each) { return each.id == one.id; });

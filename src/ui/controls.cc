@@ -897,16 +897,26 @@ auto accent_circles_for(Choose choose, const config::theme_t& in, bool with_them
 }
 
 
-// Someone found: their picture, name and ID; pressed, the chat with them --
-// in Start chat, and in the chat list where nothing joined matches.
+// Someone found: their name over their ID -- a piece, about them (the
+// avatars plugin's picture of them beside it).
+inline constexpr struct person_pick_text_fn : skiff::compose::piece<person_pick_text_fn> {
+  using facts_type = face_facts;
+  static face_facts facts(const palette&, const found_person& one) { return {one.id, one.name.empty() ? one.id : one.name}; }
+  auto make(const palette& colours, const found_person& one) const {
+    return two_lines(colours, one.name.empty() ? one.id : one.name, one.id, 14.0f, 2.0f);
+  }
+} person_pick_text{};
+// Someone found, as a row: pressed, the chat with them -- in Start chat, and
+// in the chat list where nothing joined matches. A builder (its text a
+// piece): built where the program's rules are known.
 template <class Event>
 inline auto person_pick_row(const palette& colours, const found_person& one, Event event) {
+  namespace c = skiff::compose;
   const std::string name = one.name.empty() ? one.id : one.name;
-  return SKIFF_NAMED(person_pick_row, skiff::compose::onClick(std::move(event), skiff::compose::row(
-      skiff::compose::hbox(12.0f, {.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
+  return SKIFF_NAMED(person_pick_row, c::onClick(std::move(event), c::row(
+      c::hbox(12.0f, {.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
           .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
-      avatar_mark(avatar_of::person{}, one.id, name, 36.0f),
-      two_lines(colours, name, one.id, 14.0f, 2.0f)), name));
+      person_pick_text(colours, one)), name));
 }
 inline auto found_person_row(const palette& colours, const found_person& one) {
   return person_pick_row(colours, one, request::start_direct{one.id});

@@ -50,7 +50,7 @@ auto server_search_arguments(const auto& colours, const server_search_facts& fac
     return directory_room_row(colours, room, std::string(), facts.by);
   }) | std::ranges::to<std::vector>();
   auto people = facts.people | std::views::take(30) | std::views::transform([&](const auto& person) {
-    return found_person_row(colours, person);
+    return a::built(found_person_row(colours, person));
   }) | std::ranges::to<std::vector>();
   const scene::Spec caption{.margin = {6.0f, 16.0f, 2.0f, 16.0f}};
   return std::tuple{

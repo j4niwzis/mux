@@ -78,7 +78,8 @@ constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
          on<bubble_piece_fn>(around(face_beside{})) |
          on<toast_text_fn>(around(picture_beside<avatar_of::chat>{44.0f, 12.0f})) |
          on<chat_heading_fn>(around(picture_above<avatar_of::chat>{96.0f})) |
-         on<member_text_fn>(around(picture_beside<avatar_of::person>{40.0f, 12.0f}));
+         on<member_text_fn>(around(picture_beside<avatar_of::person>{40.0f, 12.0f})) |
+         on<person_pick_text_fn>(around(picture_beside<avatar_of::person>{36.0f, 12.0f}));
 }
 
 }  // namespace mux::plugins::avatars

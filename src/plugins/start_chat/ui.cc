@@ -118,7 +118,8 @@ auto start_chat_view(const palette& colours, const Facts& facts) {
       c::text_for<Facts>([](const auto& now) {
         return now.query.empty() ? std::string("Suggestions") : now.rows.empty() ? std::string("No results") : std::string("Results");
       }, nodes::Text("", 12.0f, colours.dim, true)),
-      c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(
+      // Scrolled by the combinator: its rows are builders (their text pieces).
+      c::styled({.fillX = true, .grow = scene::axes::kY}, c::scrolled(
           c::projected<Facts>([](const auto& now) { return std::optional(now); },
               c::mount<person_rows_t<Facts>, Facts>([colours = &colours](const auto& now) {
                 return std::tuple{c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), person_rows(*colours, now))};

@@ -141,7 +141,7 @@ auto side_space_icon(const auto& colours, const config::space_item_t& item,
               c::visible(direct, c::styled({.alignSelf = scene::align::kMiddle},
                   nodes::Text("@", size * 0.45f, colours.text, true))),
               c::visible(space, c::styled({.alignSelf = scene::align::kMiddle},
-                  avatar_mark(avatar_of::chat{}, std::move(key), name, size - 6.0f)))),
+                  face_spot(avatar_of::chat{}, std::move(key), name, size - 6.0f)))),
           std::move(name))));
 }
 
@@ -236,25 +236,26 @@ struct space_bar_rows {};
 struct space_bar_view {};
 struct space_list_rows {};
 struct space_list_view {};
+// The icons, kept by their items: a builder (their faces are pieces), built
+// under the rules the bars are.
+using side_space_item = std::pair<config::space_item_t, side_space_view>;
 template <class Pick>
-using side_space_rows_raw =
-    nodes::MemoRows<config::space_item_t, side_space_view,
-                    std::invoke_result_t<side_space_row_make<Pick>, const config::space_item_t&, const side_space_view&, bool>,
-                    side_space_row_make<Pick>, skiff::compose::Box<>>;
-template <class Lane, class Pick>
-auto side_spaces_for(const auto& colours, Pick pick, bool horizontal) {
+auto side_space_rows(const auto& colours, Pick pick, bool horizontal) {
   namespace c = skiff::compose;
-  using make = side_space_row_make<Pick>;
-  using rows = side_space_rows_raw<Pick>;
-  auto line = rows(make{&colours, std::move(pick)}, c::Box<>(horizontal
+  return c::memo_rows<config::space_item_t, side_space_view, side_space_item>(side_space_row_make<Pick>{&colours, std::move(pick)}, c::Box<>(horizontal
       ? c::hbox(4.0f, {.fillY = true, .autoSize = scene::axes::kX})
       : c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 6.0f, 8.0f, 6.0f}})),
       {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
+}
+template <class Lane, class Pick>
+auto side_spaces_for(const auto& colours, Pick pick, bool horizontal) {
+  namespace c = skiff::compose;
+  auto line = side_space_rows(colours, std::move(pick), horizontal);
   return c::projected<side_shown>([horizontal](const side_shown& now) {
     return ((horizontal ? now.top_bar : now.side_bar)) | std::views::transform([&](const auto& entry) {
       return std::pair{entry.item, side_space_view{entry.folder, now.account, entry.key, entry.name, entry.chosen, entry.size}};
     }) | std::ranges::to<std::vector>();
-  }, c::LaneMark<Lane, rows>(std::move(line)));
+  }, c::reorder_lane<Lane>(std::move(line)));
 }
 
 auto side_space_popup(const auto& colours) {
@@ -277,13 +278,22 @@ struct side_pick_folder {
   using Answer = request::pick_folder;
   Answer operator()(const folder_t& folder) const { return {folder}; }
 };
-// The rows of a lane -- the bar's or the list's, each marked as its own.
-template <class P, class Lane = space_bar_rows>
-using side_space_rows_t = decltype(side_spaces_for<Lane>(std::declval<P>(), side_pick_folder{}, true));
-// The views the lanes scroll in: the list's around its own rows -- made
-// around the bar's, its type was not the one the list is made of.
-template <class P> using space_bar_view_t = decltype(skiff::compose::SideScroll(std::declval<side_space_rows_t<P>>(), true));
-template <class P> using space_list_view_t = decltype(nodes::ScrollContainer(std::declval<side_space_rows_t<P, space_list_rows>>()));
+// The views the lanes scroll in, as builders: the bar's sideways, the
+// list's down.
+// The bar's view a SideScroll in every build -- not side_scroll's, held
+// outside a release build: the drag asks it how far it is scrolled.
+template <class B> auto side_scrolled(B line) {
+  return skiff::compose::lifted([](auto built) { return skiff::compose::SideScroll(std::move(built), true); }, std::move(line));
+}
+template <class P> auto bar_lane_view(const P& colours) {
+  return skiff::compose::reorder_lane<space_bar_view>(side_scrolled(side_spaces_for<space_bar_rows>(colours, side_pick_folder{}, true)));
+}
+template <class P> auto list_lane_view(const P& colours) {
+  return skiff::compose::reorder_lane<space_list_view>(skiff::compose::scrolled(side_spaces_for<space_list_rows>(colours, side_pick_folder{}, false)));
+}
+// A lane as it is built under the rules: its mark over what it marks, built.
+template <class Tag, class B, class Rules>
+using built_lane = skiff::compose::LaneMark<Tag, skiff::compose::part_t<decltype(skiff::compose::built(std::declval<B>(), std::declval<const Rules&>()))>>;
 // The folder bar, where it is shown: in the head, or under the search field
 // where the bars are big.
 auto side_space_bar(const auto& colours, bool big) {
@@ -292,17 +302,19 @@ auto side_space_bar(const auto& colours, bool big) {
       c::styled(big ? scene::Spec{.fillX = true, .height = 58.0f, .margin = {0.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 8.0f, .masking = true}
                     : scene::Spec{.height = 34.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f,
                                   .masking = true},
-          c::LaneMark<space_bar_view, space_bar_view_t<decltype(colours)>>(c::SideScroll(side_spaces_for<space_bar_rows>(colours, side_pick_folder{}, true), true)))));
+          bar_lane_view(colours))));
 }
 
-// The lanes of the drag between the bars, as the reorder finds them shown.
+// The lanes of the drag between the bars, as the reorder finds them shown
+// -- by their types as they were built under the rules (Rules).
 template <class P> struct side_lanes {
-  template <class Found> auto operator()(const Found& found) const {
+  template <class Rules, class Found> auto operator()(const Found& found) const {
     namespace c = skiff::compose;
-    using bar_view = c::LaneMark<space_bar_view, space_bar_view_t<P>>;
-    using bar_rows = c::LaneMark<space_bar_rows, side_space_rows_raw<side_pick_folder>>;
-    using list_view = c::LaneMark<space_list_view, space_list_view_t<P>>;
-    using list_rows = c::LaneMark<space_list_rows, side_space_rows_raw<side_pick_folder>>;
+    using rows_b = decltype(side_space_rows(std::declval<const P&>(), side_pick_folder{}, true));
+    using bar_view = built_lane<space_bar_view, decltype(side_scrolled(side_spaces_for<space_bar_rows>(std::declval<const P&>(), side_pick_folder{}, true))), Rules>;
+    using bar_rows = built_lane<space_bar_rows, rows_b, Rules>;
+    using list_view = built_lane<space_list_view, decltype(skiff::compose::scrolled(std::declval<decltype(side_spaces_for<space_list_rows>(std::declval<const P&>(), side_pick_folder{}, false))>())), Rules>;
+    using list_rows = built_lane<space_list_rows, rows_b, Rules>;
     using bar_lane = decltype(c::ReorderLane{std::declval<bar_view&>(), std::declval<bar_rows&>(), skia::SkRect{}, 4.0f});
     using list_lane = decltype(c::ReorderLane{std::declval<list_view&>(), std::declval<list_rows&>(), skia::SkRect{}, 8.0f});
     bar_view* bar = found.template of<bar_view>();
@@ -322,8 +334,7 @@ inline auto side_lane(contract::side_bars, type_tag<feature>, const palette& col
   namespace c = skiff::compose;
   return c::shown_for<side_shown>([](const side_shown& now) { return now.side_on || now.dragging; },
       c::styled({.fillY = true, .width = 56.0f},
-          c::LaneMark<space_list_view, space_list_view_t<decltype(colours)>>(
-              nodes::ScrollContainer(side_spaces_for<space_list_rows>(colours, side_pick_folder{}, false)))));
+          list_lane_view(colours))));
 }
 // The top bar: in the head, or under the search field where the bars are big.
 inline auto top_bar(contract::side_bars, type_tag<feature>, const palette& colours, bool big) { return side_space_bar(colours, big); }

@@ -170,9 +170,15 @@ struct part {
                         },
                         [&](const command_asked&) {
                           // The plugins' commands (contract::slash_commands)
-                          // whose names start with what is typed.
+                          // whose names start with what is typed. What is
+                          // typed read first: the commands are a constant, and
+                          // clang tried to fold the whole pipeline while
+                          // compiling -- the case folding's Unicode tables
+                          // evaluated, 77 of this unit's 108 s (CI's traces) --
+                          // before it came to what is typed, which no constant
+                          // knows.
                           return app::kCommands | std::views::filter([&](const app::command_said& one) {
-                                   return lower(std::string(one.name)).starts_with(wanted);
+                                   return one.name.size() >= wanted.size() && lower(std::string(one.name)).starts_with(wanted);
                                  }) | std::views::take(8) | std::views::transform([](const app::command_said& one) {
                                    return suggestion{.glyph = "/", .title = std::string(one.name),
                                                      .sub = std::format("{} -- {}", one.usage, one.summary)};

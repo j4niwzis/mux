@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:composer -- Where a message is written.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.messages:composer;
 
@@ -863,7 +864,7 @@ auto two_choice_bar(const palette& colours, std::string said, skia::SkColor said
 
 // Keep the successor action inside the available width, including a narrow
 // pane: the explanation wraps above a separate button.
-inline auto replaced_room_bar(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto replaced_room_bar(const palette& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(replaced_room_bar, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
       .minHeight = 54.0f, .padding = {12.0f, 12.0f, 12.0f, 12.0f}}),
@@ -908,7 +909,7 @@ struct knock_facts {
   const knock_request& first = chat.knocking.front();
   return knock_facts{first.id, first.name, first.reason, chat.knocking.size() - 1};
 }
-inline auto knock_bar(const palette& colours, const knock_facts& one) {
+MUX_INLINE_IN_RELEASE auto knock_bar(const palette& colours, const knock_facts& one) {
   return two_choice_bar(colours,
                         std::format("{} asks to join{}{}", one.name, one.reason.empty() ? std::string() : ": " + one.reason,
                                     one.more ? std::format(" (and {} more)", one.more) : std::string()),

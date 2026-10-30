@@ -3,6 +3,7 @@
 // selected; and where to, as tdesktop's box: the account's chats, with a
 // field to find one by its name -- a press sends them there.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.forward.ui;
 
@@ -24,7 +25,7 @@ export namespace mux::plugins::forward {
 using namespace ::mux::ui;
 
 // Forward, in a message's menu where the account forwards (mux.ui:context_menu).
-inline auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&, const menu_facts& facts) {
+MUX_INLINE_IN_RELEASE auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&, const menu_facts& facts) {
   return skiff::compose::visible(facts.can.forward,
       row_item(colours, "Forward", sends<show>{show{facts.id}}, icon::send{}, std::nullopt, menu_row_look));
 }
@@ -37,7 +38,7 @@ struct draft {
   std::string query;
 };
 struct draft_events {};
-inline auto target_row(const palette& colours, const target& one) {
+MUX_INLINE_IN_RELEASE auto target_row(const palette& colours, const target& one) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(target_row, c::onPress(
       sends<to>{to{one.id}},
@@ -57,7 +58,7 @@ inline std::vector<target> matching(const std::vector<target>& all, std::string_
     return wanted.empty() || mux::logic::folded(one.name).contains(wanted);
   }) | std::ranges::to<std::vector>();
 }
-inline auto panel(const palette& colours, const std::vector<target>& chats) {
+MUX_INLINE_IN_RELEASE auto panel(const palette& colours, const std::vector<target>& chats) {
   namespace c = skiff::compose;
   using query = skiff::model::Field<&draft::query>;
   auto field = widgets::TextField<std::string>(colours.widgets, "Search");
@@ -79,7 +80,7 @@ inline auto panel(const palette& colours, const std::vector<target>& chats) {
       draft{}));
 }
 using box = decltype(panel(std::declval<const palette&>(), std::declval<const std::vector<target>&>()));
-inline auto make_content(const ui_needs& n, const shown& facts) {
+MUX_INLINE_IN_RELEASE auto make_content(const ui_needs& n, const shown& facts) {
   return panel(*n.colours, facts.chats);
 }
 inline dialog_look content_look(std::type_identity<shown>) {

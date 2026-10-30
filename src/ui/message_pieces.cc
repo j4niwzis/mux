@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message_pieces -- A message's marks, its first link, the fragment a quote marks, and its link's card and page preview.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.messages:message_pieces;
 
@@ -38,7 +39,7 @@ export namespace mux::ui {
 // A protocol link's card, composed from its stripe, its chat's face (where
 // faces go: the avatars plugin's) and two lines. A builder: built where the
 // message's row is.
-inline auto link_card(const palette& colours, std::string where, std::string avatar_id,
+MUX_INLINE_IN_RELEASE auto link_card(const palette& colours, std::string where, std::string avatar_id,
                       std::string avatar_name, std::string title, std::string said) {
   namespace c = skiff::compose;
   const auto line = [](std::string text, skia::SkColor colour, bool bold) {

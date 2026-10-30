@@ -4,6 +4,7 @@
 // yet, each with how many; pressed, the oldest gone to; pressed with the
 // other button, all of them listed.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.marks.ui;
 
@@ -33,7 +34,7 @@ auto mark_button(const palette& colours, mark_kind_t which, std::string glyph, C
                         count_badge_for<shown>(colours, count)))));
 }
 // Its buttons, over the list's corner (mux.ui.messages:timeline).
-inline auto extend(contract::list_corner, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::list_corner, type_tag<feature>, const palette& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(marks_corner, c::column(c::vbox(10.0f, {.autoSize = scene::axes::kBoth}),
       mark_button(colours, mark_kind::reaction{}, "♥", [](const shown& now) { return now.reactions; }),

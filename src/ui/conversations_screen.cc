@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:conversations_screen -- The conversations screen: the list, the chat, its info.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:conversations_screen;
 
@@ -88,7 +89,7 @@ struct composer_top_list<plugin_list<Features...>> {
 };
 using composer_top_plugins = composer_top_list<composition::providers<contract::composer_top, enabled_plugins>>;
 // No account at all: what to do about it.
-inline auto no_accounts_yet(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto no_accounts_yet(const palette& colours) {
   using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
   return SKIFF_NAMED(no_accounts_yet, skiff::compose::column(
       skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {120.0f, 48.0f, 0.0f, 48.0f}}),
@@ -101,7 +102,7 @@ inline auto no_accounts_yet(const palette& colours) {
 }
 // No chat chosen: the wallpaper, and in its middle a small pill saying what
 // to do, as tdesktop's (its service message look).
-inline auto select_a_chat() {
+MUX_INLINE_IN_RELEASE auto select_a_chat() {
   return SKIFF_NAMED(select_a_chat, skiff::compose::column(
       skiff::compose::justified(skiff::compose::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), nodes::justify::middle{}),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle},
@@ -218,7 +219,7 @@ using column_parts_t = column_parts<composition::providers<contract::chat_column
 // keyboard), and where one writes -- while a chat is open; else the hint
 // to choose one, or, with no account at all, what to do about it. What
 // shows is what the program says.
-inline auto chat_column(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto chat_column(const ui_needs& n) {
   namespace c = skiff::compose;
   const auto open = [](const chat_shown& now) { return now.chosen.has_value(); };
   // On a phone's window, standing over the panel docked under its field.
@@ -336,7 +337,7 @@ using beside_plugins = beside_panel_list<composition::providers<contract::beside
   return now.single ? scene::Spec{.width = 1.0f, .relativeSize = scene::axes::kBoth}
                     : scene::Spec{.width = now.info_width, .relativeSize = scene::axes::kY};
 }
-inline auto chats_screen(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto chats_screen(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const auto up = [](bool screen_shown::*flag) { return [flag](const screen_shown& now) { return now.*flag; }; };

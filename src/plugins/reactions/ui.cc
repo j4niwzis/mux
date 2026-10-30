@@ -6,6 +6,7 @@
 // among them; pressed, one reacts with it too. And who reacted, listed as
 // the events they are, from the message's menu.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.reactions.ui;
 
@@ -29,7 +30,7 @@ export namespace mux::plugins::reactions {
 // What a message's parts are made of: the window's own.
 using namespace ::mux::ui;
 
-inline auto reaction_chip(const palette& colours, const looks_shown& looks,
+MUX_INLINE_IN_RELEASE auto reaction_chip(const palette& colours, const looks_shown& looks,
                           std::string message, std::string key, std::size_t count, bool own,
                           const std::vector<emote>& emotes,
                           const std::vector<std::pair<std::string, std::string>>& people = {},
@@ -114,7 +115,7 @@ std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>
 }
 
 // Reactions, in a message's menu: how many, and who, listed.
-inline auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&,
+MUX_INLINE_IN_RELEASE auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&,
             const menu_facts& facts) {
   return skiff::compose::visible(
       !facts.id.empty() && (facts.can.react || facts.reaction_count > 0),
@@ -128,7 +129,7 @@ inline auto extend(contract::message_menu, type_tag<feature>, const palette& col
 
 // The quick reactions at the top of a message's menu, as Telegram's, and the
 // arrow that unrolls every emoji under them.
-inline auto quick_reaction(const palette& colours, std::string key) {
+MUX_INLINE_IN_RELEASE auto quick_reaction(const palette& colours, std::string key) {
   namespace c = skiff::compose;
   const auto request = ::mux::ui::request::menu_react{key};
   return SKIFF_NAMED(quick_reaction, c::onClick(request, c::column(c::justified(
@@ -136,7 +137,7 @@ inline auto quick_reaction(const palette& colours, std::string key) {
           .hoverBackground = colours.chosen}), nodes::justify::middle{}),
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(key), 22.0f, colours.text)))));
 }
-inline auto quick_reactions(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto quick_reactions(const palette& colours) {
   namespace c = skiff::compose;
   const std::array<std::string_view, 6> keys{"👍", "❤️", "😂", "😮", "😢", "🙏"};
   auto each = keys | std::views::transform([&](auto key) {
@@ -162,14 +163,14 @@ struct react_with {
 
 // Its head, over a message's menu (mux.ui:context_menu): where the account
 // reacts, the quick reactions and the band under them.
-inline auto extend(contract::message_menu_top, type_tag<feature>, const palette& colours, const menu_facts& facts) {
+MUX_INLINE_IN_RELEASE auto extend(contract::message_menu_top, type_tag<feature>, const palette& colours, const menu_facts& facts) {
   namespace c = skiff::compose;
   return c::visible(facts.can.react,
       c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), quick_reactions(colours),
           c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band))));
 }
 // What it unrolls: every emoji, a press reacting with it.
-inline auto unrolled(contract::message_menu_top, type_tag<feature>, const palette& colours, emoji_kept& kept) {
+MUX_INLINE_IN_RELEASE auto unrolled(contract::message_menu_top, type_tag<feature>, const palette& colours, emoji_kept& kept) {
   return emoji_panel(colours, kept, react_with{});
 }
 

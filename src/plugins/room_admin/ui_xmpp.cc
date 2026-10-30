@@ -3,6 +3,7 @@
 // room, its configuration form as the server sends it, its roles and
 // permissions. Built where XMPP is.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.room_admin.ui:xmpp;
 
@@ -310,7 +311,7 @@ template <class P> using field_editor_t = spl::variant<nodes::Text, decltype(for
                                         std::vector<decltype(skiff::compose::row(skiff::compose::hbox(), form_checkbox(std::declval<P>(), "", std::optional<std::string>(), option_flipped{}), nodes::Text("", 13.0f, 0u)))>{})),
                                     decltype(jid_list(std::declval<P>(), std::declval<const muc_field&>())),
                                     widgets::internal::TextBox<field_typed>, widgets::internal::TextArea<field_typed>>;
-inline auto field_editor(const auto& colours, const muc_field& f) -> field_editor_t<decltype(colours)> {
+MUX_INLINE_IN_RELEASE auto field_editor(const auto& colours, const muc_field& f) -> field_editor_t<decltype(colours)> {
   namespace c = skiff::compose;
   const auto text = [&](bool masked) {
     auto box = widgets::internal::TextBox<field_typed>(colours.widgets, "", field_typed{f.var, false});

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:window -- The window.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:window;
 
@@ -60,7 +61,7 @@ inline float text_menu_height(const std::vector<text_menu_item>& items) {
     return item.separate ? 39.0f : 33.0f;
   }), 0.0f, std::plus{});
 }
-inline auto text_menu_row(const palette& colours, const text_menu_item& item) {
+MUX_INLINE_IN_RELEASE auto text_menu_row(const palette& colours, const text_menu_item& item) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(text_menu_row, c::onClick(item.action,
       c::row(c::hbox(12.0f, {.fillX = true, .height = item.separate ? 39.0f : 33.0f,
@@ -72,7 +73,7 @@ inline auto text_menu_row(const palette& colours, const text_menu_item& item) {
              c::visible(item.separate, c::styled({.place = scene::anchor::kTopLeft, .fillX = true, .height = 1.0f},
                                                 nodes::Box<>(colours.band)))), item.label));
 }
-inline auto make_text_menu(const palette& colours, const std::vector<text_menu_item>& items) {
+MUX_INLINE_IN_RELEASE auto make_text_menu(const palette& colours, const std::vector<text_menu_item>& items) {
   auto rows = skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       items | std::views::transform([&](const auto& item) { return text_menu_row(colours, item); }) | std::ranges::to<std::vector>());
   return SKIFF_NAMED(make_text_menu, skiff::compose::styled(
@@ -164,7 +165,7 @@ inline text_menu_facts text_menu_at(std::vector<text_menu_item> items, std::opti
 // tapped_off), a press off it reached what was under it: on a phone, a tap
 // held a little long there was a long press -- on a message's text, its
 // Copy menu again -- and the menu could not be got rid of.
-inline auto text_menu_layer(const ui_needs& n, const text_menu_facts& facts) {
+MUX_INLINE_IN_RELEASE auto text_menu_layer(const ui_needs& n, const text_menu_facts& facts) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(text_menu_layer, c::column(c::vbox(0.0f, {.fill = true}),
                    c::onClick(request::close_text_menu{},
@@ -181,7 +182,7 @@ struct behind_shown {
   config::wallpaper_t wallpaper = config::wallpaper::theme{};
   friend bool operator==(const behind_shown&, const behind_shown&) = default;
 };
-inline auto behind_of(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto behind_of(const ui_needs& n) {
   return SKIFF_NAMED(behind_of, skiff::compose::applied<behind_shown>([](const behind_shown& now) { return now.wallpaper; },
       [at = &n](wallpaper_t& wall, const config::wallpaper_t& chosen) { show_wallpaper_on(wall, chosen, *at->colours, *at->looks); },
       wallpaper_t{}));
@@ -700,7 +701,7 @@ using content_built_t = decltype(skiff::compose::built(std::declval<Raw>(), std:
 // opens, under the rules the window was built under.
 template <class Raw, class Facts>
 auto shown_made(const ui_needs& n) {
-  return skiff::compose::Builder{[at = &n]<class Rules>(const Rules& rules) {
+  return skiff::compose::make_builder([at = &n]<class Rules>(const Rules& rules) {
     using content = content_built_t<Raw, Rules>;
     // Over everything under it, out of the flow of what it is put in: the
     // dialogs are put one after another in one column, and each fills it --
@@ -709,7 +710,7 @@ auto shown_made(const ui_needs& n) {
     shown_in<content, Facts, Rules> made(std::in_place, dialog_made<content, Facts, Rules>{at, rules});
     made.apply({.place = scene::anchor::kTopLeft});
     return made;
-  }};
+  });
 }
 // The plugins' dialogs, each its box -- from its extend(), found where the
 // window is instantiated (mux.plugins.ui).
@@ -768,7 +769,7 @@ struct plugin_layers<plugin_list<Features...>> {
 // (where it is so, at its own opacity), and the frame. Over them, bottom to
 // top: the dialogs, then the layers -- the emoji, a message's menu, a
 // picture, a text's menu -- then the plugins' layers.
-inline auto window_body(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto window_body(const ui_needs& n) {
   namespace c = skiff::compose;
   const scene::Spec everywhere{.place = scene::anchor::kTopLeft, .fill = true};
   auto behind = c::styled(everywhere, behind_of(n));
@@ -831,7 +832,7 @@ struct pressed_where {
 };
 // The window: its body, made again from scratch where the program says the
 // look changed so much (a theme: what is made takes its colours then).
-inline auto window_view(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto window_view(const ui_needs& n) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(window_view, c::keys_for<overlay_shown, scene::phase::capture>([](const overlay_shown& now) { return now; }, escape_key{},
       c::onKeys(copy_key{},
@@ -842,7 +843,7 @@ inline auto window_view(const ui_needs& n) {
 }
 // The window as its scene holds it: built once, here, under the program's
 // rules -- every view under it a builder until then.
-inline auto window_built(const ui_needs& n) { return a::built_any(window_view(n)); }
+MUX_INLINE_IN_RELEASE auto window_built(const ui_needs& n) { return a::built_any(window_view(n)); }
 using window = decltype(window_built(std::declval<const ui_needs&>()));
 
 // The emote pictures the window wants fetched: those its panels and menus

@@ -5,6 +5,7 @@
 // the one pinned before it; swiped across, right the pin before, left the
 // one after. And Pin, Unpin in a message's menu.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.pins.ui;
 
@@ -28,7 +29,7 @@ inline constexpr float kBarHeight = 46.0f;
 struct swiped {
   std::optional<step> operator()(bool towards_left) const { return step{.older = !towards_left}; }
 };
-inline auto pinned_bar(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto pinned_bar(const palette& colours) {
   namespace c = skiff::compose;
   const auto pin = [](const shown& now) { return now.pin.value_or(pin_view{}); };
   return SKIFF_NAMED(pinned_bar, c::shown_for<shown>([](const shown& now) { return now.pin.has_value(); },
@@ -46,10 +47,10 @@ inline auto pinned_bar(const palette& colours) {
 }
 
 // The bar in the chat's column, under its head (mux.ui:conversations_screen).
-inline auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) { return pinned_bar(*needs.colours); }
+MUX_INLINE_IN_RELEASE auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) { return pinned_bar(*needs.colours); }
 
 // Pin or Unpin, in a message's menu, where its chat keeps pins.
-inline auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&, const menu_facts& facts) {
+MUX_INLINE_IN_RELEASE auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&, const menu_facts& facts) {
   return skiff::compose::visible(facts.pinnable,
       row_item(colours, facts.pinned ? "Unpin" : "Pin", sends<pin>{pin{facts.id, !facts.pinned}}, icon::check{}, std::nullopt, menu_row_look));
 }

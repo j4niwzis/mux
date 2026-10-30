@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:drawer -- The drawer.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:drawer;
 
@@ -36,7 +37,7 @@ struct drawer_accounts {
 // Its row: a round avatar with its initials, its address over its protocol
 // and state, a tick on the current one -- lit; pressed, it is made the
 // current account, whose chats are listed.
-inline auto drawer_account_row(const palette& colours, const drawer_account& one) {
+MUX_INLINE_IN_RELEASE auto drawer_account_row(const palette& colours, const drawer_account& one) {
   namespace c = skiff::compose;
   auto row = c::onPress(sends<request::switch_account>{{one.address}},
       c::row(c::hbox(14.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen,
@@ -73,7 +74,7 @@ struct drawer_row_list<plugin_list<Features...>> {
   }
 };
 using drawer_plugins = drawer_row_list<composition::providers<contract::drawer_rows, enabled_plugins>>;
-inline auto drawer_view(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto drawer_view(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   // Under its title, all of it scrolled where the window is lower than it

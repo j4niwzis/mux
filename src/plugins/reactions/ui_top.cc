@@ -3,6 +3,7 @@
 // events they are: a bubble each, from the window's own messages -- above
 // them (mux.ui.messages), under the window that shows it as a dialog.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.reactions.ui_top;
 
@@ -48,7 +49,7 @@ using namespace ::mux::ui;
   return out;
 }
 
-inline auto reaction_event_row(const ui_needs& n, const conversation& in, const entry& one,
+MUX_INLINE_IN_RELEASE auto reaction_event_row(const ui_needs& n, const conversation& in, const entry& one,
                         bool first, bool last, const model* known) {
   namespace c = skiff::compose;
   // Its menu its row's own: what is not held under an id of its own offers
@@ -59,7 +60,7 @@ inline auto reaction_event_row(const ui_needs& n, const conversation& in, const 
       c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
           .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .hoverBackground = n.colours->chosen}), std::move(bubble)), "Reply to reaction"));
 }
-inline auto panel(const ui_needs& n, const shown& facts) {
+MUX_INLINE_IN_RELEASE auto panel(const ui_needs& n, const shown& facts) {
   namespace c = skiff::compose;
   const auto& chat = chat_or_none(facts.now, facts.in);
   const auto& entries = facts.entries;
@@ -71,7 +72,7 @@ inline auto panel(const ui_needs& n, const shown& facts) {
       dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))));
 }
 using box = decltype(panel(std::declval<const ui_needs&>(), std::declval<const shown&>()));
-inline auto make_content(const ui_needs& n, const shown& facts) {
+MUX_INLINE_IN_RELEASE auto make_content(const ui_needs& n, const shown& facts) {
   return panel(n, facts);
 }
 inline dialog_look content_look(std::type_identity<shown>) {

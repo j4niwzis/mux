@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:sending -- Files being sent.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:sending;
 
@@ -84,7 +85,7 @@ inline constexpr float kSendChrome = 220.0f, kLeastSendPreviews = 80.0f;
 // the caption and buttons in view on a laptop's screen, where tdesktop's
 // sendMediaPreviewHeightMax (1280) is more than a window -- the caption,
 // and Cancel and Send: the caption sent with them as it is then.
-inline auto send_box(const ui_needs& n, const send_facts& facts) {
+MUX_INLINE_IN_RELEASE auto send_box(const ui_needs& n, const send_facts& facts) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const auto& all = facts.files;

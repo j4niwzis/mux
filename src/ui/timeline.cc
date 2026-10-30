@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:timeline -- A chat's messages.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.messages:timeline;
 
@@ -367,7 +368,7 @@ using corner_plugins = corner_buttons<composition::providers<contract::list_corn
 // how many came meanwhile.
 // What shows each is read from what the program says (chat_ways); "\u2193"
 // is told by the list (with_way_down: its fourth part).
-inline auto list_corner(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto list_corner(const palette& colours) {
   namespace c = skiff::compose;
   const scene::Spec plate{.width = 42.0f, .height = 42.0f, .cornerRadius = 21.0f, .background = colours.sidebar,
                           .hoverBackground = colours.chosen, .border = scene::Border{colours.band, 1.0f}};
@@ -396,7 +397,7 @@ struct chat_backdrop_shown {
   float opacity = 1.0f;
   friend bool operator==(const chat_backdrop_shown&, const chat_backdrop_shown&) = default;
 };
-inline auto chat_area(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto chat_area(const ui_needs& n) {
   namespace c = skiff::compose;
   wallpaper_t backdrop;
   backdrop.apply({.place = scene::anchor::kTopLeft, .fill = true});

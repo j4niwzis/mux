@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message -- A message: its bubble, its pictures, files, reactions and mentions.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.messages:message;
 
@@ -784,7 +785,7 @@ struct swipe_shown {
 
 // Keep the action on a container: Text's own pointer handler is for text
 // selection and does not run an onClick inherited around the text itself.
-inline auto message_thread_link(const palette& colours, std::string root, std::string line) {
+MUX_INLINE_IN_RELEASE auto message_thread_link(const palette& colours, std::string root, std::string line) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(message_thread_link, c::onClick(request::open_thread{std::move(root)},
       c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 0.0f, 0.0f, 0.0f},

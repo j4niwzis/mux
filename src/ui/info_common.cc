@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui.cards -- What a chat's and a person's info are made of: tiles, member rows, id lines, a person's facts, a card's fit -- a module of its own, under the window, so a plugin's card (the room card's) is made of the same.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.cards;
 
@@ -47,12 +48,12 @@ using action_tile_t = decltype(action_tile(std::declval<const palette&>(), "", i
 
 
 // An icon on its own, not to be pressed.
-inline auto icon_view(const palette& colours, icon_t mark) {
+MUX_INLINE_IN_RELEASE auto icon_view(const palette& colours, icon_t mark) {
   return SKIFF_NAMED(icon_view, skiff::compose::styled({.width = 28.0f, .height = 36.0f}, nodes::Icon(shape_of(mark), colours.dim)));
 }
 using icon_view_t = decltype(icon_view(std::declval<const palette&>(), icon::none{}));
 // A band between sections: just darker than the panel.
-inline auto section_band(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto section_band(const palette& colours) {
   return SKIFF_NAMED(section_band, skiff::compose::styled({.fillX = true, .height = 6.0f, .margin = {6.0f, 0.0f, 6.0f, 0.0f}},
                                 nodes::Box<>(colours.section)));
 }
@@ -73,7 +74,7 @@ struct id_copy_events {
                       skiff::model::Up{request::copy_text{copied}}};
   }
 };
-inline auto id_line(const palette& colours, std::string text, std::string link, std::string label = "ID") {
+MUX_INLINE_IN_RELEASE auto id_line(const palette& colours, std::string text, std::string link, std::string label = "ID") {
   namespace c = skiff::compose;
   const bool a_link = !link.empty();
   const std::string copied = a_link ? link : text;

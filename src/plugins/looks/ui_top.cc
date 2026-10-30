@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.plugin.looks.ui_top -- Bubbles' and panels' looks picked, and a chat's background.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.looks.ui_top;
 
@@ -216,7 +217,7 @@ struct element_given_back {
 
 // A slider under its line, as the looks have them: where it is, read.
 template <class Done>
-inline auto look_slider(const palette& colours, auto fraction, Done done, scene::Spec spec) {
+MUX_INLINE_IN_RELEASE auto look_slider(const palette& colours, auto fraction, Done done, scene::Spec spec) {
   namespace c = skiff::compose;
   using bar_t = widgets::SliderBar<scene::NoAction, Done>;
   return SKIFF_NAMED(look_slider, c::applied<looks_picked>(std::move(fraction), [](bar_t& bar, float at) { bar.setFraction(at); },
@@ -226,7 +227,7 @@ inline auto look_slider(const palette& colours, auto fraction, Done done, scene:
 // drawn frosted -- apart from the bubbles': its line, its way back to
 // them where it has its own, and its slider.
 template <class Which>
-inline auto element_row(const palette& colours, choice_level_t level, std::string_view name, Which which) {
+MUX_INLINE_IN_RELEASE auto element_row(const palette& colours, choice_level_t level, std::string_view name, Which which) {
   namespace c = skiff::compose;
   const auto look = [level](const looks_picked& now) { return look_in(now, level, config::look_part::bubbles{}); };
   return SKIFF_NAMED(element_row, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -238,7 +239,7 @@ inline auto element_row(const palette& colours, choice_level_t level, std::strin
                   element_slid<Which>{level, which}, {.margin = {4.0f, 8.0f, 6.0f, 8.0f}})));
 }
 template <class Which, std::size_t N>
-inline auto element_rows(const palette& colours, choice_level_t level, const std::array<std::string_view, N>& labels,
+MUX_INLINE_IN_RELEASE auto element_rows(const palette& colours, choice_level_t level, const std::array<std::string_view, N>& labels,
                          const std::array<std::pair<std::string_view, Which>, N>& elements) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(element_rows, c::many(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -253,7 +254,7 @@ inline auto element_rows(const palette& colours, choice_level_t level, const std
 // bubbles' for each element apart. What does nothing greyed: all of it
 // where the panels have nothing behind them, what is under the kind where
 // the level is as above.
-inline auto bubbles_picker(const palette& colours, choice_level_t level, config::look_part_t part) {
+MUX_INLINE_IN_RELEASE auto bubbles_picker(const palette& colours, choice_level_t level, config::look_part_t part) {
   namespace c = skiff::compose;
   const bool bubbles = is_bubbles(part);
   const auto look = [level, part](const looks_picked& now) { return look_in(now, level, part); };
@@ -340,7 +341,7 @@ using background_menu_t = choice_menu<pick_wallpaper_at>;
 // What a chat looks like, at a level: its background, its bubbles, and the
 // panels round it -- in Appearance (every chat's), an account's Chats page
 // (its own), Manage's Appearance (a room's) and the background dialog.
-inline auto look_choices(const palette& colours, choice_level_t level) {
+MUX_INLINE_IN_RELEASE auto look_choices(const palette& colours, choice_level_t level) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(look_choices, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::styled({.margin = {0.0f, 10.0f, 0.0f, 10.0f}}, nodes::Text("BACKGROUND", 13.0f, colours.dim, true)),
@@ -362,7 +363,7 @@ using look_choices_t = decltype(look_choices(std::declval<const palette&>(), cho
 // Its pickers on the pages a level's looks are chosen on: Appearance (every
 // chat's), an account's page (its own), a room's Appearance tab (the
 // room's) -- mux.ui:appearance, :accounts, :room_settings.
-inline auto extend(contract::level_sections, type_tag<feature>, const palette& colours, choice_level_t level, const ui_shared&) {
+MUX_INLINE_IN_RELEASE auto extend(contract::level_sections, type_tag<feature>, const palette& colours, choice_level_t level, const ui_shared&) {
   return look_choices(colours, level);
 }
 

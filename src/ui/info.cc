@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:info -- A chat's info, and a person's.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:info;
 
@@ -46,7 +47,7 @@ export namespace mux::ui {
 
 // The chat's tiles: mute or unmute it, Manage, and Leave where its
 // protocol lets it be left.
-inline auto info_tiles(const palette& colours, bool muted, bool leavable) {
+MUX_INLINE_IN_RELEASE auto info_tiles(const palette& colours, bool muted, bool leavable) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(info_tiles, c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}}),
       c::styled({.grow = scene::axes::kX}, action_tile<sends<request::toggle_mute>>(colours, muted ? "Unmute" : "Mute", icon::bell{})),
@@ -73,7 +74,7 @@ struct info_view {
 };
 // The upper part, made from its view: ✕; the big avatar, the name, how it
 // is; the tiles; what it is about, its addresses; its ID.
-inline auto info_head(const palette& colours, const info_view& shown) {
+MUX_INLINE_IN_RELEASE auto info_head(const palette& colours, const info_view& shown) {
   namespace c = skiff::compose;
   auto description = wrapped(c::styled({.fillX = true}, nodes::Text(shown.topic, 14.0f, colours.text)));
   description.setSelectable(true);
@@ -101,7 +102,7 @@ struct info_members_heading {
   bool invite = false;
   friend bool operator==(const info_members_heading&, const info_members_heading&) = default;
 };
-inline auto info_members_head(const palette& colours, const info_members_heading& facts) {
+MUX_INLINE_IN_RELEASE auto info_members_head(const palette& colours, const info_members_heading& facts) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(info_members_head, c::row(c::hbox(10.0f, {.fillX = true, .height = 48.0f, .padding = {6.0f, 10.0f, 6.0f, 16.0f}}),
       icon_view(colours, icon::people{}),
@@ -156,13 +157,13 @@ struct info_member_row {
 };
 // The rows builders (their text pieces): kept by their keys, made under the
 // rules the panel is built under.
-inline auto info_member_rows(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto info_member_rows(const palette& colours) {
   return skiff::compose::memo_rows<std::string, info_member, std::tuple<std::string, info_member>>(info_member_row{&colours}, nodes::Stack{});
 }
 
 // The panel: its column, and its left edge. Near the end of the members
 // made, with more, it asks for the next few (request::info_more).
-inline auto info_panel(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto info_panel(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const auto listed = [](const info_shown& now) { return now.head.group; };

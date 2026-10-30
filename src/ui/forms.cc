@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:forms -- Form rows, and the account forms.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.base:forms;
 
@@ -85,7 +86,7 @@ struct link_events {
     return skiff::model::Up{request::set_link{draft.text, draft.url}};
   }
 };
-inline auto link_box(const palette& colours, const link_facts& facts) {
+MUX_INLINE_IN_RELEASE auto link_box(const palette& colours, const link_facts& facts) {
   return SKIFF_NAMED(link_box, skiff::compose::local<link_draft>(link_events{}, skiff::compose::column(
       skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       skiff::compose::styled({.fillX = true}, nodes::Text(facts.url.empty() ? "Add link" : "Edit link", 17.0f, colours.text, true)),
@@ -149,7 +150,7 @@ inline constexpr passphrase_words words_of(config::passphrase_for::decrypt) {
 inline passphrase_words words_of(const passphrase_purpose_t& purpose) {
   return spl::visit([](auto why) { return words_of(why); }, purpose);
 }
-inline auto passphrase_box(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto passphrase_box(const palette& colours) {
   using purpose = skiff::model::Field<&passphrase_facts::why>;
   using refused = skiff::model::Field<&passphrase_facts::refused>;
   return SKIFF_NAMED(passphrase_box, skiff::compose::scoped<passphrase_facts>(skiff::compose::handlers(), skiff::compose::column(

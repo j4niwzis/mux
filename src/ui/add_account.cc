@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:add_account -- Adding an account.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:add_account;
 
@@ -59,7 +60,7 @@ struct proxy_choice {
   std::optional<std::string> chosen;
   friend bool operator==(const proxy_choice&, const proxy_choice&) = default;
 };
-inline auto proxy_row(const palette& colours, const proxy_choice& now) {
+MUX_INLINE_IN_RELEASE auto proxy_row(const palette& colours, const proxy_choice& now) {
   namespace c = skiff::compose;
   const auto one = [&](std::optional<std::string> name) {
     return segment(colours, name.value_or("None"), sends<request::choose_new_proxy>{{name}}, name == now.chosen);
@@ -76,7 +77,7 @@ using proxy_row_t = decltype(proxy_row(std::declval<const palette&>(), proxy_cho
 // The protocol's form, in a box of its own -- the form is one of the
 // protocols' (a variant), the box what comes in, made again as the
 // protocol changes; the form itself as the program's facts say.
-inline auto adding_form(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto adding_form(const ui_needs& n) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(adding_form, c::appearing(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), account_form_view(n)), 0.0f));
 }
@@ -85,7 +86,7 @@ using adding_form_t = decltype(adding_form(std::declval<const ui_needs&>()));
 // Adding an account, beside the list of them: the switch, what its protocol
 // says, the proxy row, and that protocol's form under them -- made anew
 // where the protocol changes, coming in as it does.
-inline auto add_account_view(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto add_account_view(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   // As tall as what it holds: the detail pane scrolls it, and a column as

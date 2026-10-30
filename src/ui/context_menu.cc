@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:context_menu -- A message's menu.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:context_menu;
 
@@ -56,7 +57,7 @@ struct seen_list_says {
   using Answer = seen_list_hovered;
   seen_list_hovered operator()(bool on, const skia::SkRect&) const { return {on}; }
 };
-inline auto seen_row(const palette& colours, const std::vector<seen_reader>& readers) {
+MUX_INLINE_IN_RELEASE auto seen_row(const palette& colours, const std::vector<seen_reader>& readers) {
   namespace c = skiff::compose;
   const std::string said = readers.empty() ? std::string("Nobody Viewed")
                            : readers.size() == 1 ? readers.front().name
@@ -69,7 +70,7 @@ inline auto seen_row(const palette& colours, const std::vector<seen_reader>& rea
              seen_summary(colours, readers, said))));
 }
 // A reader in the list: pressed, the menu closed and their card opened.
-inline auto reader_row(const palette& colours, const seen_reader& one) {
+MUX_INLINE_IN_RELEASE auto reader_row(const palette& colours, const seen_reader& one) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(reader_row, c::onClick(std::tuple{request::close_menu{}, request::open_member_info{one.id}},
       c::row(c::hbox(14.0f, {.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = colours.chosen}),
@@ -79,7 +80,7 @@ inline auto reader_row(const palette& colours, const seen_reader& one) {
 // The readers, scrolling where there are more than fit: at most about
 // seven rows tall.
 inline constexpr float kSeenRow = 44.0f, kSeenMostTall = 320.0f, kSeenListWidth = 240.0f;
-inline auto seen_list(const palette& colours, const std::vector<seen_reader>& readers) {
+MUX_INLINE_IN_RELEASE auto seen_list(const palette& colours, const std::vector<seen_reader>& readers) {
   namespace c = skiff::compose;
   const float tall = std::min(kSeenMostTall, kSeenRow * static_cast<float>(readers.size()) + 10.0f);
   // Hovered in a box as big as the list: filling across, as a row's does, it
@@ -92,7 +93,7 @@ inline auto seen_list(const palette& colours, const std::vector<seen_reader>& re
                               readers | std::views::transform([&](const seen_reader& one) { return reader_row(colours, one); }) | std::ranges::to<std::vector>()))))));
 }
 
-inline auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, const std::optional<emote>& emoji) {
+MUX_INLINE_IN_RELEASE auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, const std::optional<emote>& emoji) {
   namespace c = skiff::compose;
   return c::visible(emoji.has_value(), c::onClick(request::favourite_emoji{emoji.value_or(emote{})},
       c::row(c::hbox(0.0f, {.fillX = true, .height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = colours.chosen}),
@@ -226,7 +227,7 @@ inline constexpr float kMenuListLeast = 220.0f;
 // it would pass the window's bottom, left where it would pass its right --
 // and kept inside the window. Up and Down go through its items, Enter does
 // what is lit, Esc and a press off it close it.
-inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts& facts) {
+MUX_INLINE_IN_RELEASE auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts& facts) {
   namespace c = skiff::compose;
   const auto item = [&](bool shown, std::string label, auto act, icon_t mark) {
     return c::visible(shown, row_item(colours, std::move(label), std::move(act), mark, std::nullopt, menu_row_look));
@@ -269,7 +270,7 @@ inline auto menu_card(const palette& colours, emoji_kept& kept, const menu_facts
 }
 // The menu over the whole window: its card at the pointer, the readers'
 // list beside its row while pointed at; a press off them closes it.
-inline auto context_menu(const ui_needs& n, const menu_facts& facts) {
+MUX_INLINE_IN_RELEASE auto context_menu(const ui_needs& n, const menu_facts& facts) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const skiff::compose::PopAt at{.from = skia::SkRect::MakeXYWH(facts.x, facts.y, 0.0f, 0.0f)};

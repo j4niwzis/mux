@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:controls -- The small controls: marks, rows, icon buttons, headers, segments, the drawer button.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.base:controls;
 
@@ -34,7 +35,7 @@ export namespace mux::ui {
 // on the left, its text, and a radio mark on the right where it is one of a
 // choice. It lights under the pointer; a press does `act`.
 // An icon on its own, in a row: drawn, not pressed.
-inline auto icon_mark(const palette& colours, icon_t mark = icon::none{}, float width = 28.0f, float height = 36.0f) {
+MUX_INLINE_IN_RELEASE auto icon_mark(const palette& colours, icon_t mark = icon::none{}, float width = 28.0f, float height = 36.0f) {
   return SKIFF_NAMED(icon_mark, skiff::compose::styled({.width = width, .height = height, .alignSelf = scene::align::kMiddle},
                                 nodes::Icon(shape_of(mark), colours.dim)));
 }
@@ -47,7 +48,7 @@ using icon_mark_t = decltype(icon_mark(std::declval<const palette&>()));
     out.marks.push_back({nodes::mark::circle{0.0f, 0.0f, 4.0f}, 0.0f, true});
   return out;
 }
-inline auto radio_dot(const palette& colours, bool chosen) {
+MUX_INLINE_IN_RELEASE auto radio_dot(const palette& colours, bool chosen) {
   return SKIFF_NAMED(radio_dot, skiff::compose::styled({.width = 20.0f, .height = 20.0f, .alignSelf = scene::align::kMiddle},
                                 nodes::Icon(radio_shape(chosen), chosen ? colours.accent : colours.dim)));
 }
@@ -141,7 +142,7 @@ struct two_line_style {
   bool selectable = false;
   std::optional<bool> show_second;
 };
-inline auto two_lines(const palette& colours, std::string first, std::string second,
+MUX_INLINE_IN_RELEASE auto two_lines(const palette& colours, std::string first, std::string second,
                       float size, float gap, two_line_style style = {}) {
   return SKIFF_NAMED(two_lines, skiff::compose::column(
       skiff::compose::vbox(gap, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
@@ -152,7 +153,7 @@ inline auto two_lines(const palette& colours, std::string first, std::string sec
               style.second_size > 0.0f ? style.second_size : size - 2.0f,
               style.second_ink.value_or(colours.dim), false, style.selectable))))));
 }
-inline auto two_lines(const palette& colours, std::string first, std::string second,
+MUX_INLINE_IN_RELEASE auto two_lines(const palette& colours, std::string first, std::string second,
                       float size, float gap, float second_size) {
   return two_lines(colours, std::move(first), std::move(second), size, gap, two_line_style{.second_size = second_size});
 }
@@ -294,7 +295,7 @@ struct sets_nth {
 
 // Three lines at the top-left of the conversation list: a press pulls the
 // drawer out.
-inline auto menu_button(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto menu_button(const palette& colours) {
   namespace c = skiff::compose;
   // Queue the request through onPress, as the other buttons do. Returning
   // it from onClick relied on the erased walks keeping handler answers;
@@ -328,7 +329,7 @@ inline auto menu_button(const palette& colours) {
 
 // The existing dropdown's head and option rows, built with combinators.
 // Selection and pointer capture are shared with the widget library.
-inline auto choice_menu_head(const palette& colours, std::string label, std::string value) {
+MUX_INLINE_IN_RELEASE auto choice_menu_head(const palette& colours, std::string label, std::string value) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(choice_menu_head, c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f,
       .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
@@ -338,7 +339,7 @@ inline auto choice_menu_head(const palette& colours, std::string label, std::str
       c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.dim))));
 }
 // An option, the one chosen in the accent and bold.
-inline auto choice_menu_option(const palette& colours, std::string name, bool chosen = false) {
+MUX_INLINE_IN_RELEASE auto choice_menu_option(const palette& colours, std::string name, bool chosen = false) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(choice_menu_option, c::row(c::hbox(0.0f, {.fillX = true, .height = 32.0f,
       .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = colours.chosen}),
@@ -379,7 +380,7 @@ struct labelled_choice_head {
 template <class Choose>
 using choice_menu = widgets::ChoiceMenu<Choose, choice_menu_head_t, choice_menu_option_t, show_choice_menu<labelled_choice_head>>;
 template <class Choose>
-inline auto make_choice_menu(const palette& colours, std::string label,
+MUX_INLINE_IN_RELEASE auto make_choice_menu(const palette& colours, std::string label,
                              std::vector<std::string> names, std::size_t current, Choose choose) {
   auto head = choice_menu_head(colours, label, current < names.size() ? names[current] : std::string());
   auto rows = names | std::views::transform([&](const std::string& name) {
@@ -537,7 +538,7 @@ template <class Owner> struct set_event_kind {
   Answer operator()() const { return skiff::model::over<Owner>(event_kind_change<Owner>{level, kind, show ? 1u : 2u}); }
 };
 template <class Owner>
-inline auto event_kind_button(const palette& colours, choice_level_t level, room_event_t kind, bool show) {
+MUX_INLINE_IN_RELEASE auto event_kind_button(const palette& colours, choice_level_t level, room_event_t kind, bool show) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(event_kind_button, c::spec_for<room_events_picked>([level, kind, show](const room_events_picked& now) {
     return scene::Spec{.selected = event_kind_shown(now, level, kind) == show};
@@ -549,7 +550,7 @@ inline auto event_kind_button(const palette& colours, choice_level_t level, room
           nodes::Text(show ? "Show" : "Hide", 13.0f, colours.text, true))), show ? "Show" : "Hide")));
 }
 template <class Owner>
-inline auto event_kind_row(const palette& colours, choice_level_t level, room_event_t kind) {
+MUX_INLINE_IN_RELEASE auto event_kind_row(const palette& colours, choice_level_t level, room_event_t kind) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(event_kind_row, c::spec_for<room_events_picked>([level](const room_events_picked& now) {
     const bool custom = events_way_of(level, now.at(level)) == kEventsCustom;
@@ -559,7 +560,7 @@ inline auto event_kind_row(const palette& colours, choice_level_t level, room_ev
       event_kind_button<Owner>(colours, level, kind, true), event_kind_button<Owner>(colours, level, kind, false))));
 }
 template <class Owner>
-inline auto event_kinds_field(const palette& colours, choice_level_t level,
+MUX_INLINE_IN_RELEASE auto event_kinds_field(const palette& colours, choice_level_t level,
                               const std::vector<room_event_t>& kinds = std::vector<room_event_t>(all_room_events.begin(), all_room_events.end())) {
   namespace c = skiff::compose;
   auto names = std::vector<std::string>{"All events", "Messages only", "Custom"};
@@ -584,14 +585,14 @@ struct pick_style_theme {
   }
 };
 template <auto Member>
-inline auto style_text_field(const palette& colours, std::string label, std::string hint) {
+MUX_INLINE_IN_RELEASE auto style_text_field(const palette& colours, std::string label, std::string hint) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(style_text_field, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       nodes::Text(std::move(label), 13.0f, colours.dim),
       c::bound<skiff::model::Field<Member>>(c::styled({.fillX = true, .height = 36.0f},
           widgets::TextField<std::string>(colours.widgets, std::move(hint))))));
 }
-inline auto style_controls(const palette& colours, bool choose_base = true) {
+MUX_INLINE_IN_RELEASE auto style_controls(const palette& colours, bool choose_base = true) {
   namespace c = skiff::compose;
   using style = config::style_settings;
   auto theme = c::projected<skiff::model::Field<&style::theme>>([](const std::optional<config::theme_t>& now) {
@@ -780,7 +781,7 @@ auto context_bar(const palette& colours, Said said, Cancel cancel) {
 // A count on an accent badge over the top of a round button: the @ and the
 // heart's, and the down arrow's. Shown while `count` makes more than none of
 // the part Want.
-inline auto count_badge(const palette& colours, std::string count = {}) {
+MUX_INLINE_IN_RELEASE auto count_badge(const palette& colours, std::string count = {}) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(count_badge, c::column(c::justified(c::vbox(0.0f, {.place = scene::anchor::kTopCentre, .y = -10.0f, .height = 18.0f,
                                                .autoSize = scene::axes::kX, .minWidth = 20.0f, .padding = {1.0f, 5.0f, 1.0f, 5.0f},
@@ -860,7 +861,7 @@ auto dialog_buttons(const palette& colours, std::string confirm, Cancel cancel_i
 
 // A row's top line, as a chat's in the list: the name, bold, as long as it
 // can be, and the time on the right.
-inline auto name_time_line(std::string name, std::string time, skia::SkColor name_colour, skia::SkColor time_colour,
+MUX_INLINE_IN_RELEASE auto name_time_line(std::string name, std::string time, skia::SkColor name_colour, skia::SkColor time_colour,
                            float time_size) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(name_time_line, c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -932,7 +933,7 @@ inline constexpr struct person_pick_text_fn : skiff::compose::piece<person_pick_
 // in the chat list where nothing joined matches. A builder (its text a
 // piece): built where the program's rules are known.
 template <class Event>
-inline auto person_pick_row(const palette& colours, const found_person& one, Event event) {
+MUX_INLINE_IN_RELEASE auto person_pick_row(const palette& colours, const found_person& one, Event event) {
   namespace c = skiff::compose;
   const std::string name = one.name.empty() ? one.id : one.name;
   return SKIFF_NAMED(person_pick_row, c::onClick(std::move(event), c::row(
@@ -940,7 +941,7 @@ inline auto person_pick_row(const palette& colours, const found_person& one, Eve
           .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
       person_pick_text(colours, one)), name));
 }
-inline auto found_person_row(const palette& colours, const found_person& one) {
+MUX_INLINE_IN_RELEASE auto found_person_row(const palette& colours, const found_person& one) {
   return person_pick_row(colours, one, request::start_direct{one.id});
 }
 using found_person_row_t = decltype(found_person_row(std::declval<const palette&>(), std::declval<const found_person&>()));

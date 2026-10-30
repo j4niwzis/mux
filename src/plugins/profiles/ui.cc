@@ -4,6 +4,7 @@
 // and its presence, of those its protocol has (profile_policy_of(state),
 // the protocol's) -- among Manage accounts' pages (contract::account_pages).
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.profiles.ui;
 
@@ -104,7 +105,7 @@ auto presence_fields(const palette& colours, const presence_form_seed& seed,
       }, c::styled({.fillX = true, .height = 36.0f}, button_for<scene::NoAction>(colours.widgets, "Set presence", {})))),
       presence_draft{index, seed.presence ? seed.presence->status.value_or("") : std::string{}}));
 }
-inline auto profile_view(const palette& colours, const account_page_facts& first, const profile_policy& policy) {
+MUX_INLINE_IN_RELEASE auto profile_view(const palette& colours, const account_page_facts& first, const profile_policy& policy) {
   namespace c = skiff::compose;
   using content = decltype(profile_fields(colours, profile_form_seed{}, false));
   using presence_content = decltype(presence_fields(colours, presence_form_seed{}, {}));
@@ -139,7 +140,7 @@ inline ui::profile_policy profile_policy_of(const auto&) {
 // The page, among an account's (contract::account_pages).
 constexpr std::string_view page_title(profile_page) { return "Profile"; }
 inline icon_t page_icon(profile_page) { return icon::info{}; }
-inline auto page_view(profile_page, const palette& colours, const account_page_facts& first) {
+MUX_INLINE_IN_RELEASE auto page_view(profile_page, const palette& colours, const account_page_facts& first) {
   return profile_view(colours, first, policy_of(first.state));
 }
 inline ui::request::refresh_profile asked_as_it_opens(profile_page, const account_id& by) { return {by}; }

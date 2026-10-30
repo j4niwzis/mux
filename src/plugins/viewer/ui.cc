@@ -2,6 +2,7 @@
 // mux.plugin.viewer.ui -- The media viewer: a picture or a video seen whole,
 // over the window (contract::window_layers).
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.viewer.ui;
 
@@ -39,7 +40,7 @@ struct viewer_menu_closed {};
 // The viewer's menu, where a right press on the picture opened it: the
 // picture copied, or saved. Over all of the viewer, a press anywhere else
 // closing it and doing nothing more.
-inline auto viewer_menu(const palette& colours, const std::string& source, float x, float y) {
+MUX_INLINE_IN_RELEASE auto viewer_menu(const palette& colours, const std::string& source, float x, float y) {
   namespace c = skiff::compose;
   const auto item = [&](auto asked, std::string label) {
     return c::onClick(std::tuple{asked, viewer_menu_closed{}},
@@ -133,7 +134,7 @@ struct seek_to {
 // around it closes it, one on a video pauses or plays it, a right press on
 // it its menu. Under a video, how far it has played (pressed, there) and
 // its time. Its zoom, place and menu its own; the rest the program's.
-inline auto picture_viewer(const ui_needs& n, const viewer_facts& facts) {
+MUX_INLINE_IN_RELEASE auto picture_viewer(const ui_needs& n, const viewer_facts& facts) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const skia::SkColor white = skia::colorSetARGB(255, 255, 255, 255);
@@ -192,7 +193,7 @@ struct make_viewer {
   auto operator()(const ui_needs& n, const viewer_facts& facts) const { return picture_viewer(n, facts); }
 };
 // Its layer, over the window: there while a picture is open in it.
-inline auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
+MUX_INLINE_IN_RELEASE auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
   return layer_made_by<viewer_facts, make_viewer>(needs);
 }
 

@@ -5,6 +5,7 @@
 // close. Enter goes to the older one, Shift+Enter to the newer, Esc closes;
 // Up and Down step. And the magnifier in the chat's head that opens it.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.search.ui;
 
@@ -37,7 +38,7 @@ struct step_act {
   bool older = true;
   request::search_step operator()() { return request::search_step{older}; }
 };
-inline auto search_bar(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto search_bar(const palette& colours) {
   namespace c = skiff::compose;
   const scene::Spec middle{.alignSelf = scene::align::kMiddle};
   auto field = widgets::TextBox<typed_act>(colours.widgets, "Search", {});
@@ -72,9 +73,9 @@ inline auto search_bar(const palette& colours) {
 
 // Its bar in the chat's column (mux.ui:conversations_screen), under the head
 // it stands in place of while it is open.
-inline auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) { return search_bar(*needs.colours); }
+MUX_INLINE_IN_RELEASE auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) { return search_bar(*needs.colours); }
 // The magnifier in the chat's head (mux.ui:header).
-inline auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
   return SKIFF_NAMED(search_button, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
                                                            icon_button(colours, icon::search{}, sends<request::open_search>{})));
 }

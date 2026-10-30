@@ -5,6 +5,7 @@
 // modules and the plugins'. (A room's settings are the room_settings
 // plugin's.)
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.base:pages;
 
@@ -217,7 +218,7 @@ using choice_row_plugins = rows_of<contract::choice_rows>;
 
 // Where what a page has by its type alone is not there: nothing in its
 // place -- known while compiling, not hidden.
-inline auto nothing_shown() {
+MUX_INLINE_IN_RELEASE auto nothing_shown() {
   return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}));
 }
 // The room events field of a level, where its protocol's chats have room
@@ -266,7 +267,7 @@ struct set_chat_notify {
   using Answer = skiff::bind::Own<chat_notify_change>;
   Answer operator()() const { return skiff::bind::own(chat_notify_change{on}); }
 };
-inline auto chat_on_field(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto chat_on_field(const palette& colours) {
   namespace c = skiff::compose;
   using choices = config::chat_choices;
   const auto shown = [](const choices& now) { return now.muted ? std::optional<bool>(false) : now.notify.on; };
@@ -280,7 +281,7 @@ inline auto chat_on_field(const palette& colours) {
           [shown](const choices& now) { return shown(now) == false; }, set_chat_notify{false}))));
 }
 // A chat's notification rows, bound to its own choices in the model.
-inline auto chat_notify_view(const palette& colours, const conversation_id& chat) {
+MUX_INLINE_IN_RELEASE auto chat_notify_view(const palette& colours, const conversation_id& chat) {
   using notify = config::notify_choices;
   using skiff::compose::bound;
   const choice_level_t level = choice_level::chat{};
@@ -296,7 +297,7 @@ inline auto chat_notify_view(const palette& colours, const conversation_id& chat
 
 // Stable model-bound switches: keep the widget while its saved value changes.
 template <auto Member>
-inline auto space_choice_row(const palette& colours, std::string label, bool allowed = true) {
+MUX_INLINE_IN_RELEASE auto space_choice_row(const palette& colours, std::string label, bool allowed = true) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(space_choice_row, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
                               .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = !allowed}),
@@ -445,7 +446,7 @@ inline constexpr struct member_text_fn : skiff::compose::piece<member_text_fn> {
 // A member as a list shows them: their name over how they are, their role;
 // pressed, their info. A builder (its text a piece): built where the
 // program's rules are known.
-inline auto member_row(const palette& colours, const member& one, std::string how) {
+MUX_INLINE_IN_RELEASE auto member_row(const palette& colours, const member& one, std::string how) {
   namespace c = skiff::compose;
   const std::string name = one.name.empty() ? one.id : one.name;
   return c::recorded(c::onClick(request::open_member_info{one.id}, c::row(

@@ -5,6 +5,7 @@
 // the link is followed; lit under the pointer, as a link is. The previews
 // themselves are the program's, fetched as the chat's settings say.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.previews.ui;
 
@@ -54,7 +55,7 @@ using namespace ::mux::ui;
   }
   return out;
 }
-inline auto page_preview(const palette& colours, const link_preview& shown, std::string where) {
+MUX_INLINE_IN_RELEASE auto page_preview(const palette& colours, const link_preview& shown, std::string where) {
   namespace c = skiff::compose;
   std::optional<nodes::Image<from_avatars>> picture;
   if (shown.image)
@@ -118,7 +119,7 @@ auto direct_row(const auto& colours, const Place& place) {
 // Its rows among a level's choices (contract::choice_rows): cards shown or
 // not, and where they come from -- each Default as the level over it.
 template <class Place>
-inline auto extend(contract::choice_rows, type_tag<feature>, const auto& colours, const Place& place) {
+MUX_INLINE_IN_RELEASE auto extend(contract::choice_rows, type_tag<feature>, const auto& colours, const Place& place) {
   namespace c = skiff::compose;
   using shown = skiff::model::Field<&choices::shown>;
   return choices_scoped<choices>(place, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),

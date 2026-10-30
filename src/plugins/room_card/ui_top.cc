@@ -5,6 +5,7 @@
 // server says (/room_summary) fills it when it comes; till then, or where it
 // says nothing, the address alone. An invite's: Accept and Decline.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.room_card.ui_top;
 
@@ -27,7 +28,7 @@ export import mux.plugin.room_card.types;
 export namespace mux::plugins::room_card {
 using namespace ::mux::ui;
 
-inline auto room_cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line) {
+MUX_INLINE_IN_RELEASE auto room_cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line) {
   return SKIFF_NAMED(room_cover, skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
       face_spot(avatar_of::chat{}, key, name, 72.0f),
@@ -59,7 +60,7 @@ inline std::string room_card_line(const std::string& asked, const room_preview& 
 }
 // The details can be taller than the window. Only this column scrolls;
 // closing the card and accepting or declining an invite stay in reach.
-inline auto room_card_details(const palette& colours, const std::string& asked, const room_preview& known) {
+MUX_INLINE_IN_RELEASE auto room_card_details(const palette& colours, const std::string& asked, const room_preview& known) {
   namespace c = skiff::compose;
   const std::string& key = known.id.empty() ? asked : known.id;
   nodes::Text about(
@@ -75,7 +76,7 @@ inline auto room_card_details(const palette& colours, const std::string& asked, 
       c::styled({.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}}, wrapped(std::move(about))),
       id_line(colours, key, "")));
 }
-inline auto card_of(const palette& colours, const std::string& asked, const room_preview& known) {
+MUX_INLINE_IN_RELEASE auto card_of(const palette& colours, const std::string& asked, const room_preview& known) {
   namespace c = skiff::compose;
   using close_act = sends<request::close_shown<shown>>;
   using decline_act = sends<room_card::decline>;
@@ -96,7 +97,7 @@ using box = decltype(card_of(std::declval<const palette&>(), std::string(), std:
 inline dialog_look content_look(std::type_identity<shown>) {
   return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}};
 }
-inline auto make_content(const ui_needs& n, const shown& facts) { return card_of(*n.colours, facts.asked, facts.known); }
+MUX_INLINE_IN_RELEASE auto make_content(const ui_needs& n, const shown& facts) { return card_of(*n.colours, facts.asked, facts.known); }
 
 // Its dialog, among the window's (mux.ui:window).
 constexpr type_tag<box> extend(contract::window_dialogs, type_tag<feature>) { return {}; }

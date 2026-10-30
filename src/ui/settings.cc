@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:settings -- The settings box.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:settings;
 
@@ -80,7 +81,7 @@ struct settings_scrolled_to {
 // scrolls, raised over it; home has none. Esc on a page goes where its ←
 // goes, on home it closes the box (escape_of, by the facts).
 using settings_page_node = typename settings_pages_of<settings_plugins>::nodes;
-inline auto settings_view(const ui_needs& needs) {
+MUX_INLINE_IN_RELEASE auto settings_view(const ui_needs& needs) {
   const palette* colours = needs.colours;
   // The page the facts name, made in place of the one up.
   auto show = [n = needs](settings_page_node& page, const settings_facts& facts) {

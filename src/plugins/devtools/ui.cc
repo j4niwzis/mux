@@ -6,6 +6,7 @@
 // and copy, the state by type and key, the account data, an editor for
 // either, an event of any type composed.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.devtools.ui;
 
@@ -83,7 +84,7 @@ struct copy_reading {
   }
 };
 // Some JSON to read: selectable, scrolling, copied by a right press.
-inline auto reading_of(const palette& colours, std::string text) {
+MUX_INLINE_IN_RELEASE auto reading_of(const palette& colours, std::string text) {
   namespace c = skiff::compose;
   auto shown_text = wrapped(nodes::Text(std::move(text), 13.0f, colours.text));
   shown_text.setMonospace(true);
@@ -105,7 +106,7 @@ auto head(const palette& colours, std::string title, Back back) {
                 c::fading_for<said>([](const said& now) { return now.copied; }, 1200.0, nodes::Text("Copied", 12.0f, colours.accent))),
       c::styled(middle, icon_button(colours, icon::close{}, sends<request::close_shown<shown>>{}))));
 }
-inline auto no_back() { return skiff::compose::visible(false, nodes::Box<>(skia::SkColor{0})); }
+MUX_INLINE_IN_RELEASE auto no_back() { return skiff::compose::visible(false, nodes::Box<>(skia::SkColor{0})); }
 template <class Asked>
 auto back_to(const palette& colours, Asked asked) {
   return skiff::compose::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::back{}, sends<Asked>{std::move(asked)}));
@@ -134,19 +135,19 @@ auto content_area(const palette& colours) {
        .border = scene::Border{colours.band, 1.0f}},
       widgets::TextAreaField<std::string>(colours.widgets, "{}", 12)));
 }
-inline auto caption(const palette& colours, std::string text) {
+MUX_INLINE_IN_RELEASE auto caption(const palette& colours, std::string text) {
   return skiff::compose::styled({.margin = {0.0f, 10.0f, 0.0f, 10.0f}}, nodes::Text(std::move(text), 13.0f, colours.dim));
 }
 
 // ---- the screens --------------------------------------------------------------------
 // Some JSON to read: a message's source, what a write came to.
-inline auto reading_screen(const palette& colours, const screen::reading& facts) {
+MUX_INLINE_IN_RELEASE auto reading_screen(const palette& colours, const screen::reading& facts) {
   return screen_column(head(colours, facts.title, no_back()), reading_of(colours, facts.text));
 }
 // The room's state: every type and how many events of it; a type's keys;
 // an event's JSON, and Edit -- back up a level at a time. A new one from
 // the top.
-inline auto state_screen(const palette& colours, const screen::state& facts) {
+MUX_INLINE_IN_RELEASE auto state_screen(const palette& colours, const screen::state& facts) {
   namespace c = skiff::compose;
   std::map<std::string, std::vector<state_entry>> by_type;
   for (const state_entry& one : facts.entries)
@@ -194,7 +195,7 @@ inline auto state_screen(const palette& colours, const screen::state& facts) {
                   c::primary(widgets::Button<scene::NoAction>(colours.widgets, "Edit", {}))))));
 }
 // The room's account data: each type, opened to edit; a new one.
-inline auto data_screen(const palette& colours, const screen::data& facts) {
+MUX_INLINE_IN_RELEASE auto data_screen(const palette& colours, const screen::data& facts) {
   namespace c = skiff::compose;
   auto rows = facts.entries | std::views::transform([&](const data_entry& one) {
                 return row_item(colours, one.type, sends<edit_data>{{one.type}});
@@ -212,7 +213,7 @@ struct state_draft {
   std::string type, key, content;
   friend bool operator==(const state_draft&, const state_draft&) = default;
 };
-inline auto state_editor_screen(const palette& colours, const screen::state_editor& facts) {
+MUX_INLINE_IN_RELEASE auto state_editor_screen(const palette& colours, const screen::state_editor& facts) {
   namespace c = skiff::compose;
   using draft = state_draft;
   return screen_column(
@@ -231,7 +232,7 @@ struct data_draft {
   std::string type, content;
   friend bool operator==(const data_draft&, const data_draft&) = default;
 };
-inline auto data_editor_screen(const palette& colours, const screen::data_editor& facts) {
+MUX_INLINE_IN_RELEASE auto data_editor_screen(const palette& colours, const screen::data_editor& facts) {
   namespace c = skiff::compose;
   using draft = data_draft;
   return screen_column(
@@ -249,7 +250,7 @@ struct composed {
   std::string type, key, content = "{\n  \n}";
   friend bool operator==(const composed&, const composed&) = default;
 };
-inline auto composer_screen(const palette& colours, const screen::composer&) {
+MUX_INLINE_IN_RELEASE auto composer_screen(const palette& colours, const screen::composer&) {
   namespace c = skiff::compose;
   return screen_column(
       head(colours, "Send custom event", no_back()),
@@ -287,7 +288,7 @@ using namespace ::mux::ui;
 
 // View Source, in a message's menu, where its account can tell it: the
 // message as the server has it.
-inline auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&, const menu_facts& facts) {
+MUX_INLINE_IN_RELEASE auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&, const menu_facts& facts) {
   return skiff::compose::visible(facts.can.view_source && !facts.link.empty(),
       row_item(colours, "View Source", sends<view_source>{view_source{facts.id}}, icon::info{}, std::nullopt, menu_row_look));
 }
@@ -297,7 +298,7 @@ inline auto extend(contract::message_menu, type_tag<feature>, const palette& col
 // account data and an event composed.
 constexpr std::string_view tab_title(room_tab) { return "Developer Tools"; }
 inline icon_t tab_icon(room_tab) { return icon::terminal{}; }
-inline auto developer_switch(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto developer_switch(const palette& colours) {
   namespace c = skiff::compose;
   using toggle_t = widgets::Toggle<sends<flip_tools>>;
   return SKIFF_NAMED(developer_switch, c::applied<kept>([](const kept& now) { return now.tools; },
@@ -308,7 +309,7 @@ template <class Asked>
 auto tool_button(const palette& colours, std::string label) {
   return skiff::compose::styled({.width = 200.0f, .height = 34.0f}, widgets::Button<sends<Asked>>(colours.widgets, std::move(label), {}));
 }
-inline auto make_manage_page(room_tab, const palette& colours, const auto& facts) {
+MUX_INLINE_IN_RELEASE auto make_manage_page(room_tab, const palette& colours, const auto& facts) {
   namespace c = skiff::compose;
   const auto tools_on = [](const kept& now) { return now.tools; };
   return SKIFF_NAMED(devtools_tab_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
@@ -326,7 +327,7 @@ inline auto make_manage_page(room_tab, const palette& colours, const auto& facts
 }
 
 // The dialog: the screen open, made again as what it shows moves.
-inline auto devtools_box(const ui_needs& n, const shown& facts) {
+MUX_INLINE_IN_RELEASE auto devtools_box(const ui_needs& n, const shown& facts) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   return SKIFF_NAMED(devtools_box, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -339,7 +340,7 @@ inline auto devtools_box(const ui_needs& n, const shown& facts) {
 }
 using box = decltype(devtools_box(std::declval<const ui_needs&>(), std::declval<const shown&>()));
 inline dialog_look content_look(std::type_identity<shown>) { return {}; }
-inline auto make_content(const ui_needs& n, const shown& facts) { return devtools_box(n, facts); }
+MUX_INLINE_IN_RELEASE auto make_content(const ui_needs& n, const shown& facts) { return devtools_box(n, facts); }
 
 // Its dialog, among the window's (mux.ui:window).
 constexpr type_tag<box> extend(contract::window_dialogs, type_tag<feature>) { return {}; }

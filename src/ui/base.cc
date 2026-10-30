@@ -821,12 +821,12 @@ template <class Facts, class Make, class Needs>
   requires skiff::compose::a_builder<std::invoke_result_t<Make, const Needs&, const Facts&>>
 auto layer_made_by(const Needs& needs) {
   using content_t = std::invoke_result_t<Make, const Needs&, const Facts&>;
-  return skiff::compose::Builder{[needs]<class Rules>(const Rules& rules) {
+  return skiff::compose::make_builder([needs]<class Rules>(const Rules& rules) {
     using made_t = decltype(skiff::compose::built(std::declval<content_t>(), rules));
     using maker_t = skiff::compose::built_arguments<layer_made<Needs, Make>, Rules>;
     return skiff::bind::Bound<std::optional<Facts>, skiff::compose::Mounted<made_t, Facts, maker_t>>(
         std::in_place, maker_t{layer_made<Needs, Make>{needs}, rules}, scene::Spec{.place = scene::anchor::kTopLeft, .fill = true}, true);
-  }};
+  });
 }
 
 // The window's shape, as the program has it from its size: a phone's --

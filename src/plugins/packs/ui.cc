@@ -6,6 +6,7 @@
 // as they are chosen; saved as the room's state, or one's account data. And
 // the ways to it: Settings' link, an account's row, a room's settings' tab.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.packs.ui;
 
@@ -39,7 +40,7 @@ using namespace ::mux::ui;
 
 // The ways to it: Settings' link (one's own, the first account's), an
 // account's row (that account's), where its protocol has packs.
-inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return settings_link(colours, "Emojis & Stickers", icon::smile{}, open{});
 }
 template <class Protocol>
@@ -50,7 +51,7 @@ auto extend(contract::account_rows<Protocol>, type_tag<feature>, const palette& 
 // in the dialog -- the list, Create pack and the editor all there.
 constexpr std::string_view tab_title(room_tab) { return "Emojis & Stickers"; }
 inline icon_t tab_icon(room_tab) { return icon::smile{}; }
-inline auto make_manage_page(room_tab, const palette& colours, const auto&) {
+MUX_INLINE_IN_RELEASE auto make_manage_page(room_tab, const palette& colours, const auto&) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(room_tab_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Emojis & Stickers"),
@@ -150,7 +151,7 @@ inline void picture_uploaded_in(shown& facts, pack_picture one, bool done, const
 }
 // A pack in the list: its picture, its name, how many images and what for;
 // pressed, opened.
-inline auto pack_row(const palette& colours, const std::optional<std::string>& room, std::size_t index, const emote_pack& pack) {
+MUX_INLINE_IN_RELEASE auto pack_row(const palette& colours, const std::optional<std::string>& room, std::size_t index, const emote_pack& pack) {
   namespace c = skiff::compose;
   auto picture = c::styled({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f, .background = colours.tile},
       nodes::Image<from_emotes>({pack.avatar.value_or(pack.pictures.empty() ? std::string() : pack.pictures.front().url),
@@ -237,7 +238,7 @@ struct pack_opened {
   bool editable = false, new_pack = false, in_room = false;
   friend bool operator==(const pack_opened& a, const pack_opened& b) { return a.opened == b.opened; }
 };
-inline auto pack_editor(const palette& colours, const pack_opened& opened) {
+MUX_INLINE_IN_RELEASE auto pack_editor(const palette& colours, const pack_opened& opened) {
   namespace c = skiff::compose;
   const auto field = [&](std::string caption, std::string placeholder, std::string now, bool attribution) {
     auto box = widgets::internal::TextBox<pack_named_typed>(colours.widgets, std::move(placeholder), pack_named_typed{attribution});
@@ -276,7 +277,7 @@ inline auto pack_editor(const palette& colours, const pack_opened& opened) {
 using pack_editor_t = decltype(pack_editor(std::declval<const palette&>(), std::declval<const pack_opened&>()));
 // Emojis & Stickers, as the program has it: its packs listed -- Create
 // where the room's may be added to -- or the one open, edited.
-inline auto packs_box(const ui_needs& n, const shown& first) {
+MUX_INLINE_IN_RELEASE auto packs_box(const ui_needs& n, const shown& first) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   using facts_t = std::optional<shown>;
@@ -314,7 +315,7 @@ using box = decltype(packs_box(std::declval<const ui_needs&>(), std::declval<con
 // The dialog it is shown in; made once while it is up -- for the room it is
 // for, the rest read as the facts move.
 inline dialog_look content_look(std::type_identity<shown>) { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
-inline auto make_content(const ui_needs& n, const shown& facts) { return packs_box(n, facts); }
+MUX_INLINE_IN_RELEASE auto make_content(const ui_needs& n, const shown& facts) { return packs_box(n, facts); }
 constexpr bool content_persistent(std::type_identity<shown>) { return true; }
 
 // Its dialog, among the window's (mux.ui:window).

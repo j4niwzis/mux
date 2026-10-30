@@ -7,6 +7,7 @@
 // anew or deleted; room keys exported or imported; unverified sessions
 // signed out. Listed for Matrix accounts only (page_shown).
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.encryption.ui:page;
 
@@ -55,7 +56,7 @@ using facts_t = said::facts_t;
                     now->state);
 }
 
-inline auto security_view(const palette& colours, const account_page_facts&) {
+MUX_INLINE_IN_RELEASE auto security_view(const palette& colours, const account_page_facts&) {
   namespace c = skiff::compose;
   using flip = sends<::mux::ui::request::flip_only_verified>;
   using toggle_t = toggle_for<flip>;
@@ -96,7 +97,7 @@ inline ui::icon_t page_icon(security_page) { return ui::icon::check{}; }
 // Listed for a Matrix account's pages, no other's.
 constexpr bool page_shown(security_page, const ::mux::proto::matrix::state&) { return true; }
 constexpr bool page_shown(security_page, const auto&) { return false; }
-inline auto page_view(security_page, const ui::palette& colours, const ui::account_page_facts& first) {
+MUX_INLINE_IN_RELEASE auto page_view(security_page, const ui::palette& colours, const ui::account_page_facts& first) {
   return page_detail::security_view(colours, first);
 }
 // As it opens: the sessions asked of the server, and with them whether this

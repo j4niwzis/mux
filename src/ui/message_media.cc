@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message_media -- What a message carries: its picture, album and file, and its reactions.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.messages:message_media;
 
@@ -91,7 +92,7 @@ struct picture_ratio {
 };
 // What a picture shows: its blurred preview, the picture over it as it
 // comes, a loader turning meanwhile, a video's marks, its time.
-inline auto picture_box(const palette& colours, const std::string& source, picture_look look) {
+MUX_INLINE_IN_RELEASE auto picture_box(const palette& colours, const std::string& source, picture_look look) {
   namespace c = skiff::compose;
   // Under the picture, not above it in the column: placed over the box, out
   // of its flow -- in the flow, the picture went under it, past the box's
@@ -112,7 +113,7 @@ inline auto picture_box(const palette& colours, const std::string& source, pictu
 // The picture fitted: its own type, for an album to shrink its cells alike.
 using picture_fitted_t =
     skiff::compose::Fitted<picture_ratio, decltype(picture_box(std::declval<const palette&>(), std::string(), picture_look{}))>;
-inline auto picture_view(const palette& colours, std::string source, int width, int height, picture_look look, media_open open) {
+MUX_INLINE_IN_RELEASE auto picture_view(const palette& colours, std::string source, int width, int height, picture_look look, media_open open) {
   namespace c = skiff::compose;
   const char* label = look.sticker ? "Sticker" : look.video_ms ? "Play video" : "Open picture";
   const skiff::compose::Fit fit{.width = static_cast<float>(width), .height = static_cast<float>(height),

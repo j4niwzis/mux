@@ -3,6 +3,7 @@
 // link to them; their page, the profiles and a way to add one; a profile's
 // editor; and an account's Proxy page, which of them it connects through.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.proxies.ui;
 
@@ -21,12 +22,12 @@ export namespace mux::plugins::proxies {
 using namespace ::mux::ui;
 
 // Settings' link to them (mux.ui:settings_pages).
-inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return settings_link(colours, "Proxies", icon::gear{}, open_list{});
 }
 
 // The profiles, and a way to add one.
-inline auto list_view(const palette& colours, const std::vector<config::proxy_settings>& profiles, bool with_back) {
+MUX_INLINE_IN_RELEASE auto list_view(const palette& colours, const std::vector<config::proxy_settings>& profiles, bool with_back) {
   auto rows = std::views::iota(std::size_t{0}, profiles.size()) | std::views::transform([&](std::size_t index) {
         const auto& profile = profiles[index];
         return settings_link(colours, std::format("{} ({} {}:{})", profile.name, config::label_of(profile.kind), profile.host, profile.port),
@@ -41,7 +42,7 @@ inline auto list_view(const palette& colours, const std::vector<config::proxy_se
       skiff::compose::visible(profiles.empty(), wrapped(skiff::compose::styled({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}},
           note_text(colours, "No proxies yet. Accounts connect directly."))))));
 }
-inline auto extend(contract::settings_pages, const ui_needs& n, const list_page& page) {
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const ui_needs& n, const list_page& page) {
   return list_view(*n.colours, page.all, page.with_back);
 }
 
@@ -75,7 +76,7 @@ struct draft_events {
   auto on(save_draft, const draft& now) const { return skiff::model::Up{save{profile_of(now), now.index}}; }
   auto on(delete_draft, const draft& now) const { return skiff::model::Up{remove{now.index}}; }
 };
-inline auto editor_view(const palette& colours, const std::optional<config::proxy_settings>& from, int index) {
+MUX_INLINE_IN_RELEASE auto editor_view(const palette& colours, const std::optional<config::proxy_settings>& from, int index) {
   draft made{.index = index};
   if (from) made = {.index = index, .name = from->name, .kind = from->kind, .host = from->host,
       .port = std::to_string(from->port), .username = from->username.value_or(""),
@@ -103,7 +104,7 @@ inline auto editor_view(const palette& colours, const std::optional<config::prox
           skiff::compose::visible(from.has_value(), skiff::compose::styled({.width = 110.0f, .height = 34.0f},
               button_for<sends<delete_draft>>(colours.widgets, "Delete", {}))))), std::move(made)));
 }
-inline auto extend(contract::settings_pages, const ui_needs& n, const editor_page& page) {
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const ui_needs& n, const editor_page& page) {
   return editor_view(*n.colours, page.from, page.index);
 }
 
@@ -117,7 +118,7 @@ struct rows_key {
   std::string current;
   friend bool operator==(const rows_key&, const rows_key&) = default;
 };
-inline auto choice_rows(const palette& colours, const std::string& account, const rows_key& key) {
+MUX_INLINE_IN_RELEASE auto choice_rows(const palette& colours, const std::string& account, const rows_key& key) {
   namespace c = skiff::compose;
   // No proxy first -- an empty place where the dots are, so the names line up.
   auto rows = std::views::iota(-1, static_cast<int>(key.names.size())) | std::views::transform([&](int at) {
@@ -130,7 +131,7 @@ inline auto choice_rows(const palette& colours, const std::string& account, cons
   return SKIFF_NAMED(choice_rows, c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)));
 }
 using choice_rows_t = decltype(choice_rows(std::declval<const palette&>(), std::string(), rows_key{}));
-inline auto page_view(account_page, const palette& colours, const account_page_facts& facts) {
+MUX_INLINE_IN_RELEASE auto page_view(account_page, const palette& colours, const account_page_facts& facts) {
   namespace c = skiff::compose;
   const std::string address = facts.by.address;
   return SKIFF_NAMED(page_view, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),

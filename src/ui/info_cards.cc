@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:info_cards -- A person's card, and a room's not joined.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:info_cards;
 
@@ -76,7 +77,7 @@ inline palette profile_text_colours(palette colours, bool banner) {
   }
   return colours;
 }
-inline auto profile_cover_details(const palette& colours, const std::string& key, const person_facts& facts) {
+MUX_INLINE_IN_RELEASE auto profile_cover_details(const palette& colours, const std::string& key, const person_facts& facts) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(profile_cover_details, c::column(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -89,7 +90,7 @@ inline auto profile_cover_details(const palette& colours, const std::string& key
 }
 // The banner sits behind the name, pronouns and biography. Its background
 // ends at the section divider, leaving the account ID and actions plain.
-inline auto profile_cover(const palette& colours, const std::string& key, const person_facts& facts) {
+MUX_INLINE_IN_RELEASE auto profile_cover(const palette& colours, const std::string& key, const person_facts& facts) {
   namespace c = skiff::compose;
   const bool has_banner = facts.profile.banner.has_value();
   nodes::Image<from_moving_thumbnail> banner(from_moving_thumbnail{facts.profile.banner.value_or("")});
@@ -210,7 +211,7 @@ struct person_details_of<protocol_list<Protocols...>> {
                                                                     std::declval<const person_facts&>()))...>;
 };
 using person_details_t = typename person_details_of<protocols>::type;
-inline auto person_card(const palette& colours, const ui_shared& shared,
+MUX_INLINE_IN_RELEASE auto person_card(const palette& colours, const ui_shared& shared,
                         const account_id& account, const std::string& key, const person_facts& facts) {
   namespace c = skiff::compose;
   using close_act = sends<::mux::ui::request::close_person_info>;
@@ -223,7 +224,7 @@ inline auto person_card(const palette& colours, const ui_shared& shared,
       page_header<no_back, close_act>(colours, "User info", {}, {}, false, true),
       c::styled({.fillX = true}, c::scrolled(std::move(details)))));
 }
-inline auto person_card(const ui_needs& n, const person_shown& shown) {
+MUX_INLINE_IN_RELEASE auto person_card(const ui_needs& n, const person_shown& shown) {
   return person_card(*n.colours, *n.shared, shown.account, shown.key, shown.facts);
 }
 using person_card_t = decltype(person_card(std::declval<const ui_needs&>(), std::declval<const person_shown&>()));

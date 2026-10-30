@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:emoji_panels -- The emoji panel, and what pickers share.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.base:emoji_panels;
 
@@ -46,10 +47,10 @@ export namespace mux::ui {
 }
 // Group by source and state key, not the displayed title. Old cached and
 // protocol-neutral packs without a source retain their named grouping.
-inline auto emote_pack_identity(const emote& one) {
+MUX_INLINE_IN_RELEASE auto emote_pack_identity(const emote& one) {
   return std::tuple{one.pack_room, one.pack_key, one.pack_room || !one.pack_key.empty() ? std::string() : one.pack};
 }
-inline auto grouped_emotes(const std::vector<emote>& all, std::string fallback) {
+MUX_INLINE_IN_RELEASE auto grouped_emotes(const std::vector<emote>& all, std::string fallback) {
   return std::views::iota(std::size_t{0}, all.size()) | std::views::filter([&](std::size_t i) {
         return std::ranges::find(all, emote_pack_identity(all[i]), emote_pack_identity) == all.begin() + static_cast<std::ptrdiff_t>(i);
       }) | std::views::transform([&](std::size_t i) {
@@ -169,7 +170,7 @@ struct emoji_group {
 // Compared, so that the panel's sections read again with the same groups --
 // at every hover of the panel -- make nothing again (skiff's Sections).
 static_assert(std::equality_comparable<emoji_group>);
-inline auto emoji_items(const auto& all) { return all | std::views::transform([](const auto& one) { return item_of(one); }) | std::ranges::to<std::vector>(); }
+MUX_INLINE_IN_RELEASE auto emoji_items(const auto& all) { return all | std::views::transform([](const auto& one) { return item_of(one); }) | std::ranges::to<std::vector>(); }
 
 // The groups shown: what was picked lately first, then its default list
 // (lib_ui's GetDefaultRecent) up to the section's number, the favourites,
@@ -257,7 +258,7 @@ auto emoji_cell(const palette& colours, emoji_kept& kept, const Pick& pick, cons
   return SKIFF_NAMED(emoji_cell, c::resting(kPreviewAfterMs, rests_on{shown}, std::move(toned)));
 }
 // A group's tab: its picture, or its mark; lit while its group is at the top.
-inline auto emoji_tab(const palette& colours, const emoji_group& one) {
+MUX_INLINE_IN_RELEASE auto emoji_tab(const palette& colours, const emoji_group& one) {
   namespace c = skiff::compose;
   std::optional<nodes::Image<from_emotes>> image;
   if (one.picture) {

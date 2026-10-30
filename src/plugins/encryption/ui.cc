@@ -4,6 +4,7 @@
 // where it is -- asked of you (Accept, Decline), waiting on them (Cancel),
 // the 7 emoji to compare (They match, They don't match), over (OK).
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.encryption.ui;
 
@@ -29,11 +30,11 @@ export namespace mux::plugins::encryption {
 using namespace ::mux::ui;
 
 // A line of it: wrapped, selectable, as wide as the box.
-[[nodiscard]] inline auto verification_line(std::string text, float size, skia::SkColor colour, bool bold = false) {
+[[nodiscard]] MUX_INLINE_IN_RELEASE auto verification_line(std::string text, float size, skia::SkColor colour, bool bold = false) {
   return skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::move(text), size, colour, bold, true)));
 }
 // One emoji, big, its name under it.
-[[nodiscard]] inline auto verification_emoji(const palette& colours, std::string_view picture, std::string_view name) {
+[[nodiscard]] MUX_INLINE_IN_RELEASE auto verification_emoji(const palette& colours, std::string_view picture, std::string_view name) {
   using skiff::compose::styled;
   return skiff::compose::column(skiff::compose::vbox(4.0f, {.width = 52.0f, .autoSize = scene::axes::kY}),
                                 styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::string(picture), 30.0f, colours.text)),
@@ -98,7 +99,7 @@ template <class Button>
 }
 // The box, made from the verification as it is now: made again as its
 // step moves on.
-inline auto verification_box_of(const palette& colours, const verification_view& view) {
+MUX_INLINE_IN_RELEASE auto verification_box_of(const palette& colours, const verification_view& view) {
   return SKIFF_NAMED(verification_box_of, skiff::compose::column(
       skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       verification_line("Verify " + view.user, 17.0f, colours.text, true), verification_line(verification_note(view), 14.0f, colours.dim),

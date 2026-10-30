@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:conversations_side -- The chat list's side: its folders and spaces, the space bars, and the column of chats.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:conversations_side;
 
@@ -331,7 +332,7 @@ auto side_folders_for(const auto& colours, Pick pick) {
 // a request; its list-item label and selection are part of the same tree.
 // Its text a piece the plugins shape: the row a builder, built with the
 // list's rows (built_maker).
-inline auto conversation_row(const ui_needs& needs, const conversation& one,
+MUX_INLINE_IN_RELEASE auto conversation_row(const ui_needs& needs, const conversation& one,
                              const conversation_view& view, const room_event_filter& events) {
   namespace c = skiff::compose;
   const palette& colours = *needs.colours;

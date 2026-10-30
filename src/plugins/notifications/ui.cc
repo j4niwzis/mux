@@ -5,6 +5,7 @@
 // UnifiedPush wakes mux (contract::settings_pages), linked from Settings'
 // home.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.notifications.ui;
 
@@ -27,7 +28,7 @@ using namespace ::mux::ui;
 
 // UnifiedPush's distributors found on the bus, each a row -- the one in use
 // marked -- pressed, chosen; as Element's "Choose distributor".
-inline auto distributor_rows(const palette& colours, const push_shown& now) {
+MUX_INLINE_IN_RELEASE auto distributor_rows(const palette& colours, const push_shown& now) {
   constexpr std::string_view kPrefix = "org.unifiedpush.Distributor.";
   auto rows = now.distributors | std::views::enumerate | std::views::transform([&](const auto& each) {
                 const auto& [at, name] = each;
@@ -39,7 +40,7 @@ inline auto distributor_rows(const palette& colours, const push_shown& now) {
   return skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows));
 }
 using distributor_rows_t = decltype(distributor_rows(std::declval<const palette&>(), push_shown{}));
-inline auto distributors_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto distributors_view(const palette& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(distributors_view, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::text_for<push_shown>([](const push_shown& now) {
@@ -51,7 +52,7 @@ inline auto distributors_view(const palette& colours) {
                                                    {.fillX = true, .autoSize = scene::axes::kY})),
       settings_link(colours, "Register again", icon::send{}, register_again{})));
 }
-inline auto notification_settings_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto notification_settings_view(const palette& colours) {
   using every = config::notification_settings;
   auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(
       skiff::compose::styled({.margin = {4.0f, 20.0f, 4.0f, 20.0f}}, themed_tabs<config::notify_backend_t>(colours, 
@@ -75,7 +76,7 @@ inline auto notification_settings_view(const palette& colours) {
                            "of messages while it runs."),
       spaced_title(colours, "DISTRIBUTOR"), distributors_view(colours)));
 }
-inline auto notifications_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto notifications_view(const palette& colours) {
   using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
   return SKIFF_NAMED(notifications_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -84,9 +85,9 @@ inline auto notifications_view(const palette& colours) {
 }
 
 // Settings' link to it (mux.ui:settings_pages), and the page.
-inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return settings_link(colours, "Notifications", icon::bell{}, open_settings{});
 }
-inline auto extend(contract::settings_pages, const ui_needs& n, const settings_page&) { return notifications_view(*n.colours); }
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const ui_needs& n, const settings_page&) { return notifications_view(*n.colours); }
 
 }  // namespace mux::plugins::notifications

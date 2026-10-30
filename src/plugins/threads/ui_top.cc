@@ -3,6 +3,7 @@
 // chat's info, the room's threads, or one opened -- its root and answers as
 // the chat's own list has its messages, and a field to answer in it.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.threads.ui_top;
 
@@ -37,7 +38,7 @@ using namespace ::mux::ui;
 }
 // A thread's row: its root's author and words, how many answers and the
 // latest's; pressed, opened.
-inline auto thread_row(const palette& colours, const thread_root& one) {
+MUX_INLINE_IN_RELEASE auto thread_row(const palette& colours, const thread_root& one) {
   namespace c = skiff::compose;
   const auto line = [](std::string text, float size, skia::SkColor colour, bool bold = false) {
     return c::styled({.fillX = true}, elided(nodes::Text(std::move(text), size, colour, bold)));
@@ -67,7 +68,7 @@ struct in_thread {
 // Threads, as Element's panel has them: in place of the chat's info, the
 // room's threads, or one opened -- its root and answers as the chat's own
 // list has its messages, and a field to answer in it. As the program says.
-inline auto threads_panel(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto threads_panel(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const auto listing = [](const shown& now) { return now.listing; };
@@ -99,6 +100,6 @@ inline auto threads_panel(const ui_needs& n) {
 }
 
 // Its panel, beside the chat in the info's place (mux.ui:conversations_screen).
-inline auto extend(contract::beside_panels, type_tag<feature>, const ui_needs& needs) { return threads_panel(needs); }
+MUX_INLINE_IN_RELEASE auto extend(contract::beside_panels, type_tag<feature>, const ui_needs& needs) { return threads_panel(needs); }
 
 }  // namespace mux::plugins::threads

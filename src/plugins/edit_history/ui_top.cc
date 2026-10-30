@@ -5,6 +5,7 @@
 // last, the list scrolled to it. Above the window's messages
 // (mux.ui.messages), under the window that shows it as a dialog.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.edit_history.ui_top;
 
@@ -23,12 +24,12 @@ using namespace ::mux::ui;
 
 // A version of the message, as the chat shows it: its menu that of a
 // version, not edited again.
-inline auto version_row(const ui_needs& n, const conversation& in, const message& event, const model* known) {
+MUX_INLINE_IN_RELEASE auto version_row(const ui_needs& n, const conversation& in, const message& event, const model* known) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(version_row, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
                    message_alone(n, in, event, true, true, known, true)));
 }
-inline auto panel(const ui_needs& n, const shown& facts) {
+MUX_INLINE_IN_RELEASE auto panel(const ui_needs& n, const shown& facts) {
   namespace c = skiff::compose;
   const auto& chat = chat_or_none(facts.known, facts.in);
   const auto versions = edit_versions_of(facts.said, &chat);
@@ -46,7 +47,7 @@ inline auto panel(const ui_needs& n, const shown& facts) {
       page_header<no_back, sends<request::close_shown<shown>>>(*n.colours, "Edit History", {}, {}, false, true), std::move(list)));
 }
 using box = decltype(panel(std::declval<const ui_needs&>(), std::declval<const shown&>()));
-inline auto make_content(const ui_needs& n, const shown& facts) {
+MUX_INLINE_IN_RELEASE auto make_content(const ui_needs& n, const shown& facts) {
   return panel(n, facts);
 }
 inline dialog_look content_look(std::type_identity<shown>) {

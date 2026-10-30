@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:header -- A chat's head, and finding in it.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:header;
 
@@ -64,10 +65,10 @@ struct notice_facts {
   bool delete_selection = false;
 };
 // A notice's text: wrapped, selectable, as wide as the box.
-[[nodiscard]] inline auto notice_line(std::string text, float size, skia::SkColor colour, bool bold = false) {
+[[nodiscard]] MUX_INLINE_IN_RELEASE auto notice_line(std::string text, float size, skia::SkColor colour, bool bold = false) {
   return skiff::compose::styled({.fillX = true}, wrapped(nodes::Text(std::move(text), size, colour, bold, true)));
 }
-inline auto notice_box(const palette& colours, const notice_facts& facts) {
+MUX_INLINE_IN_RELEASE auto notice_box(const palette& colours, const notice_facts& facts) {
   return SKIFF_NAMED(notice_box, skiff::compose::column(
       skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       notice_line(facts.heading, 17.0f, colours.text, true), notice_line(facts.text, 14.0f, colours.dim),
@@ -181,7 +182,7 @@ struct chats_shown {
 // the plugins' buttons (a call), its threads and its info. A press on it
 // elsewhere asks for its info -- the program says whether that opens it (on
 // a phone, as Telegram's). All as the program says (chat_head_shown).
-inline auto chat_header_for(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto chat_header_for(const palette& colours) {
   namespace c = skiff::compose;
   const auto chat = [](const chat_head_shown& now) { return now.key.has_value(); };
   const scene::Spec middle{.alignSelf = scene::align::kMiddle};
@@ -216,7 +217,7 @@ struct banner_shown {
   proto::part::tone_t tone = proto::part::tone::plain{};
   friend bool operator==(const banner_shown&, const banner_shown&) = default;
 };
-inline auto composer_banner_for(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto composer_banner_for(const palette& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(composer_banner_for, c::shown_for<banner_shown>([](const banner_shown& now) { return !now.text.empty(); },
       c::spec_for<banner_shown>([&colours](const banner_shown& now) {

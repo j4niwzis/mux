@@ -6,6 +6,7 @@
 // own link, to send to someone not found. Inviting to a room, the same.
 // And its row in the drawer.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.start_chat.ui;
 
@@ -33,7 +34,7 @@ export namespace mux::plugins::start_chat {
 using namespace ::mux::ui;
 
 // Its row in the drawer (mux.ui:drawer).
-inline auto extend(contract::drawer_rows, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::drawer_rows, type_tag<feature>, const palette& colours) {
   return row_item(colours, "Start new chat", sends<request::open_new_chat>{}, icon::person{});
 }
 

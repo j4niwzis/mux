@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:chat_list -- A chat in the list.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.lists:chat_list;
 
@@ -174,7 +175,7 @@ template <class V>
 
 // These are in-flow pills. The floating count_badge control has different
 // geometry; all pill drawing and layout remains the widget's.
-inline auto chat_unread(const palette& colours, const conversation_view& view) {
+MUX_INLINE_IN_RELEASE auto chat_unread(const palette& colours, const conversation_view& view) {
   return skiff::compose::visible(view.unread > 0,
       skiff::compose::styled({.margin = {0.0f, 0.0f, 0.0f, 4.0f}},
           widgets::Pill(std::to_string(view.unread),
@@ -182,19 +183,19 @@ inline auto chat_unread(const palette& colours, const conversation_view& view) {
                .text = view.chosen ? colours.selected : colours.on_accent,
                .size = 12.0f, .height = 21.0f, .padX = 7.0f, .bold = true})));
 }
-inline auto chat_protocol_mark(const palette& colours, const proto::part::badge& mark) {
+MUX_INLINE_IN_RELEASE auto chat_protocol_mark(const palette& colours, const proto::part::badge& mark) {
   return SKIFF_NAMED(chat_protocol_mark, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
       widgets::Pill(mark.text, {.plate = tone_colour(colours, mark.tone), .text = colours.on_accent,
                                 .size = 11.0f, .height = 19.0f, .padX = 6.0f, .bold = true})));
 }
 // Configure the rich-text leaf when it is made, from the resolved preview.
 // It retains only avatar mention pills; other links do not open from a row.
-inline auto chat_preview_text(const palette& colours, const conversation_view& view, const chat_preview& preview) {
+MUX_INLINE_IN_RELEASE auto chat_preview_text(const palette& colours, const conversation_view& view, const chat_preview& preview) {
   auto text = nodes::BasicText<message_pictures>(preview.text, 13.0f, view.chosen ? colours.selected_text : colours.dim);
   text.setLinks(preview.mentions, colours.accent);
   return SKIFF_NAMED(chat_preview_text, skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(std::move(text))));
 }
-inline auto chat_preview_line(const ui_needs& needs, const conversation& one,
+MUX_INLINE_IN_RELEASE auto chat_preview_line(const ui_needs& needs, const conversation& one,
                               const conversation_view& view, const chat_preview& preview) {
   namespace c = skiff::compose;
   const palette& colours = *needs.colours;

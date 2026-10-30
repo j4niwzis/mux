@@ -5,6 +5,7 @@
 // from Settings' home (contract::settings_links,
 // settings_pages).
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.storage.ui;
 
@@ -75,7 +76,7 @@ auto limit_stepper(const palette& colours, std::string what, std::string_view un
 // messages are shown, and how much of them is kept; and every chat's room
 // events. The limits and the history's switch are the model's widgets; the
 // seal, the clearing and every chat's choices are asked as before.
-inline auto seal_settings_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto seal_settings_view(const palette& colours) {
   using field = skiff::model::Field<&local_seal::on>;
   return SKIFF_NAMED(seal_settings_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -89,7 +90,7 @@ inline auto seal_settings_view(const palette& colours) {
       skiff::compose::shown_if<field>([](bool on) { return on; },
           settings_link(colours, "Change the passphrase", icon::pencil{}, request::change_passphrase{}))));
 }
-inline auto storage_settings_view(const auto& colours) {
+MUX_INLINE_IN_RELEASE auto storage_settings_view(const auto& colours) {
     namespace limit = config::limit;
     using skiff::compose::bound;
     auto clear = settings_link(colours, "Clear stored messages and pictures", icon::close{}, request::clear_stored{});
@@ -134,7 +135,7 @@ inline auto storage_settings_view(const auto& colours) {
                              "where it was, with all it said and its "
                              "time, marked removed.")));
   }
-inline auto storage_view(const auto& colours) {
+MUX_INLINE_IN_RELEASE auto storage_view(const auto& colours) {
   return SKIFF_NAMED(storage_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Storage", {}, {}, true, true),
@@ -143,10 +144,10 @@ inline auto storage_view(const auto& colours) {
 
 
 // Settings' links to them, and the pages.
-inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                                 settings_link(colours, "Storage", icon::clip{}, open_storage{}));
 }
-inline auto extend(contract::settings_pages, const auto& n, const storage_page&) { return storage_view(*n.colours); }
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const auto& n, const storage_page&) { return storage_view(*n.colours); }
 
 }  // namespace mux::plugins::storage

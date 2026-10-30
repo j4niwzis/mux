@@ -3,6 +3,7 @@
 // panels show them: what its account_form_of makes of its draft, from the
 // protocols' UI modules, which sit under this one.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:account_forms;
 
@@ -73,7 +74,7 @@ struct form_seed {
 [[nodiscard]] inline account_form_node form_made(const palette& colours, const form_seed& now) {
   return spl::visit([&](const auto& draft) { return account_form_node(account_form_of(draft, colours, now.editing)); }, now.seed);
 }
-inline auto account_form_view(const ui_needs& n) {
+MUX_INLINE_IN_RELEASE auto account_form_view(const ui_needs& n) {
   namespace c = skiff::compose;
   using facts = std::optional<account_form_facts>;
   return SKIFF_NAMED(account_form_view, c::projected<facts>([](const facts& now) { return now ? std::optional(form_seed{now->round, now->seed, now->editing.has_value()}) : std::nullopt; },

@@ -6,6 +6,7 @@
 // sections, each cell resting to show its sticker large. And a sticker made a
 // favourite, or no longer one, from its menu.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.stickers.ui;
 
@@ -83,7 +84,7 @@ inline std::vector<pack> packs_of(const emoji_kept& kept, std::string_view query
 
 inline constexpr float kCell = 78.0f;
 // A sticker: pressed, sent; the pointer resting on it, shown large.
-inline auto cell(const palette& colours, emoji_kept& kept, const emote& one) {
+MUX_INLINE_IN_RELEASE auto cell(const palette& colours, emoji_kept& kept, const emote& one) {
   namespace c = skiff::compose;
   auto picture = nodes::Image<from_emotes>({one.url, emote_kind::sticker});
   picture.keepBox();  // the cell's size, whatever the sticker
@@ -95,7 +96,7 @@ inline auto cell(const palette& colours, emoji_kept& kept, const emote& one) {
               c::styled({.fill = true}, std::move(picture))))));
 }
 // A pack's tab: its picture, or its mark; lit while its pack is at the top.
-inline auto tab(const palette& colours, const pack& one) {
+MUX_INLINE_IN_RELEASE auto tab(const palette& colours, const pack& one) {
   namespace c = skiff::compose;
   std::optional<nodes::Image<from_emotes>> image;
   if (one.picture) {
@@ -113,7 +114,7 @@ inline auto tab(const palette& colours, const pack& one) {
 // under another in a list that scrolls; a footer of their tabs that brings
 // each into view, lit for the one in view; a press sends one; the pointer
 // resting on one shows it large.
-inline auto page(const palette& colours, emoji_kept& kept) {
+MUX_INLINE_IN_RELEASE auto page(const palette& colours, emoji_kept& kept) {
   namespace c = skiff::compose;
   auto field = widgets::TextField<std::string>(colours.widgets, "Search stickers");
   field.setSearchIcon(true);
@@ -146,12 +147,12 @@ inline auto page(const palette& colours, emoji_kept& kept) {
 using page_t = decltype(page(std::declval<const palette&>(), std::declval<emoji_kept&>()));
 
 // Its page, in the media panel (the emoji picker's: mux.plugin.emoji_picker.ui).
-inline auto extend(contract::media_pages, type_tag<feature>, const ui_needs& needs, const shown&) {
+MUX_INLINE_IN_RELEASE auto extend(contract::media_pages, type_tag<feature>, const ui_needs& needs, const shown&) {
   return page(*needs.colours, *needs.emoji);
 }
 
 // A sticker's menu: made a favourite, or no longer one.
-inline auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept& kept,
+MUX_INLINE_IN_RELEASE auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept& kept,
             const menu_facts& facts) {
   return skiff::compose::visible(
       facts.sticker.has_value(),

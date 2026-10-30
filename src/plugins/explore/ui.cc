@@ -3,6 +3,7 @@
 // account's server's directory, or a space's rooms, searched; each room
 // joined, a space opened in turn. And its button in the side's head.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.explore.ui;
 
@@ -26,7 +27,7 @@ export namespace mux::plugins::explore {
 using namespace ::mux::ui;
 
 // Its button in the side's head (mux.ui:conversations_side).
-inline auto extend(contract::side_header, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::side_header, type_tag<feature>, const palette& colours) {
   return SKIFF_NAMED(explore_button, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
                                                             icon_button(colours, icon::compass{}, sends<open>{})));
 }
@@ -121,7 +122,7 @@ auto explore_view(const palette& colours, const shown& facts) {
                more ? facts.listed->next : std::nullopt})))), explore_draft{facts.query, facts.server}));
 }
 using box = decltype(explore_view(std::declval<const palette&>(), std::declval<const shown&>()));
-inline auto make_content(const ui_needs& needs, const shown& facts) { return explore_view(*needs.colours, facts); }
+MUX_INLINE_IN_RELEASE auto make_content(const ui_needs& needs, const shown& facts) { return explore_view(*needs.colours, facts); }
 inline dialog_look content_look(std::type_identity<shown>) { return {.size = dialog_size::fixed{640.0f, 560.0f}}; }
 
 // Its dialog, among the window's (mux.ui:window).

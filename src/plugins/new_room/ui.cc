@@ -4,6 +4,7 @@
 // it is found by -- and, among the advanced, whether those of other servers
 // may ever join. And its row in the drawer.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.new_room.ui;
 
@@ -34,7 +35,7 @@ export namespace mux::plugins::new_room {
 using namespace ::mux::ui;
 
 // Its row in the drawer (mux.ui:drawer).
-inline auto extend(contract::drawer_rows, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::drawer_rows, type_tag<feature>, const palette& colours) {
   return row_item(colours, "New room", sends<request::open_new_room>{}, icon::people{});
 }
 
@@ -85,7 +86,7 @@ auto room_form_toggle(const palette& colours, std::string label) {
       c::bound<skiff::model::Field<Member>>(widgets::ToggleField<bool>(colours.widgets))));
 }
 // Radio rows send changes to their bound field; their mark is projected from it.
-inline auto room_access_choice(const palette& colours, std::string label, room_access_t choice) {
+MUX_INLINE_IN_RELEASE auto room_access_choice(const palette& colours, std::string label, room_access_t choice) {
   namespace c = skiff::compose;
   using access = skiff::model::Field<&room_draft::access>;
   return SKIFF_NAMED(room_access_choice, c::spec_for<access>([choice](const auto& selected) { return scene::Spec{.selected = selected == choice}; },

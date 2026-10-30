@@ -3,6 +3,7 @@
 // tab shows them: a grid of the saved ones playing, newest first; a press
 // sends one into the chat. And Save GIF, in a moving picture's menu.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.gifs.ui;
 
@@ -19,7 +20,7 @@ import mux.plugin.gifs.types;
 
 export namespace mux::plugins::gifs {
 
-inline auto cell(const ui::palette& colours, std::string path) {
+MUX_INLINE_IN_RELEASE auto cell(const ui::palette& colours, std::string path) {
   const std::string key = "gif:" + path;
   auto image = skiff::nodes::Image<ui::from_moving_whole>({key});
   image.keepBox();
@@ -34,7 +35,7 @@ inline auto cell(const ui::palette& colours, std::string path) {
                                      .masking = true}),
           skiff::compose::styled({.fill = true, .cornerRadius = 6.0f}, std::move(image)))));
 }
-inline auto grid(const ui::palette& colours, const std::vector<std::string>& paths) {
+MUX_INLINE_IN_RELEASE auto grid(const ui::palette& colours, const std::vector<std::string>& paths) {
   namespace c = skiff::compose;
   namespace scene = skiff::scene;
   namespace nodes = skiff::nodes;
@@ -51,12 +52,12 @@ inline auto grid(const ui::palette& colours, const std::vector<std::string>& pat
 }
 
 // Its page, in the media panel (the emoji picker's: mux.plugin.emoji_picker.ui).
-inline auto extend(contract::media_pages, type_tag<feature>, const ui::ui_needs& needs, const shown& now) {
+MUX_INLINE_IN_RELEASE auto extend(contract::media_pages, type_tag<feature>, const ui::ui_needs& needs, const shown& now) {
   return grid(*needs.colours, now.paths);
 }
 
 // Save GIF, in the menu of a GIF or a moving WebP (mux.ui:context_menu).
-inline auto extend(contract::message_menu, type_tag<feature>, const ui::palette& colours, const ui::emoji_kept&,
+MUX_INLINE_IN_RELEASE auto extend(contract::message_menu, type_tag<feature>, const ui::palette& colours, const ui::emoji_kept&,
             const ui::menu_facts& facts) {
   return skiff::compose::visible(facts.media.has_value() && facts.moving,
       ui::row_item(colours, "Save GIF", ui::sends<save>{save{facts.media.value_or(std::string())}}, ui::icon::check{}, std::nullopt,

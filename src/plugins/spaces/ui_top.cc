@@ -8,6 +8,7 @@
 // icon dragged from one bar to the other, or along one. In the side column
 // through contract::side_bars.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.spaces.ui_top;
 
@@ -332,14 +333,14 @@ template <class P> struct side_lanes {
 // ---- in the side column (contract::side_bars) ------------------------------------------
 // The side bar: its lane of icons, down the side of the list, while it is up
 // or an icon is being dragged.
-inline auto side_lane(contract::side_bars, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto side_lane(contract::side_bars, type_tag<feature>, const palette& colours) {
   namespace c = skiff::compose;
   return c::shown_for<side_shown>([](const side_shown& now) { return now.side_on || now.dragging; },
       c::styled({.fillY = true, .width = 56.0f},
           list_lane_view(colours)));
 }
 // The top bar: in the head, or under the search field where the bars are big.
-inline auto top_bar(contract::side_bars, type_tag<feature>, const palette& colours, bool big) { return side_space_bar(colours, big); }
+MUX_INLINE_IN_RELEASE auto top_bar(contract::side_bars, type_tag<feature>, const palette& colours, bool big) { return side_space_bar(colours, big); }
 // The column, wrapped: an icon's menu over it, and an icon dragged between
 // the bars and along them.
 template <class Surface>
@@ -404,7 +405,7 @@ struct leave_events {
     return skiff::model::Up{leave_space{facts.space, std::move(leaving)}};
   }
 };
-inline auto leave_room_row(const palette& colours, const named_room& room) {
+MUX_INLINE_IN_RELEASE auto leave_room_row(const palette& colours, const named_room& room) {
   return SKIFF_NAMED(leave_room_row, skiff::compose::row(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
       skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(room.name, 14.0f, colours.text))),
       // On while the room is among those to leave; pressed, flipped there.
@@ -413,7 +414,7 @@ inline auto leave_room_row(const palette& colours, const named_room& room) {
           [](widgets::Toggle<flip_leave_toggle>& toggle, bool on) { toggle.setOn(on); },
           skiff::compose::styled({.alignSelf = scene::align::kMiddle}, widgets::Toggle<flip_leave_toggle>(colours.widgets, {room.id}))))));
 }
-inline auto leave_space_box(const palette& colours, const leave_space_facts& facts) {
+MUX_INLINE_IN_RELEASE auto leave_space_box(const palette& colours, const leave_space_facts& facts) {
   using choice = skiff::model::Field<&leave_draft::choice>;
   return SKIFF_NAMED(leave_space_box, skiff::compose::local<leave_draft>(leave_events{facts}, skiff::compose::column(
       skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
@@ -463,14 +464,14 @@ struct pick_space_bars {
 [[nodiscard]] inline std::size_t space_bars_way(const space_item_shown& one) {
   return one.side && !one.top ? 0 : one.top && !one.side ? 1 : one.side && one.top ? 2 : 3;
 }
-inline auto space_bars_row(const palette& colours, const std::string& account, const space_item_shown& one) {
+MUX_INLINE_IN_RELEASE auto space_bars_row(const palette& colours, const std::string& account, const space_item_shown& one) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(space_bars_row, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}}),
                    nodes::Text(one.name, 14.0f, colours.text),
                    make_choice_menu(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"}, space_bars_way(one),
                                     pick_space_bars{account, one.item})));
 }
-inline auto spaces_choices(const palette& colours, const ui_shared& shared) {
+MUX_INLINE_IN_RELEASE auto spaces_choices(const palette& colours, const ui_shared& shared) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(spaces_choices, c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                  shared.space_items | std::views::transform([&](const space_item_shown& one) { return space_bars_row(colours, shared.space_account, one); }) | std::ranges::to<std::vector>()));
@@ -484,14 +485,14 @@ struct pick_home {
     return {request::set_home_hides{choice_level::account{}, said(index >= 2)}, request::set_home_direct{choice_level::account{}, said(index == 3)}};
   }
 };
-inline auto home_choice(const palette& colours, std::size_t way) {
+MUX_INLINE_IN_RELEASE auto home_choice(const palette& colours, std::size_t way) {
   return make_choice_menu(colours, "Home", {"As above", "Every chat", "Without chats spaces hold", "Without those and direct messages"},
                           way, pick_home{});
 }
 using home_choice_t = decltype(home_choice(std::declval<const palette&>(), 0));
 // An account's Home menu, by its address: its own way, else as every
 // account's.
-inline auto home_choice_view(const palette& colours, std::string address) {
+MUX_INLINE_IN_RELEASE auto home_choice_view(const palette& colours, std::string address) {
   namespace c = skiff::compose;
   return c::projected<shown>([address = std::move(address)](const shown& now) {
     const auto way = now.home_ways.find(address);
@@ -501,7 +502,7 @@ inline auto home_choice_view(const palette& colours, std::string address) {
 }
 using home_choice_view_t = decltype(home_choice_view(std::declval<const palette&>(), std::string()));
 // An account's Home, as its page shows the account.
-inline auto account_home_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto account_home_view(const palette& colours) {
   namespace c = skiff::compose;
   using page_read = std::optional<account_page_facts>;
   return c::projected<page_read>([](const page_read& now) { return now ? std::optional(now->by.address) : std::nullopt; },
@@ -510,7 +511,7 @@ inline auto account_home_view(const palette& colours) {
 }
 // Every account's: the bars at all, the one along the top, and Home
 // without what spaces hold -- and without direct messages, only then.
-inline auto everywhere_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto everywhere_view(const palette& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(spaces_everywhere, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       spaced_title(colours, "SPACES"),
@@ -524,7 +525,7 @@ inline auto everywhere_view(const palette& colours) {
 // Its section on the pages a level's looks are chosen on
 // (contract::level_sections): every account's, on Appearance; an account's
 // own Home, on its page; and the bars' items, on both.
-inline auto extend(contract::level_sections, type_tag<feature>, const palette& colours, choice_level_t level, const ui_shared& shared) {
+MUX_INLINE_IN_RELEASE auto extend(contract::level_sections, type_tag<feature>, const palette& colours, choice_level_t level, const ui_shared& shared) {
   namespace c = skiff::compose;
   const auto is = [&](auto which) {
     return spl::visit(spl::overloaded{[](decltype(which)) { return true; }, [](const auto&) { return false; }}, level);

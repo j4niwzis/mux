@@ -4,6 +4,7 @@
 // a reaction's with who reacted and with what on a badge at its bottom
 // right. Pressed, gone to.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.marks.ui_top;
 
@@ -23,7 +24,7 @@ import mux.plugin.marks.types;
 export namespace mux::plugins::marks {
 using namespace ::mux::ui;
 
-inline auto mark_badge(const palette& colours, const std::string& who, const std::string& name, const std::string& key) {
+MUX_INLINE_IN_RELEASE auto mark_badge(const palette& colours, const std::string& who, const std::string& name, const std::string& key) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(mark_badge, c::row(
       c::hbox(4.0f, {.place = scene::anchor::kBottomRight, .x = -14.0f, .y = -2.0f, .autoSize = scene::axes::kBoth,
@@ -38,7 +39,7 @@ struct go_to_act {
   std::string event;
   Answer operator()() const { return {go_to{kind, event}, request::close_shown<listed>{}}; }
 };
-inline auto mark_row(const ui_needs& n, mark_kind_t which, const conversation& in, const entry& one, const model* now) {
+MUX_INLINE_IN_RELEASE auto mark_row(const ui_needs& n, mark_kind_t which, const conversation& in, const entry& one, const model* now) {
   namespace c = skiff::compose;
   const std::string who = one.who.value_or("");
   return SKIFF_NAMED(mark_row, c::onPress(
@@ -51,7 +52,7 @@ inline auto mark_row(const ui_needs& n, mark_kind_t which, const conversation& i
 }
 // Made from what the list is of; its rows from the chat as the chats hold
 // it now -- none where it is gone.
-inline auto marks_panel(const ui_needs& n, const listed& facts) {
+MUX_INLINE_IN_RELEASE auto marks_panel(const ui_needs& n, const listed& facts) {
   namespace c = skiff::compose;
   using close_act = sends<request::close_shown<listed>>;
   using row_t = decltype(mark_row(n, facts.kind, std::declval<const conversation&>(), std::declval<const entry&>(), facts.now));
@@ -70,7 +71,7 @@ inline auto marks_panel(const ui_needs& n, const listed& facts) {
 }
 using box = decltype(marks_panel(std::declval<const ui_needs&>(), std::declval<const listed&>()));
 inline dialog_look content_look(std::type_identity<listed>) { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 520.0f}}; }
-inline auto make_content(const ui_needs& n, const listed& facts) { return marks_panel(n, facts); }
+MUX_INLINE_IN_RELEASE auto make_content(const ui_needs& n, const listed& facts) { return marks_panel(n, facts); }
 
 // Its dialog, among the window's (mux.ui:window).
 constexpr type_tag<box> extend(contract::window_dialogs, type_tag<feature>) { return {}; }

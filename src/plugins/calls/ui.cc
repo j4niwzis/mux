@@ -6,6 +6,7 @@
 // Element's call toast -- Decline and Accept while it rings. A call ended
 // stays a moment, saying why.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.calls.ui;
 
@@ -116,7 +117,7 @@ auto call_button(const palette& colours, float size, skia::SkColor plate, skia::
   return skiff::compose::visible(shown, skiff::compose::onClick(std::move(event),
       skiff::compose::styled(call_button_look(size, plate, hover), nodes::Icon(shape_of(mark), ink)), std::move(label)));
 }
-inline auto call_buttons(const palette& colours, float size, const call_view& view) {
+MUX_INLINE_IN_RELEASE auto call_buttons(const palette& colours, float size, const call_view& view) {
   const auto white = skia::colorSetARGB(255, 255, 255, 255);
   const bool ringing = rings_here(view), ended = has_ended(view);
   return SKIFF_NAMED(call_buttons, skiff::compose::keep_ticking(ended, skiff::compose::row(
@@ -130,21 +131,21 @@ inline auto call_buttons(const palette& colours, float size, const call_view& vi
       call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, start_call{view.in}, ended && view.available, "Call back"),
       call_button(colours, size, colours.tile, colours.chosen, colours.text, icon::close{}, dismiss_call{}, ended, "Dismiss"))));
 }
-inline auto call_avatar(const call_view& view, float size) {
+MUX_INLINE_IN_RELEASE auto call_avatar(const call_view& view, float size) {
   auto avatar = widgets::Avatar<from_avatars>(initials_of(view.who), size, picture_of(view.in.id), gradient_of(view.in.id));
   round_avatar(avatar, size, avatar_of::chat{});
   return SKIFF_NAMED(call_avatar, skiff::compose::styled({.alignSelf = scene::align::kMiddle}, std::move(avatar)));
 }
 // How it is going, read as it goes: wrapped or cut short as where it is
 // shown asks -- said of the text itself, before it is read.
-inline auto call_status(const palette& colours, const call_view& view, float size, bool wrap = false, bool elide = false) {
+MUX_INLINE_IN_RELEASE auto call_status(const palette& colours, const call_view& view, float size, bool wrap = false, bool elide = false) {
   auto text = nodes::Text(said_of(view), size, colours.dim);
   text.setWrapped(wrap);
   text.setElided(elide);
   return skiff::compose::text_of<call_shown>(call_words{}, std::move(text));
 }
 // The call in its chat, beneath the header.
-inline auto call_panel(const palette& colours, const call_view& view) {
+MUX_INLINE_IN_RELEASE auto call_panel(const palette& colours, const call_view& view) {
   return SKIFF_NAMED(call_panel, skiff::compose::column(
       skiff::compose::justified(skiff::compose::vbox(10.0f,
           {.fillX = true, .height = 280.0f, .padding = {20.0f, 16.0f, 20.0f, 16.0f},
@@ -155,7 +156,7 @@ inline auto call_panel(const palette& colours, const call_view& view) {
       call_buttons(colours, 52.0f, view)));
 }
 // On a phone the call fills the window and takes presses off its controls.
-inline auto call_screen(const palette& colours, const call_view& view) {
+MUX_INLINE_IN_RELEASE auto call_screen(const palette& colours, const call_view& view) {
   return SKIFF_NAMED(call_screen, skiff::compose::onClick(scene::Taken{}, skiff::compose::column(
       skiff::compose::vbox(12.0f, {.place = scene::anchor::kTopLeft, .fill = true,
                                  .padding = {24.0f, 24.0f, 48.0f, 24.0f}, .background = colours.sidebar}),
@@ -167,7 +168,7 @@ inline auto call_screen(const palette& colours, const call_view& view) {
       call_buttons(colours, 64.0f, view))));
 }
 // A compact card above the conversation while the call rings elsewhere.
-inline auto call_bar(const palette& colours, const call_view& view) {
+MUX_INLINE_IN_RELEASE auto call_bar(const palette& colours, const call_view& view) {
   return SKIFF_NAMED(call_bar, skiff::compose::row(
       skiff::compose::hbox(12.0f, {.place = scene::anchor::kTopRight, .x = 12.0f, .y = 12.0f,
                                   .width = 360.0f, .autoSize = scene::axes::kY,
@@ -186,9 +187,9 @@ struct panel {};
 struct card {};
 struct screen {};
 }
-inline auto call_content(call_ui::panel, const palette& colours, const call_view& view) { return call_panel(colours, view); }
-inline auto call_content(call_ui::card, const palette& colours, const call_view& view) { return call_bar(colours, view); }
-inline auto call_content(call_ui::screen, const palette& colours, const call_view& view) { return call_screen(colours, view); }
+MUX_INLINE_IN_RELEASE auto call_content(call_ui::panel, const palette& colours, const call_view& view) { return call_panel(colours, view); }
+MUX_INLINE_IN_RELEASE auto call_content(call_ui::card, const palette& colours, const call_view& view) { return call_bar(colours, view); }
+MUX_INLINE_IN_RELEASE auto call_content(call_ui::screen, const palette& colours, const call_view& view) { return call_screen(colours, view); }
 
 template <class Which, class View>
 [[nodiscard]] auto call_layer(const ui_needs& needs, Which which, View view,
@@ -202,19 +203,19 @@ template <class Which, class View>
 
 // Its layers, over the window: the card, where the call rings or is in
 // another chat; the whole window, on a phone.
-inline auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
+MUX_INLINE_IN_RELEASE auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(extend, c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
       call_layer(needs, call_card_of{}, call_ui::card{}, {.fill = true}, true),
       call_layer(needs, call_screen_of{}, call_ui::screen{}, {.fill = true}, true)));
 }
 // Its view in its chat, under the head.
-inline auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) {
+MUX_INLINE_IN_RELEASE auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) {
   return call_layer(needs, call_panel_of{}, call_ui::panel{}, {.fillX = true, .autoSize = scene::axes::kY});
 }
 // Its button in the chat's head: shown where the chat shown can be called,
 // as its part keeps it (call_shown::callable).
-inline auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
   return SKIFF_NAMED(extend, skiff::compose::shown_if<call_shown>([](const call_shown& now) { return now.callable; },
       // Hidden until what is shown says otherwise: a head made anew is not
       // read before what is shown next moves.
@@ -224,7 +225,7 @@ inline auto extend(contract::chat_header, type_tag<feature>, const palette& colo
 
 // Settings' Calls page: Element's two switches, bound to the plugin's own
 // settings, in effect from the next call.
-inline auto calls_settings_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto calls_settings_view(const palette& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(calls_settings_view, c::column(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -239,9 +240,9 @@ inline auto calls_settings_view(const palette& colours) {
           spaced_note(colours, "Where your homeserver gives no relay, Matrix.org's server is asked for your address, so that a "
                                "call can find its way through your router. That server learns your IP address."))));
 }
-inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return settings_link(colours, "Calls", icon::phone{}, open_calls_page{});
 }
-inline auto extend(contract::settings_pages, const ui_needs& n, const calls_page&) { return calls_settings_view(*n.colours); }
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const ui_needs& n, const calls_page&) { return calls_settings_view(*n.colours); }
 
 } // namespace mux::plugins::calls

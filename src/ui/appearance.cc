@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:appearance -- Settings: appearance and rendering.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:appearance;
 
@@ -28,7 +29,7 @@ export namespace mux::ui {
 
 // Theme cards are expressions: the press edits the bound theme, and the
 // preview's ring is a projection of that same field.
-inline auto theme_card(const palette& colours, config::theme_t theme, std::string label,
+MUX_INLINE_IN_RELEASE auto theme_card(const palette& colours, config::theme_t theme, std::string label,
                        skia::SkColor back, skia::SkColor incoming, skia::SkColor outgoing) {
   using field = skiff::model::Field<&config::look_settings::theme>;
   return SKIFF_NAMED(theme_card, skiff::compose::bound<field>(skiff::compose::onClick(
@@ -160,7 +161,7 @@ struct theme_details_events {
         skiff::model::Up{std::move(asked)}};
   }
 };
-inline auto theme_details_initial(const config::theme_t& theme,
+MUX_INLINE_IN_RELEASE auto theme_details_initial(const config::theme_t& theme,
     const std::map<std::string, config::custom_theme>& overrides) {
   theme_details_draft initial{theme};
   const auto found = overrides.find(std::string(config::word_of(theme)));
@@ -194,7 +195,7 @@ template <std::size_t... Index> auto theme_colour_rows(const palette& colours, c
   return SKIFF_NAMED(theme_colour_rows, skiff::compose::column(skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       theme_colour_row<Index>(colours, base)...));
 }
-inline auto theme_details_view(const palette& colours, const config::theme_t& theme,
+MUX_INLINE_IN_RELEASE auto theme_details_view(const palette& colours, const config::theme_t& theme,
     const std::map<std::string, config::custom_theme>& overrides) {
   namespace c = skiff::compose; using draft = theme_details_draft;
   const auto base = palette_of(theme, config::accent::theme_own{}, 100);
@@ -221,7 +222,7 @@ inline auto theme_details_view(const palette& colours, const config::theme_t& th
 // The themes' cards, Telegram's, in its order, with its own pictures'
 // colours -- the wallpaper, a bubble received, one sent: bound to the
 // theme the model holds, the one in use ringed.
-inline auto theme_row(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto theme_row(const palette& colours) {
   return SKIFF_NAMED(theme_row, skiff::compose::row(
       skiff::compose::hbox(6.0f, {.autoSize = scene::axes::kBoth}),
       theme_card(colours, config::theme::classic{}, "Classic", skia::colorSetARGB(255, 155, 212, 148),
@@ -235,19 +236,19 @@ inline auto theme_row(const palette& colours) {
       theme_card(colours, config::theme::graphite{}, "Graphite", 0xff262626u, 0xff333333u, 0xff413c65u)));
 }
 // The themes move sideways in narrow pages; each card binds its own edit.
-inline auto theme_field(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto theme_field(const palette& colours) {
   return skiff::compose::side_scroll(theme_row(colours));
 }
 // Telegram's accents, the theme's own first: bound to the accent the model
 // holds. Their shades are the theme's: the page is made again with it.
-inline auto accent_view(const config::theme_t &theme) {
+MUX_INLINE_IN_RELEASE auto accent_view(const config::theme_t &theme) {
   using field = skiff::model::Field<&config::look_settings::accent>;
   return accent_circles_for<field>(pick<config::accent_t>{}, theme, true, [](const config::accent_t& now) { return now; });
 }
 // Values and labels are projected by the model combinators; sliders own
 // their input conversion in skiff.widgets.model.
 template <auto Member>
-inline auto percent_heading(const palette &colours, std::string_view what) {
+MUX_INLINE_IN_RELEASE auto percent_heading(const palette &colours, std::string_view what) {
   return SKIFF_NAMED(percent_heading, skiff::compose::text_for<skiff::model::Field<Member>>(
       [what](int percent) { return std::format("{}: {}%", what, percent); },
       skiff::compose::styled(
@@ -262,7 +263,7 @@ inline std::vector<std::optional<int>> rounding_steps() {
   return std::views::iota(0, kRoundAvatar / 5 + 1) | std::views::transform([](int step) { return std::optional<int>(step * 5); }) | std::ranges::to<std::vector>();
 }
 template <auto Member>
-inline auto rounding_setting(const palette& colours, std::string_view what) {
+MUX_INLINE_IN_RELEASE auto rounding_setting(const palette& colours, std::string_view what) {
   using field = skiff::model::Field<Member>;
   return SKIFF_NAMED(rounding_setting, skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::text_for<field>(
@@ -273,7 +274,7 @@ inline auto rounding_setting(const palette& colours, std::string_view what) {
           skiff::compose::styled({.margin = {10.0f, 28.0f, 10.0f, 28.0f}},
                                  widgets::ChoiceSliderField<std::optional<int>>(colours.widgets, rounding_steps())))));
 }
-inline auto avatar_rounding_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto avatar_rounding_view(const palette& colours) {
   using looks = config::look_settings;
   return SKIFF_NAMED(avatar_rounding_view, skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       spaced_title(colours, "AVATARS"),
@@ -287,7 +288,7 @@ inline auto avatar_rounding_view(const palette& colours) {
 // space bars, the window's background, blur, scale and opacity. Each made
 // of the model's widgets, bound to its setting; but the looks at every
 // level and where items are put on the bars, which are their own.
-inline auto appearance_settings_view(const palette& colours, const config::theme_t& theme) {
+MUX_INLINE_IN_RELEASE auto appearance_settings_view(const palette& colours, const config::theme_t& theme) {
   using looks = config::look_settings;
   auto themes = skiff::compose::styled(
       {.fillX = true,
@@ -299,7 +300,7 @@ inline auto appearance_settings_view(const palette& colours, const config::theme
       spaced_title(colours, "THEME"), std::move(themes),
       spaced_title(colours, "ACCENT"), accent_view(theme), avatar_rounding_view(colours)));
 }
-inline auto window_settings_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto window_settings_view(const palette& colours) {
   using looks = config::look_settings;
   return SKIFF_NAMED(window_settings_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -312,7 +313,7 @@ inline auto window_settings_view(const palette& colours) {
           widgets::ChoiceRowField<config::layout_t>(colours.widgets, "Landscape: side by side", config::layout::landscape{})),
       spaced_note(colours, "Automatic follows the window: one thing at a time where it is narrow and taller than wide.")));
 }
-inline auto frame_look_view(const palette& colours, bool see_through) {
+MUX_INLINE_IN_RELEASE auto frame_look_view(const palette& colours, bool see_through) {
   using looks = config::look_settings;
   return SKIFF_NAMED(frame_look_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
@@ -343,7 +344,7 @@ inline auto frame_look_view(const palette& colours, bool see_through) {
 }
 // Enter in a message: as the input is (a new line by touch, a send with a
 // keyboard), or always one of them.
-inline auto enter_settings_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto enter_settings_view(const palette& colours) {
   using field = skiff::model::Field<&config::look_settings::enter>;
   namespace c = skiff::compose;
   return SKIFF_NAMED(enter_settings_view, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
@@ -359,7 +360,7 @@ inline auto enter_settings_view(const palette& colours) {
 // argument packs, and Android's UI thread has a much smaller stack than a
 // desktop's: each section is made into a box of its own on the heap.
 template <class Section> [[nodiscard]] auto held(Section section) { return std::make_unique<Section>(std::move(section)); }
-inline auto appearance_page(const ui_needs& needs, const config::theme_t& theme, const config::accent_t&) {
+MUX_INLINE_IN_RELEASE auto appearance_page(const ui_needs& needs, const config::theme_t& theme, const config::accent_t&) {
   namespace c = skiff::compose;
   const palette& colours = *needs.colours;
   auto looks = held(level_section_plugins::made(colours, choice_level::everywhere{}, *needs.shared));

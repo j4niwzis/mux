@@ -4,6 +4,7 @@
 // or a third party's; pressed, its own page -- its repository, its licence
 // and its README (mux.plugins.info). Linked from Settings' home.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.catalog.ui;
 
@@ -20,14 +21,14 @@ export namespace mux::plugins::catalog {
 
 using namespace ::mux::ui;
 
-inline auto catalog_words(const palette& colours, std::string text, float size = 14.0f) {
+MUX_INLINE_IN_RELEASE auto catalog_words(const palette& colours, std::string text, float size = 14.0f) {
   return wrapped(skiff::compose::styled({.fillX = true, .margin = {8.0f, 20.0f, 8.0f, 20.0f}},
                                         nodes::Text(std::move(text), size, colours.text)));
 }
 // Whose a plugin is.
 [[nodiscard]] inline std::string_view origin_of(const plugin_info& one) { return one.bundled ? "mux" : "third party"; }
 
-inline auto list_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto list_view(const palette& colours) {
   auto rows = plugin_infos | std::views::enumerate | std::views::transform([&](const auto& each) {
                 const auto& [at, one] = each;
                 return settings_link(colours, std::format("{} · {} · {}", one.name, one.license, origin_of(one)), icon::gear{},
@@ -40,7 +41,7 @@ inline auto list_view(const palette& colours) {
                                          "(MUX_EXTRA_PLUGINS).", plugin_infos.size()), 13.0f),
       skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
 }
-inline auto plugin_view(const palette& colours, std::size_t index) {
+MUX_INLINE_IN_RELEASE auto plugin_view(const palette& colours, std::size_t index) {
   const plugin_info missing{"unknown", "", "", "", "", true};
   const plugin_info& one = index < plugin_infos.size() ? plugin_infos[index] : missing;
   auto repository = settings_link(colours, "Repository", icon::gear{}, request::open_url{std::string(one.repository)});
@@ -56,11 +57,11 @@ inline auto plugin_view(const palette& colours, std::size_t index) {
 }
 
 // Settings' link to it.
-inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return settings_link(colours, "Plugins", icon::gear{}, open_list{});
 }
 // Its pages.
-inline auto extend(contract::settings_pages, const ui_needs& n, const list_page&) { return list_view(*n.colours); }
-inline auto extend(contract::settings_pages, const ui_needs& n, const plugin_page& page) { return plugin_view(*n.colours, page.index); }
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const ui_needs& n, const list_page&) { return list_view(*n.colours); }
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const ui_needs& n, const plugin_page& page) { return plugin_view(*n.colours, page.index); }
 
 }  // namespace mux::plugins::catalog

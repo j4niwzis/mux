@@ -3,6 +3,7 @@
 // -- its emoji, and each a plugin gives it (contract::media_pages) -- and
 // what a pick does; a layer over the window (contract::window_layers).
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.emoji_picker.ui;
 
@@ -96,7 +97,7 @@ std::array<popup_page_t, 1 + sizeof...(Features)> all_pages(plugin_list<Features
   return {popup_page::emoji{}, typename decltype(page_type(contract::media_pages{}, type_tag<Features>{}))::type{}...};
 }
 
-inline auto popup_tab(const palette& colours, popup_page_t page, std::string name, bool selected, bool available) {
+MUX_INLINE_IN_RELEASE auto popup_tab(const palette& colours, popup_page_t page, std::string name, bool selected, bool available) {
   namespace c = skiff::compose;
   return c::visible(available, c::onClick(select_emoji_page{std::move(page)},
       c::row(c::justified(c::hbox(0.0f, {.width = 80.0f, .height = 28.0f, .cornerRadius = 6.0f,

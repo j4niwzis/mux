@@ -5,6 +5,7 @@
 // room in a server's directory, a notification's card -- and shape them
 // where they are put -- built, with the window, under its rules.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.lists:row_pieces;
 
@@ -76,7 +77,7 @@ inline constexpr struct toast_text_fn : skiff::compose::piece<toast_text_fn> {
     return two_lines(colours, std::move(title), std::move(text), 14.0f, 4.0f);
   }
 } toast_text{};
-inline auto toast_card(const palette& colours, std::string key, std::string title, std::string text) {
+MUX_INLINE_IN_RELEASE auto toast_card(const palette& colours, std::string key, std::string title, std::string text) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(toast_card, c::row(
       c::hbox(12.0f, {.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar,

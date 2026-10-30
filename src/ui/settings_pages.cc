@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:settings_pages -- Settings: the home page. (Proxies are the proxies plugin's: src/plugins/proxies.)
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui:settings_pages;
 
@@ -50,7 +51,7 @@ auto settings_links_of(plugin_list<Features...>, const palette& colours) {
   return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       settings_link_of<Features>(colours)...);
 }
-inline auto settings_home(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto settings_home(const palette& colours) {
   return SKIFF_NAMED(settings_home, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},

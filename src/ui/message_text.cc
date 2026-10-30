@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui:message_text -- A message's text as shown: its mentions and quotes, its code, its forward line and readers.
 module;
+#include "../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.ui.messages:message_text;
 
@@ -417,7 +418,7 @@ struct message_pictures {
 // quote's colour with a bar at its left; over the code, its language in the
 // colour and a Copy at the right; the code in the monospace face, wrapped,
 // selectable.
-inline auto code_block(const palette& colours, std::string code, std::string language, skia::SkColor colour, skia::SkColor text) {
+MUX_INLINE_IN_RELEASE auto code_block(const palette& colours, std::string code, std::string language, skia::SkColor colour, skia::SkColor text) {
   namespace c = skiff::compose;
   auto body = wrapped(nodes::BasicText<message_pictures>(code, 13.0f, text));
   body.setMonospace(true);
@@ -503,7 +504,7 @@ struct text_piece {
   return out;
 }
 // A code block and the words after it, composed in their text order.
-inline auto code_piece(const palette& colours, const text_piece& code, const text_piece& words,
+MUX_INLINE_IN_RELEASE auto code_piece(const palette& colours, const text_piece& code, const text_piece& words,
                        skia::SkColor colour, skia::SkColor quote, skia::SkColor text) {
   auto after = nodes::BasicText<message_pictures>(words.text, 13.0f, text);
   after.setWrapped(true);
@@ -522,7 +523,7 @@ using code_piece_t = decltype(code_piece(std::declval<const palette&>(), std::de
 // A card and the words after it are one composed part of the message,
 // interleaved with code blocks rather than appended below them.
 // A link's card in a message: pressed, its own link (link_card's onClick).
-inline auto link_piece(const palette& colours, const mentioned_card& card, const text_piece& words,
+MUX_INLINE_IN_RELEASE auto link_piece(const palette& colours, const mentioned_card& card, const text_piece& words,
                        const model* now, skia::SkColor quote) {
   auto after = nodes::BasicText<message_pictures>(words.text, 13.0f, colours.text);
   after.setWrapped(true);
@@ -559,7 +560,7 @@ struct disclosure_visible {
     return std::ranges::all_of(ancestors, [&](std::size_t index) { return state.open[index]; });
   }
 };
-inline auto piece_text(const palette& colours, const text_piece& words, skia::SkColor colour, skia::SkColor quote) {
+MUX_INLINE_IN_RELEASE auto piece_text(const palette& colours, const text_piece& words, skia::SkColor colour, skia::SkColor quote) {
   auto node = nodes::BasicText<message_pictures>(words.text, 13.0f, colour);
   node.setWrapped(true);
   node.setSelectable(true);
@@ -573,7 +574,7 @@ template <class Node> auto disclosure_row(Node node, const std::vector<std::size
   return SKIFF_NAMED(disclosure_row, skiff::compose::shown_for<disclosure_state>(disclosure_visible{ancestors},
       skiff::compose::styled({.margin = {2.0f, 0.0f, 2.0f, 12.0f * static_cast<float>(ancestors.size())}}, std::move(node))));
 }
-inline auto disclosure_header(const palette& colours, const text_piece& summary, std::size_t index,
+MUX_INLINE_IN_RELEASE auto disclosure_header(const palette& colours, const text_piece& summary, std::size_t index,
                               const std::vector<std::size_t>& ancestors, skia::SkColor quote) {
   namespace c = skiff::compose;
   auto label = piece_text(colours, summary, colours.text, quote);
@@ -594,7 +595,7 @@ using disclosure_code_t = decltype(disclosure_row(std::declval<code_block_t>(), 
 using disclosure_link_t = decltype(disclosure_row(card_of(std::declval<const palette&>(), std::string{},
     std::declval<const logic::link_t&>(), nullptr), std::declval<const std::vector<std::size_t>&>()));
 using disclosure_row_t = spl::variant<disclosure_header_t, disclosure_words_t, disclosure_code_t, disclosure_link_t>;
-inline auto disclosure_piece(const palette& colours, const mentioned& shown,
+MUX_INLINE_IN_RELEASE auto disclosure_piece(const palette& colours, const mentioned& shown,
                              const text_piece& after, const model* now, skia::SkColor quote) {
   namespace c = skiff::compose;
   // Slice already parsed content; links, pictures and code retain their offsets.

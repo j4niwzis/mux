@@ -4,6 +4,7 @@
 // version, revision, license and its text, its own dependencies -- as
 // Settings' pages (contract::settings_pages), linked from Settings' home.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.about.ui;
 
@@ -27,7 +28,7 @@ struct library_info {
 #include "about.inc"
 
 template <class Node> auto about_visible(bool visible, Node node) { node.setVisible(visible); return node; }
-inline auto about_words(const palette& colours, std::string text) {
+MUX_INLINE_IN_RELEASE auto about_words(const palette& colours, std::string text) {
   return wrapped(skiff::compose::styled(
       {.fillX = true, .margin = {8.0f, 20.0f, 8.0f, 20.0f}},
       nodes::Text(std::move(text), 14.0f, colours.text)));
@@ -54,7 +55,7 @@ inline library_info library_details(const library_info& info) {
   }
   return result;
 }
-inline auto library_link(const palette& colours, const library_info& info) {
+MUX_INLINE_IN_RELEASE auto library_link(const palette& colours, const library_info& info) {
   const auto library = library_details(info);
   return settings_link(colours, std::format("{} · {} · {}", library.name, library.version, library.license),
                        icon::gear{}, open_library{std::string(library.id)});
@@ -63,7 +64,7 @@ inline const library_info* library_of(std::string_view id) {
   const auto found = std::ranges::find(about_data::libraries, id, &library_info::id);
   return found == about_data::libraries.end() ? nullptr : &*found;
 }
-inline auto about_view(const palette& colours) {
+MUX_INLINE_IN_RELEASE auto about_view(const palette& colours) {
   auto libraries = about_data::primary_libraries | std::views::transform([&](std::string_view id) {
         return library_link(colours, *library_of(id));
       }) | std::ranges::to<std::vector>();
@@ -77,7 +78,7 @@ inline auto about_view(const palette& colours) {
       about_words(colours, "Libraries"), skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(libraries)),
       about_words(colours, std::string(about_data::license_text))));
 }
-inline auto library_view(const palette& colours, std::string_view id) {
+MUX_INLINE_IN_RELEASE auto library_view(const palette& colours, std::string_view id) {
   const library_info missing{id, id, "Unknown", {}, "Unknown", {}, {}, {}};
   const auto* found = library_of(id);
   const auto library = library_details(found ? *found : missing);
@@ -98,11 +99,11 @@ inline auto library_view(const palette& colours, std::string_view id) {
 }
 
 // Settings' link to it, after the rest (mux.ui:settings_pages).
-inline auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return settings_link(colours, "About", icon::eye{}, open_about{});
 }
 // Its pages.
-inline auto extend(contract::settings_pages, const ui_needs& n, const about_page&) { return about_view(*n.colours); }
-inline auto extend(contract::settings_pages, const ui_needs& n, const library_page& page) { return library_view(*n.colours, page.name); }
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const ui_needs& n, const about_page&) { return about_view(*n.colours); }
+MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const ui_needs& n, const library_page& page) { return library_view(*n.colours, page.name); }
 
 }  // namespace mux::plugins::about

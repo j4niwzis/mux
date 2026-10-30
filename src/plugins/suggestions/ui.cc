@@ -4,6 +4,7 @@
 // follows a ':' -- six at most, the lit one marked; pressed, picked. As the
 // program says.
 module;
+#include "../../inline_in_release.h"
 #include "skiff/named.h"
 export module mux.plugin.suggestions.ui;
 
@@ -52,7 +53,7 @@ auto suggestion_row(const palette& colours, Pick pick, const suggestion& one) {
       two_lines(colours, one.title, one.sub, 14.0f, 1.0f)), one.title));
 }
 // Its list, over the composer (mux.ui:conversations_screen).
-inline auto extend(contract::composer_top, type_tag<feature>, const palette& colours) {
+MUX_INLINE_IN_RELEASE auto extend(contract::composer_top, type_tag<feature>, const palette& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(suggestions_for, c::shown_for<shown>([](const shown& now) { return !now.items.empty(); },
       c::projected<shown>([](const shown& now) { return now.items; },

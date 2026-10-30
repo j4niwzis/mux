@@ -135,11 +135,26 @@ struct part {
     this->show(said.in, std::move(title), std::move(text), decision.sound);
   }
 
-  // An invite come: said once a run -- who asked, and to what -- by the
-  // backend chosen, with the chime, as the settings say for its account.
+  // An invite come: said once -- who asked, and to what -- by the backend
+  // chosen, with the chime, as the settings say for its account. Once ever,
+  // not once a run: those told of are kept (invites_told), and on every
+  // start the first sync brings each invite still open again. Those of its
+  // account no longer open (joined, declined) let go of as one comes.
+  static constexpr std::size_t kInvitesKept = 200;
   void invite_came(const mux::conversation_id& in, const mux::invite_info& invite, const std::string& name) {
-    if (!invites_told_.insert(in).second)
+    const told_invite told{in.account.address, in.id};
+    if (std::ranges::contains(this->own().invites_told, told))
       return;
+    this->keep([&](kept& now) {
+      std::erase_if(now.invites_told, [&](const told_invite& one) {
+        const mux::conversation* chat = one.account == in.account.address ? s_->model->find(mux::conversation_id{in.account, one.room}) : nullptr;
+        return chat != nullptr && !chat->invite;
+      });
+      if (now.invites_told.size() >= kInvitesKept)
+        now.invites_told.erase(now.invites_told.begin());
+      now.invites_told.push_back(told);
+    });
+    (void)s_->kept->write();
     const auto decision = s_->kept->notify_for(in, true);
     if (!decision.popup) {
       this->sound_only(decision.sound);
@@ -376,7 +391,6 @@ struct part {
   bool pushing_ = false;
   std::vector<app::toast_due> toasts_due_;
   logic::notification_history messages_;
-  std::set<conversation_id> invites_told_;
   // Held apart: neither moves, and the part is moved into the program's.
   std::unique_ptr<platform::audio::chime> chime_ = std::make_unique<platform::audio::chime>();
   std::unique_ptr<platform::audio::speaker> sound_player_ = std::make_unique<platform::audio::speaker>();

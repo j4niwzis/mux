@@ -27,6 +27,14 @@ struct open_settings {};
 // one's own; and UnifiedPush -- off unless chosen: only then is the bus
 // asked, and the servers given a pusher -- with the connection's token, kept
 // across runs, and the endpoint the distributor gave for it.
+// An invite already told of: whose account, to which room -- kept, so that
+// one is told once, not again on every start (a tester's).
+struct told_invite {
+  std::string account;
+  std::string room;
+  friend bool operator==(const told_invite&, const told_invite&) = default;
+  friend consteval auto json_schema(knot::type<told_invite>) { return knot::schema<told_invite>(); }
+};
 struct kept {
   std::optional<std::string> sound_file;
   std::optional<bool> unified_push;
@@ -35,6 +43,7 @@ struct kept {
   // The distributor chosen, by its bus name (org.unifiedpush.Distributor.*);
   // none: the first there is.
   std::optional<std::string> push_distributor;
+  std::vector<told_invite> invites_told;
   friend bool operator==(const kept&, const kept&) = default;
   friend consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>(); }
 };

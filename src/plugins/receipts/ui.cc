@@ -29,7 +29,7 @@ inline auto readers_row(const palette& colours, const conversation& in, const st
                                                        .autoSize = scene::axes::kBoth}),
       c::many(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),
               users | std::views::take(kReadersShown) | std::views::transform([&](const std::string& user) {
-                return avatar_mark(avatar_of::person{}, user, sender_name(in, user), kReaderFace);
+                return face_spot(avatar_of::person{}, user, sender_name(in, user), kReaderFace);
               }) | std::ranges::to<std::vector>()),
       c::styled({.alignSelf = scene::align::kMiddle},
                 c::visible(users.size() > kReadersShown,

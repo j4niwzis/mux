@@ -28,7 +28,7 @@ inline auto mark_badge(const palette& colours, const std::string& who, const std
   return SKIFF_NAMED(mark_badge, c::row(
       c::hbox(4.0f, {.place = scene::anchor::kBottomRight, .x = -14.0f, .y = -2.0f, .autoSize = scene::axes::kBoth,
                      .padding = {2.0f, 6.0f, 2.0f, 3.0f}, .cornerRadius = 12.0f, .background = colours.sidebar}),
-      avatar_mark(avatar_of::person{}, who, name, 20.0f),
+      face_spot(avatar_of::person{}, who, name, 20.0f),
       c::styled({.alignSelf = scene::align::kMiddle},
                 nodes::Text(proto::is_media(key) ? std::string(":emoji:") : key, 15.0f, colours.text))));
 }

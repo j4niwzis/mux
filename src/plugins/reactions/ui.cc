@@ -50,7 +50,7 @@ inline auto reaction_chip(const palette& colours, const looks_shown& looks,
         // Overlap faces with one another, never with the reaction label.
         return c::styled({.margin = {0.0f, 0.0f, 0.0f, index == 0 ? 0.0f : -6.0f},
                           .border = scene::Border{own ? colours.accent : colours.tile, 1.5f}},
-                         avatar_mark(avatar_of::person{}, person.first, person.second, 20.0f));
+                         face_spot(avatar_of::person{}, person.first, person.second, 20.0f));
       }) | std::ranges::to<std::vector>();
   const auto tint = at_opacity(own ? colours.accent : colours.tile,
       element_opacity_of(looks.bubbles, &config::element_opacity::reactions));
@@ -71,19 +71,26 @@ inline auto reaction_chip(const palette& colours, const looks_shown& looks,
 }
 using reaction_chip_t = decltype(reaction_chip(std::declval<const palette&>(), std::declval<const looks_shown&>(),
     std::string{}, std::string{}, std::size_t{}, bool{}, std::declval<const std::vector<emote>&>()));
-using reaction_row = nodes::Flow<std::vector<reaction_chip_t>>;
-inline auto reaction_row_of() {
-  auto row = reaction_row({.direction = nodes::direction::horizontal{}, .spacingX = 4.0f, .spacingY = 4.0f}, {});
+// The chips, flowing in lines.
+template <class Chip>
+auto reaction_row_of(std::vector<Chip> chips) {
+  auto row = nodes::Flow<std::vector<Chip>>({.direction = nodes::direction::horizontal{}, .spacingX = 4.0f, .spacingY = 4.0f}, std::move(chips));
   row.apply({.autoSize = scene::axes::kBoth, .maxWidth = 430.0f, .margin = {4.0f, 0.0f, 2.0f, 0.0f}});
   return row;
 }
-inline auto& reaction_chips(reaction_row& row) { return std::get<0>(row.fChildren); }
-inline const auto& reaction_chips(const reaction_row& row) { return std::get<0>(row.fChildren); }
+// Chips that hold pieces (their faces, where faces go): a builder of the
+// row, built as they are.
+template <skiff::compose::a_builder Chip>
+auto reaction_row_of(std::vector<Chip> chips) {
+  return skiff::compose::lifted([](auto built) { return reaction_row_of(std::move(built)); }, std::move(chips));
+}
+using reaction_row = decltype(reaction_row_of(std::declval<std::vector<reaction_chip_t>>()));
 
 // How far the strip's last line goes, for the message's time beside it: its
-// last chip's right edge.
-inline float trailing_width(contract::message_trailers, type_tag<feature>, const reaction_row& row) {
-  const auto& chips = reaction_chips(row);
+// last chip's right edge -- on the row as it was built.
+template <class Row>
+float trailing_width(contract::message_trailers, type_tag<feature>, const Row& row) {
+  const auto& chips = std::get<0>(row.fChildren);
   return chips.empty() ? 0.0f : chips.back().bounds().fRight - row.bounds().fLeft;
 }
 
@@ -93,18 +100,17 @@ std::optional<reaction_row> extend(contract::message_trailers, type_tag<feature>
   const message& said = facts.said;
   if (std::ranges::none_of(said.reactions, [](const auto& one) { return !one.second.empty(); }))
     return std::nullopt;
-  auto made = reaction_row_of();
-  for (const auto& one : said.reactions | std::views::filter([](const auto& one) { return !one.second.empty(); })) {
-    const auto& [key, who] = one;
-    const auto shortcode = std::ranges::find_if(said.reaction_events, [&](const auto& event) {
-      return event.key == key && event.shortcode.has_value();
-    });
-    reaction_chips(made).push_back(reaction_chip(
-        facts.colours, facts.looks, facts.message_id, key, who.size(), who.contains(said.in.account.address), facts.in.emotes,
-        who | std::views::transform([&](const std::string& person) { return std::pair{person, sender_name(facts.in, person)}; }) | std::ranges::to<std::vector>(),
-        shortcode == said.reaction_events.end() ? std::nullopt : shortcode->shortcode));
-  }
-  return made;
+  return reaction_row_of(said.reactions | std::views::filter([](const auto& one) { return !one.second.empty(); }) |
+                         std::views::transform([&](const auto& one) {
+                           const auto& [key, who] = one;
+                           const auto shortcode = std::ranges::find_if(said.reaction_events, [&](const auto& event) {
+                             return event.key == key && event.shortcode.has_value();
+                           });
+                           return reaction_chip(
+                               facts.colours, facts.looks, facts.message_id, key, who.size(), who.contains(said.in.account.address), facts.in.emotes,
+                               who | std::views::transform([&](const std::string& person) { return std::pair{person, sender_name(facts.in, person)}; }) | std::ranges::to<std::vector>(),
+                               shortcode == said.reaction_events.end() ? std::nullopt : shortcode->shortcode);
+                         }) | std::ranges::to<std::vector>());
 }
 
 // Reactions, in a message's menu: how many, and who, listed.

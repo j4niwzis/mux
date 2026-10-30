@@ -225,7 +225,9 @@ struct plugin_trailers<plugin_list<Features...>> {
     skia::SkRect bounds;
     float width = 0.0f;
   };
-  static std::optional<end> last(const nodes_t& slots) {
+  // On the slots as built: what a plugin made may be a builder (its faces).
+  template <class Slots>
+  static std::optional<end> last(const Slots& slots) {
     std::optional<end> found;
     [&]<std::size_t... At>(std::index_sequence<At...>) {
       ((std::get<At>(slots) && std::get<At>(slots)->visible()

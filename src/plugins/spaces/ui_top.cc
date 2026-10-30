@@ -255,7 +255,9 @@ auto side_spaces_for(const auto& colours, Pick pick, bool horizontal) {
     return ((horizontal ? now.top_bar : now.side_bar)) | std::views::transform([&](const auto& entry) {
       return std::pair{entry.item, side_space_view{entry.folder, now.account, entry.key, entry.name, entry.chosen, entry.size}};
     }) | std::ranges::to<std::vector>();
-  }, c::reorder_lane<Lane>(std::move(line)));
+  // Marked concrete in every build (reorder_lane's is held outside a release
+  // one): what reads the list's items into it reads them into its rows.
+  }, c::marked_as<Lane>(std::move(line)));
 }
 
 auto side_space_popup(const auto& colours) {
@@ -286,14 +288,14 @@ template <class B> auto side_scrolled(B line) {
   return skiff::compose::lifted([](auto built) { return skiff::compose::SideScroll(std::move(built), true); }, std::move(line));
 }
 template <class P> auto bar_lane_view(const P& colours) {
-  return skiff::compose::reorder_lane<space_bar_view>(side_scrolled(side_spaces_for<space_bar_rows>(colours, side_pick_folder{}, true)));
+  return skiff::compose::marked_as<space_bar_view>(side_scrolled(side_spaces_for<space_bar_rows>(colours, side_pick_folder{}, true)));
 }
 template <class P> auto list_lane_view(const P& colours) {
-  return skiff::compose::reorder_lane<space_list_view>(skiff::compose::scrolled(side_spaces_for<space_list_rows>(colours, side_pick_folder{}, false)));
+  return skiff::compose::marked_as<space_list_view>(skiff::compose::scrolled(side_spaces_for<space_list_rows>(colours, side_pick_folder{}, false)));
 }
 // A lane as it is built under the rules: its mark over what it marks, built.
 template <class Tag, class B, class Rules>
-using built_lane = skiff::compose::LaneMark<Tag, skiff::compose::part_t<decltype(skiff::compose::built(std::declval<B>(), std::declval<const Rules&>()))>>;
+using built_lane = skiff::compose::LaneMark<Tag, decltype(skiff::compose::built(std::declval<B>(), std::declval<const Rules&>()))>;
 // The folder bar, where it is shown: in the head, or under the search field
 // where the bars are big.
 auto side_space_bar(const auto& colours, bool big) {

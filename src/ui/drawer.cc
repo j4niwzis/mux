@@ -18,7 +18,7 @@ import mux.config;
 import mux.ui.base;
 // Its rows' text, pieces the plugins shape where they are put (a::part).
 import mux.ui.lists;
-import :shaping;
+import mux.ui.shaping;
 import mux.plugins.ui;
 import :accounts;
 

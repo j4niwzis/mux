@@ -23,7 +23,7 @@ import mux.plugins.types;
 import mux.ui.base;
 // Its rows' text, pieces the plugins shape where they are put (a::part).
 import mux.ui.lists;
-import :shaping;
+import mux.ui.shaping;
 import mux.plugins.ui.top;
 import mux.ui.proto;
 import mux.ui.messages;

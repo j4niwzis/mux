@@ -4,6 +4,7 @@
 module mux.app.program;
 
 import mux.ui;
+import mux.ui.shaping;
 
 namespace mux::app {
 app::app(const mux::ui::palette& theme_colours, const mux::ui::window_look_t& window)

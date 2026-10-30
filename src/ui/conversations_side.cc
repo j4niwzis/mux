@@ -29,7 +29,7 @@ import mux.ui.lists;
 import mux.ui.messages;
 import :header;
 // What the plugins shape a piece with, where it is put (a::part).
-import :shaping;
+import mux.ui.shaping;
 import :info_explore;
 
 export namespace mux::ui {

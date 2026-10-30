@@ -14,7 +14,6 @@ export import mux.ui.base;
 export import mux.ui.messages;
 
 export import mux.ui.lists;
-export import :shaping;
 export import :header;
 export import :info;
 export import :conversations;

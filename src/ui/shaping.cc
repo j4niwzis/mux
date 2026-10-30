@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.ui:shaping -- The plugins' rules (contract::shapes) gathered, in plugin
+// mux.ui.shaping -- The plugins' rules (contract::shapes) gathered, in plugin
 // order, and applied where a piece is put into its parent: a::part(piece,
 // arguments...) makes the piece and hands it, with the same arguments, to
-// every rule on it in turn. Here, above every plugin's UI_TOP layer: what can
-// call it sees every plugin -- a module under them that tried would be an
-// import cycle -- so a piece is shaped the same wherever it is put.
-export module mux.ui:shaping;
+// every rule on it in turn. A module of its own, above every plugin's UI_TOP
+// layer: what imports it sees every plugin -- a module under them that tried
+// would be an import cycle -- so a piece is shaped the same wherever it is
+// put; and the modules that put pieces together above the plugins -- each
+// small, of its own, not mux.ui grown -- import it.
+export module mux.ui.shaping;
 
 import std;
 import skiff.scene;

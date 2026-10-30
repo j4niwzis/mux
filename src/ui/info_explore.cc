@@ -18,7 +18,7 @@ import mux.logic.links;
 import mux.ui.base;
 // Its rows' text, pieces the plugins shape where they are put (a::part).
 import mux.ui.lists;
-import :shaping;
+import mux.ui.shaping;
 export namespace mux::ui {
 // The room an address typed names: one its protocol joins at once, else the
 // room a link to it names.

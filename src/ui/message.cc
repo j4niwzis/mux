@@ -1241,33 +1241,52 @@ auto bubble_of(const auto& n, const auto& in, const auto& f, const auto* now) {
 // swipe shows, the unread bar over it, who has read it under it. Swiped
 // left, it is answered; washed while it is selected, flashed where a jump
 // went to it; coming in moving where it has just come (arrives).
+// A message's bubble in its line -- the line across the row it is put in,
+// where it is on it -- a piece the plugins shape where its row is built
+// (skiff.compose's piece): what a rule on it sees, who sent it -- and
+// whether a face goes beside it (a group's, someone else's, not a line of
+// the room's), shown on the last of a run, at the looks' opacity. The face
+// is the avatars plugin's; the core keeps none, and no room for one.
+struct sender_face_facts {
+  std::string sender;
+  std::string name;
+  bool with_face = false;
+  bool shown = false;
+  float opacity = 1.0f;
+};
+inline constexpr struct bubble_piece_fn : skiff::compose::piece<bubble_piece_fn> {
+  using facts_type = sender_face_facts;
+  static sender_face_facts facts(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model*) {
+    const message& said = f.said;
+    const bool with_face = is_group(in) && !said.outgoing && !said.service;
+    return {said.sender, sender_name(in, said.sender), with_face, with_face && f.last,
+            static_cast<float>(element_opacity_of(n.looks->bubbles, &config::element_opacity::avatars)) / 100.0f};
+  }
+  auto make(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model* now) const {
+    namespace c = skiff::compose;
+    const message& said = f.said;
+    const bool as_lines = spl::visit(spl::overloaded{[](proto::part::style::lines) { return true; }, [](proto::part::style::bubbles) { return false; }},
+                                     proto::message_style(protocol_state_of(*n.shared, in.id.account)));
+    const nodes::Justify justify = said.service                    ? nodes::Justify{nodes::justify::middle{}}
+                                   : said.outgoing && !as_lines ? nodes::Justify{nodes::justify::end{}}
+                                                                : nodes::Justify{nodes::justify::start{}};
+    return c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
+                                              .padding = {f.first ? 8.0f : 1.0f, 0.0f, 1.0f, 0.0f}}),
+                               justify),
+                  bubble_of(n, in, f, now));
+  }
+} bubble_piece{};
+
 auto message_row(const bubble_needs& n, const conversation& in, const bubble_facts& f, const model* now, bool arrives) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const looks_shown& looks = *n.looks;
   const message& said = f.said;
-  const bool group = is_group(in);
-  const bool as_lines = spl::visit(spl::overloaded{[](proto::part::style::lines) { return true; }, [](proto::part::style::bubbles) { return false; }},
-                                   proto::message_style(protocol_state_of(*n.shared, in.id.account)));
   // As tdesktop: a sender's messages one under the other nearly touch; where
-  // the sender changes, a gap. The avatar hangs at the row's bottom left, out
-  // of its flow, the row keeping its width on the left.
-  const bool with_face = group && !said.outgoing && !said.service;
-  const bool face_shown = with_face && f.last;
-  auto face = c::visible(with_face, c::styled({.place = scene::anchor::kBottomLeft, .x = -(kBubbleAvatar + 8.0f), .y = -1.0f,
-                                               .alpha = face_shown ? static_cast<float>(element_opacity_of(looks.bubbles, &config::element_opacity::avatars)) / 100.0f
-                                                                   : 0.0f},
-                                              c::onPress(open_face{said.sender, face_shown},
-                                                         avatar_mark(avatar_of::person{}, said.sender, sender_name(in, said.sender), kBubbleAvatar),
-                                                         sender_name(in, said.sender))));
-  const nodes::Justify justify = said.service                    ? nodes::Justify{nodes::justify::middle{}}
-                                 : said.outgoing && !as_lines ? nodes::Justify{nodes::justify::end{}}
-                                                              : nodes::Justify{nodes::justify::start{}};
+  // the sender changes, a gap. The bubble a piece (bubble_piece): a sender's
+  // face beside it is a plugin's rule's (avatars).
   auto inner = c::onClickAt(reaction_line_press{is_reaction_line(said) ? said.replies_to : std::nullopt, said.id},
-                            c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
-                                                               .padding = {f.first ? 8.0f : 1.0f, 0.0f, 1.0f, with_face ? kBubbleAvatar + 8.0f : 0.0f}}),
-                                                justify),
-                                   std::move(face), bubble_of(n, in, f, now)));
+                            bubble_piece(n, in, f, now));
   auto mark = c::styled({.place = scene::anchor::kCentreRight, .x = -6.0f, .width = 28.0f, .height = 28.0f, .cornerRadius = 14.0f,
                          .background = colours.tile, .alpha = 0.0f},
                         nodes::Icon(shape_of(icon::back{}), colours.dim));
@@ -1285,15 +1304,15 @@ auto message_row(const bubble_needs& n, const conversation& in, const bubble_fac
   // with a picture or a file (a loader turns in it while it comes, a picture
   // may move), nor a frosted one (its backdrop is where it is on the screen).
   const bool frosted = frosts(looks.bubbles);
-  auto row = c::onRightPressAt(row_menu{n, in.id, said, f.version}, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
+  // Not shown where the chat's settings say so: kept, and out of the flow.
+  auto row = c::visible(!said.service || f.events_shown, c::recorded(
+      c::onRightPressAt(row_menu{n, in.id, said, f.version}, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
                                       .padding = {f.unread_start ? kUnreadBarHeight + 6.0f : 0.0f, 0.0f,
                                                   footer > 0.0f ? footer + 2.0f : 0.0f, 0.0f}}),
                        c::swiped(kSwipeToReply, 120.0f, sends<request::reply_to>{{said.id, said.body.plain}}, swipe_shown{&colours},
                                  std::move(mark), std::move(inner)),
-                       std::move(unread), std::move(footers)));
-  skiff::compose::state_of(row).setRecorded(!said.attachment && said.album.empty() && !frosted);
-  // Not shown where the chat's settings say so: kept, and out of the flow.
-  row.setVisible(!said.service || f.events_shown);
+                       std::move(unread), std::move(footers))),
+      !said.attachment && said.album.empty() && !frosted));
   return SKIFF_NAMED(message_row, c::washed_for<message_marks>(colours.accent, 56.0f, 80.0f,
       [id = said.id](const message_marks& marks) {
         return skiff::compose::Wash{.held = marks.previewed ? marks.previewed->contains(id) : marks.selected.contains(id),

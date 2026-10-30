@@ -21,6 +21,8 @@ import skiff.model;
 import skiff.bind;
 import mux.plugins.types;
 import mux.ui.base;
+// The program's rules, what a dialog's pieces are built under.
+import mux.ui.shaping;
 import mux.plugins.ui.top;
 import mux.ui.proto;
 import :header;
@@ -501,7 +503,7 @@ void told(Content&, const Facts&) {}
 template <class Content, class Needs, class Facts>
   requires requires(const Needs& needs, const Facts& facts) { make_content(needs, facts); }
 [[nodiscard]] Content content_made(std::type_identity<Content>, const Needs& needs, const Facts& facts) {
-  Content made = make_content(needs, facts);
+  Content made = a::built_any(make_content(needs, facts));
   told(made, facts);
   return made;
 }
@@ -694,8 +696,10 @@ struct plugin_dialogs<type_list<dialog_entry<Features, Facts>...>> {
   static auto box_of() {
     return extend(contract::window_dialogs{}, type_tag<Feature>{}, type_tag<Of>{});
   }
+  // What the dialog holds: its box, built where it is a builder (it holds
+  // pieces, built under the program's rules).
   template <class Feature, class Of>
-  using box_t = typename decltype(box_of<Feature, Of>())::type;
+  using box_t = decltype(a::built_any(std::declval<typename decltype(box_of<Feature, Of>())::type>()));
   static auto made(const ui_needs& n) {
     return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), shown_made<box_t<Features, Facts>, Facts>(n)...);
   }

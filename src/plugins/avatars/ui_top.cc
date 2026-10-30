@@ -11,6 +11,8 @@ import mux.core;
 import mux.composition;
 import mux.ui.base;
 import mux.ui.lists;
+// The message bubbles lines, what a face is put beside.
+import mux.ui.messages;
 import mux.plugin.avatars.types;
 
 export namespace mux::plugins::avatars {
@@ -37,6 +39,21 @@ struct picture_beside {
                   c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(Kind{}, facts.id, facts.name, size)), std::move(text));
   }
 };
+// A sender's face beside their bubble's line, as the core drew it: the line
+// moved in by the face's room, the face hung at its bottom left in that room
+// -- shown on a run's last, at the looks' opacity; pressed, their card.
+struct face_beside {
+  auto operator()(auto line, const sender_face_facts& f) const {
+    namespace c = skiff::compose;
+    const float room = f.with_face ? kBubbleAvatar + 8.0f : 0.0f;
+    return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 0.0f, room}}),
+                     std::move(line),
+                     c::visible(f.with_face, c::styled({.place = scene::anchor::kBottomLeft, .x = -(kBubbleAvatar + 8.0f), .y = -1.0f,
+                                                        .alpha = f.shown ? f.opacity : 0.0f},
+                                                       c::onPress(open_face{f.sender, f.shown},
+                                                                  avatar_mark(avatar_of::person{}, f.sender, f.name, kBubbleAvatar), f.name))));
+  }
+};
 // The chat list's chats, the search's results, the drawer's accounts, who
 // read a message, a directory's rooms: each its picture beside its text.
 constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
@@ -45,7 +62,8 @@ constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
          on<found_row_text_fn>(around(found_picture{})) |
          on<drawer_account_text_fn>(around(picture_beside<avatar_of::person>{38.0f, 14.0f})) |
          on<reader_text_fn>(around(picture_beside<avatar_of::person>{30.0f, 14.0f})) |
-         on<directory_room_text_fn>(around(picture_beside<avatar_of::chat>{40.0f, 12.0f}));
+         on<directory_room_text_fn>(around(picture_beside<avatar_of::chat>{40.0f, 12.0f})) |
+         on<bubble_piece_fn>(around(face_beside{}));
 }
 
 }  // namespace mux::plugins::avatars

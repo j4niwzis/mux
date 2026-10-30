@@ -35,8 +35,13 @@ inline auto panel(const ui_needs& n, const shown& facts) {
   auto rows = versions | std::views::transform([&](const message& event) {
     return version_row(n, chat, event, facts.known);
   }) | std::ranges::to<std::vector>();
-  auto list = dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)));
-  list.scrollToEnd(false);
+  // The newest version in view as it opens: scrolled to its end, as it is
+  // built (its rows hold pieces).
+  auto list = skiff::compose::lifted([](auto many) {
+    auto made = dialog_list(std::move(many));
+    made.scrollToEnd(false);
+    return made;
+  }, c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)));
   return SKIFF_NAMED(panel, c::column(list_dialog(560.0f),
       page_header<no_back, sends<request::close_shown<shown>>>(*n.colours, "Edit History", {}, {}, false, true), std::move(list)));
 }

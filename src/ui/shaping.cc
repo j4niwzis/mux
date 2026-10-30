@@ -30,6 +30,16 @@ template <class B>
 auto built(B builder) {
   return std::move(builder).build(program);
 }
+// What a contract gave, built where it is a builder (it holds pieces); as it
+// is where it is a node.
+template <class T>
+T built_any(T node) {
+  return node;
+}
+template <skiff::compose::a_builder B>
+auto built_any(B builder) {
+  return built(std::move(builder));
+}
 // As the program starts, outside a release build: the rules in skiff's table.
 inline void register_all() {
   if constexpr (skiff::scene::kErasedCombinators)

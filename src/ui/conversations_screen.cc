@@ -28,6 +28,8 @@ import mux.kept_root;
 import skiff.model;
 import mux.plugins.types;
 import mux.ui.base;
+// The program's rules, what the pieces under it are built under.
+import mux.ui.shaping;
 import mux.plugins.ui.top;
 import mux.ui.proto;
 import mux.ui.lists;
@@ -228,7 +230,8 @@ inline auto chat_column(const ui_needs& n) {
       selection_bar(n),
       column_parts_t::column_of(n),
       protocol_view_for<head_view_holder, make_head_of>(n),
-      c::shown_for<chat_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, chat_area(n))),
+      // The messages, built under the program's rules (their bubbles pieces).
+      c::shown_for<chat_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, a::built(chat_area(n)))),
       composer_top_plugins::made(*n.colours),
       composer_banner_for(*n.colours),
       protocol_view_for<composer_view_holder, make_composer_of>(n),
@@ -313,10 +316,13 @@ struct beside_panel_list;
 template <class... Features>
 struct beside_panel_list<plugin_list<Features...>> {
   template <class Feature>
-  static auto panel_of(const ui_needs& n) -> decltype(extend(contract::beside_panels{}, type_tag<Feature>{}, n)) {
+  // Built here, where the program's rules are known: a panel that holds
+  // pieces (the threads', its messages) comes as a builder.
+  template <class Feature>
+  static auto panel_of(const ui_needs& n) -> decltype(a::built_any(extend(contract::beside_panels{}, type_tag<Feature>{}, n))) {
     static_assert(requires { extend(contract::beside_panels{}, type_tag<Feature>{}, n); },
                   composition::broken<contract::beside_panels, Feature>());
-    return extend(contract::beside_panels{}, type_tag<Feature>{}, n);
+    return a::built_any(extend(contract::beside_panels{}, type_tag<Feature>{}, n));
   }
   static auto made(const ui_needs& n) {
     return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillY = true}), panel_of<Features>(n)...);

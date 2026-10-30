@@ -295,8 +295,9 @@ struct make_bubble_row {
 // Where in a row the stretch of its text a quote of it pointed at is: what a
 // jump with a quote aims at -- its words found by their mark.
 struct locate_in_row {
-  std::optional<float> operator()(const message_row_t& row, const std::string& fragment) const {
-    const bubble_words_t* text = words_in(const_cast<message_row_t&>(row));
+  template <class Row>
+  std::optional<float> operator()(const Row& row, const std::string& fragment) const {
+    const bubble_words_t* text = words_in(const_cast<Row&>(row));
     if (!text)
       return std::nullopt;
     const auto at = std::string_view(text->text()).find(fragment);
@@ -311,23 +312,31 @@ struct locate_in_row {
 // Rows being selected: a press on one selects it or lets it go, a drag
 // across them a span of them (the list's ListSpan).
 inline constexpr auto selecting = [](const message_marks& marks) { return !marks.selected.empty(); };
+// A builder: built where the program's rules are known -- the chat's column,
+// the threads' panel built where it is put -- its rows then built under them.
 template <class Want, class Tag>
 auto timeline_list() {
-  namespace c = skiff::compose;
-  auto list = c::WindowFrom<timeline_rows, chats_model, std::string, bubble_facts, message_row_t, make_bubble_row, locate_in_row, Tag>(
-      make_bubble_row{});
-  list.setCopiesOnScroll(false);
-  // The window filling the box spanned_for puts it in: a scroll view has no
-  // size of its own, and said none it was laid out 0 by 0 -- its rows made,
-  // every one 0 wide, and the chat empty.
-  list.apply({.fill = true});
-  std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY,
-                                      .padding = {8.0f, kListSide, 8.0f, kListSide}});
-  // The selection's wrapper kept concrete -- the name on the list inside it:
-  // named, the wrapper was held through a table outside a release build,
-  // and held so it never took a press on a row (a click in selection mode
-  // selected nothing; a drag neither).
-  return c::spanned_for<message_marks>(selecting, SKIFF_NAMED(timeline_list, skiff::bind::Bound<Want, decltype(list)>(std::move(list))));
+  return skiff::compose::Builder{[]<class Rules>(const Rules& rules) {
+    namespace c = skiff::compose;
+    // Its rows built under the rules it is built under: each row a builder
+    // (its bubble a piece), made into a row as the list makes it.
+    using maker = c::built_maker<make_bubble_row, Rules>;
+    using row_t = c::built_row_t<make_bubble_row, Rules, bubble_item>;
+    auto list = c::WindowFrom<timeline_rows, chats_model, std::string, bubble_facts, row_t, maker, locate_in_row, Tag>(
+        maker{make_bubble_row{}, rules});
+    list.setCopiesOnScroll(false);
+    // The window filling the box spanned_for puts it in: a scroll view has no
+    // size of its own, and said none it was laid out 0 by 0 -- its rows made,
+    // every one 0 wide, and the chat empty.
+    list.apply({.fill = true});
+    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY,
+                                        .padding = {8.0f, kListSide, 8.0f, kListSide}});
+    // The selection's wrapper kept concrete -- the name on the list inside it:
+    // named, the wrapper was held through a table outside a release build,
+    // and held so it never took a press on a row (a click in selection mode
+    // selected nothing; a drag neither).
+    return c::spanned_for<message_marks>(selecting, SKIFF_NAMED(timeline_list, skiff::bind::Bound<Want, decltype(list)>(std::move(list))));
+  }};
 }
 
 // The loader's cross: the message jumped to no longer looked for.

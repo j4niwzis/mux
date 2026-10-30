@@ -215,6 +215,11 @@ template <class Contract>
 using rows_of = row_list<Contract, composition::providers<Contract, enabled_plugins>>;
 using choice_row_plugins = rows_of<contract::choice_rows>;
 
+// Rows that hold pieces: a builder of the list, built as they are.
+template <skiff::compose::a_builder Rows> [[nodiscard]] auto dialog_list(Rows rows) {
+  return skiff::compose::lifted([](auto built) { return dialog_list(std::move(built)); }, std::move(rows));
+}
+
 // Where what a page has by its type alone is not there: nothing in its
 // place -- known while compiling, not hidden.
 inline auto nothing_shown() {
@@ -413,6 +418,7 @@ struct card_facts {
       0.0f,
       {.fillX = true, .height = height, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
 }
+template <skiff::compose::a_builder Rows> [[nodiscard]] auto dialog_list(Rows rows);
 template <class Rows> [[nodiscard]] auto dialog_list(Rows rows) {
   return skiff::compose::styled(
       {.fillX = true, .grow = scene::axes::kY},

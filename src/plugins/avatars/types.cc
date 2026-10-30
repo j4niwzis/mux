@@ -13,7 +13,5 @@ struct feature {
   static constexpr std::string_view name = "avatars";
 };
 consteval bool provides(contract::shapes, type_tag<feature>) { return true; }
-// The sender's face beside their messages, where the core places it.
-consteval bool provides(contract::message_faces, type_tag<feature>) { return true; }
 
 }  // namespace mux::plugins::avatars

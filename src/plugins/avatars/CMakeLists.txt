@@ -5,5 +5,4 @@
 mux_plugin(avatars ORDER 5
   SUMMARY "Avatars: a chat's picture beside its row in the list, put there by a rule on the row's text (the core draws none of its own)."
   TYPES  types.cc
-  UI     ui.cc
   UI_TOP ui_top.cc)

@@ -91,11 +91,9 @@ inline auto info_head(const palette& colours, const info_view& shown) {
               shown.addresses | std::views::transform([&](const std::string& address) { return id_line(colours, address, "", "Address"); }) | std::ranges::to<std::vector>()),
       id_line(colours, shown.key, shown.copied)));
 }
-// Built where it is mounted, under the program's rules: the panel a node.
-inline auto info_head_built(const palette& colours, const info_view& shown) {
-  return a::built(info_head(colours, shown));
-}
-using info_head_t = decltype(info_head_built(std::declval<const palette&>(), std::declval<const info_view&>()));
+// A builder (its heading a piece): mounted, made under the rules the panel
+// is built under.
+using info_head_t = decltype(info_head(std::declval<const palette&>(), std::declval<const info_view&>()));
 // The members' head: how many, and a way to invite where one may.
 struct info_members_heading {
   std::size_t count = 0;
@@ -153,11 +151,14 @@ struct info_member_row {
   const palette* colours = nullptr;
   auto operator()(const std::tuple<std::string, info_member>& item) const {
     const info_member& one = std::get<1>(item);
-    return a::built(member_row(*colours, one.who, one.how));
+    return member_row(*colours, one.who, one.how);
   }
 };
-using info_member_row_t = decltype(a::built(member_row(std::declval<const palette&>(), std::declval<const member&>(), "")));
-using info_member_rows_t = nodes::MemoRows<std::string, info_member, info_member_row_t, info_member_row>;
+// The rows builders (their text pieces): kept by their keys, made under the
+// rules the panel is built under.
+inline auto info_member_rows(const palette& colours) {
+  return skiff::compose::memo_rows<std::string, info_member, std::tuple<std::string, info_member>>(info_member_row{&colours}, nodes::Stack{});
+}
 
 // The panel: its column, and its left edge. Near the end of the members
 // made, with more, it asks for the next few (request::info_more).
@@ -172,9 +173,9 @@ inline auto info_panel(const ui_needs& n) {
             return c::Fetched<conversation_id>{now.heading.room, now.members.size(), now.more};
           },
               sends<request::info_more>{},
-              nodes::ScrollContainer(c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::scrolled(c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   c::projected<info_shown>([](const info_shown& now) { return std::optional(now.head); },
-                      c::mount<info_head_t, info_view>([at = &colours](const info_view& view) { return std::tuple{info_head_built(*at, view)}; },
+                      c::mount<info_head_t, info_view>([at = &colours](const info_view& view) { return std::tuple{info_head(*at, view)}; },
                                                        {.fillX = true, .autoSize = scene::axes::kY})),
                   // Its files, as Element X's Files: what it holds that is
                   // a file -- not to go to another client for them (a
@@ -200,7 +201,7 @@ inline auto info_panel(const ui_needs& n) {
                       c::projected<info_shown>([](const info_shown& now) {
                         return now.members | std::views::transform([](const info_member& one) { return std::tuple{one.who.id, one}; }) | std::ranges::to<std::vector>();
                       },
-                          c::styled({.fillX = true, .autoSize = scene::axes::kY}, info_member_rows_t(info_member_row{&colours}))))))))),
+                          c::styled({.fillX = true, .autoSize = scene::axes::kY}, info_member_rows(colours))))))))),
       c::styled({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f}, nodes::Box<>(colours.band))));
 }
 using info_panel_t = decltype(info_panel(std::declval<const ui_needs&>()));

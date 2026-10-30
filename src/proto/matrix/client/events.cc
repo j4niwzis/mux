@@ -129,6 +129,11 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       if (!original->filename)
         original->filename = content.filename;
     }
+    // A gallery whose mark carries no items -- mux's own forwards before the
+    // mark's content had them, and any client's that drops them: the
+    // message's own items, which are the gallery's.
+    if (original && !original->itemtypes)
+      original->itemtypes = content.itemtypes;
     const loom::ev::m_room_message_content_t& shown = original ? *original : content;
     message made{.in = in,
                  .id = one.event_id,

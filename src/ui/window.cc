@@ -740,12 +740,12 @@ struct plugin_layers;
 template <class... Features>
 struct plugin_layers<plugin_list<Features...>> {
   template <class Feature>
-  // Built here, under the program's rules: a layer that holds pieces (the
-  // viewer's sender's face) comes as a builder.
-  static auto made_of(const ui_needs& n) -> decltype(a::built_any(extend(contract::window_layers{}, type_tag<Feature>{}, n))) {
+  // A builder where it holds pieces (the viewer's sender's face): built
+  // with the window.
+  static auto made_of(const ui_needs& n) -> decltype(extend(contract::window_layers{}, type_tag<Feature>{}, n)) {
     static_assert(requires { extend(contract::window_layers{}, type_tag<Feature>{}, n); },
                   composition::broken<contract::window_layers, Feature>());
-    return a::built_any(extend(contract::window_layers{}, type_tag<Feature>{}, n));
+    return extend(contract::window_layers{}, type_tag<Feature>{}, n);
   }
   static auto made(const ui_needs& n) {
     return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),

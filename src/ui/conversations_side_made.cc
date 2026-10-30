@@ -10,6 +10,8 @@ import mux.ui.base;
 
 namespace mux::ui {
 skiff::compose::Held side_column_held(const ui_needs& needs) {
-  return skiff::compose::Held(skiff::compose::erased(side_column(needs)));
+  // Outside a release build a piece's rules are the table's: what holds
+  // pieces (the chats' rows, the spaces' faces) is built here under it.
+  return skiff::compose::Held(skiff::compose::erased(skiff::compose::built(side_column(needs), skiff::compose::table_rules{})));
 }
 }  // namespace mux::ui

@@ -75,12 +75,12 @@ struct composer_top_list;
 template <class... Features>
 struct composer_top_list<plugin_list<Features...>> {
   template <class Feature>
-  // Built here, under the program's rules: one that holds pieces (the
-  // suggestions' faces) comes as a builder.
-  static auto node_of(const palette& colours) -> decltype(a::built_any(extend(contract::composer_top{}, type_tag<Feature>{}, colours))) {
+  // A builder where it holds pieces (the suggestions' faces): built with
+  // the window.
+  static auto node_of(const palette& colours) -> decltype(extend(contract::composer_top{}, type_tag<Feature>{}, colours)) {
     static_assert(requires { extend(contract::composer_top{}, type_tag<Feature>{}, colours); },
                   composition::broken<contract::composer_top, Feature>());
-    return a::built_any(extend(contract::composer_top{}, type_tag<Feature>{}, colours));
+    return extend(contract::composer_top{}, type_tag<Feature>{}, colours);
   }
   static auto made(const palette& colours) {
     return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), node_of<Features>(colours)...);
@@ -317,13 +317,13 @@ template <class List>
 struct beside_panel_list;
 template <class... Features>
 struct beside_panel_list<plugin_list<Features...>> {
-  // Built here, where the program's rules are known: a panel that holds
-  // pieces (the threads', its messages) comes as a builder.
+  // A builder where it holds pieces (the threads', its messages): built
+  // with the window.
   template <class Feature>
-  static auto panel_of(const ui_needs& n) -> decltype(a::built_any(extend(contract::beside_panels{}, type_tag<Feature>{}, n))) {
+  static auto panel_of(const ui_needs& n) -> decltype(extend(contract::beside_panels{}, type_tag<Feature>{}, n)) {
     static_assert(requires { extend(contract::beside_panels{}, type_tag<Feature>{}, n); },
                   composition::broken<contract::beside_panels, Feature>());
-    return a::built_any(extend(contract::beside_panels{}, type_tag<Feature>{}, n));
+    return extend(contract::beside_panels{}, type_tag<Feature>{}, n);
   }
   static auto made(const ui_needs& n) {
     return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillY = true}), panel_of<Features>(n)...);

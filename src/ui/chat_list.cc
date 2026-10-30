@@ -16,6 +16,8 @@ import mux.core;
 import mux.config;
 import mux.ui.base;
 import mux.ui.messages;
+// The plugins that shape a row (contract::shape<views::chat_row>), seen where it is made.
+import mux.plugins.ui;
 
 export namespace mux::ui {
 
@@ -221,15 +223,17 @@ inline auto conversation_row(const ui_needs& needs, const conversation& one,
                   .height = conversation_height(one),
                   .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen,
                   .selectedBackground = colours.selected, .focusBackground = colours.chosen, .selected = view.chosen}),
-                  avatar_mark(avatar_of::chat{}, one.id.id, view.name, 46.0f),
-                  c::column(c::vbox(6.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
-                                           .alignSelf = scene::align::kMiddle}),
-                      name_time_line(view.name, preview.time, view.chosen ? colours.selected_text : colours.text,
-                                     view.chosen ? colours.selected_text : colours.dim, 13.0f),
-                      c::visible(preview.topic.has_value(), c::styled({.fillX = true},
-                          elided(nodes::Text(preview.topic.value_or(""), 13.0f,
-                                            view.chosen ? colours.selected_text : colours.text)))),
-                      chat_preview_line(needs, one, view, preview)),
+                  // Its text, a piece plugins shape (views::chat_row): its
+                  // picture is the avatars plugin's, put beside it.
+                  SKIFF_NAMED_OF(views::chat_row, chat_row_text, (views::chat_row_facts{one.id.id, view.name}),
+                      c::column(c::vbox(6.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
+                                               .alignSelf = scene::align::kMiddle}),
+                          name_time_line(view.name, preview.time, view.chosen ? colours.selected_text : colours.text,
+                                         view.chosen ? colours.selected_text : colours.dim, 13.0f),
+                          c::visible(preview.topic.has_value(), c::styled({.fillX = true},
+                              elided(nodes::Text(preview.topic.value_or(""), 13.0f,
+                                                view.chosen ? colours.selected_text : colours.text)))),
+                          chat_preview_line(needs, one, view, preview))),
                   c::visible(view.strip.has_value(), c::styled(
                       {.place = scene::anchor::kCentreLeft, .x = -8.0f, .width = 4.0f, .height = 38.0f, .cornerRadius = 2.0f},
                       nodes::Box<>(view.strip.value_or(0u))))), view.name))));

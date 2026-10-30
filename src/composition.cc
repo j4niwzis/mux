@@ -26,7 +26,33 @@ struct plugin_list {};
 // The contracts the client's own parts own, named low enough that a
 // plugin's types can say they provide them; each what it asks is said where
 // it is used.
+// The pieces of the window a plugin may shape (contract::shape): each a tag
+// type -- a name, never laid out -- declared here, the piece written as it
+// is with it beside its name (SKIFF_NAMED_AS / SKIFF_NAMED_OF), and what it
+// is made from where a plugin needs it. A piece is one where it is a
+// template made where the plugins are seen (the window, a list): a plugin
+// on a piece that is not fails to compile, never silently.
+namespace views {
+// A chat's row in the list: its text -- its name and time, its topic, its
+// last message -- as it stands in the row (mux.ui.lists:chat_list).
+struct chat_row;
+struct chat_row_facts {
+  std::string id;    // the chat's ID, in its account
+  std::string name;  // as the list says it
+};
+}  // namespace views
+
 namespace contract {
+// A piece of the window, shaped (views::): every plugin providing
+// shape<Tag> in turn, in plugin order -- each given what the one before
+// made, of any type, and what the piece is made from where it says --
+// returns what the piece is then, of any type:
+//   extend(c, f, Node node[, const Facts& facts]) -> its node
+// Nothing provides it: the piece as it was written, the same type.
+template <class Tag>
+struct shape {
+  static constexpr std::string_view name = "a piece of the window shaped";
+};
 // What a plugin asks a passphrase (or the account's password) for, in the
 // client's passphrase dialog (mux.ui.base:forms), beside the client's and
 // the protocols':

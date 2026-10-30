@@ -215,6 +215,23 @@ template <class Contract>
 using rows_of = row_list<Contract, composition::providers<Contract, enabled_plugins>>;
 using choice_row_plugins = rows_of<contract::choice_rows>;
 
+// A named piece shaped (contract::shape, SKIFF_NAMED_AS / _OF): every plugin
+// on its point in turn, in plugin order, each given what the one before made
+// -- found by ordinary lookup where the piece is written, in mux; skiff's
+// own, the identity, everywhere else.
+template <class Tag, class N, class... Facts>
+N shaped_by(plugin_list<>, skiff::compose::point<Tag>, N node, const Facts&...) {
+  return node;
+}
+template <class Tag, class First, class... Rest, class N, class... Facts>
+auto shaped_by(plugin_list<First, Rest...>, skiff::compose::point<Tag> at, N node, const Facts&... facts) {
+  return shaped_by(plugin_list<Rest...>{}, at, extend(contract::shape<Tag>{}, type_tag<First>{}, std::move(node), facts...), facts...);
+}
+template <class Tag, class N, class... Facts>
+auto shape_view(skiff::compose::point<Tag> at, N node, const Facts&... facts) {
+  return shaped_by(composition::providers<contract::shape<Tag>, enabled_plugins>{}, at, std::move(node), facts...);
+}
+
 // Where what a page has by its type alone is not there: nothing in its
 // place -- known while compiling, not hidden.
 inline auto nothing_shown() {

@@ -334,7 +334,7 @@ inline auto side_lane(contract::side_bars, type_tag<feature>, const palette& col
   namespace c = skiff::compose;
   return c::shown_for<side_shown>([](const side_shown& now) { return now.side_on || now.dragging; },
       c::styled({.fillY = true, .width = 56.0f},
-          list_lane_view(colours))));
+          list_lane_view(colours)));
 }
 // The top bar: in the head, or under the search field where the bars are big.
 inline auto top_bar(contract::side_bars, type_tag<feature>, const palette& colours, bool big) { return side_space_bar(colours, big); }

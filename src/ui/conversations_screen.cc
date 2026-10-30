@@ -232,8 +232,8 @@ inline auto chat_column(const ui_needs& n) {
       selection_bar(n),
       column_parts_t::column_of(n),
       protocol_view_for<head_view_holder, make_head_of>(n),
-      // The messages, built under the program's rules (their bubbles pieces).
-      c::shown_for<chat_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, a::built(chat_area(n)))),
+      // The messages: a builder (their bubbles pieces), built with the window.
+      c::shown_for<chat_shown>(open, c::styled({.fillX = true, .grow = scene::axes::kY}, chat_area(n))),
       composer_top_plugins::made(*n.colours),
       composer_banner_for(*n.colours),
       protocol_view_for<composer_view_holder, make_composer_of>(n),

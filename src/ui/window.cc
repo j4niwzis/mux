@@ -657,12 +657,34 @@ template <class Model, class... Facts>
 }
 // ---- the window: its frame, and over it the dialogs and the layers ------------------
 using panel_type = spl::variant<accounts_panel>;
-using drawer_node = widgets::Drawer<chats_screen_t, drawer_view_t, drawer_pushed>;
-using with_drawer = skiff::bind::Bound<skiff::model::Field<&drawer_shown::out>, drawer_node>;
+// The chats under the drawer, as built (Screen, Drawer: their nodes).
+template <class Screen, class Drawer>
+using with_drawer = skiff::bind::Bound<skiff::model::Field<&drawer_shown::out>, widgets::Drawer<Screen, Drawer, drawer_pushed>>;
 // The pages slide over the drawer and the chats: Manage accounts comes in
 // over them.
-using frame_t = skiff::bind::Bound<std::optional<panel_facts>,
-                                   widgets::Shown<widgets::SlideOver<with_drawer, panel_type>, panel_facts, panel_made<panel_type>>>;
+template <class Screen, class Drawer>
+using frame_of = skiff::bind::Bound<std::optional<panel_facts>,
+                                    widgets::Shown<widgets::SlideOver<with_drawer<Screen, Drawer>, panel_type>, panel_facts, panel_made<panel_type>>>;
+// The frame made of the chats and the drawer as built: filling the window,
+// the pages over them on the panels' colour -- as see-through as the
+// panels are.
+template <class Screen, class Drawer>
+  requires(!skiff::compose::any_builder<Screen, Drawer>)
+auto frame_made(const ui_needs& n, Screen screen, Drawer drawer) {
+  frame_of<Screen, Drawer> frame(std::in_place, panel_made<panel_type>{&n}, std::in_place, std::piecewise_construct,
+                                 std::forward_as_tuple(std::move(screen)), std::forward_as_tuple(std::move(drawer)));
+  frame.apply({.place = scene::anchor::kTopLeft, .fill = true});
+  frame.setSheetColour(n.colours->sidebar);
+  frame.base().setSheetColour(n.colours->sidebar);
+  return frame;
+}
+// Over builders (the chats hold pieces): a builder of the frame, made of
+// them as built.
+template <class Screen, class Drawer>
+  requires skiff::compose::any_builder<Screen, Drawer>
+auto frame_made(const ui_needs& n, Screen screen, Drawer drawer) {
+  return skiff::compose::lifted([at = &n](auto s, auto d) { return frame_made(*at, std::move(s), std::move(d)); }, std::move(screen), std::move(drawer));
+}
 // A dialog of Content, bound to its Facts' part of what is shown, looking
 // as its content declares.
 template <class Content, class Facts>
@@ -739,13 +761,7 @@ inline auto window_body(const ui_needs& n) {
   const scene::Spec everywhere{.place = scene::anchor::kTopLeft, .fill = true};
   auto behind = c::styled(everywhere, behind_of(n));
   behind.setVisible(n.looks->window.behind);
-  frame_t frame(std::in_place, panel_made<panel_type>{&n}, std::in_place, std::piecewise_construct,
-                std::forward_as_tuple(chats_screen(n)), std::forward_as_tuple(drawer_view(n)));
-  frame.apply(everywhere);
-  // The pages over the chats (Accounts) on the panels' colour: as
-  // see-through as the panels are.
-  frame.setSheetColour(n.colours->sidebar);
-  frame.base().setSheetColour(n.colours->sidebar);
+  auto frame = frame_made(n, chats_screen(n), drawer_view(n));
   // The files to send: as wide as 440 at most, as high as they are.
   auto sending = shown_made<send_box_t, send_facts>(n);
   sending.setWidthFittingContent(440.0f);

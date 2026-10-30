@@ -220,7 +220,12 @@ template <class... Protocols>
 struct account_pages_of_list<protocol_list<Protocols...>> {
   using type = spl::variant<decltype(account_pages_view<Protocols>(std::declval<const palette&>(), std::declval<const account_page_t&>()))...>;
 };
-using account_pages = typename account_pages_of_list<protocols>::type;
+using account_pages_variant = typename account_pages_of_list<protocols>::type;
+// In a column, as the side's own variant is: what is mounted stays one type.
+inline auto account_pages_in(account_pages_variant pages) {
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(pages));
+}
+using account_pages = decltype(account_pages_in(std::declval<account_pages_variant>()));
 // Which page is up, of which protocol: the links made again where either
 // moves.
 struct pages_key {
@@ -234,7 +239,8 @@ inline auto pages_side(const palette& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(pages_side, c::projected<page_read>([](const page_read& now) { return now ? std::optional(pages_key{now->by.speaks, now->page}) : std::nullopt; },
       c::mount<account_pages, pages_key>([at = &colours](const pages_key& now) {
-        return std::tuple{spl::visit([&]<class Protocol>(Protocol) { return account_pages(account_pages_view<Protocol>(*at, now.page)); }, now.speaks)};
+        return std::tuple{account_pages_in(
+            spl::visit([&]<class Protocol>(Protocol) { return account_pages_variant(account_pages_view<Protocol>(*at, now.page)); }, now.speaks))};
       }, {.fillX = true, .autoSize = scene::axes::kY})));
 }
 using pages_side_t = decltype(pages_side(std::declval<const palette&>()));

@@ -45,7 +45,7 @@ inline auto target_row(const palette& colours, const target& one) {
                              .height = 50.0f,
                              .padding = {0.0f, 20.0f, 0.0f, 20.0f},
                              .hoverBackground = colours.chosen}),
-             avatar_mark(avatar_of::chat{}, one.id.id, one.name, 36.0f),
+             face_spot(avatar_of::chat{}, one.id.id, one.name, 36.0f),
              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                        elided(nodes::Text(one.name, 15.0f, colours.text)))),
       one.name));
@@ -70,7 +70,7 @@ inline auto panel(const palette& colours, const std::vector<target>& chats) {
           c::styled({.fillX = true, .height = 34.0f, .margin = {0.0f, 16.0f, 8.0f, 16.0f}},
                     c::bound<query>(std::move(field))),
           c::styled({.fillX = true, .grow = scene::axes::kY},
-                    nodes::ScrollContainer(
+                    c::scrolled(
                         c::projected<query>(
                             [all = chats](const std::string& text) { return matching(all, text); },
                             c::listed<target>(

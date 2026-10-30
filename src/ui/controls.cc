@@ -74,6 +74,28 @@ auto avatar_mark(Kind kind, std::string id, std::string_view shown, float size) 
 }
 template <class Kind>
 using avatar_mark_t = decltype(avatar_mark(Kind{}, std::string(), std::string_view(), 0.0f));
+// Where a face goes -- a person's or a chat's (Kind), anywhere in the core or
+// a plugin: a piece, keyed by its kind, its facts whose it is and how big.
+// Alone it makes nothing, taking no room; the avatars plugin's rule makes
+// the face in its place (instead). So with that plugin off, no view draws
+// a face, and no plugin need know another.
+struct face_said {
+  std::string id;
+  std::string name;
+  float size = 0.0f;
+};
+template <class Kind>
+struct face_fn : skiff::compose::piece<face_fn<Kind>> {
+  using facts_type = face_said;
+  static face_said facts(const std::string& id, std::string_view name, float size) { return {id, std::string(name), size}; }
+  auto make(const std::string&, std::string_view, float) const {
+    return skiff::compose::visible(false, nodes::Box<>(skia::SkColor{0}));
+  }
+};
+template <class Kind>
+auto face_spot(Kind, std::string id, std::string_view name, float size) {
+  return face_fn<Kind>{}(std::move(id), name, size);
+}
 // Whose an avatar is, as the model says: the id it is found by, and the name
 // its initials come from.
 struct avatar_who {

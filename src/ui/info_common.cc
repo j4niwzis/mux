@@ -164,6 +164,13 @@ template <class... Parts> skiff::compose::Box<Parts...> card_box(skiff::compose:
   look.fHorizontal = false;
   return skiff::compose::Box<Parts...>(std::move(look), std::move(parts)...);
 }
+// One whose parts hold pieces (a room card's details, their faces): a
+// builder of it, built as its parts are.
+template <class... Parts>
+  requires(skiff::compose::a_builder<Parts> || ...)
+auto card_box(skiff::compose::Look look, Parts... parts) {
+  return skiff::compose::lifted([](skiff::compose::Look l, auto... p) { return card_box(std::move(l), std::move(p)...); }, std::move(look), std::move(parts)...);
+}
 struct card_fit {
   struct State {};
   template <class N> static void prepare(N& card, State&) {

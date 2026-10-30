@@ -304,7 +304,7 @@ auto profile_editor(const auto& colours, const profile_basis& basis, const room_
               c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                   action_if(colours, "Upload", sends<::mux::ui::request::pick_room_avatar>{{first.chat}}, may_now<power_need::change_avatar>{}),
                   action_if(colours, "Remove", ask(manage_change::remove_avatar{}), may_now<power_need::change_avatar>{}))),
-          avatar_mark(avatar_of::chat{}, first.id, basis.name, 96.0f)),
+          face_spot(avatar_of::chat{}, first.id, basis.name, 96.0f)),
       c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).avatar.has_value(); },
           wrapped(nodes::Text("Avatar change pending. Save to apply.", 12.0f, colours.dim))),
       c::spec_for<facts_t>([](const facts_t& now) { return scene::Spec{.disabled = !editable(now, power_need::rename{})}; },
@@ -552,7 +552,7 @@ auto general_page(const auto& colours, const room_settings_facts& first) {
                           c::shown_for<facts_t>([](const facts_t& now) { return !facts_of(now).topic.empty(); },
                               c::text_for<facts_t>([](const facts_t& now) { return facts_of(now).topic; }, wrapped(nodes::Text("", 12.0f, colours.text))))),
                       c::shown_for<facts_t>(may_profile, action(colours, "Edit", ask(manage_change::edit{editor::profile, true})))),
-                  avatar_mark(avatar_of::chat{}, first.id, first.name, 96.0f))),
+                  face_spot(avatar_of::chat{}, first.id, first.name, 96.0f))),
           c::shown_for<facts_t>([](const facts_t& now) { return kept_of(now).profile_editor; },
               rows_of<profile_editor_t<decltype(colours)>, profile_basis>([](const facts_t& now) {
                 return profile_basis{kept_of(now).profile_round, facts_of(now).name, facts_of(now).topic};

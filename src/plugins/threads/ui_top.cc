@@ -45,7 +45,7 @@ inline auto thread_row(const palette& colours, const thread_root& one) {
   return SKIFF_NAMED(thread_row, c::onClick(request::open_thread{one.root},
       c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 8.0f,
                              .hoverBackground = colours.chosen}),
-             c::styled({.alignSelf = scene::align::kStart}, avatar_mark(avatar_of::person{}, one.sender, one.name, 36.0f)),
+             c::styled({.alignSelf = scene::align::kStart}, face_spot(avatar_of::person{}, one.sender, one.name, 36.0f)),
              c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
                        line(one.name, 13.0f, colours.accent, true), line(one.words, 13.0f, colours.text), line(one.meta, 12.0f, colours.dim))),
       one.name));
@@ -86,7 +86,7 @@ inline auto threads_panel(const ui_needs& n) {
           c::styled({.margin = {16.0f, 16.0f, 0.0f, 16.0f}}, nodes::Text("No threads here yet.", 13.0f, colours.dim))),
       c::shown_for<shown>(listing,
           c::styled({.fillX = true, .grow = scene::axes::kY},
-              nodes::ScrollContainer(c::projected<shown>([](const shown& now) { return now.roots; },
+              c::scrolled(c::projected<shown>([](const shown& now) { return now.roots; },
                   c::listed<thread_root>(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}}),
                                          [&colours](const thread_root& one) { return thread_row(colours, one); }))))),
       // Across the panel and as tall as what its head and composer leave:

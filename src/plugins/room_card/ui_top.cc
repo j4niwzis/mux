@@ -30,7 +30,7 @@ using namespace ::mux::ui;
 inline auto room_cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line) {
   return SKIFF_NAMED(room_cover, skiff::compose::row(
       skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
-      avatar_mark(avatar_of::chat{}, key, name, 72.0f),
+      face_spot(avatar_of::chat{}, key, name, 72.0f),
       two_lines(colours, name, line, 17.0f, 6.0f, two_line_style{.selectable = true})));
 }
 using room_cover_t = decltype(room_cover(std::declval<const palette&>(), "", "", ""));
@@ -84,7 +84,7 @@ inline auto card_of(const palette& colours, const std::string& asked, const room
   return c::arranged<card_fit>({}, card_box(
       c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
       page_header<no_back, close_act>(colours, known.invite ? "Invite" : "Room info", {}, {}, false, true),
-      c::styled({.fillX = true}, nodes::ScrollContainer<decltype(details)>(std::move(details))),
+      c::styled({.fillX = true}, c::scrolled(std::move(details))),
       c::styled(tile_spec, action_tile<join_act>(
           colours, known.invite ? "Accept" : known.knock ? "Ask to join" : "Join",
           icon::plus{}, {known.knock && !known.invite})),

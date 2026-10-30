@@ -95,6 +95,11 @@ struct seen_faces {
                   std::move(said), c::many(c::hbox(), std::move(faces)));
   }
 };
+// A face where one goes (face_spot): the mark of whose it is.
+template <class Kind>
+struct drawn_face {
+  auto operator()(const face_said& f) const { return avatar_mark(Kind{}, f.id, f.name, f.size); }
+};
 // The chat list's chats, the search's results, the drawer's accounts, who
 // read a message, a directory's rooms, a notification's chat: each its
 // picture beside its text.
@@ -111,7 +116,9 @@ constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
          on<member_text_fn>(around(picture_beside<avatar_of::person>{40.0f, 12.0f})) |
          on<person_pick_text_fn>(around(picture_beside<avatar_of::person>{36.0f, 12.0f})) |
          on<seen_summary_fn>(around(seen_faces{})) |
-         on<person_cover_text_fn>(around(button_beside<avatar_of::person>{72.0f, 16.0f}));
+         on<person_cover_text_fn>(around(button_beside<avatar_of::person>{72.0f, 16.0f})) |
+         on<face_fn<avatar_of::person>>(instead(drawn_face<avatar_of::person>{})) |
+         on<face_fn<avatar_of::chat>>(instead(drawn_face<avatar_of::chat>{}));
 }
 
 }  // namespace mux::plugins::avatars

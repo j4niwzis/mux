@@ -56,7 +56,7 @@ struct row_act {
 auto room_row(const palette& colours, const directory_room& one, const std::string& server, std::optional<account_id> by = std::nullopt) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(explore_room_row, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}}),
-      avatar_mark(avatar_of::chat{}, one.id, one.name.empty() ? one.alias : one.name, 40.0f),
+      face_spot(avatar_of::chat{}, one.id, one.name.empty() ? one.alias : one.name, 40.0f),
       c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
                               .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
           c::styled({.fillX = true}, elided(nodes::Text(
@@ -111,7 +111,7 @@ auto explore_view(const palette& colours, const shown& facts) {
               skiff::compose::primary(widgets::SendButton<submit_explore>(colours.widgets, "Search", {}))))),
       c::visible(!status.empty(), c::styled({.fillX = true, .margin = {6.0f, 10.0f, 4.0f, 10.0f}},
           wrapped(nodes::Text(status, 13.0f, colours.dim)))),
-      c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(
+      c::styled({.fillX = true, .grow = scene::axes::kY}, c::scrolled(
           c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))),
       c::visible(more, c::styled({.fillX = true, .height = 32.0f,
                                 .margin = {6.0f, 10.0f, 0.0f, 10.0f}, .disabled = facts.loading},

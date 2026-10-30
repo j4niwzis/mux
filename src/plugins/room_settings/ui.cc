@@ -460,7 +460,7 @@ auto room_settings_view(const Needs& n, const room_settings_of<Kind>& facts) {
                                           : scene::Spec{.width = across, .relativeSize = scene::axes::kY};
               },
                   c::column(c::vbox(0.0f, {.fillY = true, .width = across, .padding = {0.0f, 8.0f, 32.0f, 8.0f}, .background = colours.sidebar}),
-                      c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), avatar_mark(avatar_of::chat{}, facts.id, facts.name, 24.0f),
+                      c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), face_spot(avatar_of::chat{}, facts.id, facts.name, 24.0f),
                              c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .shrink = scene::axes::kX,
                                         .alignSelf = scene::align::kMiddle},
                                        elided(nodes::Text(facts.name, 18.0f, colours.text, true))),

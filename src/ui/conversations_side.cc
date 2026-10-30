@@ -28,7 +28,7 @@ import mux.plugins.ui.top;
 import mux.ui.lists;
 import mux.ui.messages;
 import :header;
-// What the plugins shape a piece with, where it is put (a::built).
+// What the plugins shape a piece with: the rules the window is built under.
 import mux.ui.shaping;
 import :info_explore;
 
@@ -413,14 +413,14 @@ auto side_found_for(const auto& colours) {
                 c::memo_rows<std::size_t, side_found_view, std::pair<std::size_t, side_found_view>>(side_found_row_make{&colours}, nodes::Stack{})));
   return SKIFF_NAMED(side_found_for, c::shown_for<found_shown>([](const found_shown& now) { return now.count.has_value(); },
       c::projected<found_shown>([](const found_shown& now) { return now; },
-          c::restarted_scroll<found_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(contents)))))));
+          c::restarted_scroll<found_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, skiff::compose::scrolled(std::move(contents)))))));
 }
 auto side_server_for(const auto& colours) {
   namespace c = skiff::compose;
   auto contents = c::projected<elsewhere_shown>([](const elsewhere_shown& now) { return now.found; }, server_search_list(colours));
   return SKIFF_NAMED(side_server_for, c::shown_for<elsewhere_shown>([](const elsewhere_shown& now) { return now.found.has_value(); },
       c::projected<elsewhere_shown>([](const elsewhere_shown& now) { return now; },
-          c::restarted_scroll<elsewhere_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(std::move(contents)))))));
+          c::restarted_scroll<elsewhere_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, skiff::compose::scrolled(std::move(contents)))))));
 }
 
 } // namespace mux::ui

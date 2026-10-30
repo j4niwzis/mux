@@ -151,7 +151,7 @@ auto create_room_view(const palette& colours, const Facts& facts) {
       c::vbox(8.0f, {.fill = true, .padding = {0.0f, 22.0f, 18.0f, 22.0f}}),
       page_header<no_back, sends<request::close_shown<Facts>>>(colours,
           in ? std::string(in->make_space ? "Create a space in " : "Create a room in ") + in->name : "Create a room", {}, {}, false, true),
-      c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(c::column(
+      c::styled({.fillX = true, .grow = scene::axes::kY}, skiff::compose::scrolled(c::column(
           c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           model_field<&room_draft::name>(colours, "Name", ""),
           model_field<&room_draft::topic>(colours, "Topic (optional)", ""),

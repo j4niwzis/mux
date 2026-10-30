@@ -258,7 +258,7 @@ inline auto pack_editor(const palette& colours, const pack_opened& opened) {
              use_switch(colours, sends<pack_use>{{false}}, [](const shown& now) { return now.draft && now.draft->sticker; })),
       c::styled({.margin = {6.0f, 10.0f, 0.0f, 10.0f}}, nodes::Text("Images", 13.0f, colours.dim, true)),
       c::styled({.fillX = true, .grow = scene::axes::kY, .disabled = !opened.editable},
-                nodes::ScrollContainer(c::projected<std::optional<shown>>([](const std::optional<shown>& facts) {
+                skiff::compose::scrolled(c::projected<std::optional<shown>>([](const std::optional<shown>& facts) {
                   return facts && facts->draft ? facts->draft->pictures | std::views::transform([](const pack_picture& one) {
                                                    return std::tuple{one.url, std::pair{one.emoji, one.sticker}, one};
                                                  }) | std::ranges::to<std::vector>()
@@ -293,7 +293,7 @@ inline auto packs_box(const ui_needs& n, const shown& first) {
           c::styled({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}}, wrapped(nodes::Text("", 13.0f, colours.dim)))),
       c::shown_for<facts_t>(listing,
           c::styled({.fillX = true, .grow = scene::axes::kY},
-                    nodes::ScrollContainer(c::projected<facts_t>([](const facts_t& facts) {
+                    skiff::compose::scrolled(c::projected<facts_t>([](const facts_t& facts) {
                       return facts ? std::views::zip(std::views::iota(std::size_t{0}), facts->packs) | std::views::transform([](const auto& one) { return pack_item{std::get<0>(one), std::get<1>(one)}; }) | std::ranges::to<std::vector>()
                                    : std::vector<pack_item>{};
                     },

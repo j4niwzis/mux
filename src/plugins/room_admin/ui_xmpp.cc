@@ -287,7 +287,7 @@ auto jid_list(const auto& colours, const muc_field& f) {
         const auto count = lines == form.jids.end() ? 0u : lines->second.size();
         return scene::Spec{.fillX = true, .height = std::clamp(static_cast<float>(count) * 40.0f, 100.0f, 300.0f)};
       },
-          nodes::ScrollContainer(c::projected<muc_form>([var](const muc_form& form) {
+          skiff::compose::scrolled(c::projected<muc_form>([var](const muc_form& form) {
             const auto lines = form.jids.find(var);
             return lines == form.jids.end() ? std::vector<std::tuple<std::uint32_t, bool, std::string>>{}
                                             : lines->second | std::views::transform([](const jid_line& one) {

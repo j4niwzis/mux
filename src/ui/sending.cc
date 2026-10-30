@@ -102,7 +102,7 @@ inline auto send_box(const ui_needs& n, const send_facts& facts) {
           c::spec_for<window_shape>([needed = send_height_of(all)](const window_shape& now) {
             return scene::Spec{.fillX = true, .height = send_room_of(needed, now.height)};
           },
-                    nodes::ScrollContainer(c::column(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}),
+                    skiff::compose::scrolled(c::column(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}),
                                                      c::many(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}), std::move(pictures)),
                                                      c::many(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}), std::move(files))))),
           c::bound<skiff::model::Field<&send_draft::caption>>(

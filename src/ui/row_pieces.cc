@@ -3,7 +3,7 @@
 // the plugins (mux.ui): pieces of their own, under them, so that a plugin's
 // rule may name them -- an account in the drawer, who read a message, a
 // room in a server's directory, a notification's card -- and shape them
-// where they are put (a::built).
+// where they are put -- built, with the window, under its rules.
 module;
 #include "skiff/named.h"
 export module mux.ui.lists:row_pieces;

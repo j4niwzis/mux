@@ -44,7 +44,7 @@ inline auto grid(const ui::palette& colours, const std::vector<std::string>& pat
   return SKIFF_NAMED(grid, c::column(c::vbox(0.0f, {.padding = {4.0f, 4.0f, 4.0f, 4.0f}}),
       c::visible(paths.empty(), c::styled({.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}},
           ui::wrapped(nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, colours.dim)))),
-      c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(
+      c::styled({.fillX = true, .grow = scene::axes::kY}, skiff::compose::scrolled(
           c::styled({.fillX = true, .autoSize = scene::axes::kY},
               nodes::Flow<std::vector<decltype(cell(colours, std::string()))>>(
                   {.direction = nodes::direction::horizontal{}, .wrap = true}, std::move(cells)))))));

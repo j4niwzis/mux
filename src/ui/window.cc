@@ -79,7 +79,7 @@ inline auto make_text_menu(const palette& colours, const std::vector<text_menu_i
       {.width = 260.0f, .height = text_menu_height(items), .padding = {6.0f, 0.0f, 6.0f, 0.0f},
        .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
        .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}, .masking = true},
-      nodes::ScrollContainer<decltype(rows)>(std::move(rows))));
+      skiff::compose::scrolled(std::move(rows))));
 }
 inline std::vector<text_menu_item> field_menu_items(const scene::text_menu::of_field& field, bool formatting) {
   const bool selected = field.selection && !field.masked;

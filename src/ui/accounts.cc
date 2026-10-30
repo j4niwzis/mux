@@ -138,7 +138,7 @@ inline auto accounts_side(const palette& colours) {
       c::spec_for<panel_read>([](const panel_read& now) { return scene::Spec{.selected = adding_now(now)}; },
           c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .selectedBackground = colours.chosen}),
                     row_item(colours, "Add account", sends<request::open_new_account>{}, icon::plus{}))),
-      c::styled({.fillX = true, .grow = scene::axes::kY}, nodes::ScrollContainer(c::column(
+      c::styled({.fillX = true, .grow = scene::axes::kY}, skiff::compose::scrolled(c::column(
           c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           c::projected<panel_read>([](const panel_read& now) { return now ? std::optional(now->rows) : std::nullopt; },
               c::mount<account_list_t, std::vector<account_row>>(
@@ -498,7 +498,7 @@ using detail_shown_t = decltype(detail_shown(std::declval<const ui_needs&>(), de
 inline auto detail_column(const ui_needs& n) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(detail_column, c::column(c::vbox(0.0f, {.fill = true, .padding = {24.0f, 28.0f, 24.0f, 28.0f}}),
-      c::styled({.fill = true}, nodes::ScrollContainer(c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::styled({.fill = true}, skiff::compose::scrolled(c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           c::projected<panel_read>([](const panel_read& now) { return now ? std::optional(detail_key{now->detail, now->theme, now->toward}) : std::nullopt; },
               c::mount<detail_shown_t, detail_key>(
                   [at = &n](const detail_key& key) { return std::tuple{detail_shown(*at, key)}; },

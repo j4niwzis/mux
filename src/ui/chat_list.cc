@@ -209,7 +209,7 @@ inline auto chat_preview_line(const ui_needs& needs, const conversation& one,
 
 // A chat row's text -- its name and time, its topic, a line of its last
 // message: a piece the plugins may shape where it is put into its row,
-// above them (mux.ui:conversations_side, a::built) -- the avatars plugin's
+// above them (mux.ui:conversations_side, built with the window) -- the avatars plugin's
 // picture put beside it there.
 // What a rule on it sees: the chat, by its ID and name.
 struct chat_row_facts {
@@ -236,7 +236,7 @@ inline constexpr struct chat_row_text_fn : skiff::compose::piece<chat_row_text_f
 
 // A search result's text -- who said it and when, a line of it: a piece
 // the plugins may shape where it is put into its row (mux.ui:
-// conversations_side, a::built) -- the avatars plugin's picture beside it.
+// conversations_side, built with the window) -- the avatars plugin's picture beside it.
 // What a rule on it sees: who said it.
 struct found_row_facts {
   std::string sender;

@@ -16,7 +16,7 @@ import mux.core;
 import mux.logic.text;
 import mux.logic.links;
 import mux.ui.base;
-// Its rows' text, pieces the plugins shape where they are put (a::built).
+// Its rows' text, pieces the plugins shape: built with the window.
 import mux.ui.lists;
 import mux.ui.shaping;
 export namespace mux::ui {

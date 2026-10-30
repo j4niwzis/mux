@@ -163,7 +163,7 @@ inline auto state_screen(const palette& colours, const screen::state& facts) {
                c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::back{}, sends<state_back>{})))),
       c::shown_for<said>([](const said& now) { return !now.type; },
           c::styled({.fillX = true, .grow = scene::axes::kY},
-                    nodes::ScrollContainer(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(types))))),
+                    skiff::compose::scrolled(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(types))))),
       c::shown_for<said>([](const said& now) { return !now.type; },
           c::styled({.width = 200.0f, .height = 34.0f, .margin = {8.0f, 10.0f, 12.0f, 10.0f}},
                     widgets::Button<sends<edit_state>>(colours.widgets, "New state event", {{std::string(), std::string()}}))),
@@ -202,7 +202,7 @@ inline auto data_screen(const palette& colours, const screen::data& facts) {
   return screen_column(
       head(colours, "Account data", no_back()),
       c::styled({.fillX = true, .grow = scene::axes::kY},
-                nodes::ScrollContainer(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))),
+                skiff::compose::scrolled(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))),
       c::styled({.width = 200.0f, .height = 34.0f, .margin = {8.0f, 10.0f, 12.0f, 10.0f}},
                 widgets::Button<sends<edit_data>>(colours.widgets, "New account data", {{std::string()}})));
 }

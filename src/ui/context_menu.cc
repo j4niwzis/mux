@@ -21,6 +21,9 @@ import mux.config;
 import mux.logic.emoji;
 import mux.plugins.types;
 import mux.ui.base;
+// Its rows' text, pieces the plugins shape where they are put (a::part).
+import mux.ui.lists;
+import :shaping;
 import mux.plugins.ui.top;
 import mux.ui.proto;
 import mux.ui.messages;
@@ -81,10 +84,7 @@ inline auto reader_row(const palette& colours, const seen_reader& one) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(reader_row, c::onClick(std::tuple{request::close_menu{}, request::open_member_info{one.id}},
       c::row(c::hbox(14.0f, {.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = colours.chosen}),
-             avatar_mark(avatar_of::person{}, one.id, one.name, 30.0f),
-             c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
-                       elided(nodes::Text(one.name, 13.0f, colours.text)),
-                       elided(nodes::Text(one.at ? clock_of(*one.at) : std::string("seen"), 12.0f, colours.dim)))),
+             a::part(reader_text, colours, one)),
       one.name));
 }
 // The readers, scrolling where there are more than fit: at most about

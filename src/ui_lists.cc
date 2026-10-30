@@ -7,3 +7,4 @@ export module mux.ui.lists;
 
 export import :chat_list;
 export import :list_shown;
+export import :row_pieces;

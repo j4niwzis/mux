@@ -16,6 +16,9 @@ import skiff.nodes.text;
 import mux.core;
 import mux.config;
 import mux.ui.base;
+// Its rows' text, pieces the plugins shape where they are put (a::part).
+import mux.ui.lists;
+import :shaping;
 import mux.plugins.ui;
 import :accounts;
 
@@ -26,14 +29,6 @@ export namespace mux::ui {
 // An account in the drawer, as the program says: its address, its protocol
 // and how it is (in red where it failed), and whether its chats are the
 // ones listed.
-struct drawer_account {
-  std::string address;
-  std::string protocol;
-  std::string how;
-  bool failed = false;
-  bool current = false;
-  friend bool operator==(const drawer_account&, const drawer_account&) = default;
-};
 struct drawer_accounts {
   std::vector<drawer_account> accounts;
   friend bool operator==(const drawer_accounts&, const drawer_accounts&) = default;
@@ -46,9 +41,9 @@ inline auto drawer_account_row(const palette& colours, const drawer_account& one
   auto row = c::onPress(sends<request::switch_account>{{one.address}},
       c::row(c::hbox(14.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen,
                              .selectedBackground = colours.chosen, .focusBackground = colours.chosen, .selected = one.current}),
-             avatar_mark(avatar_of::person{}, one.address, one.address, 38.0f),
-             two_lines(colours, one.address, std::format("{} · {}", one.protocol, one.how), 14.0f, 3.0f,
-                       two_line_style{.second_ink = one.failed ? colours.error : colours.dim, .show_second = true}),
+             // Its text, a piece the plugins shape where it is put (the avatars
+             // plugin's picture beside it).
+             a::part(drawer_account_text, colours, one),
              c::visible(one.current, c::styled({.alignSelf = scene::align::kMiddle}, icon_mark(colours, icon::check{})))),
       one.address);
   return row;

@@ -241,9 +241,21 @@ struct services {
       const auto at = place(list.jump_target);
       return at ? std::pair{*at > 5 ? *at - 5 : 0, std::min(count, *at + 6)} : std::pair<std::size_t, std::size_t>{0, 0};
     }
-    const std::size_t top = place(list.top).value_or(count > around ? count - around : 0);
-    const std::size_t bottom = place(list.bottom).value_or(count == 0 ? 0 : count - 1);
-    return {top > around ? top - around : 0, std::min(count, bottom + around + 1)};
+    // The rows the list shows need not all be in the timeline -- a thread's
+    // answer shown in it (room events: thread answers) is kept with its
+    // thread. Each end found on its own, one missing went to the last page
+    // while the other stood far above it: the stretch ended before it began,
+    // and what walked it from its start went past the timeline's end (a
+    // tester's: the app gone at once as it opened, on a phone). An end not
+    // found is the other's; neither, the last page; and the stretch never
+    // turned around.
+    const auto top_at = place(list.top).or_else([&] { return place(list.bottom); });
+    const auto bottom_at = place(list.bottom).or_else([&] { return top_at; });
+    // minmax of a list: a pair of values, not of references to temporaries.
+    const auto [top, bottom] = std::minmax({top_at.value_or(count > around ? count - around : 0),
+                                            bottom_at.value_or(count == 0 ? 0 : count - 1)});
+    const std::size_t to = std::min(count, bottom + around + 1);
+    return {std::min(top > around ? top - around : 0, to), to};
   }
   std::optional<mux::logic::link_t> joining;
   // The settings as saved -- an account's privacy, its proxy, by its

@@ -37,6 +37,13 @@ using kinds_t = config::room_event_kinds;
 [[nodiscard]] constexpr bool shown_unless_chosen(room_event::unreactions) { return false; }
 [[nodiscard]] constexpr bool shown_unless_chosen(room_event::thread_answers) { return false; }
 [[nodiscard]] constexpr bool shown_unless_chosen(const auto&) { return true; }
+// Whether a level's "All events" or "Messages only" says it too. Threads'
+// answers in the timeline do not follow it: a setting of their own at
+// every level -- every account's, an account's, a space's, a chat's --
+// turned on only where it is chosen there (the user's: "All events" turned
+// them on, and the chat was shown as its timeline and threads together).
+[[nodiscard]] constexpr bool follows_all(room_event::thread_answers) { return false; }
+[[nodiscard]] constexpr bool follows_all(const auto&) { return true; }
 
 // A kind's word, as it is kept on disk -- the name of its member -- and a
 // word read back into its kind, "other" where it is none of them.
@@ -85,13 +92,15 @@ using kinds_t = config::room_event_kinds;
                                                   const std::optional<kinds_t>& every_kinds, bool every_all) {
   room_event_filter out;
   for (const room_event_t& kind : all_room_events) {
+    const bool all_too = spl::visit([](auto one) { return follows_all(one); }, kind);
+    const auto all_of = [&](std::optional<bool> all) { return all_too ? all : std::nullopt; };
     std::optional<bool> shown = choice_of(chat_kinds, kind);
     if (!shown)
-      shown = chat_all;
+      shown = all_of(chat_all);
     if (!shown)
       shown = choice_of(account_kinds, kind);
     if (!shown)
-      shown = account_all;
+      shown = all_of(account_all);
     if (!shown)
       shown = choice_of(every_kinds, kind);
     const bool fallback = spl::visit([](auto one) { return shown_unless_chosen(one); }, kind);

@@ -1230,7 +1230,7 @@ class account {
         return;
       this->send_to(to, "mux-" + std::to_string(++sent_), "This message was retracted.",
                     [&](auto& one) { one.payload.emplace_back(tern::retractions::retract{.id = id}); });
-      sink_(change::message_redacted{{id_, to}, id});
+      sink_(change::message_redacted{{id_, to}, id, id_.address});
     });
   }
 
@@ -1674,7 +1674,8 @@ class account {
         return;
       }
       if (const auto* taken = carried.template get_if<tern::retractions::retract>()) {
-        sink_(change::message_redacted{in.in, taken->id});
+        // A retraction is its sender's own (XEP-0424).
+        sink_(change::message_redacted{in.in, taken->id, in.sender});
         return;
       }
       if (const auto* reply = carried.template get_if<tern::replies::reply>())

@@ -145,7 +145,7 @@ void account<Sink>::remove(std::string room, std::string event) {
     if (auto done = perform(*api_, loom::cs::redact_event{.room_id = room,
                                                           .event_id = event,
                                                           .txn_id = this->transaction()}))
-      sink_(change::message_redacted{{id_, room}, event});
+      sink_(change::message_redacted{{id_, room}, event, id_.address});
     else
       sink_(change::refused{id_, std::format("The message was not deleted: {}", done.error().said())});
   });

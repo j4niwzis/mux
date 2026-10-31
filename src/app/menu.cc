@@ -245,7 +245,7 @@ void part_apply(menu_part& self, const request::selection_delete_confirm&) {
     if (!one || one->redacted || !proto::may_delete(now, *chat, one->outgoing))
       continue;
     if (self.s_->demo())
-      self.s_->box->push(change_t{change::message_redacted{chat->id, id}});
+      self.s_->box->push(change_t{change::message_redacted{chat->id, id, chat->id.account.address}});
     else
       self.s_->net->remove_message(chat->id, id);
     if (self.selected_chat_ == pending->first) self.selected_.erase(id);
@@ -278,7 +278,7 @@ void part_apply(menu_part& self, const request::menu_delete&) {
   if (!chosen)
     return;
   if (self.s_->demo())
-    self.s_->box->push(change_t{change::message_redacted{*chosen, self.target_.id}});
+    self.s_->box->push(change_t{change::message_redacted{*chosen, self.target_.id, chosen->account.address}});
   else
     self.s_->net->remove_message(*chosen, self.target_.id);
 }

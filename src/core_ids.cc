@@ -388,6 +388,9 @@ struct message {
   std::vector<version> versions;
   std::string latest_edit_event;
   bool redacted = false;
+  // Who deleted it, where known: its sender, or someone else (a moderator,
+  // a removal) -- then it is kept whole.
+  std::optional<std::string> redacted_by;
   // Came end-to-end encrypted, and was read: in an encrypted room, one that
   // did not is marked as such -- a server or anyone in the room can put a
   // plain message there, and it looked the same.

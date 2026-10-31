@@ -66,6 +66,7 @@ struct message_line {
   };
   std::optional<std::vector<version_line>> versions;
   std::optional<bool> redacted;
+  std::optional<std::string> redacted_by;
   std::optional<bool> out;
   std::optional<bool> service;
   std::optional<std::string> kind;
@@ -576,6 +577,7 @@ class message_store {
       one.came_plain = o.came_plain.value_or(false);
       one.unauthenticated = o.unauthenticated.value_or(false);
       one.redacted = o.redacted.value_or(false);
+      one.redacted_by = o.redacted_by;
       one.outgoing = o.out.value_or(false);
       one.service = o.service.value_or(false);
       if (o.kind)
@@ -651,6 +653,7 @@ class message_store {
                                               v.event.empty() ? std::nullopt : std::optional(v.event)};
                                         }) | std::ranges::to<std::vector>()),
         .redacted = store_file::flag(one.redacted),
+        .redacted_by = one.redacted_by,
         .out = store_file::flag(one.outgoing),
         // Something done, not said: read back as a line of its own again,
         // with which kind of room event, for which are shown.

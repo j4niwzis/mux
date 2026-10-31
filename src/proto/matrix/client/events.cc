@@ -347,12 +347,14 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // read of it.
     const bool redacted = one.unsigned_ && one.unsigned_->redacted_because;
     const auto deleted = [&] {
+      // Who deleted it: the redaction's sender, as the server tells it.
+      const std::optional<std::string> by = one.unsigned_->redacted_because->sender;
       message made{.in = in, .id = one.event_id, .sender = one.sender, .at = at, .body = {},
-                   .redacted = true, .outgoing = one.sender == id_.address};
+                   .redacted = true, .redacted_by = by, .outgoing = one.sender == id_.address};
       if (auto summary = summary_of())
         made.threaded = std::move(*summary);
       this->added(std::move(made), where, sealed);
-      sink_(change::message_redacted{in, one.event_id});
+      sink_(change::message_redacted{in, one.event_id, by});
     };
     spl::visit(spl::overloaded{[&](event_type::encrypted) {
                             if (redacted)
@@ -622,7 +624,7 @@ void account<Sink>::redaction(const conversation_id& in, const loom::ev::timelin
                   where);
     reactions_.erase(reaction);
   } else {
-    sink_(change::message_redacted{in, *target});
+    sink_(change::message_redacted{in, *target, one.sender});
   }
 }
 

@@ -248,6 +248,9 @@ struct message_encrypted {
 struct message_redacted {
   conversation_id in;
   std::string id;
+  // Who deleted it, where it is known: its sender -- what they took back is
+  // gone -- or someone else -- a moderator, a removal -- and it is kept whole.
+  std::optional<std::string> by;
 };
 
 // A message sent from here, known by a local id until the server answered
@@ -737,6 +740,13 @@ class model {
   // user's own -- what they deleted, gone from it -- or the server's emptied
   // copy. Shown as "Message deleted" where it was (a tester's: their own
   // deleted showed nothing at all, the setting on).
+  // Deleted by its own sender: what they took back is gone. By someone else
+  // -- a moderator, the sender removed from the room -- it is kept whole, as
+  // it was (a tester's). Where who did it is not known, one's own is taken
+  // as taken back, another's as not.
+  [[nodiscard]] static bool taken_back(const message& one, const std::optional<std::string>& by) {
+    return by ? *by == one.sender : one.outgoing;
+  }
   static void emptied(message& one) {
     one.body = {};
     one.versions.clear();
@@ -759,11 +769,13 @@ class model {
         if (message* kept = message_in(where, one.message.id)) {
           held = true;
           kept->redacted = true;
-          if (kept->outgoing)
+          kept->redacted_by = one.message.redacted_by;
+          if (taken_back(*kept, kept->redacted_by))
             emptied(*kept);
           in_latest(where, one.message.id, [&](message& latest) {
             latest.redacted = true;
-            if (latest.outgoing)
+            latest.redacted_by = one.message.redacted_by;
+            if (taken_back(latest, latest.redacted_by))
               emptied(latest);
           });
         }
@@ -1041,12 +1053,14 @@ class model {
     if (show_deleted) {
       if (message* kept = message_in(where, one.id)) {
         kept->redacted = true;
-        if (kept->outgoing)
+        kept->redacted_by = one.by;
+        if (taken_back(*kept, one.by))
           emptied(*kept);
       }
-      in_latest(where, one.id, [](message& kept) {
+      in_latest(where, one.id, [&](message& kept) {
         kept.redacted = true;
-        if (kept.outgoing)
+        kept.redacted_by = one.by;
+        if (taken_back(kept, one.by))
           emptied(kept);
       });
       return;

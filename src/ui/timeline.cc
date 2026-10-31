@@ -183,10 +183,24 @@ struct timeline_rows {
     if (one.at == at && !one.all.empty())
       return one.all;
     one.at = at;
-    one.all = chat.timeline | std::views::transform([](const message& said) { return &said; }) | std::ranges::to<std::vector>();
-    for (const auto& [root, answers] : chat.threads)
-      one.all.append_range(answers | std::views::transform([](const message& said) { return &said; }));
-    std::ranges::stable_sort(one.all, {}, [](const message* said) { return said->local_order.value_or(said->at); });
+    // The timeline in its own order -- as it is shown without the threads:
+    // re-sorted by where each was placed, a message placed as it arrived
+    // stood under one sent after it (the user's) -- and the answers, in
+    // time's order, each put before the first of it that comes after them.
+    const auto when = [](const message* said) { return said->local_order.value_or(said->at); };
+    auto answers = chat.threads | std::views::values | std::views::join |
+                   std::views::transform([](const message& said) { return &said; }) | std::ranges::to<std::vector>();
+    std::ranges::stable_sort(answers, {}, when);
+    one.all.clear();
+    one.all.reserve(chat.timeline.size() + answers.size());
+    auto next = answers.begin();
+    for (const message& said : chat.timeline) {
+      const auto upto = std::ranges::find_if(next, answers.end(), [&](const message* answer) { return when(answer) >= when(&said); });
+      one.all.append_range(std::ranges::subrange(next, upto));
+      next = upto;
+      one.all.push_back(&said);
+    }
+    one.all.append_range(std::ranges::subrange(next, answers.end()));
     return one.all;
   }
   static skiff::model::Revision revision(const chats_model& now, const Told& told) {

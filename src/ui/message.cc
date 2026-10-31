@@ -562,7 +562,7 @@ struct bubble_rules {
         return;
       skiff::compose::state_of(*part).setOutOfFlow(side);
       if (!side)
-        skiff::compose::state_of(*part).shiftTo(0.0f, 0.0f);
+        skiff::compose::state_of(*part).setShift(0.0f, 0.0f);
     };
     flow(part_of<bubble_part::name>(body));
     flow(part_of<bubble_part::forwarded>(body));
@@ -614,7 +614,7 @@ struct bubble_rules {
         return;
       const skia::SkRect at = part->bounds();
       const float x = state.beside_left ? sticker.fLeft - kBesideGap - at.width() : sticker.fRight + kBesideGap;
-      skiff::compose::state_of(*part).shiftTo(x - at.fLeft, sticker.fTop + y - at.fTop);
+      skiff::compose::state_of(*part).setShift(x - at.fLeft, sticker.fTop + y - at.fTop);
       y += at.height() + after;
     };
     put(part_of<bubble_part::name>(body), 4.0f);

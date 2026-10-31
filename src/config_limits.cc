@@ -171,6 +171,11 @@ struct history_settings {
   // A message deleted is shown where it was, all it said, marked; off, it
   // is gone from the chat. Either way it is kept on disk.
   bool show_deleted = false;
+  // A message removed shown as a line where it was: who removed it and why
+  // -- none of what it said. Off, removed messages are hidden (unless shown
+  // whole above); with deleted messages shown, the line stands where what
+  // was said is not held. Unsaid (a file from before it), off.
+  std::optional<bool> show_removals;
   // What is done in a room -- joins and leaves, a name or a picture changed,
   // events nothing here reads -- shown as lines of their own, or not. Kept
   // either way; an account's choice, and a room's own, come first.

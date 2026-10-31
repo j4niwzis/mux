@@ -122,6 +122,8 @@ MUX_INLINE_IN_RELEASE auto storage_settings_view(const auto& colours) {
         spaced_title(colours, "DELETED MESSAGES"),
         setting_switch<&config::history_settings::show_deleted>(
             colours, "Show deleted messages"),
+        setting_switch<&config::history_settings::show_removals, std::optional<bool>>(
+            colours, "Show removals: who and why"),
         limit_stepper<limit::deleted_on_disk>(colours, "On disk", "MB"),
         spaced_title(colours, "ROOM EVENTS"),
         event_kinds_field<config::history_settings>(colours, choice_level::everywhere{}),

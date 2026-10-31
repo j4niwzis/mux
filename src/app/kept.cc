@@ -152,6 +152,9 @@ struct kept_reactions {
   [[nodiscard]] deleted_shown on(skiff::model::Changed<skiff::model::Field<&mux::config::history_settings::show_deleted>>, const auto&) const {
     return {};
   }
+  [[nodiscard]] deleted_shown on(skiff::model::Changed<skiff::model::Field<&mux::config::history_settings::show_removals>>, const auto&) const {
+    return {};
+  }
   [[nodiscard]] std::tuple<write_kept, looks_changed> on(skiff::model::Changed<mux::config::look_settings>, const mux::config::look_settings&) const {
     return {};
   }

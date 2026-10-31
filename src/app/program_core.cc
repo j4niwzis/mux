@@ -367,6 +367,7 @@ void app::settle_model() {
     this->show_looks();
   if (due.deleted) {
     model->show_deleted = this->history().show_deleted;
+    model->show_removals = this->history().show_removals.value_or(false);
     shared.refresh_due = true;
   }
   if (due.restyle) {
@@ -733,6 +734,7 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   if (!demo)
     this->drafts.load();
   this->model->show_deleted = this->history().show_deleted;
+  this->model->show_removals = this->history().show_removals.value_or(false);
   this->settings.apply_limits();
   this->config_error = std::move(error);
   this->refresh();

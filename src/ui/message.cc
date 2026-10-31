@@ -450,10 +450,15 @@ struct named_rooms {
 // a reaction shown as a line, its emoji's.
 [[nodiscard]] mentioned shown_text_of(const conversation& in, const message& said, const model* now) {
   mux::body readable = said.body;
-  // Deleted, nothing of it left (one's own, or the server's emptied copy):
-  // that it was, where it was.
-  if (said.redacted && readable.plain.empty() && !readable.html && !said.attachment && said.album.empty())
-    readable.plain = "Message deleted";
+  // Deleted, nothing of it left (one's own, the server's emptied copy, or a
+  // removal shown as its line): that it was, where it was -- by whom, where
+  // not its sender, and why, where the redaction said.
+  if (said.redacted && readable.plain.empty() && !readable.html && !said.attachment && said.album.empty()) {
+    const bool by_another = said.redacted_by && *said.redacted_by != said.sender;
+    readable.plain = by_another ? std::format("Removed by {}", sender_name(in, *said.redacted_by)) : std::string("Message deleted");
+    if (said.redacted_reason && !said.redacted_reason->empty())
+      readable.plain += std::format(": {}", *said.redacted_reason);
+  }
   if (!said.reaction_key.empty() && said.service) {
     std::optional<std::string> label;
     if (said.replies_to)

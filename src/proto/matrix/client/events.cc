@@ -348,13 +348,15 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     const bool redacted = one.unsigned_ && one.unsigned_->redacted_because;
     const auto deleted = [&] {
       // Who deleted it: the redaction's sender, as the server tells it.
-      const std::optional<std::string> by = one.unsigned_->redacted_because->sender;
+      const auto& because = *one.unsigned_->redacted_because;
+      const std::optional<std::string> by = because.sender;
+      const std::optional<std::string> why = because.content ? because.content->reason : std::nullopt;
       message made{.in = in, .id = one.event_id, .sender = one.sender, .at = at, .body = {},
-                   .redacted = true, .redacted_by = by, .outgoing = one.sender == id_.address};
+                   .redacted = true, .redacted_by = by, .redacted_reason = why, .outgoing = one.sender == id_.address};
       if (auto summary = summary_of())
         made.threaded = std::move(*summary);
       this->added(std::move(made), where, sealed);
-      sink_(change::message_redacted{in, one.event_id, by});
+      sink_(change::message_redacted{in, one.event_id, by, why});
     };
     spl::visit(spl::overloaded{[&](event_type::encrypted) {
                             if (redacted)
@@ -585,10 +587,12 @@ template <class Sink>
 void account<Sink>::redaction(const conversation_id& in, const loom::ev::timeline_event& one,
                               std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
   std::optional<std::string> target = one.redacts;
-  // From room version 11, in its content.
+  std::optional<std::string> why;
+  // From room version 11, in its content; and why, where it says.
   spl::visit(spl::overloaded{[&](const loom::ev::m_room_redaction_content_t& content) {
                                      if (content.redacts)
                                        target = content.redacts;
+                                     why = content.reason;
                                    },
                                    [](const auto&) {}},
                 one.content.data());
@@ -624,7 +628,7 @@ void account<Sink>::redaction(const conversation_id& in, const loom::ev::timelin
                   where);
     reactions_.erase(reaction);
   } else {
-    sink_(change::message_redacted{in, *target, one.sender});
+    sink_(change::message_redacted{in, *target, one.sender, why});
   }
 }
 

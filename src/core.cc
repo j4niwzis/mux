@@ -251,6 +251,8 @@ struct message_redacted {
   // Who deleted it, where it is known: its sender -- what they took back is
   // gone -- or someone else -- a moderator, a removal -- and it is kept whole.
   std::optional<std::string> by;
+  // Why, where the redaction says.
+  std::optional<std::string> reason;
 };
 
 // A message sent from here, known by a local id until the server answered
@@ -452,6 +454,9 @@ class model {
  public:
   // A message deleted is shown where it was, marked -- or taken out.
   bool show_deleted = false;
+  // A removal shown where the message was -- who removed it and why, none
+  // of what it said -- where deleted messages are not shown whole.
+  bool show_removals = false;
   // The links' previews, by their URLs: as fetched this session.
   std::map<std::string, link_preview> previews;
   // Rooms not joined here whose server said they are there, by the address
@@ -759,7 +764,7 @@ class model {
   void add_message(const change::message_added& one) {
     // A deleted one -- read back from the disk, or the server's copy -- only
     // where deleted messages are shown.
-    if (one.message.redacted && !show_deleted)
+    if (one.message.redacted && !show_deleted && !show_removals)
       return;
     if (one.message.redacted) {
       // One held whole: marked, as a deletion told live would -- not replaced
@@ -770,12 +775,14 @@ class model {
           held = true;
           kept->redacted = true;
           kept->redacted_by = one.message.redacted_by;
-          if (taken_back(*kept, kept->redacted_by))
+          kept->redacted_reason = one.message.redacted_reason;
+          if (!show_deleted || taken_back(*kept, kept->redacted_by))
             emptied(*kept);
           in_latest(where, one.message.id, [&](message& latest) {
             latest.redacted = true;
             latest.redacted_by = one.message.redacted_by;
-            if (taken_back(latest, latest.redacted_by))
+            latest.redacted_reason = one.message.redacted_reason;
+            if (!show_deleted || taken_back(latest, latest.redacted_by))
               emptied(latest);
           });
         }
@@ -1050,19 +1057,20 @@ class model {
     // Kept where deleted messages are shown: another's whole, marked; the
     // user's own emptied -- what they deleted gone, "Message deleted" where
     // it was.
-    if (show_deleted) {
-      if (message* kept = message_in(where, one.id)) {
-        kept->redacted = true;
-        kept->redacted_by = one.by;
-        if (taken_back(*kept, one.by))
-          emptied(*kept);
-      }
-      in_latest(where, one.id, [&](message& kept) {
+    // Kept where deleted messages are shown, or their removals: whole where
+    // shown whole and another removed it; else emptied -- who removed it and
+    // why said where it was.
+    if (show_deleted || show_removals) {
+      const auto mark = [&](message& kept) {
         kept.redacted = true;
         kept.redacted_by = one.by;
-        if (taken_back(kept, one.by))
+        kept.redacted_reason = one.reason;
+        if (!show_deleted || taken_back(kept, one.by))
           emptied(kept);
-      });
+      };
+      if (message* kept = message_in(where, one.id))
+        mark(*kept);
+      in_latest(where, one.id, mark);
       return;
     }
     std::erase_if(where.timeline, [&](const message& each) { return each.id == one.id; });

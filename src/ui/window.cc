@@ -832,7 +832,7 @@ struct pressed_where {
 };
 // The window: its body, made again from scratch where the program says the
 // look changed so much (a theme: what is made takes its colours then).
-MUX_INLINE_IN_RELEASE auto window_view(const ui_needs& n) {
+inline auto window_view(const ui_needs& n) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(window_view, c::keys_for<overlay_shown, scene::phase::capture>([](const overlay_shown& now) { return now; }, escape_key{},
       c::onKeys(copy_key{},
@@ -842,8 +842,11 @@ MUX_INLINE_IN_RELEASE auto window_view(const ui_needs& n) {
                                                              {.fill = true}))))));
 }
 // The window as its scene holds it: built once, here, under the program's
-// rules -- every view under it a builder until then.
-MUX_INLINE_IN_RELEASE auto window_built(const ui_needs& n) { return a::built_any(window_view(n)); }
+// rules -- every view under it a builder until then. Both stay inline: the
+// type it gives names a struct local to them, and a struct local to a function
+// that is not inline has no linkage, so Scene<window> made in scene.cc would
+// be a different, internal, type to everyone else (undefined at link).
+inline auto window_built(const ui_needs& n) { return a::built_any(window_view(n)); }
 using window = decltype(window_built(std::declval<const ui_needs&>()));
 
 // The emote pictures the window wants fetched: those its panels and menus

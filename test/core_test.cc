@@ -321,6 +321,24 @@ TEST(Model, AnEmptiedCopyMarksTheWholeMessageDeleted) {
   EXPECT_EQ(one->timeline[0].body.plain, "hi");
 }
 
+// Deleted, where deleted messages are kept: whole whoever deleted it --
+// its own sender too -- but the user; what the user deleted is gone from it.
+TEST(Model, OnlyWhatTheUserDeletedIsEmptied) {
+  model kept;
+  kept.show_deleted = true;
+  const conversation_id in{account_id{protocol::xmpp{}, "romeo@example.net"}, "juliet@example.com"};
+  kept.apply(change::message_added{message{.in = in, .id = "1", .sender = "juliet@example.com", .body = {"hi", std::nullopt}}});
+  kept.apply(change::message_added{message{.in = in, .id = "2", .sender = "juliet@example.com", .body = {"there", std::nullopt}}});
+  kept.apply(change::message_redacted{in, "1", "juliet@example.com"});
+  kept.apply(change::message_redacted{in, "2", "romeo@example.net"});
+  const conversation* one = kept.find(in);
+  ASSERT_EQ(one->timeline.size(), 2u);
+  EXPECT_TRUE(one->timeline[0].redacted);
+  EXPECT_EQ(one->timeline[0].body.plain, "hi");
+  EXPECT_TRUE(one->timeline[1].redacted);
+  EXPECT_TRUE(one->timeline[1].body.plain.empty());
+}
+
 // Deleted, where deleted messages are not kept: gone from the chat; and a
 // deleted one read back from the disk is not put back.
 TEST(Model, ADeletedMessageGoesWhereNotKept) {

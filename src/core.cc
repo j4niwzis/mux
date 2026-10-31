@@ -248,8 +248,8 @@ struct message_encrypted {
 struct message_redacted {
   conversation_id in;
   std::string id;
-  // Who deleted it, where it is known: its sender -- what they took back is
-  // gone -- or someone else -- a moderator, a removal -- and it is kept whole.
+  // Who deleted it, where it is known: the user -- what they deleted is gone
+  // -- or anyone else, and it is kept whole where deleted messages are shown.
   std::optional<std::string> by;
   // Why, where the redaction says.
   std::optional<std::string> reason;
@@ -741,16 +741,16 @@ class model {
         this->on(reaction);
     }
   }
-  // What is left of a deleted message where only that it was is shown: the
-  // user's own -- what they deleted, gone from it -- or the server's emptied
-  // copy. Shown as "Message deleted" where it was (a tester's: their own
-  // deleted showed nothing at all, the setting on).
-  // Deleted by its own sender: what they took back is gone. By someone else
-  // -- a moderator, the sender removed from the room -- it is kept whole, as
-  // it was (a tester's). Where who did it is not known, one's own is taken
-  // as taken back, another's as not.
-  [[nodiscard]] static bool taken_back(const message& one, const std::optional<std::string>& by) {
-    return by ? *by == one.sender : one.outgoing;
+  // What is left of a deleted message where only that it was is shown: one
+  // the user deleted -- gone from it -- or the server's emptied copy. Shown as
+  // "Message deleted" where it was (a tester's: their own deleted showed
+  // nothing at all, the setting on).
+  // Deleted by the user: what they deleted is gone. By anyone else -- its
+  // own sender, a moderator, a removal -- it is kept whole, as it was (the
+  // user). Where who did it is not known, the user's own message is taken as
+  // deleted by them, another's as not.
+  [[nodiscard]] static bool deleted_by_user(const message& one, const std::optional<std::string>& by, const std::string& user) {
+    return by ? *by == user : one.outgoing;
   }
   static void emptied(message& one) {
     one.body = {};
@@ -776,13 +776,13 @@ class model {
           kept->redacted = true;
           kept->redacted_by = one.message.redacted_by;
           kept->redacted_reason = one.message.redacted_reason;
-          if (!show_deleted || taken_back(*kept, kept->redacted_by))
+          if (!show_deleted || deleted_by_user(*kept, kept->redacted_by, one.message.in.account.address))
             emptied(*kept);
           in_latest(where, one.message.id, [&](message& latest) {
             latest.redacted = true;
             latest.redacted_by = one.message.redacted_by;
             latest.redacted_reason = one.message.redacted_reason;
-            if (!show_deleted || taken_back(latest, latest.redacted_by))
+            if (!show_deleted || deleted_by_user(latest, latest.redacted_by, one.message.in.account.address))
               emptied(latest);
           });
         }
@@ -1054,18 +1054,15 @@ class model {
     // removed where the message it was on is not here to match it: gone too.
     for (auto* marks : {&where.unread_reactions, &where.unread_mentions})
       std::erase_if(*marks, [&](const unread_mark& mark) { return mark.event == one.id; });
-    // Kept where deleted messages are shown: another's whole, marked; the
-    // user's own emptied -- what they deleted gone, "Message deleted" where
-    // it was.
     // Kept where deleted messages are shown, or their removals: whole where
-    // shown whole and another removed it; else emptied -- who removed it and
-    // why said where it was.
+    // deleted messages are shown and the user did not delete it; else
+    // emptied -- who removed it and why said where it was.
     if (show_deleted || show_removals) {
       const auto mark = [&](message& kept) {
         kept.redacted = true;
         kept.redacted_by = one.by;
         kept.redacted_reason = one.reason;
-        if (!show_deleted || taken_back(kept, one.by))
+        if (!show_deleted || deleted_by_user(kept, one.by, one.in.account.address))
           emptied(kept);
       };
       if (message* kept = message_in(where, one.id))

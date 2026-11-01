@@ -27,6 +27,8 @@ struct shown {
 };
 
 consteval bool provides(contract::chat_header, type_tag<feature>) { return true; }
+// Its bar's field takes the keys as it opens.
+consteval bool provides(contract::key_focus, type_tag<feature>) { return true; }
 consteval bool provides(contract::chat_column, type_tag<feature>) { return true; }
 consteval bool provides(contract::window_state, type_tag<feature>) { return true; }
 constexpr type_tag<shown> state_type(contract::window_state, type_tag<feature>) { return {}; }

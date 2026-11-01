@@ -708,14 +708,22 @@ struct chat {
 struct thread {
   friend bool operator==(thread, thread) = default;
 };
-struct search {
-  friend bool operator==(search, search) = default;
-};
 struct menu {
   friend bool operator==(menu, menu) = default;
 };
+// A plugin's own field (contract::key_focus).
+template <class Feature>
+struct of {
+  friend bool operator==(of, of) = default;
+};
 }  // namespace keys
-using keys_target = spl::variant<keys::none, keys::chat, keys::thread, keys::search, keys::menu>;
+template <class List>
+struct keys_targets;
+template <class... Features>
+struct keys_targets<plugin_list<Features...>> {
+  using type = spl::variant<keys::none, keys::chat, keys::thread, keys::menu, keys::of<Features>...>;
+};
+using keys_target = typename keys_targets<composition::providers<contract::key_focus, enabled_plugins>>::type;
 struct keys_asked {
   keys_target which = keys::none{};
   std::uint64_t count = 0;

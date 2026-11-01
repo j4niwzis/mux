@@ -83,6 +83,11 @@ struct proxy_profiles {
 struct account_adding {
   static constexpr std::string_view name = "an account being added";
 };
+// A field of a plugin's own that takes the keys when they are asked for it
+// (mux.ui's keys_asked): its target keys::of<f>, among the client's own.
+struct key_focus {
+  static constexpr std::string_view name = "a field taking the keys";
+};
 // A chat's looks -- its background, its bubbles', its panels' -- chosen at
 // a level (mux.app.kept, mux.app.looks): chat_looks_in_effect(c, f, its own
 // settings, the space each chat is in, the chat -- none, every chat's) ->

@@ -40,7 +40,7 @@ struct part {
     if (!searching_ || searching_->in != *s_->chosen())
       searching_ = state{*s_->chosen(), {}, {}, std::nullopt};
     this->put(shown{.open = true});
-    s_->ask_keys(mux::ui::keys::search{});
+    s_->ask_keys(mux::ui::keys::of<feature>{});
   }
   void apply(const ui::request::close_search&) {
     searching_.reset();

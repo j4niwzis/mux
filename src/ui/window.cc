@@ -550,7 +550,7 @@ struct panel_made {
   template <class Container>
   void put(Container&, const panel_facts&) const {}
   [[nodiscard]] bool stands(Panels&, const panel_facts&, const panel_facts&) const { return true; }
-  [[nodiscard]] Panels make(const panel_facts&) const { return Panels(std::in_place_type<accounts_panel>, accounts_view(*needs)); }
+  [[nodiscard]] Panels make(const panel_facts&) const { return Panels(std::in_place_type<accounts_panel>, skiff::compose::made_now(accounts_view(*needs))); }
 };
 
 struct make_menu {

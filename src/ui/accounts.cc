@@ -565,7 +565,9 @@ MUX_INLINE_IN_RELEASE auto accounts_view(const ui_needs& n) {
              c::shown_for<panel_read>([](const panel_read& now) { return !now || !now->narrow || now->detail_up; },
                                       c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX}), detail_column(n)))))));
 }
-using accounts_panel = decltype(accounts_view(std::declval<const ui_needs&>()));
+// The panel as the pages make it, when it slides in: a node, built where it
+// is said (made_now).
+using accounts_panel = decltype(skiff::compose::made_now(accounts_view(std::declval<const ui_needs&>())));
 
 }  // namespace mux::ui
 

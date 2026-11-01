@@ -359,7 +359,7 @@ void change_manage(ui::shown_model& showing, const mux::conversation_id& in, Cha
   if (!open || open->chat != in)
     return;
   auto now = *open;
-  spl::visit(spl::overloaded{[&](manage_state& kept) { change(now, kept); }, [](auto&) {}}, now.manage);
+  ::mux::plugins::room_settings::each_kept(now.manage, spl::overloaded{[&](manage_state& kept) { change(now, kept); }, [](auto&) {}});
   mux::ui::show(showing, std::optional(std::move(now)));
 }
 // A write done: what it changed of the room, in the facts; the drafts it
@@ -458,9 +458,9 @@ struct matrix_glue {
       return;
     auto now = *open;
     std::optional<proto::matrix::app_detail::manage_ask_t> asked;
-    spl::visit(spl::overloaded{[&](proto::matrix::manage_state& kept) { asked = spl::visit(proto::matrix::app_detail::manage_step{now, kept}, one.change); },
-                               [](auto&) {}},
-               now.manage);
+    room_settings::each_kept(now.manage,
+        spl::overloaded{[&](proto::matrix::manage_state& kept) { asked = spl::visit(proto::matrix::app_detail::manage_step{now, kept}, one.change); },
+                        [](auto&) {}});
     ui::show(*s_->showing, std::optional(std::move(now)));
     if (!asked)
       return;

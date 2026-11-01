@@ -28,6 +28,8 @@ struct data_entry {
 struct told {
   conversation_id in;
   std::string title, text;
+  // Whether what was asked was done: a write saved, a read got.
+  bool done = true;
 };
 // A room's state, as the account has it synced.
 struct state_listed {

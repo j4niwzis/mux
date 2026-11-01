@@ -55,7 +55,7 @@ struct tabs {
 };
 // What it keeps while a kind's settings are open, beside the facts:
 //   kept_parts(c, f, type_tag<kind>) -> composition::page_list<its
-//   parts...>, one of them held at a time (facts.manage); avatar_sending
+//   parts...>, each kept beside the others' (facts.manage); avatar_sending
 //   (part&), a room's avatar on its way, by ADL.
 struct kept {
   static constexpr std::string_view name = "what a room's settings keep";

@@ -158,7 +158,7 @@ struct matrix_admin {
   static void opened(Facts& facts, const conversation& chat) {
     proto::matrix::manage_facts(chat, facts);
     facts.tab = proto::matrix::manage::room{};
-    facts.manage = proto::matrix::manage_state{};
+    std::get<proto::matrix::manage_state>(facts.manage) = proto::matrix::manage_state{};
   }
 };
 // A Matrix room's settings: its tabs, what it keeps, what it fills -- on

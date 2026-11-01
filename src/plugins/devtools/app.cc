@@ -32,63 +32,187 @@ struct part {
     now.tools = !now.tools;
     s_->kept->set_plugin_settings(now);
     (void)s_->kept->write();
-    this->tab_tools(now.tools);
+    ui::show(*s_->showing, now);
   }
   // Each frame: what the window shows of them as they are kept -- at the
   // start, once local data is opened.
-  void tick() { this->tab_tools(s_->kept->plugin_settings<kept>().tools); }
-  [[nodiscard]] const tab_facts& tab() const { return *s_->showing->look<tab_facts>(); }
-  void tab_tools(bool on) {
-    if (this->tab().tools == on)
-      return;
-    auto next = this->tab();
-    next.tools = on;
-    ui::show(*s_->showing, next);
+  void tick() {
+    const auto& now = s_->kept->plugin_settings<kept>();
+    if (*s_->showing->look<kept>() != now)
+      ui::show(*s_->showing, now);
   }
-  // The tab's lists, of the room whose settings are open: one opened or
-  // shut, asked of its account as it opens; a state type unfolded.
-  template <class Ask>
-  void flip_list(bool tab_facts::*open, Ask ask) {
-    const auto in = s_->managed();
-    if (!in)
-      return;
-    auto next = this->tab().in == in ? this->tab() : tab_facts{.tools = this->tab().tools, .in = in};
-    next.*open = !(next.*open);
-    const bool opened = next.*open;
-    ui::show(*s_->showing, next);
-    if (opened && !s_->demo())
-      s_->net->ask(in->account, ask(*in));
+
+  // ---- the tab, kept with the room's settings (tab_kept) --------------------------
+  // What the tab keeps, where the settings open are a room the tools are
+  // for, changed as `change` says -- with the room -- and shown again.
+  template <class Change>
+  void change_tab(Change change) {
+    this->change_tab_of(change, room_settings::room_kinds{});
   }
+  template <class Change, class... Kinds>
+  void change_tab_of(Change& change, ui::type_list<Kinds...>) {
+    (this->change_tab_in<Kinds>(change), ...);
+  }
+  template <class Kind, class Change>
+  void change_tab_in(Change& change) {
+    const auto& open = *s_->showing->look<std::optional<room_settings::room_settings_of<Kind>>>();
+    if (!open)
+      return;
+    auto now = *open;
+    room_settings::each_kept(now.manage, spl::overloaded{[&](tab_kept& kept) { change(now.chat, kept); }, [](auto&) {}});
+    ui::show(*s_->showing, std::optional(std::move(now)));
+  }
+  void ask_state(const conversation_id& in) {
+    if (!s_->demo())
+      s_->net->ask(in.account, state_asked{in.id});
+  }
+  void ask_data(const conversation_id& in) {
+    if (!s_->demo())
+      s_->net->ask(in.account, data_asked{in.id});
+  }
+  // Room State, Account Data: unfolded where they are, asked of the account
+  // as they open.
   void apply(const flip_state_list&) {
-    this->flip_list(&tab_facts::state_open, [](const conversation_id& in) { return state_asked{in.id}; });
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if ((kept.state_open = !kept.state_open))
+        this->ask_state(in);
+    });
   }
   void apply(const flip_data_list&) {
-    this->flip_list(&tab_facts::data_open, [](const conversation_id& in) { return data_asked{in.id}; });
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if ((kept.data_open = !kept.data_open))
+        this->ask_data(in);
+    });
   }
   void apply(const unfold_type& one) {
-    auto next = this->tab();
-    next.unfolded = next.unfolded == one.type ? std::string() : one.type;
-    ui::show(*s_->showing, next);
+    this->change_tab([&](const conversation_id&, tab_kept& kept) { kept.unfolded = kept.unfolded == one.type ? std::string() : one.type; });
   }
-  // A state event or account data from the tab's lists, opened to write:
-  // as listed, or a new one.
-  void apply(const open_state_event& one) {
-    const auto entries = this->tab().state;
-    const auto in = this->room();
-    if (!in)
-      return;
-    const auto found = std::ranges::find_if(entries, [&](const state_entry& each) { return one.key && each.type == one.type && each.key == *one.key; });
-    const bool fresh = found == entries.end();
-    this->show_screen(*in, screen::state_editor{one.type, one.key.value_or(""), fresh ? std::string("{}") : found->content, fresh});
+  // A state event read, as listed; edited from it; one composed.
+  void apply(const view_state_event& one) {
+    this->change_tab([&](const conversation_id&, tab_kept& kept) {
+      const auto found = std::ranges::find_if(kept.state, [&](const state_entry& each) { return each.type == one.type && each.key == one.key; });
+      if (kept.pending || found == kept.state.end())
+        return;
+      kept.type = found->type;
+      kept.key = found->key;
+      kept.source = found->json;
+      kept.json = found->content;
+      kept.page = tab_page::view{};
+      kept.error.clear();
+      ++kept.state_round;
+    });
   }
-  void apply(const open_data_entry& one) {
-    const auto entries = this->tab().data;
-    const auto in = this->room();
-    if (!in)
-      return;
-    const auto found = std::ranges::find_if(entries, [&](const data_entry& each) { return one.type && each.type == *one.type; });
-    const bool fresh = found == entries.end();
-    this->show_screen(*in, screen::data_editor{one.type.value_or(""), fresh ? std::string("{}") : found->content, fresh});
+  void apply(const edit_state_event&) {
+    this->change_tab([&](const conversation_id&, tab_kept& kept) {
+      if (kept.pending)
+        return;
+      kept.page = tab_page::edit{};
+      kept.error.clear();
+      ++kept.state_round;
+    });
+  }
+  void apply(const compose_state_event& one) {
+    this->change_tab([&](const conversation_id&, tab_kept& kept) {
+      if (kept.pending)
+        return;
+      kept.type = one.type;
+      kept.key.clear();
+      kept.json = "{}";
+      kept.page = tab_page::compose{};
+      kept.error.clear();
+      ++kept.state_round;
+    });
+  }
+  // Written: on its way, its answer taken where it comes (take(told)).
+  void apply(const write_state_event& one) {
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if (kept.pending || one.type.empty() || s_->demo())
+        return;
+      kept.pending = true;
+      kept.error.clear();
+      kept.type = one.type;
+      kept.key = one.key;
+      kept.json = one.json;
+      s_->net->ask(in.account, save_state_asked{in.id, one.type, one.key, one.json});
+    });
+  }
+  void apply(const write_data_entry& one) {
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if (kept.pending || one.type.empty() || s_->demo())
+        return;
+      kept.pending = true;
+      kept.error.clear();
+      kept.account_type = one.type;
+      kept.account_json = one.json;
+      s_->net->ask(in.account, save_data_asked{in.id, one.type, one.json});
+    });
+  }
+  // Account data chosen to write, as listed; a new one; the form shut.
+  void apply(const choose_data_entry& one) {
+    this->change_tab([&](const conversation_id&, tab_kept& kept) {
+      if (one.index < kept.data.size()) {
+        kept.account_type = kept.data[one.index].type;
+        kept.account_json = kept.data[one.index].content;
+      }
+      kept.account_editor = true;
+      ++kept.account_round;
+    });
+  }
+  void apply(const new_data_entry&) {
+    this->change_tab([&](const conversation_id&, tab_kept& kept) {
+      kept.account_type.clear();
+      kept.account_json.clear();
+      kept.account_editor = true;
+      ++kept.account_round;
+    });
+  }
+  void apply(const close_data_form&) {
+    this->change_tab([&](const conversation_id&, tab_kept& kept) { kept.account_editor = false; });
+  }
+  // What an account told, in the tab of its room: a write done -- a state
+  // event composed back to the overview, one edited to its reading, the
+  // lists asked again -- or what went wrong; the lists as listed, the state
+  // event read as it is now.
+  void tab_told(const told& one) {
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if (in != one.in || !kept.pending)
+        return;
+      kept.pending = false;
+      kept.error = one.done ? std::string() : one.text;
+      if (!one.done)
+        return;
+      spl::visit(spl::overloaded{[&](tab_page::compose) { kept.page = tab_page::overview{}; },
+                                 [&](tab_page::edit) { kept.page = tab_page::view{}; },
+                                 [](const auto&) {}},
+                 kept.page);
+      kept.account_editor = false;
+      ++kept.state_round;
+      this->ask_state(in);
+      this->ask_data(in);
+    });
+  }
+  void tab_listed(const state_listed& one) {
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if (in != one.in)
+        return;
+      kept.state = one.entries;
+      const auto found = std::ranges::find_if(kept.state, [&](const state_entry& each) { return each.type == kept.type && each.key == kept.key; });
+      spl::visit(spl::overloaded{[&](tab_page::view) {
+                                   if (found != kept.state.end()) {
+                                     kept.source = found->json;
+                                     kept.json = found->content;
+                                     ++kept.state_round;
+                                   }
+                                 },
+                                 [](const auto&) {}},
+                 kept.page);
+    });
+  }
+  void tab_listed(const data_listed& one) {
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if (in == one.in)
+        kept.data = one.entries;
+    });
   }
   std::uint64_t opened_ = 0;
 
@@ -188,23 +312,17 @@ struct part {
     if (open && open->in == in)
       this->show_screen(in, std::move(screen));
   }
-  void take(const told& one) { this->shown_for(one.in, screen::reading{one.title, one.text}); }
-  // And in the tab, where its lists are of that room.
+  void take(const told& one) {
+    this->shown_for(one.in, screen::reading{one.title, one.text});
+    this->tab_told(one);
+  }
   void take(const state_listed& one) {
     this->shown_for(one.in, screen::state{one.entries});
-    if (this->tab().in == one.in) {
-      auto next = this->tab();
-      next.state = one.entries;
-      ui::show(*s_->showing, next);
-    }
+    this->tab_listed(one);
   }
   void take(const data_listed& one) {
     this->shown_for(one.in, screen::data{one.entries});
-    if (this->tab().in == one.in) {
-      auto next = this->tab();
-      next.data = one.entries;
-      ui::show(*s_->showing, next);
-    }
+    this->tab_listed(one);
   }
 };
 

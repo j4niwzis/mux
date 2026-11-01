@@ -103,12 +103,14 @@ struct save_state_asked {
     account.on_fiber([&account, one = *this] {
       const std::string title = "Saved " + one.type;
       if (!written::is_object(one.content))
-        account.tell_program(told{{account.id(), one.room}, title, "Not saved: the content is not a JSON object."});
+        account.tell_program(told{{account.id(), one.room}, title, "Not saved: the content is not a JSON object.", false});
       else if (!account.connected())
-        account.tell_program(told{{account.id(), one.room}, title, "Not saved: not connected."});
-      else
-        account.tell_program(told{{account.id(), one.room}, title, written::said(account.request(loom::cs::set_room_state_with_key{
-            .room_id = one.room, .event_type = one.type, .state_key = one.key, .body = knot::raw{one.content}}))});
+        account.tell_program(told{{account.id(), one.room}, title, "Not saved: not connected.", false});
+      else {
+        const auto done = account.request(loom::cs::set_room_state_with_key{
+            .room_id = one.room, .event_type = one.type, .state_key = one.key, .body = knot::raw{one.content}});
+        account.tell_program(told{{account.id(), one.room}, title, written::said(done), static_cast<bool>(done)});
+      }
     });
   }
 };
@@ -120,12 +122,14 @@ struct save_data_asked {
     account.on_fiber([&account, one = *this] {
       const std::string title = "Saved " + one.type;
       if (!written::is_object(one.content))
-        account.tell_program(told{{account.id(), one.room}, title, "Not saved: the content is not a JSON object."});
+        account.tell_program(told{{account.id(), one.room}, title, "Not saved: the content is not a JSON object.", false});
       else if (!account.connected())
-        account.tell_program(told{{account.id(), one.room}, title, "Not saved: not connected."});
-      else
-        account.tell_program(told{{account.id(), one.room}, title, written::said_plain(account.request(loom::cs::set_account_data_per_room{
-            .user_id = account.id().address, .room_id = one.room, .type = one.type, .body = knot::raw{one.content}}))});
+        account.tell_program(told{{account.id(), one.room}, title, "Not saved: not connected.", false});
+      else {
+        const auto done = account.request(loom::cs::set_account_data_per_room{
+            .user_id = account.id().address, .room_id = one.room, .type = one.type, .body = knot::raw{one.content}});
+        account.tell_program(told{{account.id(), one.room}, title, written::said_plain(done), static_cast<bool>(done)});
+      }
     });
   }
 };
@@ -140,9 +144,9 @@ struct send_asked {
     account.on_fiber([&account, one = *this] {
       const std::string title = "Sent " + one.type;
       if (!written::is_object(one.content))
-        account.tell_program(told{{account.id(), one.room}, title, "Not sent: the content is not a JSON object."});
+        account.tell_program(told{{account.id(), one.room}, title, "Not sent: the content is not a JSON object.", false});
       else if (!account.connected())
-        account.tell_program(told{{account.id(), one.room}, title, "Not sent: not connected."});
+        account.tell_program(told{{account.id(), one.room}, title, "Not sent: not connected.", false});
       else if (one.key)
         account.tell_program(told{{account.id(), one.room}, title, written::said(account.request(loom::cs::set_room_state_with_key{
             .room_id = one.room, .event_type = one.type, .state_key = *one.key, .body = knot::raw{one.content}}))});

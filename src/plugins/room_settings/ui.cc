@@ -109,9 +109,23 @@ struct plugin_kept_of<Kind, plugin_list<Features...>> {
 template <class Kind>
 using manage_tab_t = typename ui::variant_of_types<typename ui::joined<
     ui::type_list<settings_tab::general, settings_tab::notifications, settings_tab::looks>, plugin_tabs_t<Kind>>::type>::type;
+// Every plugin's part for a kind, each kept beside the others (room_admin's
+// pages' and the developer tools' both, on a Matrix room).
+template <class List>
+struct tuple_of_types;
+template <class... Ts>
+struct tuple_of_types<ui::type_list<Ts...>> {
+  using type = std::tuple<Ts...>;
+};
 template <class Kind>
-using manage_part_t = typename ui::variant_of_types<
+using manage_part_t = typename tuple_of_types<
     typename plugin_kept_of<Kind, composition::providers<contract::kept, enabled_plugins>>::type>::type;
+// Each plugin's part given to f -- which takes the one it is for by its
+// type, and lets the others by.
+template <class Parts, class F>
+void each_kept(Parts& parts, F&& f) {
+  std::apply([&](auto&... part) { (f(part), ...); }, parts);
+}
 // The protocol's part of a room, as a kind's settings hold it: its
 // protocol's parts alone (Matrix: its rules and levels; XMPP: a MUC's
 // configuration); a plain chat's, none.
@@ -236,19 +250,19 @@ template <class Kind>
 // A room avatar being sent: what a plugin keeps shows it pending.
 template <class Kind>
 void manage_avatar_sending(room_settings_of<Kind>& facts) {
-  spl::visit([](auto& part) {
+  each_kept(facts.manage, [](auto& part) {
     using tab_defaults::avatar_sending;
     avatar_sending(part);
-  }, facts.manage);
+  });
 }
 // What the tab up closes first, by its plugin: an editor open on it.
 // Whether it did.
 template <class Kind>
 bool close_manage_editor(room_settings_of<Kind>& facts) {
   return spl::visit([&](const auto& tab) {
-    return spl::visit([&](auto& part) {
+    return std::apply([&](auto&... part) {
       using tab_defaults::manage_close_editor;
-      return manage_close_editor(tab, part);
+      return (manage_close_editor(tab, part) || ...);
     }, facts.manage);
   }, facts.tab);
 }
@@ -256,9 +270,9 @@ bool close_manage_editor(room_settings_of<Kind>& facts) {
 template <class Kind>
 [[nodiscard]] bool manage_editor_up(const room_settings_of<Kind>& facts) {
   return spl::visit([&](const auto& tab) {
-    return spl::visit([&](const auto& part) {
+    return std::apply([&](const auto&... part) {
       using tab_defaults::manage_editor_header;
-      return manage_editor_header(tab, part);
+      return (manage_editor_header(tab, part) || ...);
     }, facts.manage);
   }, facts.tab);
 }

@@ -119,35 +119,86 @@ struct kept {
 struct flip_tools {};
 consteval bool provides(contract::settings_kept, type_tag<feature>) { return true; }
 constexpr type_tag<kept> settings_type(contract::settings_kept, type_tag<feature>) { return {}; }
-// What the window shows of them (contract::window_state): whether they are
-// on, as kept; and, in a room's settings' tab, its lists as Cinny unfolds
-// them there -- the room they are of, its state events (a type unfolded to
-// its keys) and its account data, each open or shut.
-struct tab_facts {
-  bool tools = false;
-  std::optional<conversation_id> in;
-  bool state_open = false, data_open = false;
-  std::string unfolded;
+consteval bool provides(contract::window_state, type_tag<feature>) { return true; }
+constexpr type_tag<kept> state_type(contract::window_state, type_tag<feature>) { return {}; }
+
+// ---- the tab, as it was before the plugins rewrite (Cinny's) ------------------------
+// What the tab shows in place of its overview: a state event read, one
+// edited, one composed (a new one, of a type or of any).
+namespace tab_page {
+struct overview {
+  friend bool operator==(overview, overview) = default;
+};
+struct view {
+  friend bool operator==(view, view) = default;
+};
+struct edit {
+  friend bool operator==(edit, edit) = default;
+};
+struct compose {
+  friend bool operator==(compose, compose) = default;
+};
+}  // namespace tab_page
+using tab_page_t = spl::variant<tab_page::overview, tab_page::view, tab_page::edit, tab_page::compose>;
+// What it keeps while a room's settings are open (room_settings'
+// contract::kept): its lists, open or shut, as the account listed them --
+// a state type unfolded; the page up, and the state event on it, as the
+// server has it and as its content is typed from; account data being
+// written; a write on its way, and what went wrong.
+struct tab_kept {
+  tab_page_t page = tab_page::overview{};
+  bool state_open = false, data_open = false, account_editor = false, pending = false;
+  std::string unfolded, type, key, source, json, account_type, account_json, error;
+  std::uint32_t state_round = 0, account_round = 0;
   std::vector<state_entry> state;
   std::vector<data_entry> data;
-  friend bool operator==(const tab_facts&, const tab_facts&) = default;
+  friend bool operator==(const tab_kept&, const tab_kept&) = default;
 };
 // Asked of the program by the tab: a list opened or shut; a state type
-// unfolded or folded; a state event or account data opened to write (a new
-// one where its key or type is not said).
+// unfolded or folded; a state event read, edited, or one composed; a state
+// event or account data written; account data chosen to write, a new one,
+// or the form shut.
 struct flip_state_list {};
 struct flip_data_list {};
 struct unfold_type {
   std::string type;
 };
-struct open_state_event {
+struct view_state_event {
+  std::string type, key;
+};
+struct edit_state_event {};
+struct compose_state_event {
   std::string type;
-  std::optional<std::string> key;
 };
-struct open_data_entry {
-  std::optional<std::string> type;
+struct write_state_event {
+  std::string type, key, json;
 };
-consteval bool provides(contract::window_state, type_tag<feature>) { return true; }
-constexpr type_tag<tab_facts> state_type(contract::window_state, type_tag<feature>) { return {}; }
+struct write_data_entry {
+  std::string type, json;
+};
+struct choose_data_entry {
+  std::size_t index = 0;
+};
+struct new_data_entry {};
+struct close_data_form {};
+// Kept on the settings of the rooms the tab is put on.
+template <class Protocol>
+  requires(proto::offered_by<state_of<Protocol>, proto::feature::developer_tools>())
+constexpr composition::page_list<tab_kept> kept_parts(room_settings::contract::kept, type_tag<feature>,
+                                                      type_tag<room_settings::room_kind::room_of<Protocol>>) {
+  return {};
+}
+// Back or Esc: a write on its way waited for; a page up closed to the
+// overview; the account data form shut. A way back shown over a page up.
+inline bool manage_close_editor(room_tab, tab_kept& kept) {
+  if (kept.pending)
+    return true;
+  if (kept.page != tab_page_t(tab_page::overview{})) {
+    kept.page = tab_page::overview{};
+    return true;
+  }
+  return std::exchange(kept.account_editor, false);
+}
+inline bool manage_editor_header(room_tab, const tab_kept& kept) { return kept.page != tab_page_t(tab_page::overview{}); }
 
 }  // namespace mux::plugins::devtools

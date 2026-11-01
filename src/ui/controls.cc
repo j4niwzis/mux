@@ -395,6 +395,36 @@ MUX_INLINE_IN_RELEASE auto make_choice_menu(const palette& colours, std::string 
 }
 
 
+// Made again as the choice moves: a node, built where it is said
+// (made_now), as the choice menu's own head is.
+auto choice_head(const auto& colours, std::string value) {
+  namespace c = skiff::compose;
+  return c::made_now(SKIFF_NAMED(choice_head, c::row(c::hbox(4.0f, {.fillX = true, .height = 24.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f},
+      .cornerRadius = colours.widgets.fCorner, .background = colours.chosen, .hoverBackground = colours.widgets.fSurfaceHover}),
+      c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.text)),
+      c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 12.0f, colours.text))))));
+}
+// The compact head: the name chosen, nothing beside it.
+// Where nothing is chosen, what it says instead (an "Add a room..." of its
+// own).
+struct compact_choice_head {
+  const palette* colours;
+  std::string empty;
+  auto operator()(std::string value) const { return choice_head(*colours, value.empty() ? empty : std::move(value)); }
+};
+template <class Choose>
+auto compact_choice(const auto& colours, std::vector<std::string> names, std::size_t selected, Choose choose,
+                    std::string empty = {}, float least = 72.0f) {
+  const auto value = selected < names.size() ? names[selected] : empty;
+  const auto width = std::clamp(static_cast<float>(value.size()) * 6.5f + 32.0f, least, std::max(180.0f, least));
+  auto head = choice_head(colours, value);
+  auto rows = names | std::views::transform([&](const auto& name) { return choice_menu_option(colours, name); }) | std::ranges::to<std::vector>();
+  auto menu = widgets::ChoiceMenu<Choose, decltype(head), choice_menu_option_t, show_choice_menu<compact_choice_head>>(
+      std::move(names), selected, std::move(choose), std::move(head), std::move(rows),
+      show_choice_menu<compact_choice_head>{&colours, {&colours, std::move(empty)}});
+  menu.apply({.width = width, .relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle});
+  return menu;
+}
 // What a level holds of room events: all of them or messages only, and
 // each kind chosen apart.
 struct room_events_held {

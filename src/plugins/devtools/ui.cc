@@ -301,17 +301,66 @@ inline icon_t tab_icon(room_tab) { return icon::terminal{}; }
 MUX_INLINE_IN_RELEASE auto developer_switch(const palette& colours) {
   namespace c = skiff::compose;
   using toggle_t = widgets::Toggle<sends<flip_tools>>;
-  return SKIFF_NAMED(developer_switch, c::applied<tab_facts>([](const tab_facts& now) { return now.tools; },
+  return SKIFF_NAMED(developer_switch, c::applied<kept>([](const kept& now) { return now.tools; },
       [](toggle_t& toggle, bool on) { toggle.setOnNow(on); },
       c::styled({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, {}))));
 }
-// ---- the tab's lists, as Cinny's: the state by type, each unfolded to its
-// keys; the account data by type -- each opened to write where pressed --------
+// ---- the tab, as it was before the plugins rewrite (Cinny's) -------------------
+// What it reads: the room's settings open (Facts: a kind's), and what this
+// plugin keeps beside them (tab_kept).
+template <class Facts>
+[[nodiscard]] const tab_kept& tab_of(const std::optional<Facts>& now) {
+  static const tab_kept none;
+  const tab_kept* found = &none;
+  if (now)
+    room_settings::each_kept(now->manage, spl::overloaded{[&](const tab_kept& kept) { found = &kept; }, [](const auto&) {}});
+  return *found;
+}
+template <class Page>
+[[nodiscard]] bool on_page(const tab_kept& kept) {
+  return spl::visit(spl::overloaded{[](const Page&) { return true; }, [](const auto&) { return false; }}, kept.page);
+}
+// Rows made from what the facts say, again where that changes.
+template <class Facts, class Row, class Key, class Of, class Make>
+auto tab_rows(Of of, Make make, scene::Spec spec = {.fillX = true, .autoSize = scene::axes::kY}) {
+  namespace c = skiff::compose;
+  using facts_t = std::optional<Facts>;
+  return SKIFF_NAMED(tab_rows, c::projected<facts_t>([of](const facts_t& now) { return now ? std::optional<Key>(of(tab_of(now))) : std::nullopt; },
+                                c::mount<Row, Key>([make](const Key& key) { return std::tuple{make(key)}; }, spec)));
+}
+// A word under its head: saving, or what went wrong.
+template <class Facts>
+auto tab_status(const palette& colours) {
+  namespace c = skiff::compose;
+  using facts_t = std::optional<Facts>;
+  const auto said = [](const facts_t& now) {
+    const tab_kept& kept = tab_of(now);
+    return kept.pending ? std::string("Saving…") : kept.error;
+  };
+  return SKIFF_NAMED(tab_status, c::shown_for<facts_t>([said](const facts_t& now) { return !said(now).empty(); },
+                                  c::text_for<facts_t>(said, wrapped(nodes::Text("", 12.0f, colours.dim)))));
+}
+// A button whose words move: Expand, or Collapse where its list is open.
+template <class Facts, class Flip>
+auto unfold_button(const palette& colours, std::string spoken, bool tab_kept::*open) {
+  namespace c = skiff::compose;
+  using facts_t = std::optional<Facts>;
+  return SKIFF_NAMED(unfold_button, c::onPress(sends<Flip>{},
+      c::row(c::hbox(0.0f, {.height = 32.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle,
+                            .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .background = colours.chosen,
+                            .hoverBackground = colours.widgets.fSurfaceHover, .border = scene::Border{colours.widgets.fSurfaceActive, 1.0f}}),
+             c::text_for<facts_t>([open](const facts_t& now) { return std::string(tab_of(now).*open ? "Collapse" : "Expand"); },
+                                  c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 12.0f, colours.text)))),
+      std::move(spoken)));
+}
+// A row of the state list: Add New, a type (its count; unfolded or not), a
+// key of it.
 enum class state_row_kind { add, type, key };
 template <class Act>
 auto state_list_row(const palette& colours, std::string label, std::string detail, Act act, state_row_kind kind = state_row_kind::type,
                     bool expanded = false) {
   namespace c = skiff::compose;
+  // Pressed, it asks what act makes (onPress).
   auto spoken = label;
   return SKIFF_NAMED(state_list_row, c::onPress(std::move(act), c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f},
                                                           .cornerRadius = colours.widgets.fCorner, .hoverBackground = colours.chosen}),
@@ -326,7 +375,7 @@ auto state_list_row(const palette& colours, std::string label, std::string detai
           c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::right{}), colours.dim)))),
       std::move(spoken)));
 }
-// The state events, by their types: each type's keys, the one unfolded.
+// The state events, by their types: each type unfolded to its keys.
 struct state_group {
   std::string type;
   std::vector<std::string> keys;
@@ -337,100 +386,172 @@ struct state_list_key {
   std::string unfolded;
   friend bool operator==(const state_list_key&, const state_list_key&) = default;
 };
-[[nodiscard]] inline state_list_key state_list_of(const tab_facts& now) {
+[[nodiscard]] inline state_list_key state_list_of(const tab_kept& kept) {
   std::map<std::string, std::vector<std::string>> groups;
-  for (const state_entry& event : now.state)
+  for (const state_entry& event : kept.state)
     groups[event.type].push_back(event.key);
   return {groups | std::views::transform([](auto& group) {
             std::ranges::sort(group.second);
             return state_group{group.first, std::move(group.second)};
           }) | std::ranges::to<std::vector>(),
-          now.unfolded};
+          kept.unfolded};
 }
 MUX_INLINE_IN_RELEASE auto state_event_list(const palette& colours, const state_list_key& key) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(state_event_list, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       setting_tile(colours, "Events", "", nodes::Text(std::format("Total: {}", key.groups.size()), 12.0f, colours.dim)),
-      cutout(colours, {}, state_list_row(colours, "Add New", "", sends<open_state_event>{{"", std::nullopt}}, state_row_kind::add),
+      cutout(colours, {}, state_list_row(colours, "Add New", "", sends<compose_state_event>{{""}}, state_row_kind::add),
           c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.groups | std::views::transform([&](const state_group& group) {
             const bool expanded = key.unfolded == group.type;
             return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                 state_list_row(colours, group.type, std::to_string(group.keys.size()), sends<unfold_type>{{group.type}}, state_row_kind::type, expanded),
                 c::visible(expanded, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 0.0f, 0.0f, 16.0f},
                                                               .padding = {0.0f, 0.0f, 0.0f, 8.0f}, .border = scene::Border{colours.band, 1.0f}}),
-                    state_list_row(colours, "Add New", "", sends<open_state_event>{{group.type, std::nullopt}}, state_row_kind::add),
+                    state_list_row(colours, "Add New", "", sends<compose_state_event>{{group.type}}, state_row_kind::add),
                     c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), group.keys | std::views::transform([&](const std::string& one) {
-                      return state_list_row(colours, one.empty() ? "Default" : "\"" + one + "\"", "", sends<open_state_event>{{group.type, one}},
+                      return state_list_row(colours, one.empty() ? "Default" : "\"" + one + "\"", "", sends<view_state_event>{{group.type, one}},
                                             state_row_kind::key);
                     }) | std::ranges::to<std::vector>()))));
           }) | std::ranges::to<std::vector>()))));
 }
 using state_event_list_t = decltype(state_event_list(std::declval<const palette&>(), state_list_key{}));
-// The account data, by its types.
-struct data_list_key {
-  std::vector<std::string> types;
-  friend bool operator==(const data_list_key&, const data_list_key&) = default;
+// A state event edited or written: its draft made from the one open.
+struct tab_state_draft {
+  std::string type, key, json;
+  friend bool operator==(const tab_state_draft&, const tab_state_draft&) = default;
 };
-[[nodiscard]] inline data_list_key data_list_of(const tab_facts& now) {
-  return {now.data | std::views::transform(&data_entry::type) | std::ranges::to<std::vector>()};
+struct state_basis {
+  std::uint32_t round = 0;
+  bool composing = false;
+  tab_state_draft first;
+  friend bool operator==(const state_basis&, const state_basis&) = default;
+};
+[[nodiscard]] inline state_basis state_basis_of(const tab_kept& kept) {
+  return {kept.state_round, on_page<tab_page::compose>(kept), {kept.type, kept.key, kept.json.empty() ? std::string("{}") : kept.json}};
 }
-MUX_INLINE_IN_RELEASE auto data_list(const palette& colours, const data_list_key& key) {
+// A button that writes what is typed in its draft, as `make` makes of it.
+template <class Draft, class Make>
+auto writing(const palette& colours, std::string label, Make make, bool success = false) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(data_list, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      action(colours, "Add New", sends<open_data_entry>{{std::nullopt}}),
-      cutout(colours, {}, c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.types | std::views::transform([&](const std::string& type) {
-        return state_list_row(colours, type, "", sends<open_data_entry>{{type}}, state_row_kind::key);
-      }) | std::ranges::to<std::vector>()))));
+  return SKIFF_NAMED(writing, c::column(c::vbox(0.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+                                       c::asking_for<Draft>(std::move(make), action_face(colours, std::move(label), success ? action_style::success : action_style::secondary))));
 }
-using data_list_t = decltype(data_list(std::declval<const palette&>(), data_list_key{}));
-// A list shown as the facts say, made again where what it lists moves.
-template <class Row, class Key, class Of, class Make>
-auto listed_in_tab(Of of, Make make) {
+MUX_INLINE_IN_RELEASE auto state_editor(const palette& colours, const state_basis& basis) {
   namespace c = skiff::compose;
-  return c::projected<tab_facts>([of](const tab_facts& now) { return std::optional<Key>(of(now)); },
-                                 c::mount<Row, Key>([make](const Key& key) { return std::tuple{make(key)}; }, {.fillX = true, .autoSize = scene::axes::kY}));
+  using draft = tab_state_draft;
+  const auto save = [](const draft& now) { return write_state_event{now.type, now.key, now.json}; };
+  return SKIFF_NAMED(state_editor, c::local<draft>(c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::visible(!basis.composing, section(colours, "State Event", tile(colours, basis.first.type, basis.first.key,
+          c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth}),
+              writing<draft>(colours, "Save", save, true),
+              action(colours, "Cancel", sends<view_state_event>{{basis.first.type, basis.first.key}}))))),
+      c::visible(basis.composing, c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&draft::type>(colours, "State Event Type", "")),
+              writing<draft>(colours, "Send", save, true)),
+          model_field<&draft::key>(colours, "State Key (Optional)", ""))),
+      section(colours, "JSON Content", model_area<&draft::json>(colours, "", "{}", 20))),
+      basis.first));
 }
-// Expand, or Collapse where it is open: pressed, it opens or shuts.
-template <class Flip>
-auto unfold_button(const palette& colours, std::string spoken, bool tab_facts::*open) {
+using state_editor_t = decltype(state_editor(std::declval<const palette&>(), state_basis{}));
+// Account data written: its draft made from the one chosen.
+struct tab_data_draft {
+  std::string type, json;
+  friend bool operator==(const tab_data_draft&, const tab_data_draft&) = default;
+};
+struct data_basis {
+  std::uint32_t round = 0;
+  tab_data_draft first;
+  friend bool operator==(const data_basis&, const data_basis&) = default;
+};
+[[nodiscard]] inline data_basis data_basis_of(const tab_kept& kept) {
+  return {kept.account_round, {kept.account_type, kept.account_json.empty() ? std::string("{}") : kept.account_json}};
+}
+MUX_INLINE_IN_RELEASE auto data_editor(const palette& colours, const data_basis& basis) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(unfold_button, c::onPress(sends<Flip>{},
-      c::row(c::hbox(0.0f, {.height = 32.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle,
-                            .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .background = colours.chosen,
-                            .hoverBackground = colours.widgets.fSurfaceHover, .border = scene::Border{colours.widgets.fSurfaceActive, 1.0f}}),
-             c::text_for<tab_facts>([open](const tab_facts& now) { return std::string(now.*open ? "Collapse" : "Expand"); },
-                                    c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 12.0f, colours.text)))),
-      std::move(spoken)));
+  using draft = tab_data_draft;
+  return SKIFF_NAMED(data_editor, c::local<draft>(section(colours, "Account Data",
+      model_field<&draft::type>(colours, "Type", ""),
+      model_area<&draft::json>(colours, "Content", "{}", 12),
+      c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          writing<draft>(colours, "Save", [](const draft& now) { return write_data_entry{now.type, now.json}; }),
+          action(colours, "Cancel", sends<close_data_form>{}))),
+      basis.first));
+}
+using data_editor_t = decltype(data_editor(std::declval<const palette&>(), data_basis{}));
+// The account data's types, a compact choice: one chosen, written.
+struct data_choice_key {
+  std::vector<std::string> names;
+  friend bool operator==(const data_choice_key&, const data_choice_key&) = default;
+};
+struct choose_data {
+  using Answer = choose_data_entry;
+  Answer operator()(std::size_t index) const { return {index}; }
+};
+[[nodiscard]] inline data_choice_key data_choice_of(const tab_kept& kept) {
+  return {kept.data | std::views::transform(&data_entry::type) | std::ranges::to<std::vector>()};
+}
+template <class Facts>
+auto data_choice(const palette& colours) {
+  namespace c = skiff::compose;
+  using facts_t = std::optional<Facts>;
+  using menu_t = decltype(compact_choice(colours, {}, 0, choose_data{}));
+  return SKIFF_NAMED(data_choice, c::projected<facts_t>([](const facts_t& now) { return now ? std::optional(data_choice_of(tab_of(now))) : std::nullopt; },
+      c::mount<menu_t, data_choice_key>([at = &colours](const data_choice_key& shown) {
+        return std::tuple{compact_choice(*at, shown.names, shown.names.size(), choose_data{})};
+      },
+          {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle})));
 }
 
-// The tab as Cinny's, as it was before the plugins: Options -- the switch,
-// the room's ID copied -- and, with the tools on, Data -- an event
-// composed; the room's state and its account data, each unfolded in place.
+// The tab, as it was: Options -- the switch, the room's ID copied -- and,
+// with the tools on, Data -- an event composed; the room's state and its
+// account data, unfolded where they are; a state event read, edited or
+// composed in place of them, and account data written, under a way back.
 MUX_INLINE_IN_RELEASE auto make_manage_page(room_tab, const palette& colours, const auto& facts) {
   namespace c = skiff::compose;
-  const auto tools_on = [](const tab_facts& now) { return now.tools; };
+  using Facts = std::remove_cvref_t<decltype(facts)>;
+  using facts_t = std::optional<Facts>;
+  const auto tools_on = [](const kept& now) { return now.tools; };
   return SKIFF_NAMED(devtools_tab_page, c::column(page_look(),
-      section(colours, "Options",
-          tile(colours, "Enable Developer Tools", "", developer_switch(colours)),
-          c::shown_for<tab_facts>(tools_on, tile(colours, "Room ID", "Copy room ID to clipboard. (\"" + facts.id + "\")",
-                                                 action(colours, "Copy", sends<request::copy_text>{{facts.id}})))),
-      c::shown_for<tab_facts>(tools_on, section(colours, "Data",
-          tile(colours, "New Message Event", "Create and send a new message event within the room.",
-               action(colours, "Compose", sends<open_composer>{})),
-          card(colours,
-              setting_tile(colours, "Room State", "State events of the room.",
-                           unfold_button<flip_state_list>(colours, "Room state", &tab_facts::state_open)),
-              c::shown_for<tab_facts>([](const tab_facts& now) { return now.state_open; },
-                  listed_in_tab<state_event_list_t, state_list_key>(state_list_of, [at = &colours](const state_list_key& key) {
-                    return state_event_list(*at, key);
-                  }))),
-          card(colours,
-              setting_tile(colours, "Account Data", "Private personalization data stored within room.",
-                           unfold_button<flip_data_list>(colours, "Account data", &tab_facts::data_open)),
-              c::shown_for<tab_facts>([](const tab_facts& now) { return now.data_open; },
-                  listed_in_tab<data_list_t, data_list_key>(data_list_of, [at = &colours](const data_list_key& key) {
-                    return data_list(*at, key);
-                  })))))));
+      tab_status<Facts>(colours),
+      c::shown_for<facts_t>([](const facts_t& now) { return !tab_of(now).account_editor && on_page<tab_page::overview>(tab_of(now)); },
+          c::column(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              section(colours, "Options",
+                  tile(colours, "Enable Developer Tools", "", developer_switch(colours)),
+                  c::shown_for<kept>(tools_on, tile(colours, "Room ID", "Copy room ID to clipboard. (\"" + facts.id + "\")",
+                                                    action(colours, "Copy", sends<request::copy_text>{{facts.id}})))),
+              c::shown_for<kept>(tools_on, section(colours, "Data",
+                  tile(colours, "New Message Event", "Create and send a new message event within the room.",
+                       action(colours, "Compose", sends<open_composer>{})),
+                  card(colours,
+                      setting_tile(colours, "Room State", "State events of the room.",
+                                   unfold_button<Facts, flip_state_list>(colours, "Room state", &tab_kept::state_open)),
+                      c::shown_for<facts_t>([](const facts_t& now) { return tab_of(now).state_open; },
+                          tab_rows<Facts, state_event_list_t, state_list_key>(state_list_of, [at = &colours](const state_list_key& key) {
+                            return state_event_list(*at, key);
+                          }))),
+                  card(colours,
+                      setting_tile(colours, "Account Data", "Private personalization data stored within room.",
+                                   unfold_button<Facts, flip_data_list>(colours, "Account data", &tab_kept::data_open)),
+                      c::shown_for<facts_t>([](const facts_t& now) { return tab_of(now).data_open; },
+                          c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                              action(colours, "Add New", sends<new_data_entry>{}),
+                              data_choice<Facts>(colours)))))))),
+      c::shown_for<facts_t>([](const facts_t& now) { return !on_page<tab_page::overview>(tab_of(now)); },
+          c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::shown_for<facts_t>([](const facts_t& now) { return on_page<tab_page::view>(tab_of(now)); },
+                  c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                      setting_tile(colours, "State Event", "", action(colours, "Edit", sends<edit_state_event>{})),
+                      card(colours, c::text_for<facts_t>([](const facts_t& now) { return tab_of(now).source; }, [&] {
+                        auto text = nodes::Text("", 13.0f, colours.text);
+                        text.setMonospace(true);
+                        text.setSelectable(true);
+                        return wrapped(std::move(text));
+                      }())))),
+              c::shown_for<facts_t>([](const facts_t& now) { return !on_page<tab_page::view>(tab_of(now)); },
+                  tab_rows<Facts, state_editor_t, state_basis>(state_basis_of, [at = &colours](const state_basis& basis) { return state_editor(*at, basis); })))),
+      c::shown_for<facts_t>([](const facts_t& now) { return tab_of(now).account_editor; },
+          tab_rows<Facts, data_editor_t, data_basis>(data_basis_of, [at = &colours](const data_basis& basis) { return data_editor(*at, basis); }))));
 }
 
 // The dialog: the screen open, made again as what it shows moves.

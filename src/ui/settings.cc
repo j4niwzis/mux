@@ -47,15 +47,19 @@ struct plugin_settings_pages<plugin_list<Features...>> {
   using type = typename joined<type_list<>,
       typename settings_page_types<decltype(settings_pages(contract::settings_pages{}, type_tag<Features>{}))>::type...>::type;
 };
+// A page as the view holds it: a node, built where it is made, as the view
+// makes it again (made_now) -- what a page is said as is a builder.
+template <class Said>
+using page_made_t = decltype(skiff::compose::made_now(std::declval<Said>()));
 template <class List>
 struct settings_pages_of;
 template <class... Pages>
 struct settings_pages_of<type_list<Pages...>> {
   using pages = spl::variant<settings_page::home, settings_page::appearance,
                              Pages...>;
-  using nodes = spl::variant<settings_home_t,
-                             appearance_page_t,
-                             plugin_settings_node<Pages>...>;
+  using nodes = spl::variant<page_made_t<settings_home_t>,
+                             page_made_t<appearance_page_t>,
+                             page_made_t<plugin_settings_node<Pages>>...>;
 };
 using settings_plugins = typename plugin_settings_pages<composition::providers<contract::settings_pages, enabled_plugins>>::type;
 using settings_page_t = typename settings_pages_of<settings_plugins>::pages;
@@ -87,11 +91,14 @@ MUX_INLINE_IN_RELEASE auto settings_view(const ui_needs& needs) {
   auto show = [n = needs](settings_page_node& page, const settings_facts& facts) {
     const palette& c = *n.colours;
     spl::visit(spl::overloaded{
-                   [&](settings_page::home) { page.template emplace<settings_home_t>(settings_home(c)); },
-                   [&](const settings_page::appearance& one) { page.template emplace<appearance_page_t>(appearance_page(n, one.theme, one.accent)); },
+                   [&](settings_page::home) { page.template emplace<page_made_t<settings_home_t>>(skiff::compose::made_now(settings_home(c))); },
+                   [&](const settings_page::appearance& one) {
+                     page.template emplace<page_made_t<appearance_page_t>>(skiff::compose::made_now(appearance_page(n, one.theme, one.accent)));
+                   },
                    // A plugin's page: its node, made from what it shows.
                    [&]<class Page>(const Page& one) {
-                     page.template emplace<plugin_settings_node<Page>>(extend(contract::settings_pages{}, n, one));
+                     page.template emplace<page_made_t<plugin_settings_node<Page>>>(
+                         skiff::compose::made_now(extend(contract::settings_pages{}, n, one)));
                    }},
                facts.page);
   };
@@ -110,7 +117,7 @@ MUX_INLINE_IN_RELEASE auto settings_view(const ui_needs& needs) {
   // theme) goes back where it rested.
   return SKIFF_NAMED(settings_view, skiff::compose::kept_scroll<skiff::model::Field<&settings_scroll::at>>(settings_scrolled_to{},
       skiff::compose::page_view<settings_facts, settings_page_node>(
-          std::move(show), same, side, pin, settings_page_node(std::in_place_index<0>, settings_home(*colours)), {.fill = true})));
+          std::move(show), same, side, pin, settings_page_node(std::in_place_index<0>, skiff::compose::made_now(settings_home(*colours))), {.fill = true})));
 }
 using settings_view_t = decltype(settings_view(std::declval<const ui_needs&>()));
 // The window's dialog of it: made from what is shown, then told it as it changes.

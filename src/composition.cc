@@ -75,6 +75,14 @@ struct start_renderer {
 struct proxy_profiles {
   static constexpr std::string_view name = "the proxy profiles";
 };
+// The pane an account is added in (mux.ui:add_account), what plugins put
+// in it, under what its protocol says: extend(c, f, palette) -> its part;
+// and as the account is made, account_adding(c, f, config::account_t&,
+// what it keeps among what the window shows (its window_state)) -- what it
+// sets of the new account.
+struct account_adding {
+  static constexpr std::string_view name = "an account being added";
+};
 // A chat's looks -- its background, its bubbles', its panels' -- chosen at
 // a level (mux.app.kept, mux.app.looks): chat_looks_in_effect(c, f, its own
 // settings, the space each chat is in, the chat -- none, every chat's) ->

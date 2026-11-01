@@ -36,9 +36,11 @@ struct editor_page {
 // An account's Proxy page.
 struct account_page {};
 // What it keeps among what the window shows: the profiles' names, which each
-// account goes through, and what went wrong saving one.
+// account goes through, the one an account being added is to go through
+// (none: none), and what went wrong saving one.
 struct shown {
   std::vector<std::string> names;
+  std::optional<std::string> adding;
   std::vector<std::string> labels;  // each, as Home (SOCKS5 localhost:1080)
 
   std::map<std::string, std::string> through;  // an account's address: its profile's name
@@ -68,8 +70,19 @@ struct choose {
   std::string account;
   int index = -1;
 };
+// The profile the account being added is to go through, by its name: none
+// for none.
+struct choose_adding {
+  std::optional<std::string> name;
+};
 
 consteval bool provides(contract::settings_links, type_tag<feature>) { return true; }
+// Its row in the pane an account is added in -- the profile it goes
+// through -- and that profile set on it as it is made.
+consteval bool provides(contract::account_adding, type_tag<feature>) { return true; }
+inline void account_adding(contract::account_adding, type_tag<feature>, config::account_t& account, const shown& now) {
+  config::proxy_in(account) = now.adding;
+}
 consteval bool provides(contract::settings_pages, type_tag<feature>) { return true; }
 constexpr composition::page_list<list_page, editor_page> settings_pages(contract::settings_pages, type_tag<feature>) { return {}; }
 consteval bool provides(contract::account_pages, type_tag<feature>) { return true; }

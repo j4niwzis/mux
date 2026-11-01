@@ -13,6 +13,8 @@ import mux.core;
 import mux.config;
 import mux.protocols;
 import mux.ui;
+import mux.composition;
+import mux.plugins.types;
 import mux.ui.proto;
 import mux.app.network;
 import mux.app.kept;
@@ -103,8 +105,6 @@ class accounts_part {
     // Nothing to show beside the list, and no account at all: adding one.
     if (std::ranges::empty(k_->accounts().values()) && this->detail_is<mux::ui::panel_detail::none>())
       this->show_detail(mux::ui::panel_detail::adding{});
-    if (const auto& adding = *s_->showing->look<mux::ui::add_account_shown>(); adding.proxies != this->proxy_names())
-      mux::ui::show(*s_->showing, mux::ui::with_proxies(adding, this->proxy_names()));
     return this->watch_login();
   }
 
@@ -212,20 +212,9 @@ class accounts_part {
       this->show_detail(mux::ui::panel_detail::none{});
     s_->refresh_due = true;
   }
-  // The proxy the account being added is to go through.
-  void apply(const request::choose_new_proxy& one) {
-    auto adding = mux::ui::with_proxies(*s_->showing->look<mux::ui::add_account_shown>(), this->proxy_names());
-    if (!one.name || std::ranges::contains(adding.proxies, *one.name))
-      adding.proxy = one.name;
-    mux::ui::show(*s_->showing, std::move(adding));
-  }
 
  private:
   [[nodiscard]] bool narrow() const { return s_->showing->look<mux::ui::window_shape>()->narrow(); }
-  // The proxy profiles by their names, as the adding pane lists them.
-  [[nodiscard]] std::vector<std::string> proxy_names() const {
-    return k_->proxies() | std::views::transform(&mux::config::proxy_settings::name) | std::ranges::to<std::vector>();
-  }
   // The account chosen, where one is.
   [[nodiscard]] std::optional<std::string> chosen() const { return mux::ui::chosen_of(*s_->showing->look<std::optional<mux::ui::panel_facts>>()); }
   template <class Detail>
@@ -285,8 +274,7 @@ class accounts_part {
                    },
                    [&](mux::ui::panel_detail::adding) {
                      mux::ui::show<mux::ui::account_page_facts>(*s_->showing, std::nullopt);
-                     auto adding = mux::ui::with_proxies(*s_->showing->look<mux::ui::add_account_shown>(), this->proxy_names());
-                     mux::ui::show(*s_->showing, adding);
+                     const auto adding = *s_->showing->look<mux::ui::add_account_shown>();
                      this->open_form(mux::ui::blank_draft(adding.speaks), adding.speaks, std::nullopt);
                    }},
                detail);
@@ -332,10 +320,16 @@ class accounts_part {
                                       }},
                       found->state);
   }
-  // A new account: saved, and started -- through the proxy chosen for it;
-  // the page waits to hear how it went.
+  // What the plugins set of a new account, from what each keeps among what
+  // the window shows (contract::account_adding).
+  template <class... Features>
+  void plugins_adding(mux::config::account_t& account, mux::plugin_list<Features...>) {
+    (account_adding(mux::contract::account_adding{}, type_tag<Features>{}, account, *s_->showing->look<mux::ui::plugin_state_t<Features>>()), ...);
+  }
+  // A new account: saved, and started -- as the plugins set it (its proxy,
+  // the proxies'); the page waits to hear how it went.
   void add(mux::config::account_t account) {
-    mux::config::proxy_in(account) = s_->showing->look<mux::ui::add_account_shown>()->proxy;
+    this->plugins_adding(account, mux::composition::providers<mux::contract::account_adding, mux::enabled_plugins>{});
     const std::string address = mux::config::address_of(account);
     if (!k_->add_account(account)) {
       this->say("That account is already here.", true);

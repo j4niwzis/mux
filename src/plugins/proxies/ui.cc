@@ -21,6 +21,34 @@ import mux.plugin.proxies.types;
 export namespace mux::plugins::proxies {
 using namespace ::mux::ui;
 
+// Its row in the pane an account is added in (contract::account_adding):
+// the profile the new account goes through -- none, or one of them -- and
+// Add proxy…, their list opened.
+struct adding_choice {
+  std::vector<std::string> names;
+  std::optional<std::string> chosen;
+  friend bool operator==(const adding_choice&, const adding_choice&) = default;
+};
+MUX_INLINE_IN_RELEASE auto adding_row(const palette& colours, const adding_choice& now) {
+  namespace c = skiff::compose;
+  const auto one = [&](std::optional<std::string> name) {
+    return segment(colours, name.value_or("None"), sends<choose_adding>{{name}}, name == now.chosen);
+  };
+  return SKIFF_NAMED(proxy_row, c::row(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Proxy", 13.0f, colours.dim)),
+                c::many(c::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
+                        std::views::iota(std::size_t{0}, now.names.size() + 1) | std::views::transform([&](std::size_t at) {
+                          return one(at == 0 ? std::nullopt : std::optional(now.names[at - 1]));
+                        }) | std::ranges::to<std::vector>()),
+                segment(colours, "Add proxy…", sends<manage>{}, false)));
+}
+using adding_row_t = decltype(adding_row(std::declval<const palette&>(), adding_choice{}));
+MUX_INLINE_IN_RELEASE auto extend(contract::account_adding, type_tag<feature>, const palette& colours) {
+  namespace c = skiff::compose;
+  return c::projected<shown>([](const shown& now) { return adding_choice{now.names, now.adding}; },
+      c::mount<adding_row_t, adding_choice>([at = &colours](const adding_choice& now) { return std::tuple{adding_row(*at, now)}; },
+                                            {.fillX = true, .autoSize = scene::axes::kY}));
+}
 // Settings' link to them (mux.ui:settings_pages).
 MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return settings_link(colours, "Proxies", icon::gear{}, open_list{});

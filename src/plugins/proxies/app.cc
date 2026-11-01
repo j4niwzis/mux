@@ -38,6 +38,9 @@ struct part {
     const auto& now = *s_->showing->look<shown>();
     shown next{.error = now.error};
     next.names = s_->kept->proxies() | std::views::transform(&config::proxy_settings::name) | std::ranges::to<std::vector>();
+    // The one chosen for an account being added, while it is there.
+    if (now.adding && std::ranges::contains(next.names, *now.adding))
+      next.adding = now.adding;
     next.labels = s_->kept->proxies() | std::views::transform([](const config::proxy_settings& one) {
                     return std::format("{} ({} {}:{})", one.name, config::label_of(one.kind), one.host, one.port);
                   }) | std::ranges::to<std::vector>();
@@ -46,6 +49,13 @@ struct part {
         next.through.insert_or_assign(config::address_of(one), *name);
     if (next != now)
       ui::show(*s_->showing, std::move(next));
+  }
+  // The profile an account being added is to go through.
+  void apply(const choose_adding& one) {
+    ui::change_shown<shown>(*s_->showing, [&](shown& now) {
+      if (!one.name || std::ranges::contains(now.names, *one.name))
+        now.adding = one.name;
+    });
   }
   void error(std::string text) {
     ui::change_shown<shown>(*s_->showing, [&](shown& now) { now.error = std::move(text); });

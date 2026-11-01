@@ -32,14 +32,63 @@ struct part {
     now.tools = !now.tools;
     s_->kept->set_plugin_settings(now);
     (void)s_->kept->write();
-    ui::show(*s_->showing, now);
+    this->tab_tools(now.tools);
   }
   // Each frame: what the window shows of them as they are kept -- at the
   // start, once local data is opened.
-  void tick() {
-    const auto& now = s_->kept->plugin_settings<kept>();
-    if (*s_->showing->look<kept>() != now)
-      ui::show(*s_->showing, now);
+  void tick() { this->tab_tools(s_->kept->plugin_settings<kept>().tools); }
+  [[nodiscard]] const tab_facts& tab() const { return *s_->showing->look<tab_facts>(); }
+  void tab_tools(bool on) {
+    if (this->tab().tools == on)
+      return;
+    auto next = this->tab();
+    next.tools = on;
+    ui::show(*s_->showing, next);
+  }
+  // The tab's lists, of the room whose settings are open: one opened or
+  // shut, asked of its account as it opens; a state type unfolded.
+  template <class Ask>
+  void flip_list(bool tab_facts::*open, Ask ask) {
+    const auto in = s_->managed();
+    if (!in)
+      return;
+    auto next = this->tab().in == in ? this->tab() : tab_facts{.tools = this->tab().tools, .in = in};
+    next.*open = !(next.*open);
+    const bool opened = next.*open;
+    ui::show(*s_->showing, next);
+    if (opened && !s_->demo())
+      s_->net->ask(in->account, ask(*in));
+  }
+  void apply(const flip_state_list&) {
+    this->flip_list(&tab_facts::state_open, [](const conversation_id& in) { return state_asked{in.id}; });
+  }
+  void apply(const flip_data_list&) {
+    this->flip_list(&tab_facts::data_open, [](const conversation_id& in) { return data_asked{in.id}; });
+  }
+  void apply(const unfold_type& one) {
+    auto next = this->tab();
+    next.unfolded = next.unfolded == one.type ? std::string() : one.type;
+    ui::show(*s_->showing, next);
+  }
+  // A state event or account data from the tab's lists, opened to write:
+  // as listed, or a new one.
+  void apply(const open_state_event& one) {
+    const auto entries = this->tab().state;
+    const auto in = this->room();
+    if (!in)
+      return;
+    const auto found = std::ranges::find_if(entries, [&](const state_entry& each) { return one.key && each.type == one.type && each.key == *one.key; });
+    const bool fresh = found == entries.end();
+    this->show_screen(*in, screen::state_editor{one.type, one.key.value_or(""), fresh ? std::string("{}") : found->content, fresh});
+  }
+  void apply(const open_data_entry& one) {
+    const auto entries = this->tab().data;
+    const auto in = this->room();
+    if (!in)
+      return;
+    const auto found = std::ranges::find_if(entries, [&](const data_entry& each) { return one.type && each.type == *one.type; });
+    const bool fresh = found == entries.end();
+    this->show_screen(*in, screen::data_editor{one.type.value_or(""), fresh ? std::string("{}") : found->content, fresh});
   }
   std::uint64_t opened_ = 0;
 
@@ -140,8 +189,23 @@ struct part {
       this->show_screen(in, std::move(screen));
   }
   void take(const told& one) { this->shown_for(one.in, screen::reading{one.title, one.text}); }
-  void take(const state_listed& one) { this->shown_for(one.in, screen::state{one.entries}); }
-  void take(const data_listed& one) { this->shown_for(one.in, screen::data{one.entries}); }
+  // And in the tab, where its lists are of that room.
+  void take(const state_listed& one) {
+    this->shown_for(one.in, screen::state{one.entries});
+    if (this->tab().in == one.in) {
+      auto next = this->tab();
+      next.state = one.entries;
+      ui::show(*s_->showing, next);
+    }
+  }
+  void take(const data_listed& one) {
+    this->shown_for(one.in, screen::data{one.entries});
+    if (this->tab().in == one.in) {
+      auto next = this->tab();
+      next.data = one.entries;
+      ui::show(*s_->showing, next);
+    }
+  }
 };
 
 // Its part, among the program's (mux.app.program).

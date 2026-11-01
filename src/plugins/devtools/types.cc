@@ -119,7 +119,35 @@ struct kept {
 struct flip_tools {};
 consteval bool provides(contract::settings_kept, type_tag<feature>) { return true; }
 constexpr type_tag<kept> settings_type(contract::settings_kept, type_tag<feature>) { return {}; }
+// What the window shows of them (contract::window_state): whether they are
+// on, as kept; and, in a room's settings' tab, its lists as Cinny unfolds
+// them there -- the room they are of, its state events (a type unfolded to
+// its keys) and its account data, each open or shut.
+struct tab_facts {
+  bool tools = false;
+  std::optional<conversation_id> in;
+  bool state_open = false, data_open = false;
+  std::string unfolded;
+  std::vector<state_entry> state;
+  std::vector<data_entry> data;
+  friend bool operator==(const tab_facts&, const tab_facts&) = default;
+};
+// Asked of the program by the tab: a list opened or shut; a state type
+// unfolded or folded; a state event or account data opened to write (a new
+// one where its key or type is not said).
+struct flip_state_list {};
+struct flip_data_list {};
+struct unfold_type {
+  std::string type;
+};
+struct open_state_event {
+  std::string type;
+  std::optional<std::string> key;
+};
+struct open_data_entry {
+  std::optional<std::string> type;
+};
 consteval bool provides(contract::window_state, type_tag<feature>) { return true; }
-constexpr type_tag<kept> state_type(contract::window_state, type_tag<feature>) { return {}; }
+constexpr type_tag<tab_facts> state_type(contract::window_state, type_tag<feature>) { return {}; }
 
 }  // namespace mux::plugins::devtools

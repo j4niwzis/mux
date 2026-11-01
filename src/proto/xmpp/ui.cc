@@ -173,7 +173,7 @@ inline auto account_form_of(const account_draft& seed, const ui::palette& colour
                                                                                  {{"Sign in to an account", false}, {"Create a new account", true}})),
           c::shown_for<d>([](const d& now) { return now.creating; }, form_detail::asked_part(colours)),
           check_field<&d::advanced>(colours, "Advanced"),
-          c::projected<d>([](const d& now) { return now.advanced; }, widgets::Collapsible(form_detail::advanced_fields(colours))),
+          c::projected<d>([](const d& now) { return now.advanced; }, widgets::collapsible(form_detail::advanced_fields(colours))),
           account_form_end<d>(colours, editing))),
       seed));
 }

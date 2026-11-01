@@ -132,14 +132,6 @@ inline constexpr std::array kScales{50,  60,  70,  75,  80,  90,  100, 110, 120,
                                     150, 160, 170, 175, 180, 190, 200, 225, 250, 275, 300};
 inline constexpr int kScaleLeast = kScales.front();
 inline constexpr int kScaleMost = kScales.back();
-// The items of the space bars of the account shown, and where each is: for
-// the settings to list them. Said by the chat list as it shows them.
-struct space_item_shown {
-  config::space_item_t item;
-  std::string name;
-  bool side = false;
-  bool top = false;
-};
 // What the window's parts tell one another and the program, as the program
 // holds it: handed down with the colours (ui_needs).
 struct ui_shared {
@@ -156,11 +148,6 @@ struct ui_shared {
     if (docked_panel_watcher != 0)
       scene::work::mark(docked_panel_watcher);
   }
-  // The items of the space bars of the account shown, and where each is,
-  // and that account: for the settings to list them. Said by the chat list
-  // as it shows them.
-  std::vector<space_item_shown> space_items;
-  std::string space_account;
   // The images of the pack being edited, and the stickers the emoji panel
   // shows -- in view, and its packs' tabs: keyed by source and kind,
   // fetched into their separate stores while they show.

@@ -75,34 +75,17 @@ struct folder_tab_shown {
   bool chosen = false;
   friend bool operator==(const folder_tab_shown&, const folder_tab_shown&) = default;
 };
-struct space_icon_shown {
-  config::space_item_t item;
-  folder_t folder;
-  std::string key;  // its picture's
-  std::string name;
-  float size = 40.0f;
-  bool chosen = false;
-  friend bool operator==(const space_icon_shown&, const space_icon_shown&) = default;
-};
 // The side column, as the program works it out: the tabs (none where there
 // is only All), the bars and whether each is up, the list of chats open's name, and
 // "No chats yet" where the account has none listed.
 struct side_shown {
   std::vector<folder_tab_shown> folders;
-  std::vector<space_icon_shown> side_bar, top_bar;
-  bool side_on = false, top_on = false;
   // The name of the chat open as a list of chats, over the list.
   std::optional<std::string> scope;
   bool no_chats = false;
   // The chats' list up: not while messages found are in its place, and not
   // empty while the server's search is shown -- that taking the room.
   bool chats_on = true;
-  // An icon being dragged: the side bar shown to drop on, whatever it holds.
-  bool dragging = false;
-  // The bars big: the folder bar under the search field, not in the head.
-  bool big = false;
-  // Whose spaces the bars hold: what a space's menu asks with.
-  std::string account;
   friend bool operator==(const side_shown&, const side_shown&) = default;
 };
 // The chats screen's frame, as the program keeps it: how wide the side and

@@ -480,16 +480,6 @@ struct open_new_room_in {
 // Threads: their panel opened or closed, one opened or let go (back to the
 // list), an answer sent in one, one begun from a message's menu.
 // A chat background: its dialog, for a level; what is chosen there.
-// Spaces: a bar's order, as a drag left it -- the item moved out of the
-// bar it came from, where it came from one; an item's bars, as chosen;
-// the bars at all, and the top one.
-struct place_spaces {
-  std::string account;
-  mux::config::space_bar_t bar;
-  std::vector<mux::config::space_item_t> order;
-  std::optional<mux::config::space_bar_t> from;
-  std::optional<mux::config::space_item_t> moved;
-};
 // How much Frosted blurs, in percent.
 struct set_frost_blur {
   double percent = 10.0;

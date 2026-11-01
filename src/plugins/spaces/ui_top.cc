@@ -50,6 +50,50 @@ inline bool operator<(const space_item_t& a, const space_item_t& b) {
 
 export namespace mux::plugins::spaces {
 using namespace ::mux::ui;
+// An icon of a space bar -- Home, Direct messages, a space, a space in one
+// (smaller a level down); an item of the bars and where it is, for the
+// settings to list.
+struct space_icon_shown {
+  config::space_item_t item;
+  ui::folder_t folder;
+  std::string key;  // its picture's
+  std::string name;
+  float size = 40.0f;
+  bool chosen = false;
+  friend bool operator==(const space_icon_shown&, const space_icon_shown&) = default;
+};
+struct space_item_shown {
+  config::space_item_t item;
+  std::string name;
+  bool side = false;
+  bool top = false;
+  friend bool operator==(const space_item_shown&, const space_item_shown&) = default;
+};
+// What the window shows of it (contract::window_state): each account's Home
+// as its menu lists it, and the spaces Home leaves out; its bars -- the
+// side's and the top's, each up or not, big where the bars are made big for
+// a finger, the side's up while an icon is dragged -- of whose spaces; and
+// the items, for the settings.
+struct shown {
+  std::map<std::string, std::size_t> home_ways;
+  std::set<conversation_id> hidden;
+  std::vector<space_icon_shown> side_bar, top_bar;
+  bool side_on = false, top_on = false, big = false, dragging = false;
+  std::string account;
+  std::vector<space_item_shown> items;
+  friend bool operator==(const shown&, const shown&) = default;
+};
+constexpr type_tag<shown> state_type(contract::window_state, type_tag<feature>) { return {}; }
+// Spaces: a bar's order, as a drag left it -- the item moved out of the
+// bar it came from, where it came from one; an item's bars, as chosen;
+// the bars at all, and the top one.
+struct place_spaces {
+  std::string account;
+  mux::config::space_bar_t bar;
+  std::vector<mux::config::space_item_t> order;
+  std::optional<mux::config::space_bar_t> from;
+  std::optional<mux::config::space_item_t> moved;
+};
 // Asked of the program, its own (moved from mux.ui, where only it took them).
 // Home without what spaces hold, but direct messages: at a level, or as the
 // level over it says.
@@ -277,7 +321,7 @@ template <class Lane, class Pick>
 auto side_spaces_for(const auto& colours, Pick pick, bool horizontal) {
   namespace c = skiff::compose;
   auto line = side_space_rows(colours, std::move(pick), horizontal);
-  return c::projected<side_shown>([horizontal](const side_shown& now) {
+  return c::projected<shown>([horizontal](const shown& now) {
     return ((horizontal ? now.top_bar : now.side_bar)) | std::views::transform([&](const auto& entry) {
       return std::pair{entry.item, side_space_view{entry.folder, now.account, entry.key, entry.name, entry.chosen, entry.size}};
     }) | std::ranges::to<std::vector>();
@@ -326,7 +370,7 @@ using built_lane = skiff::compose::LaneMark<Tag, decltype(skiff::compose::built(
 // where the bars are big.
 auto side_space_bar(const auto& colours, bool big) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(side_space_bar, c::shown_for<side_shown>([big](const side_shown& now) { return (now.top_on || now.dragging) && now.big == big; },
+  return SKIFF_NAMED(side_space_bar, c::shown_for<shown>([big](const shown& now) { return (now.top_on || now.dragging) && now.big == big; },
       c::styled(big ? scene::Spec{.fillX = true, .height = 58.0f, .margin = {0.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 8.0f, .masking = true}
                     : scene::Spec{.height = 34.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f,
                                   .masking = true},
@@ -360,7 +404,7 @@ template <class P> struct side_lanes {
 // or an icon is being dragged.
 MUX_INLINE_IN_RELEASE auto side_lane(contract::side_bars, type_tag<feature>, const palette& colours) {
   namespace c = skiff::compose;
-  return c::shown_for<side_shown>([](const side_shown& now) { return now.side_on || now.dragging; },
+  return c::shown_for<shown>([](const shown& now) { return now.side_on || now.dragging; },
       c::styled({.fillY = true, .width = 56.0f},
           list_lane_view(colours)));
 }
@@ -496,10 +540,25 @@ MUX_INLINE_IN_RELEASE auto space_bars_row(const palette& colours, const std::str
                    make_choice_menu(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"}, space_bars_way(one),
                                     pick_space_bars{account, one.item})));
 }
-MUX_INLINE_IN_RELEASE auto spaces_choices(const palette& colours, const ui_shared& shared) {
+// The items of the account shown's bars, each with where it is: made again
+// as they change.
+struct space_choices_key {
+  std::string account;
+  std::vector<space_item_shown> items;
+  friend bool operator==(const space_choices_key&, const space_choices_key&) = default;
+};
+MUX_INLINE_IN_RELEASE auto space_choice_rows(const palette& colours, const space_choices_key& key) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(spaces_choices, c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                 shared.space_items | std::views::transform([&](const space_item_shown& one) { return space_bars_row(colours, shared.space_account, one); }) | std::ranges::to<std::vector>()));
+  return c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                 key.items | std::views::transform([&](const space_item_shown& one) { return space_bars_row(colours, key.account, one); }) |
+                     std::ranges::to<std::vector>());
+}
+using space_choice_rows_t = decltype(space_choice_rows(std::declval<const palette&>(), space_choices_key{}));
+MUX_INLINE_IN_RELEASE auto spaces_choices(const palette& colours, const ui_shared&) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(spaces_choices, c::projected<shown>([](const shown& now) { return std::optional(space_choices_key{now.account, now.items}); },
+      c::mount<space_choice_rows_t, space_choices_key>([at = &colours](const space_choices_key& key) { return std::tuple{space_choice_rows(*at, key)}; },
+                                                       {.fillX = true, .autoSize = scene::axes::kY})));
 }
 // Home without what an account's spaces hold -- but direct messages -- or
 // as every account's.

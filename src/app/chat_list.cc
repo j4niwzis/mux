@@ -56,8 +56,8 @@ struct folder_rules<plugin_list<Features...>> {
   static bool keeps(const services& s, const mux::ui::folder_context& ctx, const mux::ui::folder_t& folder) {
     return (keeps_folder(contract::chat_folders{}, type_tag<Features>{}, s, ctx, folder) || ...);
   }
-  static void bars_into(const services& s, const mux::ui::folder_context& ctx, const mux::ui::list_shown& list, mux::ui::side_shown& side, mux::ui::ui_shared& shared) {
-    (space_bars(contract::chat_folders{}, type_tag<Features>{}, s, ctx, list, side, shared), ...);
+  static void listed(const services& s, const mux::ui::folder_context& ctx, const mux::ui::list_shown& list) {
+    (folders_listed(contract::chat_folders{}, type_tag<Features>{}, s, ctx, list), ...);
   }
 };
 using folder_plugins = folder_rules<composition::providers<contract::chat_folders, enabled_plugins>>;
@@ -135,23 +135,6 @@ class chat_list_part {
   }
   void apply(const request::big_bars& one) {
     this->change([&](mux::ui::list_shown& list) { list.big_bars = one.on; });
-  }
-  // An icon of the bars being dragged: the side bar up to drop on, whatever
-  // it holds; and dropped -- in a bar, its items in their new order.
-  void apply(const skiff::compose::ItemsDragging& one) {
-    dragging_ = one.on;
-    seen_.reset();
-  }
-  template <class Asked>
-  void apply(const skiff::compose::ItemsPlaced<mux::config::space_item_t>& one, const Asked& asked) {
-    dragging_ = false;
-    seen_.reset();
-    const auto bar_of = [](skiff::compose::ReorderBar bar) -> mux::config::space_bar_t {
-      return bar == skiff::compose::ReorderBar::horizontal ? mux::config::space_bar_t{mux::config::space_bar::top{}}
-                                                           : mux::config::space_bar_t{mux::config::space_bar::side{}};
-    };
-    const auto& listed = s_->showing->look<mux::ui::list_shown>()->account;
-    asked(request::place_spaces{listed ? listed->address : std::string(), bar_of(one.to), one.order, bar_of(one.from), one.item});
   }
   // The chats screen's keys, as tdesktop's: Ctrl+1 to Ctrl+9 a folder;
   // Ctrl+F finds in the chat, Ctrl+K puts a link on what is selected,
@@ -433,9 +416,7 @@ class chat_list_part {
       out.folders = folders | std::views::transform([&](const auto& one) {
                       return mux::ui::folder_tab_shown{one.first, one.second, one.second == list.folder};
                     }) | std::ranges::to<std::vector>();
-    this->bars_of(now, kept, list, out);
-    out.side_on = out.side_on || dragging_;
-    out.dragging = dragging_;
+    this->folders_listed(now, kept, list);
     out.account = list.account ? list.account->address : std::string();
     const mux::account* in = list.account ? now.accounts().find(*list.account) : nullptr;
     const mux::conversation* scope = chat.scope && in ? in->conversations.find(*chat.scope) : nullptr;
@@ -443,9 +424,10 @@ class chat_list_part {
       out.scope = mux::ui::display_name(*scope);
     return out;
   }
-  // The bars: the plugins' (contract::chat_folders) -- the spaces'.
-  void bars_of(const mux::model& now, const kept_view& kept, const mux::ui::list_shown& list, mux::ui::side_shown& out) const {
-    folder_plugins::bars_into(*s_, this->context_of(now, kept, list.account), list, out, s_->ui);
+  // The list worked out, told the folder plugins (contract::chat_folders):
+  // what each shows of its folders (the spaces' bars) its own.
+  void folders_listed(const mux::model& now, const kept_view& kept, const mux::ui::list_shown& list) const {
+    folder_plugins::listed(*s_, this->context_of(now, kept, list.account), list);
   }
 
   // The chats listed: the account's in the folder chosen -- or the list of
@@ -647,7 +629,6 @@ class chat_list_part {
   kept_settings* k_;
   const mux::ui::palette* colours_;
   std::optional<inputs> seen_;
-  bool dragging_ = false;
   std::uint64_t revision_ = 0;
   std::vector<mux::conversation_id> order_;
   // The server search: what was asked, by which account, and what came.

@@ -15,6 +15,7 @@ import mux.composition;
 import mux.core;
 import mux.config;
 import mux.protocols;
+import skiff.compose;
 import mux.ui;
 import mux.app.kept;
 import mux.app.network;
@@ -124,8 +125,9 @@ inline bool keeps_folder(contract::chat_folders, type_tag<feature>, const app::s
 // bars it is placed in (the side one, unplaced); under the space chosen --
 // or one holding it -- its own spaces, smaller a level down. And them all,
 // for the settings to list.
-inline void space_bars(contract::chat_folders, type_tag<feature>, const app::services& services, const ui::folder_context& ctx,
-                       const ui::list_shown& list, ui::side_shown& out, ui::ui_shared& shared) {
+inline void folders_listed(contract::chat_folders, type_tag<feature>, const app::services& services, const ui::folder_context& ctx,
+                           const ui::list_shown& list) {
+    shown out = *services.showing->look<shown>();
     const kept& now = kept_of(services);
     const auto places = places_of(now);
     struct entry {
@@ -183,7 +185,7 @@ inline void space_bars(contract::chat_folders, type_tag<feature>, const app::ser
     // A bar's icons: its items, and under an open space its own spaces, a
     // level at a time -- smaller each level down.
     const auto icons_of = [&](const std::vector<const entry*>& items, float size) {
-      std::vector<mux::ui::space_icon_shown> icons;
+      std::vector<space_icon_shown> icons;
       for (const entry* one : items) {
         icons.push_back({one->item, one->shows, one->id, one->name, size, one->shows == list.folder});
         const auto room = mux::ui::space_of(one->shows);
@@ -216,12 +218,14 @@ inline void space_bars(contract::chat_folders, type_tag<feature>, const app::ser
     out.big = list.big_bars;
     out.top_on = now.bars && now.top_bar;
     out.side_on = now.bars && !side_items.empty();
-    // For the settings to list them.
-    shared.space_account = address;
-    shared.space_items = all | std::views::transform([&](const entry& one) {
-                           return mux::ui::space_item_shown{one.item, one.name, in_bar(one, mux::config::space_bar::side{}),
+    // Whose spaces they are, and them all, for the settings to list them.
+    out.account = address;
+    out.items = all | std::views::transform([&](const entry& one) {
+                           return space_item_shown{one.item, one.name, in_bar(one, mux::config::space_bar::side{}),
                                                             in_bar(one, mux::config::space_bar::top{})};
                          }) | std::ranges::to<std::vector>();
+    if (*services.showing->look<shown>() != out)
+      ui::show(*services.showing, std::move(out));
   }
 
 // The spaces' part of the program: the bars as a drag leaves them, an
@@ -255,7 +259,21 @@ struct part {
 
   // A bar's order, as a drag left it: its items put there in that order --
   // the one moved taken out of the bar it came from, and from hidden.
-  void apply(const ui::request::place_spaces& one) {
+  // An icon of the bars being dragged: the side bar up to drop on, whatever
+  // it holds; and dropped -- in a bar, its items in their new order.
+  void apply(const skiff::compose::ItemsDragging& one) {
+    ui::change_shown<shown>(*s_->showing, [&](shown& now) { now.dragging = one.on; });
+  }
+  void apply(const skiff::compose::ItemsPlaced<mux::config::space_item_t>& one) {
+    ui::change_shown<shown>(*s_->showing, [](shown& now) { now.dragging = false; });
+    const auto bar_of = [](skiff::compose::ReorderBar bar) -> mux::config::space_bar_t {
+      return bar == skiff::compose::ReorderBar::horizontal ? mux::config::space_bar_t{mux::config::space_bar::top{}}
+                                                           : mux::config::space_bar_t{mux::config::space_bar::side{}};
+    };
+    const auto& listed = s_->showing->look<ui::list_shown>()->account;
+    this->apply(place_spaces{listed ? listed->address : std::string(), bar_of(one.to), one.order, bar_of(one.from), one.item});
+  }
+  void apply(const place_spaces& one) {
     const auto mine = [&](const mux::config::space_placed& p) { return p.account == one.account; };
     auto places = places_of(kept_of(*s_));
     std::erase_if(places, [&](const mux::config::space_placed& p) {
@@ -328,7 +346,10 @@ struct part {
   // Each frame: what the window shows of what it keeps, for its switches.
   void tick() {
     const kept& now = kept_of(*s_);
-    shown made;
+    // Its switches made again; its bars kept, as the list last said them.
+    shown made = *s_->showing->look<shown>();
+    made.home_ways.clear();
+    made.hidden.clear();
     for (const account_home& one : now.accounts)
       made.home_ways[one.account] = !one.hides_spaced ? 0 : !*one.hides_spaced ? 1 : one.hides_direct.value_or(false) ? 3 : 2;
     for (const hidden_space& one : now.hidden_from_home)

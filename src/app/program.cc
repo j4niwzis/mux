@@ -573,7 +573,6 @@ struct app : kept_settings {
   void apply(const request::thread_draft_edited&) {}
   void apply(const request::adopt_pack&) {}
   void apply(const request::explore_space&) {}
-  void apply(const request::place_spaces&) {}
   void apply(const request::look_up_room&) {}
   void apply(const request::show_invite&) {}
   void apply(const request::open_room_invite&) {}

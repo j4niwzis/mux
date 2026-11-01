@@ -387,7 +387,8 @@ struct level_sections {
 //   folder_tabs(c, f, ctx, tabs&): its folders as tabs over the list
 //   keeps_folder(c, f, ctx, folder) -> bool: a folder it shows elsewhere
 //   (a bar), kept chosen though no tab lists it
-//   space_bars(c, f, ctx, list, side&, ui_shared&): the bars' icons
+//   folders_listed(c, f, services, ctx, list): the list worked out -- what
+//   it shows of its folders (the bars' icons) put in its own window_state
 struct chat_folders {
   static constexpr std::string_view name = "the chat list's folders";
 };
@@ -409,7 +410,8 @@ struct settings_links {
   static constexpr std::string_view name = "Settings' links";
 };
 // What a plugin keeps among what the window shows, beside its dialogs and
-// layers (mux.ui:window): state_type(c, f) -> type_tag<a value of its own>,
+// layers (mux.ui:window): state_type(c, f) -> type_tag<a value of its own>
+// -- said in its types, or in its UI layers where it holds mux.ui's types,
 // one of it held in the shown model -- set by its part (ui::show), read by
 // its nodes (shown_for, text_for); a proxy editor's error line, for one
 struct window_state {

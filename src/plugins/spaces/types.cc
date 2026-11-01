@@ -47,19 +47,12 @@ struct kept {
   friend bool operator==(const kept&, const kept&) = default;
   friend consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>(); }
 };
-// What the window shows of it for its switches (contract::window_state):
-// each account's Home as its menu lists it, and the spaces Home leaves out.
-struct shown {
-  std::map<std::string, std::size_t> home_ways;
-  std::set<conversation_id> hidden;
-  friend bool operator==(const shown&, const shown&) = default;
-};
 
 consteval bool provides(contract::chat_folders, type_tag<feature>) { return true; }
 consteval bool provides(contract::settings_kept, type_tag<feature>) { return true; }
 constexpr type_tag<kept> settings_type(contract::settings_kept, type_tag<feature>) { return {}; }
 consteval bool provides(contract::window_state, type_tag<feature>) { return true; }
-constexpr type_tag<shown> state_type(contract::window_state, type_tag<feature>) { return {}; }
+// What it keeps among what the window shows: its UI_TOP layer's shown.
 consteval bool provides(contract::level_sections, type_tag<feature>) { return true; }
 consteval bool provides(room_settings::contract::general_sections, type_tag<feature>) { return true; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }

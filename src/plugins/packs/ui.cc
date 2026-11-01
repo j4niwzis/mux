@@ -153,9 +153,10 @@ inline void picture_uploaded_in(shown& facts, pack_picture one, bool done, const
 // pressed, opened.
 MUX_INLINE_IN_RELEASE auto pack_row(const palette& colours, const std::optional<std::string>& room, std::size_t index, const emote_pack& pack) {
   namespace c = skiff::compose;
-  auto picture = c::styled({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f, .background = colours.tile},
-      nodes::Image<from_emotes>({pack.avatar.value_or(pack.pictures.empty() ? std::string() : pack.pictures.front().url),
-                                 pack.emoji ? emote_kind::emoji : emote_kind::sticker}));
+  // A node, its box kept: its spec applied on it (styled() makes a builder).
+  nodes::Image<from_emotes> picture({pack.avatar.value_or(pack.pictures.empty() ? std::string() : pack.pictures.front().url),
+                                     pack.emoji ? emote_kind::emoji : emote_kind::sticker});
+  picture.apply({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f, .background = colours.tile});
   picture.keepBox();
   return SKIFF_NAMED(pack_row, c::onClick(pack_open{index},
       c::row(c::hbox(12.0f, {.fillX = true, .height = 56.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
@@ -205,8 +206,8 @@ struct picture_row_of {
     namespace c = skiff::compose;
     const auto& [url, use, one] = item;
     const scene::Spec middle{.alignSelf = scene::align::kMiddle};
-    auto face = c::styled({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f, .background = colours->tile},
-                          nodes::Image<from_emotes>({one.url, one.emoji ? emote_kind::emoji : emote_kind::sticker}));
+    nodes::Image<from_emotes> face({one.url, one.emoji ? emote_kind::emoji : emote_kind::sticker});
+    face.apply({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f, .background = colours->tile});
     face.keepBox();
     auto shortcode = widgets::internal::TextBox<picture_renamed_typed>(colours->widgets, "shortcode", picture_renamed_typed{one.url});
     shortcode.setText(one.shortcode);

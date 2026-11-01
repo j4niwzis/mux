@@ -772,8 +772,7 @@ struct plugin_layers<plugin_list<Features...>> {
 MUX_INLINE_IN_RELEASE auto window_body(const ui_needs& n) {
   namespace c = skiff::compose;
   const scene::Spec everywhere{.place = scene::anchor::kTopLeft, .fill = true};
-  auto behind = c::styled(everywhere, behind_of(n));
-  behind.setVisible(n.looks->window.behind);
+  auto behind = c::visible(n.looks->window.behind, c::styled(everywhere, behind_of(n)));
   auto frame = frame_made(n, chats_screen(n), drawer_view(n));
   // The files to send: as wide as 440 at most, as high as they are.
   auto sending = skiff::compose::lifted([](auto made) {

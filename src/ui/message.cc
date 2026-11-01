@@ -508,8 +508,8 @@ auto message_words(const palette& colours, const text_piece& words, skia::SkColo
 // The bubble's words, marked where they are made: found by their mark where
 // what holds them asks of them -- its rules, its menu, a jump to a quote.
 struct bubble_words {};
-using bubble_words_t = skiff::compose::Marked<bubble_words, decltype(skiff::compose::styled({}, message_words(std::declval<const palette&>(),
-                                                                                               std::declval<const text_piece&>(), 0u, 0u)))>;
+using bubble_words_t = skiff::compose::Marked<bubble_words, decltype(message_words(std::declval<const palette&>(),
+                                                                                std::declval<const text_piece&>(), 0u, 0u))>;
 [[nodiscard]] bubble_words_t* words_in(auto& node) { return skiff::scene::findNode<bubble_words_t>(node); }
 
 // The bubble's own rules, as tdesktop lays one out: the time beside the
@@ -988,7 +988,9 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   const skia::SkColor quote_colour = mine ? colours.text : colours.accent;
   // Words, code blocks and link cards in their own order.
   const std::vector<text_piece> pieces = pieces_of(shown.text, shown.links, shown.styles, shown.cards, shown.disclosures);
-  auto words = c::styled({.maxWidth = kBubbleMaxWidth}, message_words(colours, pieces.front(), colours.text, quote_colour));
+  // A node, asked of below: its spec applied on it (styled() makes a builder).
+  auto words = message_words(colours, pieces.front(), colours.text, quote_colour);
+  words.apply({.maxWidth = kBubbleMaxWidth});
   words.setVisible(text_shown && !pieces.front().text.empty());
   // What the time's first guess is made from, before the words are held.
   const bool words_shown = words.visible();
@@ -1087,9 +1089,14 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   // flow at its end. Guessed before its first layout from the text wrapped
   // at the bubble's widest, so that a bubble made anew is drawn right from
   // its first frame -- the layout checks the guess.
-  auto time = c::visible(time_shown, c::styled(time_spec, nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim)));
-  auto inline_time = c::visible(false, c::styled({.place = scene::anchor::kBottomRight, .y = kTimeLower},
-                                                 nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim)));
+  // Nodes, shown or hidden below as the guess goes: their specs applied on
+  // them (styled() and visible() make builders).
+  nodes::Text time(when, 11.0f, mine ? colours.sent_time : colours.dim);
+  time.apply(time_spec);
+  time.setVisible(time_shown);
+  nodes::Text inline_time(when, 11.0f, mine ? colours.sent_time : colours.dim);
+  inline_time.apply({.place = scene::anchor::kBottomRight, .y = kTimeLower});
+  inline_time.setVisible(false);
   // Only where the words are what ends the bubble: after a code block or a
   // preview, the time goes under them.
   if (skia::SkFont* font = skiff::paint::defaultFont(); font && words_shown && !words_said.empty() && !rules.sticker && pieces.size() == 1 && !cards_t::any(cards)) {

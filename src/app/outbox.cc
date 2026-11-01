@@ -249,14 +249,11 @@ class outbox_part {
     std::string caption = one.caption;
     auto& screen = s_->root();
     // Into a thread: its root and its latest, and what is answered in it.
-    std::optional<mux::thread_place> thread;
+    mux::plugin_message_parts placed{};
     std::optional<std::string> reply_to;
     if (files_thread_) {
-      std::string latest = *files_thread_;
       if (const mux::conversation* chat = s_->model->find(*chosen))
-        if (const std::vector<mux::message>* answers = mux::aside_for(*chat, *files_thread_); answers && !answers->empty())
-          latest = answers->back().id;
-      thread = mux::thread_place{*files_thread_, std::move(latest)};
+        placed = mux::placed_aside(*chat, *files_thread_);
       if (s_->thread_open() == files_thread_)
         reply_to = s_->showing->look<mux::ui::chat_shown>()->thread_answer;
     } else {
@@ -268,7 +265,7 @@ class outbox_part {
     for (file& one : to_send_)
       s_->net->send_file(*chosen, one.local, std::move(one.as.bytes), one.as.name, one.as.mimetype,
                          one.as.picture.has_value(), one.width, one.height, std::exchange(caption, std::string()),
-                         std::exchange(reply_to, std::nullopt), thread, std::move(one.video));
+                         std::exchange(reply_to, std::nullopt), placed, std::move(one.video));
     // The draft copied into the caption was sent with the first file.
     // Cancel leaves it alone; sending consumes it only if it is still the
     // same draft in the same place, so a later edit is never erased.

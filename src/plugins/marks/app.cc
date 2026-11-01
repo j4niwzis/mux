@@ -293,8 +293,6 @@ struct part {
     const message* said = ui::held_message(chat, target);
     if (const auto about = said ? mux::about_of(chat, *said) : std::nullopt) {
       s_->open_thread(*about);
-      if (!s_->demo())
-        s_->net->load_thread(chat.id, *about);
       s_->model->apply(change_t{change::mark_taken{chat.id, kind, event}});
       dirty_ = true;
       s_->refresh_due = true;

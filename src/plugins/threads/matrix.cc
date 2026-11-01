@@ -13,6 +13,7 @@ import splice;
 import loom.ev;
 import loom.state;
 import loom.cs.threads_list;
+import loom.cs.relations;
 import mux.core;
 import mux.proto.matrix.client;
 import mux.plugin.threads.types;
@@ -34,6 +35,17 @@ void matrix_message_made(contract::matrix_events, type_tag<feature>, const loom:
                             .last_text = sealed_room ? std::string() : said->latest_body.value_or(""),
                             .last_at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(said->latest_ts.value_or(0))),
                             .participated = said->participated};
+}
+
+// A message sent into a thread (its part says the root): m.thread, and the
+// latest event as what a client without threads shows it answering.
+template <class Said>
+void matrix_said(contract::matrix_events, type_tag<feature>, const plugin_message_parts& parts, Said& said) {
+  const message_part& mine = std::get<message_part>(parts);
+  if (!mine.root)
+    return;
+  said.thread = *mine.root;
+  said.thread_latest = mine.latest;
 }
 
 template <class Account>
@@ -58,6 +70,35 @@ struct list_asked {
         account.took_aside(in, one);
       }
       account.tell_program(listed{in, std::move(roots)});
+    });
+  }
+};
+
+// A page of a thread's answers, newest first, from where the last ended
+// (none: its newest): each taken aside, a message in it; where the next
+// starts, told.
+struct answers_asked {
+  std::string room;
+  std::string root;
+  std::optional<std::string> from;
+  template <matrix_account Account>
+  void operator()(Account& account) const {
+    account.on_fiber([&account, room = room, root = root, from = from] {
+      const conversation_id in{account.id(), room};
+      if (!account.connected()) {
+        account.tell_program(paged{in, root});
+        return;
+      }
+      using asked = loom::cs::get_relating_events_with_rel_type;
+      auto got = account.request(asked{.room_id = room, .event_id = root, .rel_type = "m.thread", .from = from, .limit = 50,
+                                       .dir = asked::dir_t{asked::dir_values::b{}}});
+      if (!got) {
+        account.tell_program(paged{in, root});
+        return;
+      }
+      for (const auto& one : got->chunk)
+        account.took_aside(in, one);
+      account.tell_program(paged{in, root, true, got->next_batch});
     });
   }
 };

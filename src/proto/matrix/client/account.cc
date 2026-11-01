@@ -280,10 +280,6 @@ class account {
   std::uint64_t notification_revision_ = 0;
   bool notifications_busy_ = false;
   std::set<std::string> notification_rooms_;
-  // Each thread's way back, by its root: where its next page of older
-  // answers starts (none where it is all loaded), and those on their way.
-  std::map<std::string, std::optional<std::string>> thread_back_;
-  std::set<std::string> thread_loading_;
   void set_pusher(std::optional<std::string> endpoint);
   // A push come: the long poll cut short, and the sync gone again at once.
   void sync_now();
@@ -337,14 +333,6 @@ class account {
   // Packs of custom emoji and stickers (MSC2545): a room's, or one's own
   // where none is named, listed to edit; one saved, or a room's taken away;
   // an image uploaded for one.
-  // Threads (m.thread): a room's roots listed; a thread's answers loaded,
-  // each as a message in it; an answer sent in one.
-  void load_thread(std::string room, std::string root);
-  // The page of its answers before those loaded: as the chat's history, as
-  // its panel reaches its top.
-  void load_thread_older(std::string room, std::string root);
-  void send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles = {},
-                      std::vector<mention> mentions = {});
   // The user directory searched: people_found for what was asked.
   void search_people(std::string term);
   // Room keys sent only to verified sessions, or not: the account's choice.
@@ -429,7 +417,7 @@ class account {
   // (Matrix 1.10) -- then known by the event the server gives it.
   void send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
                  bool image, int width, int height, std::string caption,
-                 std::optional<std::string> reply_to = std::nullopt, std::optional<thread_place> thread = std::nullopt,
+                 std::optional<std::string> reply_to = std::nullopt, plugin_message_parts parts = {},
                  std::optional<video_look> video = std::nullopt);
 
   // A message of one's own edited (m.replace): the new text in its place.
@@ -452,7 +440,7 @@ class account {
   // its chat under it -- else one made here.
   void send(std::string room, std::string body, std::optional<std::string> reply_to = std::nullopt,
             std::vector<mention> mentions = {}, std::vector<styled_run> styles = {},
-            std::optional<std::string> local = std::nullopt);
+            std::optional<std::string> local = std::nullopt, plugin_message_parts parts = {});
   // A message as a slash command made it: its body and HTML as they are --
   // no Markdown read into it -- as a text or an emote (/me), answering one
   // where it does.
@@ -887,6 +875,19 @@ class account {
   }
   template <class Plugin>
   static void made_for(const loom::ev::timeline_event&, const std::optional<relates_t>&, bool, message&) {}
+  // What a message sent says, as each plugin's part of it has it said
+  // (matrix_said: a thread's root and latest, for an answer in one).
+  template <class Plugin, class Said>
+    requires requires(const plugin_message_parts& parts, Said& said) { matrix_said(contract::matrix_events{}, type_tag<Plugin>{}, parts, said); }
+  static void said_for(const plugin_message_parts& parts, Said& said) {
+    matrix_said(contract::matrix_events{}, type_tag<Plugin>{}, parts, said);
+  }
+  template <class Plugin, class Said>
+  static void said_for(const plugin_message_parts&, Said&) {}
+  template <template <class...> class List, class... Plugins, class Said>
+  static void plugins_say(type_tag<List<Plugins...>>, const plugin_message_parts& parts, Said& said) {
+    (said_for<Plugins>(parts, said), ...);
+  }
   template <template <class...> class List, class... Plugins>
   static void plugins_make(type_tag<List<Plugins...>>, const loom::ev::timeline_event& one, const std::optional<relates_t>& relates,
                            bool sealed_room, message& made) {

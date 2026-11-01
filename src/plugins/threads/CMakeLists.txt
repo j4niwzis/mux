@@ -11,4 +11,4 @@ mux_plugin(threads ORDER 45
   UI_TOP ui_top.cc
   APP    app.cc
   MATRIX matrix.cc
-  LOOM   cs-threads_list)
+  LOOM   cs-threads_list cs-relations)

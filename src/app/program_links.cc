@@ -120,8 +120,6 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
   jumps.stop();
   if (shared.thread_open() != thread) {
     shared.open_thread(*thread);
-    if (!shared.demo())
-      net->load_thread(chat.id, *thread);
   }
   this->refresh();
   // Its answers still on their way: scrolled to once they are (woken).
@@ -161,8 +159,6 @@ void app::apply(const request::jump_to_message& one) {
         if (thread) {
           if (shared.thread_open() != thread) {
             shared.open_thread(*thread);
-            if (!shared.demo())
-              net->load_thread(chat->id, *thread);
             this->refresh();
           }
           if (jumps.aim_in_thread(one.id))

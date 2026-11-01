@@ -33,7 +33,6 @@ using chat_aimed = skiff::compose::ListAimed<std::string, mux::ui::chat_list_tag
 using chat_edge = skiff::compose::ListEdge<mux::ui::chat_list_tag>;
 using chat_seen = skiff::compose::ListSeen<std::string, mux::ui::chat_list_tag>;
 using thread_aimed = skiff::compose::ListAimed<std::string, mux::ui::thread_list_tag>;
-using thread_edge = skiff::compose::ListEdge<mux::ui::thread_list_tag>;
 using thread_seen = skiff::compose::ListSeen<std::string, mux::ui::thread_list_tag>;
 using chat_span = skiff::compose::ListSpan<std::string, mux::ui::chat_list_tag>;
 using thread_span = skiff::compose::ListSpan<std::string, mux::ui::thread_list_tag>;
@@ -215,13 +214,6 @@ class jumps_part {
       ++marks.flash;
     });
     flash_until_ = now_ms() + kFlashMs;
-  }
-  // At its top, the page of answers before those held, as a chat's history
-  // is asked for at its top: a thread opens at its newest page only.
-  void apply(const thread_edge& one) {
-    const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
-    if (one.older && shown.chosen && shown.thread)
-      s_->net->load_thread_older(*shown.chosen, *shown.thread);
   }
   // What the thread's panel shows: its pictures asked for as it changes,
   // those around it only.

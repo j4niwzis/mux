@@ -30,12 +30,18 @@ struct message_part {
   std::optional<std::string> root;
   // A thread's root: the thread's summary.
   std::optional<summary> threaded;
+  // Sent into a thread: its latest event as it was sent -- what a client
+  // that does not know threads shows it as an answer to.
+  std::optional<std::string> latest;
   friend bool operator==(const message_part&, const message_part&) = default;
 };
 template <class Message>
 struct chat_part {
   std::map<std::string, std::vector<Message>> answers;
   std::vector<std::string> roots;
+  // Each thread's way back, by its root: where its next page of older
+  // answers starts -- none where all are loaded.
+  std::map<std::string, std::optional<std::string>> pages;
   friend bool operator==(const chat_part&, const chat_part&) = default;
 };
 
@@ -99,6 +105,14 @@ template <class Message>
 bool kept_about(const chat_part<Message>& part, const Message& one) {
   const auto& threaded = part_of(one).threaded;
   return (threaded && threaded->count > 0) || part.answers.contains(one.id);
+}
+// A message to be sent aside about one (an answer into a thread): its part
+// says the root, and the thread's latest held answer (the root, none held).
+template <class Message, class Parts>
+void aside_placed(const chat_part<Message>& part, Parts& parts, const std::string& root) {
+  const auto found = part.answers.find(root);
+  std::get<message_part>(parts) =
+      message_part{.root = root, .latest = found == part.answers.end() || found->second.empty() ? root : found->second.back().id};
 }
 // Every list it keeps aside, given to f.
 template <class Message, class F>

@@ -305,9 +305,10 @@ template <class Plugins>
 
 template <class Sink>
 void account<Sink>::send(std::string room, std::string body, std::optional<std::string> reply_to,
-                         std::vector<mention> mentions, std::vector<styled_run> styles, std::optional<std::string> local) {
+                         std::vector<mention> mentions, std::vector<styled_run> styles, std::optional<std::string> local,
+                         plugin_message_parts parts) {
   this->spawn_sending([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to),
-                mentions = std::move(mentions), styles = std::move(styles), local = std::move(local)]() mutable {
+                mentions = std::move(mentions), styles = std::move(styles), local = std::move(local), parts = std::move(parts)]() mutable {
     const std::string txn = local ? *local : this->transaction();
     const conversation_id in{id_, room};
     log(id_, "send {}: begun in {}{}", txn, room, api_ ? "" : " (not connected: it will be marked not sent)");
@@ -322,11 +323,14 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
         .replies_to = reply_to,
         .encrypted = this->encrypted_room(room),
         .outgoing = true,
-        .delivery = delivery::sending{}}});
+        .delivery = delivery::sending{},
+        .plugins = parts}});
     unsent<Sink> pending{sink_, in, txn};
     if (!api_)
       return;
-    const auto content = loom::client::text_message(loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .mentions = marked.users});
+    auto typed = loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .mentions = marked.users};
+    plugins_say(sink_plugins_tag{}, parts, typed);
+    const auto content = loom::client::text_message(typed);
     this->send_text(in, room, txn, as_body(content), relates_to_of(content));
     pending.settled = true;
   });
@@ -397,73 +401,6 @@ void account<Sink>::send_text(const conversation_id& in, const std::string& room
   sink_(change::message_acknowledged{in, txn, sent->event_id});
 }
 
-
-template <class Sink>
-void account<Sink>::load_thread(std::string room, std::string root) {
-  // Its newest page only, as a chat opens at its newest: the rest as its
-  // panel reaches its top (load_thread_older). Five pages of a hundred
-  // were loaded at once, every answer of a long thread made and kept.
-  thread_back_.erase(root);
-  this->load_thread_older(std::move(room), std::move(root));
-}
-
-template <class Sink>
-void account<Sink>::load_thread_older(std::string room, std::string root) {
-  const auto back = thread_back_.find(root);
-  // All loaded already, or the page on its way.
-  if ((back != thread_back_.end() && !back->second) || !thread_loading_.insert(root).second)
-    return;
-  std::optional<std::string> from = back != thread_back_.end() ? back->second : std::nullopt;
-  this->spawn_guarded([this, room = std::move(room), root, from = std::move(from)] {
-    if (!api_) {
-      thread_loading_.erase(root);
-      return;
-    }
-    using asked = loom::cs::get_relating_events_with_rel_type;
-    const conversation_id in{id_, room};
-    auto got = perform(*api_, asked{.room_id = room, .event_id = root, .rel_type = "m.thread", .from = from, .limit = 50,
-                                    .dir = asked::dir_t{asked::dir_values::b{}}});
-    thread_loading_.erase(root);
-    if (!got) {
-      log(id_, "the thread {}: {}", root, got.error().said());
-      return;
-    }
-    for (const auto& one : got->chunk)
-      this->event(in, one, placement::aside{});
-    thread_back_.insert_or_assign(root, got->next_batch);
-  });
-}
-
-template <class Sink>
-void account<Sink>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to,
-                                  std::vector<styled_run> styles, std::vector<mention> mentions) {
-  this->spawn_sending([this, room = std::move(room), body = std::move(body), root = std::move(root), latest = std::move(latest),
-                 reply_to = std::move(reply_to), styles = std::move(styles), mentions = std::move(mentions)]() mutable {
-    const std::string txn = this->transaction();
-    const conversation_id in{id_, room};
-    // Its mentions links and m.mentions, as a message sent in the room has.
-    const auto marked = marked_mentions(body, mentions, styles);
-    const auto html = html_of<typename heard_plugins<Sink>::type>(marked.marked, emotes_in(room), styles);
-    sink_(change::message_added{message{.in = in,
-                                        .id = txn,
-                                        .sender = id_.address,
-                                        .at = std::chrono::time_point_cast<std::chrono::milliseconds>(
-                                            std::chrono::system_clock::now()),
-                                        .body = {body, html},
-                                        .replies_to = reply_to,
-                                        .encrypted = this->encrypted_room(room),
-                                        .outgoing = true,
-                                        .delivery = delivery::sending{},
-                                        .thread = root}});
-    unsent<Sink> pending{sink_, in, txn};
-    if (!api_)
-      return;
-    const auto content = loom::client::text_message(
-        loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .mentions = marked.users, .thread = root, .thread_latest = latest});
-    this->send_text(in, room, txn, as_body(content), relates_to_of(content));
-    pending.settled = true;
-  });
-}
 
 template <class Sink>
 void account<Sink>::typing(std::string room, bool on) {

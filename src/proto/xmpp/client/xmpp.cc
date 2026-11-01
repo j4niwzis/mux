@@ -509,7 +509,7 @@ class account {
   }
   void send_file(std::string to, std::string local, std::string bytes, std::string name, std::string mimetype,
       bool image, int width, int height, std::string caption, std::optional<std::string> reply_to,
-      std::optional<thread_place>, std::optional<video_look>) {
+      plugin_message_parts, std::optional<video_look>) {
     this->spawn_guarded([this, to = std::move(to), local = std::move(local), bytes = std::move(bytes),
         name = std::move(name), mimetype = std::move(mimetype), image, width, height, caption = std::move(caption), reply_to] {
       message out{.in = {id_, to}, .id = local, .sender = id_.address,
@@ -1149,7 +1149,7 @@ class account {
   // its chat under it -- else one made here.
   void send(std::string to, std::string text, std::optional<std::string> reply_to = std::nullopt,
             std::vector<mux::mention> = {}, std::vector<mux::styled_run> styles = {},
-            std::optional<std::string> local = std::nullopt) {
+            std::optional<std::string> local = std::nullopt, plugin_message_parts = {}) {
     text = styled_body(std::move(text), styles);
     this->spawn_guarded([this, to = std::move(to), text = std::move(text), reply_to = std::move(reply_to), local = std::move(local)] {
       message out{.in = {id_, to},

@@ -335,12 +335,6 @@ using choice_level_t = spl::variant<choice_level::everywhere, choice_level::acco
 
 // A message forwarded, as the client that sent it marked it: who it is from
 // -- their id and name -- and a link to the original.
-// Sent into a thread: its root, and its latest event -- what a client that
-// does not know threads shows it as an answer to.
-struct thread_place {
-  std::string root;
-  std::string latest;
-};
 // A video sent: its length, and its first picture (PNG) as its thumbnail,
 // with that picture's size -- what m.video says, so that it is shown as a
 // video, not a file.

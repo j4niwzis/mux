@@ -39,9 +39,6 @@ template void account<mux::app::post_change>::follow(std::optional<std::string> 
 template void account<mux::app::post_change>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate,
                                                                   bool encrypted, mux::room_place place);
 template void account<mux::app::post_change>::search_people(std::string term);
-template void account<mux::app::post_change>::load_thread(std::string room, std::string root);
-template void account<mux::app::post_change>::load_thread_older(std::string room, std::string root);
-template void account<mux::app::post_change>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles, std::vector<mention> mentions);
 template void account<mux::app::post_change>::catch_up(std::string room, std::string from, std::string until);
 template void account<mux::app::post_change>::preview_room(std::string room, std::vector<std::string> via);
 template void account<mux::app::post_change>::fetch_profile(std::string user);
@@ -68,7 +65,7 @@ template void account<mux::app::post_change>::edit_caption(std::string room, std
 template void account<mux::app::post_change>::remove(std::string room, std::string event);
 template void account<mux::app::post_change>::react(std::string room, std::string target, std::string key, bool on, std::optional<std::string> shortcode);
 template void account<mux::app::post_change>::leave(std::string room);
-template void account<mux::app::post_change>::send(std::string room, std::string body, std::optional<std::string> reply_to, std::vector<mention> mentions, std::vector<styled_run> styles, std::optional<std::string> local);
+template void account<mux::app::post_change>::send(std::string room, std::string body, std::optional<std::string> reply_to, std::vector<mention> mentions, std::vector<styled_run> styles, std::optional<std::string> local, plugin_message_parts parts);
 template void account<mux::app::post_change>::set_display_name(std::string name);
 template void account<mux::app::post_change>::send_as(std::string room, std::string body, std::optional<std::string> html, bool emote, std::optional<std::string> reply_to);
 template void account<mux::app::post_change>::typing(std::string room, bool on);

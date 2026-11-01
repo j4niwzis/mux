@@ -8,6 +8,7 @@ export module mux.plugin.threads.app;
 
 import std;
 import skiff.model;
+import skiff.compose;
 import mux.composition;
 import mux.core;
 import mux.ui;
@@ -20,9 +21,14 @@ import mux.plugin.threads.matrix;
 
 export namespace mux::plugins::threads {
 
+// The thread's panel at its top: the page of answers before those held.
+using thread_edge = skiff::compose::ListEdge<mux::ui::thread_list_tag>;
+
 struct part {
   app::services* s_ = nullptr;
   std::optional<std::string> answered_in_;
+  // The threads whose page of answers is on its way.
+  std::vector<std::pair<mux::conversation_id, std::string>> loading_;
   std::tuple<std::optional<mux::conversation_id>, skiff::model::Revision, std::optional<std::string>> seen_;
 
   // Threads, as Element's panel: opened in place of the chat's info, the
@@ -38,13 +44,6 @@ struct part {
     if (!s_->chosen())
       return;
     s_->open_thread(one.root);
-    if (!s_->demo()) {
-      s_->net->load_thread(*s_->chosen(), one.root);
-      if (const mux::conversation* chat = s_->model->find(*s_->chosen());
-          chat && !chat->quoted.contains(one.root) &&
-          std::ranges::find(chat->timeline, one.root, &mux::message::id) == chat->timeline.end())
-        s_->net->fetch_quoted(*s_->chosen(), one.root);
-    }
     s_->refresh_due = true;
   }
   void apply(const close_thread&) {
@@ -101,6 +100,10 @@ struct part {
     if (chat_now.thread != answered_in_) {
       answered_in_ = chat_now.thread;
       s_->stop_thread_answer();
+      // A thread opened, from wherever it was: its newest page of answers
+      // fetched, and its root where it is not held.
+      if (chat_now.thread && chat_now.chosen)
+        this->opened(*chat_now.chosen, *chat_now.thread);
     }
     const mux::conversation* chat = chat_now.chosen && chat_now.threads_open ? s_->model->find(*chat_now.chosen) : nullptr;
     const auto key = std::tuple{chat ? std::optional(chat->id) : std::nullopt, chat ? this->revision_of(chat->id) : 0, chat_now.thread};
@@ -141,10 +144,34 @@ struct part {
     const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
     if (!chat || s_->demo())
       return;
-    std::string latest = one.root;
-    if (const std::vector<mux::message>* answers = mux::aside_for(*chat, one.root); answers && !answers->empty())
-      latest = answers->back().id;
-    s_->net->send_in_thread(*chosen, one.text, one.root, latest, one.reply_to, one.styles, one.mentions);
+    s_->net->send(*chosen, one.text, one.reply_to, one.mentions, one.styles, mux::placed_aside(*chat, one.root));
+  }
+
+  void opened(const mux::conversation_id& in, const std::string& root) {
+    if (s_->demo())
+      return;
+    this->load(in, root, true);
+    if (const mux::conversation* chat = s_->model->find(in); chat && !mux::ui::held_message(*chat, root))
+      s_->net->fetch_quoted(in, root);
+  }
+  // A page of a thread's answers asked for: its newest (fresh), or the one
+  // before those held -- none once all are, nor while one is on its way.
+  void load(const mux::conversation_id& in, const std::string& root, bool fresh) {
+    const mux::conversation* chat = s_->model->find(in);
+    if (!chat || s_->demo())
+      return;
+    const auto& pages = std::get<chat_part<mux::message>>(chat->plugins).pages;
+    const auto at = pages.find(root);
+    if ((!fresh && at != pages.end() && !at->second) || std::ranges::contains(loading_, std::pair{in, root}))
+      return;
+    loading_.emplace_back(in, root);
+    s_->net->ask(in.account, answers_asked{in.id, root, fresh || at == pages.end() ? std::nullopt : at->second});
+  }
+  void take(const paged& one) { std::erase(loading_, std::pair{one.in, one.root}); }
+  void apply(const thread_edge& one) {
+    const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
+    if (one.older && shown.chosen && shown.thread)
+      this->load(*shown.chosen, *shown.thread, false);
   }
 
   [[nodiscard]] skiff::model::Revision revision_of(const mux::conversation_id& chat) const {

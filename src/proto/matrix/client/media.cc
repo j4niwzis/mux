@@ -138,11 +138,11 @@ void account<Sink>::upload_room_avatar(std::string room, std::string bytes, std:
 
 template <class Sink>
 void account<Sink>::send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
-                 bool image, int width, int height, std::string caption, std::optional<std::string> reply_to, std::optional<thread_place> thread,
+                 bool image, int width, int height, std::string caption, std::optional<std::string> reply_to, plugin_message_parts parts,
                  std::optional<video_look> video) {
   this->spawn_sending([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
                 name = std::move(name), mimetype = std::move(mimetype), image, width, height,
-                caption = std::move(caption), reply_to = std::move(reply_to), thread = std::move(thread),
+                caption = std::move(caption), reply_to = std::move(reply_to), parts = std::move(parts),
                 video = std::move(video)] mutable {
     const conversation_id in{id_, room};
     mux::attachment carried;
@@ -168,7 +168,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .outgoing = true,
                                         .delivery = delivery::sending{},
                                         .attachment = carried,
-                                        .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt}});
+                                        .plugins = parts}});
     unsent<Sink> pending{sink_, in, local};
     // Before the upload: the bytes of a file for an encrypted room never
     // reach the server in the clear (review 4, H2).
@@ -230,7 +230,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
       return;
     // The message: a picture or a file, its caption its body; an answer, as
     // any message may be one.
-    const loom::client::media_said said{.uri = *uri,
+    loom::client::media_said said{.uri = *uri,
                                         .name = name,
                                         .caption = caption,
                                         // Its Markdown as a text's is: sent formatted, not as
@@ -238,9 +238,8 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .caption_html = caption.empty() ? std::nullopt : written_html<typename heard_plugins<Sink>::type>(caption),
                                         .mimetype = mimetype,
                                         .size = static_cast<std::int64_t>(bytes.size()),
-                                        .reply_to = reply_to,
-                                        .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt,
-                                        .thread_latest = thread ? std::optional<std::string>(thread->latest) : std::nullopt};
+                                        .reply_to = reply_to};
+    plugins_say(sink_plugins_tag{}, parts, said);
     // Sealed: the file named by what opens it, its URL not in the clear.
     const auto with_file = [&](auto content) {
       if (sealed) {

@@ -55,6 +55,10 @@ const std::string* about_said(const Part&) {
 }
 template <class Part>
 void about_restored(Part&, const std::string&) {}
+// A message to be sent aside about one: what a chat's part puts in its
+// parts.
+template <class Part, class Parts>
+void aside_placed(const Part&, Parts&, const std::string&) {}
 }  // namespace aside_defaults
 // Every list of messages the plugins keep aside in a chat -- out of its
 // timeline (a thread's answers, for one) -- given to f.
@@ -94,6 +98,16 @@ template <class Where>
     ((out = out ? out : (about_said(mine) ? std::optional<std::string>(*about_said(mine)) : std::nullopt)), ...);
     return out;
   }, one.plugins);
+}
+// The plugins' parts of a message sent aside about one (an answer into a
+// thread), as the chat's parts place it.
+[[nodiscard]] inline plugin_message_parts placed_aside(const conversation& where, const std::string& about) {
+  plugin_message_parts out{};
+  std::apply([&](const auto&... part) {
+    using aside_defaults::aside_placed;
+    (aside_placed(part, out, about), ...);
+  }, where.plugins);
+  return out;
 }
 inline void restore_about(message& one, const std::string& about) {
   std::apply([&](auto&... mine) {

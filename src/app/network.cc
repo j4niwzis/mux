@@ -75,7 +75,7 @@ template <class Account>
 [[nodiscard]] constexpr mux::proto::account_ops ops_of_type() {
   return {.react = requires { &Account::react; },
           .forward = requires { &Account::forward; },
-          .threads = requires { &Account::load_thread; },
+          .threads = requires { &Account::took_aside; },
           // The developer tools' (a plugin's) source and state: read from what
           // the account has synced, through its door for plugins.
           .view_source = requires(Account& account) { account.synced(); },
@@ -196,7 +196,7 @@ struct network {
   std::int64_t window_run = std::chrono::system_clock::now().time_since_epoch().count();
   std::uint64_t window_sent = 0;
   void send(const mux::conversation_id& to, std::string text, std::optional<std::string> reply_to = std::nullopt,
-            std::vector<mux::mention> mentions = {}, std::vector<mux::styled_run> styles = {}) {
+            std::vector<mux::mention> mentions = {}, std::vector<mux::styled_run> styles = {}, mux::plugin_message_parts parts = {}) {
     // Said at each end of the post: a send that never reached the network's
     // loop, or found no account there, shows here.
     mux::log_line(to.account.address, std::format("send to {}: asked ({} bytes)", to.id, text.size()));
@@ -213,16 +213,17 @@ struct network {
         .body = {text, std::nullopt},
         .replies_to = reply_to,
         .outgoing = true,
-        .delivery = mux::delivery::sending{}}}});
+        .delivery = mux::delivery::sending{},
+        .plugins = parts}}});
     loop.post([this, to, local, text = std::move(text), reply_to = std::move(reply_to), mentions = std::move(mentions),
-               styles = std::move(styles)] {
+               styles = std::move(styles), parts = std::move(parts)] {
       bool found = false;
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == to.account) {
                 found = true;
-                account->send(to.id, text, reply_to, mentions, styles, local);
+                account->send(to.id, text, reply_to, mentions, styles, local, parts);
               }
             },
             one.account);
@@ -283,16 +284,16 @@ struct network {
   // A file sent into a chat by the account it is of.
   void send_file(const mux::conversation_id& in, std::string local, std::string bytes, std::string name,
                  std::string mimetype, bool image, int width, int height, std::string caption,
-                 std::optional<std::string> reply_to = std::nullopt, std::optional<mux::thread_place> thread = std::nullopt,
+                 std::optional<std::string> reply_to = std::nullopt, mux::plugin_message_parts parts = {},
                  std::optional<mux::video_look> video = std::nullopt) {
     loop.post([this, in, local = std::move(local), bytes = std::move(bytes), name = std::move(name),
                mimetype = std::move(mimetype), image, width, height, caption = std::move(caption),
-               reply_to = std::move(reply_to), thread = std::move(thread), video = std::move(video)] {
+               reply_to = std::move(reply_to), parts = std::move(parts), video = std::move(video)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.send_file(in.id, local, bytes, name, mimetype, image, width, height, caption, reply_to, thread, video))) { a.send_file(in.id, local, bytes, name, mimetype, image, width, height, caption, reply_to, thread, video); }, *account);
+                ask_if_able([&](auto& a) -> decltype(void(a.send_file(in.id, local, bytes, name, mimetype, image, width, height, caption, reply_to, parts, video))) { a.send_file(in.id, local, bytes, name, mimetype, image, width, height, caption, reply_to, parts, video); }, *account);
             },
             one.account);
     });
@@ -520,42 +521,6 @@ struct network {
             [&](auto& account) {
               if (account->id() == by)
                 ask_if_able([&](auto& a) -> decltype(void(a.create_room(name, topic, open, alias, federate, encrypted, place))) { a.create_room(name, topic, open, alias, federate, encrypted, place); }, *account);
-            },
-            one.account);
-    });
-  }
-  // Threads: a room's listed, one loaded, an answer sent in one.
-  void load_thread(const mux::conversation_id& in, std::string root) {
-    loop.post([this, in, root = std::move(root)] {
-      for (auto& one : accounts)
-        spl::visit(
-            [&](auto& account) {
-              if (account->id() == in.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.load_thread(in.id, root))) { a.load_thread(in.id, root); }, *account);
-            },
-            one.account);
-    });
-  }  // The page of a thread's answers before those loaded.
-  void load_thread_older(const mux::conversation_id& in, std::string root) {
-    loop.post([this, in, root = std::move(root)] {
-      for (auto& one : accounts)
-        spl::visit(
-            [&](auto& account) {
-              if (account->id() == in.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.load_thread_older(in.id, root))) { a.load_thread_older(in.id, root); }, *account);
-            },
-            one.account);
-    });
-  }
-  void send_in_thread(const mux::conversation_id& in, std::string body, std::string root, std::string latest,
-                      std::optional<std::string> reply_to, std::vector<mux::styled_run> styles, std::vector<mux::mention> mentions = {}) {
-    loop.post([this, in, body = std::move(body), root = std::move(root), latest = std::move(latest),
-               reply_to = std::move(reply_to), styles = std::move(styles), mentions = std::move(mentions)] {
-      for (auto& one : accounts)
-        spl::visit(
-            [&](auto& account) {
-              if (account->id() == in.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.send_in_thread(in.id, body, root, latest, reply_to, styles, mentions))) { a.send_in_thread(in.id, body, root, latest, reply_to, styles, mentions); }, *account);
             },
             one.account);
     });

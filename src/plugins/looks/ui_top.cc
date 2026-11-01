@@ -35,6 +35,25 @@ import mux.plugin.looks.types;
 
 export namespace mux::plugins::looks {
 using namespace ::mux::ui;
+// Asked of the program, its own (moved from mux.ui, where only it took them).
+struct set_wallpaper {
+  mux::choice_level_t level;
+  mux::config::wallpaper_pick_t pick;
+};
+
+struct change_bubbles {
+  mux::choice_level_t level;
+  mux::config::look_part_t part = mux::config::look_part::bubbles{};
+  bubbles_change_t change;
+};
+
+// Bubbles at a level: a look, or none -- as the level over it says.
+struct set_bubbles {
+  mux::choice_level_t level;
+  std::optional<mux::config::bubble_look> look;
+  mux::config::look_part_t part = mux::config::look_part::bubbles{};
+};
+
 // What a chat looks like, chosen at a level -- every chat's, an account's,
 // one chat's: its background (as the level over it says, the theme's, a
 // plain colour, or a picture of one's own), and how its bubbles and the
@@ -76,7 +95,7 @@ using namespace ::mux::ui;
 // The look a choice asks for, from the looks as they are: none where it
 // does nothing -- the panels with nothing behind them, a slider under a
 // level that is as above.
-[[nodiscard]] inline std::optional<config::bubble_look> look_after(const looks_picked& now, const request::change_bubbles& asked,
+[[nodiscard]] inline std::optional<config::bubble_look> look_after(const looks_picked& now, const change_bubbles& asked,
                                                                    const request::bubbles_change::opacity& slid) {
   if (!look_usable(now, asked.part) || !look_own(now, asked.level, asked.part))
     return std::nullopt;
@@ -89,7 +108,7 @@ using namespace ::mux::ui;
   return look;
 }
 // Frosted's blur where it was let go, as it is: 55.2%, not rounded.
-[[nodiscard]] inline std::optional<config::bubble_look> look_after(const looks_picked& now, const request::change_bubbles& asked,
+[[nodiscard]] inline std::optional<config::bubble_look> look_after(const looks_picked& now, const change_bubbles& asked,
                                                                    const request::bubbles_change::blur& slid) {
   if (!look_usable(now, asked.part) || !look_own(now, asked.level, asked.part))
     return std::nullopt;
@@ -108,7 +127,7 @@ using namespace ::mux::ui;
 [[nodiscard]] inline auto& element_place(config::bubble_look& look, request::element_opacity_t which) { return look.elements.*which; }
 [[nodiscard]] inline auto& element_place(config::bubble_look& look, request::element_blur_t which) { return look.blurs.*which; }
 template <class Which>
-[[nodiscard]] std::optional<config::bubble_look> look_after(const looks_picked& now, const request::change_bubbles& asked,
+[[nodiscard]] std::optional<config::bubble_look> look_after(const looks_picked& now, const change_bubbles& asked,
                                                             const request::bubbles_change::element<Which>& slid) {
   if (!look_own(now, asked.level, config::look_part::bubbles{}))
     return std::nullopt;
@@ -125,20 +144,20 @@ template <class Which>
 }
 // What the program sets for a choice: the look at its level -- or, a kind
 // of none, as the level over it says.
-[[nodiscard]] inline std::optional<request::set_bubbles> bubbles_asked(const looks_picked& now, const request::change_bubbles& asked) {
+[[nodiscard]] inline std::optional<set_bubbles> bubbles_asked(const looks_picked& now, const change_bubbles& asked) {
   return spl::visit(
-      spl::overloaded{[&](const request::bubbles_change::kind& picked) -> std::optional<request::set_bubbles> {
+      spl::overloaded{[&](const request::bubbles_change::kind& picked) -> std::optional<set_bubbles> {
                         if (!look_usable(now, asked.part))
                           return std::nullopt;
                         if (!picked.to)
-                          return request::set_bubbles{asked.level, std::nullopt, asked.part};
+                          return set_bubbles{asked.level, std::nullopt, asked.part};
                         config::bubble_look look = look_in(now, asked.level, asked.part);
                         look.kind = *picked.to;
-                        return request::set_bubbles{asked.level, look, asked.part};
+                        return set_bubbles{asked.level, look, asked.part};
                       },
                       [&](const auto& slid) {
                         return look_after(now, asked, slid).transform([&](config::bubble_look look) {
-                          return request::set_bubbles{asked.level, std::move(look), look_part_of(asked.part, slid)};
+                          return set_bubbles{asked.level, std::move(look), look_part_of(asked.part, slid)};
                         });
                       }},
       asked.change);
@@ -162,36 +181,36 @@ inline const std::array<config::bubbles_t, 4> kBubbleKinds{config::bubbles::soli
   return own ? (has_level_above(level) ? 1 : 0) + own->kind.index() : 0;
 }
 struct pick_kind_at {
-  using Answer = std::optional<request::change_bubbles>;
+  using Answer = std::optional<change_bubbles>;
   choice_level_t level;
   config::look_part_t part;
   Answer operator()(std::size_t index) const {
     const std::size_t shift = has_level_above(level) ? 1 : 0;
     if (index < shift)
-      return request::change_bubbles{level, part, request::bubbles_change::kind{std::nullopt}};
+      return change_bubbles{level, part, request::bubbles_change::kind{std::nullopt}};
     if (index - shift >= kBubbleKinds.size())
       return std::nullopt;
-    return request::change_bubbles{level, part, request::bubbles_change::kind{kBubbleKinds[index - shift]}};
+    return change_bubbles{level, part, request::bubbles_change::kind{kBubbleKinds[index - shift]}};
   }
 };
 // A slider let go: where, as the change it is.
 template <class Change>
 struct look_slid {
-  using Answer = request::change_bubbles;
+  using Answer = change_bubbles;
   choice_level_t level;
   config::look_part_t part;
   Answer operator()(float at) const { return {level, part, Change{at}}; }
 };
 template <class Which>
 struct element_slid {
-  using Answer = request::change_bubbles;
+  using Answer = change_bubbles;
   choice_level_t level;
   Which which;
   Answer operator()(float at) const { return {level, config::look_part::bubbles{}, request::bubbles_change::element<Which>{which, at}}; }
 };
 template <class Which>
 struct element_given_back {
-  using Answer = request::change_bubbles;
+  using Answer = change_bubbles;
   choice_level_t level;
   Which which;
   Answer operator()() const { return {level, config::look_part::bubbles{}, request::bubbles_change::element<Which>{which, std::nullopt}}; }
@@ -316,17 +335,17 @@ struct background_shown {
   return {std::move(names), own ? (has_level_above(level) ? 1 : 0) + own->index() : 0};
 }
 struct pick_wallpaper_at {
-  using Answer = std::optional<request::set_wallpaper>;
+  using Answer = std::optional<set_wallpaper>;
   choice_level_t level;
   Answer operator()(std::size_t index) const {
     static const std::array<config::wallpaper_pick_t, 3> picks{config::wallpaper_pick::theme{}, config::wallpaper_pick::plain{},
                                                                config::wallpaper_pick::picture{}};
     const std::size_t shift = has_level_above(level) ? 1 : 0;
     if (index < shift)
-      return request::set_wallpaper{level, config::wallpaper_pick::inherit{}};
+      return set_wallpaper{level, config::wallpaper_pick::inherit{}};
     if (index - shift >= picks.size())
       return std::nullopt;
-    return request::set_wallpaper{level, picks[index - shift]};
+    return set_wallpaper{level, picks[index - shift]};
   }
 };
 using background_menu_t = choice_menu<pick_wallpaper_at>;

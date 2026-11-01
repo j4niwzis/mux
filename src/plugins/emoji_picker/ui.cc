@@ -29,6 +29,12 @@ import skiff.bind;
 import mux.plugin.emoji_picker.types;
 
 export namespace mux::plugins::emoji_picker {
+// Asked of the program, its own (moved from mux.ui, where only it took them).
+struct insert_emoji {
+  std::string text;
+  std::string picture;  // a custom emoji's, where it is one
+};
+
 
 using namespace ::mux::ui;
 
@@ -55,12 +61,12 @@ using pages_shown_t = typename decltype(pages_shown_of(media_page_plugins{}))::t
 struct select_emoji_page { popup_page_t page; };
 // What the input's emoji do: go into what is written.
 struct insert_emoji_into {
-  using Answer = ::mux::ui::request::insert_emoji;
+  using Answer = insert_emoji;
   [[nodiscard]] static constexpr bool takes_text() { return false; }
   // A glyph as itself; a custom emoji (its key its picture's, not its
   // text) as its picture.
   Answer operator()(const std::string& text, const std::string& key) const {
-    return ::mux::ui::request::insert_emoji{text, key == text ? std::string() : key};
+    return insert_emoji{text, key == text ? std::string() : key};
   }
 };
 

@@ -33,10 +33,26 @@ export import mux.plugin.new_room.types;
 
 export namespace mux::plugins::new_room {
 using namespace ::mux::ui;
+// Asked of the program, its own (moved from mux.ui, where only it took them).
+struct open_new_room {};
+
+struct create_room {
+  std::string name;
+  std::string topic;
+  bool open = false;
+  std::string alias;
+  bool federate = true;  // those of other servers may join
+  bool encrypted = true;  // end-to-end, from the start
+  // In a space, by its account; its members let in; a space itself.
+  std::optional<mux::conversation_id> space;
+  bool space_members = false;
+  bool make_space = false;
+};
+
 
 // Its row in the drawer (mux.ui:drawer).
 MUX_INLINE_IN_RELEASE auto extend(contract::drawer_rows, type_tag<feature>, const palette& colours) {
-  return row_item(colours, "New room", sends<request::open_new_room>{}, icon::people{});
+  return row_item(colours, "New room", sends<open_new_room>{}, icon::people{});
 }
 
 namespace room_access {
@@ -64,14 +80,14 @@ struct room_creation_events {
   Facts facts;
   auto on(submit_room, const room_draft& draft) const {
     constexpr auto traits = traits_of<typename Facts::protocol>;
-    std::optional<request::create_room> asked;
+    std::optional<create_room> asked;
     const auto [open, members] = spl::visit(spl::overloaded{
         [](room_access::invited) { return std::pair{false, false}; },
         [](room_access::everyone) { return std::pair{true, false}; },
         [](room_access::space) { return std::pair{false, true}; }}, draft.access);
     const auto in = place_of(facts);
     if (!draft.name.empty() && (!traits.address_required || !draft.address.empty()))
-      asked = request::create_room{draft.name, draft.topic, open, draft.address, draft.federate,
+      asked = create_room{draft.name, draft.topic, open, draft.address, draft.federate,
           traits.encryption && draft.encrypted && !open,
           in ? std::optional(in->space) : std::nullopt, members,
           in && in->make_space};

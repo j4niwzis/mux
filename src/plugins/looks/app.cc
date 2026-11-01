@@ -33,7 +33,7 @@ struct part {
 
   // A background chosen: the theme's, plain, or as the level over it says,
   // set at once; a picture, chosen first in the system's dialog (took_files).
-  void apply(const ui::request::set_wallpaper& one) {
+  void apply(const set_wallpaper& one) {
     spl::visit(spl::overloaded{[&](mux::config::wallpaper_pick::inherit) { this->set_at(one.level, std::nullopt); },
                                      [&](mux::config::wallpaper_pick::theme) { this->set_at(one.level, mux::config::wallpaper::theme{}); },
                                      [&](mux::config::wallpaper_pick::plain) { this->set_at(one.level, mux::config::wallpaper::plain{}); },
@@ -56,12 +56,12 @@ struct part {
   // A look's choice -- a kind, a slider let go, an element given back --
   // worked out from the looks as they are, and set; nothing where it does
   // nothing.
-  void apply(const ui::request::change_bubbles& one) {
+  void apply(const change_bubbles& one) {
     if (auto asked = bubbles_asked(mux::ui::looks_picked_of(s_->looks), one))
       this->apply(*asked);
   }
   // Bubbles or panels, at a level: a look, or as the level over it says.
-  void apply(const ui::request::set_bubbles& one) {
+  void apply(const set_bubbles& one) {
     const auto word = one.look ? std::optional<std::string>(mux::config::word_of(*one.look)) : std::nullopt;
     const bool set = this->change_at(one.level, [&](words& level) {
       spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) { level.bubbles = word; },

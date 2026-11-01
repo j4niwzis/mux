@@ -50,6 +50,31 @@ inline bool operator<(const space_item_t& a, const space_item_t& b) {
 
 export namespace mux::plugins::spaces {
 using namespace ::mux::ui;
+// Asked of the program, its own (moved from mux.ui, where only it took them).
+// Home without what spaces hold, but direct messages: at a level, or as the
+// level over it says.
+struct set_home_hides {
+  mux::choice_level_t level;
+  std::optional<bool> on;
+};
+
+struct flip_home_hide {
+  std::string room;
+};
+
+// And its direct messages out of Home too: only where Home is so.
+struct set_home_direct {
+  mux::choice_level_t level;
+  std::optional<bool> on;
+};
+
+struct set_space_bars {
+  std::string account;
+  mux::config::space_item_t item;
+  bool side = true;
+  bool top = false;
+};
+
 
 // What a bar's icon is, as its row is made of it.
 struct side_space_view {
@@ -150,11 +175,11 @@ auto side_space_icon(const auto& colours, const config::space_item_t& item,
 
 
 struct set_bars_act {
-  using Answer = ::mux::ui::request::set_space_bars;
+  using Answer = set_space_bars;
   std::string account;
   config::space_item_t item;
   bool side = true, top = false;
-  ::mux::ui::request::set_space_bars operator()() { return ::mux::ui::request::set_space_bars{account, item, side, top}; }
+  set_space_bars operator()() { return set_space_bars{account, item, side, top}; }
 };
 struct manage_act {
   using Answer = ::mux::ui::request::manage_space;
@@ -450,14 +475,14 @@ constexpr type_tag<leave_space_box_t> extend(contract::window_dialogs, type_tag<
 // with where it is: the side bar, the top one, both, or hidden. A choice
 // asks for the item's bars to be set so.
 struct pick_space_bars {
-  using Answer = std::optional<request::set_space_bars>;
+  using Answer = std::optional<set_space_bars>;
   std::string account;
   config::space_item_t item;
   Answer operator()(std::size_t index) const {
     static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
     if (index >= kWays.size())
       return std::nullopt;
-    return request::set_space_bars{account, item, kWays[index].first, kWays[index].second};
+    return set_space_bars{account, item, kWays[index].first, kWays[index].second};
   }
 };
 // Where an item is now, as the dropdown lists the ways.
@@ -479,10 +504,10 @@ MUX_INLINE_IN_RELEASE auto spaces_choices(const palette& colours, const ui_share
 // Home without what an account's spaces hold -- but direct messages -- or
 // as every account's.
 struct pick_home {
-  using Answer = std::tuple<request::set_home_hides, request::set_home_direct>;
+  using Answer = std::tuple<set_home_hides, set_home_direct>;
   Answer operator()(std::size_t index) const {
     const auto said = [&](bool on) { return index == 0 ? std::nullopt : std::optional<bool>(on); };
-    return {request::set_home_hides{choice_level::account{}, said(index >= 2)}, request::set_home_direct{choice_level::account{}, said(index == 3)}};
+    return {set_home_hides{choice_level::account{}, said(index >= 2)}, set_home_direct{choice_level::account{}, said(index == 3)}};
   }
 };
 MUX_INLINE_IN_RELEASE auto home_choice(const palette& colours, std::size_t way) {
@@ -542,13 +567,13 @@ template <class Colours>
 auto extend(room_settings::contract::general_sections, type_tag<feature>, const Colours& colours,
             const auto& facts) {
   namespace c = skiff::compose;
-  using toggle_t = widgets::Toggle<sends<request::flip_home_hide>>;
+  using toggle_t = widgets::Toggle<sends<flip_home_hide>>;
   return SKIFF_NAMED(home_section, c::visible(facts.space,
       c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
           c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text("Its rooms not in Home", 14.0f, colours.text))),
           c::applied<shown>([chat = facts.chat](const shown& now) { return now.hidden.contains(chat); },
                             [](toggle_t& toggle, bool on) { toggle.setOn(on); },
-                            c::styled({.alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, {request::flip_home_hide{facts.id}}))))));
+                            c::styled({.alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, {flip_home_hide{facts.id}}))))));
 }
 
 }  // namespace mux::plugins::spaces

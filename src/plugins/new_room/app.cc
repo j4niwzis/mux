@@ -24,7 +24,7 @@ struct part {
 
   // With no account that can make rooms, said so: left silent, a press on
   // the drawer's row did nothing at all.
-  void apply(const ui::request::open_new_room&) {
+  void apply(const open_new_room&) {
     const auto by = s_->account_offering(proto::feature::room_creation{});
     ui::show(*s_->showing, ui::drawer_shown{false});
     if (!by) {
@@ -50,7 +50,7 @@ struct part {
   void apply(const ui::request::close_shown<space_room_form_of<Protocol>>&) { forms::close(*s_->showing); }
   // The room made: in a space, by its account; its alias's local part as
   // the protocol has it (#name:server, name).
-  void apply(const ui::request::create_room& one) {
+  void apply(const create_room& one) {
     const auto by = one.space ? std::optional<account_id>(one.space->account) : this->open_by(protocols{});
     if (!by || s_->demo())
       return;

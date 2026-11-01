@@ -40,7 +40,7 @@ struct part {
   // Element's Start chat. With no account to ask, said so: left silent, a
   // press on the drawer's row did nothing at all -- a tester signed in to
   // none pressed it again and again.
-  void apply(const ui::request::open_new_chat&) {
+  void apply(const open_new_chat&) {
     const auto& current = s_->listed();
     ui::show(*s_->showing, ui::drawer_shown{false});
     if (!current) {
@@ -68,7 +68,7 @@ struct part {
       ui::show(*s_->showing, std::optional(std::move(facts)));
     }, one.room.account.speaks);
   }
-  void apply(const ui::request::invite_to_room& one) {
+  void apply(const invite_to_room& one) {
     const conversation* chat = s_->model->find(one.room);
     if (!chat || !ui::is_group(*chat) || chat->invite || !direct_address(one.room.account, one.user) ||
         !proto::chat_rights(ui::protocol_state_of(s_->ui, one.room.account), *chat).invite || s_->demo())
@@ -78,7 +78,7 @@ struct part {
   }
   // What is typed: the rows made again from it, and the account's directory
   // asked where its protocol has one.
-  void apply(const ui::request::find_people& one) {
+  void apply(const find_people& one) {
     std::optional<account_id> by;
     dialogs::each_open(*s_->showing, [&]<class Facts>(const Facts& open) {
       by = open.by;
@@ -97,7 +97,7 @@ struct part {
   // with them -- by the program, as a link to them does.
   template <class Asked>
   void apply(const pick& one, const Asked& asked) {
-    std::optional<ui::request::invite_to_room> invite;
+    std::optional<invite_to_room> invite;
     std::optional<ui::request::start_direct> start;
     dialogs::each_open(*s_->showing, [&](const auto& open) { this->picked(open, one, invite, start); });
     if (invite)
@@ -129,12 +129,12 @@ struct part {
  private:
   // Who was picked, by what the dialog is for.
   template <class Protocol>
-  static void picked(const invite_of<Protocol>& open, const pick& one, std::optional<ui::request::invite_to_room>& invite,
+  static void picked(const invite_of<Protocol>& open, const pick& one, std::optional<invite_to_room>& invite,
                      std::optional<ui::request::start_direct>&) {
-    invite = ui::request::invite_to_room{open.inviting, one.user};
+    invite = invite_to_room{open.inviting, one.user};
   }
   template <class Protocol>
-  static void picked(const start_of<Protocol>& open, const pick& one, std::optional<ui::request::invite_to_room>&,
+  static void picked(const start_of<Protocol>& open, const pick& one, std::optional<invite_to_room>&,
                      std::optional<ui::request::start_direct>& start) {
     start = ui::request::start_direct{one.user, open.by};
   }

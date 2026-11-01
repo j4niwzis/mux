@@ -448,49 +448,22 @@ struct explore_space {
 struct manage_space {
   std::string room;
 };
-struct flip_home_hide {
-  std::string room;
-};
 struct close_scope {};
 // The settings of the list of chats open in the list (a forum): it is in no
 // bar to be right-pressed.
 struct manage_scope {};
-struct search_rooms {
-  std::string server;
-  std::string query;
-  std::optional<std::string> since;  // the next page of the same search
-};
 struct join_directory_room {
   std::string room;
   std::string server;
   std::optional<account_id> by;
 };
-struct create_room {
-  std::string name;
-  std::string topic;
-  bool open = false;
-  std::string alias;
-  bool federate = true;  // those of other servers may join
-  bool encrypted = true;  // end-to-end, from the start
-  // In a space, by its account; its members let in; a space itself.
-  std::optional<mux::conversation_id> space;
-  bool space_members = false;
-  bool make_space = false;
-};
 struct open_room_invite { mux::conversation_id room; };
-struct invite_to_room { mux::conversation_id room; std::string user; };
-// Element's Start chat and Create a room: people searched for, a room's
-// box opened and closed; and a text put on the clipboard (one's link).
-struct find_people {
-  std::string query;
-};
 // The chat list's search, where nothing joined matches: the server's room
 // directory and user directory asked.
 struct search_elsewhere {
   std::string query;
   std::optional<account_id> by;
 };
-struct open_new_room {};
 // Leaving a space: the box asked for, with which of its rooms to leave; the
 // space left, with those; the box closed.
 struct open_leave_space {
@@ -517,36 +490,9 @@ struct place_spaces {
   std::optional<mux::config::space_bar_t> from;
   std::optional<mux::config::space_item_t> moved;
 };
-struct set_space_bars {
-  std::string account;
-  mux::config::space_item_t item;
-  bool side = true;
-  bool top = false;
-};
-// Home without what spaces hold, but direct messages: at a level, or as the
-// level over it says.
-struct set_home_hides {
-  mux::choice_level_t level;
-  std::optional<bool> on;
-};
-// And its direct messages out of Home too: only where Home is so.
-struct set_home_direct {
-  mux::choice_level_t level;
-  std::optional<bool> on;
-};
 // How much Frosted blurs, in percent.
 struct set_frost_blur {
   double percent = 10.0;
-};
-// Bubbles at a level: a look, or none -- as the level over it says.
-struct set_bubbles {
-  mux::choice_level_t level;
-  std::optional<mux::config::bubble_look> look;
-  mux::config::look_part_t part = mux::config::look_part::bubbles{};
-};
-struct set_wallpaper {
-  mux::choice_level_t level;
-  mux::config::wallpaper_pick_t pick;
 };
 // A look changed by its choices -- a kind picked, a slider let go, an
 // element given back to the bubbles' -- at a level: the program works the
@@ -575,23 +521,9 @@ using element_opacity_t = std::optional<int> mux::config::element_opacity::*;
 using element_blur_t = std::optional<double> mux::config::element_blur::*;
 using bubbles_change_t = spl::variant<bubbles_change::kind, bubbles_change::opacity, bubbles_change::blur,
                                       bubbles_change::element<element_opacity_t>, bubbles_change::element<element_blur_t>>;
-struct change_bubbles {
-  mux::choice_level_t level;
-  mux::config::look_part_t part = mux::config::look_part::bubbles{};
-  bubbles_change_t change;
-};
 struct toggle_threads {};
 struct open_thread {
   std::string root;
-};
-struct close_thread {};
-struct send_in_thread {
-  std::string root;
-  std::string text;
-  std::optional<std::string> reply_to;  // an answer in it answered
-  std::vector<styled_run> styles;
-  // Who it mentions: its pills, sent as a message's are.
-  std::vector<mention> mentions;
 };
 struct menu_thread {};
 struct adopt_pack {
@@ -737,10 +669,6 @@ using writing_t = spl::variant<writing::chat, writing::thread>;
 struct settings_scrolled {
   float at = 0.0f;
 };
-struct insert_emoji {
-  std::string text;
-  std::string picture;  // a custom emoji's, where it is one
-};
 // The GIFs: one saved from its menu, the saved ones shown in the input's
 // panel, and one of them sent.
 // A file shown, its whole kept where it is asked to be -- a GIF among the
@@ -772,10 +700,7 @@ struct change_passphrase {};
 struct flip_room_events {};
 struct flip_account_room_events {};
 struct flip_chat_room_events {};
-// Forwarding: the box of chats to forward to, closed, and a chat chosen.
-// A new chat: its box opened and closed; a direct chat with someone, or a
-// group, asked for.
-struct open_new_chat {};
+// A direct chat with someone, or a group, asked for.
 struct start_direct {
   std::string user;
   // By which account: the one listed where none is said.
@@ -887,9 +812,7 @@ struct suggestion_pick {
   std::optional<std::size_t> at;
 };
 struct suggestion_close {};
-// The thread's field: what is written sent in the thread open, an answer to
-// what is answered there; the answer let go.
-struct thread_send {};
+// The thread's field: the answer in it let go.
 struct thread_answer_cancel {};
 // The video in the viewer: paused or played on; and gone to a share of it.
 // One of a person's card's buttons of its protocol's own: by where it is

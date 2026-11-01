@@ -560,7 +560,6 @@ struct app : kept_settings {
   void apply(const request::pick_room_avatar&) {}
   void apply(const request::toggle_emoji&) {}
   void apply(const request::toggle_thread_emoji&) {}
-  void apply(const request::insert_emoji&) {}
   // An emoji made a favourite from its menu: the client's, picker or not.
   void apply(const request::favourite_emoji& one) {
     shared.emoji.flip_emoji_favourite(one.emoji);
@@ -577,31 +576,15 @@ struct app : kept_settings {
   void apply(const request::suggestion_close&) {}
   void apply(const request::toggle_threads&) {}
   void apply(const request::open_thread&) {}
-  void apply(const request::close_thread&) {}
-  void apply(const request::thread_send&) {}
   void apply(const request::thread_answer_cancel&) {}
   void apply(const request::thread_draft_edited&) {}
-  void apply(const request::send_in_thread&) {}
   void apply(const request::adopt_pack&) {}
   void apply(const request::explore_space&) {}
-  void apply(const request::search_rooms&) {}
   void apply(const request::place_spaces&) {}
-  void apply(const request::set_home_hides&) {}
-  void apply(const request::flip_home_hide&) {}
-  void apply(const request::set_home_direct&) {}
-  void apply(const request::set_space_bars&) {}
-  void apply(const request::set_wallpaper&) {}
-  void apply(const request::change_bubbles&) {}
-  void apply(const request::set_bubbles&) {}
   void apply(const request::look_up_room&) {}
   void apply(const request::show_invite&) {}
-  void apply(const request::open_new_chat&) {}
   void apply(const request::open_room_invite&) {}
-  void apply(const request::invite_to_room&) {}
-  void apply(const request::find_people&) {}
-  void apply(const request::open_new_room&) {}
   void apply(const request::open_new_room_in&) {}
-  void apply(const request::create_room&) {}
   void apply(const request::quit&);
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);

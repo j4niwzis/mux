@@ -25,6 +25,13 @@ export import mux.plugin.explore.types;
 
 export namespace mux::plugins::explore {
 using namespace ::mux::ui;
+// Asked of the program, its own (moved from mux.ui, where only it took them).
+struct search_rooms {
+  std::string server;
+  std::string query;
+  std::optional<std::string> since;  // the next page of the same search
+};
+
 
 // Its button in the side's head (mux.ui:conversations_side).
 MUX_INLINE_IN_RELEASE auto extend(contract::side_header, type_tag<feature>, const palette& colours) {
@@ -73,7 +80,7 @@ struct explore_draft { std::string query, server; };
 struct submit_explore {};
 struct explore_events {
   auto on(submit_explore, const explore_draft& draft) const {
-    return skiff::model::Up{request::search_rooms{draft.server, draft.query}};
+    return skiff::model::Up{search_rooms{draft.server, draft.query}};
   }
 };
 auto explore_view(const palette& colours, const shown& facts) {
@@ -119,7 +126,7 @@ auto explore_view(const palette& colours, const shown& facts) {
           c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))),
       c::visible(more, c::styled({.fillX = true, .height = 32.0f,
                                 .margin = {6.0f, 10.0f, 0.0f, 10.0f}, .disabled = facts.loading},
-          widgets::SendButton<request::search_rooms>(colours.widgets, "Load more",
+          widgets::SendButton<search_rooms>(colours.widgets, "Load more",
               {facts.listed ? facts.listed->server : facts.server,
                facts.listed ? facts.listed->query : facts.query,
                more ? facts.listed->next : std::nullopt})))), explore_draft{facts.query, facts.server}));

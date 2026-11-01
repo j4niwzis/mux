@@ -271,7 +271,7 @@ struct part {
     this->keep([&](kept& now) { now.places = said_of(places); });
   }
   // Home without what spaces hold, at a level.
-  void apply(const ui::request::set_home_hides& one) {
+  void apply(const set_home_hides& one) {
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
                                        this->keep([&](kept& now) { now.home_hides_spaced = one.on.value_or(false); });
                                      },
@@ -283,7 +283,7 @@ struct part {
     if (s_->on_settings_page<mux::ui::settings_page::appearance>())
       s_->settings_page(mux::ui::settings_page::appearance{s_->kept->appearance().theme, s_->kept->appearance().accent});
   }
-  void apply(const ui::request::set_home_direct& one) {
+  void apply(const set_home_direct& one) {
     spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
                                        this->keep([&](kept& now) { now.home_hides_direct = one.on.value_or(false); });
                                      },
@@ -296,7 +296,7 @@ struct part {
       s_->settings_page(mux::ui::settings_page::appearance{s_->kept->appearance().theme, s_->kept->appearance().accent});
   }
   // An item's bars, as chosen: the side, the top, both, or none -- hidden.
-  void apply(const ui::request::set_space_bars& one) {
+  void apply(const set_space_bars& one) {
     auto places = places_of(kept_of(*s_));
     std::erase_if(places, [&](const mux::config::space_placed& p) { return p.account == one.account && p.item == one.item; });
     if (one.side)
@@ -310,7 +310,7 @@ struct part {
       s_->settings_page(mux::ui::settings_page::appearance{s_->kept->appearance().theme, s_->kept->appearance().accent});
   }
   // A space's rooms in Home, or not: its own choice.
-  void apply(const ui::request::flip_home_hide& one) {
+  void apply(const flip_home_hide& one) {
     const auto by = s_->listed();
     if (!by)
       return;

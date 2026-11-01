@@ -16,6 +16,22 @@ import mux.plugin.threads.types;
 
 export namespace mux::plugins::threads {
 using namespace ::mux::ui;
+// Asked of the program, its own (moved from mux.ui, where only it took them).
+struct close_thread {};
+
+// The thread's field: what is written sent in the thread open, an answer to
+// what is answered there; the answer let go.
+struct thread_send {};
+
+struct send_in_thread {
+  std::string root;
+  std::string text;
+  std::optional<std::string> reply_to;  // an answer in it answered
+  std::vector<styled_run> styles;
+  // Who it mentions: its pills, sent as a message's are.
+  std::vector<mention> mentions;
+};
+
 
 // Its button in the chat's head (mux.ui:header), after Search.
 MUX_INLINE_IN_RELEASE auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {

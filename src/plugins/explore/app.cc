@@ -58,7 +58,7 @@ struct part {
   // A search: an address typed in is gone to, as a link to it would be --
   // its card, or the room where joined; else the directory asked.
   template <class Asked>
-  void apply(const ui::request::search_rooms& one, const Asked& asked) {
+  void apply(const search_rooms& one, const Asked& asked) {
     const auto& facts = this->open_now();
     const auto by = facts ? facts->by : std::nullopt;
     if (!by || s_->demo())

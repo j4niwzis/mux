@@ -32,10 +32,24 @@ export import mux.plugin.start_chat.types;
 
 export namespace mux::plugins::start_chat {
 using namespace ::mux::ui;
+// Asked of the program, its own (moved from mux.ui, where only it took them).
+// Forwarding: the box of chats to forward to, closed, and a chat chosen.
+// A new chat: its box opened and closed; a direct chat with someone, or a
+// group, asked for.
+struct open_new_chat {};
+
+struct invite_to_room { mux::conversation_id room; std::string user; };
+
+// Element's Start chat and Create a room: people searched for, a room's
+// box opened and closed; and a text put on the clipboard (one's link).
+struct find_people {
+  std::string query;
+};
+
 
 // Its row in the drawer (mux.ui:drawer).
 MUX_INLINE_IN_RELEASE auto extend(contract::drawer_rows, type_tag<feature>, const palette& colours) {
-  return row_item(colours, "Start new chat", sends<request::open_new_chat>{}, icon::person{});
+  return row_item(colours, "Start new chat", sends<open_new_chat>{}, icon::person{});
 }
 
 using choose_person_request = pick;
@@ -56,7 +70,7 @@ auto people_rows(const Facts& facts) {
   return rows;
 }
 struct find_people_typed {
-  using Answer = request::find_people;
+  using Answer = find_people;
   Answer operator()(std::string_view text) const { return {std::string(text)}; }
 };
 struct start_chat_events {};

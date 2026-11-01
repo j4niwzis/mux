@@ -45,14 +45,14 @@ struct part {
     }
     s_->refresh_due = true;
   }
-  void apply(const ui::request::close_thread&) {
+  void apply(const close_thread&) {
     s_->close_thread();
     s_->refresh_due = true;
   }
   // What is written in the thread's field, sent in the thread open -- an
   // answer to what is answered there, where something is -- and the field
   // emptied.
-  void apply(const ui::request::thread_send&) {
+  void apply(const thread_send&) {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
     const std::string text = mux::ui::composer_plain(s_->thread_writing());
     if (!shown.thread || text.empty())
@@ -76,7 +76,7 @@ struct part {
     }
     const auto chosen_now = s_->managed();
     const mux::conversation* chat = chosen_now ? s_->model->find(*chosen_now) : nullptr;
-    ui::request::send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(s_->thread_writing()),
+    send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(s_->thread_writing()),
                                       mux::ui::composer_mentions(s_->thread_writing(), chat ? chat->members : std::vector<mux::member>{})};
     s_->write_thread({});
     s_->stop_thread_answer();
@@ -130,7 +130,7 @@ struct part {
       mux::ui::show(*s_->showing, std::move(now));
   }
 
-  void apply(const ui::request::send_in_thread& one) {
+  void apply(const send_in_thread& one) {
     const auto chosen = s_->managed();
     const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
     if (!chat || s_->demo())

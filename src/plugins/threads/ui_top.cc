@@ -57,10 +57,10 @@ MUX_INLINE_IN_RELEASE auto thread_row(const palette& colours, const thread_root&
 struct in_thread {
   using cancel = sends<request::thread_answer_cancel>;
   using draft = thread_draft;
-  using told = draft_told<request::thread_draft_edited, request::thread_send>;
+  using told = draft_told<request::thread_draft_edited, thread_send>;
   using attach = sends<request::attach_in_thread>;
   using emoji = emoji_beside<request::toggle_thread_emoji>;
-  using send = sends<request::thread_send>;
+  using send = sends<thread_send>;
   static constexpr std::string_view placeholder = "Reply in thread\u2026";
   using reads_chat = std::false_type;
   using composing = thread_compose;
@@ -78,7 +78,7 @@ MUX_INLINE_IN_RELEASE auto threads_panel(const ui_needs& n) {
   return SKIFF_NAMED(threads_panel, c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar}),
       c::row(c::hbox(8.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}}),
              c::shown_for<shown>(open, c::styled({.alignSelf = scene::align::kMiddle},
-                                                         icon_button(colours, icon::back{}, sends<request::close_thread>{}))),
+                                                         icon_button(colours, icon::back{}, sends<close_thread>{}))),
              c::text_for<shown>([](const shown& now) { return std::string(now.listing ? "Threads" : "Thread"); },
                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text("", 16.0f, colours.text, true)))),
              c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::close{}, sends<request::toggle_threads>{}))),

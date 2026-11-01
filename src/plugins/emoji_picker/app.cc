@@ -55,7 +55,7 @@ class part {
     this->open_at(one.right, one.top);
   }
   void apply(const request::close_shown<emoji_facts>&) { this->close(); }
-  void apply(const request::insert_emoji& one) {
+  void apply(const insert_emoji& one) {
     // Put in the draft of the field it is for; that field given the keys --
     // not under a finger, where the panel stands where the keyboard would:
     // focused, the field brought the keyboard up over the panel at each emoji.

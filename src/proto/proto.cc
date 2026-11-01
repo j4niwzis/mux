@@ -70,7 +70,7 @@ struct developer_tools {};  // a message's source, a room's state and account da
 struct account_ops {
   bool react = false;        // reactions sent
   bool forward = false;      // a message sent on, as it is
-  bool threads = false;      // threads listed, read and answered in
+  bool keeps_aside = false;  // messages kept aside by a plugin (threads') taken
   bool view_source = false;  // a message's source, and a room's state
   bool send_file = false;    // files and pictures
   bool send_sticker = false;

@@ -111,15 +111,15 @@ bool app::open_aside_of(const mux::conversation& chat, const std::string& id) {
   if (said == nullptr)
     return false;
   const std::optional<std::string> about = mux::about_of(chat, *said);
-  const std::optional<std::string> thread = about                       ? about
+  const std::optional<std::string> opened = about                       ? about
                                             : mux::has_aside(chat, *said) ? std::optional<std::string>(said->id)
                                                                           : std::nullopt;
-  if (!thread)
+  if (!opened)
     return false;
   auto& screen = root();
   jumps.stop();
-  if (shared.aside_shown() != thread) {
-    shared.open_aside(*thread);
+  if (shared.aside_shown() != opened) {
+    shared.open_aside(*opened);
   }
   this->refresh();
   // Its answers still on their way: scrolled to once they are (woken).
@@ -153,12 +153,12 @@ void app::apply(const request::jump_to_message& one) {
       if (const mux::message* said = mux::ui::held_message(*chat, one.id)) {
         auto& screen = root();
         const std::optional<std::string> about = mux::about_of(*chat, *said);
-        const std::optional<std::string> thread = about ? about
+        const std::optional<std::string> opened = about ? about
                                                   : shared.aside_shown() == said->id ? std::optional<std::string>(said->id)
                                                                                       : std::nullopt;
-        if (thread) {
-          if (shared.aside_shown() != thread) {
-            shared.open_aside(*thread);
+        if (opened) {
+          if (shared.aside_shown() != opened) {
+            shared.open_aside(*opened);
             this->refresh();
           }
           if (jumps.aim_aside(one.id))

@@ -98,7 +98,7 @@ struct list {
 struct chat {
   friend bool operator==(chat, chat) = default;
 };
-struct beside {  // the info or the threads, in the chat's place
+struct beside {  // the info or a plugin's panel, in the chat's place
   friend bool operator==(beside, beside) = default;
 };
 }  // namespace pane

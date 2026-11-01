@@ -257,30 +257,30 @@ class pictures_part {
           // Only those around what its panel shows: a thread of thousands
           // had every one of them gone through -- each one's text parsed for
           // its emoji -- at every refresh.
-          std::vector<const message*> in_thread;
+          std::vector<const message*> in_aside;
           if (const auto open = s_->aside_shown()) {
             if (const message* root = mux::ui::held_message(one, *open))
-              in_thread.push_back(root);
+              in_aside.push_back(root);
             if (const std::vector<message>* answers = mux::aside_for(one, *open))
               std::ranges::copy(*answers | std::views::transform([](const message& answer) { return &answer; }),
-                                std::back_inserter(in_thread));
+                                std::back_inserter(in_aside));
             const auto place = [&](const std::optional<std::string>& id) -> std::optional<std::size_t> {
               if (!id)
                 return std::nullopt;
-              const auto at = std::ranges::find(in_thread, *id, &message::id);
-              return at == in_thread.end() ? std::nullopt : std::optional(static_cast<std::size_t>(at - in_thread.begin()));
+              const auto at = std::ranges::find(in_aside, *id, &message::id);
+              return at == in_aside.end() ? std::nullopt : std::optional(static_cast<std::size_t>(at - in_aside.begin()));
             };
             constexpr std::size_t kAround = 40;
-            const std::size_t count = in_thread.size();
-            const std::size_t top = place(s_->thread_list.top).value_or(count > kAround ? count - kAround : 0);
-            const std::size_t bottom = place(s_->thread_list.bottom).value_or(count == 0 ? 0 : count - 1);
+            const std::size_t count = in_aside.size();
+            const std::size_t top = place(s_->aside_view.top).value_or(count > kAround ? count - kAround : 0);
+            const std::size_t bottom = place(s_->aside_view.bottom).value_or(count == 0 ? 0 : count - 1);
             const std::size_t from = top > kAround ? top - kAround : 0, to = std::min(count, bottom + kAround + 1);
-            in_thread = std::vector<const message*>(in_thread.begin() + static_cast<std::ptrdiff_t>(std::min(from, to)),
-                                                    in_thread.begin() + static_cast<std::ptrdiff_t>(to));
-            s_->aside_pictures_span = in_thread.empty() ? services::asked_span{}
-                                                         : services::asked_span{in_thread.front()->id, in_thread.back()->id};
+            in_aside = std::vector<const message*>(in_aside.begin() + static_cast<std::ptrdiff_t>(std::min(from, to)),
+                                                    in_aside.begin() + static_cast<std::ptrdiff_t>(to));
+            s_->aside_pictures_span = in_aside.empty() ? services::asked_span{}
+                                                         : services::asked_span{in_aside.front()->id, in_aside.back()->id};
           }
-          senders.insert_range(in_thread | std::views::transform([](const message* said) -> std::string_view { return said->sender; }));
+          senders.insert_range(in_aside | std::views::transform([](const message* said) -> std::string_view { return said->sender; }));
           // Each sender looked up, not every member walked for them.
           const auto& placed = mux::ui::names_of(one).at;
           const auto member_called = [&](std::string_view who) -> const member* {
@@ -317,7 +317,7 @@ class pictures_part {
           };
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             emoji_of(one.timeline[i]);
-          for (const message* said : in_thread)
+          for (const message* said : in_aside)
             emoji_of(*said);
           // The chat's pinned messages not loaded: fetched on their own, as
           // a quoted one is, for the pinned bar.
@@ -391,7 +391,7 @@ class pictures_part {
           // Those around what its panel shows (in_thread, its emoji and
           // senders asked for above): every answer, each sender looked for
           // among all the members, at every refresh, lagged a big thread.
-          for (const message* said : in_thread)
+          for (const message* said : in_aside)
             pictures_of(*said);
         }
       }

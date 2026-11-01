@@ -29,20 +29,20 @@ using kinds_t = config::room_event_kinds;
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::unreadable) { return &kinds_t::unreadable; }
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::reactions) { return &kinds_t::reactions; }
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::unreactions) { return &kinds_t::unreactions; }
-[[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::thread_answers) { return &kinds_t::thread_answers; }
+[[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::kept_aside) { return &kinds_t::kept_aside; }
 // What a kind is where nothing is chosen for it: shown, but reactions,
 // reactions taken back and threads' answers in the timeline -- each one a
 // line of its own only where asked for.
 [[nodiscard]] constexpr bool shown_unless_chosen(room_event::reactions) { return false; }
 [[nodiscard]] constexpr bool shown_unless_chosen(room_event::unreactions) { return false; }
-[[nodiscard]] constexpr bool shown_unless_chosen(room_event::thread_answers) { return false; }
+[[nodiscard]] constexpr bool shown_unless_chosen(room_event::kept_aside) { return false; }
 [[nodiscard]] constexpr bool shown_unless_chosen(const auto&) { return true; }
 // Whether a level's "All events" or "Messages only" says it too. Threads'
 // answers in the timeline do not follow it: a setting of their own at
 // every level -- every account's, an account's, a space's, a chat's --
 // turned on only where it is chosen there (the user's: "All events" turned
 // them on, and the chat was shown as its timeline and threads together).
-[[nodiscard]] constexpr bool follows_all(room_event::thread_answers) { return false; }
+[[nodiscard]] constexpr bool follows_all(room_event::kept_aside) { return false; }
 [[nodiscard]] constexpr bool follows_all(const auto&) { return true; }
 
 // A kind's word, as it is kept on disk -- the name of its member -- and a
@@ -63,7 +63,7 @@ using kinds_t = config::room_event_kinds;
 [[nodiscard]] constexpr std::string_view word_of(room_event::unreadable) { return "unreadable"; }
 [[nodiscard]] constexpr std::string_view word_of(room_event::reactions) { return "reactions"; }
 [[nodiscard]] constexpr std::string_view word_of(room_event::unreactions) { return "unreactions"; }
-[[nodiscard]] constexpr std::string_view word_of(room_event::thread_answers) { return "thread_answers"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::kept_aside) { return "kept_aside"; }
 [[nodiscard]] inline std::string_view word_of(const room_event_t& kind) {
   return spl::visit([](auto one) { return word_of(one); }, kind);
 }

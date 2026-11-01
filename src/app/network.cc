@@ -75,7 +75,7 @@ template <class Account>
 [[nodiscard]] constexpr mux::proto::account_ops ops_of_type() {
   return {.react = requires { &Account::react; },
           .forward = requires { &Account::forward; },
-          .threads = requires { &Account::took_aside; },
+          .keeps_aside = requires { &Account::took_aside; },
           // The developer tools' (a plugin's) source and state: read from what
           // the account has synced, through its door for plugins.
           .view_source = requires(Account& account) { account.synced(); },

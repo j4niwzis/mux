@@ -21,7 +21,6 @@ import loom.cs.receipts;
 import loom.cs.redaction;
 import loom.cs.users;
 import loom.cs.relations;
-import loom.cs.threads_list;
 import loom.cs.room_summary;
 import loom.cs.list_public_rooms;
 import loom.cs.directory;

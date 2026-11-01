@@ -165,7 +165,7 @@ struct timeline_rows {
       return {};
     bool kept_aside = false;
     each_aside_of(*chat, [&](const std::vector<message>& list) { kept_aside = kept_aside || !list.empty(); });
-    if (!told.aside && told.filter.shows(room_event::thread_answers{}) && kept_aside)
+    if (!told.aside && told.filter.shows(room_event::kept_aside{}) && kept_aside)
       return {.merged = &merged_of(now, told, *chat)};
     if (!told.aside)
       return {.timeline = &chat->timeline};

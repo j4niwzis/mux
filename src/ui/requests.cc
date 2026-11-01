@@ -63,7 +63,7 @@ struct menu_facts {
   bool pinnable = false;  // in a chat where pins are kept: a Matrix room
   bool editable = false;  // one's own, as its protocol's rule for edits allows
   bool history = false;   // edited here before: its edit history can be shown
-  proto::account_ops can;  // what its account does: React, Forward, threads...
+  proto::account_ops can;  // what its account does: React, Forward, keep aside...
   bool deletable = false;  // one may take it away: one's own, or another's with the power to
   bool answerable = true;  // may be replied to: on the server, and not deleted
   bool reaction_events = false;  // reacted to, the reactions being events
@@ -608,7 +608,7 @@ struct chat {
   friend bool operator==(chat, chat) = default;
 };
 struct aside {
-  friend bool operator==(thread, thread) = default;
+  friend bool operator==(aside, aside) = default;
 };
 struct menu {
   friend bool operator==(menu, menu) = default;

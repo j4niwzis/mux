@@ -204,7 +204,7 @@ class jumps_part {
     if (id != *shown.aside && (!answers || !std::ranges::contains(*answers, id, &mux::message::id)))
       return false;
     aside_aim_ = {.key = id, .number = ++number_};
-    this->tell_thread();
+    this->tell_aside();
     return true;
   }
   void apply(const aside_aimed& one) {
@@ -218,8 +218,8 @@ class jumps_part {
   // What the thread's panel shows: its pictures asked for as it changes,
   // those around it only.
   void apply(const aside_seen& one) {
-    if (const services::thread_list_now now{one.top, one.bottom}; now != s_->thread_list) {
-      s_->thread_list = now;
+    if (const services::aside_view_now now{one.top, one.bottom}; now != s_->aside_view) {
+      s_->aside_view = now;
       // Asked again only near the ends of what was last asked for: at every
       // row scrolled past, the messages around were all parsed again for
       // their emoji, and a long thread lagged.
@@ -231,7 +231,7 @@ class jumps_part {
     }
   }
   // What the thread's list is told: the thread open, if one is.
-  void tell_thread() {
+  void tell_aside() {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
     const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
     if (aside_of_ != shown.aside) {
@@ -354,7 +354,7 @@ class jumps_part {
         marks.fragment.reset();
       });
     }
-    this->tell_thread();
+    this->tell_aside();
     this->follow_looks();
     if (this->chosen() && s_->showing->look<mux::ui::chat_told>()->fetched != this->fetched())
       this->tell();
@@ -606,7 +606,7 @@ class jumps_part {
     asked(request::load_newer{chat.id, *chat.future_from});
   }
   template <class Asked>
-  void spanned(const std::string& first, const std::string& last, bool done, bool in_thread, const Asked& asked) {
+  void spanned(const std::string& first, const std::string& last, bool done, bool in_aside, const Asked& asked) {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
     const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
     if (!chat)
@@ -614,7 +614,7 @@ class jumps_part {
     // The messages of the list it is in: the thread's root and answers, or
     // the chat's timeline.
     std::vector<const mux::message*> all;
-    if (in_thread && shown.aside) {
+    if (in_aside && shown.aside) {
       if (const mux::message* root = mux::ui::held_message(*chat, *shown.aside))
         all.push_back(root);
       if (const std::vector<mux::message>* answers = mux::aside_for(*chat, *shown.aside))

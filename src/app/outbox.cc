@@ -278,7 +278,7 @@ class outbox_part {
         drafts_->keep(*chosen, std::string());
       }
     }
-    if (thread) {
+    if (files_aside_) {
       if (s_->aside_shown() == files_aside_)
         s_->stop_aside_answer();
     } else if (spl::visit(spl::overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }},

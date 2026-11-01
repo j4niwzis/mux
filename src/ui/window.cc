@@ -287,7 +287,7 @@ struct shown_root {
   // What the chat's field writes: an answer, an edit, or a plain message.
   skiff::model::Tracked<chat_compose> composing;
   // And a thread's field.
-  skiff::model::Tracked<aside_compose> thread_composing;
+  skiff::model::Tracked<aside_compose> aside_composing;
   // Each plugin's layer's: a call, for one.
   layers_shown_t layers;
   states_shown_t plugin_states;
@@ -326,7 +326,7 @@ struct shown_root {
   // What the chat's list and the thread's are told; the marks on messages
   // (selected, flashed); the corner's ways back.
   skiff::model::Tracked<chat_told> chat_list;
-  skiff::model::Tracked<aside_told> thread_list;
+  skiff::model::Tracked<aside_told> aside_view;
   skiff::model::Tracked<message_marks> messages_marked;
   skiff::model::Tracked<chat_ways> ways;
   // The way down over the chat's list, as the list said it.
@@ -850,7 +850,7 @@ using window = decltype(window_built(std::declval<const ui_needs&>()));
 // The emote pictures the window wants fetched: those its panels and menus
 // drew without their pictures (drained) -- the custom emoji the list over
 // the composer shows among them -- and those in the fields.
-[[nodiscard]] inline std::vector<emote_picture> emoji_pictures_wanted(const chat_draft& chat, const aside_draft& thread) {
+[[nodiscard]] inline std::vector<emote_picture> emoji_pictures_wanted(const chat_draft& chat, const aside_draft& aside) {
   std::vector<emote_picture> wanted = std::exchange(emotes_wanted(), {});
   // Those put in what is being written: the drafts' pictures.
   const auto inserted = [&](const composer_doc& draft) {
@@ -858,7 +858,7 @@ using window = decltype(window_built(std::declval<const ui_needs&>()));
                         std::views::transform([](const widgets::TextAtom& atom) { return emote_picture{atom.target, emote_kind::emoji}; }));
   };
   inserted(chat.now);
-  inserted(thread.now);
+  inserted(aside.now);
   return wanted;
 }
 

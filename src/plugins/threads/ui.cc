@@ -9,6 +9,7 @@ export module mux.plugin.threads.ui;
 import std;
 import skiff.scene;
 import skiff.compose;
+import skiff.nodes.icon;
 import mux.composition;
 import mux.core;
 import mux.ui.base;
@@ -17,6 +18,16 @@ import mux.plugin.threads.model;
 
 export namespace mux::plugins::threads {
 using namespace ::mux::ui;
+// Threads' icon, as Element's: a bubble, its tail at the lower left, two
+// lines said in it.
+inline const nodes::IconShape threads_shape{
+    {{nodes::mark::path{{nodes::path_step::move{-8.0f, -6.0f}, nodes::path_step::line{8.0f, -6.0f}, nodes::path_step::line{8.0f, 5.0f},
+                         nodes::path_step::line{-3.0f, 5.0f}, nodes::path_step::line{-7.0f, 8.5f}, nodes::path_step::line{-7.0f, 5.0f},
+                         nodes::path_step::line{-8.0f, 5.0f}, nodes::path_step::close{}}},
+      1.6f},
+     {nodes::mark::line{-4.5f, -2.0f, 4.5f, -2.0f}, 1.6f},
+     {nodes::mark::line{-4.5f, 1.5f, 2.0f, 1.5f}, 1.6f}}};
+[[nodiscard]] inline icon::drawn threads_icon() { return {&threads_shape, "Threads"}; }
 // Reply in thread, in a message's menu where its chat has threads and it
 // may be answered: the menu closed and its thread opened.
 struct reply_in_thread {
@@ -25,8 +36,8 @@ struct reply_in_thread {
   Answer operator()() const { return {request::close_menu{}, request::open_aside{root}}; }
 };
 MUX_INLINE_IN_RELEASE auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&, const menu_facts& facts) {
-  return skiff::compose::visible(facts.answerable && facts.can.threads && !facts.link.empty(),
-      row_item(colours, "Reply in thread", reply_in_thread{facts.id}, icon::threads{}, std::nullopt, menu_row_look));
+  return skiff::compose::visible(facts.answerable && facts.can.keeps_aside && !facts.link.empty(),
+      row_item(colours, "Reply in thread", reply_in_thread{facts.id}, threads_icon(), std::nullopt, menu_row_look));
 }
 // Asked of the program, its own (moved from mux.ui, where only it took them).
 struct close_aside {};
@@ -48,7 +59,7 @@ struct send_in_thread {
 // Its button in the chat's head (mux.ui:header), after Search.
 MUX_INLINE_IN_RELEASE auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
   return SKIFF_NAMED(threads_button, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                                            icon_button(colours, icon::threads{}, sends<request::toggle_panel>{})));
+                                                            icon_button(colours, threads_icon(), sends<request::toggle_panel>{})));
 }
 
 // Keep the action on a container: Text's own pointer handler is for text

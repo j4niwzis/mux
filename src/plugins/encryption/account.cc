@@ -43,7 +43,6 @@ import loom.cs.keys;
 import loom.cs.event_context;
 import loom.cs.users;
 import loom.cs.relations;
-import loom.cs.threads_list;
 import loom.cs.room_summary;
 import loom.cs.list_public_rooms;
 import loom.cs.space_hierarchy;

@@ -51,12 +51,18 @@ struct phone {};   // a handset: a call
 struct hang_up {};  // the handset turned down: a call ended
 struct microphone {};
 struct microphone_off {};  // the microphone, crossed out: muted
-struct threads {};  // a room's threads  // an arrow down onto a line: saved to the disk
 struct reply {};   // tdesktop's historyReplyIcon: an arrow turned back
 struct pencil {};  // tdesktop's historyEditIcon
 struct smile {};   // tdesktop's historyEmojiIcon: a round face
 struct play {};    // a triangle, pointing on
 struct pause {};   // two bars
+// A plugin's own: its shape -- kept where the plugin keeps it, for the
+// program's life -- and its name.
+struct drawn {
+  const nodes::IconShape* shape = nullptr;
+  std::string_view name;
+  friend bool operator==(const drawn&, const drawn&) = default;
+};
 // A filled dot of a colour of its own, as a proxy profile's.
 struct dot {
   skia::SkColor colour;
@@ -66,7 +72,7 @@ using icon_t = spl::variant<icon::none, icon::person, icon::gear, icon::power, i
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
                             icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile,
-                            icon::play, icon::pause, icon::download, icon::compass, icon::threads, icon::phone,
+                            icon::play, icon::pause, icon::download, icon::compass, icon::drawn, icon::phone,
                             icon::hang_up, icon::microphone, icon::microphone_off, icon::lock, icon::terminal, icon::room, icon::right>;
 
 // Each icon's shape, as data, in points from the middle of its box -- about
@@ -230,16 +236,7 @@ namespace steps = nodes::path_step;
            {marks::path{{steps::move{-2.5f, 5.0f}, steps::line{0.0f, 9.5f}, steps::line{2.5f, 5.0f}}}, 1.8f}},
           45.0f};
 }
-// Threads, as Element's: a bubble, its tail at the lower left, two lines
-// said in it.
-[[nodiscard]] inline IconShape shape_of(icon::threads) {
-  return {{{marks::path{{steps::move{-8.0f, -6.0f}, steps::line{8.0f, -6.0f}, steps::line{8.0f, 5.0f},
-                         steps::line{-3.0f, 5.0f}, steps::line{-7.0f, 8.5f}, steps::line{-7.0f, 5.0f},
-                         steps::line{-8.0f, 5.0f}, steps::close{}}},
-            1.6f},
-           {marks::line{-4.5f, -2.0f, 4.5f, -2.0f}, 1.6f},
-           {marks::line{-4.5f, 1.5f, 2.0f, 1.5f}, 1.6f}}};
-}
+[[nodiscard]] inline IconShape shape_of(icon::drawn one) { return one.shape ? *one.shape : IconShape{}; }
 // Explore rooms, as Element's: a compass -- a ring, its needle across it.
 [[nodiscard]] inline IconShape shape_of(icon::compass) {
   return {{{marks::circle{0.0f, 0.0f, 8.0f}, 1.8f},
@@ -323,7 +320,7 @@ namespace steps = nodes::path_step;
 [[nodiscard]] constexpr std::string_view name_of(icon::hang_up) { return "Hang up"; }
 [[nodiscard]] constexpr std::string_view name_of(icon::microphone) { return "Microphone"; }
 [[nodiscard]] constexpr std::string_view name_of(icon::microphone_off) { return "Microphone off"; }
-[[nodiscard]] constexpr std::string_view name_of(icon::threads) { return "Threads"; }
+[[nodiscard]] constexpr std::string_view name_of(icon::drawn one) { return one.name; }
 [[nodiscard]] constexpr std::string_view name_of(icon::reply) { return "Reply"; }
 [[nodiscard]] constexpr std::string_view name_of(icon::pencil) { return "Edit"; }
 [[nodiscard]] constexpr std::string_view name_of(icon::smile) { return "Emoji"; }

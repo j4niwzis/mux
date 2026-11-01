@@ -829,6 +829,12 @@ auto label_button_row_for(const palette& colours, Label label, std::string butto
 // A run of things under a name, as the emoji and sticker panels list them:
 // the name, dim, over its cells, wrapped as wide as it is. The cells are put
 // in by what it is a section of.
+// Cells flowing in lines, as a view's part: the flow made over them as they
+// are built (lifted) -- builders under the view's rules, nodes as they are.
+template <class Cell>
+auto flowed(scene::FlowOptions options, std::vector<Cell> cells) {
+  return skiff::compose::lifted([options](auto made) { return nodes::Flow<decltype(made)>(options, std::move(made)); }, std::move(cells));
+}
 template <class Cell>
 auto cell_section(const palette& colours, std::string name, std::vector<Cell> cells,
                   std::optional<emote_pack> pack = std::nullopt, std::optional<account_id> by = std::nullopt) {
@@ -843,7 +849,7 @@ auto cell_section(const palette& colours, std::string name, std::vector<Cell> ce
                               .cornerRadius = 6.0f, .hoverBackground = colours.chosen},
                             nodes::Text("Add to account", 11.0f, colours.accent)), "Add pack to account"))),
       c::styled({.fillX = true, .autoSize = scene::axes::kY},
-          nodes::Flow<std::vector<Cell>>({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, std::move(cells)))));
+          flowed({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, std::move(cells)))));
 }
 template <class Cell>
 using cell_section_t = decltype(cell_section(std::declval<const palette&>(), "", std::vector<Cell>{}));

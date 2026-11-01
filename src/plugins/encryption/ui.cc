@@ -42,7 +42,7 @@ using namespace ::mux::ui;
 }
 using verification_emoji_t = decltype(verification_emoji(std::declval<const palette&>(), {}, {}));
 // The seven to compare wrap in their original order on narrow screens.
-[[nodiscard]] inline nodes::Flow<std::vector<verification_emoji_t>> emoji_row(const palette& colours, const verification_step_t& step) {
+[[nodiscard]] inline auto emoji_row(const palette& colours, const verification_step_t& step) {
   auto cells = spl::visit(spl::overloaded{
       [&](const verification_step::compare& shown) {
         return shown.emoji | std::views::transform([&](int index) {
@@ -53,7 +53,7 @@ using verification_emoji_t = decltype(verification_emoji(std::declval<const pale
   const bool comparing = !cells.empty();
   return skiff::compose::visible(comparing, skiff::compose::styled(
       {.fillX = true, .autoSize = scene::axes::kY},
-      nodes::Flow<std::vector<verification_emoji_t>>({.direction = nodes::direction::horizontal{}, .spacingX = 8.0f, .spacingY = 12.0f, .wrap = true}, std::move(cells))));
+      flowed({.direction = nodes::direction::horizontal{}, .spacingX = 8.0f, .spacingY = 12.0f, .wrap = true}, std::move(cells))));
 }
 
 // Which of a verification's buttons its step shows.

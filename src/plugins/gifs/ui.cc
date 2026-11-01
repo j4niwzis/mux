@@ -47,8 +47,7 @@ MUX_INLINE_IN_RELEASE auto grid(const ui::palette& colours, const std::vector<st
           ui::wrapped(nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, colours.dim)))),
       c::styled({.fillX = true, .grow = scene::axes::kY}, skiff::compose::scrolled(
           c::styled({.fillX = true, .autoSize = scene::axes::kY},
-              nodes::Flow<std::vector<decltype(cell(colours, std::string()))>>(
-                  {.direction = nodes::direction::horizontal{}, .wrap = true}, std::move(cells)))))));
+              ui::flowed({.direction = nodes::direction::horizontal{}, .wrap = true}, std::move(cells)))))));
 }
 
 // Its page, in the media panel (the emoji picker's: mux.plugin.emoji_picker.ui).

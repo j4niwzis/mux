@@ -46,15 +46,12 @@ export namespace mux::ui {
   namespace c = skiff::compose;
   std::optional<nodes::Text> tag;
   if (quoted)
-    tag.emplace(c::styled({.alignSelf = scene::align::kStart,
-                           .margin = {1.0f, 0.0f, 0.0f, 0.0f}},
-                          nodes::Text("quoted", 11.0f, colours.dim)));
+    tag.emplace("quoted", 11.0f, colours.dim).apply({.alignSelf = scene::align::kStart, .margin = {1.0f, 0.0f, 0.0f, 0.0f}});
   std::optional<nodes::Image<from_thumbnails>> thumb;
   if (picture)
-    thumb.emplace(c::styled({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle,
-                              .margin = {2.0f, 0.0f, 2.0f, 0.0f}, .cornerRadius = 3.0f,
-                              .background = colours.tile},
-                             nodes::Image<from_thumbnails>({*picture, sticker})));
+    thumb.emplace(from_thumbnails{*picture, sticker})
+        .apply({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle, .margin = {2.0f, 0.0f, 2.0f, 0.0f},
+                .cornerRadius = 3.0f, .background = colours.tile});
   auto text = nodes::Text(std::move(said), 13.0f, colours.text);
   if (quoted)
     text = wrapped(std::move(text));

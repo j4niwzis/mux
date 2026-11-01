@@ -59,7 +59,7 @@ MUX_INLINE_IN_RELEASE auto page_preview(const palette& colours, const link_previ
   namespace c = skiff::compose;
   std::optional<nodes::Image<from_avatars>> picture;
   if (shown.image)
-    picture.emplace(c::styled({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f}, nodes::Image<from_avatars>(from_avatars{*shown.image})));
+    picture.emplace(from_avatars{*shown.image}).apply({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f});
   return SKIFF_NAMED(page_preview, c::onClick(request::open_url{std::move(where)},
       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {6.0f, 0.0f, 2.0f, 0.0f},
                             .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f,

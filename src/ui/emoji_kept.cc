@@ -95,9 +95,9 @@ inline constexpr double kPreviewAfterMs = 450.0;
 [[nodiscard]] MUX_INLINE_IN_RELEASE auto emote_preview(const palette& colours, const previewed& shown) {
   namespace c = skiff::compose;
   std::optional<nodes::Image<from_emotes>> picture;
+  // The node itself, its spec applied on it: styled() makes a builder.
   if (shown.picture)
-    picture.emplace(c::styled({.width = 200.0f, .height = 200.0f, .alignSelf = scene::align::kMiddle},
-                               nodes::Image<from_emotes>({shown.key, shown.kind})));
+    picture.emplace(from_emotes{shown.key, shown.kind}).apply({.width = 200.0f, .height = 200.0f, .alignSelf = scene::align::kMiddle});
   return c::column(c::justified(c::vbox(8.0f, {.place = scene::anchor::kCentre,
       .autoSize = scene::axes::kBoth, .padding = {16.0f, 16.0f, 16.0f, 16.0f},
       .cornerRadius = 14.0f, .background = (colours.sidebar & 0x00FFFFFFu) | (0xF0u << 24)}),

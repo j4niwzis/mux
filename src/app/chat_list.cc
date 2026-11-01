@@ -19,6 +19,7 @@ import mux.ui;
 import mux.composition;
 import mux.plugins.types;
 import mux.plugins.app;
+import mux.plugins.ui.top;
 import mux.ui.proto;
 import skiff.compose;
 import skiff.model;

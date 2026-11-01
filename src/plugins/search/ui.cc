@@ -80,16 +80,4 @@ MUX_INLINE_IN_RELEASE auto extend(contract::chat_header, type_tag<feature>, cons
                                                            icon_button(colours, icon::search{}, sends<open>{})));
 }
 
-// Its keys on the chats screen (contract::screen_keys): Ctrl+F opens the
-// bar; Esc, while it is open, closes it.
-inline std::optional<std::variant<open, close>> screen_key(contract::screen_keys, type_tag<feature>, const request::screen_key& one,
-                                                           const shown& now) {
-  namespace keys = scene::keys;
-  if (one.key == keys::kF && one.control)
-    return open{};
-  if (one.key == keys::kEscape && !(one.control || one.shift || one.alt) && now.open)
-    return close{};
-  return std::nullopt;
-}
-
 }  // namespace mux::plugins::search

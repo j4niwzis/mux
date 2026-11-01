@@ -221,12 +221,14 @@ auto switch_control(const auto& colours, On on, Act act, Allowed allowed) {
           c::applied<facts_t>(std::move(on), [](toggle_t& toggle, bool now) { toggle.setOnNow(now); },
                               c::styled({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, std::move(act)))))));
 }
+// Made again as the choice moves: a node, built where it is said
+// (made_now), as the choice menu's own head is.
 auto choice_head(const auto& colours, std::string value) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(choice_head, c::row(c::hbox(4.0f, {.fillX = true, .height = 24.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f},
+  return c::made_now(SKIFF_NAMED(choice_head, c::row(c::hbox(4.0f, {.fillX = true, .height = 24.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f},
       .cornerRadius = colours.widgets.fCorner, .background = colours.chosen, .hoverBackground = colours.widgets.fSurfaceHover}),
       c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.text)),
-      c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 12.0f, colours.text)))));
+      c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 12.0f, colours.text))))));
 }
 // The compact head: the name chosen, nothing beside it.
 // Where nothing is chosen, what it says instead (an "Add a room..." of its

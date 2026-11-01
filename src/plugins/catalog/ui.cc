@@ -44,8 +44,8 @@ MUX_INLINE_IN_RELEASE auto list_view(const palette& colours) {
 MUX_INLINE_IN_RELEASE auto plugin_view(const palette& colours, std::size_t index) {
   const plugin_info missing{"unknown", "", "", "", "", true};
   const plugin_info& one = index < plugin_infos.size() ? plugin_infos[index] : missing;
-  auto repository = settings_link(colours, "Repository", icon::gear{}, request::open_url{std::string(one.repository)});
-  repository.setVisible(!one.repository.empty());
+  auto repository = skiff::compose::visible(!one.repository.empty(),
+      settings_link(colours, "Repository", icon::gear{}, request::open_url{std::string(one.repository)}));
   return SKIFF_NAMED(catalog_plugin_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<open_list>, sends<request::close_settings>>(colours, std::string(one.name), {}, {}, true, true),

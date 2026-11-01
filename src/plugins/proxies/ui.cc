@@ -21,11 +21,6 @@ import mux.plugin.proxies.types;
 export namespace mux::plugins::proxies {
 using namespace ::mux::ui;
 
-// Add proxy…, after the profiles in an account being added's proxy row
-// (mux.ui:add_account): their list opened, as before the plugins rewrite.
-MUX_INLINE_IN_RELEASE auto extend(contract::proxy_actions, type_tag<feature>, const palette& colours) {
-  return segment(colours, "Add proxy…", sends<manage>{}, false);
-}
 // Settings' link to them (mux.ui:settings_pages).
 MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
   return settings_link(colours, "Proxies", icon::gear{}, open_list{});

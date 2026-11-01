@@ -75,12 +75,6 @@ struct start_renderer {
 struct proxy_profiles {
   static constexpr std::string_view name = "the proxy profiles";
 };
-// An account being added, its proxy row (mux.ui:add_account), after the
-// profiles' segments: extend(c, f, palette) -> a segment of its own, as
-// the others are -- what it opens its plugin's (Add proxy…, the proxies').
-struct proxy_actions {
-  static constexpr std::string_view name = "an account's proxy row's actions";
-};
 // A chat's looks -- its background, its bubbles', its panels' -- chosen at
 // a level (mux.app.kept, mux.app.looks): chat_looks_in_effect(c, f, its own
 // settings, the space each chat is in, the chat -- none, every chat's) ->

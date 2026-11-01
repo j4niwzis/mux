@@ -577,7 +577,7 @@ struct field_quotes {
 // ---- what is written, as the program keeps it ------------------------------------
 // The draft of a field: its text, its pills and pictures, its runs and where
 // the caret is -- skiff-widgets' document, of the message's runs. The
-// program keeps the chat's and the thread's (chat_draft, thread_draft); the
+// program keeps the chat's and the thread's (chat_draft, aside_draft); the
 // field shows them, and tells each edit (draft_told) as a request carrying
 // the whole document, Enter as its send. What the program does to what is
 // written -- a link put on, a name picked, a quote, an emoji -- it does to
@@ -592,17 +592,17 @@ struct chat_draft {
   using ModelOpaque = void;
   friend bool operator==(const chat_draft&, const chat_draft&) = default;
 };
-struct thread_draft {
+struct aside_draft {
   composer_doc now;
   using ModelOpaque = void;
-  friend bool operator==(const thread_draft&, const thread_draft&) = default;
+  friend bool operator==(const aside_draft&, const aside_draft&) = default;
 };
 namespace request {
 // The field edited: the draft as it is now.
 struct chat_draft_edited {
   composer_doc now;
 };
-struct thread_draft_edited {
+struct aside_draft_edited {
   composer_doc now;
 };
 }  // namespace request
@@ -783,7 +783,7 @@ auto composer_buttons_of(plugin_list<Features...>, const palette& colours) {
 }
 // Which field a draft's input is, for the keys.
 inline keys::chat keys_target_of(std::type_identity<chat_draft>) { return {}; }
-keys::thread keys_target_of(std::type_identity<thread_draft>) { return {}; }
+keys::aside keys_target_of(std::type_identity<aside_draft>) { return {}; }
 template <class Draft, class Told, class Writing, class Attach, class Send>
 auto message_input(const palette& colours, std::string placeholder, Attach attach_it, Send send_it) {
   namespace c = skiff::compose;
@@ -807,13 +807,14 @@ struct chat_shown {
   std::optional<conversation_id> chosen;
   std::optional<account_id> current;
   bool info_open = false;
-  // The threads' panel open, and the thread open in it, if one is.
-  bool threads_open = false;
-  std::optional<std::string> thread;
+  // A plugin's panel open beside the chat (threads'), and what it keeps
+  // aside that is open in it (a thread, by its root), if one is.
+  bool panel_open = false;
+  std::optional<std::string> aside;
   // An answer being written in it: to which of its messages.
-  std::optional<std::string> thread_answer;
+  std::optional<std::string> aside_answer;
   // Or one of its messages being edited there: which.
-  std::optional<std::string> thread_edit;
+  std::optional<std::string> aside_edit;
   // The chat opened as a list of chats (a plugin's scope: a forum), its
   // rooms listed: by its id.
   std::optional<std::string> scope;
@@ -827,7 +828,7 @@ struct chat_compose {
   using ModelOpaque = void;
 };
 // What a thread's field answers, as what is shown holds it: the bar over it.
-struct thread_compose {
+struct aside_compose {
   std::optional<compose_context> said;
   using ModelOpaque = void;
 };

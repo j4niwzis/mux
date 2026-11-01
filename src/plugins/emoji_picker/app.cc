@@ -61,9 +61,9 @@ class part {
                                  s_->edit_chat_writing(put);
                                  focus(ui::keys::chat{});
                                },
-                               [&](request::writing::thread) {
-                                 s_->edit_thread_writing(put);
-                                 focus(ui::keys::thread{});
+                               [&](request::writing::aside) {
+                                 s_->edit_aside_writing(put);
+                                 focus(ui::keys::aside{});
                                }},
                into_);
   }

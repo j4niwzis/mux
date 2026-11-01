@@ -107,14 +107,14 @@ void part_apply(menu_part& self, const request::menu_edit&) {
   const std::string text = self.target_.captioned && self.target_.text == self.target_.media_name ? std::string() : self.target_.text;
   // A message of the thread open -- an answer in it, or its root: edited in
   // the thread's field, where it is written.
-  if (const auto& chosen = self.s_->chosen(); chosen && self.s_->thread_open())
+  if (const auto& chosen = self.s_->chosen(); chosen && self.s_->aside_shown())
     if (const mux::conversation* chat = self.s_->model->find(*chosen))
       if (const mux::message* said = mux::ui::held_message(*chat, self.target_.id);
-          said && self.s_->thread_open() == mux::about_of(*chat, *said).value_or(said->id)) {
+          said && self.s_->aside_shown() == mux::about_of(*chat, *said).value_or(said->id)) {
         std::string line = text;
         std::ranges::replace(line, '\n', ' ');
-        self.s_->edit_in_thread(self.target_.id, mux::ui::compose_context{mux::ui::icon::pencil{}, "Edit message", std::move(line)});
-        self.s_->write_thread(mux::ui::plain_draft(text));
+        self.s_->edit_aside(self.target_.id, mux::ui::compose_context{mux::ui::icon::pencil{}, "Edit message", std::move(line)});
+        self.s_->write_aside(mux::ui::plain_draft(text));
         return;
       }
   self.outbox_->edit(self.target_.id, text);

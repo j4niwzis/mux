@@ -116,7 +116,7 @@ struct services {
   struct asked_span {
     std::optional<std::string> first, last;
   };
-  asked_span chat_pictures_span, thread_pictures_span;
+  asked_span chat_pictures_span, aside_pictures_span;
   // Whether what is in view (its top and bottom rows) comes within `margin`
   // of the span's ends, or out of it, in the messages given: their pictures
   // to be asked for again.
@@ -171,9 +171,9 @@ struct services {
   // keeps it -- the fields show it; and changed, as the program changes it
   // (a link put on, a name picked, a quote) or a field told it was edited.
   [[nodiscard]] const mux::ui::composer_doc& chat_writing() { return showing->look<mux::ui::chat_draft>()->now; }
-  [[nodiscard]] const mux::ui::composer_doc& thread_writing() { return showing->look<mux::ui::thread_draft>()->now; }
+  [[nodiscard]] const mux::ui::composer_doc& aside_writing() { return showing->look<mux::ui::aside_draft>()->now; }
   void write_chat(mux::ui::composer_doc now) { mux::ui::show(*showing, mux::ui::chat_draft{std::move(now)}); }
-  void write_thread(mux::ui::composer_doc now) { mux::ui::show(*showing, mux::ui::thread_draft{std::move(now)}); }
+  void write_aside(mux::ui::composer_doc now) { mux::ui::show(*showing, mux::ui::aside_draft{std::move(now)}); }
   template <class Change>
   void edit_chat_writing(Change change) {
     auto now = this->chat_writing();
@@ -181,41 +181,41 @@ struct services {
     this->write_chat(std::move(now));
   }
   template <class Change>
-  void edit_thread_writing(Change change) {
-    auto now = this->thread_writing();
+  void edit_aside_writing(Change change) {
+    auto now = this->aside_writing();
     change(now);
-    this->write_thread(std::move(now));
+    this->write_aside(std::move(now));
   }
   // An answer being written in the thread open let go: the field's bar over
   // it too.
-  void stop_thread_answer() const {
+  void stop_aside_answer() const {
     const auto& shown = *showing->look<mux::ui::chat_shown>();
-    if (!shown.thread_answer && !shown.thread_edit)
+    if (!shown.aside_answer && !shown.aside_edit)
       return;
     mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) {
-      now.thread_answer.reset();
-      now.thread_edit.reset();
+      now.aside_answer.reset();
+      now.aside_edit.reset();
     });
-    mux::ui::show(*showing, mux::ui::thread_compose{});
+    mux::ui::show(*showing, mux::ui::aside_compose{});
   }
   // A message of the thread open edited there: "Edit message" over its
   // field. The chat's field, behind the thread on a phone, took it before,
   // and Edit seemed to do nothing (a tester's).
-  void edit_in_thread(std::string id, mux::ui::compose_context said) const {
+  void edit_aside(std::string id, mux::ui::compose_context said) const {
     mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) {
-      now.thread_answer.reset();
-      now.thread_edit = std::move(id);
+      now.aside_answer.reset();
+      now.aside_edit = std::move(id);
     });
-    mux::ui::show(*showing, mux::ui::thread_compose{std::move(said)});
+    mux::ui::show(*showing, mux::ui::aside_compose{std::move(said)});
   }
   // A message of the thread open answered there, as tdesktop's "Reply to
   // <name>" over the field.
-  void answer_in_thread(std::string id, mux::ui::compose_context said) const {
+  void answer_aside(std::string id, mux::ui::compose_context said) const {
     mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) {
-      now.thread_answer = std::move(id);
-      now.thread_edit.reset();
+      now.aside_answer = std::move(id);
+      now.aside_edit.reset();
     });
-    mux::ui::show(*showing, mux::ui::thread_compose{std::move(said)});
+    mux::ui::show(*showing, mux::ui::aside_compose{std::move(said)});
   }
   // The stretch of a chat's messages in view and a page around it -- or,
   // while a message is jumped to, a few around that: what is loaded on the
@@ -267,9 +267,9 @@ struct services {
   [[nodiscard]] const std::optional<conversation_id>& chosen() const { return showing->look<mux::ui::chat_shown>()->chosen; }
   [[nodiscard]] const std::optional<account_id>& listed() const { return showing->look<mux::ui::list_shown>()->account; }
   [[nodiscard]] bool single() const { return showing->look<mux::ui::screen_shown>()->single; }
-  [[nodiscard]] std::optional<std::string> thread_open() const {
+  [[nodiscard]] std::optional<std::string> aside_shown() const {
     const auto& now = *showing->look<mux::ui::chat_shown>();
-    return now.threads_open ? now.thread : std::nullopt;
+    return now.panel_open ? now.aside : std::nullopt;
   }
   // The whole-window binding is instantiated in one implementation unit.
   void read_shown_now() const;
@@ -286,7 +286,7 @@ struct services {
   // a count raised -- the field takes them as it reads that.
   void ask_keys(mux::ui::keys_target which) const {
     spl::visit(spl::overloaded{[&](mux::ui::keys::chat) { written_last = mux::ui::request::writing::chat{}; },
-                               [&](mux::ui::keys::thread) { written_last = mux::ui::request::writing::thread{}; },
+                               [&](mux::ui::keys::aside) { written_last = mux::ui::request::writing::aside{}; },
                                [](const auto&) {}},
                which);
     mux::ui::change_shown<mux::ui::keys_asked>(*showing, [&](mux::ui::keys_asked& now) {
@@ -299,21 +299,21 @@ struct services {
   mutable mux::ui::request::writing_t written_last = mux::ui::request::writing::chat{};
   // The threads' panel, as what is shown says: opened on a thread, the
   // thread closed in it, or the panel toggled -- whether it is open now.
-  void open_thread(std::string root) const {
+  void open_aside(std::string root) const {
     mux::ui::change_shown<mux::ui::chat_shown>(*showing, [&](mux::ui::chat_shown& now) {
-      now.threads_open = true;
-      now.thread = std::move(root);
+      now.panel_open = true;
+      now.aside = std::move(root);
     });
   }
-  void close_thread() const {
-    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) { now.thread.reset(); });
+  void close_aside() const {
+    mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) { now.aside.reset(); });
   }
-  bool toggle_threads() const {
+  bool toggle_panel() const {
     mux::ui::change_shown<mux::ui::chat_shown>(*showing, [](mux::ui::chat_shown& now) {
-      now.threads_open = !now.threads_open;
-      now.thread.reset();
+      now.panel_open = !now.panel_open;
+      now.aside.reset();
     });
-    return showing->look<mux::ui::chat_shown>()->threads_open;
+    return showing->look<mux::ui::chat_shown>()->panel_open;
   }
   // Which settings page is open, as the shown model holds it.
   template <class Page> [[nodiscard]] bool on_settings_page() const {

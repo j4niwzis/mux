@@ -44,7 +44,7 @@ MUX_INLINE_IN_RELEASE auto thread_row(const palette& colours, const thread_root&
   const auto line = [](std::string text, float size, skia::SkColor colour, bool bold = false) {
     return c::styled({.fillX = true}, elided(nodes::Text(std::move(text), size, colour, bold)));
   };
-  return SKIFF_NAMED(thread_row, c::onClick(request::open_thread{one.root},
+  return SKIFF_NAMED(thread_row, c::onClick(request::open_aside{one.root},
       c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 8.0f,
                              .hoverBackground = colours.chosen}),
              c::styled({.alignSelf = scene::align::kStart}, face_spot(avatar_of::person{}, one.sender, one.name, 36.0f)),
@@ -56,15 +56,15 @@ MUX_INLINE_IN_RELEASE auto thread_row(const palette& colours, const thread_root&
 // the answer, Enter and the arrow send there, its paperclip and emoji too --
 // each the program's to do.
 struct in_thread {
-  using cancel = sends<request::thread_answer_cancel>;
-  using draft = thread_draft;
-  using told = draft_told<request::thread_draft_edited, thread_send>;
-  using attach = sends<request::attach_in_thread>;
-  using writing = request::writing::thread;
+  using cancel = sends<request::aside_answer_cancel>;
+  using draft = aside_draft;
+  using told = draft_told<request::aside_draft_edited, thread_send>;
+  using attach = sends<request::attach_aside>;
+  using writing = request::writing::aside;
   using send = sends<thread_send>;
   static constexpr std::string_view placeholder = "Reply in thread\u2026";
   using reads_chat = std::false_type;
-  using composing = thread_compose;
+  using composing = aside_compose;
 };
 // Threads, as Element's panel has them: in place of the chat's info, the
 // room's threads, or one opened -- its root and answers as the chat's own
@@ -79,10 +79,10 @@ MUX_INLINE_IN_RELEASE auto threads_panel(const ui_needs& n) {
   return SKIFF_NAMED(threads_panel, c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar}),
       c::row(c::hbox(8.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}}),
              c::shown_for<shown>(open, c::styled({.alignSelf = scene::align::kMiddle},
-                                                         icon_button(colours, icon::back{}, sends<close_thread>{}))),
+                                                         icon_button(colours, icon::back{}, sends<close_aside>{}))),
              c::text_for<shown>([](const shown& now) { return std::string(now.listing ? "Threads" : "Thread"); },
                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text("", 16.0f, colours.text, true)))),
-             c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::close{}, sends<request::toggle_threads>{}))),
+             c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::close{}, sends<request::toggle_panel>{}))),
       c::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)),
       c::shown_for<shown>([](const shown& now) { return now.listing && now.roots.empty(); },
           c::styled({.margin = {16.0f, 16.0f, 0.0f, 16.0f}}, nodes::Text("No threads here yet.", 13.0f, colours.dim))),
@@ -96,7 +96,7 @@ MUX_INLINE_IN_RELEASE auto threads_panel(const ui_needs& n) {
       // its fill down too -- the panel's whole height, the composer pushed
       // under the window.
       c::shown_for<shown>(open, c::styled({.fillX = true, .relativeSize = scene::axes::kX, .grow = scene::axes::kY},
-                                                  timeline_list<thread_told, thread_list_tag>())),
+                                                  timeline_list<aside_told, aside_list_tag>())),
       c::shown_for<shown>(open, composer_bar<in_thread>(n))));
 }
 

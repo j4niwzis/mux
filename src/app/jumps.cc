@@ -32,10 +32,10 @@ export namespace mux::app {
 using chat_aimed = skiff::compose::ListAimed<std::string, mux::ui::chat_list_tag>;
 using chat_edge = skiff::compose::ListEdge<mux::ui::chat_list_tag>;
 using chat_seen = skiff::compose::ListSeen<std::string, mux::ui::chat_list_tag>;
-using thread_aimed = skiff::compose::ListAimed<std::string, mux::ui::thread_list_tag>;
-using thread_seen = skiff::compose::ListSeen<std::string, mux::ui::thread_list_tag>;
+using aside_aimed = skiff::compose::ListAimed<std::string, mux::ui::aside_list_tag>;
+using aside_seen = skiff::compose::ListSeen<std::string, mux::ui::aside_list_tag>;
 using chat_span = skiff::compose::ListSpan<std::string, mux::ui::chat_list_tag>;
-using thread_span = skiff::compose::ListSpan<std::string, mux::ui::thread_list_tag>;
+using aside_span = skiff::compose::ListSpan<std::string, mux::ui::aside_list_tag>;
 
 // The first unread message among those held: the one after the message
 // read up to that the reader did not send. Where that marker is not known
@@ -195,19 +195,19 @@ class jumps_part {
   // A message of the thread open -- its root or an answer -- brought into
   // view in its panel and flashed: a quote of it pressed. False where it
   // is not one of its.
-  bool aim_in_thread(const std::string& id) {
+  bool aim_aside(const std::string& id) {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
     const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
-    if (!chat || !shown.thread)
+    if (!chat || !shown.aside)
       return false;
-    const std::vector<mux::message>* answers = mux::aside_for(*chat, *shown.thread);
-    if (id != *shown.thread && (!answers || !std::ranges::contains(*answers, id, &mux::message::id)))
+    const std::vector<mux::message>* answers = mux::aside_for(*chat, *shown.aside);
+    if (id != *shown.aside && (!answers || !std::ranges::contains(*answers, id, &mux::message::id)))
       return false;
-    thread_aim_ = {.key = id, .number = ++number_};
+    aside_aim_ = {.key = id, .number = ++number_};
     this->tell_thread();
     return true;
   }
-  void apply(const thread_aimed& one) {
+  void apply(const aside_aimed& one) {
     mux::ui::change_shown<mux::ui::message_marks>(*s_->showing, [&](mux::ui::message_marks& marks) {
       marks.flashed = one.key;
       marks.fragment.reset();
@@ -217,7 +217,7 @@ class jumps_part {
   }
   // What the thread's panel shows: its pictures asked for as it changes,
   // those around it only.
-  void apply(const thread_seen& one) {
+  void apply(const aside_seen& one) {
     if (const services::thread_list_now now{one.top, one.bottom}; now != s_->thread_list) {
       s_->thread_list = now;
       // Asked again only near the ends of what was last asked for: at every
@@ -225,8 +225,8 @@ class jumps_part {
       // their emoji, and a long thread lagged.
       const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
       const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
-      const std::vector<mux::message>* answers = chat && shown.thread ? mux::aside_for(*chat, *shown.thread) : nullptr;
-      if (!answers || services::nears_end(*answers, s_->thread_pictures_span, one.top, one.bottom))
+      const std::vector<mux::message>* answers = chat && shown.aside ? mux::aside_for(*chat, *shown.aside) : nullptr;
+      if (!answers || services::nears_end(*answers, s_->aside_pictures_span, one.top, one.bottom))
         s_->ui.pictures_due = true;
     }
   }
@@ -234,22 +234,22 @@ class jumps_part {
   void tell_thread() {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
     const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
-    if (thread_of_ != shown.thread) {
-      thread_of_ = shown.thread;
-      thread_aim_ = {};
+    if (aside_of_ != shown.aside) {
+      aside_of_ = shown.aside;
+      aside_aim_ = {};
     }
-    mux::ui::thread_told now;
-    if (chat && shown.threads_open && shown.thread) {
+    mux::ui::aside_told now;
+    if (chat && shown.panel_open && shown.aside) {
       now.of = chat->id;
-      now.thread = shown.thread;
-      now.aim = thread_aim_;
+      now.aside = shown.aside;
+      now.aim = aside_aim_;
       needs_.now = s_->model;
       now.needs = &needs_;
       now.frost = s_->looks.window.frost;
       now.looks = looks_;
       now.fetched = this->fetched();
     }
-    if (*s_->showing->look<mux::ui::thread_told>() != now)
+    if (*s_->showing->look<mux::ui::aside_told>() != now)
       mux::ui::show(*s_->showing, std::move(now));
   }
 
@@ -263,7 +263,7 @@ class jumps_part {
     this->spanned(one.first, one.last, one.done, false, asked);
   }
   template <class Asked>
-  void apply(const thread_span& one, const Asked& asked) {
+  void apply(const aside_span& one, const Asked& asked) {
     this->spanned(one.first, one.last, one.done, true, asked);
   }
 
@@ -419,7 +419,7 @@ class jumps_part {
     if (const auto about = held ? mux::about_of(*chat, *held) : std::nullopt) {
       // Come as one kept aside (an answer in a thread): never in the
       // timeline. What it is about opened.
-      asked(request::open_thread{*about});
+      asked(request::open_aside{*about});
       going_.reset();
       this->tell();
       return;
@@ -614,10 +614,10 @@ class jumps_part {
     // The messages of the list it is in: the thread's root and answers, or
     // the chat's timeline.
     std::vector<const mux::message*> all;
-    if (in_thread && shown.thread) {
-      if (const mux::message* root = mux::ui::held_message(*chat, *shown.thread))
+    if (in_thread && shown.aside) {
+      if (const mux::message* root = mux::ui::held_message(*chat, *shown.aside))
         all.push_back(root);
-      if (const std::vector<mux::message>* answers = mux::aside_for(*chat, *shown.thread))
+      if (const std::vector<mux::message>* answers = mux::aside_for(*chat, *shown.aside))
         all.append_range(*answers | std::views::transform([](const mux::message& one) { return &one; }));
     } else {
       all = chat->timeline | std::views::transform([](const mux::message& one) { return &one; }) | std::ranges::to<std::vector>();
@@ -672,8 +672,8 @@ class jumps_part {
   double older_asked_ms_ = 0.0;
   std::optional<std::string> newer_asked_;
   double newer_asked_ms_ = 0.0;
-  skiff::compose::WindowAim<std::string> thread_aim_;
-  std::optional<std::string> thread_of_;
+  skiff::compose::WindowAim<std::string> aside_aim_;
+  std::optional<std::string> aside_of_;
 };
 
 }  // namespace mux::app

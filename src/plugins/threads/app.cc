@@ -22,7 +22,7 @@ import mux.plugin.threads.matrix;
 export namespace mux::plugins::threads {
 
 // The thread's panel at its top: the page of answers before those held.
-using thread_edge = skiff::compose::ListEdge<mux::ui::thread_list_tag>;
+using thread_edge = skiff::compose::ListEdge<mux::ui::aside_list_tag>;
 
 struct part {
   app::services* s_ = nullptr;
@@ -35,19 +35,19 @@ struct part {
   // room's listed by the server as it opens; one opened, its answers fetched
   // (and its root, where it is not held); an answer sent in the one open --
   // falling back, for clients without threads, to its latest event.
-  void apply(const ui::request::toggle_threads&) {
-    if (s_->toggle_threads() && s_->chosen() && !s_->demo())
+  void apply(const ui::request::toggle_panel&) {
+    if (s_->toggle_panel() && s_->chosen() && !s_->demo())
       s_->net->ask(s_->chosen()->account, list_asked{s_->chosen()->id});
     s_->refresh_due = true;
   }
-  void apply(const ui::request::open_thread& one) {
+  void apply(const ui::request::open_aside& one) {
     if (!s_->chosen())
       return;
-    s_->open_thread(one.root);
+    s_->open_aside(one.root);
     s_->refresh_due = true;
   }
-  void apply(const close_thread&) {
-    s_->close_thread();
+  void apply(const close_aside&) {
+    s_->close_aside();
     s_->refresh_due = true;
   }
   // What is written in the thread's field, sent in the thread open -- an
@@ -55,18 +55,18 @@ struct part {
   // emptied.
   void apply(const thread_send&) {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
-    const std::string text = mux::ui::composer_plain(s_->thread_writing());
-    if (!shown.thread || text.empty())
+    const std::string text = mux::ui::composer_plain(s_->aside_writing());
+    if (!shown.aside || text.empty())
       return;
     // A message of it edited there: the edit sent, not an answer.
-    if (shown.thread_edit) {
-      const std::string id = *shown.thread_edit;
-      auto styles = mux::ui::composer_styles(s_->thread_writing());
+    if (shown.aside_edit) {
+      const std::string id = *shown.aside_edit;
+      auto styles = mux::ui::composer_styles(s_->aside_writing());
       const auto chosen_now = s_->managed();
       const mux::conversation* chat = chosen_now ? s_->model->find(*chosen_now) : nullptr;
-      auto mentions = mux::ui::composer_mentions(s_->thread_writing(), chat ? chat->members : std::vector<mux::member>{});
-      s_->write_thread({});
-      s_->stop_thread_answer();
+      auto mentions = mux::ui::composer_mentions(s_->aside_writing(), chat ? chat->members : std::vector<mux::member>{});
+      s_->write_aside({});
+      s_->stop_aside_answer();
       if (const auto chosen = s_->managed()) {
         if (s_->demo())
           s_->box->push(mux::change_t{mux::change::message_edited{*chosen, id, mux::body{text, std::nullopt}}});
@@ -77,17 +77,17 @@ struct part {
     }
     const auto chosen_now = s_->managed();
     const mux::conversation* chat = chosen_now ? s_->model->find(*chosen_now) : nullptr;
-    send_in_thread asked{*shown.thread, text, shown.thread_answer, mux::ui::composer_styles(s_->thread_writing()),
-                                      mux::ui::composer_mentions(s_->thread_writing(), chat ? chat->members : std::vector<mux::member>{})};
-    s_->write_thread({});
-    s_->stop_thread_answer();
+    send_in_thread asked{*shown.aside, text, shown.aside_answer, mux::ui::composer_styles(s_->aside_writing()),
+                                      mux::ui::composer_mentions(s_->aside_writing(), chat ? chat->members : std::vector<mux::member>{})};
+    s_->write_aside({});
+    s_->stop_aside_answer();
     this->apply(asked);
   }
-  void apply(const ui::request::thread_answer_cancel&) { s_->stop_thread_answer(); }
+  void apply(const ui::request::aside_answer_cancel&) { s_->stop_aside_answer(); }
   // The thread's field edited: what is written, kept.
-  void apply(const ui::request::thread_draft_edited& one) {
-    s_->written_last = ui::request::writing::thread{};
-    s_->write_thread(one.now);
+  void apply(const ui::request::aside_draft_edited& one) {
+    s_->written_last = ui::request::writing::aside{};
+    s_->write_aside(one.now);
   }
 
   // The panel as the chat is: the thread open -- an answer being written
@@ -97,21 +97,21 @@ struct part {
   // chat moved or the thread open changed.
   void tick() {
     const auto& chat_now = *s_->showing->look<mux::ui::chat_shown>();
-    if (chat_now.thread != answered_in_) {
-      answered_in_ = chat_now.thread;
-      s_->stop_thread_answer();
+    if (chat_now.aside != answered_in_) {
+      answered_in_ = chat_now.aside;
+      s_->stop_aside_answer();
       // A thread opened, from wherever it was: its newest page of answers
       // fetched, and its root where it is not held.
-      if (chat_now.thread && chat_now.chosen)
-        this->opened(*chat_now.chosen, *chat_now.thread);
+      if (chat_now.aside && chat_now.chosen)
+        this->opened(*chat_now.chosen, *chat_now.aside);
     }
-    const mux::conversation* chat = chat_now.chosen && chat_now.threads_open ? s_->model->find(*chat_now.chosen) : nullptr;
-    const auto key = std::tuple{chat ? std::optional(chat->id) : std::nullopt, chat ? this->revision_of(chat->id) : 0, chat_now.thread};
+    const mux::conversation* chat = chat_now.chosen && chat_now.panel_open ? s_->model->find(*chat_now.chosen) : nullptr;
+    const auto key = std::tuple{chat ? std::optional(chat->id) : std::nullopt, chat ? this->revision_of(chat->id) : 0, chat_now.aside};
     if (key == seen_)
       return;
     seen_ = key;
-    threads::shown now{.listing = !chat_now.thread};
-    if (chat && !chat_now.thread) {
+    threads::shown now{.listing = !chat_now.aside};
+    if (chat && !chat_now.aside) {
       std::vector<const mux::message*> roots;
       const auto add = [&](const std::string& id) {
         if (const mux::message* one = mux::ui::held_message(*chat, id); one && !std::ranges::contains(roots, one))
@@ -170,8 +170,8 @@ struct part {
   void take(const paged& one) { std::erase(loading_, std::pair{one.in, one.root}); }
   void apply(const thread_edge& one) {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
-    if (one.older && shown.chosen && shown.thread)
-      this->load(*shown.chosen, *shown.thread, false);
+    if (one.older && shown.chosen && shown.aside)
+      this->load(*shown.chosen, *shown.aside, false);
   }
 
   [[nodiscard]] skiff::model::Revision revision_of(const mux::conversation_id& chat) const {

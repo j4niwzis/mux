@@ -279,13 +279,13 @@ void app::take_arriving(std::chrono::milliseconds most) {
     if (const mux::conversation* chat = model->find(linked_->first); chat && mux::ui::held_message(*chat, linked_->second)) {
       const auto [in, event] = *std::exchange(linked_, std::nullopt);
       if (shared.chosen() == in)
-        (void)this->open_in_thread(*chat, event);
+        (void)this->open_aside_of(*chat, event);
     }
   // An answer gone to, scrolled to once its thread's panel has it.
-  if (thread_target_) {
+  if (aside_target_) {
     auto& screen = root();
-    if (!shared.thread_open() || jumps.aim_in_thread(*thread_target_))
-      thread_target_.reset();
+    if (!shared.aside_shown() || jumps.aim_aside(*aside_target_))
+      aside_target_.reset();
   }
   // The slice, and the surge it is part of: said whole once the queue is
   // empty again, where it took more than one slice.
@@ -588,7 +588,7 @@ void app::before_frame() {
   // whole sweep of every picture the window shows (pictures_due), which
   // ran at nearly every frame of a scroll through custom emoji.
   if (auto shown = mux::ui::emoji_pictures_wanted(*showing.look<mux::ui::chat_draft>(),
-                                                *showing.look<mux::ui::thread_draft>()); shown != shared.ui.panel_pictures_shown) {
+                                                *showing.look<mux::ui::aside_draft>()); shown != shared.ui.panel_pictures_shown) {
     pictures.want_shown(shown);
     shared.ui.panel_pictures_shown = std::move(shown);
   }

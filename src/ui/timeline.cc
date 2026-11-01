@@ -80,7 +80,7 @@ void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chosen, con
 // readers, link previews, its first unread), and what to aim at.
 struct timeline_told {
   std::optional<conversation_id> of;
-  std::optional<std::string> thread;
+  std::optional<std::string> aside;
   skiff::compose::WindowAim<std::string> aim;
   room_event_filter filter;
   // What the plugins' flags say of the chat (contract::chat_flags).
@@ -99,7 +99,7 @@ struct timeline_told {
 // What the chat's list is told, and the thread's: the program's, in the
 // shown model, each its own part.
 struct chat_told : timeline_told {};
-struct thread_told : timeline_told {};
+struct aside_told : timeline_told {};
 // What the corner over the chat's list shows besides the way down: a way
 // back to where a jump in this chat came from, one to the chat a jump
 // left, and the loader while a jump is on its way.
@@ -118,7 +118,7 @@ struct chat_ways {
 };
 // Which of the two lists a list's answers are of.
 struct chat_list_tag {};
-struct thread_list_tag {};
+struct aside_list_tag {};
 // A row's item: its key, the facts it is made from, and what making it
 // takes there and then.
 using bubble_item = std::tuple<std::string, bubble_facts, const conversation*, const bubble_needs*, bool>;
@@ -165,11 +165,11 @@ struct timeline_rows {
       return {};
     bool kept_aside = false;
     each_aside_of(*chat, [&](const std::vector<message>& list) { kept_aside = kept_aside || !list.empty(); });
-    if (!told.thread && told.filter.shows(room_event::thread_answers{}) && kept_aside)
+    if (!told.aside && told.filter.shows(room_event::thread_answers{}) && kept_aside)
       return {.merged = &merged_of(now, told, *chat)};
-    if (!told.thread)
+    if (!told.aside)
       return {.timeline = &chat->timeline};
-    return {.root = held_message(*chat, *told.thread), .answers = aside_for(*chat, *told.thread)};
+    return {.root = held_message(*chat, *told.aside), .answers = aside_for(*chat, *told.aside)};
   }
   // The chat's timeline and its threads' answers in one order, made again
   // only where the chat changed since (its revision): pointers into where it
@@ -231,14 +231,14 @@ struct timeline_rows {
   // list's bottom as history is at its top. Not a thread's answers.
   static bool goes_on(const chats_model& now, const Told& told) {
     const conversation* chat = chat_of(now, told);
-    return chat && chat->detached && !told.thread;
+    return chat && chat->detached && !told.aside;
   }
   // Come while the reader was away from the end, counted on the way down:
   // another's message the chat shows, not one's own nor an event it hides.
   // A chat a window away from its newest counts nothing: what comes after
   // its window is a page of what is older than the newest, not new.
   static bool counts(const chats_model& now, const Told& told, std::size_t i) {
-    if (const conversation* chat = chat_of(now, told); chat && chat->detached && !told.thread)
+    if (const conversation* chat = chat_of(now, told); chat && chat->detached && !told.aside)
       return false;
     const message& said = seen_of(now, told).at(i);
     return !said.outgoing && (!said.service || told.filter.shows(said.event_kind));

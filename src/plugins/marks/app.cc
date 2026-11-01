@@ -292,7 +292,7 @@ struct part {
   void go(const conversation& chat, mark_kind_t kind, const std::string& event, const std::string& target) {
     const message* said = ui::held_message(chat, target);
     if (const auto about = said ? mux::about_of(chat, *said) : std::nullopt) {
-      s_->open_thread(*about);
+      s_->open_aside(*about);
       s_->model->apply(change_t{change::mark_taken{chat.id, kind, event}});
       dirty_ = true;
       s_->refresh_due = true;

@@ -220,8 +220,8 @@ class chat_list_part {
       asked(request::selection_cancel{});
     else if (this->plugins_take(one, asked, mux::composition::providers<mux::contract::screen_keys, mux::enabled_plugins>{}))
       ;
-    else if (one.key == keys::kEscape && !any && chat.thread_answer)
-      asked(request::thread_answer_cancel{});
+    else if (one.key == keys::kEscape && !any && chat.aside_answer)
+      asked(request::aside_answer_cancel{});
     else if (one.key == keys::kEscape && !any && answering)
       asked(request::cancel_compose{});
     else if (stepping)
@@ -233,8 +233,8 @@ class chat_list_part {
     else if (one.key == keys::kEscape && !any) {
       // Nothing else to let go of: the threads or the info shut, else the
       // chat closed, as tdesktop's Esc closes it.
-      if (chat.threads_open)
-        asked(request::toggle_threads{});
+      if (chat.panel_open)
+        asked(request::toggle_panel{});
       else if (chat.info_open)
         asked(request::toggle_info{});
       else
@@ -269,8 +269,8 @@ class chat_list_part {
       return;
     if (!chat.chosen)
       asked(request::open_drawer{});
-    else if (chat.threads_open)
-      asked(request::toggle_threads{});
+    else if (chat.panel_open)
+      asked(request::toggle_panel{});
     else if (chat.info_open)
       asked(request::toggle_info{});
     else
@@ -593,11 +593,11 @@ class chat_list_part {
     this->change_frame([&](mux::ui::screen_shown& now) {
       now.single = shape.phone();
       now.pane = !chat.chosen ? mux::ui::pane_t{mux::ui::pane::list{}}
-                 : chat.info_open || chat.threads_open ? mux::ui::pane_t{mux::ui::pane::beside{}}
+                 : chat.info_open || chat.panel_open ? mux::ui::pane_t{mux::ui::pane::beside{}}
                                                        : mux::ui::pane_t{mux::ui::pane::chat{}};
-      const bool beside = (chat.info_open || chat.threads_open) && chat.chosen.has_value();
-      now.info_up = beside && !chat.threads_open;
-      now.panel_up = beside && chat.threads_open;
+      const bool beside = (chat.info_open || chat.panel_open) && chat.chosen.has_value();
+      now.info_up = beside && !chat.panel_open;
+      now.panel_up = beside && chat.panel_open;
       now.beside_edge = beside && !now.single;
       now.side_up = !now.single || !chat.chosen;
       now.side_edge = !now.single;

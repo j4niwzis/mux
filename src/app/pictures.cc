@@ -258,7 +258,7 @@ class pictures_part {
           // had every one of them gone through -- each one's text parsed for
           // its emoji -- at every refresh.
           std::vector<const message*> in_thread;
-          if (const auto open = s_->thread_open()) {
+          if (const auto open = s_->aside_shown()) {
             if (const message* root = mux::ui::held_message(one, *open))
               in_thread.push_back(root);
             if (const std::vector<message>* answers = mux::aside_for(one, *open))
@@ -277,7 +277,7 @@ class pictures_part {
             const std::size_t from = top > kAround ? top - kAround : 0, to = std::min(count, bottom + kAround + 1);
             in_thread = std::vector<const message*>(in_thread.begin() + static_cast<std::ptrdiff_t>(std::min(from, to)),
                                                     in_thread.begin() + static_cast<std::ptrdiff_t>(to));
-            s_->thread_pictures_span = in_thread.empty() ? services::asked_span{}
+            s_->aside_pictures_span = in_thread.empty() ? services::asked_span{}
                                                          : services::asked_span{in_thread.front()->id, in_thread.back()->id};
           }
           senders.insert_range(in_thread | std::views::transform([](const message* said) -> std::string_view { return said->sender; }));

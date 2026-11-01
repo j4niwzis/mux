@@ -98,7 +98,7 @@ void app::go_to_linked(const mux::conversation_id& in, const std::string& event)
       jumps.note_chat_return();
       this->open_chat(in, std::nullopt);
     }
-    if (const mux::conversation* now = model->find(in); now && this->open_in_thread(*now, event))
+    if (const mux::conversation* now = model->find(in); now && this->open_aside_of(*now, event))
       return;
   } else if (chat && !shared.demo()) {
     linked_ = {in, event};
@@ -106,7 +106,7 @@ void app::go_to_linked(const mux::conversation_id& in, const std::string& event)
   }
   this->go_to_message(in, event, std::nullopt);
 }
-bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
+bool app::open_aside_of(const mux::conversation& chat, const std::string& id) {
   const mux::message* said = mux::ui::held_message(chat, id);
   if (said == nullptr)
     return false;
@@ -118,13 +118,13 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
     return false;
   auto& screen = root();
   jumps.stop();
-  if (shared.thread_open() != thread) {
-    shared.open_thread(*thread);
+  if (shared.aside_shown() != thread) {
+    shared.open_aside(*thread);
   }
   this->refresh();
   // Its answers still on their way: scrolled to once they are (woken).
-  if (!jumps.aim_in_thread(id))
-    thread_target_ = id;
+  if (!jumps.aim_aside(id))
+    aside_target_ = id;
   return true;
 }
 
@@ -154,14 +154,14 @@ void app::apply(const request::jump_to_message& one) {
         auto& screen = root();
         const std::optional<std::string> about = mux::about_of(*chat, *said);
         const std::optional<std::string> thread = about ? about
-                                                  : shared.thread_open() == said->id ? std::optional<std::string>(said->id)
+                                                  : shared.aside_shown() == said->id ? std::optional<std::string>(said->id)
                                                                                       : std::nullopt;
         if (thread) {
-          if (shared.thread_open() != thread) {
-            shared.open_thread(*thread);
+          if (shared.aside_shown() != thread) {
+            shared.open_aside(*thread);
             this->refresh();
           }
-          if (jumps.aim_in_thread(one.id))
+          if (jumps.aim_aside(one.id))
             return;
         }
       }

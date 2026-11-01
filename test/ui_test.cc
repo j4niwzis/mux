@@ -127,7 +127,7 @@ struct stub {
   void close_leave_space() {}
   void find_people(std::string) {}
   void search_elsewhere(std::string) {}
-  void toggle_threads() {}
+  void toggle_panel() {}
   void set_bubbles(mux::choice_level_t, std::optional<mux::config::bubble_look>,
                    mux::config::look_part_t = mux::config::look_part::bubbles{}) {}
   void set_frost_blur(int) {}
@@ -137,10 +137,10 @@ struct stub {
   void set_home_hides(mux::choice_level_t, std::optional<bool>) {}
   void set_home_direct(mux::choice_level_t, std::optional<bool>) {}
   void set_wallpaper(mux::choice_level_t, mux::config::wallpaper_pick_t) {}
-  void open_thread(std::string) {}
-  void close_thread() {}
+  void open_aside(std::string) {}
+  void close_aside() {}
   void send_in_thread(std::string, std::string, std::optional<std::string>) {}
-  void attach_in_thread() {}
+  void attach_aside() {}
   void toggle_thread_emoji() {}
   void set_account_colour(mux::config::accent_t) {}
   void flip_account_strip() {}

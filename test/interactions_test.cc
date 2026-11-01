@@ -21,7 +21,7 @@ struct requests {
   std::vector<std::string> threads, reactions;
   std::vector<std::string> captions;
   int closed = 0;
-  void take(const ui::request::open_thread& one) { threads.push_back(one.root); }
+  void take(const ui::request::open_aside& one) { threads.push_back(one.root); }
   void take(const ui::request::menu_react& one) { reactions.push_back(one.key); }
   void take(const ui::request::close_menu&) { ++closed; }
   void take(const ui::request::send_files& one) { captions.push_back(one.caption); }

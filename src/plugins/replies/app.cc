@@ -77,8 +77,8 @@ struct part {
     const auto fragment = selected.value_or(skiff::scene::clipboardFragment(plain, {}));
     const auto quote = [&](ui::composer_doc& now) { ui::prepend_quote(now, fragment); };
     // Into what answers it: the thread's draft, where it is answered there.
-    if (s_->showing->look<ui::chat_shown>()->thread_answer == id) {
-      s_->edit_thread_writing(quote);
+    if (s_->showing->look<ui::chat_shown>()->aside_answer == id) {
+      s_->edit_aside_writing(quote);
       return;
     }
     s_->edit_chat_writing(quote);
@@ -108,9 +108,9 @@ struct part {
     // A thread's root or answer, its thread open: answered there.
     // The field that answers it given the keys -- on a phone, its keyboard
     // up at once, as Telegram's: what answers is typed next.
-    if (said && s_->thread_open() == mux::about_of(*chat, *said).value_or(said->id)) {
-      s_->answer_in_thread(id, ui::compose_context{ui::icon::reply{}, std::move(title), std::move(line)});
-      s_->ask_keys(ui::keys::thread{});
+    if (said && s_->aside_shown() == mux::about_of(*chat, *said).value_or(said->id)) {
+      s_->answer_aside(id, ui::compose_context{ui::icon::reply{}, std::move(title), std::move(line)});
+      s_->ask_keys(ui::keys::aside{});
       return;
     }
     ui::show(*s_->showing, ui::chat_compose{ui::compose::reply{id}, ui::compose_context{ui::icon::reply{}, std::move(title), std::move(line)}});

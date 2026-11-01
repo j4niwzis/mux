@@ -20,16 +20,16 @@ using namespace ::mux::ui;
 // Reply in thread, in a message's menu where its chat has threads and it
 // may be answered: the menu closed and its thread opened.
 struct reply_in_thread {
-  using Answer = std::tuple<request::close_menu, request::open_thread>;
+  using Answer = std::tuple<request::close_menu, request::open_aside>;
   std::string root;
-  Answer operator()() const { return {request::close_menu{}, request::open_thread{root}}; }
+  Answer operator()() const { return {request::close_menu{}, request::open_aside{root}}; }
 };
 MUX_INLINE_IN_RELEASE auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&, const menu_facts& facts) {
   return skiff::compose::visible(facts.answerable && facts.can.threads && !facts.link.empty(),
       row_item(colours, "Reply in thread", reply_in_thread{facts.id}, icon::threads{}, std::nullopt, menu_row_look));
 }
 // Asked of the program, its own (moved from mux.ui, where only it took them).
-struct close_thread {};
+struct close_aside {};
 
 // The thread's field: what is written sent in the thread open, an answer to
 // what is answered there; the answer let go.
@@ -48,14 +48,14 @@ struct send_in_thread {
 // Its button in the chat's head (mux.ui:header), after Search.
 MUX_INLINE_IN_RELEASE auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
   return SKIFF_NAMED(threads_button, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                                            icon_button(colours, icon::threads{}, sends<request::toggle_threads>{})));
+                                                            icon_button(colours, icon::threads{}, sends<request::toggle_panel>{})));
 }
 
 // Keep the action on a container: Text's own pointer handler is for text
 // selection and does not run an onClick inherited around the text itself.
 MUX_INLINE_IN_RELEASE auto message_thread_link(const palette& colours, std::string root, std::string line) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(message_thread_link, c::onClick(request::open_thread{std::move(root)},
+  return SKIFF_NAMED(message_thread_link, c::onClick(request::open_aside{std::move(root)},
       c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 0.0f, 0.0f, 0.0f},
                             .hoverBackground = colours.chosen}),
           c::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(line), 13.0f, colours.accent, true)))),

@@ -217,7 +217,7 @@ class outbox_part {
       return;
     this->forget_unless_shown();
     if (to_send_.empty())
-      files_thread_.reset();
+      files_aside_.reset();
     s_->system_dialogs->choose_files();
   }
   // The send box's Add more: more chosen, to go with what is in it -- the
@@ -229,17 +229,17 @@ class outbox_part {
     s_->system_dialogs->choose_files();
   }
   // The thread panel's paperclip: what is chosen goes into the thread open.
-  void apply(const request::attach_in_thread&) {
+  void apply(const request::attach_aside&) {
     if (!s_->chosen() || !mux::ui::may_send_files(s_->ui, s_->chosen()->account))
       return;
     this->forget_unless_shown();
     if (to_send_.empty())
-      files_thread_ = s_->thread_open();
+      files_aside_ = s_->aside_shown();
     s_->system_dialogs->choose_files();
   }
   void apply(const request::close_send_box&) {
     to_send_.clear();
-    files_thread_.reset();
+    files_aside_.reset();
     mux::ui::show<mux::ui::send_facts>(*s_->showing, std::nullopt);
   }
   void apply(const request::send_files& one) {
@@ -251,11 +251,11 @@ class outbox_part {
     // Into a thread: its root and its latest, and what is answered in it.
     mux::plugin_message_parts placed{};
     std::optional<std::string> reply_to;
-    if (files_thread_) {
+    if (files_aside_) {
       if (const mux::conversation* chat = s_->model->find(*chosen))
-        placed = mux::placed_aside(*chat, *files_thread_);
-      if (s_->thread_open() == files_thread_)
-        reply_to = s_->showing->look<mux::ui::chat_shown>()->thread_answer;
+        placed = mux::placed_aside(*chat, *files_aside_);
+      if (s_->aside_shown() == files_aside_)
+        reply_to = s_->showing->look<mux::ui::chat_shown>()->aside_answer;
     } else {
       // Sent while answering: the first of them the answer, as Element sends.
       reply_to = spl::visit(spl::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
@@ -270,23 +270,23 @@ class outbox_part {
     // Cancel leaves it alone; sending consumes it only if it is still the
     // same draft in the same place, so a later edit is never erased.
     if (files_chat_ == chosen) {
-      if (files_thread_ && s_->thread_open() == files_thread_) {
-        if (mux::ui::composer_plain(s_->thread_writing()) == files_caption_)
-          s_->write_thread({});
-      } else if (!files_thread_ && mux::ui::composer_plain(s_->chat_writing()) == files_caption_) {
+      if (files_aside_ && s_->aside_shown() == files_aside_) {
+        if (mux::ui::composer_plain(s_->aside_writing()) == files_caption_)
+          s_->write_aside({});
+      } else if (!files_aside_ && mux::ui::composer_plain(s_->chat_writing()) == files_caption_) {
         s_->write_chat({});
         drafts_->keep(*chosen, std::string());
       }
     }
     if (thread) {
-      if (s_->thread_open() == files_thread_)
-        s_->stop_thread_answer();
+      if (s_->aside_shown() == files_aside_)
+        s_->stop_aside_answer();
     } else if (spl::visit(spl::overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }},
                              this->composing())) {
       this->compose(compose::plain{}, std::nullopt);
     }
     to_send_.clear();
-    files_thread_.reset();
+    files_aside_.reset();
     mux::ui::show<mux::ui::send_facts>(*s_->showing, std::nullopt);
   }
   // A saved GIF sent into the chat, as a picture that moves -- as a file
@@ -363,14 +363,14 @@ class outbox_part {
     // Dropped while the thread's field has the keys: into the thread, as
     // its paperclip sends.
     if (dropped && to_send_.empty())
-      files_thread_ = s_->thread_open() && spl::visit(spl::overloaded{[](request::writing::thread) { return true; },
+      files_aside_ = s_->aside_shown() && spl::visit(spl::overloaded{[](request::writing::aside) { return true; },
                                                                         [](request::writing::chat) { return false; }},
                                                          s_->written_last)
-                          ? s_->thread_open()
+                          ? s_->aside_shown()
                           : std::nullopt;
     if (to_send_.empty()) {
       files_chat_ = s_->chosen();
-      files_caption_ = mux::ui::composer_plain(files_thread_ ? s_->thread_writing() : s_->chat_writing());
+      files_caption_ = mux::ui::composer_plain(files_aside_ ? s_->aside_writing() : s_->chat_writing());
     }
     for (const std::string& path : paths) {
       auto bytes_read = mux::platform::files::read(path);
@@ -418,7 +418,7 @@ class outbox_part {
       to_send_.clear();
   }
   // The thread what is in the send box goes into, where it is one.
-  std::optional<std::string> files_thread_;
+  std::optional<std::string> files_aside_;
   // The field's text sent: as a message, an answer, or an edit -- as what is
   // written says -- and the field and its draft emptied.
   // A line its chat's protocol reads as a command of its own -- an IRC

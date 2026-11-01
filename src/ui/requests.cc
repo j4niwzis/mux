@@ -511,8 +511,8 @@ using element_opacity_t = std::optional<int> mux::config::element_opacity::*;
 using element_blur_t = std::optional<double> mux::config::element_blur::*;
 using bubbles_change_t = spl::variant<bubbles_change::kind, bubbles_change::opacity, bubbles_change::blur,
                                       bubbles_change::element<element_opacity_t>, bubbles_change::element<element_blur_t>>;
-struct toggle_threads {};
-struct open_thread {
+struct toggle_panel {};
+struct open_aside {
   std::string root;
 };
 struct adopt_pack {
@@ -595,7 +595,7 @@ struct set_chat_strip_colour {
   mux::config::accent_t colour;
 };
 // The thread panel's own: its paperclip, and its emoji button.
-struct attach_in_thread {};
+struct attach_aside {};
 }  // namespace request
 // Which field the program gives the keys to, and each time it does: a count
 // it raises -- the field asked reads it and takes the keys (focused_by); the
@@ -607,7 +607,7 @@ struct none {
 struct chat {
   friend bool operator==(chat, chat) = default;
 };
-struct thread {
+struct aside {
   friend bool operator==(thread, thread) = default;
 };
 struct menu {
@@ -623,7 +623,7 @@ template <class List>
 struct keys_targets;
 template <class... Features>
 struct keys_targets<plugin_list<Features...>> {
-  using type = spl::variant<keys::none, keys::chat, keys::thread, keys::menu, keys::of<Features>...>;
+  using type = spl::variant<keys::none, keys::chat, keys::aside, keys::menu, keys::of<Features>...>;
 };
 using keys_target = typename keys_targets<composition::providers<contract::key_focus, enabled_plugins>>::type;
 struct keys_asked {
@@ -642,9 +642,9 @@ namespace request {
 // Which field the emoji picker writes in: the chat's, or the thread's.
 namespace writing {
 struct chat {};
-struct thread {};
+struct aside {};
 }  // namespace writing
-using writing_t = spl::variant<writing::chat, writing::thread>;
+using writing_t = spl::variant<writing::chat, writing::aside>;
 // Where the settings page has come to rest, scrolled: kept by the program,
 // the page put back there when it is made again.
 struct settings_scrolled {
@@ -777,7 +777,7 @@ struct banner_pressed {
 struct banner_button {};
 struct banner_close {};
 // The thread's field: the answer in it let go.
-struct thread_answer_cancel {};
+struct aside_answer_cancel {};
 // The video in the viewer: paused or played on; and gone to a share of it.
 // One of a person's card's buttons of its protocol's own: by where it is
 // among them.

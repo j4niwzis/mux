@@ -449,9 +449,9 @@ struct app : kept_settings {
   // A link's message gone to, and a thread's answer to be scrolled to once
   // its panel shows it.
   void go_to_linked(const mux::conversation_id& in, const std::string& event);
-  bool open_in_thread(const mux::conversation& chat, const std::string& id);
+  bool open_aside_of(const mux::conversation& chat, const std::string& id);
   std::optional<std::pair<mux::conversation_id, std::string>> linked_;
-  std::optional<std::string> thread_target_;
+  std::optional<std::string> aside_target_;
 
   // -- messages on disk: every change to one written as it is now
   message_store store;
@@ -567,10 +567,10 @@ struct app : kept_settings {
   void apply(const request::open_picture&) {}
   void apply(const request::open_video&) {}
   void apply(const request::open_avatar&) {}
-  void apply(const request::toggle_threads&) {}
-  void apply(const request::open_thread&) {}
-  void apply(const request::thread_answer_cancel&) {}
-  void apply(const request::thread_draft_edited&) {}
+  void apply(const request::toggle_panel&) {}
+  void apply(const request::open_aside&) {}
+  void apply(const request::aside_answer_cancel&) {}
+  void apply(const request::aside_draft_edited&) {}
   void apply(const request::adopt_pack&) {}
   void apply(const request::explore_space&) {}
   void apply(const request::look_up_room&) {}

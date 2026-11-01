@@ -66,7 +66,7 @@ void app::apply(const request::choose& one) {
   // as it was, listing the new chat's threads.
   mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) {
     if (now.chosen != one.which)
-      now.thread.reset();
+      now.aside.reset();
     now.chosen = one.which;
   });
   // Shown anew: opened at its first unread, quietly, where it has unread;

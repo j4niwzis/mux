@@ -290,10 +290,11 @@ struct part {
   // message is on the screen (marks_shown): a jump cancelled, or still on
   // its way, leaves it.
   void go(const conversation& chat, mark_kind_t kind, const std::string& event, const std::string& target) {
-    if (const message* said = ui::held_message(chat, target); said && said->thread) {
-      s_->open_thread(*said->thread);
+    const message* said = ui::held_message(chat, target);
+    if (const auto about = said ? mux::about_of(chat, *said) : std::nullopt) {
+      s_->open_thread(*about);
       if (!s_->demo())
-        s_->net->load_thread(chat.id, *said->thread);
+        s_->net->load_thread(chat.id, *about);
       s_->model->apply(change_t{change::mark_taken{chat.id, kind, event}});
       dirty_ = true;
       s_->refresh_due = true;

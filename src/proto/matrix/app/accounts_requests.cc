@@ -39,7 +39,6 @@ template void account<mux::app::post_change>::follow(std::optional<std::string> 
 template void account<mux::app::post_change>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate,
                                                                   bool encrypted, mux::room_place place);
 template void account<mux::app::post_change>::search_people(std::string term);
-template void account<mux::app::post_change>::list_threads(std::string room);
 template void account<mux::app::post_change>::load_thread(std::string room, std::string root);
 template void account<mux::app::post_change>::load_thread_older(std::string room, std::string root);
 template void account<mux::app::post_change>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to, std::vector<styled_run> styles, std::vector<mention> mentions);

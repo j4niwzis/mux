@@ -8,7 +8,7 @@ export module mux.core.ids;
 
 import std;
 import splice;
-import mux.plugins.model;
+export import mux.plugins.model;
 export import mux.proto.tags;
 export import mux.proto.state;
 export import skiff.model;
@@ -332,18 +332,6 @@ using choice_level_t = spl::variant<choice_level::everywhere, choice_level::acco
   return spl::visit(spl::overloaded{[](choice_level::everywhere) { return false; }, [](const auto&) { return true; }}, level);
 }
 
-// A thread's summary, on its root (m.relations' m.thread, or counted
-// here): how many answers, the latest -- who, what, when -- and whether the
-// user took part.
-struct thread_summary {
-  std::int64_t count = 0;
-  std::string last_id;
-  std::string last_sender;
-  std::string last_text;
-  std::chrono::sys_time<std::chrono::milliseconds> last_at{};
-  bool participated = false;
-  friend bool operator==(const thread_summary&, const thread_summary&) = default;
-};
 
 // A message forwarded, as the client that sent it marked it: who it is from
 // -- their id and name -- and a link to the original.
@@ -433,10 +421,6 @@ struct message {
   // Several pictures or files in one message, as a gallery (MSC4274) carries
   // them: shown as an album.
   std::vector<mux::attachment> album;
-  // In a thread (m.thread): its root -- kept in the chat's threads, not in
-  // its timeline. And, where it is a thread's root, the thread's summary.
-  std::optional<std::string> thread;
-  std::optional<thread_summary> threaded;
   // Forwarded: from whom, and where it was.
   std::optional<forward_info> forwarded;
   // A sticker (m.sticker): its picture drawn as Telegram draws one -- no
@@ -769,10 +753,6 @@ struct conversation {
   // What each plugin keeps of the chat (mux.plugins.model): its threads'
   // answers, for one.
   plugin_chat_parts<message> plugins;
-  // Each thread's answers, by its root, oldest first: kept apart from the
-  // timeline, as Element keeps them; and the roots the server listed.
-  std::map<std::string, std::vector<message>> threads;
-  std::vector<std::string> thread_roots;
   // Who has read up to where: each other person's last message read, as
   // their receipts say; and the user's own, kept here whether it is sent or
   // not -- what is unread is counted from it.

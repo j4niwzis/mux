@@ -158,6 +158,16 @@ template <class Plugin, class Content, class Heard>
 concept hears = requires(const Content& content, Heard& what) {
   { matrix_heard(contract::matrix_events{}, type_tag<Plugin>{}, content, what) } -> std::convertible_to<heard_t>;
 };
+// What a plugin makes of a message the account made of an event: its part
+// of it filled -- matrix_message_made(contract::matrix_events, type_tag<its
+// feature>, the event, what it relates to where it says, whether the room
+// is encrypted, the message) -- found by ADL where the account is made.
+// A thread's answer's root, and a root's summary, for one.
+using relates_t = loom::ev::m_room_message_content_t::m_relates_to_t;
+template <class Plugin>
+concept makes_messages = requires(const loom::ev::timeline_event& one, const std::optional<relates_t>& relates, message& made) {
+  matrix_message_made(contract::matrix_events{}, type_tag<Plugin>{}, one, relates, true, made);
+};
 // The plugins an account's sink serves (the program's, mux::app::
 // post_change's); none for any other.
 template <class Sink>
@@ -329,7 +339,6 @@ class account {
   // an image uploaded for one.
   // Threads (m.thread): a room's roots listed; a thread's answers loaded,
   // each as a message in it; an answer sent in one.
-  void list_threads(std::string room);
   void load_thread(std::string room, std::string root);
   // The page of its answers before those loaded: as the chat's history, as
   // its panel reaches its top.
@@ -502,6 +511,10 @@ class account {
       then(perform(*api_, request));
     });
   }
+  // An event a plugin fetched (a thread's root, listed): taken as one come
+  // aside, out of the timeline -- decrypted, made a message, its plugins
+  // asked what it is to them.
+  void took_aside(const conversation_id& in, const loom::ev::timeline_event& one) { this->event(in, one, placement::aside{}); }
   template <class Change>
   void tell_program(Change change) {
     sink_(std::move(change));
@@ -864,6 +877,20 @@ class account {
   template <class Plugin, class Content>
   static bool told(const Content&, heard_here&) {
     return false;
+  }
+  // A message made of an event, given to every plugin that makes something
+  // of it (makes_messages).
+  template <class Plugin>
+    requires makes_messages<Plugin>
+  static void made_for(const loom::ev::timeline_event& one, const std::optional<relates_t>& relates, bool sealed_room, message& made) {
+    matrix_message_made(contract::matrix_events{}, type_tag<Plugin>{}, one, relates, sealed_room, made);
+  }
+  template <class Plugin>
+  static void made_for(const loom::ev::timeline_event&, const std::optional<relates_t>&, bool, message&) {}
+  template <template <class...> class List, class... Plugins>
+  static void plugins_make(type_tag<List<Plugins...>>, const loom::ev::timeline_event& one, const std::optional<relates_t>& relates,
+                           bool sealed_room, message& made) {
+    (made_for<Plugins>(one, relates, sealed_room, made), ...);
   }
   // Told to every plugin that hears it: a line in the timeline where any
   // says so.

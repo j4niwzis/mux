@@ -14,7 +14,9 @@ import mux.ui;
 import mux.app.network;
 import mux.app.services;
 import mux.plugin.threads.types;
+import mux.plugin.threads.model;
 import mux.plugin.threads.ui_top;
+import mux.plugin.threads.matrix;
 
 export namespace mux::plugins::threads {
 
@@ -29,7 +31,7 @@ struct part {
   // falling back, for clients without threads, to its latest event.
   void apply(const ui::request::toggle_threads&) {
     if (s_->toggle_threads() && s_->chosen() && !s_->demo())
-      s_->net->list_threads(*s_->chosen());
+      s_->net->ask(s_->chosen()->account, list_asked{s_->chosen()->id});
     s_->refresh_due = true;
   }
   void apply(const ui::request::open_thread& one) {
@@ -112,14 +114,18 @@ struct part {
         if (const mux::message* one = mux::ui::held_message(*chat, id); one && !std::ranges::contains(roots, one))
           roots.push_back(one);
       };
-      for (const std::string& id : chat->thread_roots)
+      const auto& mine = std::get<threads::chat_part<mux::message>>(chat->plugins);
+      for (const std::string& id : mine.roots)
         add(id);
       for (const mux::message& one : chat->timeline)
-        if (one.threaded && one.threaded->count > 0)
+        if (threads::kept_about(mine, one))
           add(one.id);
-      for (const std::string& id : chat->threads | std::views::keys)
+      for (const std::string& id : mine.answers | std::views::keys)
         add(id);
-      const auto latest = [](const mux::message* one) { return one->threaded ? one->threaded->last_at : one->at; };
+      const auto latest = [](const mux::message* one) {
+        const auto& threaded = threads::part_of(*one).threaded;
+        return threaded ? threaded->last_at : one->at;
+      };
       std::ranges::sort(roots, std::ranges::greater{}, latest);
       now.roots = roots | std::views::transform([&](const mux::message* one) {
                     return thread_root{one->id, one->sender, mux::ui::sender_name(*chat, one->sender),
@@ -136,8 +142,8 @@ struct part {
     if (!chat || s_->demo())
       return;
     std::string latest = one.root;
-    if (const auto found = chat->threads.find(one.root); found != chat->threads.end() && !found->second.empty())
-      latest = found->second.back().id;
+    if (const std::vector<mux::message>* answers = mux::aside_for(*chat, one.root); answers && !answers->empty())
+      latest = answers->back().id;
     s_->net->send_in_thread(*chosen, one.text, one.root, latest, one.reply_to, one.styles, one.mentions);
   }
 

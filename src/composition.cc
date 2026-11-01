@@ -259,6 +259,13 @@ struct message_trailers {
 struct message_cards {
   static constexpr std::string_view name = "a message's cards";
 };
+// A message's lines: what goes in its bubble after its trailers, a line of
+// its own across it (mux.ui:message): extend(c, f, trailer_facts) ->
+// std::optional<its node>, none where it has nothing to say of the message
+// -- a thread's root's answers, for one.
+struct message_lines {
+  static constexpr std::string_view name = "a message's lines";
+};
 // Under a message's row, at its right (mux.ui.messages:message): who has
 // read up to it, for one:
 //   extend(c, f, footer_facts) -> std::optional<its node>, placed in the

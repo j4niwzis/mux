@@ -75,7 +75,7 @@ template <class Account>
 [[nodiscard]] constexpr mux::proto::account_ops ops_of_type() {
   return {.react = requires { &Account::react; },
           .forward = requires { &Account::forward; },
-          .threads = requires { &Account::list_threads; },
+          .threads = requires { &Account::load_thread; },
           // The developer tools' (a plugin's) source and state: read from what
           // the account has synced, through its door for plugins.
           .view_source = requires(Account& account) { account.synced(); },
@@ -525,17 +525,6 @@ struct network {
     });
   }
   // Threads: a room's listed, one loaded, an answer sent in one.
-  void list_threads(const mux::conversation_id& in) {
-    loop.post([this, in] {
-      for (auto& one : accounts)
-        spl::visit(
-            [&](auto& account) {
-              if (account->id() == in.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.list_threads(in.id))) { a.list_threads(in.id); }, *account);
-            },
-            one.account);
-    });
-  }
   void load_thread(const mux::conversation_id& in, std::string root) {
     loop.post([this, in, root = std::move(root)] {
       for (auto& one : accounts)

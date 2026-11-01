@@ -22,8 +22,102 @@ export import mux.plugins.changes;
 
 export namespace mux {
 
+// What the model asks of a plugin's part of a chat (mux.plugins.model),
+// where the part says nothing: no message its own to keep aside, none it
+// is about, nothing told, no list kept. A plugin's part says otherwise by
+// its own overloads, found by its type -- more special than these.
+namespace aside_defaults {
+template <class Part, class Message>
+std::vector<Message>* aside_list(Part&, const Message&) {
+  return nullptr;
+}
+template <class Part, class Message>
+const std::string* aside_about(const Part&, const Message&) {
+  return nullptr;
+}
+template <class Part, class Message>
+void noted(const Part&, Message&, const Message&, bool) {}
+template <class Part, class F>
+void each_aside(Part&, F&&) {}
+template <class Part>
+const std::vector<message>* aside_by(const Part&, const std::string&) {
+  return nullptr;
+}
+template <class Part>
+bool kept_about(const Part&, const message&) {
+  return false;
+}
+// A message's own part: what it is kept aside about, said and restored
+// (the store keeps it across a restart).
+template <class Part>
+const std::string* about_said(const Part&) {
+  return nullptr;
+}
+template <class Part>
+void about_restored(Part&, const std::string&) {}
+}  // namespace aside_defaults
+// Every list of messages the plugins keep aside in a chat -- out of its
+// timeline (a thread's answers, for one) -- given to f.
+template <class Where, class F>
+void each_aside_of(Where& where, F&& f) {
+  std::apply([&](auto&... part) {
+    using aside_defaults::each_aside;
+    (each_aside(part, f), ...);
+  }, where.plugins);
+}
+// The list a plugin keeps aside about a message (a thread's answers, about
+// its root), where one keeps one.
+template <class Where>
+[[nodiscard]] const std::vector<message>* aside_for(const Where& where, const std::string& about) {
+  const std::vector<message>* out = nullptr;
+  std::apply([&](const auto&... part) {
+    using aside_defaults::aside_by;
+    ((out = out ? out : aside_by(part, about)), ...);
+  }, where.plugins);
+  return out;
+}
+// Whether a plugin keeps a list aside about a message, held here or not yet
+// (a thread's root, its answers counted by the server).
+template <class Where>
+[[nodiscard]] bool has_aside(const Where& where, const message& one) {
+  return std::apply([&](const auto&... part) {
+    using aside_defaults::kept_about;
+    return (kept_about(part, one) || ...);
+  }, where.plugins);
+}
+// What a message says it is kept aside about, from its own parts alone:
+// what the store keeps; and that put back in them.
+[[nodiscard]] inline std::optional<std::string> said_about(const message& one) {
+  return std::apply([](const auto&... mine) {
+    using aside_defaults::about_said;
+    std::optional<std::string> out;
+    ((out = out ? out : (about_said(mine) ? std::optional<std::string>(*about_said(mine)) : std::nullopt)), ...);
+    return out;
+  }, one.plugins);
+}
+inline void restore_about(message& one, const std::string& about) {
+  std::apply([&](auto&... mine) {
+    using aside_defaults::about_restored;
+    (about_restored(mine, about), ...);
+  }, one.plugins);
+}
+// What a message a plugin keeps aside is about (a thread's answer: its
+// root), where one keeps it.
+template <class Where>
+[[nodiscard]] std::optional<std::string> about_of(const Where& where, const message& one) {
+  std::optional<std::string> out;
+  std::apply([&](const auto&... part) {
+    using aside_defaults::aside_about;
+    const auto ask = [&](const auto& mine) {
+      if (const std::string* about = aside_about(mine, one); !out && about)
+        out = *about;
+    };
+    (ask(part), ...);
+  }, where.plugins);
+  return out;
+}
 // The message an edit event wrote -- its latest text, or one of its earlier
-// versions -- in the timeline or a thread: what a reaction some clients put
+// versions -- in the timeline or kept aside: what a reaction some clients put
 // on the edit (not on what it edited) is on. None for an empty id.
 [[nodiscard]] inline const message* edited_by(const conversation& where, std::string_view event) {
   if (event.empty())
@@ -33,10 +127,12 @@ export namespace mux {
   };
   if (const auto found = std::ranges::find_if(where.timeline, wrote); found != where.timeline.end())
     return &*found;
-  for (const auto& [root, answers] : where.threads)
-    if (const auto found = std::ranges::find_if(answers, wrote); found != answers.end())
-      return &*found;
-  return nullptr;
+  const message* out = nullptr;
+  each_aside_of(where, [&](const std::vector<message>& list) {
+    if (const auto found = std::ranges::find_if(list, wrote); !out && found != list.end())
+      out = &*found;
+  });
+  return out;
 }
 
 namespace change {
@@ -312,12 +408,6 @@ struct reacted_to_mine {
   std::string target;
   std::chrono::sys_time<std::chrono::milliseconds> at{};
 };
-// A room's threads, as the server lists them: their roots, newest first
-// (each root's own message comes aside, with its summary).
-struct threads_listed {
-  conversation_id in;
-  std::vector<std::string> roots;
-};
 // The user directory searched: who it found for what was asked.
 struct people_found {
   account_id by;
@@ -391,7 +481,7 @@ struct event_missing {
 // change list -- changes_type(state), found by ADL in its folder (mux.proto.
 // <p>.changes), none where it gives none; and the plugins', in one list
 // (mux.plugins.changes) -- all one variant.
-using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::message_found_at, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved, change::threads_listed>;
+using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::message_found_at, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved>;
 namespace changes_defaults {
 constexpr type_tag<change_list<>> changes_type(const auto&) { return {}; }
 }  // namespace changes_defaults
@@ -645,15 +735,18 @@ class model {
     for (auto it = where.timeline.rbegin(); it != where.timeline.rend(); ++it)
       if (it->id == id)
         return &*it;
-    // Or an answer in a thread.
-    for (auto& [root, answers] : where.threads)
-      for (message& one : answers)
-        if (one.id == id)
-          return &one;
-    return nullptr;
+    // Or one a plugin keeps aside (a thread's answer).
+    message* out = nullptr;
+    each_aside_of(where, [&](std::vector<message>& list) {
+      for (message& one : list)
+        if (!out && one.id == id)
+          out = &one;
+    });
+    return out;
   }
-  // A thread's root, where it is held: in the timeline, or fetched aside.
-  static message* root_of(conversation& where, const std::string& root) {
+  // A message one kept aside is about (a thread's root), where it is held:
+  // in the timeline, or fetched aside.
+  static message* about_of(conversation& where, const std::string& root) {
     for (auto it = where.timeline.rbegin(); it != where.timeline.rend(); ++it)
       if (it->id == root)
         return &*it;
@@ -661,25 +754,26 @@ class model {
       return &found->second;
     return nullptr;
   }
-  // An answer come to a thread: the root's summary brought up to date -- one
-  // more where it came live, else as many as are held at least.
-  static void note_answer(conversation& where, const std::string& root, const message& answer, bool counted) {
-    message* kept = root_of(where, root);
-    if (!kept)
-      return;
-    thread_summary summary = kept->threaded.value_or(thread_summary{});
-    const auto& answers = where.threads[root];
-    summary.count = counted ? summary.count + 1 : std::max<std::int64_t>(summary.count, static_cast<std::int64_t>(answers.size()));
-    if (answer.at >= summary.last_at) {
-      summary.last_id = answer.id;
-      summary.last_sender = answer.sender;
-      summary.last_text = answer.body.plain;
-      summary.last_at = answer.at;
-    }
-    summary.participated = summary.participated || answer.outgoing;
-    kept->threaded = summary;
+  // The list a plugin keeps a message aside in, where one claims it (a
+  // thread's answer: its thread's), with the plugin's part of the chat:
+  // given to f. Whether one did.
+  template <class F>
+  static bool aside_of(conversation& where, const message& one, F&& f) {
+    bool claimed = false;
+    std::apply([&](auto&... part) {
+      const auto claim = [&](auto& mine) {
+        using aside_defaults::aside_list;
+        if (claimed)
+          return;
+        if (std::vector<message>* list = aside_list(mine, one)) {
+          claimed = true;
+          f(mine, *list);
+        }
+      };
+      (claim(part), ...);
+    }, where.plugins);
+    return claimed;
   }
-
   void on(const change::connection_changed& one) {
     this->in_account(one.account, [&](account& kept) { kept.state = one.state; });
   }
@@ -880,26 +974,28 @@ class model {
       for (auto& each : reaction_events)
         if (!std::ranges::contains(kept->reaction_events, each))
           kept->reaction_events.push_back(std::move(each));
-      // A thread's answers are in time's order, and one's own came first with
-      // this machine's time: its copy from the server, stamped by the server,
-      // may belong elsewhere -- put there. With a clock a minute behind, one's
-      // reply stood above the answer it replied to.
-      if (one.message.thread)
-        if (const auto found = where.threads.find(*one.message.thread); found != where.threads.end())
-          std::ranges::stable_sort(found->second, message_before);
-      if (!one.message.thread && moved)
+      // What a plugin keeps aside (a thread's answers) is in time's order,
+      // and one's own came first with this machine's time: its copy from the
+      // server, stamped by the server, may belong elsewhere -- put there.
+      // With a clock a minute behind, one's reply stood above the answer it
+      // replied to.
+      const bool aside = aside_of(where, one.message, [](auto&, std::vector<message>& list) { std::ranges::stable_sort(list, message_before); });
+      if (!aside && moved)
         std::ranges::stable_sort(where.timeline, message_before);
       return;
     }
-    // An answer in a thread: with the thread's, in time's order, not in the
-    // timeline; its root's summary brought up to date.
-    if (one.message.thread) {
-      auto& answers = where.threads[*one.message.thread];
-      place_local(one.message, answers, live);
-      answers.insert(std::ranges::upper_bound(answers, one.message, message_before), one.message);
-      note_answer(where, *one.message.thread, one.message, live);
+    // One a plugin keeps aside (a thread's answer): with its list, in time's
+    // order, not in the timeline; the message it is about told of it.
+    if (aside_of(where, one.message, [&](auto& part, std::vector<message>& list) {
+          place_local(one.message, list, live);
+          list.insert(std::ranges::upper_bound(list, one.message, message_before), one.message);
+          using aside_defaults::aside_about;
+          using aside_defaults::noted;
+          if (const std::string* about = aside_about(part, one.message))
+            if (message* told = about_of(where, *about))
+              noted(part, *told, one.message, live);
+        }))
       return;
-    }
     // In the timeline now: what was fetched for a quote is not needed.
     where.quoted.erase(one.message.id);
     // Keep a local echo after what was visible when it was sent, even if
@@ -1071,19 +1167,24 @@ class model {
       return;
     }
     std::erase_if(where.timeline, [&](const message& each) { return each.id == one.id; });
-    for (auto& [root, answers] : where.threads)
-      std::erase_if(answers, [&](const message& each) { return each.id == one.id; });
+    each_aside_of(where, [&](std::vector<message>& list) { std::erase_if(list, [&](const message& each) { return each.id == one.id; }); });
     if (where.latest && where.latest->id == one.id)
       where.latest.reset();
   });
   }
-  void on(const change::threads_listed& one) {
-    this->in_chat(one.in, [&](conversation& where) { where.thread_roots = one.roots; });
-  }
-  // A plugin's own: its part of the program's (mux.plugins.app), not the
-  // model's.
+  // A plugin's own: its part of the program's (mux.plugins.app) -- and,
+  // where it says so, its part of a chat changed (applied_to(change, chat):
+  // a room's threads listed, for one).
   template <plugin_change Change>
   void on(const Change&) {}
+  template <plugin_change Change>
+    requires requires(const Change& one, conversation& where) {
+      one.in;
+      applied_to(one, where);
+    }
+  void on(const Change& one) {
+    this->in_chat(one.in, [&](conversation& where) { applied_to(one, where); });
+  }
   void on(const change::message_acknowledged& one) {
     // An answer that finds no message -- not the one sent, not the server's
     // copy -- said: a message left "sending" while its answer came.
@@ -1098,8 +1199,7 @@ class model {
     });
     if (message_in(where, one.id)) {
       std::erase_if(where.timeline, [&](const message& kept) { return kept.id == one.local_id; });
-      for (auto& [root, answers] : where.threads)
-        std::erase_if(answers, [&](const message& kept) { return kept.id == one.local_id; });
+      each_aside_of(where, [&](std::vector<message>& list) { std::erase_if(list, [&](const message& kept) { return kept.id == one.local_id; }); });
       return;
     }
     if (message* kept = message_in(where, one.local_id)) {

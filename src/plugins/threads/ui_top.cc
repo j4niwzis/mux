@@ -20,6 +20,7 @@ import mux.core;
 import mux.ui.base;
 import mux.ui.messages;
 import mux.plugin.threads.types;
+import mux.plugin.threads.model;
 
 export namespace mux::plugins::threads {
 using namespace ::mux::ui;
@@ -30,7 +31,7 @@ using namespace ::mux::ui;
   return text;
 }
 [[nodiscard]] inline std::string thread_meta_of(const conversation& chat, const message& said) {
-  const thread_summary summary = said.threaded.value_or(thread_summary{});
+  const threads::summary summary = part_of(said).threaded.value_or(threads::summary{});
   std::string out = std::format("{} {}", summary.count, summary.count == 1 ? "reply" : "replies");
   if (!summary.last_id.empty())
     out += std::format(" \u00b7 {} \u00b7 {}: {}", clock_of(summary.last_at), sender_name(chat, summary.last_sender), flat_line(summary.last_text));

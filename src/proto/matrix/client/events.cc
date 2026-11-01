@@ -60,20 +60,6 @@ inline void carry_info(mux::attachment& carried, const auto& info) {
 using member_content = loom::ev::m_room_member_content_t;
 template <class Sink>
 void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where, bool sealed) {
-  // A thread's root: its summary, as the server counts it, where it has one
-  // (loom's). In an encrypted room the server's summary is no one's word:
-  // its text is not shown -- the thread's own messages are, decrypted.
-  const auto summary_of = [&]() -> std::optional<thread_summary> {
-    const auto said = loom::client::thread_summary_of(one);
-    if (!said)
-      return std::nullopt;
-    return thread_summary{.count = said->count,
-                          .last_id = said->latest_id.value_or(""),
-                          .last_sender = said->latest_sender.value_or(""),
-                          .last_text = this->encrypted_room(in.id) ? std::string() : said->latest_body.value_or(""),
-                          .last_at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(said->latest_ts.value_or(0))),
-                          .participated = said->participated};
-  };
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
   // A verification step in the room: taken by the verification, not shown.
   if (this->whole().verification_in_room(in, one, where))
@@ -250,14 +236,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       made.body.plain = "Unsupported message (" + (content.msgtype.empty() ? std::string("no msgtype") : content.msgtype) + ")";
     if (relates && relates->m_in_reply_to)
       made.replies_to = relates->m_in_reply_to->event_id;
-    // In a thread: its root. Its answer to the thread's latest event, where
-    // it falls back, is for clients that do not know threads -- not one.
-    if (relates)
-      if ((made.thread = loom::client::thread_of(*relates)) && relates->is_falling_back.value_or(false))
-        made.replies_to.reset();
-    // A thread's root: its summary, as the server counts it.
-    if (auto summary = summary_of())
-      made.threaded = std::move(*summary);
+    // What the plugins make of it -- a thread's answer, a root's summary.
+    plugins_make(sink_plugins_tag{}, one, relates, this->encrypted_room(in.id), made);
     // A message for the user, come as it happened: listed, as Telegram's @.
     // Who it mentions, as m.mentions says; before that, the user's ID in it.
     const bool live = (!telling_history_ && placed_as_news(where));
@@ -353,8 +333,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       const std::optional<std::string> why = because.content ? because.content->reason : std::nullopt;
       message made{.in = in, .id = one.event_id, .sender = one.sender, .at = at, .body = {},
                    .redacted = true, .redacted_by = by, .redacted_reason = why, .outgoing = one.sender == id_.address};
-      if (auto summary = summary_of())
-        made.threaded = std::move(*summary);
+      plugins_make(sink_plugins_tag{}, one, std::nullopt, this->encrypted_room(in.id), made);
       this->added(std::move(made), where, sealed);
       sink_(change::message_redacted{in, one.event_id, by, why});
     };

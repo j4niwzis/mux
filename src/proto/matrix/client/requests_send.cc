@@ -399,27 +399,6 @@ void account<Sink>::send_text(const conversation_id& in, const std::string& room
 
 
 template <class Sink>
-void account<Sink>::list_threads(std::string room) {
-  this->spawn_guarded([this, room = std::move(room)] {
-    if (!api_)
-      return;
-    using asked = loom::cs::get_thread_roots;
-    auto got = perform(*api_, asked{.room_id = room, .include = asked::include_t{asked::include_values::all{}}, .limit = 50});
-    if (!got) {
-      log(id_, "the threads of {}: {}", room, got.error().said());
-      return;
-    }
-    const conversation_id in{id_, room};
-    std::vector<std::string> roots;
-    for (const auto& one : got->chunk) {
-      roots.push_back(one.event_id);
-      this->event(in, one, placement::aside{});
-    }
-    sink_(change::threads_listed{in, std::move(roots)});
-  });
-}
-
-template <class Sink>
 void account<Sink>::load_thread(std::string room, std::string root) {
   // Its newest page only, as a chat opens at its newest: the rest as its
   // panel reaches its top (load_thread_older). Five pages of a hundred

@@ -22,13 +22,7 @@ struct part {
     const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
     if (!chat)
       return;
-    const auto in_threads = chat->threads | std::views::values | std::views::join;
-    const auto is_it = [&](const message& said) { return said.id == one.message; };
-    const message* found = nullptr;
-    if (const auto at = std::ranges::find_if(chat->timeline, is_it); at != chat->timeline.end())
-      found = &*at;
-    else if (const auto there = std::ranges::find_if(in_threads, is_it); there != std::ranges::end(in_threads))
-      found = &*there;
+    const message* found = ui::held_message(*chat, one.message);
     if (!found || found->versions.empty())
       return;
     ui::show(*s_->showing, std::optional(shown{chat->id, *found, &*s_->model}));

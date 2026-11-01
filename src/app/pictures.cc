@@ -261,8 +261,8 @@ class pictures_part {
           if (const auto open = s_->thread_open()) {
             if (const message* root = mux::ui::held_message(one, *open))
               in_thread.push_back(root);
-            if (const auto found = one.threads.find(*open); found != one.threads.end())
-              std::ranges::copy(found->second | std::views::transform([](const message& answer) { return &answer; }),
+            if (const std::vector<message>* answers = mux::aside_for(one, *open))
+              std::ranges::copy(*answers | std::views::transform([](const message& answer) { return &answer; }),
                                 std::back_inserter(in_thread));
             const auto place = [&](const std::optional<std::string>& id) -> std::optional<std::size_t> {
               if (!id)

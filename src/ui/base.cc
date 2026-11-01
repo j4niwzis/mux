@@ -769,9 +769,13 @@ struct mux_paint : scene::Painting {
 [[nodiscard]] inline const message* held_message(const conversation& chat, std::string_view id) {
   if (const auto it = std::ranges::find(chat.timeline, id, &message::id); it != chat.timeline.end())
     return &*it;
-  for (const auto& [root, answers] : chat.threads)
-    if (const auto it = std::ranges::find(answers, id, &message::id); it != answers.end())
-      return &*it;
+  const message* aside = nullptr;
+  each_aside_of(chat, [&](const std::vector<message>& list) {
+    if (const auto it = std::ranges::find(list, id, &message::id); !aside && it != list.end())
+      aside = &*it;
+  });
+  if (aside)
+    return aside;
   if (const auto aside = chat.quoted.find(std::string(id)); aside != chat.quoted.end())
     return &aside->second;
   return nullptr;

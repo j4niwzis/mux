@@ -13,6 +13,7 @@ import mux.composition;
 import mux.core;
 import mux.ui.base;
 import mux.plugin.threads.types;
+import mux.plugin.threads.model;
 
 export namespace mux::plugins::threads {
 using namespace ::mux::ui;
@@ -48,6 +49,31 @@ struct send_in_thread {
 MUX_INLINE_IN_RELEASE auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
   return SKIFF_NAMED(threads_button, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
                                                             icon_button(colours, icon::threads{}, sends<request::toggle_threads>{})));
+}
+
+// Keep the action on a container: Text's own pointer handler is for text
+// selection and does not run an onClick inherited around the text itself.
+MUX_INLINE_IN_RELEASE auto message_thread_link(const palette& colours, std::string root, std::string line) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(message_thread_link, c::onClick(request::open_thread{std::move(root)},
+      c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 0.0f, 0.0f, 0.0f},
+                            .hoverBackground = colours.chosen}),
+          c::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(line), 13.0f, colours.accent, true)))),
+      "Open thread"));
+}
+using message_thread_link_t = decltype(message_thread_link(std::declval<const palette&>(), std::string{}, std::string{}));
+// A thread's root: how many answers, the latest, as Element shows it under
+// the message, a line of its own (contract::message_lines); pressed, the
+// thread.
+inline std::optional<message_thread_link_t> extend(contract::message_lines, type_tag<feature>, const trailer_facts& facts) {
+  const summary now = part_of(facts.said).threaded.value_or(summary{});
+  if (now.count <= 0)
+    return std::nullopt;
+  std::string line = std::format("\U0001F4AC {} {}", now.count, now.count == 1 ? "reply" : "replies");
+  if (!now.last_text.empty())
+    line += std::format(" \u00b7 {}: {}", sender_name(facts.in, now.last_sender), now.last_text);
+  std::ranges::replace(line, '\n', ' ');
+  return message_thread_link(facts.colours, facts.said.id, std::move(line));
 }
 
 }  // namespace mux::plugins::threads

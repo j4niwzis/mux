@@ -110,9 +110,10 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
   const mux::message* said = mux::ui::held_message(chat, id);
   if (said == nullptr)
     return false;
-  const std::optional<std::string> thread = said->thread                                    ? said->thread
-                                            : said->threaded && said->threaded->count > 0 ? std::optional<std::string>(said->id)
-                                                                                          : std::nullopt;
+  const std::optional<std::string> about = mux::about_of(chat, *said);
+  const std::optional<std::string> thread = about                       ? about
+                                            : mux::has_aside(chat, *said) ? std::optional<std::string>(said->id)
+                                                                          : std::nullopt;
   if (!thread)
     return false;
   auto& screen = root();
@@ -153,7 +154,8 @@ void app::apply(const request::jump_to_message& one) {
     if (const mux::conversation* chat = model->find(*chosen))
       if (const mux::message* said = mux::ui::held_message(*chat, one.id)) {
         auto& screen = root();
-        const std::optional<std::string> thread = said->thread ? said->thread
+        const std::optional<std::string> about = mux::about_of(*chat, *said);
+        const std::optional<std::string> thread = about ? about
                                                   : shared.thread_open() == said->id ? std::optional<std::string>(said->id)
                                                                                       : std::nullopt;
         if (thread) {

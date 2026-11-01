@@ -22,7 +22,7 @@ export namespace mux::logic {
     }) | std::views::transform([](const message& one) { return &one; });
   };
   auto ordered = chosen(chat.timeline) | std::ranges::to<std::vector>();
-  ordered.append_range(chosen(chat.threads | std::views::values | std::views::join));
+  each_aside_of(chat, [&](const std::vector<message>& list) { ordered.append_range(chosen(list)); });
   ordered.append_range(chosen(chat.quoted | std::views::values));
   std::set<std::string_view> seen;
   std::erase_if(ordered, [&](const message* one) { return !seen.insert(one->id).second; });

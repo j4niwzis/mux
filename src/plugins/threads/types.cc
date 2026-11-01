@@ -33,6 +33,8 @@ consteval bool provides(contract::chat_header, type_tag<feature>) { return true;
 consteval bool provides(contract::beside_panels, type_tag<feature>) { return true; }
 // Reply in thread, in a message's menu.
 consteval bool provides(contract::message_menu, type_tag<feature>) { return true; }
+// A root's answers under it, a line of its own (contract::message_lines).
+consteval bool provides(contract::message_lines, type_tag<feature>) { return true; }
 consteval bool provides(contract::window_state, type_tag<feature>) { return true; }
 constexpr type_tag<shown> state_type(contract::window_state, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }

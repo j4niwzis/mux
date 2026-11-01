@@ -254,8 +254,8 @@ class outbox_part {
     if (files_thread_) {
       std::string latest = *files_thread_;
       if (const mux::conversation* chat = s_->model->find(*chosen))
-        if (const auto found = chat->threads.find(*files_thread_); found != chat->threads.end() && !found->second.empty())
-          latest = found->second.back().id;
+        if (const std::vector<mux::message>* answers = mux::aside_for(*chat, *files_thread_); answers && !answers->empty())
+          latest = answers->back().id;
       thread = mux::thread_place{*files_thread_, std::move(latest)};
       if (s_->thread_open() == files_thread_)
         reply_to = s_->showing->look<mux::ui::chat_shown>()->thread_answer;

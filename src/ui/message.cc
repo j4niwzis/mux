@@ -238,6 +238,27 @@ struct plugin_trailers<plugin_list<Features...>> {
   }
 };
 using trailers_t = plugin_trailers<composition::providers<contract::message_trailers, enabled_plugins>>;
+// What plugins put in a message's bubble as lines of their own, after its
+// trailers (contract::message_lines) -- a thread's root's answers -- in
+// their order, each in a slot of its own: empty where it has nothing to say.
+template <class List>
+struct plugin_lines;
+template <class... Features>
+struct plugin_lines<plugin_list<Features...>> {
+  template <class Feature>
+  static auto made(const trailer_facts& facts) -> decltype(extend(contract::message_lines{}, type_tag<Feature>{}, facts)) {
+    return extend(contract::message_lines{}, type_tag<Feature>{}, facts);
+  }
+  using nodes_t = std::tuple<std::optional<composition::node_t<decltype(made<Features>(std::declval<const trailer_facts&>()))>>...>;
+  static nodes_t built(const trailer_facts& facts) {
+    nodes_t slots;
+    [&]<std::size_t... At>(std::index_sequence<At...>) {
+      (composition::put(std::get<At>(slots), made<Features>(facts)), ...);
+    }(std::index_sequence_for<Features...>{});
+    return slots;
+  }
+};
+using lines_t = plugin_lines<composition::providers<contract::message_lines, enabled_plugins>>;
 // The message a message's head shows, as its plugin says (head_waits_for):
 // fetched where it is not there; the row made again once it is.
 template <class... Features>
@@ -485,7 +506,7 @@ struct named_rooms {
 // The body's parts, by where they are in it.
 namespace bubble_part {
 inline constexpr std::size_t frost = 0, name = 1, forwarded = 2, quote = 3, picture = 4, their_sticker = 5, album = 6, file = 7,
-                             text = 8, blocks = 9, cards = 10, trailers = 11, thread = 12, lines = 13, their_view = 14, time = 15,
+                             text = 8, blocks = 9, cards = 10, trailers = 11, plugin_lines = 12, lines = 13, their_view = 14, time = 15,
                              inline_time = 16;
 }
 template <std::size_t Part> [[nodiscard]] auto& part_of(auto& body) { return std::get<Part>(body.fParts); }
@@ -798,17 +819,6 @@ struct swipe_shown {
   }
 };
 
-// Keep the action on a container: Text's own pointer handler is for text
-// selection and does not run an onClick inherited around the text itself.
-MUX_INLINE_IN_RELEASE auto message_thread_link(const palette& colours, std::string root, std::string line) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(message_thread_link, c::onClick(request::open_thread{std::move(root)},
-      c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 0.0f, 0.0f, 0.0f},
-                            .hoverBackground = colours.chosen}),
-          c::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(line), 13.0f, colours.accent, true)))),
-      "Open thread"));
-}
-using message_thread_link_t = decltype(message_thread_link(std::declval<const palette&>(), std::string{}, std::string{}));
 
 // The bubble: a column of the name, the forward, the quote, the picture or
 // file or album, the text and its pieces, the preview, the reactions, the
@@ -1038,17 +1048,6 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
     rules.base_min = 0.0f;
     spec.minWidth = 0.0f;
   }
-  // A thread's root: how many answers, the latest, as Element shows it under
-  // the message; pressed, the thread.
-  std::optional<message_thread_link_t> thread;
-  if (said.threaded && said.threaded->count > 0) {
-    const thread_summary& summary = *said.threaded;
-    std::string line = std::format("\U0001F4AC {} {}", summary.count, summary.count == 1 ? "reply" : "replies");
-    if (!summary.last_text.empty())
-      line += std::format(" · {}: {}", sender_name(in, summary.last_sender), summary.last_text);
-    std::ranges::replace(line, '\n', ' ');
-    thread.emplace(message_thread_link(colours, said.id, std::move(line)));
-  }
   // What its protocol says under it, and its node of its own.
   auto lines = proto::message_lines(protocol_state_of(*n.shared, in.id.account), in, said) | std::views::transform([&](const proto::part::line& one) {
                  return c::styled({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}},
@@ -1116,7 +1115,8 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
       std::move(rules),
       bubble_box(c::vbox(2.0f, spec), std::move(frost), std::move(name), specced(plate, std::move(forwarded)), specced(plate, std::move(quote)), faded(images, std::move(picture)),
                 std::move(their_sticker), faded(images, std::move(album)), std::move(file), std::move(text), std::move(blocks), std::move(cards),
-                trailers_t::built(trailer_facts{colours, looks, said, in, said.id}), std::move(thread), std::move(lines),
+                trailers_t::built(trailer_facts{colours, looks, said, in, said.id}),
+                lines_t::built(trailer_facts{colours, looks, said, in, said.id}), std::move(lines),
                 std::move(their_view), std::move(time), std::move(inline_time)));
 }
 // Who has read a message: those whose receipt is for it or for one after

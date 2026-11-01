@@ -53,7 +53,8 @@ struct message_line {
   std::optional<std::string> plain;
   std::optional<std::string> html;
   std::optional<std::string> reply;
-  std::optional<std::string> thread;
+  // What it is kept aside about, by a plugin (a thread's answer: its root).
+  std::optional<std::string> about;
   std::optional<bool> edited;
   std::optional<std::string> latest_edit_event;
   // Its edit history: what it said before each edit, and until when.
@@ -566,7 +567,8 @@ class message_store {
       one.body.plain = o.plain.value_or("");
       one.body.html = std::move(o.html);
       one.replies_to = std::move(o.reply);
-      one.thread = std::move(o.thread);
+      if (o.about)
+        mux::restore_about(one, *o.about);
       one.edited = o.edited.value_or(false);
       one.latest_edit_event = o.latest_edit_event.value_or("");
       one.versions = o.versions.value_or(std::vector<store_file::message_line::version_line>{}) | std::views::transform([&](const store_file::message_line::version_line& v) {
@@ -644,7 +646,7 @@ class message_store {
         .plain = one.body.plain,
         .html = one.body.html,
         .reply = one.replies_to,
-        .thread = one.thread,
+        .about = mux::said_about(one),
         .edited = store_file::flag(one.edited),
         .latest_edit_event = one.latest_edit_event.empty() ? std::nullopt : std::optional(one.latest_edit_event),
         .versions = one.versions.empty()

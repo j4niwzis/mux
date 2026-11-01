@@ -163,12 +163,13 @@ struct timeline_rows {
     const conversation* chat = chat_of(now, told);
     if (!chat)
       return {};
-    if (!told.thread && told.filter.shows(room_event::thread_answers{}) && !chat->threads.empty())
+    bool kept_aside = false;
+    each_aside_of(*chat, [&](const std::vector<message>& list) { kept_aside = kept_aside || !list.empty(); });
+    if (!told.thread && told.filter.shows(room_event::thread_answers{}) && kept_aside)
       return {.merged = &merged_of(now, told, *chat)};
     if (!told.thread)
       return {.timeline = &chat->timeline};
-    const auto found = chat->threads.find(*told.thread);
-    return {.root = held_message(*chat, *told.thread), .answers = found == chat->threads.end() ? nullptr : &found->second};
+    return {.root = held_message(*chat, *told.thread), .answers = aside_for(*chat, *told.thread)};
   }
   // The chat's timeline and its threads' answers in one order, made again
   // only where the chat changed since (its revision): pointers into where it
@@ -191,8 +192,10 @@ struct timeline_rows {
     // stood under one sent after it (the user's) -- and the answers, in
     // time's order, each put before the first of it that comes after them.
     const auto when = [](const message* said) { return said->local_order.value_or(said->at); };
-    auto answers = chat.threads | std::views::values | std::views::join |
-                   std::views::transform([](const message& said) { return &said; }) | std::ranges::to<std::vector>();
+    std::vector<const message*> answers;
+    each_aside_of(chat, [&](const std::vector<message>& list) {
+      answers.append_range(list | std::views::transform([](const message& said) { return &said; }));
+    });
     std::ranges::stable_sort(answers, {}, when);
     one.all.clear();
     one.all.reserve(chat.timeline.size() + answers.size());

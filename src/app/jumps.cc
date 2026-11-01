@@ -201,8 +201,8 @@ class jumps_part {
     const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
     if (!chat || !shown.thread)
       return false;
-    const auto answers = chat->threads.find(*shown.thread);
-    if (id != *shown.thread && (answers == chat->threads.end() || !std::ranges::contains(answers->second, id, &mux::message::id)))
+    const std::vector<mux::message>* answers = mux::aside_for(*chat, *shown.thread);
+    if (id != *shown.thread && (!answers || !std::ranges::contains(*answers, id, &mux::message::id)))
       return false;
     thread_aim_ = {.key = id, .number = ++number_};
     this->tell_thread();
@@ -233,9 +233,8 @@ class jumps_part {
       // their emoji, and a long thread lagged.
       const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
       const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
-      const auto answers = chat && shown.thread ? chat->threads.find(*shown.thread) : decltype(chat->threads.end()){};
-      if (!chat || !shown.thread || answers == chat->threads.end() ||
-          services::nears_end(answers->second, s_->thread_pictures_span, one.top, one.bottom))
+      const std::vector<mux::message>* answers = chat && shown.thread ? mux::aside_for(*chat, *shown.thread) : nullptr;
+      if (!answers || services::nears_end(*answers, s_->thread_pictures_span, one.top, one.bottom))
         s_->ui.pictures_due = true;
     }
   }
@@ -424,10 +423,11 @@ class jumps_part {
       }
       return;
     }
-    if (const mux::message* held = mux::ui::held_message(*chat, jump.to); held && held->thread) {
-      // Come as an answer in a thread: kept with its thread, never in the
-      // timeline. Its thread opened.
-      asked(request::open_thread{*held->thread});
+    const mux::message* held = mux::ui::held_message(*chat, jump.to);
+    if (const auto about = held ? mux::about_of(*chat, *held) : std::nullopt) {
+      // Come as one kept aside (an answer in a thread): never in the
+      // timeline. What it is about opened.
+      asked(request::open_thread{*about});
       going_.reset();
       this->tell();
       return;
@@ -625,8 +625,8 @@ class jumps_part {
     if (in_thread && shown.thread) {
       if (const mux::message* root = mux::ui::held_message(*chat, *shown.thread))
         all.push_back(root);
-      if (const auto answers = chat->threads.find(*shown.thread); answers != chat->threads.end())
-        all.append_range(answers->second | std::views::transform([](const mux::message& one) { return &one; }));
+      if (const std::vector<mux::message>* answers = mux::aside_for(*chat, *shown.thread))
+        all.append_range(*answers | std::views::transform([](const mux::message& one) { return &one; }));
     } else {
       all = chat->timeline | std::views::transform([](const mux::message& one) { return &one; }) | std::ranges::to<std::vector>();
     }

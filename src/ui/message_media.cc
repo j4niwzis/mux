@@ -110,16 +110,18 @@ MUX_INLINE_IN_RELEASE auto picture_box(const palette& colours, const std::string
                    c::while_coming(c::vbox(0.0f, {.fill = true}), std::move(picture), std::move(loader)),
                    std::move(video), time_pill(std::move(look.time))));
 }
-// The picture fitted: its own type, for an album to shrink its cells alike.
-using picture_fitted_t =
-    skiff::compose::Fitted<picture_ratio, decltype(picture_box(std::declval<const palette&>(), std::string(), picture_look{}))>;
+// The picture fitted: its own type, for an album to shrink its cells alike
+// -- found by it (forEachNode) in every build, so its box built where it is
+// said (made_now), not under the rules the album is built under.
+using picture_fitted_t = skiff::compose::Fitted<
+    picture_ratio, decltype(skiff::compose::made_now(picture_box(std::declval<const palette&>(), std::string(), picture_look{})))>;
 MUX_INLINE_IN_RELEASE auto picture_view(const palette& colours, std::string source, int width, int height, picture_look look, media_open open) {
   namespace c = skiff::compose;
   const char* label = look.sticker ? "Sticker" : look.video_ms ? "Play video" : "Open picture";
   const skiff::compose::Fit fit{.width = static_cast<float>(width), .height = static_cast<float>(height),
                                 .most = look.sticker ? kStickerMost : kPictureMost, .least = look.sticker ? 0.0f : kPictureLeast,
                                 .cell = look.cell};
-  return SKIFF_NAMED(picture_view, c::onClick(std::move(open), picture_fitted_t(fit, picture_ratio{}, picture_box(colours, source, std::move(look))), label));
+  return SKIFF_NAMED(picture_view, c::onClick(std::move(open), picture_fitted_t(fit, picture_ratio{}, c::made_now(picture_box(colours, source, std::move(look)))), label));
 }
 using picture_view_t = decltype(picture_view(std::declval<const palette&>(), std::string(), 0, 0, picture_look{}, media_open{}));
 

@@ -27,8 +27,8 @@ MUX_INLINE_IN_RELEASE auto motion_settings_view(const palette& colours) {
   using field = skiff::model::Field<&kept::motion>;
   return SKIFF_NAMED(motion_settings_view, skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      wrapped(skiff::compose::styled({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}},
-          note_text(colours, "How much the window moves. Reduced keeps the small movements, such as a section unfolding, and shows panels at once."))),
+      skiff::compose::styled({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}},
+          wrapped(note_text(colours, "How much the window moves. Reduced keeps the small movements, such as a section unfolding, and shows panels at once."))),
       skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "Full", config::motion::full{})),
       skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "Reduced", config::motion::reduced{})),
       skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "None", config::motion::none{}))));
@@ -67,7 +67,7 @@ MUX_INLINE_IN_RELEASE auto rendering_view(const palette& colours) {
           skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
           skiff::compose::bound<field>(widgets::ChoiceRowField<config::renderer_t>(colours.widgets, "OpenGL (the graphics card)", config::renderer::opengl{})),
           skiff::compose::bound<field>(widgets::ChoiceRowField<config::renderer_t>(colours.widgets, "Software (the processor)", config::renderer::software{})),
-          wrapped(skiff::compose::styled({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}}, note_text(colours, "Takes effect when mux starts again.")))),
+          skiff::compose::styled({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}}, wrapped(note_text(colours, "Takes effect when mux starts again.")))),
       frame_settings_view(colours)));
 }
 

@@ -27,11 +27,10 @@ struct library_info {
 };
 #include "about.inc"
 
-template <class Node> auto about_visible(bool visible, Node node) { node.setVisible(visible); return node; }
 MUX_INLINE_IN_RELEASE auto about_words(const palette& colours, std::string text) {
-  return wrapped(skiff::compose::styled(
+  return skiff::compose::styled(
       {.fillX = true, .margin = {8.0f, 20.0f, 8.0f, 20.0f}},
-      nodes::Text(std::move(text), 14.0f, colours.text)));
+      wrapped(nodes::Text(std::move(text), 14.0f, colours.text)));
 }
 inline library_info library_details(const library_info& info) {
   auto result = info;
@@ -91,8 +90,8 @@ MUX_INLINE_IN_RELEASE auto library_view(const palette& colours, std::string_view
       page_header<sends<open_about>, sends<request::close_settings>>(colours, std::string(library.name), {}, {}, true, true),
       about_words(colours, std::format("Version: {}\nRevision: {}\nLicense: {}", library.version,
                                      library.revision.empty() ? "Not reported" : library.revision, library.license)),
-      about_visible(!library.repository.empty(), settings_link(colours, "Repository", icon::gear{}, request::open_url{std::string(library.repository)})),
-      about_visible(!dependencies.empty(), about_words(colours, "Dependencies")),
+      skiff::compose::visible(!library.repository.empty(), settings_link(colours, "Repository", icon::gear{}, request::open_url{std::string(library.repository)})),
+      skiff::compose::visible(!dependencies.empty(), about_words(colours, "Dependencies")),
       skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(dependencies)),
       about_words(colours, library.license_text.empty() ? std::format("License: {}\nLicense text was not supplied by the installed package.", library.license)
                                                      : std::string(library.license_text))));

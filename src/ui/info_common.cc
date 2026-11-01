@@ -83,10 +83,10 @@ MUX_INLINE_IN_RELEASE auto id_line(const palette& colours, std::string text, std
           c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
               .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen,
               .focusBackground = colours.chosen}),
-          wrapped(c::styled({.fillX = true}, nodes::Text(std::move(text), 14.0f, colours.accent, false, true))),
+          c::styled({.fillX = true}, wrapped(nodes::Text(std::move(text), 14.0f, colours.accent, false, true))),
           c::text_for<id_feedback>([label, a_link](const id_feedback& now) {
               return !now.copied ? label : a_link ? label + " · link copied, with its servers" : label + " · copied";
-            }, wrapped(c::styled({.fillX = true}, nodes::Text(label, 13.0f, colours.accent))))), "Copy " + label)));
+            }, c::styled({.fillX = true}, wrapped(nodes::Text(label, 13.0f, colours.accent))))), "Copy " + label)));
 }
 using id_line_t = decltype(id_line(std::declval<const palette&>(), "", ""));
 

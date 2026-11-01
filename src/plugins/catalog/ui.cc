@@ -22,8 +22,8 @@ export namespace mux::plugins::catalog {
 using namespace ::mux::ui;
 
 MUX_INLINE_IN_RELEASE auto catalog_words(const palette& colours, std::string text, float size = 14.0f) {
-  return wrapped(skiff::compose::styled({.fillX = true, .margin = {8.0f, 20.0f, 8.0f, 20.0f}},
-                                        nodes::Text(std::move(text), size, colours.text)));
+  return skiff::compose::styled({.fillX = true, .margin = {8.0f, 20.0f, 8.0f, 20.0f}},
+                                        wrapped(nodes::Text(std::move(text), size, colours.text)));
 }
 // Whose a plugin is.
 [[nodiscard]] inline std::string_view origin_of(const plugin_info& one) { return one.bundled ? "mux" : "third party"; }

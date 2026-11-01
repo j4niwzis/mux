@@ -868,8 +868,8 @@ MUX_INLINE_IN_RELEASE auto replaced_room_bar(const palette& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(replaced_room_bar, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
       .minHeight = 54.0f, .padding = {12.0f, 12.0f, 12.0f, 12.0f}}),
-      wrapped(c::styled({.fillX = true},
-          nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim))),
+      c::styled({.fillX = true},
+          wrapped(nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim))),
       c::styled({.height = 30.0f}, primary(widgets::Button<sends<request::open_replacement>>(
           colours.widgets, "Join New Room", {})))));
 }

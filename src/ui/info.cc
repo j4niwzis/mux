@@ -76,9 +76,10 @@ struct info_view {
 // is; the tiles; what it is about, its addresses; its ID.
 MUX_INLINE_IN_RELEASE auto info_head(const palette& colours, const info_view& shown) {
   namespace c = skiff::compose;
-  auto description = wrapped(c::styled({.fillX = true}, nodes::Text(shown.topic, 14.0f, colours.text)));
+  auto description = wrapped(nodes::Text(shown.topic, 14.0f, colours.text));
   description.setSelectable(true);
   description.setLinks(link_spans_in(shown.topic), colours.accent);
+  description.apply({.fillX = true});
   return SKIFF_NAMED(info_head, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::row(c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}), nodes::justify::end{}),
                    icon_button(colours, icon::close{}, sends<request::toggle_info>{})),

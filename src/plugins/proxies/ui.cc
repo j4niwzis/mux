@@ -39,8 +39,8 @@ MUX_INLINE_IN_RELEASE auto list_view(const palette& colours, const std::vector<c
           page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Proxies", {}, {}, with_back, true)),
       skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)),
       settings_link(colours, "Add proxy", icon::plus{}, add{}),
-      skiff::compose::visible(profiles.empty(), wrapped(skiff::compose::styled({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}},
-          note_text(colours, "No proxies yet. Accounts connect directly."))))));
+      skiff::compose::visible(profiles.empty(), skiff::compose::styled({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}},
+          wrapped(note_text(colours, "No proxies yet. Accounts connect directly."))))));
 }
 MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const ui_needs& n, const list_page& page) {
   return list_view(*n.colours, page.all, page.with_back);
@@ -94,8 +94,8 @@ MUX_INLINE_IN_RELEASE auto editor_view(const palette& colours, const std::option
       model_field<&draft::password>(colours, "Password", "none", true, scene::Margin::horizontal(16.0f)),
       model_field<&draft::resolver>(colours, "XMPP SRV lookups: nameserver", "the system's; an IP address, or off", false, scene::Margin::horizontal(16.0f)),
       skiff::compose::text_for<shown>([](const shown& now) { return now.error; },
-          wrapped(skiff::compose::styled({.fillX = true, .margin = scene::Margin::horizontal(16.0f)},
-                                        nodes::Text("", 13.0f, colours.error)))),
+          skiff::compose::styled({.fillX = true, .margin = scene::Margin::horizontal(16.0f)},
+                                        wrapped(nodes::Text("", 13.0f, colours.error)))),
       skiff::compose::row(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
           .margin = scene::Margin::horizontal(16.0f)}),
           // The program's buttons, their labels in their middle.

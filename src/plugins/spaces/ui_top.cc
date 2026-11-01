@@ -266,11 +266,11 @@ auto side_space_popup(const auto& colours) {
   using facts = side_space_menu_facts;
   using field = skiff::model::Field<&space_menu_state::open>;
   using menu = decltype(side_space_menu(colours, std::string{}, config::space_item_t{}, std::string{}));
-  using content = c::Box<menu>;
+  // The menu mounted as it is built (a builder: the mount names what it
+  // builds), as big as it is.
   auto box = c::projected<field>([](const std::optional<facts>& now) { return now; },
-      c::mount<content, facts>([&colours](const facts& now) {
-        return std::tuple{c::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
-            side_space_menu(colours, now.account, now.item, now.name)};
+      c::mount<menu, facts>([&colours](const facts& now) {
+        return std::tuple{side_space_menu(colours, now.account, now.item, now.name)};
       }, {.autoSize = scene::axes::kBoth}, true));
   return SKIFF_NAMED(side_space_popup, c::placed_at<field>([](const std::optional<facts>& now) {
     return now ? std::optional(now->at) : std::nullopt;

@@ -437,11 +437,11 @@ auto side_chat_popup(const auto& colours) {
   using field = skiff::model::Field<&side_menu_state::chat>;
   using menu = decltype(side_chat_menu(colours, conversation_id{}, std::string{}, account_id{},
       std::vector<account_id>{}, config::theme_t{}));
-  using content = c::Box<menu>;
+  // The menu mounted as it is built (a builder: the mount names what it
+  // builds), as big as it is.
   auto box = c::projected<field>([](const std::optional<facts>& now) { return now; },
-      c::mount<content, facts>([&colours](const facts& now) {
-        return std::tuple{c::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
-            side_chat_menu(colours, now.chat, now.name, now.listing, now.accounts, now.theme)};
+      c::mount<menu, facts>([&colours](const facts& now) {
+        return std::tuple{side_chat_menu(colours, now.chat, now.name, now.listing, now.accounts, now.theme)};
       }, {.autoSize = scene::axes::kBoth}, true));
   return SKIFF_NAMED(side_chat_popup, c::placed_at<field>([](const std::optional<facts>& now) {
     return now ? std::optional(now->at) : std::nullopt;

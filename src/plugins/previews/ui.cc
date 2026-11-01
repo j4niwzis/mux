@@ -78,8 +78,10 @@ MUX_INLINE_IN_RELEASE auto page_preview(const palette& colours, const link_previ
 struct previewed_link {
   std::string url;
 };
-using card = skiff::compose::Marked<previewed_link, decltype(page_preview(std::declval<const palette&>(), std::declval<const link_preview&>(),
-                                                                         std::string()))>;
+// A node, asked of where it is (pressed_link): built where it is said
+// (made_now), marked with its link.
+using card = skiff::compose::Marked<previewed_link, decltype(skiff::compose::made_now(page_preview(
+                                                        std::declval<const palette&>(), std::declval<const link_preview&>(), std::string())))>;
 
 // Its card in a message's bubble (mux.ui.messages:message): the first
 // link's preview, where the chat shows them and it has come.
@@ -89,7 +91,7 @@ inline std::optional<card> extend(contract::message_cards, type_tag<feature>, co
   const auto found = facts.now->previews.find(*facts.link);
   if (found == facts.now->previews.end())
     return std::nullopt;
-  return card(page_preview(facts.colours, found->second, *facts.link), previewed_link{*facts.link});
+  return card(skiff::compose::made_now(page_preview(facts.colours, found->second, *facts.link)), previewed_link{*facts.link});
 }
 // The link a press on it is on, for the message's menu.
 inline std::optional<std::string> pressed_link(contract::message_cards, type_tag<feature>, const card& shown, float x, float y) {

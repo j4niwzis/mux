@@ -999,7 +999,7 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
     else if (pieces[i].card)
       blocks.emplace_back(std::in_place_type<link_piece_m>, marked_kind<link_kind>(link_piece(colours, *pieces[i].card, pieces[i + 1], now, quote_colour)));
     else
-      blocks.emplace_back(std::in_place_type<code_piece_m>, code_piece(colours, pieces[i], pieces[i + 1], quote_colour, quote_colour, colours.text));
+      blocks.emplace_back(std::in_place_type<code_piece_m>, marked_kind<code_kind>(code_piece(colours, pieces[i], pieces[i + 1], quote_colour, quote_colour, colours.text)));
   }
   auto text = c::onClickAt(quote_pressed{said.id, said.replies_to},
                            c::applied<message_marks>([id = said.id](const message_marks& marks) {

@@ -679,13 +679,13 @@ using disclosure_piece_t = decltype(disclosure_piece(std::declval<const palette&
 struct code_kind {};
 struct link_kind {};
 struct disclosure_kind {};
-using code_piece_m = skiff::compose::Marked<code_kind, code_piece_t>;
-// A link's and a disclosure's hold pieces (a card's face): builders, marked
-// as they are built.
+// Every piece a builder (a code block's too, a column of it and its words),
+// marked as it is built.
 template <class Kind, class B>
 auto marked_kind(B piece) {
   return skiff::compose::lifted([](auto made) { return skiff::compose::Marked<Kind, decltype(made)>(std::move(made)); }, std::move(piece));
 }
+using code_piece_m = decltype(marked_kind<code_kind>(std::declval<code_piece_t>()));
 using link_piece_m = decltype(marked_kind<link_kind>(std::declval<link_piece_t>()));
 using disclosure_piece_m = decltype(marked_kind<disclosure_kind>(std::declval<disclosure_piece_t>()));
 // A block of a message, after its words: a variant one of whose kinds holds

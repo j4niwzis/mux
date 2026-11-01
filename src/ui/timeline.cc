@@ -382,7 +382,10 @@ auto timeline_list() {
     // named, the wrapper was held through a table outside a release build,
     // and held so it never took a press on a row (a click in selection mode
     // selected nothing; a drag neither).
-    return c::spanned_for<message_marks>(selecting, SKIFF_NAMED(timeline_list, skiff::bind::Bound<Want, decltype(list)>(std::move(list))));
+    // Built here, under the rules the list is built under: spanned_for makes
+    // a builder, and what this builder builds is a node.
+    return c::built(c::spanned_for<message_marks>(selecting, SKIFF_NAMED(timeline_list, skiff::bind::Bound<Want, decltype(list)>(std::move(list)))),
+                    rules);
   }};
 }
 

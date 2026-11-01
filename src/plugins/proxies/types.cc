@@ -70,6 +70,7 @@ struct choose {
 };
 
 consteval bool provides(contract::settings_links, type_tag<feature>) { return true; }
+consteval bool provides(contract::proxy_actions, type_tag<feature>) { return true; }
 consteval bool provides(contract::settings_pages, type_tag<feature>) { return true; }
 constexpr composition::page_list<list_page, editor_page> settings_pages(contract::settings_pages, type_tag<feature>) { return {}; }
 consteval bool provides(contract::account_pages, type_tag<feature>) { return true; }

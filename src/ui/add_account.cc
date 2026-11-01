@@ -17,6 +17,8 @@ import mux.core;
 import mux.config;
 import mux.protocols;
 import mux.ui.base;
+import mux.composition;
+import mux.plugins.ui;
 import :account_forms;
 
 export namespace mux::ui {
@@ -60,6 +62,12 @@ struct proxy_choice {
   std::optional<std::string> chosen;
   friend bool operator==(const proxy_choice&, const proxy_choice&) = default;
 };
+// The plugins' segments after the profiles' (contract::proxy_actions).
+template <class... Features>
+auto proxy_actions_of(plugin_list<Features...>, const palette& colours) {
+  return skiff::compose::row(skiff::compose::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
+                             extend(contract::proxy_actions{}, type_tag<Features>{}, colours)...);
+}
 MUX_INLINE_IN_RELEASE auto proxy_row(const palette& colours, const proxy_choice& now) {
   namespace c = skiff::compose;
   const auto one = [&](std::optional<std::string> name) {
@@ -70,7 +78,8 @@ MUX_INLINE_IN_RELEASE auto proxy_row(const palette& colours, const proxy_choice&
                 c::many(c::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
                         std::views::iota(std::size_t{0}, now.names.size() + 1) | std::views::transform([&](std::size_t at) {
                           return one(at == 0 ? std::nullopt : std::optional(now.names[at - 1]));
-                        }) | std::ranges::to<std::vector>())));
+                        }) | std::ranges::to<std::vector>()),
+                proxy_actions_of(composition::providers<contract::proxy_actions, enabled_plugins>{}, colours)));
 }
 using proxy_row_t = decltype(proxy_row(std::declval<const palette&>(), proxy_choice{}));
 

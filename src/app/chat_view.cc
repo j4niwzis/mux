@@ -12,6 +12,8 @@ import splice;
 import mux.core;
 import mux.config;
 import mux.ui;
+import mux.composition;
+import mux.plugins.types;
 import mux.ui.proto;
 import mux.proto;
 import mux.protocols;
@@ -28,6 +30,11 @@ class chat_view_part {
   chat_view_part(const chat_view_part&) = delete;
   chat_view_part& operator=(const chat_view_part&) = delete;
 
+  // Whether a plugin's bar stands in the head's place (contract::head_cover).
+  template <class... Features>
+  [[nodiscard]] bool head_covered(mux::plugin_list<Features...>) const {
+    return (covers_head(mux::contract::head_cover{}, type_tag<Features>{}, *s_->showing->look<mux::ui::plugin_state_t<Features>>()) || ...);
+  }
   // What the bands say now: each written where it changed.
   void show() {
     const auto& shown = *s_->showing->look<mux::ui::chat_shown>();
@@ -35,7 +42,8 @@ class chat_view_part {
     const mux::conversation* chat = shown.chosen ? s_->model->find(*shown.chosen) : nullptr;
     auto head = mux::ui::chat_head_of(s_->ui, chat, *s_->model);
     head.back = s_->single();
-    head.hidden = s_->searching || s_->showing->look<mux::ui::selection_shown>()->count > 0;
+    head.hidden = this->head_covered(mux::composition::providers<mux::contract::head_cover, mux::enabled_plugins>{}) ||
+                  s_->showing->look<mux::ui::selection_shown>()->count > 0;
     this->put(std::move(head));
     this->put(mux::ui::chats_shown{.none = s_->model->accounts().empty(), .chosen = chat != nullptr});
     this->put(this->banner_of(chat));

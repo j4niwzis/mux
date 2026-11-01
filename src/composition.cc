@@ -88,6 +88,28 @@ struct account_adding {
 struct key_focus {
   static constexpr std::string_view name = "a field taking the keys";
 };
+// The chats screen's keys a plugin takes (mux.app.chat_list), asked of each
+// in order after a selection's and before the client's others:
+//   screen_key(c, f, mux::ui::request::screen_key, what it keeps among
+//   what the window shows (its window_state)) -> std::optional<its
+//   request>, asked of the program where it says one -- Ctrl+F finding,
+//   Esc closing its bar, for one.
+struct screen_keys {
+  static constexpr std::string_view name = "the chats screen's keys";
+};
+// The chat's head, stood aside for a plugin's bar in its place
+// (mux.app.chat_view): covers_head(c, f, its window_state) -> bool.
+struct head_cover {
+  static constexpr std::string_view name = "the chat's head covered";
+};
+// The side column's panes, under its list of chats (mux.ui:
+// conversations_side): extend(c, f, palette) -> its pane, shown as what it
+// keeps says; covers_chats(c, f, its window_state) -> bool, whether the
+// chats stand aside for it now (mux.app.chat_list) -- a chat's search's
+// found messages, for one.
+struct side_panes {
+  static constexpr std::string_view name = "the side's panes";
+};
 // A chat's looks -- its background, its bubbles', its panels' -- chosen at
 // a level (mux.app.kept, mux.app.looks): chat_looks_in_effect(c, f, its own
 // settings, the space each chat is in, the chat -- none, every chat's) ->

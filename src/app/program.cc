@@ -602,11 +602,6 @@ struct app : kept_settings {
   void apply(const request::open_new_room&) {}
   void apply(const request::open_new_room_in&) {}
   void apply(const request::create_room&) {}
-  void apply(const request::open_search&) {}
-  void apply(const request::close_search&) {}
-  void apply(const request::search_typed&) {}
-  void apply(const request::search_step&) {}
-  void apply(const request::search_pick&) {}
   void apply(const request::quit&);
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);

@@ -137,13 +137,6 @@ struct screen_shown {
   bool selecting = false, suggesting = false, pointing = false, in_scope = false;
   friend bool operator==(const screen_shown&, const screen_shown&) = default;
 };
-// What a search in the chat found, in the chats' place while it is asked:
-// how many, and each.
-struct found_shown {
-  std::optional<std::size_t> count;
-  std::vector<search_result> results;
-  friend bool operator==(const found_shown&, const found_shown&) = default;
-};
 // What the server found of what is typed in the side search: rooms and
 // people, while the search asks the server -- none where it does not.
 struct server_search_facts {

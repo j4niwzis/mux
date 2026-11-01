@@ -109,16 +109,6 @@ inline bool same_side_menu_context(const std::shared_ptr<const side_menu_context
   if (a == b) return true;
   return a && b && *a == *b;
 }
-struct side_found_view {
-  std::size_t index = 0;
-  std::string sender, name;
-  std::chrono::sys_time<std::chrono::milliseconds> at{};
-  std::string snippet;
-  friend bool operator==(const side_found_view&, const side_found_view&) = default;
-};
-inline side_found_view side_found_of(const search_result& one) {
-  return {one.index, one.sender, one.name, one.at, one.snippet};
-}
 // Menus are UI state. An answer choosing an item clears this part at the
 // next model refresh, after the input handler has finished.
 struct side_menu_state {
@@ -169,17 +159,6 @@ auto side_folder_tab(const auto& colours, std::string name, folder_t which,
                   {.place = scene::anchor::kBottomLeft, .fillX = true, .height = 3.0f, .cornerRadius = 1.5f},
                   nodes::Box<>(colours.accent)))),
           std::move(name))));
-}
-
-auto side_found_row(const palette& colours, const search_result& one) {
-  namespace c = skiff::compose;
-  return c::with_cursor(scene::cursor::arrow{}, c::onClick(request::search_pick{one.index},
-      c::row(c::hbox(10.0f, {.fillX = true, .height = 56.0f,
-          .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen}),
-          // Its text, a piece the plugins shape: the avatars plugin's
-          // picture of who said it beside it.
-          found_row_text(colours, one)),
-      std::format("{}: {}", one.name, one.snippet)));
 }
 
 // The chat open as a list of chats (a forum), over the list: back out of it,
@@ -399,22 +378,12 @@ auto side_chats_for(const auto& needs) {
     return side_list_place{now.account, now.folder, now.scope};
   }, c::remembered_scroll<side_list_place, decltype(viewport)>(std::move(contents))));
 }
-struct side_found_row_make {
-  const palette* colours;
-  auto operator()(const std::pair<std::size_t, side_found_view>& item) const {
-    const auto& one = item.second;
-    return side_found_row(*colours, search_result{one.index, one.sender, one.name, one.at, one.snippet});
-  }
-};
-auto side_found_for(const auto& colours) {
-  namespace c = skiff::compose;
-  auto contents = c::projected<found_shown>([](const found_shown& now) {
-    return now.results | std::views::transform([](const search_result& one) { return std::pair{one.index, side_found_of(one)}; }) | std::ranges::to<std::vector>();
-  }, c::styled({.fillX = true, .autoSize = scene::axes::kY},
-                c::memo_rows<std::size_t, side_found_view, std::pair<std::size_t, side_found_view>>(side_found_row_make{&colours}, nodes::Stack{})));
-  return SKIFF_NAMED(side_found_for, c::shown_for<found_shown>([](const found_shown& now) { return now.count.has_value(); },
-      c::projected<found_shown>([](const found_shown& now) { return now; },
-          c::restarted_scroll<found_shown>(c::styled({.fillX = true, .grow = scene::axes::kY}, skiff::compose::scrolled(std::move(contents)))))));
+// What plugins put under the list of chats (contract::side_panes), each
+// shown as it says.
+template <class... Features>
+auto side_panes_of(plugin_list<Features...>, const palette& colours) {
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
+                                extend(contract::side_panes{}, type_tag<Features>{}, colours)...);
 }
 auto side_server_for(const auto& colours) {
   namespace c = skiff::compose;
@@ -518,13 +487,7 @@ auto side_body_for(const auto& needs) {
       c::shown_for<side_shown>([](const side_shown& now) { return now.no_chats; },
           c::styled({.margin = {12.0f, 16.0f, 0.0f, 16.0f}}, nodes::Text("No chats yet.", 13.0f, colours.dim))),
       std::move(chats),
-      c::shown_for<found_shown>([](const found_shown& now) { return now.count.has_value(); },
-          c::styled({.margin = {4.0f, 16.0f, 6.0f, 16.0f}},
-          c::text_for<found_shown>([](const found_shown& now) {
-            return !now.count ? std::string{} : *now.count == 0 ? std::string("No messages found")
-                : *now.count == 1 ? std::string("1 message found") : std::format("{} messages found", *now.count);
-          }, nodes::Text("", 13.0f, colours.dim, true)))),
-      side_found_for(colours), side_server_for(colours));
+      side_panes_of(composition::providers<contract::side_panes, enabled_plugins>{}, colours), side_server_for(colours));
   auto body = c::row(c::hbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), std::move(side), std::move(rest));
   return body;
 }

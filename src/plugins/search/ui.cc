@@ -30,27 +30,27 @@ struct found_said_t {
   }
 };
 struct typed_act {
-  using Answer = std::optional<request::search_typed>;
-  std::optional<request::search_typed> operator()(std::string_view text) { return request::search_typed{std::string(text)}; }
+  using Answer = std::optional<typed>;
+  std::optional<typed> operator()(std::string_view text) { return typed{std::string(text)}; }
 };
 struct step_act {
-  using Answer = request::search_step;
+  using Answer = step;
   bool older = true;
-  request::search_step operator()() { return request::search_step{older}; }
+  step operator()() { return step{older}; }
 };
 MUX_INLINE_IN_RELEASE auto search_bar(const palette& colours) {
   namespace c = skiff::compose;
   const scene::Spec middle{.alignSelf = scene::align::kMiddle};
   auto field = widgets::TextBox<typed_act>(colours.widgets, "Search", {});
   field.setSearchIcon(true);
-  const auto keys = [](const scene::key::down& press) -> std::optional<std::variant<request::search_step, request::close_search>> {
+  const auto keys = [](const scene::key::down& press) -> std::optional<std::variant<step, close>> {
     namespace keys = scene::keys;
     if (press.key == keys::kEnter)
-      return request::search_step{!press.modifiers.template has<scene::modifier::shift>()};
+      return step{!press.modifiers.template has<scene::modifier::shift>()};
     if (press.key == keys::kEscape)
-      return request::close_search{};
+      return close{};
     if (press.key == keys::kUp || press.key == keys::kDown)
-      return request::search_step{press.key == keys::kDown};
+      return step{press.key == keys::kDown};
     return std::nullopt;
   };
   return SKIFF_NAMED(search_bar, c::shown_for<shown>([](const shown& now) { return now.open; },
@@ -67,7 +67,7 @@ MUX_INLINE_IN_RELEASE auto search_bar(const palette& colours) {
                  c::text_for<shown>(found_said_t{}, c::styled(middle, nodes::Text("", 13.0f, colours.dim))),
                  c::styled(middle, icon_button(colours, icon::up{}, step_act{false})),
                  c::styled(middle, icon_button(colours, icon::down{}, step_act{true})),
-                 c::styled(middle, icon_button(colours, icon::close{}, sends<request::close_search>{})),
+                 c::styled(middle, icon_button(colours, icon::close{}, sends<close>{})),
                  c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))))));
 }
 
@@ -77,7 +77,19 @@ MUX_INLINE_IN_RELEASE auto extend(contract::chat_column, type_tag<feature>, cons
 // The magnifier in the chat's head (mux.ui:header).
 MUX_INLINE_IN_RELEASE auto extend(contract::chat_header, type_tag<feature>, const palette& colours) {
   return SKIFF_NAMED(search_button, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                                           icon_button(colours, icon::search{}, sends<request::open_search>{})));
+                                                           icon_button(colours, icon::search{}, sends<open>{})));
+}
+
+// Its keys on the chats screen (contract::screen_keys): Ctrl+F opens the
+// bar; Esc, while it is open, closes it.
+inline std::optional<std::variant<open, close>> screen_key(contract::screen_keys, type_tag<feature>, const request::screen_key& one,
+                                                           const shown& now) {
+  namespace keys = scene::keys;
+  if (one.key == keys::kF && one.control)
+    return open{};
+  if (one.key == keys::kEscape && !(one.control || one.shift || one.alt) && now.open)
+    return close{};
+  return std::nullopt;
 }
 
 }  // namespace mux::plugins::search

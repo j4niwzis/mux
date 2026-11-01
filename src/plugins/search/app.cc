@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.plugin.search.app -- Finding in a chat: what is asked, in which chat,
-// the messages it is found in (listed down the side, the program's
-// found_shown), and which of them is shown -- as tdesktop's search in a chat.
+// the messages it is found in (listed down the side, in what it shows),
+// and which of them is shown -- as tdesktop's search in a chat.
 export module mux.plugin.search.app;
 
 import std;
@@ -21,20 +21,23 @@ export namespace mux::plugins::search {
 struct part {
   app::services* s_ = nullptr;
 
-  // What the bar says, put where it changed; and the program told whether
-  // it is open (Esc closes it, the head stands aside for it).
+  // What it shows, put where it changed -- the list of what was found kept
+  // with it.
   void put(shown now) {
-    s_->searching = now.open;
+    now.found = found_;
+    now.lines = lines_;
     if (*s_->showing->look<shown>() != now)
       ui::show(*s_->showing, std::move(now));
   }
+  std::optional<std::size_t> found_;
+  std::vector<found_line> lines_;
   // Another chat chosen: finding is in one chat, and is closed.
   void tick() {
     if (const auto& chosen = s_->chosen(); chosen)
       this->chat_chosen(*chosen);
   }
 
-  void apply(const ui::request::open_search&) {
+  void apply(const open&) {
     if (!s_->chosen())
       return;
     if (!searching_ || searching_->in != *s_->chosen())
@@ -42,12 +45,13 @@ struct part {
     this->put(shown{.open = true});
     s_->ask_keys(mux::ui::keys::of<feature>{});
   }
-  void apply(const ui::request::close_search&) {
+  void apply(const close&) {
     searching_.reset();
-    mux::ui::show(*s_->showing, mux::ui::found_shown{});
+    found_.reset();
+    lines_.clear();
     this->put(shown{});
   }
-  void apply(const ui::request::search_typed& one) {
+  void apply(const typed& one) {
     if (!searching_)
       return;
     searching_->query = one.text;
@@ -73,13 +77,13 @@ struct part {
         searching_->messages = std::move(messages);
         searching_->at.reset();
         this->list();
-        this->step(true);
+        this->step_to(true);
       };
     });
   }
-  void apply(const ui::request::search_step& one) { this->step(one.older); }
+  void apply(const step& one) { this->step_to(one.older); }
   // One of the list picked: gone to, as a step to it.
-  void apply(const ui::request::search_pick& one) {
+  void apply(const pick& one) {
     if (!searching_ || one.index >= searching_->found.size())
       return;
     searching_->at = one.index;
@@ -90,7 +94,8 @@ struct part {
   void chat_chosen(const conversation_id& which) {
     if (searching_ && searching_->in != which) {
       searching_.reset();
-    mux::ui::show(*s_->showing, mux::ui::found_shown{});
+      found_.reset();
+      lines_.clear();
       this->put(shown{});
     }
   }
@@ -110,7 +115,7 @@ struct part {
     const conversation* chat = s_->model->find(searching_->in);
     constexpr auto lower = mux::logic::folded;
     const std::string asked = lower(searching_->query);
-    std::vector<ui::search_result> rows;
+    std::vector<found_line> rows;
     rows.reserve(searching_->messages.size());
     for (std::size_t i = 0; i < searching_->messages.size(); ++i) {
       const message& one = searching_->messages[i];
@@ -125,9 +130,9 @@ struct part {
       }
       rows.push_back({i, one.sender, chat ? ui::sender_name(*chat, one.sender) : one.sender, one.at, std::move(text)});
     }
-    const std::size_t count = rows.size();
-    const auto counted = searching_->query.empty() ? std::nullopt : std::optional<std::size_t>(count);
-    mux::ui::show(*s_->showing, mux::ui::found_shown{counted, rows});
+    found_ = searching_->query.empty() ? std::nullopt : std::optional<std::size_t>(rows.size());
+    lines_ = std::move(rows);
+    this->put(*s_->showing->look<shown>());
   }
   // The found at `at` gone to, what was asked marked in it; the count set.
   void show_at() {
@@ -137,7 +142,7 @@ struct part {
   }
 
   // To the next found, older or newer, shown and flashed; the count set.
-  void step(bool older) {
+  void step_to(bool older) {
     if (!searching_)
       return;
     auto& screen = s_->root();

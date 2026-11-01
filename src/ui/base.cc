@@ -185,15 +185,15 @@ struct audio_shown {
   double at = 0.0, length = 0.0;
   friend bool operator==(const audio_shown&, const audio_shown&) = default;
 };
-// A message found by a chat's search, as the list of them shows it: its
-// place among them, who said it, when, and its words around what was found.
-struct search_result {
+// A message as a line in a list of them (a search's found, for one): its
+// place among them, who said it, when, and its words -- a part of them.
+struct message_line {
   std::size_t index = 0;
   std::string sender;
   std::string name;
   std::chrono::sys_time<std::chrono::milliseconds> at{};
   std::string snippet;
-  friend bool operator==(const search_result&, const search_result&) = default;
+  friend bool operator==(const message_line&, const message_line&) = default;
 };
 // What each level holds of the looks, as the program last said: none, as
 // the level over it. For the choices to show what is chosen where.
@@ -444,7 +444,6 @@ void look_as_its_content(const Node&, const palette&) {}
 //   void toggle_emoji(), close_emoji(), insert_emoji(std::string text, std::string picture)  -- the input's emoji panel
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
-//   void open_search(), close_search(), search_typed(std::string), search_step(bool older)  -- finding in a chat
 //   void open_url(std::string)       -- a link, in the browser
 //   void switch_account(std::string address)  -- whose chats are listed
 //   void pop_panel()                 -- back from the top panel to what is under it

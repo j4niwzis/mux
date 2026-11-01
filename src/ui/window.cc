@@ -349,7 +349,6 @@ struct shown_root {
   // chat_list).
   skiff::model::Tracked<list_shown> list;
   skiff::model::Tracked<side_shown> side;
-  skiff::model::Tracked<found_shown> found_messages;
   skiff::model::Tracked<elsewhere_shown> elsewhere;
   skiff::model::Tracked<listing_shown> listing;
   skiff::model::Tracked<screen_shown> frame;

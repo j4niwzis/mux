@@ -5,4 +5,5 @@ mux_plugin(search ORDER 1
   SUMMARY "Finding in a chat, as tdesktop's search in a chat: a bar in place of the chat's head, what is found listed down the side, stepped through and gone to."
   TYPES types.cc
   UI    ui.cc
+  UI_TOP ui_top.cc
   APP   app.cc)

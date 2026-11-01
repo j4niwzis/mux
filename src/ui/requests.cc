@@ -404,7 +404,6 @@ struct jump_to_message {
   // "↓" comes back to.
   std::optional<std::string> from;
 };
-struct open_search {};
 struct edit_last {};
 struct reply_step {
   bool older = true;
@@ -417,17 +416,7 @@ struct answer_step {
   bool older = true;
   bool repeat = false;
 };
-struct close_search {};
-struct search_typed {
-  std::string text;
-};
 // One of the messages found, picked in their list.
-struct search_pick {
-  std::size_t index = 0;
-};
-struct search_step {
-  bool older = true;
-};
 struct open_member_info {
   std::string id;
 };

@@ -16,6 +16,8 @@ import mux.protocols;
 import mux.logic.text;
 import mux.kept_root;
 import mux.ui;
+import mux.composition;
+import mux.plugins.types;
 import mux.plugins.app;
 import mux.ui.proto;
 import skiff.compose;
@@ -100,7 +102,8 @@ class chat_list_part {
                                             : std::optional<mux::account_id>(now.accounts().keyAt(0));
     list.scope = chat.scope;
     const inputs seen{now.chats().revision(), k_->state.revision(), list, chat.chosen, chat.scope, s_->drafts_revision,
-                      s_->showing->look<mux::ui::found_shown>()->count.has_value(), s_->showing->look<mux::ui::elsewhere_shown>()->found.has_value()};
+                      this->chats_covered(mux::composition::providers<mux::contract::side_panes, mux::enabled_plugins>{}),
+                      s_->showing->look<mux::ui::elsewhere_shown>()->found.has_value()};
     if (seen_ == seen)
       return;
     seen_ = seen;
@@ -112,7 +115,8 @@ class chat_list_part {
     auto side = this->side_of(now, kept, list, chat);
     const bool elsewhere = s_->showing->look<mux::ui::elsewhere_shown>()->found.has_value();
     side.no_chats = !now.accounts().empty() && listing->chats.empty() && !elsewhere;
-    side.chats_on = !s_->showing->look<mux::ui::found_shown>()->count.has_value() && (!listing->chats.empty() || !elsewhere);
+    side.chats_on = !this->chats_covered(mux::composition::providers<mux::contract::side_panes, mux::enabled_plugins>{}) &&
+                    (!listing->chats.empty() || !elsewhere);
     this->put(std::move(side));
     this->put(mux::ui::listing_shown{++revision_, std::move(listing), list.account, now.accounts().keys() | std::ranges::to<std::vector>(),
                                      k_->state.root().looks.fValue.theme});
@@ -157,6 +161,34 @@ class chat_list_part {
   // gone into (a list of chats), a selection, the search, an answer, then the threads or the
   // info, else the chat; Ctrl+Tab and Alt+Up and Alt+Down go through the
   // chats listed (a forum gone to, lit, not opened); Ctrl+End to the newest.
+  // Whether a plugin's pane stands in the chats' place (contract::side_panes).
+  template <class... Features>
+  [[nodiscard]] bool chats_covered(mux::plugin_list<Features...>) const {
+    return (covers_chats(mux::contract::side_panes{}, type_tag<Features>{}, *s_->showing->look<mux::ui::plugin_state_t<Features>>()) || ...);
+  }
+  // A key the plugins take (contract::screen_keys), asked of each in order
+  // with what it keeps: the first that answers it has it.
+  template <class Asked, class... Features>
+  bool plugins_take(const request::screen_key& one, const Asked& asked, mux::plugin_list<Features...>) {
+    return (this->plugin_takes<Features>(one, asked) || ...);
+  }
+  template <class Feature, class Asked>
+  bool plugin_takes(const request::screen_key& one, const Asked& asked) {
+    auto answer = screen_key(mux::contract::screen_keys{}, type_tag<Feature>{}, one, *s_->showing->look<mux::ui::plugin_state_t<Feature>>());
+    if (!answer)
+      return false;
+    asked_one(asked, std::move(*answer));
+    return true;
+  }
+  // What a plugin answers a key with: a request, or one of several.
+  template <class Asked, class R>
+  static void asked_one(const Asked& asked, R one) {
+    asked(std::move(one));
+  }
+  template <class Asked, class... Rs>
+  static void asked_one(const Asked& asked, std::variant<Rs...> one) {
+    std::visit([&](auto& each) { asked(std::move(each)); }, one);
+  }
   template <class Asked>
   void apply(const request::screen_key& one, const Asked& asked) {
     namespace keys = skiff::scene::keys;
@@ -178,11 +210,8 @@ class chat_list_part {
     if (!chat.chosen && !(list.pointed && stepping))
       return;
     const bool selected = s_->showing->look<mux::ui::selection_shown>()->count > 0;
-    const bool searching = s_->searching;
     const bool answering = s_->showing->look<mux::ui::chat_compose>()->said.has_value();
-    if (one.key == keys::kF && one.control)
-      asked(request::open_search{});
-    else if (one.key == keys::kK && one.control)
+    if (one.key == keys::kK && one.control)
       asked(request::ask_link{});
     else if (one.key == keys::kUp && one.control)
       asked(request::reply_step{true, one.repeat});
@@ -200,8 +229,8 @@ class chat_list_part {
         skiff::scene::setClipboardText(text);
     } else if (one.key == keys::kEscape && !any && selected)
       asked(request::selection_cancel{});
-    else if (one.key == keys::kEscape && !any && searching)
-      asked(request::close_search{});
+    else if (this->plugins_take(one, asked, mux::composition::providers<mux::contract::screen_keys, mux::enabled_plugins>{}))
+      ;
     else if (one.key == keys::kEscape && !any && chat.thread_answer)
       asked(request::thread_answer_cancel{});
     else if (one.key == keys::kEscape && !any && answering)

@@ -72,9 +72,6 @@ struct services {
   // A list over the composer is up (a plugin's: what an @ or a ':' asks):
   // the screen catches its keys -- Up, Down, Enter, Tab, Esc -- for it.
   bool composer_list_up = false;
-  // Finding in the chat is open (a plugin's): Esc closes it, the head
-  // stands aside for its bar.
-  bool searching = false;
   // The room a card is up for (a plugin's): the server's answer of it is
   // the card's, not a pill's.
   std::optional<std::string> card_room;

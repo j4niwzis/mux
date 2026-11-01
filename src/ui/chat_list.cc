@@ -235,26 +235,26 @@ inline constexpr struct chat_row_text_fn : skiff::compose::piece<chat_row_text_f
   }
 } chat_row_text{};
 
-// A search result's text -- who said it and when, a line of it: a piece
-// the plugins may shape where it is put into its row (mux.ui:
-// conversations_side, built with the window) -- the avatars plugin's picture beside it.
-// What a rule on it sees: who said it.
-struct found_row_facts {
+// A message's line -- who said it and when, a part of it: a piece the
+// plugins may shape where it is put into its row (a list of messages, a
+// search's found) -- the avatars plugin's picture beside it. What a rule on
+// it sees: who said it.
+struct message_line_facts {
   std::string sender;
   std::string name;
 };
-inline constexpr struct found_row_text_fn : skiff::compose::piece<found_row_text_fn> {
-  using facts_type = found_row_facts;
-  static found_row_facts facts(const palette&, const search_result& one) { return {one.sender, one.name}; }
-  auto make(const palette& colours, const search_result& one) const {
+inline constexpr struct message_line_text_fn : skiff::compose::piece<message_line_text_fn> {
+  using facts_type = message_line_facts;
+  static message_line_facts facts(const palette&, const message_line& one) { return {one.sender, one.name}; }
+  auto make(const palette& colours, const message_line& one) const {
     namespace c = skiff::compose;
-    return SKIFF_NAMED(found_row_text_view, c::column(c::vbox(4.0f,
+    return SKIFF_NAMED(message_line_text_view, c::column(c::vbox(4.0f,
         {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
         name_time_line(one.name, std::format("{:%d.%m.%y}", std::chrono::floor<std::chrono::days>(one.at)),
                        colours.text, colours.dim, 12.0f),
         c::styled({.fillX = true}, elided(nodes::Text(one.snippet, 13.0f, colours.dim)))));
   }
-} found_row_text{};
+} message_line_text{};
 
 struct listed_chat {
   conversation_id id;

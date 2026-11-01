@@ -21,7 +21,7 @@ using namespace ::mux::ui;
 
 // A search result's: who said it (its facts the sender's).
 struct found_picture {
-  auto operator()(auto text, const found_row_facts& f) const {
+  auto operator()(auto text, const message_line_facts& f) const {
     namespace c = skiff::compose;
     return c::row(c::hbox(10.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
                   c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(avatar_of::person{}, f.sender, f.name, 40.0f)), std::move(text));
@@ -106,7 +106,7 @@ struct drawn_face {
 constexpr auto shape_rules(contract::shapes, type_tag<feature>) {
   using namespace skiff::compose;
   return on<chat_row_text_fn>(around(picture_beside<avatar_of::chat>{46.0f, 12.0f})) |
-         on<found_row_text_fn>(around(found_picture{})) |
+         on<message_line_text_fn>(around(found_picture{})) |
          on<drawer_account_text_fn>(around(picture_beside<avatar_of::person>{38.0f, 14.0f})) |
          on<reader_text_fn>(around(picture_beside<avatar_of::person>{30.0f, 14.0f})) |
          on<directory_room_text_fn>(around(picture_beside<avatar_of::chat>{40.0f, 12.0f})) |

@@ -18,6 +18,8 @@ struct feature {
 };
 
 consteval bool provides(contract::message_footers, type_tag<feature>) { return true; }
+// Who has seen a message, at its menu's foot (its UI_TOP layer).
+consteval bool provides(contract::message_menu_foot, type_tag<feature>) { return true; }
 
 // Its choice at each level (mux.levels): whether a chat shows who has read
 // up to where, as faces -- unsaid, as the level over it says; said nowhere,

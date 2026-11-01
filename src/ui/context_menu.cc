@@ -34,65 +34,6 @@ export import mux.ui.base;
 
 export namespace mux::ui {
 
-// Who has seen a message, as tdesktop's menu shows it (chat_helpers.style's
-// defaultWhoRead, who_reacted_context_action.cpp): the read ticks 15 in;
-// "N Seen", the one reader's name, or "Nobody Viewed", 44 in; up to three
-// userpics of 22 at the right, 17 in, each 8 over the next, in a ring of the
-// menu's colour. Pointed at, every reader in a list beside the menu: a
-// userpic of 30, 13 in, the name 57 in, and under it when they read.
-inline constexpr float kSeenHeight = 33.0f, kSeenRight = 17.0f;
-// The row and the list, pointed at or left: the list open while either is.
-struct seen_row_hovered {
-  bool on = false;
-  skia::SkRect box;
-};
-struct seen_list_hovered {
-  bool on = false;
-};
-struct seen_row_says {
-  using Answer = seen_row_hovered;
-  seen_row_hovered operator()(bool on, const skia::SkRect& box) const { return {on, box}; }
-};
-struct seen_list_says {
-  using Answer = seen_list_hovered;
-  seen_list_hovered operator()(bool on, const skia::SkRect&) const { return {on}; }
-};
-MUX_INLINE_IN_RELEASE auto seen_row(const palette& colours, const std::vector<seen_reader>& readers) {
-  namespace c = skiff::compose;
-  const std::string said = readers.empty() ? std::string("Nobody Viewed")
-                           : readers.size() == 1 ? readers.front().name
-                                                 : std::to_string(readers.size()) + " Seen";
-  // What it says, a piece about the first readers (the avatars plugin's
-  // faces of them at its right).
-  return SKIFF_NAMED(seen_row, c::hovering(seen_row_says{},
-      c::row(c::hbox(0.0f, {.fillX = true, .height = kSeenHeight, .padding = {9.0f, kSeenRight, 7.0f, 44.0f}, .hoverBackground = colours.chosen}),
-             c::styled({.place = scene::anchor::kCentreLeft, .x = 15.0f - 44.0f}, icon_mark(colours, icon::check{})),
-             seen_summary(colours, readers, said))));
-}
-// A reader in the list: pressed, the menu closed and their card opened.
-MUX_INLINE_IN_RELEASE auto reader_row(const palette& colours, const seen_reader& one) {
-  namespace c = skiff::compose;
-  return SKIFF_NAMED(reader_row, c::onClick(std::tuple{request::close_menu{}, request::open_member_info{one.id}},
-      c::row(c::hbox(14.0f, {.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = colours.chosen}),
-             reader_text(colours, one)),
-      one.name));
-}
-// The readers, scrolling where there are more than fit: at most about
-// seven rows tall.
-inline constexpr float kSeenRow = 44.0f, kSeenMostTall = 320.0f, kSeenListWidth = 240.0f;
-MUX_INLINE_IN_RELEASE auto seen_list(const palette& colours, const std::vector<seen_reader>& readers) {
-  namespace c = skiff::compose;
-  const float tall = std::min(kSeenMostTall, kSeenRow * static_cast<float>(readers.size()) + 10.0f);
-  // Hovered in a box as big as the list: filling across, as a row's does, it
-  // was popped as wide as the window, at its left edge.
-  return SKIFF_NAMED(seen_list, c::hovering(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), seen_list_says{},
-      c::column(c::vbox(0.0f, {.width = kSeenListWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f}, .cornerRadius = 10.0f,
-                               .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .masking = true}),
-                c::styled({.fill = true},
-                          c::scrolled(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                              readers | std::views::transform([&](const seen_reader& one) { return reader_row(colours, one); }) | std::ranges::to<std::vector>()))))));
-}
-
 MUX_INLINE_IN_RELEASE auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, const std::optional<emote>& emoji) {
   namespace c = skiff::compose;
   return c::visible(emoji.has_value(), c::onClick(request::favourite_emoji{emoji.value_or(emote{})},
@@ -101,7 +42,7 @@ MUX_INLINE_IN_RELEASE auto emoji_favourite_row(const palette& colours, const emo
               ? "Remove from favorites" : "Add to favorites", 13.0f, colours.text)))));
 }
 // What the menu's own parts do to what it has open: a top unrolled (its
-// place among the plugins' tops), the list of readers pointed at or left.
+// place among the plugins' tops).
 //
 // Each top's unrolling a plain on() of its own, not one template for every
 // feature: a debug build routes a press's answer through a table of the
@@ -124,22 +65,6 @@ struct menu_events_at;
 template <std::size_t... At, class... Features>
 struct menu_events_at<std::index_sequence<At...>, Features...> : unroll_of<Features, At + 1>... {
   using unroll_of<Features, At + 1>::on...;
-  auto on(const seen_row_hovered& one, const contract::message_menu_state& now) const {
-    auto next = now;
-    next.seen_row = one.on;
-    if (one.on) {
-      next.seen_left = one.box.fLeft;
-      next.seen_top = one.box.fTop;
-      next.seen_right = one.box.fRight;
-      next.seen_bottom = one.box.fBottom;
-    }
-    return skiff::model::over<contract::message_menu_state>(skiff::model::setTo(std::move(next)));
-  }
-  auto on(const seen_list_hovered& one, const contract::message_menu_state& now) const {
-    auto next = now;
-    next.seen_list = one.on;
-    return skiff::model::over<contract::message_menu_state>(skiff::model::setTo(std::move(next)));
-  }
 };
 template <class List>
 struct menu_events_of;
@@ -201,6 +126,37 @@ consteval bool unrolls_listed(plugin_list<Features...>) {
 }
 static_assert(unrolls_listed(composition::providers<contract::message_menu_top, enabled_plugins>{}),
               "a menu top's unrolling is not in the menu's handlers' table: its arrow would do nothing");
+// What plugins put at its foot (contract::message_menu_foot): each its row,
+// its popover over the window, and a state of its own around the whole
+// menu, which both read -- in their order.
+template <class List>
+struct menu_feet;
+template <class... Features>
+struct menu_feet<plugin_list<Features...>> {
+  static auto rows(const palette& colours, const menu_facts& facts) {
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                  extend(contract::message_menu_foot{}, type_tag<Features>{}, colours, facts)...);
+  }
+  static auto popovers(const palette& colours, const menu_facts& facts) {
+    return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
+                                  foot_popover(contract::message_menu_foot{}, type_tag<Features>{}, colours, facts)...);
+  }
+  template <class Node>
+  static auto held(Node node) {
+    return held_by<Features...>(std::move(node));
+  }
+  template <class... None, class Node>
+    requires(sizeof...(None) == 0)
+  static Node held_by(Node node) {
+    return node;
+  }
+  template <class First, class... Rest, class Node>
+  static auto held_by(Node node) {
+    using state_t = typename decltype(foot_state(contract::message_menu_foot{}, type_tag<First>{}))::type;
+    return skiff::compose::local<state_t>(foot_events(contract::message_menu_foot{}, type_tag<First>{}), held_by<Rest...>(std::move(node)));
+  }
+};
+using menu_feet_t = menu_feet<composition::providers<contract::message_menu_foot, enabled_plugins>>;
 // The rows plugins add to a message's menu (contract::message_menu), after
 // Save As, in the plugins' order.
 template <class List>
@@ -221,8 +177,9 @@ using menu_rows_t = menu_rows<composition::providers<contract::message_menu, ena
 inline constexpr float kMenuListLeast = 220.0f;
 // A message's menu, as tdesktop's, in its order: the quick reactions; every
 // emoji, in place of the rest once asked for; Reply, Edit, Pin, Copy, Copy
-// Message Link, Save As, Forward, Delete; who has seen it at the foot -- how
-// many, and their names beside it as it is pointed at. What does not apply
+// Message Link, Save As, Forward, Delete; what plugins put at the foot --
+// who has seen it, and their names beside it as it is pointed at. What does
+// not apply
 // to the message left out. At the pointer, going down and right -- up where
 // it would pass the window's bottom, left where it would pass its right --
 // and kept inside the window. Up and Down go through its items, Enter does
@@ -246,7 +203,7 @@ MUX_INLINE_IN_RELEASE auto menu_card(const palette& colours, emoji_kept& kept, c
       item(!facts.id.empty(), "Select", sends<request::menu_select>{}, icon::check{}),
       item(facts.deletable, "Delete", sends<request::menu_delete>{}, icon::close{}),
       c::styled({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band)),
-      seen_row(colours, facts.seen));
+      menu_feet_t::rows(colours, facts));
   return SKIFF_NAMED(menu_card, c::onClick(scene::Taken{},
           c::focused_by<keys_asked>(keys_on<keys::menu>{},
           c::moves_focus([](const scene::key::down& press) {
@@ -268,27 +225,21 @@ MUX_INLINE_IN_RELEASE auto menu_card(const palette& colours, emoji_kept& kept, c
                             }, std::move(items)),
                             menu_tops_t::overs(colours, kept))))))));
 }
-// The menu over the whole window: its card at the pointer, the readers'
-// list beside its row while pointed at; a press off them closes it.
+// The menu over the whole window: its card at the pointer, what the
+// plugins at its foot pop beside it; a press off them closes it.
 MUX_INLINE_IN_RELEASE auto context_menu(const ui_needs& n, const menu_facts& facts) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const skiff::compose::PopAt at{.from = skia::SkRect::MakeXYWH(facts.x, facts.y, 0.0f, 0.0f)};
-  const bool readers = !facts.seen.empty();
   // A press off it closes it -- a right press too: caught here, over the
   // whole window, a right-click on another message did nothing at all, the
   // menu left open.
-  return SKIFF_NAMED(context_menu, c::local<contract::message_menu_state>(menu_events{},
+  return SKIFF_NAMED(context_menu, menu_feet_t::held(c::local<contract::message_menu_state>(menu_events{},
       c::onRightPress(request::menu_pressed_off{}, c::onClick(request::close_menu{},
           c::column(c::vbox(0.0f, {.fill = true}),
               c::popped_at<contract::message_menu_state>([at](const contract::message_menu_state&) { return std::optional(at); }, 8.0f,
                                                          c::styled({}, menu_card(colours, *n.emoji, facts))),
-              c::popped_at<contract::message_menu_state>([readers](const contract::message_menu_state& now) -> std::optional<skiff::compose::PopAt> {
-                if (!readers || !(now.seen_row || now.seen_list))
-                  return std::nullopt;
-                return skiff::compose::PopAt{.from = skia::SkRect::MakeLTRB(now.seen_left, now.seen_top, now.seen_right, now.seen_bottom),
-                                             .beside = true, .overlap = 6.0f};
-              }, 8.0f, seen_list(colours, facts.seen)))))));
+              menu_feet_t::popovers(colours, facts)))))));
 }
 using context_menu_t = decltype(context_menu(std::declval<const ui_needs&>(), std::declval<const menu_facts&>()));
 

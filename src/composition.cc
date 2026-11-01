@@ -216,13 +216,22 @@ struct message_menu_top {
   static constexpr std::string_view name = "a message's menu's top";
 };
 // What a message's menu has open, its own: which of its tops unrolled
-// (its place among them, from 1; none, 0), and its list of who has seen it
-// -- while its row or the list is pointed at, from the row's box.
+// (its place among them, from 1; none, 0).
 struct message_menu_state {
   std::size_t unrolled = 0;
-  bool seen_row = false, seen_list = false;
-  float seen_left = 0.0f, seen_top = 0.0f, seen_right = 0.0f, seen_bottom = 0.0f;
   friend bool operator==(const message_menu_state&, const message_menu_state&) = default;
+};
+// A message's menu's foot, under its last line (mux.ui:context_menu): a
+// row of a plugin's, and what it pops over the window beside the menu --
+// who has seen it, for one -- both reading a state of its own, a Local
+// around the whole menu:
+//   foot_state(c, f) -> type_tag<its state>; foot_events(c, f) -> what
+//   changes it (a Local's handlers)
+//   extend(c, f, palette, menu_facts) -> its row
+//   foot_popover(c, f, palette, menu_facts) -> its node, placed in the
+//   window as its state says (popped_at)
+struct message_menu_foot {
+  static constexpr std::string_view name = "a message's menu's foot";
 };
 // A top asking to unroll its own.
 template <class Feature> struct menu_unroll {};

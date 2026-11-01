@@ -68,10 +68,11 @@ auto radio_dot_for(const palette& colours, Chosen chosen) {
 // rounding it takes), by their id and the name its initials come from.
 template <class Kind>
 auto avatar_mark(Kind kind, std::string id, std::string_view shown, float size) {
-  auto avatar = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                       widgets::Avatar<from_avatars>(initials_of(shown), size, picture_of(id), gradient_of(id)));
+  // Rounded as the node it is, then placed (styled() makes a builder), as
+  // a call's avatar is.
+  auto avatar = widgets::Avatar<from_avatars>(initials_of(shown), size, picture_of(id), gradient_of(id));
   round_avatar(avatar, size, kind);
-  return avatar;
+  return skiff::compose::styled({.alignSelf = scene::align::kMiddle}, std::move(avatar));
 }
 template <class Kind>
 using avatar_mark_t = decltype(avatar_mark(Kind{}, std::string(), std::string_view(), 0.0f));

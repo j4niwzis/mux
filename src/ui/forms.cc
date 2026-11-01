@@ -27,7 +27,7 @@ import :themes;
 export namespace mux::ui {
 
 template <auto Member, class Caption>
-  requires std::derived_from<Caption, scene::Node>
+  requires skiff::compose::a_part<Caption>
 auto model_field(const palette& colours, Caption caption, std::string placeholder, bool masked = false,
                  scene::Margin margin = {}) {
   return SKIFF_NAMED(model_field, skiff::compose::column(

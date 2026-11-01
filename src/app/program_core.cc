@@ -135,9 +135,10 @@ void app::take_arriving(std::chrono::milliseconds most) {
                                // is up for that room still.
                                [&](const mux::change::room_previewed& shown) {
                                  // Asked for a pill: the room there or not, and
-                                 // its picture, under the address it was named by.
-                                 if (pictures.pill_rooms.contains(shown.asked) &&
-                                     shared.card_room != shown.asked) {
+                                 // its picture, under the address it was named by
+                                 // -- whoever else asked it too (a room's card:
+                                 // its plugin takes the change as well).
+                                 if (pictures.pill_rooms.contains(shown.asked)) {
                                    if (!shown.preview.id.empty()) {
                                      model->rooms_found.insert_or_assign(shown.asked, shown.preview.name);
                                      if (shown.preview.avatar)

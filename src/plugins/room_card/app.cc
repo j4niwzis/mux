@@ -27,13 +27,11 @@ struct part {
   std::optional<looked_up> looked_;
 
   void open(looked_up looked, shown card) {
-    s_->card_room = looked.step.room;
     looked_ = std::move(looked);
     ui::show(*s_->showing, std::optional(std::move(card)));
   }
   void close() {
     looked_.reset();
-    s_->card_room.reset();
     ui::show<shown>(*s_->showing, std::nullopt);
   }
 

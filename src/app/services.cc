@@ -69,9 +69,6 @@ struct services {
   // window brought up to date with the model a part changed; the window
   // made again, in a theme or an accent chosen.
   bool refresh_due = false;
-  // The room a card is up for (a plugin's): the server's answer of it is
-  // the card's, not a pill's.
-  std::optional<std::string> card_room;
   // Whether the window has the keyboard's focus, and is on screen at all:
   // a message to the chat being read then notifies nothing.
   bool window_focused = true;

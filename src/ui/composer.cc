@@ -20,6 +20,8 @@ import skiff.widgets.textarea;
 import mux.core;
 import mux.config;
 import mux.ui.base;
+import mux.composition;
+import mux.plugins.types;
 import mux.plugins.ui;
 import mux.ui.proto;
 import :message;
@@ -772,17 +774,18 @@ void prepend_quote(composer_doc& doc, const scene::ClipboardFragment& selected) 
 // does is said by where it is. What is typed looks as it will be sent: the
 // messages' size, as in tdesktop, whose field takes the message font; the
 // arrow in the accent.
-// The emoji button's answer: the panel toggled, opened beside where the
-// button is laid out.
-template <class Toggle> struct emoji_beside {
-  using Answer = Toggle;
-  Toggle operator()(const skia::SkRect& at) const { return {at.fRight, at.fTop}; }
-};
+// The buttons plugins put beside a field (contract::composer_buttons), in
+// their order, each told which field it is.
+template <class Writing, class... Features>
+auto composer_buttons_of(plugin_list<Features...>, const palette& colours) {
+  return skiff::compose::row(skiff::compose::hbox(6.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kEnd}),
+                             extend(contract::composer_buttons{}, type_tag<Features>{}, colours, Writing{})...);
+}
 // Which field a draft's input is, for the keys.
 inline keys::chat keys_target_of(std::type_identity<chat_draft>) { return {}; }
 keys::thread keys_target_of(std::type_identity<thread_draft>) { return {}; }
-template <class Draft, class Told, class Attach, class Emoji, class Send>
-auto message_input(const palette& colours, std::string placeholder, Attach attach_it, Emoji emoji_it, Send send_it) {
+template <class Draft, class Told, class Writing, class Attach, class Send>
+auto message_input(const palette& colours, std::string placeholder, Attach attach_it, Send send_it) {
   namespace c = skiff::compose;
   auto text = widgets::TextArea<Told, message_pictures, field_quotes>(colours.widgets, std::move(placeholder), Told{});
   text.setFontSize(13.0f);
@@ -794,7 +797,7 @@ auto message_input(const palette& colours, std::string placeholder, Attach attac
   return SKIFF_NAMED(message_input, c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}}),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Attach>(colours, icon::clip{}, std::move(attach_it))),
                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field)),
-                c::styled({.alignSelf = scene::align::kEnd}, icon_button<Emoji>(colours, icon::smile{}, std::move(emoji_it))),
+                composer_buttons_of<Writing>(composition::providers<contract::composer_buttons, enabled_plugins>{}, colours),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Send>(colours, icon::send{}, std::move(send_it), colours.accent))));
 }
 
@@ -839,7 +842,7 @@ struct in_chat {
   using draft = chat_draft;
   using told = draft_told<request::chat_draft_edited, ::mux::ui::request::send_typed>;
   using attach = sends<::mux::ui::request::attach_files>;
-  using emoji = emoji_beside<::mux::ui::request::toggle_emoji>;
+  using writing = ::mux::ui::request::writing::chat;
   using send = sends<::mux::ui::request::send_typed>;
   static constexpr std::string_view placeholder = "Write a message…";
   using reads_chat = std::true_type;
@@ -973,7 +976,7 @@ template <class Column> auto in_chosen_chat(std::false_type, Column column) { re
 // thread's: one composer, told where it writes.
 template <class Where = in_chat>
 auto composer_bar(const ui_needs& n, typename Where::cancel cancel = {}, typename Where::attach attach = {},
-                  typename Where::emoji emoji = {}, typename Where::send send = {}) {
+                  typename Where::send send = {}) {
   namespace c = skiff::compose;
   using reads = typename Where::reads_chat;
   const palette& colours = *n.colours;
@@ -989,8 +992,8 @@ auto composer_bar(const ui_needs& n, typename Where::cancel cancel = {}, typenam
                               c::visible(false, unsent_bar(colours))),
                 context_shown<Where>(colours, std::move(cancel)),
                 shown_by_chat(reads{}, [shared](const conversation& chat) { return may_post_in(*shared, chat); },
-                              message_input<typename Where::draft, typename Where::told>(
-                                  colours, std::string(Where::placeholder), std::move(attach), std::move(emoji), std::move(send))),
+                              message_input<typename Where::draft, typename Where::told, typename Where::writing>(
+                                  colours, std::string(Where::placeholder), std::move(attach), std::move(send))),
                 shown_by_chat(reads{},
                               [shared](const conversation& chat) { return !may_post_in(*shared, chat) && !replaced_chat(*shared, chat); },
                               c::visible(false, no_post_line(colours))),

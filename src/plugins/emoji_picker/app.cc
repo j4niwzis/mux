@@ -38,20 +38,13 @@ class part {
                                  [&](const auto& theirs) { asked(theirs); }},
                  one.page);
   }
-  void apply(const request::toggle_emoji& one) {
+  // A field's smile: the panel toggled, for that field.
+  void apply(const toggle& one) {
     if (this->open()) {
       this->close();
       return;
     }
-    into_ = request::writing::chat{};
-    this->open_at(one.right, one.top);
-  }
-  void apply(const request::toggle_thread_emoji& one) {
-    if (this->open()) {
-      this->close();
-      return;
-    }
-    into_ = request::writing::thread{};
+    into_ = one.into;
     this->open_at(one.right, one.top);
   }
   void apply(const request::close_shown<emoji_facts>&) { this->close(); }

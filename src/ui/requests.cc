@@ -577,10 +577,6 @@ struct way_down {
   bool wanted = false;
   std::size_t unseen = 0;
 };
-struct toggle_emoji {
-  float right = 0.0f;
-  float top = 0.0f;
-};
 // The account chosen in Accounts: its colour, and its strip on its chats in
 // other accounts' lists.
 struct set_account_colour {
@@ -611,10 +607,6 @@ struct set_chat_strip_colour {
 };
 // The thread panel's own: its paperclip, and its emoji button.
 struct attach_in_thread {};
-struct toggle_thread_emoji {
-  float right = 0.0f;
-  float top = 0.0f;
-};
 }  // namespace request
 // Which field the program gives the keys to, and each time it does: a count
 // it raises -- the field asked reads it and takes the keys (focused_by); the

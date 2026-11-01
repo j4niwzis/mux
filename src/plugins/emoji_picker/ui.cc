@@ -37,6 +37,23 @@ struct insert_emoji {
 
 
 using namespace ::mux::ui;
+// The panel toggled by a field's smile: opened beside where the smile is
+// laid out, putting what is chosen into that field.
+struct toggle {
+  float right = 0.0f;
+  float top = 0.0f;
+  request::writing_t into = request::writing::chat{};
+};
+template <class Writing>
+struct toggle_beside {
+  using Answer = toggle;
+  toggle operator()(const skia::SkRect& at) const { return {at.fRight, at.fTop, Writing{}}; }
+};
+// Its smile beside a message's field (contract::composer_buttons).
+template <class Writing>
+auto extend(contract::composer_buttons, type_tag<feature>, const palette& colours, Writing) {
+  return skiff::compose::styled({.alignSelf = scene::align::kEnd}, icon_button<toggle_beside<Writing>>(colours, icon::smile{}, toggle_beside<Writing>{}));
+}
 
 // The picker page is part of what is shown, so data refreshes retain it:
 // its emoji, and each page a plugin gives the media panel

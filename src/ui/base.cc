@@ -441,7 +441,6 @@ void look_as_its_content(const Node&, const palette&) {}
 //        search_elsewhere(query)  -- the chat list's search, where nothing joined matches,
 //        create_room(name, topic, open, alias, federate, encrypted)  -- rooms found and made
 //   void settings_notifications(),
-//   void toggle_emoji(), close_emoji(), insert_emoji(std::string text, std::string picture)  -- the input's emoji panel
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
 //   void open_url(std::string)       -- a link, in the browser

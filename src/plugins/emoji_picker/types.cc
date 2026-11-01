@@ -17,6 +17,8 @@ struct feature {
 };
 
 consteval bool provides(contract::window_layers, type_tag<feature>) { return true; }
+// Its smile beside each message's field (its UI layer).
+consteval bool provides(contract::composer_buttons, type_tag<feature>) { return true; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
 
 }  // namespace mux::plugins::emoji_picker

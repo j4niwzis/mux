@@ -119,6 +119,13 @@ struct side_panes {
 struct person_card_parts {
   static constexpr std::string_view name = "a person's card's parts";
 };
+// The buttons beside a message's field (mux.ui.messages:composer), after
+// the text and before the arrow: extend(c, f, palette, the field -- mux.ui's
+// request::writing::chat or ::thread) -> its button. The emoji picker's
+// smile, for one.
+struct composer_buttons {
+  static constexpr std::string_view name = "the composer's buttons";
+};
 // A chat's looks -- its background, its bubbles', its panels' -- chosen at
 // a level (mux.app.kept, mux.app.looks): chat_looks_in_effect(c, f, its own
 // settings, the space each chat is in, the chat -- none, every chat's) ->

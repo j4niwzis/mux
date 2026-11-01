@@ -558,8 +558,6 @@ struct app : kept_settings {
   void apply(const request::manage_space&) {}
   void apply(const request::manage_scope&) {}
   void apply(const request::pick_room_avatar&) {}
-  void apply(const request::toggle_emoji&) {}
-  void apply(const request::toggle_thread_emoji&) {}
   // An emoji made a favourite from its menu: the client's, picker or not.
   void apply(const request::favourite_emoji& one) {
     shared.emoji.flip_emoji_favourite(one.emoji);

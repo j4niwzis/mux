@@ -190,7 +190,6 @@ MUX_INLINE_IN_RELEASE auto menu_card(const palette& colours, emoji_kept& kept, c
     return c::visible(shown, row_item(colours, std::move(label), std::move(act), mark, std::nullopt, menu_row_look));
   };
   auto items = c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      item(facts.answerable && facts.can.threads && !facts.link.empty(), "Reply in thread", sends<request::menu_thread>{}, icon::threads{}),
       item(facts.editable && !facts.reaction && ((!facts.text.empty() && !facts.media) || facts.captioned), "Edit", sends<request::menu_edit>{},
            icon::sliders{}),
       item(!facts.copied.empty(), facts.selection ? "Copy Selected Text" : "Copy Text", sends<request::menu_copy>{}, icon::clip{}),

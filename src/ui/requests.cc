@@ -515,7 +515,6 @@ struct toggle_threads {};
 struct open_thread {
   std::string root;
 };
-struct menu_thread {};
 struct adopt_pack {
   mux::emote_pack pack;
   std::optional<mux::account_id> by;

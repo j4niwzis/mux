@@ -16,6 +16,17 @@ import mux.plugin.threads.types;
 
 export namespace mux::plugins::threads {
 using namespace ::mux::ui;
+// Reply in thread, in a message's menu where its chat has threads and it
+// may be answered: the menu closed and its thread opened.
+struct reply_in_thread {
+  using Answer = std::tuple<request::close_menu, request::open_thread>;
+  std::string root;
+  Answer operator()() const { return {request::close_menu{}, request::open_thread{root}}; }
+};
+MUX_INLINE_IN_RELEASE auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&, const menu_facts& facts) {
+  return skiff::compose::visible(facts.answerable && facts.can.threads && !facts.link.empty(),
+      row_item(colours, "Reply in thread", reply_in_thread{facts.id}, icon::threads{}, std::nullopt, menu_row_look));
+}
 // Asked of the program, its own (moved from mux.ui, where only it took them).
 struct close_thread {};
 

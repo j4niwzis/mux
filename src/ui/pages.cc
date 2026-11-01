@@ -161,6 +161,65 @@ template <class Rule, class Variant>
 
 
 // A heading over a tab, and over a part of one, as Element's.
+// A settings page as Cinny lays one out: sections, each a heading over its
+// cards; a card a tile -- its title, what it does, its control at the right
+// -- or several; a button's face its words on a plate. Shared by every page
+// built so (a room's admin tabs, the developer tools): no plugin makes its
+// own.
+inline skiff::compose::Look page_look() {
+  return skiff::compose::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {16.0f, 16.0f, 100.0f, 16.0f}});
+}
+auto settings_section_heading(const auto& colours, std::string title) { return nodes::Text(std::move(title), 12.0f, colours.text); }
+template <class... Children>
+auto settings_surface(const auto& colours, skia::SkColor background, scene::Margin padding, float gap, Children... children) {
+  return SKIFF_NAMED(settings_surface, skiff::compose::column(skiff::compose::vbox(gap, {.fillX = true, .autoSize = scene::axes::kY, .padding = padding,
+                                                           .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = background,
+                                                           .masking = true}),
+                                std::move(children)...));
+}
+template <class... Children> auto card(const auto& colours, Children... children) {
+  return settings_surface(colours, colours.tile, {12.0f, 12.0f, 12.0f, 12.0f}, 16.0f, std::move(children)...);
+}
+template <class... Children> auto cutout(const auto& colours, scene::Margin padding, Children... children) {
+  return settings_surface(colours, colours.background, padding, 4.0f, std::move(children)...);
+}
+template <class... Children> auto section(const auto& colours, std::string title, Children... children) {
+  return SKIFF_NAMED(section, skiff::compose::column(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                settings_section_heading(colours, std::move(title)), std::move(children)...));
+}
+template <class Control> auto setting_tile(const auto& colours, std::string title, std::string description, Control control) {
+  namespace c = skiff::compose;
+  const bool described = !description.empty();
+  return SKIFF_NAMED(setting_tile, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::column(c::vbox(4.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX}),
+          wrapped(nodes::Text(std::move(title), 14.0f, colours.text)),
+          c::visible(described, wrapped(nodes::Text(std::move(description), 12.0f, colours.dim)))),
+      c::styled({.alignSelf = scene::align::kMiddle}, std::move(control))));
+}
+template <class Control> auto tile(const auto& colours, std::string title, std::string description, Control control) {
+  return card(colours, setting_tile(colours, std::move(title), std::move(description), std::move(control)));
+}
+enum class action_style { secondary, primary, success };
+[[nodiscard]] inline scene::Spec allowed_spec(bool on) { return {.alpha = on ? 1.0f : 0.38f, .disabled = !on}; }
+// A button's face: its words on its plate.
+auto action_face(const auto& colours, std::string label, action_style style = action_style::secondary, bool allowed = true) {
+  namespace c = skiff::compose;
+  const auto background = style == action_style::secondary ? colours.chosen : colours.accent;
+  const auto ink = style == action_style::secondary ? colours.text : colours.on_accent;
+  return SKIFF_NAMED(action_face, c::row(c::hbox(0.0f, {.height = 32.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle,
+                               .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .background = background,
+                               .hoverBackground = colours.widgets.fSurfaceHover,
+                               .border = scene::Border{colours.widgets.fSurfaceActive, style == action_style::secondary ? 1.0f : 0.0f},
+                               .alpha = allowed ? 1.0f : 0.38f, .disabled = !allowed}),
+                c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 12.0f, ink))));
+}
+// A button: its words, and whether it does anything now, as said once or
+// read as the facts move.
+template <class Act>
+auto action(const auto& colours, std::string label, Act act, bool allowed = true, action_style style = action_style::secondary) {
+  auto spoken = label;
+  return SKIFF_NAMED(action, skiff::compose::onPress(std::move(act), action_face(colours, std::move(label), style, allowed), std::move(spoken)));
+}
 inline nodes::Text tab_heading(const palette& colours, std::string text) {
   nodes::Text out(std::move(text), 20.0f, colours.text, true);
   out.apply({.margin = {0.0f, 0.0f, 12.0f, 0.0f}});

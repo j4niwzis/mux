@@ -305,25 +305,23 @@ MUX_INLINE_IN_RELEASE auto developer_switch(const palette& colours) {
       [](toggle_t& toggle, bool on) { toggle.setOnNow(on); },
       c::styled({.relativeSize = scene::axes::kNone, .alignSelf = scene::align::kMiddle}, toggle_t(colours.widgets, {}))));
 }
-template <class Asked>
-auto tool_button(const palette& colours, std::string label) {
-  return skiff::compose::styled({.width = 200.0f, .height = 34.0f}, widgets::Button<sends<Asked>>(colours.widgets, std::move(label), {}));
-}
+// The tab as Cinny's: Options -- the switch, the room's ID copied -- and,
+// with the tools on, Data -- an event composed, the room's state and its
+// account data, each opened on its own screen.
 MUX_INLINE_IN_RELEASE auto make_manage_page(room_tab, const palette& colours, const auto& facts) {
   namespace c = skiff::compose;
   const auto tools_on = [](const kept& now) { return now.tools; };
-  return SKIFF_NAMED(devtools_tab_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
-      tab_heading(colours, "Developer Tools"),
-      c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text("Enable Developer Tools", 14.0f, colours.text)),
-          developer_switch(colours)),
-      c::shown_for<kept>(tools_on, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text("Room ID: " + facts.id, 13.0f, colours.dim))),
-              c::styled({.width = 90.0f, .height = 30.0f}, widgets::Button<sends<request::copy_text>>(colours.widgets, "Copy", {{facts.id}}))),
-          tool_button<open_state>(colours, "Room state"),
-          tool_button<open_data>(colours, "Account data"),
-          tool_button<open_composer>(colours, "Send custom event")))));
+  return SKIFF_NAMED(devtools_tab_page, c::column(page_look(),
+      section(colours, "Options",
+          tile(colours, "Enable Developer Tools", "", developer_switch(colours)),
+          c::shown_for<kept>(tools_on, tile(colours, "Room ID", "Copy room ID to clipboard. (\"" + facts.id + "\")",
+                                            action(colours, "Copy", sends<request::copy_text>{{facts.id}})))),
+      c::shown_for<kept>(tools_on, section(colours, "Data",
+          tile(colours, "New Message Event", "Create and send a new message event within the room.",
+               action(colours, "Compose", sends<open_composer>{})),
+          tile(colours, "Room State", "State events of the room.", action(colours, "Explore", sends<open_state>{})),
+          tile(colours, "Account Data", "Private personalization data stored within room.",
+               action(colours, "Explore", sends<open_data>{}))))));
 }
 
 // The dialog: the screen open, made again as what it shows moves.

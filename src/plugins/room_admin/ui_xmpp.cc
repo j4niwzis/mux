@@ -279,8 +279,8 @@ struct jid_row_of {
 };
 auto jid_list(const auto& colours, const muc_field& f) {
   namespace c = skiff::compose;
-  using row_t = std::invoke_result_t<jid_row_of, const std::tuple<std::uint32_t, bool, std::string>&>;
-  using rows_t = nodes::MemoRows<std::uint32_t, bool, row_t, jid_row_of>;
+  // The rows kept by their keys, each built as it is made (memo_rows).
+  using jid_item = std::tuple<std::uint32_t, bool, std::string>;
   const std::string var = f.var;
   return SKIFF_NAMED(jid_list, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::spec_for<muc_form>([var](const muc_form& form) {
@@ -295,7 +295,7 @@ auto jid_list(const auto& colours, const muc_field& f) {
                                                 return std::tuple{one.row, one.picked, one.address};
                                               }) | std::ranges::to<std::vector>();
           },
-              c::styled({.fillX = true, .autoSize = scene::axes::kY}, rows_t(jid_row_of{&colours, var}))))),
+              c::styled({.fillX = true, .autoSize = scene::axes::kY}, c::memo_rows<std::uint32_t, bool, jid_item>(jid_row_of{&colours, var}, nodes::Stack{}))))),
       c::row(c::hbox(6.0f, {.fillX = true, .height = 32.0f}),
              c::styled({.height = 32.0f}, widgets::Button<sends<jid_added>>(colours.widgets, "Add", {{var}})),
              c::spec_for<muc_form>([var](const muc_form& form) {

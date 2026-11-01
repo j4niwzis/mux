@@ -147,7 +147,6 @@ struct info_file_row {
                      file_open{request::open_file{carried.source, carried.name}});
   }
 };
-using info_file_rows_t = nodes::MemoRows<std::string, info_file, file_view_t, info_file_row>;
 // A member's row, kept while it shows the same.
 struct info_member_row {
   const palette* colours = nullptr;
@@ -193,7 +192,7 @@ MUX_INLINE_IN_RELEASE auto info_panel(const ui_needs& n) {
                             return now.files | std::views::transform([](const info_file& one) { return std::tuple{one.id, one}; }) | std::ranges::to<std::vector>();
                           },
                               c::styled({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 16.0f, 8.0f, 16.0f}},
-                                        info_file_rows_t(info_file_row{&colours}))))),
+                                        skiff::compose::memo_rows<std::string, info_file, std::tuple<std::string, info_file>>(info_file_row{&colours}, nodes::Stack{}))))),
                   c::shown_for<info_shown>(listed, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
                       section_band(colours),
                       c::projected<info_shown>([](const info_shown& now) { return std::optional(now.heading); },

@@ -247,8 +247,8 @@ MUX_INLINE_IN_RELEASE auto pack_editor(const palette& colours, const pack_opened
     return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .disabled = !opened.editable}),
                      nodes::Text(std::move(caption), 13.0f, colours.dim), c::styled({.fillX = true, .height = 36.0f}, std::move(box)));
   };
-  using rows_t = nodes::MemoRows<std::string, std::pair<bool, bool>,
-                                 std::invoke_result_t<picture_row_of, const std::tuple<std::string, std::pair<bool, bool>, pack_picture>&>, picture_row_of>;
+  // The rows kept by their keys, each built as it is made (memo_rows).
+  using picture_item = std::tuple<std::string, std::pair<bool, bool>, pack_picture>;
   const scene::Spec button{.width = 110.0f, .height = 34.0f};
   return SKIFF_NAMED(pack_editor, c::column(c::vbox(8.0f, {.fillX = true, .grow = scene::axes::kY}),
       field("Name", "Pack name", opened.pack.name, false),
@@ -266,7 +266,7 @@ MUX_INLINE_IN_RELEASE auto pack_editor(const palette& colours, const pack_opened
                                                  }) | std::ranges::to<std::vector>()
                                                : std::vector<std::tuple<std::string, std::pair<bool, bool>, pack_picture>>{};
                 },
-                    c::styled({.fillX = true, .autoSize = scene::axes::kY}, rows_t(picture_row_of{&colours}))))),
+                    c::styled({.fillX = true, .autoSize = scene::axes::kY}, c::memo_rows<std::string, std::pair<bool, bool>, picture_item>(picture_row_of{&colours}, nodes::Stack{}))))),
       c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}}),
              c::visible(opened.editable, c::styled(button, widgets::Button<sends<pick_images>>(colours.widgets, "Add images", {}))),
              c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::SkColor{0})),

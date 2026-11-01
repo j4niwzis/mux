@@ -317,12 +317,12 @@ template <class Pick>
 auto side_folders_for(const auto& colours, Pick pick) {
   namespace c = skiff::compose;
   using make = side_folder_row_make<Pick>;
-  using row = std::invoke_result_t<make, const std::pair<folder_t, side_folder_view>&>;
-  using rows = nodes::MemoRows<folder_t, side_folder_view, row, make>;
   nodes::Stack flow;
   flow.fStack = {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f, .wrap = true};
-  auto tabs = rows(make{&colours, std::move(pick)}, std::move(flow), {.autoSize = scene::axes::kBoth});
-  tabs.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
+  // The tabs kept by their folders, each built as it is made (memo_rows).
+  auto tabs = c::styled({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}},
+      c::memo_rows<folder_t, side_folder_view, std::pair<folder_t, side_folder_view>>(make{&colours, std::move(pick)}, std::move(flow),
+                                                                                      {.autoSize = scene::axes::kBoth}));
   return SKIFF_NAMED(side_folders_for, c::projected<side_shown>([](const side_shown& now) {
     return now.folders | std::views::transform([](const side_folder_view& tab) { return std::pair{tab.folder, tab}; }) | std::ranges::to<std::vector>();
   }, std::move(tabs)));

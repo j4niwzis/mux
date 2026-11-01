@@ -353,14 +353,14 @@ auto setting_switch(const palette& colours, std::string text) {
           skiff::compose::styled({.alignSelf = scene::align::kMiddle},
                                  widgets::ToggleField<T>(colours.widgets)))));
 }
-inline nodes::Text spaced_title(const palette& colours, std::string text) {
+inline auto spaced_title(const palette& colours, std::string text) {
   return skiff::compose::styled({.margin = {10.0f, 0.0f, 4.0f, 20.0f}},
                                 section_title(colours, std::move(text)));
 }
-inline nodes::Text spaced_note(const palette& colours, std::string text) {
-  return wrapped(skiff::compose::styled(
+inline auto spaced_note(const palette& colours, std::string text) {
+  return skiff::compose::styled(
       {.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}},
-      note_text(colours, std::move(text))));
+      wrapped(note_text(colours, std::move(text))));
 }
 
 // An account's Privacy page: whether it sends read receipts; whether it

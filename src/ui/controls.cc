@@ -329,26 +329,28 @@ MUX_INLINE_IN_RELEASE auto menu_button(const palette& colours) {
 [[nodiscard]] constexpr std::string_view label_of(room_event::thread_answers) { return "Thread answers, in the timeline too"; }
 
 // The existing dropdown's head and option rows, built with combinators.
-// Selection and pointer capture are shared with the widget library.
+// Selection and pointer capture are shared with the widget library. Made
+// again as the choice moves or the menu opens: nodes, built where they are
+// said (made_now), the one type the menu keeps and the one it makes again.
 MUX_INLINE_IN_RELEASE auto choice_menu_head(const palette& colours, std::string label, std::string value) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(choice_menu_head, c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f,
+  return c::made_now(SKIFF_NAMED(choice_menu_head, c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f,
       .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
       .background = colours.tile, .hoverBackground = colours.chosen, .border = scene::Border{colours.band, 1.0f}}),
       c::visible(!label.empty(), c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(label, 13.0f, colours.dim)))),
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 14.0f, colours.text))),
-      c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.dim))));
+      c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.dim)))));
 }
 // An option, the one chosen in the accent and bold.
 MUX_INLINE_IN_RELEASE auto choice_menu_option(const palette& colours, std::string name, bool chosen = false) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(choice_menu_option, c::row(c::hbox(0.0f, {.fillX = true, .height = 32.0f,
+  return c::made_now(SKIFF_NAMED(choice_menu_option, c::row(c::hbox(0.0f, {.fillX = true, .height = 32.0f,
       .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = colours.chosen}),
       // On one line, cut short with an ellipsis where the list is narrower
       // than the name: wrapped, a long name in a narrow list overflowed its
       // row onto the next ones (a tester's).
       c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                elided(nodes::Text(std::move(name), 14.0f, chosen ? colours.accent : colours.text, chosen)))));
+                elided(nodes::Text(std::move(name), 14.0f, chosen ? colours.accent : colours.text, chosen))))));
 }
 using choice_menu_head_t = decltype(choice_menu_head(std::declval<const palette&>(), std::string(), std::string()));
 using choice_menu_option_t = decltype(choice_menu_option(std::declval<const palette&>(), std::string()));
@@ -448,13 +450,13 @@ struct room_events_picked {
 [[nodiscard]] inline skiff::compose::Look setting_row() {
   return skiff::compose::hbox(4.0f, {.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
 }
-[[nodiscard]] inline nodes::Text setting_label(nodes::Text label) {
+[[nodiscard]] inline auto setting_label(nodes::Text label) {
   return skiff::compose::styled({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                                 elided(std::move(label)));
 }
 // A segment of a setting's row: as wide as said, in the middle of the row.
 template <class Segment>
-[[nodiscard]] Segment setting_choice(float width, Segment one) {
+[[nodiscard]] auto setting_choice(float width, Segment one) {
   return skiff::compose::styled({.width = width, .alignSelf = scene::align::kMiddle}, std::move(one));
 }
 

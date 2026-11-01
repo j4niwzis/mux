@@ -363,18 +363,20 @@ template <class Section> [[nodiscard]] auto held(Section section) { return std::
 MUX_INLINE_IN_RELEASE auto appearance_page(const ui_needs& needs, const config::theme_t& theme, const config::accent_t&) {
   namespace c = skiff::compose;
   const palette& colours = *needs.colours;
-  auto looks = held(level_section_plugins::made(colours, choice_level::everywhere{}, *needs.shared));
-  looks->apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
-  return c::Box(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  // Its sections held on the heap as they are built (builders: held once
+  // built, under the page's rules), its head as it is.
+  return c::lifted([](auto head, auto... sections) {
+    return c::Box(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(head), held(std::move(sections))...);
+  },
       c::styled({.depth = 1.0f, .background = colours.sidebar},
                 page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Appearance", {}, {}, true, true)),
-      held(appearance_settings_view(colours, theme)),
-      held(theme_details_view(colours, theme, needs.looks->theme_overrides)),
-      held(c::scoped<config::look_settings>(c::handlers(), style_controls(colours, false))),
-      std::move(looks),
-      held(window_settings_view(colours)),
-      held(frame_look_view(colours, needs.looks->window.see_through)),
-      held(enter_settings_view(colours)));
+      appearance_settings_view(colours, theme),
+      theme_details_view(colours, theme, needs.looks->theme_overrides),
+      c::scoped<config::look_settings>(c::handlers(), style_controls(colours, false)),
+      c::styled({.margin = {6.0f, 10.0f, 0.0f, 10.0f}}, level_section_plugins::made(colours, choice_level::everywhere{}, *needs.shared)),
+      window_settings_view(colours),
+      frame_look_view(colours, needs.looks->window.see_through),
+      enter_settings_view(colours));
 }
 using appearance_page_t = decltype(appearance_page(std::declval<const ui_needs&>(), config::theme_t{}, config::accent_t{}));
 

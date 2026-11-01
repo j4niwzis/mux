@@ -540,8 +540,7 @@ auto side_column(const auto& needs) {
   // The space's and the chat's menus, over the column: a tap off them closes
   // the one up.
   auto popups = c::tapped_off(sends<close_side_menu>{},
-      c::Box<decltype(side_chat_popup(colours))>(
-          c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), side_chat_popup(colours)));
+      c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), side_chat_popup(colours)));
   auto surface = c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar}),
       std::move(head), connection_bar_for<connection_shown>(colours, &connection_shown::list), std::move(body), std::move(popups));
   // The plugin's bars' own around it: their menus, an icon dragged.

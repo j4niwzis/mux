@@ -347,7 +347,7 @@ template <class Surface>
 auto wrap_side(contract::side_bars, type_tag<feature>, const palette& colours, Surface surface) {
   namespace c = skiff::compose;
   auto popup = c::tapped_off(sends<close_space_menu>{},
-      c::Box<decltype(side_space_popup(colours))>(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), side_space_popup(colours)));
+      c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), side_space_popup(colours)));
   auto over = c::column(c::vbox(0.0f, {.fill = true}), std::move(surface), std::move(popup));
   auto reorder = c::reorder_bars<config::space_item_t, side_space_view>(std::move(over),
       side_space_row_make<side_pick_folder>{&colours, {}}, side_lanes<decltype(colours)>{}, colours.chosen);

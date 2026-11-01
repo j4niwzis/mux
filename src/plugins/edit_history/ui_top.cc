@@ -12,6 +12,7 @@ export module mux.plugin.edit_history.ui_top;
 import std;
 import skiff.scene;
 import skiff.compose;
+import skiff.nodes.scroll;
 import mux.composition;
 import mux.core;
 import mux.ui.base;
@@ -38,11 +39,14 @@ MUX_INLINE_IN_RELEASE auto panel(const ui_needs& n, const shown& facts) {
   }) | std::ranges::to<std::vector>();
   // The newest version in view as it opens: scrolled to its end, as it is
   // built (its rows hold pieces).
-  auto list = skiff::compose::lifted([](auto many) {
-    auto made = dialog_list(std::move(many));
+  // The scroll made here, over the rows as built, so it can be told where to
+  // start: dialog_list's is a builder.
+  auto list = c::styled({.fillX = true, .grow = scene::axes::kY}, c::lifted([](auto many) {
+    many.apply({.fillX = true, .autoSize = scene::axes::kY});
+    skiff::nodes::ScrollContainer<decltype(many)> made(std::move(many));
     made.scrollToEnd(false);
     return made;
-  }, c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)));
+  }, c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
   return SKIFF_NAMED(panel, c::column(list_dialog(560.0f),
       page_header<no_back, sends<request::close_shown<shown>>>(*n.colours, "Edit History", {}, {}, false, true), std::move(list)));
 }

@@ -56,8 +56,6 @@ struct part {
   void apply(const manage&) {
     ui::show(*s_->showing, std::optional(ui::settings_facts{list_page{s_->kept->proxies(), false}}));
   }
-  // Add proxy…, from an account being added: their list, as Manage.
-  void apply(const ui::request::manage_proxies&) { this->apply(manage{}); }
   void apply(const open_list&) {
     if (s_->settings_open())
       s_->settings_page(list_page{s_->kept->proxies()});

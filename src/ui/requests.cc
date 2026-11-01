@@ -605,9 +605,6 @@ struct send_in_thread {
   std::vector<mention> mentions;
 };
 struct menu_thread {};
-// The proxies' list opened (Add proxy…, an account being added's): the
-// proxies plugin's to take; nothing where it is off.
-struct manage_proxies {};
 struct adopt_pack {
   mux::emote_pack pack;
   std::optional<mux::account_id> by;

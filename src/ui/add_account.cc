@@ -70,8 +70,7 @@ MUX_INLINE_IN_RELEASE auto proxy_row(const palette& colours, const proxy_choice&
                 c::many(c::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
                         std::views::iota(std::size_t{0}, now.names.size() + 1) | std::views::transform([&](std::size_t at) {
                           return one(at == 0 ? std::nullopt : std::optional(now.names[at - 1]));
-                        }) | std::ranges::to<std::vector>()),
-                segment(colours, "Add proxy…", sends<request::manage_proxies>{}, false)));
+                        }) | std::ranges::to<std::vector>())));
 }
 using proxy_row_t = decltype(proxy_row(std::declval<const palette&>(), proxy_choice{}));
 

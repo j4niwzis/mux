@@ -583,7 +583,6 @@ struct app : kept_settings {
   void apply(const request::thread_draft_edited&) {}
   void apply(const request::send_in_thread&) {}
   void apply(const request::adopt_pack&) {}
-  void apply(const request::manage_proxies&) {}
   void apply(const request::explore_space&) {}
   void apply(const request::search_rooms&) {}
   void apply(const request::place_spaces&) {}

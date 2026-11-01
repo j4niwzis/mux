@@ -569,8 +569,6 @@ struct app : kept_settings {
   void apply(const request::open_picture&) {}
   void apply(const request::open_video&) {}
   void apply(const request::open_avatar&) {}
-  void apply(const request::verify_person&) {}
-  void apply(const request::accept_identity&) {}
   void apply(const request::suggestion_step&) {}
   void apply(const request::suggestion_pick&) {}
   void apply(const request::suggestion_close&) {}

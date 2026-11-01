@@ -110,6 +110,15 @@ struct head_cover {
 struct side_panes {
   static constexpr std::string_view name = "the side's panes";
 };
+// A person's card (mux.ui:info_cards), what plugins put on it, each in the
+// place its extend takes -- mux.ui.cards' person_place::actions (after
+// Message) or ::details (at its end): extend(c, f, palette, place,
+// type_tag<the account's protocol>, account_id, their key, person_facts)
+// -> its node; none for a place it has nothing in. Encryption's Verify,
+// Withdraw verification and their sessions, for one.
+struct person_card_parts {
+  static constexpr std::string_view name = "a person's card's parts";
+};
 // A chat's looks -- its background, its bubbles', its panels' -- chosen at
 // a level (mux.app.kept, mux.app.looks): chat_looks_in_effect(c, f, its own
 // settings, the space each chat is in, the chat -- none, every chat's) ->

@@ -31,6 +31,9 @@ import mux.ui.lists;
 import mux.ui.shaping;
 import mux.ui.messages;
 import mux.ui.cards;
+import mux.composition;
+import mux.plugins.types;
+import mux.plugins.ui.top;
 
 export namespace mux::ui {
 // A person's info, as tdesktop's profile layer: a box in the middle of the
@@ -114,12 +117,6 @@ struct person_room_act {
   room_action_t action;
   Answer operator()() const { return {::mux::ui::request::room_act{action}, ::mux::ui::request::close_person_info{}}; }
 };
-// Verified by comparing emoji with each of their devices that answers.
-struct person_accept_act {
-  using Answer = ::mux::ui::request::accept_identity;
-  conversation_id who;
-  Answer operator()() const { return ::mux::ui::request::accept_identity{who}; }
-};
 // A button of its protocol's own: which it is, its request asked again
 // where the program knows the protocol.
 struct person_protocol_act {
@@ -127,26 +124,23 @@ struct person_protocol_act {
   Answer pressed;
   Answer operator()() const { return pressed; }
 };
-struct person_verify_act {
-  using Answer = std::tuple<::mux::ui::request::verify_person, ::mux::ui::request::close_person_info>;
-  conversation_id who;
-  Answer operator()() const { return {::mux::ui::request::verify_person{who}, ::mux::ui::request::close_person_info{}}; }
-};
-
-// Verify, where their protocol verifies people -- known from its type, the
-// tile not made for one that does not -- shown while their identity is
-// known (told by end-to-end encryption, the encryption plugin's) and they
-// are not verified, or not any more.
-template <class Protocol>
-auto verify_part(const palette&, const scene::Spec&, const account_id&, const std::string&, bool) {
+// What plugins put on the card (contract::person_card_parts), in their
+// order, each in the place its extend takes; nothing in the others.
+template <class Place, class Feature, class Protocol>
+auto person_part_of(const palette&, const account_id&, const std::string&, const person_facts&) {
   return nothing_shown();
 }
-template <class Protocol>
-  requires(proto::offered_by<state_of<Protocol>, proto::feature::identity_verification>())
-auto verify_part(const palette& colours, const scene::Spec& tile_spec, const account_id& account, const std::string& key, bool unverified) {
-  namespace c = skiff::compose;
-  return c::visible(unverified, c::styled(tile_spec, action_tile<person_verify_act>(
-      colours, "Verify with emoji", icon::check{}, {conversation_id{account, key}})));
+template <class Place, class Feature, class Protocol>
+  requires requires(const palette& colours, const account_id& account, const std::string& key, const person_facts& facts) {
+    extend(contract::person_card_parts{}, type_tag<Feature>{}, colours, Place{}, type_tag<Protocol>{}, account, key, facts);
+  }
+auto person_part_of(const palette& colours, const account_id& account, const std::string& key, const person_facts& facts) {
+  return extend(contract::person_card_parts{}, type_tag<Feature>{}, colours, Place{}, type_tag<Protocol>{}, account, key, facts);
+}
+template <class Place, class Protocol, class... Features>
+auto person_parts_of(plugin_list<Features...>, const palette& colours, const account_id& account, const std::string& key, const person_facts& facts) {
+  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                person_part_of<Place, Features, Protocol>(colours, account, key, facts)...);
 }
 // Everything below the title scrolls within the height the dialog gives it.
 // Of a protocol's account's person.
@@ -156,23 +150,6 @@ auto person_card_details(const palette& colours, const ui_shared& shared,
   namespace c = skiff::compose;
   const scene::Spec tile_spec{.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}};
   const auto& proto_state = protocol_state_of(shared, account);
-  const bool unverified = facts.trust && !spl::visit(spl::overloaded{[](trust::verified) { return true; },
-                                                                     [](const auto&) { return false; }},
-                                                     *facts.trust);
-  // Their identity reset: taken as theirs now, unverified (Element's
-  // "Withdraw verification").
-  const bool can_accept = facts.trust && spl::visit(spl::overloaded{[](trust::changed) { return true; },
-                                                                    [](const auto&) { return false; }},
-                                                    *facts.trust);
-  auto sessions = facts.devices | std::views::transform([&](const change::device_view& one) {
-                    return c::styled(
-                        {.fillX = true, .margin = {2.0f, 22.0f, 0.0f, 22.0f}},
-                        elided(nodes::Text(
-                            std::format("{} {}{}", one.verified ? "\u2713" : "\u26A0",
-                                        one.name.empty() ? one.id : one.name,
-                                        one.verified ? std::string(" \u00b7 Verified") : std::string(" \u00b7 Not verified")),
-                            13.0f, one.verified ? colours.text : colours.dim)));
-                  }) | std::ranges::to<std::vector>();
   auto theirs = proto::person_actions(proto_state, account, key) | std::views::enumerate | std::views::transform([&](const auto& one) {
                   const auto& [index, label] = one;
                   return c::styled(tile_spec, action_tile<person_protocol_act>(
@@ -184,18 +161,14 @@ auto person_card_details(const palette& colours, const ui_shared& shared,
       section_band(colours),
       id_line(colours, key, proto::person_link(proto_state, key).value_or("")),
       c::styled(tile_spec, action_tile<person_message_act>(colours, "Message", icon::send{}, {conversation_id{account, key}})),
-      verify_part<Protocol>(colours, tile_spec, account, key, unverified),
-      c::visible(can_accept, c::styled(tile_spec, action_tile<person_accept_act>(
-          colours, "Withdraw verification", icon::close{}, {conversation_id{account, key}}))),
+      person_parts_of<person_place::actions, Protocol>(composition::providers<contract::person_card_parts, enabled_plugins>{}, colours, account,
+                                                       key, facts),
       c::visible(facts.may_kick, c::styled(tile_spec, action_tile<person_room_act>(
           colours, "Remove from room", icon::leave{}, {room_action::kick{key}}))),
       c::visible(facts.may_ban, c::styled(tile_spec, action_tile<person_room_act>(
           colours, "Ban from room", icon::close{}, {room_action::ban{key}}))),
-      c::styled({.margin = {14.0f, 22.0f, 2.0f, 22.0f}},
-          c::visible(!facts.devices.empty(), nodes::Text(
-              facts.devices.empty() ? std::string() : std::format("SESSIONS ({})", facts.devices.size()),
-              13.0f, colours.dim, true))),
-      c::visible(!sessions.empty(), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(sessions))),
+      person_parts_of<person_place::details, Protocol>(composition::providers<contract::person_card_parts, enabled_plugins>{}, colours, account,
+                                                       key, facts),
       c::visible(!theirs.empty(), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(theirs)))));
 }
 

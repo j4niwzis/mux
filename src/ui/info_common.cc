@@ -106,6 +106,11 @@ struct person_facts {
   profile_details profile;
   friend bool operator==(const person_facts&, const person_facts&) = default;
 };
+// Where on a person's card a plugin's part goes (contract::person_card_parts).
+namespace person_place {
+struct actions {};
+struct details {};
+}  // namespace person_place
 [[nodiscard]] inline person_facts person_of(const ui_shared& shared, const conversation* in, const model& now, const account_id& account,
                                             const std::string& id) {
   person_facts out{id, presence_of(shared, now, account, id)};

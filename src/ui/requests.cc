@@ -690,9 +690,6 @@ struct give_passphrase {
 };
 // Emoji verification: with a person (all their devices), with one of this
 // account's sessions; and the answers in its dialog.
-struct verify_person {
-  mux::conversation_id who;  // the account, and the person's ID
-};
 // The chosen account's room keys, to a file or from one.
 // Local data's encryption flipped from Storage: a passphrase asked for.
 struct flip_local_encryption {};
@@ -773,10 +770,6 @@ struct flip_only_verified {};
 // not; sealed there, or not.
 struct flip_account_mentions_shared {};
 struct flip_account_mentions_sealed {};
-// A person's reset identity accepted, as Element's "Withdraw verification".
-struct accept_identity {
-  mux::conversation_id who;
-};
 struct typing {
   bool on = false;
 };

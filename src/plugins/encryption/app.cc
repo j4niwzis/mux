@@ -29,7 +29,7 @@ class part {
     ui::show(*s_->showing, std::optional(verification_view{one.user, one.device, one.step}));
   }
   // Begun from a person's card or a session's row.
-  void apply(const ui::request::verify_person& one) { s_->net->verify_start(one.who.account, one.who.id, std::nullopt); }
+  void apply(const verify_person& one) { s_->net->verify_start(one.who.account, one.who.id, std::nullopt); }
   // The dialog's answers, to the verification it shows.
   void apply(const verify_accept_now&) {
     if (shown_)
@@ -66,7 +66,7 @@ class part {
     this->on_chosen([](auto& account) -> decltype(void(account.delete_backup())) { account.delete_backup(); });
   }
   // A person's reset identity accepted ("Withdraw verification").
-  void apply(const ui::request::accept_identity& one) {
+  void apply(const accept_identity& one) {
     if (!s_->demo())
       s_->net->accept_identity(one.who.account, one.who.id);
   }

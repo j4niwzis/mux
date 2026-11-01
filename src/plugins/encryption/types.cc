@@ -11,10 +11,22 @@ import mux.composition;
 import mux.proto;
 
 export namespace mux::plugins::encryption {
+// Asked of the program by a person's card: emoji verification with them
+// (all their devices); their reset identity accepted, as Element's
+// "Withdraw verification".
+struct verify_person {
+  mux::conversation_id who;  // the account, and the person's ID
+};
+struct accept_identity {
+  mux::conversation_id who;
+};
 
 struct feature {
   static constexpr std::string_view name = "encryption";
 };
+// Its parts of a person's card: Verify and Withdraw verification after
+// Message, their sessions at its end (its UI_TOP layer).
+consteval bool provides(contract::person_card_parts, type_tag<feature>) { return true; }
 
 consteval bool provides(contract::matrix_account, type_tag<feature>) { return true; }
 

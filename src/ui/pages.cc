@@ -414,17 +414,13 @@ struct card_facts {
       0.0f,
       {.fillX = true, .height = height, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
 }
+// Rows, nodes or builders, scrolling: skiff's scrolled() makes the
+// container over them as they are built.
 template <class Rows> [[nodiscard]] auto dialog_list(Rows rows) {
   return skiff::compose::styled(
       {.fillX = true, .grow = scene::axes::kY},
-      nodes::ScrollContainer<Rows>(skiff::compose::styled(
+      skiff::compose::scrolled(skiff::compose::styled(
           {.fillX = true, .autoSize = scene::axes::kY}, std::move(rows))));
-}
-// Rows that hold pieces: a builder of the list, built as they are -- defined
-// after the eager one, which its lambda calls on what is built (a skiff
-// type, so the call is not found by ADL: it must be seen here).
-template <skiff::compose::a_builder Rows> [[nodiscard]] auto dialog_list(Rows rows) {
-  return skiff::compose::lifted([](auto built) { return dialog_list(std::move(built)); }, std::move(rows));
 }
 
 // A chat as the chats hold it now: none, where it is gone.

@@ -101,8 +101,11 @@ auto explore_view(const palette& colours, const shown& facts) {
       // fit beside it -- a phone's dialog, 306 wide, left the query 6 of
       // them, its caption a letter a line (a tester's) -- the server and
       // Search under it then.
-      c::styled({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 6.0f, 0.0f, 6.0f}}, nodes::Flow(
-          nodes::FlowOptions{.direction = nodes::direction::horizontal{}, .spacingX = 8.0f, .spacingY = 8.0f, .wrap = true},
+      // The flow made over its parts as they are built (lifted).
+      c::styled({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 6.0f, 0.0f, 6.0f}}, c::lifted([](auto... parts) {
+        return nodes::Flow<decltype(parts)...>(
+            nodes::FlowOptions{.direction = nodes::direction::horizontal{}, .spacingX = 8.0f, .spacingY = 8.0f, .wrap = true}, std::move(parts)...);
+      },
           c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .minWidth = 150.0f},
               model_field<&explore_draft::query>(colours, "Find a room",
                   std::string(facts.by ? proto::directory_hint(facts.by->speaks) : std::string_view("Name, topic, or address")))),

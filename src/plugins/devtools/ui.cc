@@ -91,7 +91,7 @@ MUX_INLINE_IN_RELEASE auto reading_of(const palette& colours, std::string text) 
   shown_text.setSelectable(true);
   return SKIFF_NAMED(devtools_reading, c::onRightPressAt(copy_reading{},
       c::styled({.fillX = true, .grow = scene::axes::kY},
-                nodes::ScrollContainer<nodes::Text>(c::styled({.fillX = true, .margin = {6.0f, 16.0f, 12.0f, 16.0f}}, std::move(shown_text))))));
+                c::scrolled(c::styled({.fillX = true, .margin = {6.0f, 16.0f, 12.0f, 16.0f}}, std::move(shown_text))))));
 }
 // A screen's head: back where there is somewhere to go back to, the title
 // -- "Copied" over it a moment -- and close.

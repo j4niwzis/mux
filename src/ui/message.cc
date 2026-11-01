@@ -504,13 +504,18 @@ auto message_words(const palette& colours, const text_piece& words, skia::SkColo
 }
 // The bubble's words, marked where they are made: found by their mark where
 // what holds them asks of them -- its rules, its menu, a jump to a quote.
-// A part that may be there, at an opacity: a picture or an album at the
-// chat's look's (a builder, so its alpha said as it is put, not set on it).
+// A part that may be there, with a spec more: said as it is put (a
+// builder: nothing set on it).
 template <class T>
-auto faded(float alpha, std::optional<T> part) -> std::optional<decltype(skiff::compose::styled({}, std::move(*part)))> {
+auto specced(scene::Spec spec, std::optional<T> part) -> std::optional<decltype(skiff::compose::styled({}, std::move(*part)))> {
   if (!part)
     return std::nullopt;
-  return skiff::compose::styled({.alpha = alpha}, std::move(*part));
+  return skiff::compose::styled(spec, std::move(*part));
+}
+// One at an opacity: a picture or an album at the chat's look's.
+template <class T>
+auto faded(float alpha, std::optional<T> part) {
+  return specced({.alpha = alpha}, std::move(part));
 }
 struct bubble_words {};
 using bubble_words_t = skiff::compose::Marked<bubble_words, decltype(message_words(std::declval<const palette&>(),
@@ -1023,16 +1028,11 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   // the quote of what it answers -- each on a small plate of its own, as
   // Telegram's, beside it; no sender's name (tdesktop's drawSurrounding
   // draws a topic, a forward, via and the reply, never the name).
+  // The plate said where they are put in the bubble (specced).
+  scene::Spec plate{};
   if (rules.sticker && picture) {
-    const auto plated = [&](scene::Node& part) {
-      part.apply({.padding = {3.0f, 8.0f, 3.0f, 8.0f}, .cornerRadius = 8.0f, .background = rules.plate});
-    };
-    if (name)
-      name->setVisible(false);
-    if (forwarded)
-      plated(*forwarded);
-    if (quote)
-      plated(*quote);
+    plate = {.padding = {3.0f, 8.0f, 3.0f, 8.0f}, .cornerRadius = 8.0f, .background = rules.plate};
+    name.reset();
     rules.beside = true;
     rules.beside_left = mine;
     rules.base_min = 0.0f;
@@ -1114,7 +1114,7 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   }
   return c::arranged<bubble_rules>(
       std::move(rules),
-      bubble_box(c::vbox(2.0f, spec), std::move(frost), std::move(name), std::move(forwarded), std::move(quote), faded(images, std::move(picture)),
+      bubble_box(c::vbox(2.0f, spec), std::move(frost), std::move(name), specced(plate, std::move(forwarded)), specced(plate, std::move(quote)), faded(images, std::move(picture)),
                 std::move(their_sticker), faded(images, std::move(album)), std::move(file), std::move(text), std::move(blocks), std::move(cards),
                 trailers_t::built(trailer_facts{colours, looks, said, in, said.id}), std::move(thread), std::move(lines),
                 std::move(their_view), std::move(time), std::move(inline_time)));

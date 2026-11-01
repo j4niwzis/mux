@@ -297,10 +297,13 @@ auto emoji_panel(const palette& colours, emoji_kept& kept, Pick pick) {
   // The footer, as tdesktop's: the categories in a row of their own, 36
   // high, each tab sharing it; under it the packs -- the favourites, each
   // custom pack -- a page of them at a time between arrows.
+  // Made as the strip pages, a node each time: its spec applied on it
+  // (styled() makes a builder).
   const auto arrow = [&colours](bool next) {
-    return c::styled({.width = 30.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
-                      .hoverBackground = colours.chosen},
-                     nodes::Text(next ? "›" : "‹", 20.0f, colours.text));
+    nodes::Text made(next ? "›" : "‹", 20.0f, colours.text);
+    made.apply({.width = 30.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
+                .hoverBackground = colours.chosen});
+    return made;
   };
   auto footer = c::split<emoji_group>(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       [](const emoji_group& one) { return one.picture.has_value(); },

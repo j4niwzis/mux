@@ -17,6 +17,11 @@ set(mux_bundled_plugins_root "${CMAKE_CURRENT_SOURCE_DIR}/src/plugins")
 set(MUX_EXTRA_PLUGINS "" CACHE STRING "Folders of third-party plugins, each with a CMakeLists.txt calling mux_plugin()")
 
 # A plugin's sources, by where they go:
+#   MODEL     what it keeps in the model beside the client's own: its part
+#             of a message (message_part) and of a chat (chat_part<Message>,
+#             a template over the client's message): on std alone, under
+#             mux.core.ids, which holds every plugin's -- the module
+#             mux.plugin.<name>.model
 #   CHANGES   what it tells the program from an account -- its changes,
 #             one change_list, `changes`, in its namespace: under mux.core,
 #             on mux.core.ids alone; the module mux.plugin.<name>.changes
@@ -45,7 +50,7 @@ set(MUX_EXTRA_PLUGINS "" CACHE STRING "Folders of third-party plugins, each with
 # (mux's own: mux's, AGPL-3.0-only); and its folder's README.md, put in
 # the program whole (#embed).
 function(mux_plugin name)
-  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER;REPO;LICENSE;SUMMARY" "CHANGES;TYPES;UI;UI_TOP;APP;MATRIX;XMPP;REQUIRES;LIBRARIES;LOOM")
+  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER;REPO;LICENSE;SUMMARY" "MODEL;CHANGES;TYPES;UI;UI_TOP;APP;MATRIX;XMPP;REQUIRES;LIBRARIES;LOOM")
   # The parts of loom it needs, where Matrix is on: asked for with the
   # protocol's own, and only then.
   if(MUX_PROTOCOL_MATRIX)
@@ -60,10 +65,13 @@ function(mux_plugin name)
   if(NOT MUX_PROTOCOL_XMPP)
     set(one_XMPP)
   endif()
+  if(one_MODEL)
+    set_property(GLOBAL APPEND PROPERTY MUX_PLUGINS_WITH_MODEL ${name})
+  endif()
   if(one_CHANGES)
     set_property(GLOBAL APPEND PROPERTY MUX_PLUGINS_WITH_CHANGES ${name})
   endif()
-  foreach(layer IN ITEMS CHANGES TYPES UI UI_TOP APP MATRIX XMPP)
+  foreach(layer IN ITEMS MODEL CHANGES TYPES UI UI_TOP APP MATRIX XMPP)
     # Its own sources by their paths in its folder; one it wrote (a layer's
     # module made from the protocols turned on: room_admin's) by its own.
     set(paths)
@@ -160,7 +168,7 @@ else()
   set(mux_all_plugins OFF)
 endif()
 get_property(mux_plugin_libraries GLOBAL PROPERTY MUX_PLUGIN_LIBRARIES)
-foreach(layer IN ITEMS CHANGES TYPES UI UI_TOP APP MATRIX XMPP)
+foreach(layer IN ITEMS MODEL CHANGES TYPES UI UI_TOP APP MATRIX XMPP)
   string(TOLOWER "${layer}" lower)
   get_property(mux_plugin_${lower} GLOBAL PROPERTY MUX_PLUGIN_${layer})
   get_property(mux_plugin_modules_${lower} GLOBAL PROPERTY MUX_PLUGIN_MODULES_${layer})
@@ -213,6 +221,21 @@ list(APPEND mux_plugins_types "${mux_plugins_info}")
 # bubbles): on mux.ui.messages, under the window.
 mux_plugins_module(mux_plugins_ui_top mux.plugins.ui.top "mux.plugins.ui;${mux_plugin_modules_ui_top}" "")
 mux_plugins_module(mux_plugins_app mux.plugins.app "mux.plugins.types;${mux_plugin_modules_app}" "")
+# What the plugins keep in the model, in their ORDER: each's part of a
+# message and of a chat, held by mux.core.ids' message and conversation.
+get_property(mux_plugins_with_model GLOBAL PROPERTY MUX_PLUGINS_WITH_MODEL)
+set(message_parts)
+set(chat_parts)
+foreach(name IN LISTS mux_plugins)
+  if(name IN_LIST mux_plugins_with_model)
+    list(APPEND message_parts "plugins::${name}::message_part")
+    list(APPEND chat_parts "plugins::${name}::chat_part<Message>")
+  endif()
+endforeach()
+string(REPLACE ";" ", " message_parts "${message_parts}")
+string(REPLACE ";" ", " chat_parts "${chat_parts}")
+mux_plugins_module(mux_plugins_model mux.plugins.model "${mux_plugin_modules_model}"
+  "import std;\nexport namespace mux {\n// Every plugin's part of a message, and of a chat (over the client's\n// message), in their ORDER.\nusing plugin_message_parts = std::tuple<${message_parts}>;\ntemplate <class Message>\nusing plugin_chat_parts = std::tuple<${chat_parts}>;\n}  // namespace mux\n")
 # The plugins' changes, in their ORDER: one list, joined into mux::change_t.
 get_property(mux_plugins_with_changes GLOBAL PROPERTY MUX_PLUGINS_WITH_CHANGES)
 set(change_lists)

@@ -8,6 +8,7 @@ export module mux.core.ids;
 
 import std;
 import splice;
+import mux.plugins.model;
 export import mux.proto.tags;
 export import mux.proto.state;
 export import skiff.model;
@@ -446,6 +447,9 @@ struct message {
   std::string reaction_key;
   // What its protocol has of it beyond this (message_parts), or none.
   message_part theirs;
+  // What each plugin keeps of it (mux.plugins.model): a thread's answer's
+  // root, for one.
+  plugin_message_parts plugins;
   // A local echo's position while its server timestamp is unknown. Delivery
   // acknowledgements keep it; a received copy replaces it with server time.
   std::optional<std::chrono::sys_time<std::chrono::milliseconds>> local_order;
@@ -762,6 +766,9 @@ struct conversation {
   // on their own for their quotes -- kept out of the timeline, and let go
   // once the timeline has them, or when too many have gathered.
   std::map<std::string, message> quoted;
+  // What each plugin keeps of the chat (mux.plugins.model): its threads'
+  // answers, for one.
+  plugin_chat_parts<message> plugins;
   // Each thread's answers, by its root, oldest first: kept apart from the
   // timeline, as Element keeps them; and the roots the server listed.
   std::map<std::string, std::vector<message>> threads;

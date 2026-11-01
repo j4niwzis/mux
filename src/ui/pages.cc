@@ -478,17 +478,21 @@ struct trailer_facts {
 // whether the chat shows previews.
 // What a message's footers are made from (contract::message_footers): the
 // chat, and who has read up to the message where the chat shows receipts.
+// The chats' flags and the rows' marks, each plugin's (contract::chat_flags,
+// contract::row_marks).
+using chat_flags_t = typename composition::chat_flags_of<composition::providers<contract::chat_flags, enabled_plugins>>::type;
+using row_marks_t = typename composition::row_marks_of<composition::providers<contract::row_marks, enabled_plugins>>::type;
 struct footer_facts {
   const palette& colours;
   const conversation& in;
-  const std::vector<std::string>& readers;
+  const row_marks_t& marks;
 };
 struct card_facts {
   const palette& colours;
   const message& said;
   std::optional<std::string> link;
   const model* now = nullptr;
-  bool previews_shown = true;
+  const chat_flags_t& flags;
 };
 
 

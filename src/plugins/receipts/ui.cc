@@ -42,9 +42,10 @@ using readers_row_t = decltype(readers_row(std::declval<const palette&>(), std::
 // Its footer under a message's row (mux.ui.messages:message): where anyone
 // has read up to it, as the chat shows receipts.
 inline std::optional<readers_row_t> extend(contract::message_footers, type_tag<feature>, const footer_facts& facts) {
-  if (facts.readers.empty())
+  const auto& mark = std::get<std::optional<readers>>(facts.marks);
+  if (!mark || mark->who.empty())
     return std::nullopt;
-  return readers_row(facts.colours, facts.in, facts.readers);
+  return readers_row(facts.colours, facts.in, mark->who);
 }
 constexpr float footer_height(contract::message_footers, type_tag<feature>) { return kReadersHeight; }
 

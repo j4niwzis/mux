@@ -155,10 +155,22 @@ struct chat_looks {
   static constexpr std::string_view name = "a chat's looks";
 };
 // What the timeline does for a chat, as a plugin's choices say (mux.app.jumps):
-// flags_for(c, f, its own settings, the space each chat is in, the chat,
-// chat_flags&) -- it sets the flags that are its own.
+// flag_type(c, f) -> type_tag<its flag>, a value of its own;
+// flag_of(c, f, its own settings, the space each chat is in, the chat) ->
+// its flag. The timeline holds each's (chat_flags_of), and what a plugin
+// puts in a row reads its own.
 struct chat_flags {
   static constexpr std::string_view name = "a chat's flags";
+};
+// What a plugin marks rows of the timeline with, over the messages it
+// shows (mux.ui:timeline): mark_type(c, f) -> type_tag<its mark>;
+// marks_over(c, f, the chat's flags, conversation, the messages in order
+// (std::vector<const message*>), whether each is shown) ->
+// std::map<message id, its mark>. Each row holds
+// its marks (row_marks_of), made again as they change -- who has read up
+// to it, for one.
+struct row_marks {
+  static constexpr std::string_view name = "a row's marks";
 };
 // Rows of a plugin's among a level's choices for chats -- every chat's
 // (Storage), an account's (its Chats page), a chat's (its General tab)
@@ -467,6 +479,20 @@ consteval bool provides() {
   return provides(Contract{}, type_tag<Feature>{});
 }
 
+// The chats' flags, each plugin's of its own type (contract::chat_flags);
+// the rows' marks, each plugin's where it has one (contract::row_marks).
+template <class List>
+struct chat_flags_of;
+template <class... Features>
+struct chat_flags_of<plugin_list<Features...>> {
+  using type = std::tuple<typename decltype(flag_type(contract::chat_flags{}, type_tag<Features>{}))::type...>;
+};
+template <class List>
+struct row_marks_of;
+template <class... Features>
+struct row_marks_of<plugin_list<Features...>> {
+  using type = std::tuple<std::optional<typename decltype(mark_type(contract::row_marks{}, type_tag<Features>{}))::type>...>;
+};
 // Lists joined, in order.
 template <class... Lists>
 struct joined {

@@ -86,7 +86,10 @@ using card = skiff::compose::Marked<previewed_link, decltype(skiff::compose::mad
 // Its card in a message's bubble (mux.ui.messages:message): the first
 // link's preview, where the chat shows them and it has come.
 inline std::optional<card> extend(contract::message_cards, type_tag<feature>, const card_facts& facts) {
-  if (!facts.link || !facts.now || !facts.previews_shown)
+  // Not where the chat shows none, nor in an encrypted room, whose links
+  // were never fetched.
+  const conversation* chat = facts.now ? facts.now->find(facts.said.in) : nullptr;
+  if (!facts.link || !facts.now || !std::get<flag>(facts.flags).shown || (chat && chat->encrypted))
     return std::nullopt;
   const auto found = facts.now->previews.find(*facts.link);
   if (found == facts.now->previews.end())

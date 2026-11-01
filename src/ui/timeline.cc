@@ -22,6 +22,8 @@ import mux.config;
 import mux.logic.links;
 import mux.protocols;
 import mux.ui.base;
+import mux.composition;
+import mux.plugins.types;
 import mux.plugins.ui;
 import mux.ui.proto;
 import :message;
@@ -81,7 +83,8 @@ struct timeline_told {
   std::optional<std::string> thread;
   skiff::compose::WindowAim<std::string> aim;
   room_event_filter filter;
-  bool receipts = false, previews = true;
+  // What the plugins' flags say of the chat (contract::chat_flags).
+  chat_flags_t flags{};
   // What its rows are made with: the program's, handed down.
   const bubble_needs* needs = nullptr;
   std::optional<std::string> unread_from;
@@ -248,6 +251,22 @@ struct timeline_rows {
       return found->second;
     return named.emplace(said.id, rooms_named_in(in, said, now)).first->second;
   }
+  // Each plugin's marks over the messages shown (contract::row_marks), and
+  // a row's of them.
+  template <class... Features>
+  static auto plugins_marks(const chat_flags_t& flags, const conversation& chat, const std::vector<const message*>& in_order,
+                            const std::vector<bool>& shown, plugin_list<Features...>) {
+    return std::tuple{marks_over(contract::row_marks{}, type_tag<Features>{}, flags, chat, in_order, shown)...};
+  }
+  template <class... Maps>
+  static row_marks_t marks_on(const std::tuple<Maps...>& marks, const std::string& id) {
+    return std::apply([&](const auto&... each) {
+      return row_marks_t{[&](const auto& map) -> std::optional<typename std::remove_cvref_t<decltype(map)>::mapped_type> {
+        const auto found = map.find(id);
+        return found == map.end() ? std::nullopt : std::optional(found->second);
+      }(each)...};
+    }, marks);
+  }
   static std::vector<bubble_item> items(const chats_model& now, const Told& told, std::size_t from, std::size_t to,
                                         const std::optional<std::string>& newest) {
     const conversation* chat = chat_of(now, told);
@@ -269,32 +288,12 @@ struct timeline_rows {
       return j && !all.at(i).service && !all.at(*j).service && all.at(*j).sender == all.at(i).sender &&
              all.at(*j).outgoing == all.at(i).outgoing;
     };
-    // Who has read up to where, where the chat shows it: each other person on
-    // the message their receipt points at -- or, pointing at what is not shown
-    // or not here, the nearest shown before it, by its time.
-    std::map<std::string, std::vector<std::string>> readers;
-    if (told.receipts) {
-      std::map<std::string, std::size_t> place;
-      for (std::size_t i = 0; i < all.size(); ++i)
-        place.emplace(all.at(i).id, i);
-      for (const auto& [user, event] : chat->read_by) {
-        if (user == chat->id.account.address)
-          continue;
-        std::optional<std::size_t> at;
-        if (const auto found = place.find(event); found != place.end())
-          at = found->second;
-        else if (const auto when = chat->receipt_times.find(user); when != chat->receipt_times.end())
-          for (std::size_t j = all.size(); j-- > 0;)
-            if (all.at(j).at <= when->second) {
-              at = j;
-              break;
-            }
-        while (at && !shows(all.at(*at)))
-          at = *at == 0 ? std::nullopt : std::optional<std::size_t>(*at - 1);
-        if (at)
-          readers[all.at(*at).id].push_back(user);
-      }
-    }
+    // What the plugins mark rows with, over the messages as they are and
+    // whether each is shown (contract::row_marks).
+    const std::vector<const message*> in_order = std::views::iota(std::size_t{0}, all.size()) |
+                                                 std::views::transform([&](std::size_t i) { return &all.at(i); }) | std::ranges::to<std::vector>();
+    const std::vector<bool> shown_each = in_order | std::views::transform([&](const message* one) { return shows(*one); }) | std::ranges::to<std::vector>();
+    const auto marks = plugins_marks(told.flags, *chat, in_order, shown_each, composition::providers<contract::row_marks, enabled_plugins>{});
     // Where the newest shown was: those after it have just come.
     std::optional<std::size_t> newest_at;
     if (newest)
@@ -306,7 +305,7 @@ struct timeline_rows {
                                 .first = !same(i, neighbour(i, false)),
                                 .last = !same(i, neighbour(i, true)),
                                 .events_shown = shows(said),
-                                .previews_shown = told.previews,
+                                .flags = told.flags,
                                 .unread_start = told.unread_from && said.id == *told.unread_from,
                                 .frost = told.frost,
                                 .looks = told.looks};
@@ -317,8 +316,7 @@ struct timeline_rows {
              }
              if (const auto link = first_link_of(said); link && program)
                facts.preview_known = program->previews.contains(*link);
-             if (const auto found = readers.find(said.id); found != readers.end())
-               facts.readers = found->second;
+             facts.marks = marks_on(marks, said.id);
              if (program)
                facts.rooms_come = rooms_of(*chat, said, program).come(*program);
              // Come in moving: newer than the newest it showed, shown -- not an

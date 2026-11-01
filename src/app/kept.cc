@@ -445,14 +445,13 @@ struct kept_settings {
       (void)state.apply(skiff::model::put<account_choice<T>>(address, account_choice<T>{}));
   }
   // What the timeline does for a chat: the plugins' say (contract::chat_flags).
-  [[nodiscard]] chat_flags flags_of(const conversation_id& chat) const {
+  using chat_flags_t = typename composition::chat_flags_of<composition::providers<contract::chat_flags, enabled_plugins>>::type;
+  [[nodiscard]] chat_flags_t flags_of(const conversation_id& chat) const {
     return this->flags_said_by(composition::providers<contract::chat_flags, enabled_plugins>{}, chat);
   }
   template <class... Features>
-  [[nodiscard]] chat_flags flags_said_by(plugin_list<Features...>, const conversation_id& chat) const {
-    chat_flags out;
-    (flags_for(contract::chat_flags{}, type_tag<Features>{}, this->plugin_settings<plugin_settings_t<Features>>(), space_above, chat, out), ...);
-    return out;
+  [[nodiscard]] chat_flags_t flags_said_by(plugin_list<Features...>, const conversation_id& chat) const {
+    return chat_flags_t{flag_of(contract::chat_flags{}, type_tag<Features>{}, this->plugin_settings<plugin_settings_t<Features>>(), space_above, chat)...};
   }
   bool remove_account(std::string_view address) {
     return this->settings_of(address) != nullptr && state.apply(skiff::model::take<mux::config::account_t>(std::string(address)));

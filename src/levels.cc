@@ -88,12 +88,5 @@ struct chat_in : chat {
 [[nodiscard]] inline choice_level_t level_of(const level_place::account&) { return choice_level::account{}; }
 [[nodiscard]] inline choice_level_t level_of(const level_place::chat&) { return choice_level::chat{}; }
 
-// What the timeline does for a chat, as the plugins say (contract::chat_flags):
-// each unsaid where no plugin says it.
-struct chat_flags {
-  std::optional<bool> receipts;
-  std::optional<bool> previews;
-  std::optional<bool> previews_direct;
-};
 
 }  // namespace mux

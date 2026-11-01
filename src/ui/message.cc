@@ -387,15 +387,15 @@ struct bubble_facts {
   // Where it is in its sender's run: the first has the name, the last the
   // avatar.
   bool first = false, last = false;
-  // Whether room events are shown, the chat shows link previews, its link's
-  // preview has come, the message it answers was there to quote, it is the
-  // chat's first unread.
-  bool events_shown = true, previews_shown = true, preview_known = false, quote_known = true, unread_start = false;
+  // Whether room events are shown, its link's preview has come, the message
+  // it answers was there to quote, it is the chat's first unread.
+  bool events_shown = true, preview_known = false, quote_known = true, unread_start = false;
+  // What the plugins' flags say of its chat, and their marks on it.
+  chat_flags_t flags{};
+  row_marks_t marks{};
   // What the message it answers says now: a row quoting it made again as
   // it changes -- edited, deleted.
   std::optional<decltype(message::body)> quote_said;
-  // Who has read up to it, where the chat shows it.
-  std::vector<std::string> readers;
   // The inherited blur its panes were made with.
   double frost = 10.0;
   // How many of the rooms it names have come -- a picture, or found to be
@@ -1016,7 +1016,7 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
                            },
                            marks_fragment{pieces.front().styles, quote_colour}, bubble_words_t(std::move(words))));
   // The plugins' cards: the first link's preview, where it has come.
-  auto cards = cards_t::built(card_facts{colours, said, first_link_of(said), now, f.previews_shown});
+  auto cards = cards_t::built(card_facts{colours, said, first_link_of(said), now, f.flags});
   // Its head: the bubble at least as wide as it asks.
   std::optional<head_node_t> quote;
   if (head) {
@@ -1323,7 +1323,7 @@ auto message_row(const bubble_needs& n, const conversation& in, const bubble_fac
   if (f.unread_start)
     unread.emplace(c::styled({.margin = {0.0f, -kListSide, 0.0f, -kListSide}}, unread_bar(colours)));
   // The plugins' footers under it: who has read up to it, for one.
-  auto footers = footers_t::built(footer_facts{colours, in, f.readers});
+  auto footers = footers_t::built(footer_facts{colours, in, f.marks});
   const float footer = footers_t::height(footers);
   // Drawn once and played back until something in it changes -- not one
   // with a picture or a file (a loader turns in it while it comes, a picture

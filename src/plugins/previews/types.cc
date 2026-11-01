@@ -44,12 +44,15 @@ consteval bool provides(contract::choice_rows, type_tag<feature>) { return true;
 consteval bool provides(contract::account_page_rows, type_tag<feature>) { return true; }
 // The program told whether a chat shows them, and from where they come
 // (contract::chat_flags).
+struct flag {
+  bool shown = true;
+  friend bool operator==(const flag&, const flag&) = default;
+};
 consteval bool provides(contract::chat_flags, type_tag<feature>) { return true; }
-inline void flags_for(contract::chat_flags, type_tag<feature>, const level_choices<choices>& mine,
-                      const std::map<conversation_id, conversation_id>& space_above, const conversation_id& chat, chat_flags& out) {
-  const choices now = choices_in_effect(mine, space_above, chat);
-  out.previews = now.shown.value_or(true);
-  out.previews_direct = now.direct.value_or(false);
+constexpr type_tag<flag> flag_type(contract::chat_flags, type_tag<feature>) { return {}; }
+inline flag flag_of(contract::chat_flags, type_tag<feature>, const level_choices<choices>& mine,
+                    const std::map<conversation_id, conversation_id>& space_above, const conversation_id& chat) {
+  return {choices_in_effect(mine, space_above, chat).shown.value_or(true)};
 }
 
 }  // namespace mux::plugins::previews

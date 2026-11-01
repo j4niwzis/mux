@@ -39,10 +39,53 @@ constexpr type_tag<level_choices<choices>> settings_type(contract::settings_kept
 consteval bool provides(contract::choice_rows, type_tag<feature>) { return true; }
 consteval bool provides(contract::account_page_rows, type_tag<feature>) { return true; }
 // The timeline told whether a chat shows them (contract::chat_flags).
+struct flag {
+  bool shown = false;
+  friend bool operator==(const flag&, const flag&) = default;
+};
 consteval bool provides(contract::chat_flags, type_tag<feature>) { return true; }
-inline void flags_for(contract::chat_flags, type_tag<feature>, const level_choices<choices>& mine,
-                      const std::map<conversation_id, conversation_id>& space_above, const conversation_id& chat, chat_flags& out) {
-  out.receipts = choices_in_effect(mine, space_above, chat).shown.value_or(false);
+constexpr type_tag<flag> flag_type(contract::chat_flags, type_tag<feature>) { return {}; }
+inline flag flag_of(contract::chat_flags, type_tag<feature>, const level_choices<choices>& mine,
+                    const std::map<conversation_id, conversation_id>& space_above, const conversation_id& chat) {
+  return {choices_in_effect(mine, space_above, chat).shown.value_or(false)};
+}
+// Who has read up to each message, where the chat shows it
+// (contract::row_marks): each other person on the message their receipt
+// points at -- or, pointing at what is not shown or not here, the nearest
+// shown before it, by its time.
+struct readers {
+  std::vector<std::string> who;
+  friend bool operator==(const readers&, const readers&) = default;
+};
+consteval bool provides(contract::row_marks, type_tag<feature>) { return true; }
+constexpr type_tag<readers> mark_type(contract::row_marks, type_tag<feature>) { return {}; }
+template <class Flags>
+std::map<std::string, readers> marks_over(contract::row_marks, type_tag<feature>, const Flags& flags, const conversation& chat,
+                                          const std::vector<const message*>& all, const std::vector<bool>& shown) {
+  std::map<std::string, readers> out;
+  if (!std::get<flag>(flags).shown)
+    return out;
+  std::map<std::string, std::size_t> place;
+  for (std::size_t i = 0; i < all.size(); ++i)
+    place.emplace(all[i]->id, i);
+  for (const auto& [user, event] : chat.read_by) {
+    if (user == chat.id.account.address)
+      continue;
+    std::optional<std::size_t> at;
+    if (const auto found = place.find(event); found != place.end())
+      at = found->second;
+    else if (const auto when = chat.receipt_times.find(user); when != chat.receipt_times.end())
+      for (std::size_t j = all.size(); j-- > 0;)
+        if (all[j]->at <= when->second) {
+          at = j;
+          break;
+        }
+    while (at && !shown[*at])
+      at = *at == 0 ? std::nullopt : std::optional<std::size_t>(*at - 1);
+    if (at)
+      out[all[*at]->id].who.push_back(user);
+  }
+  return out;
 }
 
 }  // namespace mux::plugins::receipts

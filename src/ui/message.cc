@@ -504,6 +504,14 @@ auto message_words(const palette& colours, const text_piece& words, skia::SkColo
 }
 // The bubble's words, marked where they are made: found by their mark where
 // what holds them asks of them -- its rules, its menu, a jump to a quote.
+// A part that may be there, at an opacity: a picture or an album at the
+// chat's look's (a builder, so its alpha said as it is put, not set on it).
+template <class T>
+auto faded(float alpha, std::optional<T> part) -> std::optional<decltype(skiff::compose::styled({}, std::move(*part)))> {
+  if (!part)
+    return std::nullopt;
+  return skiff::compose::styled({.alpha = alpha}, std::move(*part));
+}
 struct bubble_words {};
 using bubble_words_t = skiff::compose::Marked<bubble_words, decltype(message_words(std::declval<const palette&>(),
                                                                                 std::declval<const text_piece&>(), 0u, 0u))>;
@@ -963,13 +971,9 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   if (!said.album.empty())
     album.emplace(album_view(colours, said.album,
                              said.album | std::views::transform([&](const attachment& one) { return opens(one.source, std::nullopt, one.name); }) | std::ranges::to<std::vector>()));
-  // Pictures at the chat's look's opacity for them.
-  if (const float images = static_cast<float>(element_opacity_of(looks.bubbles, &config::element_opacity::images)) / 100.0f; images < 1.0f) {
-    if (picture)
-      picture->apply({.alpha = images});
-    if (album)
-      album->apply({.alpha = images});
-  }
+  // Pictures at the chat's look's opacity for them: said where they are put
+  // in the bubble (faded), what they are being builders.
+  const float images = static_cast<float>(element_opacity_of(looks.bubbles, &config::element_opacity::images)) / 100.0f;
 
   // Its text, as the message says it, its mentions as pills. A reply whose
   // text opens with its only quote, of the message it answers: the quote
@@ -1110,8 +1114,8 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
   }
   return c::arranged<bubble_rules>(
       std::move(rules),
-      bubble_box(c::vbox(2.0f, spec), std::move(frost), std::move(name), std::move(forwarded), std::move(quote), std::move(picture),
-                std::move(their_sticker), std::move(album), std::move(file), std::move(text), std::move(blocks), std::move(cards),
+      bubble_box(c::vbox(2.0f, spec), std::move(frost), std::move(name), std::move(forwarded), std::move(quote), faded(images, std::move(picture)),
+                std::move(their_sticker), faded(images, std::move(album)), std::move(file), std::move(text), std::move(blocks), std::move(cards),
                 trailers_t::built(trailer_facts{colours, looks, said, in, said.id}), std::move(thread), std::move(lines),
                 std::move(their_view), std::move(time), std::move(inline_time)));
 }
@@ -1315,11 +1319,9 @@ auto message_row(const bubble_needs& n, const conversation& in, const bubble_fac
                         nodes::Icon(shape_of(icon::back{}), colours.dim));
   // Over the first unread message of a chat opened: tdesktop's bar, across
   // the whole list -- held out past the row's sides and the list's.
-  std::optional<decltype(unread_bar(colours))> unread;
-  if (f.unread_start) {
-    unread.emplace(unread_bar(colours));
-    unread->apply({.margin = {0.0f, -kListSide, 0.0f, -kListSide}});
-  }
+  std::optional<decltype(skiff::compose::styled({}, unread_bar(colours)))> unread;
+  if (f.unread_start)
+    unread.emplace(c::styled({.margin = {0.0f, -kListSide, 0.0f, -kListSide}}, unread_bar(colours)));
   // The plugins' footers under it: who has read up to it, for one.
   auto footers = footers_t::built(footer_facts{colours, in, f.readers});
   const float footer = footers_t::height(footers);

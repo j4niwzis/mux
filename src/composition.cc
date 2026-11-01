@@ -136,6 +136,15 @@ struct composer_buttons {
 struct captured_keys {
   static constexpr std::string_view name = "the keys caught first";
 };
+// What a plugin fetches for a message on screen (mux.app.pictures), asked
+// for each as the pictures' own are: wanted_for(c, f, services&,
+// conversation, message, wants) in its APP layer, where wants lends the
+// pictures' fetching -- picture(source, key), a picture kept as an
+// avatar's; site_picture(account, image), one fetched from a site; and
+// once(key), true the first time a key is said. A link's preview, for one.
+struct shown_message_wants {
+  static constexpr std::string_view name = "what a message shown wants";
+};
 // A chat's looks -- its background, its bubbles', its panels' -- chosen at
 // a level (mux.app.kept, mux.app.looks): chat_looks_in_effect(c, f, its own
 // settings, the space each chat is in, the chat -- none, every chat's) ->

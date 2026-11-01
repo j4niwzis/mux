@@ -464,13 +464,6 @@ struct kept_settings {
   [[nodiscard]] std::int64_t jump_search_of(const conversation_id& chat) {
     return this->reads().jump_search_of(chat);
   }
-  // Whether a chat's link previews come from the sites themselves: where
-  // its protocol's servers fetch none, always; else as the plugins say
-  // (contract::chat_flags).
-  [[nodiscard]] bool previews_direct(const conversation_id& chat) const {
-    return !proto::offers(state_before(chat.account.speaks), proto::feature::server_previews{}) ||
-           this->flags_of(chat).previews_direct.value_or(false);
-  }
   // Whether a chat shows what is done in it: its own choice, else its
   // account's, else every account's.
   [[nodiscard]] bool room_events_shown(const conversation_id& chat) {

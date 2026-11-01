@@ -24,6 +24,9 @@ import mux.ui;
 import mux.app.network;
 import mux.app.requests;
 import mux.app.services;
+import mux.composition;
+import mux.plugins.types;
+import mux.plugins.app;
 import mux.app.workers;
 import mux.logic.blurhash;
 
@@ -364,29 +367,10 @@ class pictures_part {
                   this->make_preview(item);
                 }
               }
-            // Its first link's preview, once, where the chat shows them;
-            // and the preview's picture.
-            // Never for an encrypted room: the preview is fetched through the
-            // homeserver (/preview_url), which would be handed every link
-            // said in it -- as Element does not by default.
-            if (const auto link = !s_->kept->flags_of(one.id).previews.value_or(false) || one.encrypted
-                                      ? std::nullopt
-                                      : mux::ui::first_link_of(said)) {
-              if (const auto found = s_->model->previews.find(*link); found != s_->model->previews.end()) {
-                if (found->second.image && !found->second.from_site)
-                  want(id, found->second.image, *found->second.image);
-                // From the site: only where this chat fetches previews so.
-                else if (const std::string& image = found->second.image.value_or(std::string());
-                         found->second.image && s_->kept->previews_direct(one.id) &&
-                         !mux::ui::avatar_images().has(image) && !decoding_.contains(image) &&
-                         !this->read_back(media_use::avatar{image}, image) && fetches_.due(image)) {
-                  fetches_.asked(image);
-                  s_->net->fetch_preview_picture(id, image);
-                }
-              } else if (links_asked_.insert(*link).second) {
-                s_->net->fetch_preview(id, *link, s_->kept->previews_direct(one.id));
-              }
-            }
+            // What the plugins fetch for it (contract::shown_message_wants):
+            // its link's preview, for one.
+            this->plugins_want(one, said, plugin_wants<decltype(want)>{this, id, &want},
+                               mux::composition::providers<mux::contract::shown_message_wants, mux::enabled_plugins>{});
             // A message quoted that is neither in the timeline nor fetched:
             // fetched on its own, once.
             // (The message a plugin's head shows: the one a reply answers.)
@@ -833,7 +817,32 @@ class pictures_part {
     return true;
   }
   // The links whose previews were asked for, not to be asked twice.
-  std::set<std::string> links_asked_;
+  std::set<std::string> keys_said_;
+  // What a plugin is lent of the pictures' fetching for a message shown
+  // (contract::shown_message_wants).
+  template <class Want>
+  struct plugin_wants {
+    pictures_part* self;
+    account_id of;
+    Want* want;
+    // A picture kept as an avatar's are, by its key.
+    void picture(const std::optional<std::string>& source, const std::string& key) const { (*want)(of, source, key); }
+    // One fetched from a site, kept under its address.
+    void site_picture(const std::string& image) const { self->site_picture(of, image); }
+    // The first time a key is said.
+    [[nodiscard]] bool once(const std::string& key) const { return self->keys_said_.insert(key).second; }
+  };
+  void site_picture(const account_id& of, const std::string& image) {
+    if (image.empty() || mux::ui::avatar_images().has(image) || decoding_.contains(image) || this->read_back(media_use::avatar{image}, image) ||
+        !fetches_.due(image))
+      return;
+    fetches_.asked(image);
+    s_->net->fetch_preview_picture(of, image);
+  }
+  template <class Wants, class... Features>
+  void plugins_want(const conversation& chat, const message& said, const Wants& wants, mux::plugin_list<Features...>) {
+    (wanted_for(mux::contract::shown_message_wants{}, type_tag<Features>{}, *s_, chat, said, wants), ...);
+  }
 
 public:
   // Rooms asked of for a message's pill: what their server says goes to the

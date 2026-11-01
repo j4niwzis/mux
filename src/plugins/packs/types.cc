@@ -103,6 +103,28 @@ constexpr composition::page_list<room_tab> room_tabs(room_settings::contract::ta
                                                      type_tag<room_settings::room_kind::room_of<Protocol>>) {
   return {};
 }
+// What the tab keeps while a room's settings are open (room_settings'
+// contract::kept), as it was before the plugins rewrite (Cinny's Room
+// Packs): the room's packs, as its account listed them -- asked once as the
+// settings open -- whether one may make and change them; a new pack's name
+// field made anew where one is made.
+struct tab_kept {
+  bool asked = false, listed = false, editable = false;
+  std::vector<emote_pack> packs;
+  std::uint32_t round = 0;
+  friend bool operator==(const tab_kept&, const tab_kept&) = default;
+};
+// Asked of the program by the tab: a pack made, by its name.
+struct create_room_pack {
+  std::string name;
+};
+consteval bool provides(room_settings::contract::kept, type_tag<feature>) { return true; }
+template <class Protocol>
+  requires(proto::offered_by<state_of<Protocol>, proto::feature::sticker_packs>())
+constexpr composition::page_list<tab_kept> kept_parts(room_settings::contract::kept, type_tag<feature>,
+                                                      type_tag<room_settings::room_kind::room_of<Protocol>>) {
+  return {};
+}
 consteval bool provides(contract::window_dialogs, type_tag<feature>) { return true; }
 constexpr type_tag<shown> facts_type(contract::window_dialogs, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }

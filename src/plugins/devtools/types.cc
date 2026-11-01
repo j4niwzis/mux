@@ -182,6 +182,7 @@ struct choose_data_entry {
 struct new_data_entry {};
 struct close_data_form {};
 // Kept on the settings of the rooms the tab is put on.
+consteval bool provides(room_settings::contract::kept, type_tag<feature>) { return true; }
 template <class Protocol>
   requires(proto::offered_by<state_of<Protocol>, proto::feature::developer_tools>())
 constexpr composition::page_list<tab_kept> kept_parts(room_settings::contract::kept, type_tag<feature>,

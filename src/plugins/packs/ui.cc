@@ -51,15 +51,65 @@ auto extend(contract::account_rows<Protocol>, type_tag<feature>, const palette& 
 // in the dialog -- the list, Create pack and the editor all there.
 constexpr std::string_view tab_title(room_tab) { return "Emojis & Stickers"; }
 inline icon_t tab_icon(room_tab) { return icon::smile{}; }
-MUX_INLINE_IN_RELEASE auto make_manage_page(room_tab, const palette& colours, const auto&) {
+// The tab, as it was before the plugins rewrite (Cinny's Room Packs): a new
+// pack made by its name, where one may; each pack a card -- its name, how
+// many images, View opening it in the dialog; none, said so.
+template <class Facts>
+[[nodiscard]] const tab_kept& tab_of(const std::optional<Facts>& now) {
+  static const tab_kept none;
+  const tab_kept* found = &none;
+  if (now)
+    room_settings::each_kept(now->manage, spl::overloaded{[&](const tab_kept& kept) { found = &kept; }, [](const auto&) {}});
+  return *found;
+}
+struct pack_draft {
+  std::string name;
+  friend bool operator==(const pack_draft&, const pack_draft&) = default;
+};
+MUX_INLINE_IN_RELEASE auto pack_maker(const palette& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(room_tab_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
-      tab_heading(colours, "Emojis & Stickers"),
-      c::styled({.fillX = true}, wrapped(nodes::Text("The custom emoji and stickers of this room and the spaces it is in: listed, "
-                                                     "made and edited where your power here allows, or added to your account.",
-                                                     13.0f, colours.dim))),
-      c::styled({.width = 160.0f, .height = 34.0f},
-                skiff::compose::primary(widgets::Button<sends<open_room>>(colours.widgets, "Open packs", {{std::nullopt}})))));
+  return SKIFF_NAMED(pack_maker, c::local<pack_draft>(c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&pack_draft::name>(colours, "Name", "Pack name")),
+      c::column(c::vbox(0.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+                c::asking_for<pack_draft>([](const pack_draft& now) { return create_room_pack{now.name}; }, action_face(colours, "Create")))),
+      pack_draft{}));
+}
+using pack_maker_t = decltype(pack_maker(std::declval<const palette&>()));
+struct pack_line {
+  std::string key, name;
+  std::size_t pictures = 0;
+  friend bool operator==(const pack_line&, const pack_line&) = default;
+};
+struct packs_key {
+  std::vector<pack_line> packs;
+  friend bool operator==(const packs_key&, const packs_key&) = default;
+};
+MUX_INLINE_IN_RELEASE auto pack_cards(const palette& colours, const packs_key& key) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(pack_cards, c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.packs | std::views::transform([&](const pack_line& one) {
+    return card(colours, setting_tile(colours, one.name.empty() ? "Unnamed Pack" : one.name, std::format("{} images", one.pictures),
+                                      action(colours, "View", sends<open_room>{{one.key}})));
+  }) | std::ranges::to<std::vector>()));
+}
+using pack_cards_t = decltype(pack_cards(std::declval<const palette&>(), packs_key{}));
+MUX_INLINE_IN_RELEASE auto make_manage_page(room_tab, const palette& colours, const auto& facts) {
+  namespace c = skiff::compose;
+  using facts_t = std::optional<std::remove_cvref_t<decltype(facts)>>;
+  return SKIFF_NAMED(room_tab_page, c::column(page_look(), section(colours, "Room Packs",
+      c::shown_for<facts_t>([](const facts_t& now) { return tab_of(now).editable; }, card(colours,
+          setting_tile(colours, "New Pack", "Add your own emoji and sticker pack to use in room.", c::column()),
+          c::projected<facts_t>([](const facts_t& now) { return now ? std::optional(tab_of(now).round) : std::nullopt; },
+              c::mount<pack_maker_t, std::uint32_t>([at = &colours](std::uint32_t) { return std::tuple{pack_maker(*at)}; },
+                                                    {.fillX = true, .autoSize = scene::axes::kY})))),
+      c::projected<facts_t>([](const facts_t& now) {
+        return now ? std::optional(packs_key{tab_of(now).packs | std::views::transform([](const emote_pack& pack) {
+                                     return pack_line{pack.key, pack.name, pack.pictures.size()};
+                                   }) | std::ranges::to<std::vector>()})
+                   : std::nullopt;
+      },
+          c::mount<pack_cards_t, packs_key>([at = &colours](const packs_key& key) { return std::tuple{pack_cards(*at, key)}; },
+                                            {.fillX = true, .autoSize = scene::axes::kY})),
+      c::shown_for<facts_t>([](const facts_t& now) { return tab_of(now).packs.empty(); }, wrapped(nodes::Text("No packs found.", 12.0f, colours.dim))))));
 }
 
 // A pack opened -- a new one where none is named -- to edit: what is said

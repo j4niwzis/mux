@@ -17,6 +17,7 @@ import mux.ui;
 import skiff.platform.dialogs;
 import mux.app.network;
 import mux.app.services;
+import mux.plugin.room_settings.ui;
 import mux.plugin.packs.types;
 import mux.plugin.packs.changes;
 import mux.plugin.packs.ui;
@@ -79,9 +80,11 @@ struct part {
   }
   void take(const packs_listed& one) {
     this->change_shown_for(one.by, one.room, [&](shown& now) { packs_listed_in(now, one.packs); });
+    this->tab_listed(one);
   }
   void take(const pack_saved& one) {
     this->change_shown_for(one.by, one.pack.chat, [&](shown& now) { pack_saved_in(now, one.pack, one.removed, one.done); });
+    this->tab_saved(one);
   }
   void take(const pack_picture_uploaded& one) {
     this->change_shown_for(one.by, one.opening.room, [&](shown& now) { picture_uploaded_in(now, one.picture, one.done, one.opening); });
@@ -212,6 +215,67 @@ struct part {
     auto wanted = open ? pictures_of(*open) : std::vector<emote_picture>{};
     if (wanted != s_->ui.plugin_pictures)
       s_->ui.plugin_pictures = std::move(wanted);
+    // A room's settings open: its packs asked once, for the tab.
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if (kept.asked)
+        return;
+      kept.asked = true;
+      if (const conversation* chat = s_->model->find(in))
+        kept.editable = proto::chat_rights(ui::protocol_state_of(s_->ui, in.account), *chat).edit_packs;
+      if (!s_->demo())
+        s_->net->ask(in.account, list_asked{in.id});
+    });
+  }
+
+  // ---- the tab, kept with the room's settings (tab_kept) --------------------------
+  // What the tab keeps, where the settings open are a room with packs,
+  // changed as `change` says -- with the room -- and shown again where it
+  // changed.
+  template <class Change>
+  void change_tab(Change change) {
+    this->change_tab_of(change, room_settings::room_kinds{});
+  }
+  template <class Change, class... Kinds>
+  void change_tab_of(Change& change, ui::type_list<Kinds...>) {
+    (this->change_tab_in<Kinds>(change), ...);
+  }
+  template <class Kind, class Change>
+  void change_tab_in(Change& change) {
+    const auto& open = *s_->showing->look<std::optional<room_settings::room_settings_of<Kind>>>();
+    if (!open)
+      return;
+    auto now = *open;
+    room_settings::each_kept(now.manage, spl::overloaded{[&](tab_kept& kept) { change(now.chat, kept); }, [](auto&) {}});
+    if (now != *open)
+      ui::show(*s_->showing, std::optional(std::move(now)));
+  }
+  // A pack made from the tab: a new one of the room's, by its name -- the
+  // list asked again once it is saved.
+  void apply(const create_room_pack& one) {
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if (one.name.empty() || !kept.editable || s_->demo())
+        return;
+      s_->net->ask(in.account, save_asked{emote_pack{.chat = in.id, .name = one.name}});
+    });
+  }
+  // What an account told, for the tab of its room: the packs listed; one
+  // saved, the list asked again and the name field made anew.
+  void tab_listed(const packs_listed& one) {
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if (in.account == one.by && one.room == std::optional(in.id)) {
+        kept.packs = one.packs;
+        kept.listed = true;
+      }
+    });
+  }
+  void tab_saved(const pack_saved& one) {
+    this->change_tab([&](const conversation_id& in, tab_kept& kept) {
+      if (in.account != one.by || one.pack.chat != std::optional(in.id) || !one.done)
+        return;
+      ++kept.round;
+      if (!s_->demo())
+        s_->net->ask(in.account, list_asked{in.id});
+    });
   }
 };
 

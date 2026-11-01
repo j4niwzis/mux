@@ -69,9 +69,6 @@ struct services {
   // window brought up to date with the model a part changed; the window
   // made again, in a theme or an accent chosen.
   bool refresh_due = false;
-  // A list over the composer is up (a plugin's: what an @ or a ':' asks):
-  // the screen catches its keys -- Up, Down, Enter, Tab, Esc -- for it.
-  bool composer_list_up = false;
   // The room a card is up for (a plugin's): the server's answer of it is
   // the card's, not a pill's.
   std::optional<std::string> card_room;

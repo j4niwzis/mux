@@ -45,21 +45,21 @@ struct part {
     this->put();
   }
 
-  void apply(const ui::request::suggestion_step& one) {
+  void apply(const suggestion_step& one) {
     if (items_.empty())
       return;
     const std::size_t n = items_.size();
     lit_ = one.down ? (lit_ + 1) % n : (lit_ + n - 1) % n;
     this->put();
   }
-  void apply(const ui::request::suggestion_close&) {
+  void apply(const suggestion_close&) {
     closed_ = asked_;
     items_.clear();
     this->put();
   }
   // One picked: the @ and what follows it made their name -- kept to be
   // mentioned when it is sent -- or the ':' and what follows it that emoji.
-  void apply(const ui::request::suggestion_pick& one) {
+  void apply(const suggestion_pick& one) {
     const std::size_t at = one.at.value_or(lit_);
     if (at >= items_.size() || !asked_)
       return;
@@ -211,9 +211,6 @@ struct part {
   void put() {
     shown now{items_};
     for (suggestion& one : now.items) { one.lit = one.at == lit_; }
-    // Its keys -- Up, Down, Enter, Tab, Esc -- the screen's to catch while
-    // it is up.
-    s_->composer_list_up = !now.items.empty();
     if (*s_->showing->look<shown>() != now)
       mux::ui::show(*s_->showing, std::move(now));
   }

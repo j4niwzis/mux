@@ -134,7 +134,10 @@ struct screen_shown {
   // The keys caught before the field takes them, and whether each is live:
   // messages selected (Ctrl+C, Delete), the list over the field (Up, Down,
   // Enter, Tab, Esc), a list of chats gone to (Alt+Right) or open (Alt+Left).
-  bool selecting = false, suggesting = false, pointing = false, in_scope = false;
+  bool selecting = false, pointing = false, in_scope = false;
+  // Which plugins catch the keys now (contract::captured_keys), in their
+  // order.
+  std::vector<bool> capturing;
   friend bool operator==(const screen_shown&, const screen_shown&) = default;
 };
 // What the server found of what is typed in the side search: rooms and

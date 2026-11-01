@@ -787,16 +787,6 @@ struct banner_pressed {
 // chat shown.
 struct banner_button {};
 struct banner_close {};
-// The list over the composer -- the @ list, the : list: the next or the
-// one before lit, one picked (the lit one, where none is said), or the
-// list closed until something else is asked.
-struct suggestion_step {
-  bool down = true;
-};
-struct suggestion_pick {
-  std::optional<std::size_t> at;
-};
-struct suggestion_close {};
 // The thread's field: the answer in it let go.
 struct thread_answer_cancel {};
 // The video in the viewer: paused or played on; and gone to a share of it.

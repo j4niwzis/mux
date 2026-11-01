@@ -567,9 +567,6 @@ struct app : kept_settings {
   void apply(const request::open_picture&) {}
   void apply(const request::open_video&) {}
   void apply(const request::open_avatar&) {}
-  void apply(const request::suggestion_step&) {}
-  void apply(const request::suggestion_pick&) {}
-  void apply(const request::suggestion_close&) {}
   void apply(const request::toggle_threads&) {}
   void apply(const request::open_thread&) {}
   void apply(const request::thread_answer_cancel&) {}

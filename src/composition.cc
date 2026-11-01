@@ -126,6 +126,16 @@ struct person_card_parts {
 struct composer_buttons {
   static constexpr std::string_view name = "the composer's buttons";
 };
+// The keys a plugin catches on the chats screen before what has the focus
+// takes them -- its list's Up, Down, Enter, over the field: whether it does
+// now, captures_keys(c, f, its window_state) -> bool (mux.app.chat_list,
+// said to the screen in its order); and what a key is to it then,
+// captured_key(c, f, scene::key::down) -> std::optional<its request>, in
+// its UI layer (mux.ui:conversations_screen). The composer's suggestions,
+// for one.
+struct captured_keys {
+  static constexpr std::string_view name = "the keys caught first";
+};
 // A chat's looks -- its background, its bubbles', its panels' -- chosen at
 // a level (mux.app.kept, mux.app.looks): chat_looks_in_effect(c, f, its own
 // settings, the space each chat is in, the chat -- none, every chat's) ->
@@ -328,8 +338,8 @@ struct space_menu {
 };
 // Over the chat's composer, under its messages (mux.ui:conversations_screen):
 //   extend(c, f, palette) -> its node -- the list of what an @ or a ':'
-//   asks, for one; its part says the screen is to catch the list's keys
-//   (services::composer_list_up) while it is up
+//   asks, for one; it catches the list's keys while it is up
+//   (contract::captured_keys)
 struct composer_top {
   static constexpr std::string_view name = "over the composer";
 };

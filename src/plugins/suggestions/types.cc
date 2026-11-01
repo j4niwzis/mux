@@ -32,7 +32,21 @@ struct shown {
   friend bool operator==(const shown&, const shown&) = default;
 };
 
+// Asked of the program: the list over the composer -- the @ list, the : list: the next or the
+// one before lit, one picked (the lit one, where none is said), or the
+// list closed until something else is asked.
+struct suggestion_step {
+  bool down = true;
+};
+struct suggestion_pick {
+  std::optional<std::size_t> at;
+};
+struct suggestion_close {};
 consteval bool provides(contract::composer_top, type_tag<feature>) { return true; }
+// Its list's keys -- Up, Down, Enter, Tab, Esc -- caught over the field
+// while it is up (what a key is to it: its UI layer).
+consteval bool provides(contract::captured_keys, type_tag<feature>) { return true; }
+inline bool captures_keys(contract::captured_keys, type_tag<feature>, const shown& now) { return !now.items.empty(); }
 consteval bool provides(contract::window_state, type_tag<feature>) { return true; }
 constexpr type_tag<shown> state_type(contract::window_state, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }

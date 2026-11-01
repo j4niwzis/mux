@@ -58,7 +58,24 @@ MUX_INLINE_IN_RELEASE auto extend(contract::composer_top, type_tag<feature>, con
   return SKIFF_NAMED(suggestions_for, c::shown_for<shown>([](const shown& now) { return !now.items.empty(); },
       c::projected<shown>([](const shown& now) { return now.items; },
           c::listed<suggestion>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .background = colours.sidebar}),
-              [&colours](const suggestion& one) { return suggestion_row(colours, sends<request::suggestion_pick>{{one.at}}, one); }))));
+              [&colours](const suggestion& one) { return suggestion_row(colours, sends<suggestion_pick>{{one.at}}, one); }))));
+}
+
+// What a key is to its list while it is up (contract::captured_keys):
+// Up and Down step, Enter and Tab pick, Esc closes; nothing with Control or
+// Alt held.
+inline std::optional<std::variant<suggestion_step, suggestion_pick, suggestion_close>> captured_key(contract::captured_keys, type_tag<feature>,
+                                                                                               const scene::key::down& press) {
+  namespace keys = scene::keys;
+  if (press.modifiers.template has<scene::modifier::control>() || press.modifiers.template has<scene::modifier::alt>())
+    return std::nullopt;
+  if (press.key == keys::kUp || press.key == keys::kDown)
+    return suggestion_step{press.key == keys::kDown};
+  if (press.key == keys::kEnter || press.key == keys::kTab)
+    return suggestion_pick{};
+  if (press.key == keys::kEscape)
+    return suggestion_close{};
+  return std::nullopt;
 }
 
 }  // namespace mux::plugins::suggestions

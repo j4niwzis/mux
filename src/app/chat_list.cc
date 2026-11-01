@@ -161,6 +161,11 @@ class chat_list_part {
   // gone into (a list of chats), a selection, the search, an answer, then the threads or the
   // info, else the chat; Ctrl+Tab and Alt+Up and Alt+Down go through the
   // chats listed (a forum gone to, lit, not opened); Ctrl+End to the newest.
+  // Which plugins catch the keys now (contract::captured_keys), in order.
+  template <class... Features>
+  [[nodiscard]] std::vector<bool> capturing(mux::plugin_list<Features...>) const {
+    return {captures_keys(mux::contract::captured_keys{}, type_tag<Features>{}, *s_->showing->look<mux::ui::plugin_state_t<Features>>())...};
+  }
   // Whether a plugin's pane stands in the chats' place (contract::side_panes).
   template <class... Features>
   [[nodiscard]] bool chats_covered(mux::plugin_list<Features...>) const {
@@ -615,7 +620,7 @@ class chat_list_part {
       now.side_edge = !now.single;
       now.chat_up = !now.single || (chat.chosen && !beside);
       now.selecting = s_->showing->look<mux::ui::selection_shown>()->count > 0;
-      now.suggesting = s_->composer_list_up;
+      now.capturing = this->capturing(mux::composition::providers<mux::contract::captured_keys, mux::enabled_plugins>{});
       now.pointing = s_->showing->look<mux::ui::list_shown>()->pointed.has_value();
       now.in_scope = chat.scope.has_value();
     });

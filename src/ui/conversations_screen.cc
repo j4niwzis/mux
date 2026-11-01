@@ -27,10 +27,12 @@ import mux.protocols;
 import mux.config;
 import mux.kept_root;
 import skiff.model;
+import mux.composition;
 import mux.plugins.types;
 import mux.ui.base;
 // The program's rules, what the pieces under it are built under.
 import mux.ui.shaping;
+import mux.plugins.ui;
 import mux.plugins.ui.top;
 import mux.ui.proto;
 import mux.ui.lists;
@@ -263,9 +265,64 @@ struct chat_part {
 // both phases and a swipe across it: they wrap one node, which (outside a
 // release build) answers as its outermost wrapper says, so each inner one's
 // answer is one of the outer one's.
-using capture_answer = std::variant<request::selection_copy, request::selection_delete, request::suggestion_step, request::suggestion_pick,
-                                    request::suggestion_close, request::open_pointed, request::leave_scope, request::screen_key,
-                                    request::screen_swipe>;
+// The plugins' keys caught first (contract::captured_keys): what each
+// answers one with.
+template <class Feature>
+using captured_t = typename decltype(captured_key(contract::captured_keys{}, type_tag<Feature>{}, std::declval<const scene::key::down&>()))::value_type;
+// A plugin answers with a request or one of several (a std::variant): each
+// of them one of the screen's answers, not a variant in it.
+template <class T>
+struct answer_kinds {
+  using type = type_list<T>;
+};
+template <class... Ts>
+struct answer_kinds<std::variant<Ts...>> {
+  using type = type_list<Ts...>;
+};
+template <class List>
+struct variant_of_kinds;
+template <class... Ts>
+struct variant_of_kinds<type_list<Ts...>> {
+  using type = std::variant<Ts...>;
+};
+template <class List>
+struct capture_answers;
+template <class... Features>
+struct capture_answers<plugin_list<Features...>> {
+  using type = typename variant_of_kinds<typename joined<
+      type_list<request::selection_copy, request::selection_delete, request::open_pointed, request::leave_scope, request::screen_key,
+                request::screen_swipe>,
+      typename answer_kinds<captured_t<Features>>::type...>::type>::type;
+  // A key to the first of those catching keys now that has a use for it.
+  static std::optional<type> caught(const screen_shown& now, const scene::key::down& press) {
+    std::optional<type> out;
+    std::size_t at = 0;
+    const auto ask = [&]<class Feature>(std::type_identity<Feature>) {
+      if (!out && at < now.capturing.size() && now.capturing[at])
+        out = caught_by<Feature>(press);
+      ++at;
+    };
+    (ask(std::type_identity<Features>{}), ...);
+    return out;
+  }
+  template <class Feature>
+  static std::optional<type> caught_by(const scene::key::down& press) {
+    auto answer = captured_key(contract::captured_keys{}, type_tag<Feature>{}, press);
+    if (!answer)
+      return std::nullopt;
+    return as_answer(std::move(*answer));
+  }
+  template <class R>
+  static std::optional<type> as_answer(R one) {
+    return type(std::move(one));
+  }
+  template <class... Rs>
+  static std::optional<type> as_answer(std::variant<Rs...> one) {
+    return std::visit([](auto& each) { return type(std::move(each)); }, one);
+  }
+};
+using capture_plugins = capture_answers<composition::providers<contract::captured_keys, enabled_plugins>>;
+using capture_answer = capture_plugins::type;
 struct capture_keys {
   std::optional<capture_answer> operator()(const screen_shown& now, const scene::key::down& press) const {
     namespace keys = scene::keys;
@@ -280,15 +337,7 @@ struct capture_keys {
       return request::open_pointed{};
     if (alt && press.key == keys::kLeft && now.in_scope)
       return request::leave_scope{};
-    if (!now.suggesting || control || alt)
-      return std::nullopt;
-    if (press.key == keys::kUp || press.key == keys::kDown)
-      return request::suggestion_step{press.key == keys::kDown};
-    if (press.key == keys::kEnter || press.key == keys::kTab)
-      return request::suggestion_pick{};
-    if (press.key == keys::kEscape)
-      return request::suggestion_close{};
-    return std::nullopt;
+    return capture_plugins::caught(now, press);
   }
 };
 // The rest, on their way up, nothing under the keys having taken them:

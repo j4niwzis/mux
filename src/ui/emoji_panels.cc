@@ -266,8 +266,16 @@ MUX_INLINE_IN_RELEASE auto emoji_tab(const palette& colours, const emoji_group& 
     image->apply({.width = 24.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle});
     image->keepBox();
   }
-  return SKIFF_NAMED(emoji_tab, c::row(c::justified(c::hbox(0.0f, {.width = 30.0f, .height = 30.0f, .minWidth = 24.0f, .alignSelf = scene::align::kMiddle,
-                                            .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.tile}),
+  // A category's tab shares its row with the others'; a pack's is as wide
+  // as its picture.
+  scene::Spec look{.width = 30.0f, .height = 30.0f, .minWidth = 24.0f, .alignSelf = scene::align::kMiddle,
+                   .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.tile};
+  if (!one.picture) {
+    look.grow = scene::axes::kX;
+    look.shrink = scene::axes::kX;
+    look.minWidth = 0.0f;
+  }
+  return SKIFF_NAMED(emoji_tab, c::row(c::justified(c::hbox(0.0f, look),
                              nodes::justify::middle{}),
       std::move(image), c::visible(!one.picture, c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(one.mark, 16.0f, colours.text)))));
 }
@@ -301,13 +309,7 @@ auto emoji_panel(const palette& colours, emoji_kept& kept, Pick pick) {
                             c::justified(c::hbox(0.0f, {.height = 30.0f, .grow = scene::axes::kX}), nodes::justify::middle{}), 30.0f, 60.0f,
                             arrow, "Previous emoji packs", "Next emoji packs"));
   auto groups = c::sections<emoji_group>(c::vbox(4.0f, {.fill = true}), c::vbox(0.0f),
-      [&colours](const emoji_group& one) {
-        auto made = emoji_tab(colours, one);
-        // A category's tab shares its row with the others'.
-        if (!one.picture)
-          made.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .minWidth = 0.0f});
-        return made;
-      },
+      [&colours](const emoji_group& one) { return emoji_tab(colours, one); },
       [&colours, &kept, pick](const emoji_group& one) {
         return cell_section(colours, one.name,
                             one.items | std::views::transform([&](const emoji_item& each) { return emoji_cell(colours, kept, pick, each); }) | std::ranges::to<std::vector>(),

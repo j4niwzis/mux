@@ -569,10 +569,9 @@ MUX_INLINE_IN_RELEASE auto event_kinds_field(const palette& colours, choice_leve
   namespace c = skiff::compose;
   auto names = std::vector<std::string>{"All events", "Messages only", "Custom"};
   if (has_level_above(level)) names.insert(names.begin(), "As above");
-  auto mode = c::projected<room_events_picked>([level](const room_events_picked& now) {
+  auto mode = c::styled({.margin = {0.0f, 20.0f, 4.0f, 20.0f}}, c::projected<room_events_picked>([level](const room_events_picked& now) {
     return events_way_of(level, now.at(level)) - (has_level_above(level) ? 0 : 1);
-  }, make_choice_menu(colours, "Room events", std::move(names), 0, choose_events_way{level}));
-  mode.apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
+  }, make_choice_menu(colours, "Room events", std::move(names), 0, choose_events_way{level})));
   auto rows = kinds | std::views::transform([&](const room_event_t& kind) {
     return event_kind_row<Owner>(colours, level, kind);
   }) | std::ranges::to<std::vector>();

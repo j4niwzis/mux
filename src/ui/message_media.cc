@@ -99,8 +99,12 @@ MUX_INLINE_IN_RELEASE auto picture_box(const palette& colours, const std::string
   // bottom, cut off by its corners: only the blurred preview was ever seen.
   auto preview = c::visible(look.thumbnail, c::styled({.place = scene::anchor::kTopLeft, .fill = true, .cornerRadius = 10.0f},
                                                      nodes::Image<from_previews>({source})));
-  auto picture = c::Marked<message_picture, picture_image_t>(c::visible(look.thumbnail, c::styled({.fill = true, .cornerRadius = 10.0f},
-                                                      nodes::Image<from_moving_thumbnail>({source, look.sticker}))));
+  // The picture itself, found by its mark: a node, its spec and whether it
+  // shows set on it (styled() and visible() make builders).
+  picture_image_t image({source, look.sticker});
+  image.apply({.fill = true, .cornerRadius = 10.0f});
+  image.setVisible(look.thumbnail);
+  auto picture = c::Marked<message_picture, picture_image_t>(std::move(image));
   auto loader = c::visible(false, c::styled({.place = scene::anchor::kCentre}, widgets::RadialLoader<>{}));
   std::optional<decltype(video_marks(0))> video;
   if (look.video_ms)

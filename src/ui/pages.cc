@@ -258,9 +258,7 @@ auto choices_scoped(const level_place::chat& at, Node node) {
   return skiff::compose::scoped<chat_choice<T>>(skiff::compose::handlers(), std::move(node), at.id);
 }
 // The rows plugins put among a level's choices for chats
-// (contract::choice_rows), and on an account's pages
-// (contract::account_privacy_rows, account_chat_rows): each list its
-// contract's providers, in their order.
+// (contract::choice_rows): its providers, in their order.
 template <class Contract, class List>
 struct row_list;
 template <class Contract, class... Features>
@@ -280,6 +278,32 @@ using choice_row_plugins = rows_of<contract::choice_rows>;
 MUX_INLINE_IN_RELEASE auto nothing_shown() {
   return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}));
 }
+// The rows plugins put on a page of an account's
+// (contract::account_page_rows), in their order: each where it says it
+// goes -- its extend taking that page -- nothing on the others.
+template <class Page, class Feature, class Colours, class Place>
+auto account_row_of(const Colours&, const Place&) {
+  return nothing_shown();
+}
+template <class Page, class Feature, class Colours, class Place>
+  requires requires(const Colours& colours, const Place& place) {
+    extend(contract::account_page_rows{}, type_tag<Feature>{}, colours, place, Page{});
+  }
+auto account_row_of(const Colours& colours, const Place& place) {
+  return extend(contract::account_page_rows{}, type_tag<Feature>{}, colours, place, Page{});
+}
+template <class Page, class List>
+struct page_rows;
+template <class Page, class... Features>
+struct page_rows<Page, plugin_list<Features...>> {
+  template <class Place>
+  static auto made(const auto& colours, const Place& place) {
+    return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                  account_row_of<Page, Features>(colours, place)...);
+  }
+};
+template <class Page>
+using account_page_rows_of = page_rows<Page, composition::providers<contract::account_page_rows, enabled_plugins>>;
 // The room events field of a level, where its protocol's chats have room
 // events (proto::shows_room_events); nothing where they have none.
 template <class Protocol, class Choices>

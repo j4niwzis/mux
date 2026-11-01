@@ -129,9 +129,9 @@ MUX_INLINE_IN_RELEASE auto extend(contract::choice_rows, type_tag<feature>, cons
       direct_row(colours, place)));
 }
 
-// The same row on an account's Chats page (contract::account_chat_rows).
+// The same row on an account's Chats page (contract::account_page_rows).
 template <class Place>
-auto extend(contract::account_chat_rows, type_tag<feature> f, const auto& colours, const Place& place) {
+auto extend(contract::account_page_rows, type_tag<feature> f, const auto& colours, const Place& place, account_page::chats) {
   return extend(contract::choice_rows{}, f, colours, place);
 }
 

@@ -105,15 +105,13 @@ struct chat_flags {
 struct choice_rows {
   static constexpr std::string_view name = "a level's choice rows";
 };
-// The same rows on an account's pages, each page its own list -- a plugin
-// put straight on the page it is on: extend(c, f, colours,
-// level_place::account) -> its node. The Privacy page's (typing sent):
-struct account_privacy_rows {
-  static constexpr std::string_view name = "an account's Privacy rows";
-};
-// Its Chats page's (receipts as faces, link previews):
-struct account_chat_rows {
-  static constexpr std::string_view name = "an account's Chats rows";
+// The same rows on an account's pages, each where the plugin says it goes
+// (mux.ui:accounts): extend(c, f, colours, level_place::account, the page
+// -- one of mux.ui's account_page) -> its node; none for the pages it has
+// nothing on. Typing sent, on Privacy; receipts and link previews, on
+// Chats.
+struct account_page_rows {
+  static constexpr std::string_view name = "an account's pages' rows";
 };
 // Chats the chat list opens as a list of chats -- a forum's topics -- in
 // place of the chat, their rooms listed in them, not beside them

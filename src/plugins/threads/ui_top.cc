@@ -21,6 +21,7 @@ import mux.ui.base;
 import mux.ui.messages;
 import mux.plugin.threads.types;
 import mux.plugin.threads.model;
+import mux.plugin.threads.ui;
 
 export namespace mux::plugins::threads {
 using namespace ::mux::ui;

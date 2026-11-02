@@ -44,7 +44,7 @@ struct set_wallpaper {
 struct change_bubbles {
   mux::choice_level_t level;
   mux::config::look_part_t part = mux::config::look_part::bubbles{};
-  bubbles_change_t change;
+  request::bubbles_change_t change;
 };
 
 // Bubbles at a level: a look, or none -- as the level over it says.

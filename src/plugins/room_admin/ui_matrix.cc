@@ -862,11 +862,13 @@ struct chips_key {
   std::vector<std::pair<std::string, skia::SkColor>> chips;
   friend bool operator==(const chips_key&, const chips_key&) = default;
 };
+// The levels' chips in lines that wrap: the flow the panels' cells are in
+// (ui::flowed), as wide as the page.
 auto power_chips(const auto& colours, const chips_key& key) {
-  auto chips = skiff::compose::many(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      key.chips | std::views::transform([&](const auto& one) { return power_chip(colours, one.first, one.second); }) | std::ranges::to<std::vector>());
-  chips.fStack.wrap = true;
-  return chips;
+  return skiff::compose::styled({.fillX = true, .autoSize = scene::axes::kY},
+      ui::flowed({.direction = nodes::direction::horizontal{}, .spacingX = 8.0f, .spacingY = 8.0f, .wrap = true},
+                 key.chips | std::views::transform([&](const auto& one) { return power_chip(colours, one.first, one.second); }) |
+                     std::ranges::to<std::vector>()));
 }
 template <class P> using power_chips_t = decltype(power_chips(std::declval<P>(), chips_key{}));
 // A power level's form: made from the one edited, or empty for a new one.

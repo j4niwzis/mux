@@ -170,10 +170,12 @@ struct popup_pages<plugin_list<Features...>> {
     namespace c = skiff::compose;
     using node_t = composition::node_t<decltype(made<Feature, Needs>(needs, facts))>;
     const bool shown = facts.page == popup_page_t(page_t<Feature>{}) && page_available(facts, page_t<Feature>{});
-    auto slot = c::mount<node_t, bool>([&needs, &facts](bool) { return page_arguments(made<Feature, Needs>(needs, facts)); },
-                                       {.fillX = true, .grow = scene::axes::kY, .masking = true});
-    slot.read(shown ? std::optional(true) : std::nullopt);
-    return slot;
+    // Read as it is built: made where the page is the one shown.
+    return c::lifted([shown](auto slot) {
+      slot.read(shown ? std::optional(true) : std::nullopt);
+      return slot;
+    }, c::mount<node_t, bool>([&needs, &facts](bool) { return page_arguments(made<Feature, Needs>(needs, facts)); },
+                              {.fillX = true, .grow = scene::axes::kY, .masking = true}));
   }
   // Their column, there only while one of them is the page: shown with the
   // emoji's, it grew beside them, and took half the card -- the emoji in the
@@ -239,9 +241,13 @@ auto emoji_popup(const Needs& n, const emoji_facts& facts) {
                                                   .depth = 1.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f}}),
                                    nodes::justify::middle{}))))));
   // Its own floating backdrop painted: the full-window layer has no fill,
-  // and a plate taken for an inner panel's was dropped under live blur.
-  skiff::compose::state_of(card).setFloats(true);
-  return SKIFF_NAMED(emoji_popup, c::column(c::vbox(0.0f, {.fill = true}), std::move(card)));
+  // and a plate taken for an inner panel's was dropped under live blur --
+  // said of the card as it is built.
+  auto floating = c::lifted([](auto made) {
+    skiff::compose::state_of(made).setFloats(true);
+    return made;
+  }, std::move(card));
+  return SKIFF_NAMED(emoji_popup, c::column(c::vbox(0.0f, {.fill = true}), std::move(floating)));
 }
 
 // Its layer over the window: there while the panel is open, a tap off it

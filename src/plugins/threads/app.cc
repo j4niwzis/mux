@@ -16,6 +16,7 @@ import mux.app.network;
 import mux.app.services;
 import mux.plugin.threads.types;
 import mux.plugin.threads.model;
+import mux.plugin.threads.ui;      // what it is asked: close_aside, thread_send
 import mux.plugin.threads.ui_top;
 import mux.plugin.threads.matrix;
 

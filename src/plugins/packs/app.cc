@@ -245,8 +245,16 @@ struct part {
     if (!open)
       return;
     auto now = *open;
-    room_settings::each_kept(now.manage, spl::overloaded{[&](tab_kept& kept) { change(now.chat, kept); }, [](auto&) {}});
-    if (now != *open)
+    // Changed: what the change touches -- the tab's kept part -- compared with what it was (the settings as a whole
+    // have no equality: not all their parts do).
+    bool changed = false;
+    room_settings::each_kept(now.manage, spl::overloaded{[&](tab_kept& kept) {
+                                                           const tab_kept was = kept;
+                                                           change(now.chat, kept);
+                                                           changed = changed || kept != was;
+                                                         },
+                                                         [](auto&) {}});
+    if (changed)
       ui::show(*s_->showing, std::optional(std::move(now)));
   }
   // A pack made from the tab: a new one of the room's, by its name -- the

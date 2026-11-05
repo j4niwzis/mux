@@ -43,8 +43,11 @@ template <class Part>
 const std::vector<message>* aside_by(const Part&, const std::string&) {
   return nullptr;
 }
-template <class Part>
-bool kept_about(const Part&, const message&) {
+// Generic in the message too, as aside_about is: a plugin's own
+// (chat_part<Message>, Message) is then more specialized than this, not
+// ambiguous with it.
+template <class Part, class Message>
+bool kept_about(const Part&, const Message&) {
   return false;
 }
 // A message's own part: what it is kept aside about, said and restored

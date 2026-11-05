@@ -308,8 +308,8 @@ struct timeline_rows {
                                 .first = !same(i, neighbour(i, false)),
                                 .last = !same(i, neighbour(i, true)),
                                 .events_shown = shows(said),
-                                .flags = told.flags,
                                 .unread_start = told.unread_from && said.id == *told.unread_from,
+                                .flags = told.flags,
                                 .frost = told.frost,
                                 .looks = told.looks};
              if (const auto shown_above = head_message_of(said)) {

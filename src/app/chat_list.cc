@@ -418,7 +418,6 @@ class chat_list_part {
                       return mux::ui::folder_tab_shown{one.first, one.second, one.second == list.folder};
                     }) | std::ranges::to<std::vector>();
     this->folders_listed(now, kept, list);
-    out.account = list.account ? list.account->address : std::string();
     const mux::account* in = list.account ? now.accounts().find(*list.account) : nullptr;
     const mux::conversation* scope = chat.scope && in ? in->conversations.find(*chat.scope) : nullptr;
     if (scope && scope_plugins::opens(*s_, *scope))

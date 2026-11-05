@@ -186,6 +186,16 @@ struct software {
 };
 }  // namespace renderer
 using renderer_t = spl::variant<renderer::opengl, renderer::software>;
+// How frames are drawn, read by the window's host at each one (skiff's
+// frames() hook, by these names): only the damage repainted, and it
+// outlined; in step with the display; the frames a second counted.
+struct frame_settings {
+  bool partial_redraw = false;
+  bool flash_redraws = false;
+  bool vsync = true;
+  bool show_fps = false;
+  friend bool operator==(const frame_settings&, const frame_settings&) = default;
+};
 namespace proxy_kind {
 struct socks5 {
   static constexpr std::string_view json_value = "socks5";

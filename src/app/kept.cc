@@ -256,6 +256,18 @@ struct kept_settings {
     ((out = renderer_at_start(contract::start_renderer{}, type_tag<Features>{}, this->plugin_settings<plugin_settings_t<Features>>())), ...);
     return out;
   }
+  // How frames are drawn, read by the window's host at each one -- skiff's
+  // frames() hook, which takes its own defaults, silently, from a program
+  // without it: the plugins' say (contract::frames_said) -- the last one's.
+  [[nodiscard]] mux::config::frame_settings frames() const {
+    return this->frames_said_by(composition::providers<contract::frames_said, enabled_plugins>{});
+  }
+  template <class... Features>
+  [[nodiscard]] mux::config::frame_settings frames_said_by(plugin_list<Features...>) const {
+    mux::config::frame_settings out;
+    ((out = frames_said(contract::frames_said{}, type_tag<Features>{}, this->plugin_settings<plugin_settings_t<Features>>())), ...);
+    return out;
+  }
   // A part the model's root holds one of, made what is given, whole.
   template <class Part>
   void set_part(Part now) {

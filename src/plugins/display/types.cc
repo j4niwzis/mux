@@ -43,6 +43,12 @@ constexpr type_tag<kept> settings_type(contract::settings_kept, type_tag<feature
 // The window made with the renderer chosen (main).
 consteval bool provides(contract::start_renderer, type_tag<feature>) { return true; }
 inline config::renderer_t renderer_at_start(contract::start_renderer, type_tag<feature>, const kept& mine) { return mine.renderer; }
+// How frames are drawn (contract::frames_said): its Rendering page's switches,
+// read by the window's host at each frame -- in effect at once.
+consteval bool provides(contract::frames_said, type_tag<feature>) { return true; }
+inline config::frame_settings frames_said(contract::frames_said, type_tag<feature>, const kept& mine) {
+  return {.partial_redraw = mine.partial_redraw, .flash_redraws = mine.flash_redraws, .vsync = mine.vsync, .show_fps = mine.show_fps};
+}
 struct open_animations {};
 struct open_rendering {};
 

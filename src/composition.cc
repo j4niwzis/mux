@@ -68,6 +68,12 @@ struct settings_kept {
 struct start_renderer {
   static constexpr std::string_view name = "the renderer at the start";
 };
+// How frames are drawn, read by the window's host at each one (mux.app.kept's
+// frames()): frames_said(c, f, its own settings) -> config::frame_settings;
+// where none says, config::frame_settings{}.
+struct frames_said {
+  static constexpr std::string_view name = "how frames are drawn";
+};
 // The proxy profiles accounts go through, by their names (mux.app.kept,
 // mux.app.network): proxy_profiles(c, f, its own settings) ->
 // std::vector<config::proxy_settings>; where none says, none -- and an

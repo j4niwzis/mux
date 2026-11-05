@@ -92,6 +92,7 @@ struct part {
     ui::show<ui::menu_facts>(*s_->showing, std::nullopt);
     std::string title = "Reply";
     const message* said = nullptr;
+    const conversation* said_in = nullptr;  // the chat it was found in (set with said)
     std::string line;
     if (const auto& chosen = s_->chosen())
       if (const conversation* chat = s_->model->find(*chosen))
@@ -99,6 +100,7 @@ struct part {
           if (!ui::answerable(*it))
             return;
           said = it;
+          said_in = chat;
           title = "Reply to " + ui::sender_name(*chat, it->sender);
           if (!it->body.plain.empty())
             line = ui::quote_line_of(*it, *chat, s_->model);
@@ -108,7 +110,7 @@ struct part {
     // A thread's root or answer, its thread open: answered there.
     // The field that answers it given the keys -- on a phone, its keyboard
     // up at once, as Telegram's: what answers is typed next.
-    if (said && s_->aside_shown() == mux::about_of(*chat, *said).value_or(said->id)) {
+    if (said && s_->aside_shown() == mux::about_of(*said_in, *said).value_or(said->id)) {
       s_->answer_aside(id, ui::compose_context{ui::icon::reply{}, std::move(title), std::move(line)});
       s_->ask_keys(ui::keys::aside{});
       return;

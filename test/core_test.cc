@@ -4,6 +4,8 @@ import std;
 import mux.core;
 import mux.plugin.receipts.model;
 import mux.plugin.receipts.changes;
+import mux.plugin.typing.model;
+import mux.plugin.typing.changes;
 import gtest;
 
 #include "gtest/gtest-macros.h"
@@ -79,30 +81,34 @@ TEST(Model, SavedReadMarkerSurvivesOlderAndUnknownReceipts) {
   EXPECT_EQ(kept.find(with_juliet)->read_up_to, std::optional<std::string>("new"));
 }
 
-TEST(Model, TypingExpiresAndEmptyUpdateCancelsWake) {
+// Who is typing in a chat: the typing plugin's part of it.
+const std::vector<std::string>& typers(const model& kept) {
+  return std::get<plugins::typing::chat_part<message>>(kept.find(with_juliet)->plugins).who;
+}
+
+TEST(Model, TypingIsThePluginsPartAndAnEmptyUpdateEndsIt) {
   model kept;
-  const auto began = std::chrono::steady_clock::now();
-  kept.apply(change::typing_changed{with_juliet, {"juliet@example.com"}});
-  EXPECT_FALSE(kept.expire_typing(began + std::chrono::seconds(29)));
-  EXPECT_FALSE(kept.find(with_juliet)->typing.empty());
-  EXPECT_TRUE(kept.expire_typing(began + std::chrono::seconds(31)));
-  EXPECT_TRUE(kept.find(with_juliet)->typing.empty());
-  EXPECT_FALSE(std::isfinite(kept.typing_wake_in()));
-  kept.apply(change::typing_changed{with_juliet, {"juliet@example.com"}});
-  kept.apply(change::typing_changed{with_juliet, {"juliet@example.com"}});
-  EXPECT_TRUE(std::isfinite(kept.typing_wake_in()));
-  kept.apply(change::typing_changed{with_juliet, {}});
-  EXPECT_TRUE(kept.find(with_juliet)->typing.empty());
-  EXPECT_FALSE(std::isfinite(kept.typing_wake_in()));
+  kept.apply(plugins::typing::typing_now{with_juliet, {"juliet@example.com"}});
+  EXPECT_EQ(typers(kept), (std::vector<std::string>{"juliet@example.com"}));
+  kept.apply(plugins::typing::typing_now{with_juliet, {}});
+  EXPECT_TRUE(typers(kept).empty());
 }
 
 TEST(Model, LiveMessageEndsItsSendersTypingButHistoryDoesNot) {
   model kept;
-  kept.apply(change::typing_changed{with_juliet, {"juliet@example.com", "nurse@example.com"}});
+  kept.apply(plugins::typing::typing_now{with_juliet, {"juliet@example.com", "nurse@example.com"}});
   kept.apply(change::message_added{said("old", "history"), placement::at_start{}});
-  EXPECT_EQ(kept.find(with_juliet)->typing.size(), 2u);
+  EXPECT_EQ(typers(kept).size(), 2u);
   kept.apply(change::message_added{said("new", "finished typing")});
-  EXPECT_EQ(kept.find(with_juliet)->typing, (std::vector<std::string>{"nurse@example.com"}));
+  EXPECT_EQ(typers(kept), (std::vector<std::string>{"nurse@example.com"}));
+}
+
+TEST(Model, OneWhoLeftTypesNoMore) {
+  model kept;
+  kept.apply(change::members_changed{with_juliet, {{"juliet@example.com", "Juliet", std::nullopt}, {"nurse@example.com", "Nurse", std::nullopt}}});
+  kept.apply(plugins::typing::typing_now{with_juliet, {"juliet@example.com", "nurse@example.com", "romeo@example.com"}});
+  kept.apply(change::members_changed{with_juliet, {{"juliet@example.com", "Juliet", std::nullopt}}});
+  EXPECT_EQ(typers(kept), (std::vector<std::string>{"juliet@example.com", "romeo@example.com"}));
 }
 
 TEST(Model, LateHistoryAndTimestampCorrectionsKeepChronologicalOrder) {
@@ -295,11 +301,11 @@ TEST(Model, Messages) {
   EXPECT_EQ(one->timeline[1].body.plain, "hello there");
 
   kept.apply(change::delivery_changed{with_juliet, "2", delivery::read{}});
-  kept.apply(change::typing_changed{with_juliet, {"juliet@example.com"}});
+  kept.apply(plugins::typing::typing_now{with_juliet, {"juliet@example.com"}});
   kept.apply(change::history_position{with_juliet, "mam-17"});
   one = kept.find(with_juliet);
   EXPECT_EQ(one->timeline[2].delivery, delivery_t{delivery::read{}});
-  EXPECT_EQ(one->typing, (std::vector<std::string>{"juliet@example.com"}));
+  EXPECT_EQ(typers(kept), (std::vector<std::string>{"juliet@example.com"}));
   EXPECT_EQ(one->history_from, "mam-17");
 
   kept.apply(change::members_changed{with_juliet, {{"juliet@example.com", "Juliet", "owner"}, {"nurse@example.com", "Nurse", std::nullopt}}});
@@ -380,7 +386,7 @@ TEST(Mailbox, CrossesThreads) {
   mailbox box([&] { ++notified; });
   std::thread network([&] {
     for (int i = 0; i < 100; ++i)
-      box.push(change::typing_changed{with_juliet, {}});
+      box.push(change::history_position{with_juliet, std::nullopt});
   });
   network.join();
   EXPECT_EQ(box.take().size(), 100u);

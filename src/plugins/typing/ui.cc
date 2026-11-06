@@ -12,14 +12,16 @@ import skiff.model;
 import skiff.compose;
 import mux.ui.base;
 import mux.plugin.typing.types;
+import mux.plugin.typing.model;
 
 export namespace mux::plugins::typing {
 
 // The chat's status in its head, while someone types (mux.ui:header).
 inline std::optional<std::string> extend(contract::chat_status, type_tag<feature>, const conversation& one) {
-  if (one.typing.empty())
+  const auto& who = std::get<chat_part<message>>(one.plugins).who;
+  if (who.empty())
     return std::nullopt;
-  const auto names = one.typing | std::views::transform([&](const std::string& who) { return ui::sender_name(one, who); }) |
+  const auto names = who | std::views::transform([&](const std::string& who) { return ui::sender_name(one, who); }) |
                      std::ranges::to<std::vector>();
   switch (names.size()) {
     case 1: return names[0] + " is typing…";

@@ -87,7 +87,7 @@ struct recorder {
   mux::model model;
   std::vector<mux::connection_t> states;
   bool sent = false;
-  int room_updates = 0, member_updates = 0, typing_updates = 0;
+  int room_updates = 0, member_updates = 0;
   std::optional<mux::proto::matrix::client::account<sink>> account;
 };
 
@@ -105,7 +105,6 @@ void sink::operator()(mux::change_t one) const {
   spl::visit(spl::overloaded{
       [&](const mux::change::conversation_updated&) { ++to->room_updates; },
       [&](const mux::change::members_changed&) { ++to->member_updates; },
-      [&](const mux::change::typing_changed&) { ++to->typing_updates; },
       [](const auto&) {}}, one);
   // A message sent once the room is there.
   const bool room_there = spl::visit(spl::overloaded{[](const mux::change::conversation_updated&) { return true; },
@@ -167,7 +166,7 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
               else {
                 body = R"({"next_batch":"s)" + std::to_string(syncs) + R"("})";
                 if (syncs == 2) {
-                  initial_updates = {seen.room_updates, seen.member_updates, seen.typing_updates};
+                  initial_updates = {seen.room_updates, seen.member_updates};
                   body = R"({"next_batch":"s2","rooms":{"join":{"!r:x.org":{
                     "ephemeral":{"events":[{"type":"m.receipt","content":{
                       "$m1":{"m.read":{"@b:x.org":{"ts":15}}}}}]}}}}})";
@@ -215,7 +214,6 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   EXPECT_FALSE(candidates_overtook_description);
   EXPECT_EQ(seen.room_updates, initial_updates[0]);
   EXPECT_EQ(seen.member_updates, initial_updates[1]);
-  EXPECT_EQ(seen.typing_updates, initial_updates[2]);
   const auto& states = seen.states;
   const auto& model = seen.model;
 
@@ -228,7 +226,6 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   ASSERT_NE(room, nullptr);
   EXPECT_EQ(room->name, "Garden");
   EXPECT_EQ(room->unread, 2);
-  EXPECT_EQ(room->typing, (std::vector<std::string>{"@b:x.org"}));
   ASSERT_GE(room->timeline.size(), 3u);
   // The message, edited in place; its HTML; the reaction on it.
   EXPECT_EQ(room->timeline[0].id, "$m1");

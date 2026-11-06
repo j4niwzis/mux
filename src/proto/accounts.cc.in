@@ -17,6 +17,9 @@ import std;
 @mux_account_imports@// What the accounts are made as, a plugin's where one makes one (Matrix's
 // end-to-end encryption: account_of).
 import mux.plugins.matrix;
+// And what the plugins hear of an XMPP account and keep of it
+// (xmpp_message, xmpp_kept_type): found where it is made.
+import mux.plugins.xmpp;
 import :sink;
 
 #if defined(MUX_SPLIT_ACCOUNTS)

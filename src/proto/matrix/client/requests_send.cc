@@ -402,18 +402,6 @@ void account<Sink>::send_text(const conversation_id& in, const std::string& room
 
 
 template <class Sink>
-void account<Sink>::typing(std::string room, bool on) {
-  this->spawn_guarded([this, room = std::move(room), on] {
-    if (api_)
-      (void)perform(*api_, loom::cs::set_typing{.user_id = id_.address,
-                                                .room_id = room,
-                                                .body = {.typing = on,
-                                                         .timeout = on ? std::optional<std::int64_t>(30000)
-                                                                       : std::nullopt}});
-  });
-}
-
-template <class Sink>
 void account<Sink>::join(std::string room, std::vector<std::string> via) {
   this->spawn_guarded([this, room = std::move(room), via = std::move(via)] {
     if (!api_)

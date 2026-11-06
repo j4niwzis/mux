@@ -6,6 +6,8 @@ module mux.app.network;
 import std;
 import mux.core;
 import mux.proto.xmpp.client;
+// What the plugins hear of its messages, found where it is made.
+import mux.plugins.xmpp;
 
 template class mux::proto::xmpp::client::account<mux::app::post_change>;
 #if defined(MUX_SPLIT_ACCOUNTS)

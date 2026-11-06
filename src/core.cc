@@ -63,6 +63,29 @@ void about_restored(Part&, const std::string&) {}
 template <class Part, class Parts>
 void aside_placed(const Part&, Parts&, const std::string&) {}
 }  // namespace aside_defaults
+// What the model hears of a chat, to the plugins' parts of it that hear it
+// (their own overloads, found by their type, more special than these): a
+// message come live, at its end; who is in it now, and who was.
+namespace heard_defaults {
+template <class Part, class Message>
+void message_came(Part&, const Message&) {}
+template <class Part, class Members>
+void members_now(Part&, const Members&, const Members&) {}
+}  // namespace heard_defaults
+template <class Where, class Message>
+void parts_heard_message(Where& where, const Message& one) {
+  std::apply([&](auto&... part) {
+    using heard_defaults::message_came;
+    (message_came(part, one), ...);
+  }, where.plugins);
+}
+template <class Where, class Members>
+void parts_heard_members(Where& where, const Members& before, const Members& after) {
+  std::apply([&](auto&... part) {
+    using heard_defaults::members_now;
+    (members_now(part, before, after), ...);
+  }, where.plugins);
+}
 // Every list of messages the plugins keep aside in a chat -- out of its
 // timeline (a thread's answers, for one) -- given to f.
 template <class Where, class F>
@@ -465,11 +488,6 @@ struct mark_taken {
   std::optional<std::string> event;
 };
 
-struct typing_changed {
-  conversation_id in;
-  std::vector<std::string> who;
-};
-
 // History paged back to its beginning, or further to go from.
 struct history_position {
   conversation_id in;
@@ -496,7 +514,7 @@ struct event_missing {
 // change list -- changes_type(state), found by ADL in its folder (mux.proto.
 // <p>.changes), none where it gives none; and the plugins', in one list
 // (mux.plugins.changes) -- all one variant.
-using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::message_found_at, change::event_missing, change::members_changed, change::avatar_loaded, change::read_marker, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved>;
+using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::history_position, change::message_found_at, change::event_missing, change::members_changed, change::avatar_loaded, change::read_marker, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved>;
 namespace changes_defaults {
 constexpr type_tag<change_list<>> changes_type(const auto&) { return {}; }
 }  // namespace changes_defaults
@@ -617,29 +635,6 @@ class model {
 
   void apply(const change_t& what) {
     spl::visit([this](const auto& one) { on(one); }, what);
-  }
-
-  // Typing is transient. Schedule its expiry without polling or drawing frames.
-  [[nodiscard]] double typing_wake_in() const {
-    if (typing_until_.empty())
-      return std::numeric_limits<double>::infinity();
-    const auto next = std::ranges::min_element(typing_until_, {}, [](const auto& one) { return one.second; });
-    return std::max(0.0, std::chrono::duration<double, std::milli>(next->second - std::chrono::steady_clock::now()).count());
-  }
-  bool expire_typing(std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now()) {
-    bool changed = false;
-    for (auto it = typing_until_.begin(); it != typing_until_.end();) {
-      if (it->second > now) {
-        ++it;
-        continue;
-      }
-      if (const auto* chat = find(it->first); chat && !chat->typing.empty()) {
-        this->in_chat(it->first, [](conversation& chat) { chat.typing.clear(); });
-        changed = true;
-      }
-      it = typing_until_.erase(it);
-    }
-    return changed;
   }
 
   // The user has read a chat up to a message: kept, sent or not.
@@ -793,7 +788,6 @@ class model {
     this->in_account(one.account, [&](account& kept) { kept.state = one.state; });
   }
   void on(const change::account_removed& one) {
-    std::erase_if(typing_until_, [&](const auto& pending) { return pending.first.account == one.account; });
     (void)chats_.apply(skiff::model::take<account>(one.account));
   }
   void on(const change::conversation_updated& one) {
@@ -820,7 +814,6 @@ class model {
   });
   }
   void on(const change::conversation_removed& one) {
-    typing_until_.erase(one.id);
     if (this->accounts().contains(one.id.account))
       this->in_account(one.id.account, [&](account& kept) { (void)kept.conversations.take(one.id.id); });
   }
@@ -955,11 +948,10 @@ class model {
                    one.where))
       return;
     const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, one.where);
-    if (live) {
-      std::erase(where.typing, one.message.sender);
-      if (where.typing.empty())
-        typing_until_.erase(one.message.in);
-    }
+    // Come live: to the plugins' parts of the chat, that hear it (its
+    // sender's typing ended, for one).
+    if (live)
+      parts_heard_message(where, one.message);
     if (message* kept = one.message.id.empty() ? nullptr : message_in(where, one.message.id)) {
       // Come again -- a page, the disk, a window around it: its reactions
       // kept, which what came may not carry.
@@ -1376,16 +1368,6 @@ class model {
     }
   });
   }
-  std::map<conversation_id, std::chrono::steady_clock::time_point> typing_until_;
-  void on(const change::typing_changed& one) {
-    if (one.who.empty())
-      typing_until_.erase(one.in);
-    else
-      typing_until_.insert_or_assign(one.in, std::chrono::steady_clock::now() + std::chrono::seconds(30));
-    if (const auto* chat = find(one.in); chat && chat->typing == one.who)
-      return;
-    this->in_chat(one.in, [&](conversation& where) { where.typing = one.who; });
-  }
   void on(const change::history_position& one) {
     this->in_chat(one.in, [&](conversation& where) { where.history_from = one.from; });
   }
@@ -1403,11 +1385,9 @@ class model {
   }
   void on(const change::members_changed& one) {
     this->in_chat(one.in, [&](conversation& where) {
-    // Who was in it and is no longer -- left, kicked, banned -- types no
-    // more: their typing, said before they went, stayed under the name.
-    std::erase_if(where.typing, [&](const std::string& who) {
-      return std::ranges::contains(where.members, who, &member::id) && !std::ranges::contains(one.members, who, &member::id);
-    });
+    // To the plugins' parts of the chat, that hear who is in it now, and
+    // who was (one who left types no more, for one).
+    parts_heard_members(where, where.members, one.members);
     where.members = one.members;
     where.knocking = one.knocking;
     ++where.members_revision;

@@ -162,6 +162,21 @@ struct app : kept_settings {
   }
   template <class Part>
   static void tick_part(Part&) {}
+  // When a plugin's part needs the window woken, in milliseconds: never,
+  // where it says nothing (a typer past, the typing's).
+  template <class Part>
+    requires requires(const Part& part) { { part.wake_in() } -> std::convertible_to<double>; }
+  static double part_wake_in(const Part& part) {
+    return part.wake_in();
+  }
+  template <class Part>
+  static double part_wake_in(const Part&) {
+    return std::numeric_limits<double>::infinity();
+  }
+  [[nodiscard]] double plugins_wake_in() const {
+    return std::apply([](const auto&... part) { return std::min({std::numeric_limits<double>::infinity(), part_wake_in(part)...}); },
+                      plugin_parts);
+  }
   void plugins_take(const mux::change_t& one) {
     spl::visit([&](const auto& each) { std::apply([&](auto&... part) { (take_change(part, each), ...); }, plugin_parts); }, one);
   }

@@ -1767,12 +1767,13 @@ TEST(Plugins, TypingSaysWhoIsTypingAsTelegramDoes) {
   const auto said = [&] {
     return extend(mux::contract::chat_status{}, mux::type_tag<mux::plugins::typing::feature>{}, std::as_const(chat));
   };
+  auto& typing = std::get<mux::plugins::typing::chat_part<mux::message>>(chat.plugins).who;
   EXPECT_FALSE(said());
-  chat.typing = {"@a:x.org"};
+  typing = {"@a:x.org"};
   EXPECT_EQ(said().value_or(""), "Ann is typing…");
-  chat.typing = {"@a:x.org", "@b:x.org"};
+  typing = {"@a:x.org", "@b:x.org"};
   EXPECT_EQ(said().value_or(""), "Ann and Bob are typing…");
-  chat.typing = {"@a:x.org", "@b:x.org", "@c:x.org", "@d:x.org"};
+  typing = {"@a:x.org", "@b:x.org", "@c:x.org", "@d:x.org"};
   EXPECT_EQ(said().value_or(""), "Ann, Bob and 2 more are typing…");
 }
 

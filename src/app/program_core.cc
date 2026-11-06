@@ -482,7 +482,7 @@ void app::after_event() {
 
 // Something arrived and not taken yet: the next frame at once.
 double app::wake_in() const {
-  return arriving_.empty() ? std::min(model->typing_wake_in(), jumps.loader_wake_in()) : 0.0;
+  return arriving_.empty() ? std::min(this->plugins_wake_in(), jumps.loader_wake_in()) : 0.0;
 }
 
 void app::before_frame() {
@@ -544,8 +544,6 @@ void app::before_frame() {
   }
   if (showing.look<mux::ui::screen_shown>()->docked != shared.ui.docked_panel_height)
     mux::ui::change_shown<mux::ui::screen_shown>(showing, [&](mux::ui::screen_shown& now) { now.docked = shared.ui.docked_panel_height; });
-  if (model->expire_typing())
-    chats_binding.refresh(root(), model->chats());
   store.flush_reads();
   ++mux::ui::image_cache::frame();
   // What the model's widgets did: edits of the model, before the frame.

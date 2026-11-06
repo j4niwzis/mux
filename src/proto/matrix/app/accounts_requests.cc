@@ -68,7 +68,6 @@ template void account<mux::app::post_change>::leave(std::string room);
 template void account<mux::app::post_change>::send(std::string room, std::string body, std::optional<std::string> reply_to, std::vector<mention> mentions, std::vector<styled_run> styles, std::optional<std::string> local, plugin_message_parts parts);
 template void account<mux::app::post_change>::set_display_name(std::string name);
 template void account<mux::app::post_change>::send_as(std::string room, std::string body, std::optional<std::string> html, bool emote, std::optional<std::string> reply_to);
-template void account<mux::app::post_change>::typing(std::string room, bool on);
 template void account<mux::app::post_change>::join(std::string room, std::vector<std::string> via);
 template void account<mux::app::post_change>::knock(std::string room, std::vector<std::string> via, std::string reason);
 template void account<mux::app::post_change>::fetch_members(std::string room);

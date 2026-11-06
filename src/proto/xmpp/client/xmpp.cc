@@ -13,6 +13,7 @@ import std;
 import splice;
 import tern;
 import mux.core;
+import mux.composition;
 import mux.net;
 import mux.http;
 import mux.proto.xmpp;
@@ -178,6 +179,60 @@ inline mux::proto::xmpp::registration_asked registration_asked_of(const account_
   }
   return out;
 }
+
+}  // namespace mux::proto::xmpp::client
+
+export namespace mux::contract {
+// What a plugin hears of an XMPP account's messages, and keeps of it
+// (mux.plugins.xmpp).
+struct xmpp_events {};
+}  // namespace mux::contract
+
+export namespace mux::proto::xmpp::client {
+
+// What a plugin hears of a message come -- xmpp_message(contract::
+// xmpp_events, type_tag<its feature>, the stanza, whether a room's, the
+// account), found by ADL where the account is made -- told to the program
+// as its own changes (tell_program): chat states, for one.
+template <class Plugin, class Message, class Account>
+concept hears_xmpp_messages = requires(const Message& got, bool group, Account& account) {
+  xmpp_message(contract::xmpp_events{}, type_tag<Plugin>{}, got, group, account);
+};
+// What a plugin keeps of an account while it is connected -- xmpp_kept_type(
+// contract::xmpp_events, type_tag<its feature>) -> type_tag<what>; nothing
+// where it says nothing -- and every plugin's, in one tuple.
+template <class Plugin>
+struct xmpp_kept_of {
+  struct type {};
+};
+template <class Plugin>
+  requires requires { xmpp_kept_type(contract::xmpp_events{}, type_tag<Plugin>{}); }
+struct xmpp_kept_of<Plugin> {
+  using type = typename decltype(xmpp_kept_type(contract::xmpp_events{}, type_tag<Plugin>{}))::type;
+};
+template <class Plugin>
+struct xmpp_kept_slot {
+  typename xmpp_kept_of<Plugin>::type kept{};
+};
+template <class List>
+struct xmpp_kept_slots {
+  using type = std::tuple<>;
+};
+template <template <class...> class List, class... Plugins>
+struct xmpp_kept_slots<List<Plugins...>> {
+  using type = std::tuple<xmpp_kept_slot<Plugins>...>;
+};
+// The plugins an account's sink serves (the program's, mux::app::
+// post_change's); none for any other.
+template <class Sink>
+struct xmpp_plugins {
+  using type = plugin_list<>;
+};
+template <class Sink>
+  requires requires { typename Sink::plugins; }
+struct xmpp_plugins<Sink> {
+  using type = typename Sink::plugins;
+};
 
 // The protocol spoken: the standard one, rooms (XEP-0045), bookmarks
 // (XEP-0402) and chat markers (XEP-0333).
@@ -881,6 +936,33 @@ class account {
   void tell_program(Change change) {
     sink_(std::move(change));
   }
+  // A room joined: one's own nick in it; none, for a person.
+  [[nodiscard]] std::optional<std::string> nick_in(const std::string& room) const {
+    const auto found = rooms_.find(room);
+    return found == rooms_.end() ? std::nullopt : std::optional<std::string>(found->second.nick);
+  }
+  // A message of a plugin's payload alone (a chat state), to a room or to
+  // a person.
+  template <class Payload>
+  void send_payload(const std::string& to, Payload payload) {
+    if (!session_)
+      return;
+    if (rooms_.contains(to)) {
+      proto::message::groupchat message{.to = to};
+      message.payload.emplace_back(std::move(payload));
+      session_->send(message);
+    } else {
+      proto::message::chat message{.to = to};
+      message.payload.emplace_back(std::move(payload));
+      session_->send(message);
+    }
+  }
+  // What the plugin keeps of the account while it is connected
+  // (xmpp_kept_type): forgotten as it connects again.
+  template <class Plugin>
+  [[nodiscard]] auto& kept_for(type_tag<Plugin>) {
+    return std::get<xmpp_kept_slot<Plugin>>(plugins_kept_).kept;
+  }
 
   // XEP-0030: a MUC service lists its rooms; an account domain lists its
   // services first. Searches are local because disco has no search query.
@@ -1173,41 +1255,19 @@ class account {
     });
   }
 
-  void typing(std::string to, bool on) {
-    this->spawn_guarded([this, to = std::move(to), on] {
-      if (!session_) return;
-      if (!rooms_.contains(to) && !typing_supported_.contains(to)) {
-        const auto info = session_->template try_request<tern::query::disco_info>({.to = to});
-        typing_supported_[to] = info && std::ranges::contains(info->features, tern::chat_states::ns, &tern::disco::feature::var);
-      }
-      if (!session_ || (!rooms_.contains(to) && !typing_supported_[to])) return;
-      const auto previous = typing_sent_.find(to);
-      if (previous != typing_sent_.end() && previous->second == on) return;
-      typing_sent_[to] = on;
-      const auto extra = [&](auto& message) {
-        if (on) message.payload.emplace_back(tern::chat_states::composing{});
-        else message.payload.emplace_back(tern::chat_states::paused{});
-      };
-      if (rooms_.contains(to)) { proto::message::groupchat message{.to = to}; extra(message); session_->send(message); }
-      else { proto::message::chat message{.to = to}; extra(message); session_->send(message); }
-    });
+  // A message come, to every plugin that hears it (hears_xmpp_messages):
+  // its chat state, for one.
+  using sink_plugins_tag = type_tag<typename xmpp_plugins<Sink>::type>;
+  template <class Plugin, class Message>
+    requires hears_xmpp_messages<Plugin, Message, account>
+  void message_for(const Message& got, bool group) {
+    xmpp_message(contract::xmpp_events{}, type_tag<Plugin>{}, got, group, *this);
   }
-  template <class Message> void read_typing(const Message& got, bool group) {
-    if (!got.from) return;
-    const auto room = bare(*got.from);
-    if (group && (!rooms_.contains(room) || resource_of(*got.from) == rooms_.at(room).nick)) return;
-    const auto sender = group ? *got.from : room;
-    if (group && resource_of(*got.from).empty()) return;
-    bool said = false, composing = false;
-    for (const auto& p : got.payload) {
-      composing = composing || p.template is<tern::chat_states::composing>();
-      said = said || p.template is<tern::chat_states::active>() || p.template is<tern::chat_states::composing>() || p.template is<tern::chat_states::paused>() || p.template is<tern::chat_states::inactive>() || (!group && p.template is<tern::chat_states::gone>());
-    }
-    if (!group && said) typing_supported_[room] = true;
-    if (!said && !got.body) return;
-    auto& who = typing_received_[room];
-    if (composing) who.insert(sender); else who.erase(sender);
-    sink_(change::typing_changed{{id_, room}, std::vector<std::string>(who.begin(), who.end())});
+  template <class Plugin, class Message>
+  void message_for(const Message&, bool) {}
+  template <template <class...> class List, class... Plugins, class Message>
+  void plugins_hear_message(type_tag<List<Plugins...>>, const Message& got, bool group) {
+    (this->template message_for<Plugins>(got, group), ...);
   }
 
   // A message of one's own corrected (XEP-0308): the new text in its place.
@@ -1403,7 +1463,7 @@ class account {
     }
     session_type& session = *made;
     session_ = &session;
-    typing_supported_.clear(); typing_sent_.clear(); typing_received_.clear();
+    plugins_kept_ = {};
     connected_ = true;
     log(id_, "logged in, as {}", how_.resource.empty() ? std::string("a resource the server chose") : how_.resource);
     say(connection::online{});
@@ -1619,7 +1679,7 @@ class account {
   // A room's message: the room is the conversation, the occupant the sender,
   // and one's own nick says it was sent from here -- the room's echo of it.
   void on_message(const proto::message::groupchat& got) {
-    read_typing(got, true);
+    this->plugins_hear_message(sink_plugins_tag{}, got, true);
     if (!got.from)
       return;
     const std::string room = bare(*got.from);
@@ -1646,7 +1706,7 @@ class account {
 
   template <class Message>
   void text_message(const Message& got) {
-    read_typing(got, false);
+    this->plugins_hear_message(sink_plugins_tag{}, got, false);
     if (!got.from || (!got.body && !std::ranges::any_of(got.payload, [](const auto& p) { return p.template is<tern::files::sharing>() || p.template is<tern::files::oob>(); })))
       return;
     const std::string room = bare(*got.from);
@@ -1949,8 +2009,7 @@ class account {
   mux::presence own_presence_{availability::online{}, {}};
   session_type* session_ = nullptr;
   net::stream* wire_ = nullptr;
-  std::map<std::string, bool> typing_supported_, typing_sent_;
-  std::map<std::string, std::set<std::string>> typing_received_;
+  typename xmpp_kept_slots<typename xmpp_plugins<Sink>::type>::type plugins_kept_{};
   std::optional<std::string> upload_service_;
   std::optional<std::uint64_t> upload_limit_;
   std::uint64_t sent_ = 0;

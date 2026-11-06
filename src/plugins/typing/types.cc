@@ -39,4 +39,17 @@ consteval bool provides(contract::choice_rows, type_tag<feature>) { return true;
 // On an account's Privacy page: whether others are told one is typing.
 consteval bool provides(contract::account_page_rows, type_tag<feature>) { return true; }
 
+// The user typing in a chat, or not, asked of its account: told by each
+// protocol's side of the plugin (told_typing, found by ADL on the ask --
+// mux.plugin.typing.matrix, .xmpp), where the account is one it tells.
+struct typing_ask {
+  std::string to;
+  bool on = false;
+  template <class Account>
+    requires requires(Account& account, const typing_ask& ask) { told_typing(account, ask); }
+  void operator()(Account& account) const {
+    told_typing(account, *this);
+  }
+};
+
 }  // namespace mux::plugins::typing

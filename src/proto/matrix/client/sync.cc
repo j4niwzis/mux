@@ -825,14 +825,9 @@ void account<Sink>::load_kept() {
     return;
   }
   state_.apply(*saved);
-  // Who was typing when it was kept is long past: the server tells m.typing
-  // only as it changes, so a typer kept here stayed "typing" -- re-told at
-  // every sync -- until they typed in that room again.
-  for (auto& [room, kept] : state_.joined)
-    kept.typing.clear();
-  telling_history_ = true;
+  telling_history_ = telling_kept_ = true;
   tell(*saved);
-  telling_history_ = false;
+  telling_history_ = telling_kept_ = false;
   log(id_, "the sync kept: {} rooms, going on from there", state_.joined.size());
 }
 
@@ -1023,17 +1018,6 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       if (part.timeline)
         for (const auto& one : part.timeline->events)
           event(in, one);
-      // Who is typing, but the account itself: its own typing, from this or
-      // another device, is not news to it (as in Telegram).
-      if (part.ephemeral && part.ephemeral->events &&
-          std::ranges::any_of(*part.ephemeral->events, [](const auto& event) {
-            return event.content.template is<loom::ev::m_typing_content_t>();
-          })) {
-        std::vector<std::string> typing;
-        std::ranges::copy_if(found->second.typing, std::back_inserter(typing),
-                             [&](const std::string& who) { return who != id_.address; });
-        sink_(change::typing_changed{in, std::move(typing)});
-      }
       // The mentions read in another session of this account (theirs, in
       // the room's account data): seen here too.
       if (part.account_data && part.account_data->events)
@@ -1051,8 +1035,11 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
             if (one.user == id_.address)
               sink_(change::read_marker{in, one.event_id});
         // And the room's ephemeral events, to the plugins that hear them
-        // (matrix_ephemeral): others' read receipts, for one.
-        this->plugins_hear_ephemeral(sink_plugins_tag{}, in, *part.ephemeral->events);
+        // (matrix_ephemeral): others' read receipts, who is typing -- a live
+        // sync's, not those of the sync kept, long past (a typer kept stayed
+        // "typing" until they typed in that room again).
+        if (!telling_kept_)
+          this->plugins_hear_ephemeral(sink_plugins_tag{}, in, *part.ephemeral->events);
       }
     }
   // Invites: the room as its stripped state tells of it -- its name,

@@ -710,7 +710,6 @@ struct conversation {
   // was said in the clear, and is not marked for it.
   std::optional<std::chrono::sys_time<std::chrono::milliseconds>> encrypted_since;
   std::int64_t highlights = 0;
-  std::vector<std::string> typing;
   std::vector<knock_request> knocking;  // asking to join, where it lets them knock
   std::vector<member> members;  // a group's, as far as they are known
   std::vector<message> timeline;  // oldest first, as far back as is loaded

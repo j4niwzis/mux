@@ -165,7 +165,7 @@ inline std::string sender_role(const state&, const conversation& in, std::string
 // Encrypted, said after the chat's status, as Element's shield on its
 // header: and in a direct chat, what is known of the other's identity.
 inline std::vector<part::badge> header_badges(const state& now, const conversation& one, const model& known) {
-  if (!one.encrypted || !one.typing.empty())
+  if (!one.encrypted)
     return {};
   const auto trust = other_trust(now, one, known);
   const std::string after = !trust ? std::string()

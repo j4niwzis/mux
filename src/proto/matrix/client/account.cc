@@ -778,8 +778,6 @@ class account {
   // banned taken out.
   void members(const conversation_id& in, const loom::client::joined_room& kept);
  public:
-  // The user typing in a room, or not: for thirty seconds, or until said.
-  void typing(std::string room, bool on);
   // A room joined, by its id or an alias, through the servers `via` names:
   // it comes with the next sync.
   void join(std::string room, std::vector<std::string> via);
@@ -800,6 +798,9 @@ class account {
   // no call -- a login showed every old mention as new.
   std::optional<loom::cs::sync::set_presence_t> chosen_presence_;
   bool telling_history_ = false;
+  // The sync kept on disk told again at a start: its ephemeral events --
+  // who was typing, receipts -- long past, and not given to the plugins.
+  bool telling_kept_ = false;
   // Events told now are news, though they go into the window -- to a
   // plugin that hears them (a call's signals):
   // a live sync's gap caught up (the sliding sync brings only a room's

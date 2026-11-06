@@ -166,12 +166,13 @@ struct chats_shown {
                           .value_or(is_group(*one) ? std::format("{} member{}", count, count == 1 ? "" : "s")
                                                    : presence_of(shared, now, one->id.account, contact_of(shared, *one)));
   // What plugins say of it now, over that (contract::chat_status): who is
-  // typing, for one.
+  // typing, for one -- said alone, while it lasts.
   if (auto said = chat_status_plugins::said(*one))
     about = std::move(*said);
-  // What its protocol says of it after (proto::header_badges): Matrix's
-  // shield, for one.
-  about = std::ranges::fold_left(proto::header_badges(protocol_state_of(shared, one->id.account), *one, now), std::move(about),
+  // Else what its protocol says of it after (proto::header_badges):
+  // Matrix's shield, for one.
+  else
+    about = std::ranges::fold_left(proto::header_badges(protocol_state_of(shared, one->id.account), *one, now), std::move(about),
                                  [](std::string so_far, const proto::part::badge& badge) {
                                    return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
                                  });

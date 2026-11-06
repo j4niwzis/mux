@@ -81,7 +81,6 @@ template <class Account>
           .view_source = requires(Account& account) { account.synced(); },
           .send_file = requires { &Account::send_file; },
           .send_sticker = requires { &Account::send_sticker; },
-          .typing = requires { &Account::typing; },
           .calls = requires { &Account::call; }};
 }
 // Each protocol's, for the window: found once, as the program starts.
@@ -435,18 +434,6 @@ struct network {
             [&](auto& account) {
               if (account->id() == in.account)
                 ask_if_able([&](auto& a) -> decltype(void(a.fetch_quoted(in.id, target))) { a.fetch_quoted(in.id, target); }, *account);
-            },
-            one.account);
-    });
-  }
-  // Whether the user is typing in a chat, told to it.
-  void typing(const mux::conversation_id& in, bool on) {
-    loop.post([this, in, on] {
-      for (auto& one : accounts)
-        spl::visit(
-            [&](auto& account) {
-              if (account->id() == in.account)
-                ask_if_able([&](auto& a) -> decltype(void(a.typing(in.id, on))) { a.typing(in.id, on); }, *account);
             },
             one.account);
     });

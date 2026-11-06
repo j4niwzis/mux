@@ -559,12 +559,22 @@ struct bubble_rules {
     // beside the last line asks it: the bubble widened to hold both.
     float base_min = 0.0f, widened = 0.0f;
     // Where the time goes has been decided, from a layout; and what that
-    // was decided from, so that it is measured again only where that moved.
+    // was decided from, so that it is measured again only where that moved
+    // -- in the bubble (relative to its top left: see within).
     bool time_placed = false;
     skia::SkRect placed_beside = skia::SkRect::MakeEmpty();
     float placed_width = -1.0f, placed_most = 0.0f;
     std::string placed_time;
   };
+  // A part's box within the bubble, from its top left. Bounds are the
+  // scene's: a bubble laid out and then moved as it is -- one's own, put at
+  // the row's end after its layout -- has every part moved with it. Compared
+  // where they were, the text's last line laid out (arrange, before the move)
+  // and settled (after it) were never the same box: the time placed again,
+  // and the bubble damaged and laid out, at every frame, for ever.
+  static skia::SkRect within(const skia::SkRect& part, const auto& body) {
+    return part.makeOffset(-body.fState.fBounds.fLeft, -body.fState.fBounds.fTop);
+  }
   static bool beside_now(auto& body, const State& state) {
     auto& picture = part_of<bubble_part::picture>(body);
     if (!state.beside || !picture)
@@ -618,9 +628,12 @@ struct bubble_rules {
         scene::layout(inline_time, body.fState.contentBox());
       }
     }
-    if (state.time_placed && text.visible() && part_of<bubble_part::blocks>(body).empty() && !cards_t::any(part_of<bubble_part::cards>(body)) &&
-        !state.beside) {
-      const auto last = trailer ? trailer->bounds : text.bounds();
+    // Not in the provisional pass of an auto-sized bubble's layout: its parts
+    // laid out in a box that is not the bubble's, where the text may wrap
+    // otherwise -- only the final pass is what settle placed the time from.
+    if (skiff::scene::work::provisionalDepth() == 0 && state.time_placed && text.visible() &&
+        part_of<bubble_part::blocks>(body).empty() && !cards_t::any(part_of<bubble_part::cards>(body)) && !state.beside) {
+      const auto last = within(trailer ? trailer->bounds : text.bounds(), body);
       if (last != state.placed_beside) {
         state.time_placed = false;
         body.markDamaged();
@@ -724,10 +737,11 @@ struct bubble_rules {
     // gives it where that is less -- a phone's window.
     const float given = body.fState.fLastConstraint.width() - 2.0f * kBubblePadX;
     const float most = given > 0.0f ? std::min(kBubbleMaxWidth, given) : kBubbleMaxWidth;
-    if (last == state.placed_beside && last_width == state.placed_width && inline_time.text() == state.placed_time &&
+    const skia::SkRect last_within = within(last, body);
+    if (last_within == state.placed_beside && last_width == state.placed_width && inline_time.text() == state.placed_time &&
         most == state.placed_most)
       return;
-    state.placed_beside = last;
+    state.placed_beside = last_within;
     state.placed_width = last_width;
     state.placed_time = inline_time.text();
     state.placed_most = most;

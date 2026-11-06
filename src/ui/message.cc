@@ -1136,8 +1136,8 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
 // What the plugins' rows at a menu's foot are made from, each worked out by
 // its plugin from the chat and the message (contract::message_menu_foot).
 template <class... Features>
-[[nodiscard]] menu_feet_t menu_feet_for(plugin_list<Features...>, const conversation& chat, const message& said) {
-  return menu_feet_t{foot_facts(contract::message_menu_foot{}, type_tag<Features>{}, chat, said)...};
+[[nodiscard]] menu_feet_facts_t menu_feet_for(plugin_list<Features...>, const conversation& chat, const message& said) {
+  return menu_feet_facts_t{foot_facts(contract::message_menu_foot{}, type_tag<Features>{}, chat, said)...};
 }
 
 // What the plugins' rows in a menu are made from, each worked out by its

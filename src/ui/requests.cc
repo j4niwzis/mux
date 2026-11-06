@@ -48,7 +48,7 @@ struct person_at {
 };
 // What the plugins' rows at a message's menu's foot are made from, each its
 // own (contract::message_menu_foot).
-using menu_feet_t = typename composition::menu_feet_of<composition::providers<contract::message_menu_foot, enabled_plugins>>::type;
+using menu_feet_facts_t = typename composition::menu_feet_of<composition::providers<contract::message_menu_foot, enabled_plugins>>::type;
 // What the plugins' rows in a message's menu are made from, each its own
 // (contract::message_menu's row_facts).
 using menu_row_facts_t = typename composition::menu_row_facts_of<composition::providers<contract::message_menu, enabled_plugins>>::type;
@@ -59,7 +59,7 @@ struct menu_facts {
   std::string copied;  // what Copy takes: the selection, or all of it
   std::optional<skiff::scene::ClipboardFragment> copied_fragment;
   bool selection = false;
-  menu_feet_t feet{};
+  menu_feet_facts_t feet{};
   menu_row_facts_t rows{};
   std::optional<std::string> media;  // a picture's or a file's source
   std::optional<std::string> picture;  // a picture's source, or a video's thumbnail's: what Copy Image copies

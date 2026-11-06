@@ -101,8 +101,9 @@ built-in sample conversations without an account.
 | [chevron](https://github.com/j4niwzis/chevron) | XML, typed, under tern; HTML for Matrix's formatted bodies |
 | [alef](https://github.com/j4niwzis/alef) | Unicode: normalization, casing, graphemes, IDNA, PRECIS, emoji -- its tables read from Unicode's files at compile time |
 | [splice](https://github.com/j4niwzis/splice) | `spl::variant`, overload sets, erased calls, fields of aggregates |
-| [skiff](https://github.com/j4niwzis/skiff) | the scene: layout, input routing, text, accessibility, frame scheduling, on Skia |
-| [skiff-widgets](https://github.com/j4niwzis/skiff-widgets) | the controls: text areas (extendable: formats, blocks), buttons, tabs, sliders, dialogs |
+| [skiff](https://github.com/j4niwzis/skiff) | the scene: layout, input routing, text, accessibility, frame scheduling, on Skia; every screen written as `skiff.compose` builders, shaped by the plugins' rules |
+| [skiff-widgets](https://github.com/j4niwzis/skiff-widgets) | the controls: text areas (extendable: formats, blocks), buttons, tabs, sliders, menus, avatars, loaders |
+| [skiff-framework](https://github.com/j4niwzis/skiff-framework) | the window (`skiff.platform.window`): SDL3 makes it and brings its input, Skia draws the scene into it; in the browser, HTTP, storage, pickers and downloads |
 | [cmake-everywhere](https://github.com/j4niwzis/cmake-everywhere) | every dependency, pinned: built here or taken from the system, natively or cross-compiled |
 
 and on SDL3 (a fork, for Android's NativeActivity), Skia, Boost.Asio and
@@ -113,7 +114,10 @@ Boost.Beast, OpenSSL, vodozemac, FFmpeg, Opus and libdatachannel.
 ```
   mux.platform.*    the SDL3 window, input, IME, clipboard, dialogs, audio,
        |            video, notifications, push, files -- Linux and Android
-  mux.ui            the screens, as skiff nodes (partitions mux.ui:*)
+  mux.ui            the screens, as skiff.compose builders (partitions
+       |            mux.ui:*), built under the plugins' rules
+  mux.plugins.*     each feature beyond the core, in a folder of its own:
+       |            threads, receipts, typing, pins, search, reactions, ...
        |    ^
   requests  changes
        v    |
@@ -148,6 +152,24 @@ Boost.Beast, OpenSSL, vodozemac, FFmpeg, Opus and libdatachannel.
   a variant of each protocol's client, visited.
 - **Sans-I/O below, I/O here.** tern and loom do the protocols and nothing
   else; sockets, TLS, files and the clock are mux's.
+- **Plugins.** Every feature beyond the core is a plugin: a folder,
+  `src/plugins/<name>/`, found by that alone and built where its option
+  `MUX_PLUGIN_<NAME>` is on. Its sources come in layers -- what it keeps in
+  the model beside the client's own (its part of a message and of a chat),
+  the changes it hears from an account, its UI, its part of the program, its
+  Matrix and XMPP pieces. What it extends is a **contract**, a type owned by
+  what is extended -- a message's menu and its foot, a chat's flags, a
+  list row's marks, the composer's buttons, an account's pages, the keys
+  caught before the focus -- and it says it provides one by an overload; what
+  it says it provides must be there, or the build stops naming both
+  (`mux.composition`). A plugin also shapes the screens through rules on
+  `skiff.compose`'s pieces (before, after, around, instead, drop), gathered
+  above every plugin. The core knows nothing of threads, receipts or typing;
+  third parties' plugins are folders given in `MUX_EXTRA_PLUGINS`.
+- **Screens as builders.** The UI is written with skiff's builders: a view
+  is described before it is built, so the plugins' rules are applied where
+  it is made -- folded while compiling in a release build, through a table
+  outside one.
 - **Static in release, erased while developing.** A release build is
   instantiated whole; a development build erases handlers and walks and
   splits the accounts into units of their own, built in parallel
@@ -171,7 +193,9 @@ Otherwise GLib and libnice are built from source; that fallback needs the
 host tools Meson and pkg-config, including when cross-compiling for Android.
 
 Options: `MUX_CALLS` (voice calls), `MUX_VIDEO` (FFmpeg), `MUX_GL`,
-`MUX_GIF`, `MUX_WEBP`, `MUX_CLI` (a terminal client), `MUX_TESTS`.
+`MUX_GIF`, `MUX_WEBP`, `MUX_CLI` (a terminal client), `MUX_TESTS`;
+`MUX_PLUGIN_<NAME>` for each plugin (all on by default), and
+`MUX_EXTRA_PLUGINS` for plugins kept outside the tree.
 
 - **Cross-compiling:** a CMake toolchain file with a sysroot and
   `CMAKE_C_COMPILER_TARGET` / `CMAKE_CXX_COMPILER_TARGET`; Rust (for

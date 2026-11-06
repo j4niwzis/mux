@@ -83,6 +83,12 @@ inline seen foot_facts(contract::message_menu_foot, type_tag<feature>, const con
   return {std::move(out)};
 }
 
+// Read receipts as faces: not, where nothing says otherwise.
+struct receipts_setting {
+  static constexpr std::string_view label = "Read receipts as faces";
+  static constexpr std::string_view yes = "Show", no = "Hide";
+  static constexpr bool unsaid = false;
+};
 // Its row among a level's choices (contract::choice_rows): faces shown,
 // hidden, or as the level over it says.
 template <class Place>

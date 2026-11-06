@@ -708,12 +708,6 @@ struct link_previews_setting {
   static constexpr std::string_view yes = "Show", no = "Hide";
   static constexpr bool unsaid = true;
 };
-// Read receipts as faces: not, where nothing says otherwise.
-struct receipts_setting {
-  static constexpr std::string_view label = "Read receipts as faces";
-  static constexpr std::string_view yes = "Show", no = "Hide";
-  static constexpr bool unsaid = false;
-};
 // Link previews fetched from the sites themselves, through the account's
 // proxy, or through its server: the server, where nothing says
 // otherwise.
@@ -757,14 +751,13 @@ auto show_hide_field(const palette& colours, choice_level_t level) {
           [shown](const T& now) { return shown(now) == false; }, sets<T>{part_of(false, std::type_identity<T>{})})));
 }
 
-// What a chat shows, at a level -- its room events, read receipts as faces,
-// link previews (and in direct messages), how far a jump looks back -- as
+// What a chat shows, at a level -- its room events, link previews (and in
+// direct messages), how far a jump looks back -- as
 // in effect there: the same rows wherever they are chosen (every chat's in
 // Storage, an account's, one room's).
 struct chat_choice_values {
   std::optional<bool> events_all;
   std::optional<config::room_event_kinds> event_kinds;
-  std::optional<bool> receipts;
   std::optional<bool> previews;
   std::optional<bool> previews_direct;
   std::optional<std::int64_t> jump_search;

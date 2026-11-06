@@ -204,21 +204,42 @@ class pictures_part {
     panel_asked_.clear();
     if (s_->demo())
       return;
+    // One source for each key in a sweep. A person's picture is wanted under
+    // the same key from their profile (their picture everywhere) and, as a
+    // sender in the chat being read, from their membership of it (Matrix's
+    // picture for that room, which may differ, or be none). Told the cache
+    // one after the other, the key's source changed twice at every sweep:
+    // its picture let go, and every face of theirs woken, drawn without it,
+    // and asking for the next sweep -- the rows their faces are in (the read
+    // receipts under one's own messages, in a one-to-one chat) redrawn at
+    // every frame. The last said wins -- the room's over the profile's -- and
+    // none never over one.
+    std::map<std::string, std::pair<account_id, std::optional<std::string>>, std::less<>> wanted;
     const auto want = [&](const account_id& of, const std::optional<std::string>& source, const std::string& key) {
-      mux::ui::avatar_images().use_source(key, source);
-      // Shown already, or being decoded: nothing to do.
-      if (!source || source->empty() || mux::ui::avatar_images().has(key) || decoding_.contains(*source))
+      const auto says = [](const std::optional<std::string>& one) { return one && !one->empty(); };
+      if (const auto found = wanted.find(key); found != wanted.end() && !says(source) && says(found->second.second))
         return;
-      // Kept on the disk: read back -- also where it was fetched before and
-      // has since been pushed out of the window's pictures, which once was
-      // never asked for again: a sticker that had been shown stayed empty.
-      if (this->read_back(media_use::avatar{key}, *source))
-        return;
-      // On its way, or asked again only after a while where it did not come.
-      if (!fetches_.due(*source))
-        return;
-      fetches_.asked(*source);
-      s_->net->fetch_avatar(of, *source, key);
+      wanted.insert_or_assign(key, std::pair{of, source});
+    };
+    // And then each told the cache once, and fetched where it is not there.
+    const auto fetch_wanted = [&] {
+      for (const auto& [key, said] : wanted) {
+        const auto& [of, source] = said;
+        mux::ui::avatar_images().use_source(key, source);
+        // Shown already, or being decoded: nothing to do.
+        if (!source || source->empty() || mux::ui::avatar_images().has(key) || decoding_.contains(*source))
+          continue;
+        // Kept on the disk: read back -- also where it was fetched before and
+        // has since been pushed out of the window's pictures, which once was
+        // never asked for again: a sticker that had been shown stayed empty.
+        if (this->read_back(media_use::avatar{key}, *source))
+          continue;
+        // On its way, or asked again only after a while where it did not come.
+        if (!fetches_.due(*source))
+          continue;
+        fetches_.asked(*source);
+        s_->net->fetch_avatar(of, *source, key);
+      }
     };
     auto& screen = s_->root();
     // The images of the pack being edited, by the account of the chat in view.
@@ -395,6 +416,7 @@ class pictures_part {
             pictures_of(*said);
         }
       }
+    fetch_wanted();
   }
 
   // Everything kept let go: the stored pictures cleared.

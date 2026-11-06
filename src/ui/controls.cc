@@ -716,13 +716,6 @@ struct previews_direct_setting {
   static constexpr std::string_view yes = "From site", no = "Server";
   static constexpr bool unsaid = false;
 };
-// Others told one is typing -- never what: sent, where nothing says
-// otherwise.
-struct typing_setting {
-  static constexpr std::string_view label = "Send typing notifications";
-  static constexpr std::string_view yes = "Send", no = "Don't";
-  static constexpr bool unsaid = true;
-};
 
 // A setting at a level, as the model holds it: its row of Default (where
 // there is a level above), Show and Hide, bound to its part -- an optional

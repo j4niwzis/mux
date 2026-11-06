@@ -6,6 +6,7 @@
 export module mux.plugin.typing.types;
 
 import std;
+import splice;
 import knot;
 import mux.core;
 import mux.composition;
@@ -42,6 +43,50 @@ consteval bool provides(contract::account_page_rows, type_tag<feature>) { return
 // The user typing in a chat, or not, asked of its account: told by each
 // protocol's side of the plugin (told_typing, found by ADL on the ask --
 // mux.plugin.typing.matrix, .xmpp), where the account is one it tells.
+// What is said of the user's typing: that it started in a chat, or that it
+// stopped in one.
+namespace typing_said {
+struct started {
+  conversation_id in;
+};
+struct stopped {
+  conversation_id in;
+};
+}  // namespace typing_said
+using typing_said_t = spl::variant<typing_said::started, typing_said::stopped>;
+
+// Where 'typing' was last said, and when.
+struct typing_state {
+  std::optional<conversation_id> in;
+  std::chrono::steady_clock::time_point said{};
+  friend bool operator==(const typing_state&, const typing_state&) = default;
+};
+struct typing_step {
+  std::vector<typing_said_t> say;
+  typing_state next;
+};
+// The field's text there or not, in the chat chosen, at a time: 'stopped'
+// where it was said somewhere and has stopped or the chat was left;
+// 'started' where there is text and it was not said here in the last twenty
+// seconds -- each only where `allowed` says the account's privacy lets it.
+template <std::predicate<const conversation_id&> Allowed>
+[[nodiscard]] typing_step typing_after(typing_state now, bool on, const std::optional<conversation_id>& chosen,
+                                       std::chrono::steady_clock::time_point at, const Allowed& allowed) {
+  typing_step out;
+  if (now.in && (!on || now.in != chosen)) {
+    if (allowed(*now.in))
+      out.say.emplace_back(typing_said::stopped{*now.in});
+    now.in.reset();
+  }
+  if (on && chosen && allowed(*chosen) && (now.in != chosen || at - now.said > std::chrono::seconds(20))) {
+    out.say.emplace_back(typing_said::started{*chosen});
+    now.in = chosen;
+    now.said = at;
+  }
+  out.next = now;
+  return out;
+}
+
 struct typing_ask {
   std::string to;
   bool on = false;

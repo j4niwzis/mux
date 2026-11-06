@@ -14,6 +14,7 @@ import mux.logic.forwarding;
 import mux.logic.blurhash;
 import mux.logic.formatting;
 import mux.logic.reactions;
+import mux.plugin.typing.types;
 
 #include "gtest/gtest-macros.h"
 
@@ -101,21 +102,21 @@ TEST(Reading, TypingSaidAtMostEveryTwentySeconds) {
   using clock = std::chrono::steady_clock;
   const auto yes = [](const conversation_id&) { return true; };
   const clock::time_point t0{};
-  auto step = logic::typing_after({}, true, with_juliet, t0, yes);
+  auto step = plugins::typing::typing_after({}, true, with_juliet, t0, yes);
   ASSERT_EQ(step.say.size(), 1u);
-  EXPECT_TRUE(spl::visit(spl::overloaded{[](const logic::typing_said::started&) { return true; },
-                                    [](const logic::typing_said::stopped&) { return false; }},
+  EXPECT_TRUE(spl::visit(spl::overloaded{[](const plugins::typing::typing_said::started&) { return true; },
+                                    [](const plugins::typing::typing_said::stopped&) { return false; }},
                          step.say[0]));
   // Still typing a little later: nothing said again.
-  auto again = logic::typing_after(step.next, true, with_juliet, t0 + std::chrono::seconds(5), yes);
+  auto again = plugins::typing::typing_after(step.next, true, with_juliet, t0 + std::chrono::seconds(5), yes);
   EXPECT_TRUE(again.say.empty());
   // Stopped: said.
-  auto stop = logic::typing_after(again.next, false, with_juliet, t0 + std::chrono::seconds(6), yes);
+  auto stop = plugins::typing::typing_after(again.next, false, with_juliet, t0 + std::chrono::seconds(6), yes);
   ASSERT_EQ(stop.say.size(), 1u);
   EXPECT_FALSE(stop.next.in.has_value());
   // Not allowed by privacy: nothing said at all.
   const auto no = [](const conversation_id&) { return false; };
-  EXPECT_TRUE(logic::typing_after({}, true, with_juliet, t0, no).say.empty());
+  EXPECT_TRUE(plugins::typing::typing_after({}, true, with_juliet, t0, no).say.empty());
 }
 
 TEST(Drafts, KeptAndReadBack) {

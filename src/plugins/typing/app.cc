@@ -13,7 +13,6 @@ import splice;
 import mux.composition;
 import mux.core;
 import mux.ui;
-import mux.logic.reading;
 import mux.app.network;
 import mux.app.kept;
 import mux.app.services;
@@ -27,7 +26,7 @@ export namespace mux::plugins::typing {
 struct part {
   static constexpr auto kPast = std::chrono::seconds(30);
   app::services* s_ = nullptr;
-  logic::typing_state typing_{};
+  typing_state typing_{};
   // When each chat's typers are past, unless told of again.
   std::map<conversation_id, std::chrono::steady_clock::time_point> until_;
 
@@ -37,10 +36,10 @@ struct part {
     // Told where the chat, its space, its account or every chat lets it.
     const auto& mine = s_->kept->plugin_settings<level_choices<choices>>();
     const auto allowed = [&](const conversation_id& in) { return choices_in_effect(mine, s_->kept->space_above, in).sent.value_or(true); };
-    auto step = logic::typing_after(typing_, one.on, s_->chosen(), std::chrono::steady_clock::now(), allowed);
+    auto step = typing_after(typing_, one.on, s_->chosen(), std::chrono::steady_clock::now(), allowed);
     for (const auto& said : step.say)
-      spl::visit(spl::overloaded{[&](const logic::typing_said::started& it) { s_->net->ask(it.in.account, typing_ask{it.in.id, true}); },
-                                 [&](const logic::typing_said::stopped& it) { s_->net->ask(it.in.account, typing_ask{it.in.id, false}); }},
+      spl::visit(spl::overloaded{[&](const typing_said::started& it) { s_->net->ask(it.in.account, typing_ask{it.in.id, true}); },
+                                 [&](const typing_said::stopped& it) { s_->net->ask(it.in.account, typing_ask{it.in.id, false}); }},
                  said);
     typing_ = step.next;
   }

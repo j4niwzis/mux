@@ -31,13 +31,21 @@ inline std::optional<std::string> extend(contract::chat_status, type_tag<feature
   }
 }
 
+// Others told one is typing -- never what: sent, where nothing says
+// otherwise.
+struct typing_setting {
+  static constexpr std::string_view label = "Send typing notifications";
+  static constexpr std::string_view yes = "Send", no = "Don't";
+  static constexpr bool unsaid = true;
+};
+
 // Its row among a level's choices (contract::choice_rows): told, not told,
 // or as the level over it says.
 template <class Place>
 inline auto extend(contract::choice_rows, type_tag<feature>, const auto& colours, const Place& place) {
   using field = skiff::model::Field<&choices::sent>;
   return ::mux::ui::choices_scoped<choices>(place, skiff::compose::bound<field>(
-      ::mux::ui::show_hide_field<::mux::ui::typing_setting, std::optional<bool>, field>(colours, level_of(place))));
+      ::mux::ui::show_hide_field<typing_setting, std::optional<bool>, field>(colours, level_of(place))));
 }
 
 // The same row on an account's Privacy page (contract::account_page_rows).

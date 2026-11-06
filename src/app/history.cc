@@ -8,6 +8,9 @@ export module mux.app.history;
 
 import std;
 import splice;
+import knot;
+import mux.composition;
+import mux.plugins.types;
 import mux.core;
 import mux.proto;
 import mux.protocols;
@@ -36,14 +39,58 @@ class history_part {
     const bool restore_me = !chat->read_up_to && saved.me.has_value();
     if (restore_me)
       s_->model->read_up_to(in, *saved.me);
-    if (!saved.read_by.empty())
-      s_->model->apply(mux::change_t{mux::change::receipts_changed{in, std::move(saved.read_by), std::move(saved.times)}});
+    this->restore_parts(in, mux::composition::providers<mux::contract::chat_kept, mux::enabled_plugins>{});
   }
 
   void before(const mux::change_t& one) {
     spl::visit(spl::overloaded{
-        [&](const mux::change::receipts_changed& c) { restore_reads(c.in); },
-        [](const auto&) {}}, one);
+        [&](const mux::change::read_marker& c) { restore_reads(c.in); },
+        [&](const auto& c) { this->parts_before(c, mux::composition::providers<mux::contract::chat_kept, mux::enabled_plugins>{}); }}, one);
+  }
+
+  // Each plugin's part of a chat kept on disk (contract::chat_kept): put back
+  // as its change, as the chat is first opened.
+  template <class... Features>
+  void restore_parts(const mux::conversation_id& in, mux::plugin_list<Features...>) {
+    (this->template restore_part<Features>(in), ...);
+  }
+  template <class Feature>
+  void restore_part(const mux::conversation_id& in) {
+    using kept_t = typename decltype(chat_kept_type(mux::contract::chat_kept{}, mux::type_tag<Feature>{}))::type;
+    const auto text = s_->store->read_part(in, Feature::name);
+    if (!text)
+      return;
+    auto saved = knot::try_read<kept_t>(std::string_view(*text));
+    if (!saved)
+      return;
+    s_->model->apply(mux::change_t{restored(mux::contract::chat_kept{}, mux::type_tag<Feature>{}, in, std::move(*saved))});
+  }
+  // A change a plugin's kept part follows (kept_after): its chat restored
+  // first -- before the server's word replaces what was kept -- and its part
+  // kept again after.
+  template <class Feature, class Change>
+    requires requires(const Change& c) { kept_after(mux::contract::chat_kept{}, mux::type_tag<Feature>{}, c); }
+  void part_before(const Change& c) {
+    this->restore_reads(kept_after(mux::contract::chat_kept{}, mux::type_tag<Feature>{}, c));
+  }
+  template <class Feature, class Change>
+  void part_before(const Change&) {}
+  template <class Feature, class Change>
+    requires requires(const Change& c) { kept_after(mux::contract::chat_kept{}, mux::type_tag<Feature>{}, c); }
+  void part_after(const Change& c) {
+    const mux::conversation_id in = kept_after(mux::contract::chat_kept{}, mux::type_tag<Feature>{}, c);
+    if (const mux::conversation* chat = s_->model->find(in))
+      s_->store->keep_part(in, Feature::name, knot::to_json_string(kept_of(mux::contract::chat_kept{}, mux::type_tag<Feature>{}, *chat)));
+  }
+  template <class Feature, class Change>
+  void part_after(const Change&) {}
+  template <class Change, class... Features>
+  void parts_before(const Change& c, mux::plugin_list<Features...>) {
+    (this->template part_before<Features>(c), ...);
+  }
+  template <class Change, class... Features>
+  void parts_after(const Change& c, mux::plugin_list<Features...>) {
+    (this->template part_after<Features>(c), ...);
   }
 
   // A change the model was given, kept on disk as it says.
@@ -149,7 +196,7 @@ class history_part {
                                [&](const mux::change::message_encrypted& c) { as_now(c.in, c.id); },
                                [&](const mux::change::message_discarded& c) { s_->store->forget(c.in, c.id); },
                                [&](const mux::change::reaction_changed& c) { as_now(c.in, c.id); },
-                               [&](const mux::change::receipts_changed& c) {
+                               [&](const mux::change::read_marker& c) {
                                  if (const mux::conversation* chat = s_->model->find(c.in))
                                    s_->store->keep_reads(c.in, *chat);
                                },
@@ -159,6 +206,8 @@ class history_part {
                                },
                                [](const auto&) {}},
                one);
+    // And the plugins' parts of the chat it changed, where they are kept.
+    spl::visit([&](const auto& c) { this->parts_after(c, mux::composition::providers<mux::contract::chat_kept, mux::enabled_plugins>{}); }, one);
   }
 
   // Older messages of a chat: from the disk while it has some from before

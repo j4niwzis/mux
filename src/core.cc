@@ -234,13 +234,11 @@ struct conversation_updated {
   std::optional<invite_info> invite;
 };
 
-// Receipts: who has read up to which message, as the server says.
-struct receipts_changed {
+// The user's own read position, as the server says it: their receipt from
+// another device, or this one's echoed.
+struct read_marker {
   conversation_id in;
-  std::map<std::string, std::string> read_by;  // user -> the message read up to
-  // And when: the receipt's own time, for one read up to an event not
-  // among the messages here -- a reaction, a state event, one not loaded.
-  std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> read_at{};
+  std::string event;
 };
 
 
@@ -498,7 +496,7 @@ struct event_missing {
 // change list -- changes_type(state), found by ADL in its folder (mux.proto.
 // <p>.changes), none where it gives none; and the plugins', in one list
 // (mux.plugins.changes) -- all one variant.
-using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::message_found_at, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved>;
+using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::message_found_at, change::event_missing, change::members_changed, change::avatar_loaded, change::read_marker, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved>;
 namespace changes_defaults {
 constexpr type_tag<change_list<>> changes_type(const auto&) { return {}; }
 }  // namespace changes_defaults
@@ -1434,45 +1432,20 @@ class model {
   void on(const change::room_created&) {}    // the program's: it shows it
   void on(const change::room_previewed&) {}  // the window's: the room's card
   void on(const change::preview_loaded& one) { previews.insert_or_assign(one.url, one.preview); }
-  void on(const change::receipts_changed& one) {
+  // The user's own position, from another device (or this one's, echoed):
+  // where it is past the position kept here -- or there is none -- the
+  // position moves on to it. Never back: a receipt older than what was read
+  // here.
+  void on(const change::read_marker& one) {
     this->in_chat(one.in, [&](conversation& kept) {
-    const auto place = [&](const std::string& id) { return std::ranges::find(kept.timeline, id, &message::id); };
-    for (const auto& [user, event] : one.read_by) {
-      const auto previous = kept.read_by.find(user);
-      bool accept = previous == kept.read_by.end() || previous->second == event;
-      if (!accept) {
-        const auto before = place(previous->second), after = place(event);
-        if (before != kept.timeline.end() && after != kept.timeline.end())
-          accept = after > before;
-        else {
-          const auto old_time = kept.receipt_times.find(user);
-          const auto new_time = one.read_at.find(user);
-          if (old_time != kept.receipt_times.end() && new_time != one.read_at.end())
-            accept = new_time->second > old_time->second;
-        }
-        // Without either positions or timestamps, an unknown event cannot
-        // prove that an existing receipt moved forward.
-      }
-      if (!accept) continue;
-      kept.read_by.insert_or_assign(user, event);
-      if (const auto time = one.read_at.find(user); time != one.read_at.end()) {
-        const auto old = kept.receipt_times.find(user);
-        if (old == kept.receipt_times.end() || time->second > old->second)
-          kept.receipt_times.insert_or_assign(user, time->second);
-      }
-    }
-    // The user's own, from another device (or this one's, echoed): where it
-    // is past the position kept here -- or there is none -- the position
-    // moves on to it. Never back: a receipt older than what was read here.
-    if (const auto mine = one.read_by.find(one.in.account.address); mine != one.read_by.end()) {
-      const auto theirs = place(mine->second);
+      const auto place = [&](const std::string& id) { return std::ranges::find(kept.timeline, id, &message::id); };
+      const auto theirs = place(one.event);
       const bool past = !kept.read_up_to ||
                         (theirs != kept.timeline.end() &&
                          (place(*kept.read_up_to) != kept.timeline.end() && theirs > place(*kept.read_up_to)));
       if (past)
-        kept.read_up_to = mine->second;
-    }
-  });
+        kept.read_up_to = one.event;
+    });
   }
 
   chats_model chats_;

@@ -2,6 +2,8 @@
 // mux.core's model: changes applied as the protocols say them.
 import std;
 import mux.core;
+import mux.plugin.receipts.model;
+import mux.plugin.receipts.changes;
 import gtest;
 
 #include "gtest/gtest-macros.h"
@@ -67,13 +69,13 @@ TEST(Model, SavedReadMarkerSurvivesOlderAndUnknownReceipts) {
   kept.apply(change::message_added{said("old", "older")});
   kept.apply(change::message_added{said("new", "newer")});
   kept.read_up_to(with_juliet, "new");
-  kept.apply(change::receipts_changed{with_juliet, {{romeo.address, "old"}}});
+  kept.apply(change::read_marker{with_juliet, "old"});
   EXPECT_EQ(kept.find(with_juliet)->read_up_to, std::optional<std::string>("new"));
   kept.read_up_to(with_juliet, "outside-window");
-  kept.apply(change::receipts_changed{with_juliet, {{romeo.address, "old"}}});
+  kept.apply(change::read_marker{with_juliet, "old"});
   EXPECT_EQ(kept.find(with_juliet)->read_up_to, std::optional<std::string>("outside-window"));
   kept.read_up_to(with_juliet, "old");
-  kept.apply(change::receipts_changed{with_juliet, {{romeo.address, "new"}}});
+  kept.apply(change::read_marker{with_juliet, "new"});
   EXPECT_EQ(kept.find(with_juliet)->read_up_to, std::optional<std::string>("new"));
 }
 
@@ -394,14 +396,17 @@ TEST(Model, DirectMessageReceiptsNeverMoveBackOrLoseTheirTimestamp) {
   kept.apply(change::message_added{said("old", "older")});
   kept.apply(change::message_added{said("new", "newer")});
   const auto time = [](int ms) { return std::chrono::sys_time<std::chrono::milliseconds>{std::chrono::milliseconds{ms}}; };
-  kept.apply(change::receipts_changed{with_juliet, {{with_juliet.id, "new"}}, {{with_juliet.id, time(200)}}});
-  kept.apply(change::receipts_changed{with_juliet, {{with_juliet.id, "old"}}, {{with_juliet.id, time(100)}}});
-  EXPECT_EQ(kept.find(with_juliet)->read_by.at(with_juliet.id), "new");
-  EXPECT_EQ(kept.find(with_juliet)->receipt_times.at(with_juliet.id), time(200));
-  kept.apply(change::receipts_changed{with_juliet, {{with_juliet.id, "outside-window"}}, {{with_juliet.id, time(300)}}});
-  kept.apply(change::receipts_changed{with_juliet, {{with_juliet.id, "new"}}, {{with_juliet.id, time(200)}}});
-  EXPECT_EQ(kept.find(with_juliet)->read_by.at(with_juliet.id), "outside-window");
-  EXPECT_EQ(kept.find(with_juliet)->receipt_times.at(with_juliet.id), time(300));
+  // Others' receipts: the receipts plugin's part of the chat, by its change.
+  using receipts_read = plugins::receipts::read;
+  const auto part = [&] { return std::get<plugins::receipts::chat_part<message>>(kept.find(with_juliet)->plugins); };
+  kept.apply(receipts_read{with_juliet, {{with_juliet.id, "new"}}, {{with_juliet.id, time(200)}}});
+  kept.apply(receipts_read{with_juliet, {{with_juliet.id, "old"}}, {{with_juliet.id, time(100)}}});
+  EXPECT_EQ(part().read_by.at(with_juliet.id), "new");
+  EXPECT_EQ(part().times.at(with_juliet.id), time(200));
+  kept.apply(receipts_read{with_juliet, {{with_juliet.id, "outside-window"}}, {{with_juliet.id, time(300)}}});
+  kept.apply(receipts_read{with_juliet, {{with_juliet.id, "new"}}, {{with_juliet.id, time(200)}}});
+  EXPECT_EQ(part().read_by.at(with_juliet.id), "outside-window");
+  EXPECT_EQ(part().times.at(with_juliet.id), time(300));
 }
 
 TEST(Model, ReactionsOnAsideEventsDrainAndSurviveTimelinePromotion) {

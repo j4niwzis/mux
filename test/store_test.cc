@@ -7,7 +7,7 @@ import mux.app.store;
 import gtest;
 #include "gtest/gtest-macros.h"
 
-TEST(Store, DirectMessageReadMarkersAndReceiptTimesSurviveReopening) {
+TEST(Store, ReadMarkersAndPluginPartsSurviveReopening) {
   const mux::account_id account{mux::protocol::matrix{},
       std::format("@read-test-{}:example.org", std::chrono::steady_clock::now().time_since_epoch().count())};
   const mux::conversation_id room{account, "!dm:example.org"};
@@ -21,26 +21,23 @@ TEST(Store, DirectMessageReadMarkersAndReceiptTimesSurviveReopening) {
   mux::conversation chat;
   chat.id = room;
   chat.read_up_to = "$latest";
-  chat.read_by.emplace("@other:example.org", "$other-latest");
-  const auto time = std::chrono::sys_time<std::chrono::milliseconds>{std::chrono::milliseconds{123456}};
-  chat.receipt_times.emplace("@other:example.org", time);
+  const std::string part = R"({"users":{"@other:example.org":"$other-latest"},"times":{"@other:example.org":123456}})";
   {
     mux::app::message_store first;
     first.vault = &vault;
     first.keep_reads(room, chat);
+    first.keep_part(room, "receipts", part);
   }
   ASSERT_TRUE(std::filesystem::is_regular_file(path));
   mux::app::message_store reopened;
   reopened.vault = &vault;
-  const auto saved = reopened.read_reads(room);
-  EXPECT_EQ(saved.me, chat.read_up_to);
-  EXPECT_EQ(saved.read_by, chat.read_by);
-  EXPECT_EQ(saved.times, chat.receipt_times);
-  // Old installations have users/me but no receipt timestamps.
+  EXPECT_EQ(reopened.read_reads(room).me, chat.read_up_to);
+  EXPECT_EQ(reopened.read_part(room, "receipts"), std::optional<std::string>(part));
+  EXPECT_EQ(reopened.read_part(room, "other"), std::nullopt);
+  // Old installations kept others' receipts in the reads file too: the
+  // user's position still read from it.
   ASSERT_TRUE(vault.write_file(path, R"({"users":{"@other:example.org":"$old"},"me":"$old"})"));
-  const auto legacy = reopened.read_reads(room);
-  EXPECT_EQ(legacy.me, std::optional<std::string>("$old"));
-  EXPECT_TRUE(legacy.times.empty());
+  EXPECT_EQ(reopened.read_reads(room).me, std::optional<std::string>("$old"));
 }
 
 TEST(Store, EditEventIdsSurviveReopening) {

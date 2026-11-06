@@ -16,6 +16,7 @@ import mux.core;
 import mux.levels;
 import skiff.model;
 import mux.ui.base;
+import mux.plugin.receipts.model;
 import mux.plugin.receipts.types;
 
 export namespace mux::plugins::receipts {
@@ -61,7 +62,8 @@ inline seen foot_facts(contract::message_menu_foot, type_tag<feature>, const con
   if (!mine)
     return {};
   const auto when = chat.timeline[*mine].at;
-  auto out = chat.read_by | std::views::filter([&](const auto& read) {
+  const auto& kept = std::get<chat_part<message>>(chat.plugins);
+  auto out = kept.read_by | std::views::filter([&](const auto& read) {
                const auto& [user, event] = read;
                if (user == said.sender || user == chat.id.account.address)
                  return false;
@@ -70,12 +72,12 @@ inline seen foot_facts(contract::message_menu_foot, type_tag<feature>, const con
                // event -- read at or after it was sent.
                if (const auto theirs = place(event))
                  return *theirs >= *mine;
-               const auto read_at = chat.receipt_times.find(user);
-               return read_at != chat.receipt_times.end() && read_at->second >= when;
+               const auto read_at = kept.times.find(user);
+               return read_at != kept.times.end() && read_at->second >= when;
              }) | std::views::transform([&](const auto& read) {
-               const auto read_at = chat.receipt_times.find(read.first);
+               const auto read_at = kept.times.find(read.first);
                return reader{read.first, sender_name(chat, read.first),
-                             read_at == chat.receipt_times.end() ? std::nullopt : std::optional(read_at->second)};
+                             read_at == kept.times.end() ? std::nullopt : std::optional(read_at->second)};
              }) | std::ranges::to<std::vector>();
   std::ranges::sort(out, {}, &reader::name);
   return {std::move(out)};

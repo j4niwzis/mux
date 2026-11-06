@@ -1041,20 +1041,18 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
           spl::visit(spl::overloaded{[&](const loom::ev::net_mux_mentions_read_content_t& content) { this->whole().mentions_from(in, content); },
                                      [](const auto&) {}},
                      one.content.data());
-      // Receipts: m.receipt's content is event -> kind -> user; the public
-      // and the private m.read both say how far someone has read.
       if (part.ephemeral && part.ephemeral->events) {
-        std::map<std::string, std::string> read_by;
-        std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> read_at;
+        // The user's own read position, from their receipt (m.receipt's
+        // content is event -> kind -> user; the public and the private
+        // m.read both say how far one has read): what is unread is counted
+        // from it.
         for (const auto& event : *part.ephemeral->events)
-          for (const loom::client::read_receipt& one : loom::client::receipts_of(event)) {
-            read_by.insert_or_assign(one.user, one.event_id);
-            if (one.ts)
-              read_at.insert_or_assign(one.user, std::chrono::sys_time<std::chrono::milliseconds>(
-                                                     std::chrono::milliseconds(*one.ts)));
-          }
-        if (!read_by.empty())
-          sink_(change::receipts_changed{in, std::move(read_by), std::move(read_at)});
+          for (const loom::client::read_receipt& one : loom::client::receipts_of(event))
+            if (one.user == id_.address)
+              sink_(change::read_marker{in, one.event_id});
+        // And the room's ephemeral events, to the plugins that hear them
+        // (matrix_ephemeral): others' read receipts, for one.
+        this->plugins_hear_ephemeral(sink_plugins_tag{}, in, *part.ephemeral->events);
       }
     }
   // Invites: the room as its stripped state tells of it -- its name,

@@ -98,9 +98,10 @@ struct message_line {
   friend consteval auto json_schema(knot::type<message_line>) { return knot::schema<message_line>(); }
 };
 
-// Who has read up to where in a chat, and the user.
+// How far the user has read in a chat. (Others' receipts were kept here
+// too, by an older mux: read past, and let go -- a plugin keeps its own.)
 struct reads_file {
-  std::map<std::string, std::string> users;
+  std::optional<std::map<std::string, std::string>> users;
   std::optional<std::string> me;
   std::optional<std::map<std::string, std::int64_t>> times;
   friend consteval auto json_schema(knot::type<reads_file>) { return knot::schema<reads_file>(); }
@@ -138,19 +139,28 @@ class message_store {
     if (!one.id.empty())
       append(one.in, line_of(one));
   }
-  // Who has read up to where in a chat, the user among them: one small file
-  // beside its messages, written anew when it changes, read when the chat
-  // is opened.
+  // How far the user has read in a chat: one small file beside its
+  // messages, written anew when it changes, read when the chat is opened.
   void keep_reads(const mux::conversation_id& in, const mux::conversation& chat) {
-    std::map<std::string, std::int64_t> times;
-    for (const auto& [user, when] : chat.receipt_times)
-      times.emplace(user, when.time_since_epoch().count());
-    const store_file::reads_file all{.users = chat.read_by, .me = chat.read_up_to, .times = std::move(times)};
+    const store_file::reads_file all{.me = chat.read_up_to};
     {
       std::lock_guard held(queue_lock_);
-      pending_reads_.insert_or_assign(in, knot::to_json_string(all));
+      pending_files_.insert_or_assign(reads_file_of(in), knot::to_json_string(all));
     }
     flush_reads(true);
+  }
+  // A plugin's part of a chat (contract::chat_kept), as its text: a small
+  // file of its own beside the chat's messages, under the plugin's name,
+  // written anew when it changes, read when the chat is opened.
+  void keep_part(const mux::conversation_id& in, std::string_view plugin, std::string text) {
+    {
+      std::lock_guard held(queue_lock_);
+      pending_files_.insert_or_assign(part_file_of(in, plugin), std::move(text));
+    }
+    flush_reads(true);
+  }
+  [[nodiscard]] std::optional<std::string> read_part(const mux::conversation_id& in, std::string_view plugin) const {
+    return this->read_kept(part_file_of(in, plugin));
   }
   // The reads waiting written, by the writer: one that failed kept, for a
   // later attempt -- once a second at most, unless `force`.
@@ -161,34 +171,31 @@ class message_store {
     reads_retry_at_ = now + std::chrono::seconds(1);
     {
       std::lock_guard held(queue_lock_);
-      if (pending_reads_.empty())
+      if (pending_files_.empty())
         return;
     }
     this->queue(queued::reads{});
   }
   struct reads {
-    std::map<std::string, std::string> read_by;
     std::optional<std::string> me;
-    std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> times;
   };
   [[nodiscard]] reads read_reads(const mux::conversation_id& in) const {
-    reads out;
-    std::optional<std::string> waiting;
+    const auto text = this->read_kept(reads_file_of(in));
+    if (!text)
+      return {};
+    auto parsed = knot::try_read<store_file::reads_file>(std::string_view(*text));
+    if (!parsed)
+      return {};
+    return {std::move(parsed->me)};
+  }
+  // A small file's text, as it waits to be written -- else as it is.
+  [[nodiscard]] std::optional<std::string> read_kept(const std::filesystem::path& where) const {
     {
       std::lock_guard held(queue_lock_);
-      if (const auto pending = pending_reads_.find(in); pending != pending_reads_.end())
-        waiting = pending->second;
+      if (const auto pending = pending_files_.find(where); pending != pending_files_.end())
+        return pending->second;
     }
-    const std::string text = waiting ? std::move(*waiting) : vault->read_file(reads_file_of(in)).value_or(std::string());
-    auto parsed = knot::try_read<store_file::reads_file>(std::string_view(text));
-    if (!parsed)
-      return out;
-    out.read_by = std::move(parsed->users);
-    out.me = std::move(parsed->me);
-    if (parsed->times)
-      for (const auto& [user, when] : *parsed->times)
-        out.times.emplace(user, std::chrono::sys_time<std::chrono::milliseconds>{std::chrono::milliseconds{when}});
-    return out;
+    return vault->read_file(where);
   }
   // A message deleted that is held in memory: marked where it is kept, and
   // kept whole, as it was, in the archive of deleted messages, which the
@@ -310,6 +317,9 @@ class message_store {
         root / mux::config::old_file_name_of(in.account.address) / (mux::config::old_file_name_of(in.id) + std::string(ending)));
   }
   static std::filesystem::path reads_file_of(const mux::conversation_id& in) { return kept_of("messages", in, ".reads.json"); }
+  static std::filesystem::path part_file_of(const mux::conversation_id& in, std::string_view plugin) {
+    return kept_of("messages", in, std::format(".{}.json", plugin));
+  }
   static std::filesystem::path deleted_file_of(const mux::conversation_id& in) { return kept_of("deleted", in, ".jsonl"); }
   static std::filesystem::path file_of(const mux::conversation_id& in) { return kept_of("messages", in, ".jsonl"); }
   // The files are read on workers and written on the UI's thread: a line
@@ -382,21 +392,20 @@ class message_store {
   void write_reads() {
     if (vault == nullptr)
       return;
-    std::map<mux::conversation_id, std::string> now;
+    std::map<std::filesystem::path, std::string> now;
     {
       std::lock_guard held(queue_lock_);
-      now = pending_reads_;
+      now = pending_files_;
     }
-    for (const auto& [in, text] : now) {
-      const auto where = reads_file_of(in);
+    for (const auto& [where, text] : now) {
       std::error_code failed;
       std::filesystem::create_directories(where.parent_path(), failed);
       if (failed || !vault->write_file(where, text))
         continue;
       // Written: let go of, unless a newer one came meanwhile.
       std::lock_guard held(queue_lock_);
-      if (const auto still = pending_reads_.find(in); still != pending_reads_.end() && still->second == text)
-        pending_reads_.erase(still);
+      if (const auto still = pending_files_.find(where); still != pending_files_.end() && still->second == text)
+        pending_files_.erase(still);
     }
   }
   // A chat's file written again with one line each, oldest first: its lines
@@ -493,7 +502,8 @@ class message_store {
   mutable std::condition_variable_any queue_ready_;
   mutable std::deque<queued::one> queue_;
   mutable std::set<std::filesystem::path> compacting_;
-  std::map<mux::conversation_id, std::string> pending_reads_;
+  // The small files waiting to be written, by where: the reads, the plugins' parts.
+  std::map<std::filesystem::path, std::string> pending_files_;
   std::chrono::steady_clock::time_point reads_retry_at_{};
   std::atomic<std::size_t> appended_ = 0;
   // The chat's messages as its file says, each as its last line says; the

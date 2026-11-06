@@ -10,6 +10,8 @@ import knot;
 import mux.core;
 import mux.composition;
 import mux.levels;
+import mux.plugin.receipts.model;
+import mux.plugin.receipts.changes;
 
 export namespace mux::plugins::receipts {
 
@@ -81,13 +83,14 @@ std::map<std::string, readers> marks_over(contract::row_marks, type_tag<feature>
   std::map<std::string, std::size_t> place;
   for (std::size_t i = 0; i < all.size(); ++i)
     place.emplace(all[i]->id, i);
-  for (const auto& [user, event] : chat.read_by) {
+  const auto& mine = std::get<chat_part<message>>(chat.plugins);
+  for (const auto& [user, event] : mine.read_by) {
     if (user == chat.id.account.address)
       continue;
     std::optional<std::size_t> at;
     if (const auto found = place.find(event); found != place.end())
       at = found->second;
-    else if (const auto when = chat.receipt_times.find(user); when != chat.receipt_times.end())
+    else if (const auto when = mine.times.find(user); when != mine.times.end())
       for (std::size_t j = all.size(); j-- > 0;)
         if (all[j]->at <= when->second) {
           at = j;
@@ -100,5 +103,29 @@ std::map<std::string, readers> marks_over(contract::row_marks, type_tag<feature>
   }
   return out;
 }
+
+// Who has read up to where, kept beside the chat's messages across a restart
+// (contract::chat_kept): read back as the chat is first opened, before the
+// server says it anew; kept again as it changes.
+struct kept {
+  std::map<std::string, std::string> users;
+  std::optional<std::map<std::string, std::int64_t>> times;
+  friend consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>(); }
+};
+consteval bool provides(contract::chat_kept, type_tag<feature>) { return true; }
+constexpr type_tag<kept> chat_kept_type(contract::chat_kept, type_tag<feature>) { return {}; }
+inline kept kept_of(contract::chat_kept, type_tag<feature>, const conversation& chat) {
+  const auto& mine = std::get<chat_part<message>>(chat.plugins);
+  return {mine.read_by, mine.times | std::views::transform([](const auto& one) { return std::pair{one.first, one.second.time_since_epoch().count()}; }) |
+                            std::ranges::to<std::map<std::string, std::int64_t>>()};
+}
+inline read restored(contract::chat_kept, type_tag<feature>, const conversation_id& in, kept saved) {
+  using when = std::chrono::sys_time<std::chrono::milliseconds>;
+  return {in, std::move(saved.users),
+          saved.times.value_or(std::map<std::string, std::int64_t>{}) |
+              std::views::transform([](const auto& one) { return std::pair{one.first, when{std::chrono::milliseconds{one.second}}}; }) |
+              std::ranges::to<std::map<std::string, when>>()};
+}
+inline conversation_id kept_after(contract::chat_kept, type_tag<feature>, const read& one) { return one.in; }
 
 }  // namespace mux::plugins::receipts

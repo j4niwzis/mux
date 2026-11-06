@@ -74,6 +74,16 @@ struct start_renderer {
 struct frames_said {
   static constexpr std::string_view name = "how frames are drawn";
 };
+// A plugin's part of a chat, kept beside its messages across a restart
+// (mux.app.store, mux.app.history): chat_kept_type(c, f) -> type_tag<what is
+// kept> (read and written as JSON); kept_of(c, f, conversation) -> that;
+// restored(c, f, conversation_id, that) -> its change that puts it back,
+// given to the model as the chat is first opened, before the server's;
+// kept_after(c, f, one of its changes) -> the chat whose part to keep again,
+// for each change of its that changes it.
+struct chat_kept {
+  static constexpr std::string_view name = "a plugin's part of a chat, kept";
+};
 // The proxy profiles accounts go through, by their names (mux.app.kept,
 // mux.app.network): proxy_profiles(c, f, its own settings) ->
 // std::vector<config::proxy_settings>; where none says, none -- and an

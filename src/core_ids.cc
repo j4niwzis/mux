@@ -747,11 +747,8 @@ struct conversation {
   // What each plugin keeps of the chat (mux.plugins.model): its threads'
   // answers, for one.
   plugin_chat_parts<message> plugins;
-  // Who has read up to where: each other person's last message read, as
-  // their receipts say; and the user's own, kept here whether it is sent or
-  // not -- what is unread is counted from it.
-  std::map<std::string, std::string> read_by;
-  std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> receipt_times;
+  // How far the user has read, kept here whether it is sent or not -- what
+  // is unread is counted from it. (Others' receipts are a plugin's part.)
   std::optional<std::string> read_up_to;
   // What is unread, as counted here from the user's own position where there
   // is one, and as the server counts it where not.

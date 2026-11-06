@@ -315,6 +315,10 @@ struct message_menu_state {
 //   extend(c, f, palette, menu_facts) -> its row
 //   foot_popover(c, f, palette, menu_facts) -> its node, placed in the
 //   window as its state says (popped_at)
+//   foot_facts_type(c, f) -> type_tag<what it is made from>, in its types;
+//   foot_facts(c, f, conversation, message) -> those, worked out as the
+//   menu opens -- held in menu_facts::feet (menu_feet_of), each read by its
+//   own row and popover
 struct message_menu_foot {
   static constexpr std::string_view name = "a message's menu's foot";
 };
@@ -501,6 +505,12 @@ struct chat_flags_of;
 template <class... Features>
 struct chat_flags_of<plugin_list<Features...>> {
   using type = std::tuple<typename decltype(flag_type(contract::chat_flags{}, type_tag<Features>{}))::type...>;
+};
+template <class List>
+struct menu_feet_of;
+template <class... Features>
+struct menu_feet_of<plugin_list<Features...>> {
+  using type = std::tuple<typename decltype(foot_facts_type(contract::message_menu_foot{}, type_tag<Features>{}))::type...>;
 };
 template <class List>
 struct row_marks_of;

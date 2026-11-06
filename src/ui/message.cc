@@ -1133,35 +1133,11 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
                 lines_t::built(trailer_facts{colours, looks, said, in, said.id}), std::move(lines),
                 std::move(their_view), std::move(time), std::move(inline_time)));
 }
-// Who has read a message: those whose receipt is for it or for one after
-// it, by their names in the chat -- its sender and the user aside.
-[[nodiscard]] inline std::vector<person_at> seen_by(const conversation& chat, const std::string& id, const std::string& sender) {
-  const auto place = [&](const std::string& event) -> std::optional<std::size_t> {
-    const auto at = std::ranges::find(chat.timeline, event, &message::id);
-    return at == chat.timeline.end() ? std::nullopt : std::optional(static_cast<std::size_t>(at - chat.timeline.begin()));
-  };
-  const auto mine = place(id);
-  if (!mine)
-    return {};
-  const auto when = chat.timeline[*mine].at;
-  auto out = chat.read_by | std::views::filter([&](const auto& read) {
-               const auto& [user, event] = read;
-               if (user == sender || user == chat.id.account.address)
-                 return false;
-               // Read up to a message here at or after it; else, the receipt
-               // pointing at what is not among these -- a reaction, a state
-               // event -- read at or after it was sent.
-               if (const auto theirs = place(event))
-                 return *theirs >= *mine;
-               const auto read_at = chat.receipt_times.find(user);
-               return read_at != chat.receipt_times.end() && read_at->second >= when;
-             }) | std::views::transform([&](const auto& read) {
-               const auto read_at = chat.receipt_times.find(read.first);
-               return person_at{read.first, sender_name(chat, read.first),
-                                  read_at == chat.receipt_times.end() ? std::nullopt : std::optional(read_at->second)};
-             }) | std::ranges::to<std::vector>();
-  std::ranges::sort(out, {}, &person_at::name);
-  return out;
+// What the plugins' rows at a menu's foot are made from, each worked out by
+// its plugin from the chat and the message (contract::message_menu_foot).
+template <class... Features>
+[[nodiscard]] menu_feet_t menu_feet_for(plugin_list<Features...>, const conversation& chat, const message& said) {
+  return menu_feet_t{foot_facts(contract::message_menu_foot{}, type_tag<Features>{}, chat, said)...};
 }
 
 // A message's menu, for a right press on its row wherever it is shown -- the
@@ -1215,7 +1191,7 @@ struct row_menu {
       // The message's link, where its protocol has one.
       if (auto link = proto::message_link(now, *chat, said.id))
         facts.link = std::move(*link);
-      facts.seen = seen_by(*chat, said.id, said.sender);
+      facts.feet = menu_feet_for(composition::providers<contract::message_menu_foot, enabled_plugins>{}, *chat, said);
     }
     // The link the press was on: one in the text -- its text asked a menu
     // of its own with it, which this one is in place of -- or the preview's,

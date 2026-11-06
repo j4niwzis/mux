@@ -74,10 +74,16 @@ struct seen_events {
 consteval type_tag<seen_shown> foot_state(contract::message_menu_foot, type_tag<feature>) { return {}; }
 inline seen_events foot_events(contract::message_menu_foot, type_tag<feature>) { return {}; }
 
+// Its readers, from what its foot was made from, as the menu's pieces take
+// people.
+[[nodiscard]] inline std::vector<person_at> readers_of(const menu_facts& facts) {
+  return std::get<seen>(facts.feet).readers | std::views::transform([](const reader& one) { return person_at{one.id, one.name, one.at}; }) |
+         std::ranges::to<std::vector>();
+}
 // The row: how many have seen it, or who; the first readers' faces.
 MUX_INLINE_IN_RELEASE auto extend(contract::message_menu_foot, type_tag<feature>, const palette& colours, const menu_facts& facts) {
   namespace c = skiff::compose;
-  const auto& readers = facts.seen;
+  const auto readers = readers_of(facts);
   const std::string said = readers.empty() ? std::string("Nobody Viewed")
                            : readers.size() == 1 ? readers.front().name
                                                  : std::to_string(readers.size()) + " Seen";
@@ -111,12 +117,13 @@ MUX_INLINE_IN_RELEASE auto seen_list(const palette& colours, const std::vector<p
 }
 MUX_INLINE_IN_RELEASE auto foot_popover(contract::message_menu_foot, type_tag<feature>, const palette& colours, const menu_facts& facts) {
   namespace c = skiff::compose;
-  const bool readers = !facts.seen.empty();
+  const auto people = readers_of(facts);
+  const bool readers = !people.empty();
   return c::popped_at<seen_shown>([readers](const seen_shown& now) -> std::optional<skiff::compose::PopAt> {
     if (!readers || !(now.row || now.list))
       return std::nullopt;
     return skiff::compose::PopAt{.from = skia::SkRect::MakeLTRB(now.left, now.top, now.right, now.bottom), .beside = true, .overlap = 6.0f};
-  }, 8.0f, seen_list(colours, facts.seen));
+  }, 8.0f, seen_list(colours, people));
 }
 
 }  // namespace mux::plugins::receipts

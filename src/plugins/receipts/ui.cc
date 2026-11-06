@@ -49,6 +49,38 @@ inline std::optional<readers_row_t> extend(contract::message_footers, type_tag<f
 }
 constexpr float footer_height(contract::message_footers, type_tag<feature>) { return kReadersHeight; }
 
+// Who has read a message, for its menu's foot (contract::message_menu_foot):
+// those whose receipt is for it or for one after it, by their names in the
+// chat -- its sender and the user aside.
+inline seen foot_facts(contract::message_menu_foot, type_tag<feature>, const conversation& chat, const message& said) {
+  const auto place = [&](const std::string& event) -> std::optional<std::size_t> {
+    const auto at = std::ranges::find(chat.timeline, event, &message::id);
+    return at == chat.timeline.end() ? std::nullopt : std::optional(static_cast<std::size_t>(at - chat.timeline.begin()));
+  };
+  const auto mine = place(said.id);
+  if (!mine)
+    return {};
+  const auto when = chat.timeline[*mine].at;
+  auto out = chat.read_by | std::views::filter([&](const auto& read) {
+               const auto& [user, event] = read;
+               if (user == said.sender || user == chat.id.account.address)
+                 return false;
+               // Read up to a message here at or after it; else, the receipt
+               // pointing at what is not among these -- a reaction, a state
+               // event -- read at or after it was sent.
+               if (const auto theirs = place(event))
+                 return *theirs >= *mine;
+               const auto read_at = chat.receipt_times.find(user);
+               return read_at != chat.receipt_times.end() && read_at->second >= when;
+             }) | std::views::transform([&](const auto& read) {
+               const auto read_at = chat.receipt_times.find(read.first);
+               return reader{read.first, sender_name(chat, read.first),
+                             read_at == chat.receipt_times.end() ? std::nullopt : std::optional(read_at->second)};
+             }) | std::ranges::to<std::vector>();
+  std::ranges::sort(out, {}, &reader::name);
+  return {std::move(out)};
+}
+
 // Its row among a level's choices (contract::choice_rows): faces shown,
 // hidden, or as the level over it says.
 template <class Place>

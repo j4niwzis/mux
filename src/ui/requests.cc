@@ -46,6 +46,9 @@ struct person_at {
   std::optional<std::chrono::sys_time<std::chrono::milliseconds>> at;
   friend bool operator==(const person_at&, const person_at&) = default;
 };
+// What the plugins' rows at a message's menu's foot are made from, each its
+// own (contract::message_menu_foot).
+using menu_feet_t = typename composition::menu_feet_of<composition::providers<contract::message_menu_foot, enabled_plugins>>::type;
 struct menu_facts {
   std::string id;
   bool own = false;
@@ -53,7 +56,7 @@ struct menu_facts {
   std::string copied;  // what Copy takes: the selection, or all of it
   std::optional<skiff::scene::ClipboardFragment> copied_fragment;
   bool selection = false;
-  std::vector<person_at> seen;
+  menu_feet_t feet{};
   std::optional<std::string> media;  // a picture's or a file's source
   std::optional<std::string> picture;  // a picture's source, or a video's thumbnail's: what Copy Image copies
   bool captioned = false;  // a picture whose caption may be edited (not a video's)

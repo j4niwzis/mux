@@ -18,8 +18,21 @@ struct feature {
 };
 
 consteval bool provides(contract::message_footers, type_tag<feature>) { return true; }
-// Who has seen a message, at its menu's foot (its UI_TOP layer).
+// Who has seen a message, at its menu's foot (its UI_TOP layer): each reader,
+// by their name in the chat, and when where their receipt says -- worked out
+// as the menu opens (foot_facts, its UI layer).
 consteval bool provides(contract::message_menu_foot, type_tag<feature>) { return true; }
+struct reader {
+  std::string id;
+  std::string name;
+  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> at;
+  friend bool operator==(const reader&, const reader&) = default;
+};
+struct seen {
+  std::vector<reader> readers;
+  friend bool operator==(const seen&, const seen&) = default;
+};
+consteval type_tag<seen> foot_facts_type(contract::message_menu_foot, type_tag<feature>) { return {}; }
 
 // Its choice at each level (mux.levels): whether a chat shows who has read
 // up to where, as faces -- unsaid, as the level over it says; said nowhere,

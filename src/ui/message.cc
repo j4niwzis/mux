@@ -1135,7 +1135,7 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
 }
 // Who has read a message: those whose receipt is for it or for one after
 // it, by their names in the chat -- its sender and the user aside.
-[[nodiscard]] inline std::vector<seen_reader> seen_by(const conversation& chat, const std::string& id, const std::string& sender) {
+[[nodiscard]] inline std::vector<person_at> seen_by(const conversation& chat, const std::string& id, const std::string& sender) {
   const auto place = [&](const std::string& event) -> std::optional<std::size_t> {
     const auto at = std::ranges::find(chat.timeline, event, &message::id);
     return at == chat.timeline.end() ? std::nullopt : std::optional(static_cast<std::size_t>(at - chat.timeline.begin()));
@@ -1157,10 +1157,10 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
                return read_at != chat.receipt_times.end() && read_at->second >= when;
              }) | std::views::transform([&](const auto& read) {
                const auto read_at = chat.receipt_times.find(read.first);
-               return seen_reader{read.first, sender_name(chat, read.first),
+               return person_at{read.first, sender_name(chat, read.first),
                                   read_at == chat.receipt_times.end() ? std::nullopt : std::optional(read_at->second)};
              }) | std::ranges::to<std::vector>();
-  std::ranges::sort(out, {}, &seen_reader::name);
+  std::ranges::sort(out, {}, &person_at::name);
   return out;
 }
 

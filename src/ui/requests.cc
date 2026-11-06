@@ -38,13 +38,13 @@ struct variant_of_types<type_list<Ts...>> {
   using type = spl::variant<Ts...>;
 };
 
-// One who has read a message: who, by their name in the chat, and when,
-// where their receipt says.
-struct seen_reader {
+// Someone, by their name in the chat, and a time, where one is said -- what
+// a plugin lists of a message in its menu (who read it, for one).
+struct person_at {
   std::string id;
   std::string name;
   std::optional<std::chrono::sys_time<std::chrono::milliseconds>> at;
-  friend bool operator==(const seen_reader&, const seen_reader&) = default;
+  friend bool operator==(const person_at&, const person_at&) = default;
 };
 struct menu_facts {
   std::string id;
@@ -53,7 +53,7 @@ struct menu_facts {
   std::string copied;  // what Copy takes: the selection, or all of it
   std::optional<skiff::scene::ClipboardFragment> copied_fragment;
   bool selection = false;
-  std::vector<seen_reader> seen;
+  std::vector<person_at> seen;
   std::optional<std::string> media;  // a picture's or a file's source
   std::optional<std::string> picture;  // a picture's source, or a video's thumbnail's: what Copy Image copies
   bool captioned = false;  // a picture whose caption may be edited (not a video's)

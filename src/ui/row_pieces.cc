@@ -39,17 +39,18 @@ inline constexpr struct drawer_account_text_fn : skiff::compose::piece<drawer_ac
   }
 } drawer_account_text{};
 
-// Who read a message, in the menu's list: their name over when.
-inline constexpr struct reader_text_fn : skiff::compose::piece<reader_text_fn> {
+// A person in a menu's list: their name over a line its plugin says (when
+// they read the message, for one) -- a piece, about them.
+inline constexpr struct person_line_text_fn : skiff::compose::piece<person_line_text_fn> {
   using facts_type = face_facts;
-  static face_facts facts(const palette&, const seen_reader& one) { return {one.id, one.name}; }
-  auto make(const palette& colours, const seen_reader& one) const {
+  static face_facts facts(const palette&, const person_at& one, const std::string&) { return {one.id, one.name}; }
+  auto make(const palette& colours, const person_at& one, std::string under) const {
     namespace c = skiff::compose;
-    return SKIFF_NAMED(reader_text, c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+    return SKIFF_NAMED(person_line_text, c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
         elided(nodes::Text(one.name, 13.0f, colours.text)),
-        elided(nodes::Text(one.at ? clock_of(*one.at) : std::string("seen"), 12.0f, colours.dim))));
+        elided(nodes::Text(std::move(under), 12.0f, colours.dim))));
   }
-} reader_text{};
+} person_line_text{};
 
 // A room in a server's directory: its name, its address and members, its topic.
 inline constexpr struct directory_room_text_fn : skiff::compose::piece<directory_room_text_fn> {
@@ -103,27 +104,27 @@ inline constexpr struct chat_heading_fn : skiff::compose::piece<chat_heading_fn>
   }
 } chat_heading{};
 
-// Who read a message, as the menu's first row says it: how many, or who --
-// a piece, about the first few readers (the avatars plugin's faces of them
-// at its right, overlapping).
-inline constexpr float kSeenFace = 22.0f, kSeenOverlap = 8.0f;
-inline constexpr std::size_t kSeenMostFaces = 3;
-struct seen_faces_facts {
+// A row's line about some people, as a plugin says it (how many have read a
+// message, or who) -- a piece, about the first few of them (the avatars
+// plugin's faces of them at its right, overlapping).
+inline constexpr float kSummaryFace = 22.0f, kSummaryOverlap = 8.0f;
+inline constexpr std::size_t kSummaryMostFaces = 3;
+struct faces_summary_facts {
   std::vector<face_facts> faces;
   skia::SkColor ring = 0;
 };
-inline constexpr struct seen_summary_fn : skiff::compose::piece<seen_summary_fn> {
-  using facts_type = seen_faces_facts;
-  static seen_faces_facts facts(const palette& colours, const std::vector<seen_reader>& readers, const std::string&) {
-    return {readers | std::views::take(kSeenMostFaces) | std::views::transform([](const seen_reader& one) { return face_facts{one.id, one.name}; }) |
+inline constexpr struct faces_summary_fn : skiff::compose::piece<faces_summary_fn> {
+  using facts_type = faces_summary_facts;
+  static faces_summary_facts facts(const palette& colours, const std::vector<person_at>& people, const std::string&) {
+    return {people | std::views::take(kSummaryMostFaces) | std::views::transform([](const person_at& one) { return face_facts{one.id, one.name}; }) |
                 std::ranges::to<std::vector>(),
             colours.sidebar};
   }
-  auto make(const palette& colours, const std::vector<seen_reader>&, std::string said) const {
+  auto make(const palette& colours, const std::vector<person_at>&, std::string said) const {
     namespace c = skiff::compose;
     return c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(said), 13.0f, colours.text)));
   }
-} seen_summary{};
+} faces_summary{};
 
 // A person's name over how they are, at the top of their card, each to
 // select -- a piece, about them (the avatars plugin's picture of them

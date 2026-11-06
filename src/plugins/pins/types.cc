@@ -47,6 +47,14 @@ consteval bool provides(contract::chat_column, type_tag<feature>) { return true;
 consteval bool provides(contract::window_state, type_tag<feature>) { return true; }
 constexpr type_tag<shown> state_type(contract::window_state, type_tag<feature>) { return {}; }
 consteval bool provides(contract::message_menu, type_tag<feature>) { return true; }
+// What its row in a message's menu is made from: whether the message may be
+// pinned -- in a chat that keeps pins, on the server -- and whether it is.
+struct row {
+  bool pinnable = false;
+  bool pinned = false;
+  friend bool operator==(const row&, const row&) = default;
+};
+constexpr type_tag<row> row_facts_type(contract::message_menu, type_tag<feature>) { return {}; }
 consteval bool provides(contract::program_parts, type_tag<feature>) { return true; }
 
 }  // namespace mux::plugins::pins

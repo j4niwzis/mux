@@ -13,6 +13,8 @@ import loom.cs.room_state;
 import loom.cs.rooms;
 import mux.core;
 import mux.proto.matrix.client;
+import mux.plugin.pins.types;
+export import mux.plugin.pins.changes;
 
 export namespace mux::plugins::pins {
 
@@ -22,6 +24,13 @@ concept matrix_account = requires(Account& account) {
   account.synced();
   account.connected();
 };
+
+// A joined room's pins, as its state says (m.room.pinned_events), told as
+// the room is.
+template <class Room, class Account>
+void matrix_room(contract::matrix_events, type_tag<feature>, const conversation_id& in, const Room& kept, Account& account) {
+  account.tell_program(pinned_now{in, kept.state.pinned()});
+}
 
 struct pin_asked {
   std::string room, target;

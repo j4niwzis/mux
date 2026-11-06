@@ -198,7 +198,6 @@ inline std::vector<banner> composer_banners(const state& now, const conversation
           }},
       *trust);
 }
-constexpr bool can_pin(const state&, std::string_view event) { return event.starts_with('$'); }
 
 // Annotation targets are events, including state and reaction events. Local
 // transaction IDs cannot be related to until acknowledged by the server.

@@ -13,6 +13,7 @@ import mux.ui;
 import mux.app.network;
 import mux.app.services;
 import mux.plugin.pins.types;
+import mux.plugin.pins.changes;
 import mux.plugin.pins.ui;
 import mux.plugin.pins.matrix;
 
@@ -69,9 +70,9 @@ struct part {
     if (!now)
       return;
     if (const conversation* chat = this->chat_shown())
-      if (const auto at = std::ranges::find(chat->pinned, now->id); at != chat->pinned.end()) {
-        const auto count = chat->pinned.size();
-        const auto index = static_cast<std::size_t>(at - chat->pinned.begin());
+      if (const auto at = std::ranges::find(pinned_of(*chat), now->id); at != pinned_of(*chat).end()) {
+        const auto count = pinned_of(*chat).size();
+        const auto index = static_cast<std::size_t>(at - pinned_of(*chat).begin());
         cycled_ = cycle{chat->id, (index + count - 1) % count, count};
       }
     asked(ui::request::jump_to_message{now->id});
@@ -83,11 +84,11 @@ struct part {
     const conversation* chat = this->chat_shown();
     if (!now || !chat)
       return;
-    const auto at = std::ranges::find(chat->pinned, now->id);
-    if (at == chat->pinned.end())
+    const auto at = std::ranges::find(pinned_of(*chat), now->id);
+    if (at == pinned_of(*chat).end())
       return;
-    const auto count = chat->pinned.size();
-    const auto index = static_cast<std::size_t>(at - chat->pinned.begin());
+    const auto count = pinned_of(*chat).size();
+    const auto index = static_cast<std::size_t>(at - pinned_of(*chat).begin());
     cycled_ = cycle{chat->id, one.older ? (index + count - 1) % count : (index + 1) % count, count};
     this->put(shown{this->pin_of(chat)});
   }
@@ -102,12 +103,12 @@ struct part {
   }
 
   std::optional<pin_view> pin_of(const conversation* chat) {
-    if (!chat || chat->pinned.empty())
+    if (!chat || pinned_of(*chat).empty())
       return std::nullopt;
-    if (cycled_ && (cycled_->in != chat->id || cycled_->of != chat->pinned.size()))
+    if (cycled_ && (cycled_->in != chat->id || cycled_->of != pinned_of(*chat).size()))
       cycled_.reset();
     seen_t seen{chat->id, chat->timeline.size(), chat->timeline.empty() ? std::string() : chat->timeline.front().id,
-                chat->timeline.empty() ? std::string() : chat->timeline.back().id, s_->list.top, chat->pinned,
+                chat->timeline.empty() ? std::string() : chat->timeline.back().id, s_->list.top, pinned_of(*chat),
                 cycled_ ? std::optional(cycled_->at) : std::nullopt, chat->quoted.size()};
     if (kept_ && kept_->first == seen)
       return kept_->second;
@@ -122,11 +123,11 @@ struct part {
     };
     const std::ptrdiff_t top = s_->list.top ? place(*s_->list.top) : std::numeric_limits<std::ptrdiff_t>::max();
     // Not const: a filter_view caches its begin, so begin() and end() are not.
-    auto above = chat->pinned | std::views::enumerate | std::views::filter([&](const auto& one) { return place(std::get<1>(one)) < top; });
+    auto above = pinned_of(*chat) | std::views::enumerate | std::views::filter([&](const auto& one) { return place(std::get<1>(one)) < top; });
     const auto best = std::ranges::max_element(above, {}, [&](const auto& one) { return place(std::get<1>(one)); });
-    const std::size_t count = chat->pinned.size();
+    const std::size_t count = pinned_of(*chat).size();
     const std::size_t at = cycled_ ? cycled_->at : best == std::ranges::end(above) ? 0 : static_cast<std::size_t>(std::get<0>(*best));
-    const std::string& id = chat->pinned[at];
+    const std::string& id = pinned_of(*chat)[at];
     pin_view made{id, count == 1 ? std::string("Pinned message") : std::format("Pinned message #{} of {}", at + 1, count), "A message"};
     if (const message* said = ui::held_message(*chat, id)) {
       made.line = said->body.plain.empty() && said->attachment ? std::string("Photo") : said->body.plain;

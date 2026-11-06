@@ -14,7 +14,7 @@
 //
 //   available(state)                             anything at all
 //   offers(state, feature::room_directory{})     what it has, by type
-//   can_pin(state, message id), may_delete(state, chat, outgoing)
+//   may_delete(state, chat, outgoing)
 //   may_edit(state, chat, message) -- through the rule edit_rule(state) gives
 //   can_page_back(state)                         older history asked of the server
 //   can_upload(state)                            files sent: the paperclip, a drop, a paste
@@ -284,7 +284,6 @@ inline std::string sender_role(const auto&, const conversation&, std::string_vie
 inline bool can_leave(const auto&, const conversation&) { return true; }
 // Whom a direct chat is with: the chat's own address.
 inline std::string direct_contact(const auto&, const conversation& one) { return one.id.id; }
-constexpr bool can_pin(const auto&, std::string_view) { return false; }
 // One's own messages, and no one else's: what every protocol allows.
 inline bool may_delete(const auto&, const conversation&, bool outgoing) { return outgoing; }
 inline bool may_react(const auto&, const conversation&, const message& event) { return !event.id.empty() && !event.redacted; }
@@ -667,17 +666,6 @@ inline constexpr struct direct_contact_t {
     }, state);
   }
 } direct_contact{};
-
-inline constexpr struct can_pin_t {
-  template <class State>
-  bool operator()(const State& state, std::string_view id) const {
-    return spl::visit([&](const auto& now) {
-      using defaults::available;
-      using defaults::can_pin;
-      return available(now) && can_pin(now, id);
-    }, state);
-  }
-} can_pin{};
 
 inline constexpr struct may_react_t {
   template <class State>

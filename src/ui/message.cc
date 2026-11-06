@@ -1140,6 +1140,23 @@ template <class... Features>
   return menu_feet_t{foot_facts(contract::message_menu_foot{}, type_tag<Features>{}, chat, said)...};
 }
 
+// What the plugins' rows in a menu are made from, each worked out by its
+// plugin from the chat and the message (contract::message_menu's
+// row_facts); nothing where it needs none.
+template <class Feature>
+  requires requires(const conversation& chat, const message& said) { row_facts(contract::message_menu{}, type_tag<Feature>{}, chat, said); }
+[[nodiscard]] composition::menu_row_slot<Feature> menu_row_for(const conversation& chat, const message& said) {
+  return {row_facts(contract::message_menu{}, type_tag<Feature>{}, chat, said)};
+}
+template <class Feature>
+[[nodiscard]] composition::menu_row_slot<Feature> menu_row_for(const conversation&, const message&) {
+  return {};
+}
+template <class... Features>
+[[nodiscard]] menu_row_facts_t menu_rows_for(plugin_list<Features...>, const conversation& chat, const message& said) {
+  return menu_row_facts_t{menu_row_for<Features>(chat, said)...};
+}
+
 // A message's menu, for a right press on its row wherever it is shown -- the
 // timeline, a thread: what it offers, from the message, its chat as the
 // model has it now, what is selected in its text and the link pressed.
@@ -1173,13 +1190,11 @@ struct row_menu {
     if (chat) {
       const message* held = held_message(*chat, said.id);
       const message& current = held ? *held : said;
-      facts.pinned = std::ranges::contains(chat->pinned, said.id);
       const protocol_state_t now = protocol_state_of(*needs.shared, chat->id.account);
       // What its account does, offered only where anything may be done now.
       if (proto::available(now))
         facts.can = ops_of(*needs.shared, chat->id.account);
       facts.can.react = facts.can.react && proto::may_react(now, *chat, current);
-      facts.pinnable = proto::can_pin(now, said.id);
       // Edited as its protocol's rule allows: any of one's own, or the last.
       facts.editable = !said.service && !said.reaction && proto::may_edit(now, *chat, said);
       facts.history = !said.versions.empty();
@@ -1192,6 +1207,7 @@ struct row_menu {
       if (auto link = proto::message_link(now, *chat, said.id))
         facts.link = std::move(*link);
       facts.feet = menu_feet_for(composition::providers<contract::message_menu_foot, enabled_plugins>{}, *chat, said);
+      facts.rows = menu_rows_for(composition::providers<contract::message_menu, enabled_plugins>{}, *chat, said);
     }
     // The link the press was on: one in the text -- its text asked a menu
     // of its own with it, which this one is in place of -- or the preview's,

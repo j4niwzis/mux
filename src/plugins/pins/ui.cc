@@ -19,6 +19,8 @@ import mux.composition;
 import mux.core;
 import mux.ui.base;
 import mux.plugin.pins.types;
+import mux.plugin.pins.model;
+import mux.plugin.pins.changes;
 
 export namespace mux::plugins::pins {
 using namespace ::mux::ui;
@@ -49,10 +51,18 @@ MUX_INLINE_IN_RELEASE auto pinned_bar(const palette& colours) {
 // The bar in the chat's column, under its head (mux.ui:conversations_screen).
 MUX_INLINE_IN_RELEASE auto extend(contract::chat_column, type_tag<feature>, const ui_needs& needs) { return pinned_bar(*needs.colours); }
 
+// What its row is made from, as the menu opens: pinnable in a chat that
+// keeps pins, where the server has it (answerable); pinned there or not.
+inline row row_facts(contract::message_menu, type_tag<feature>, const conversation& chat, const message& said) {
+  const auto& mine = std::get<chat_part<message>>(chat.plugins);
+  return {.pinnable = mine.pinned.has_value() && !said.id.empty() && answerable(said),
+          .pinned = std::ranges::contains(pinned_of(chat), said.id)};
+}
 // Pin or Unpin, in a message's menu, where its chat keeps pins.
 MUX_INLINE_IN_RELEASE auto extend(contract::message_menu, type_tag<feature>, const palette& colours, const emoji_kept&, const menu_facts& facts) {
-  return skiff::compose::visible(facts.pinnable,
-      row_item(colours, facts.pinned ? "Unpin" : "Pin", sends<pin>{pin{facts.id, !facts.pinned}}, icon::check{}, std::nullopt, menu_row_look));
+  const row& mine = row_facts_of<feature>(facts);
+  return skiff::compose::visible(mine.pinnable,
+      row_item(colours, mine.pinned ? "Unpin" : "Pin", sends<pin>{pin{facts.id, !mine.pinned}}, icon::check{}, std::nullopt, menu_row_look));
 }
 
 }  // namespace mux::plugins::pins

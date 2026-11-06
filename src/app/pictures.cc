@@ -340,13 +340,13 @@ class pictures_part {
             emoji_of(one.timeline[i]);
           for (const message* said : in_aside)
             emoji_of(*said);
-          // The chat's pinned messages not loaded: fetched on their own, as
-          // a quoted one is, for the pinned bar.
-          for (const std::string& pinned : one.pinned)
-            if (!one.quoted.contains(pinned) &&
-                std::ranges::find(one.timeline, pinned, &message::id) == one.timeline.end() &&
-                this->quote_due(pinned))
-              s_->net->fetch_quoted(one.id, pinned);
+          // The messages the plugins' parts hold on to, not loaded: fetched
+          // on their own, as a quoted one is -- the pinned, for its bar.
+          mux::each_held_id(one, [&](const std::string& held) {
+            if (!one.quoted.contains(held) && std::ranges::find(one.timeline, held, &message::id) == one.timeline.end() &&
+                this->quote_due(held))
+              s_->net->fetch_quoted(one.id, held);
+          });
           // Pack media is requested only for visible picker cells above or
           // visible message content. Opening a room must not decode its packs.
           // Its stickers: those the panel shows, asked for above as it shows

@@ -177,6 +177,14 @@ template <class Plugin, class Events, class Account>
 concept hears_ephemeral = requires(const conversation_id& in, const Events& events, Account& account) {
   matrix_ephemeral(contract::matrix_events{}, type_tag<Plugin>{}, in, events, account);
 };
+// What a plugin makes of a joined room's state, as a sync brings it --
+// matrix_room(contract::matrix_events, type_tag<its feature>, the room, the
+// room as synced, the account), found by ADL where the account is made --
+// told to the program as the plugin's own changes: the pinned, for one.
+template <class Plugin, class Room, class Account>
+concept hears_rooms = requires(const conversation_id& in, const Room& kept, Account& account) {
+  matrix_room(contract::matrix_events{}, type_tag<Plugin>{}, in, kept, account);
+};
 // The plugins an account's sink serves (the program's, mux::app::
 // post_change's); none for any other.
 template <class Sink>
@@ -912,6 +920,17 @@ class account {
   }
   template <class Plugin, class Events>
   void ephemeral_for(const conversation_id&, const Events&) {}
+  template <class Plugin, class Room>
+    requires hears_rooms<Plugin, Room, account>
+  void room_for(const conversation_id& in, const Room& kept) {
+    matrix_room(contract::matrix_events{}, type_tag<Plugin>{}, in, kept, *this);
+  }
+  template <class Plugin, class Room>
+  void room_for(const conversation_id&, const Room&) {}
+  template <template <class...> class List, class... Plugins, class Room>
+  void plugins_hear_room(type_tag<List<Plugins...>>, const conversation_id& in, const Room& kept) {
+    (this->template room_for<Plugins>(in, kept), ...);
+  }
   template <template <class...> class List, class... Plugins, class Events>
   void plugins_hear_ephemeral(type_tag<List<Plugins...>>, const conversation_id& in, const Events& events) {
     (this->template ephemeral_for<Plugins>(in, events), ...);

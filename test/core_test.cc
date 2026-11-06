@@ -6,6 +6,8 @@ import mux.plugin.receipts.model;
 import mux.plugin.receipts.changes;
 import mux.plugin.typing.model;
 import mux.plugin.typing.changes;
+import mux.plugin.pins.model;
+import mux.plugin.pins.changes;
 import gtest;
 
 #include "gtest/gtest-macros.h"
@@ -101,6 +103,19 @@ TEST(Model, LiveMessageEndsItsSendersTypingButHistoryDoesNot) {
   EXPECT_EQ(typers(kept).size(), 2u);
   kept.apply(change::message_added{said("new", "finished typing")});
   EXPECT_EQ(typers(kept), (std::vector<std::string>{"nurse@example.com"}));
+}
+
+TEST(Model, PinsAreThePluginsPartAndHeldOnTo) {
+  model kept;
+  EXPECT_FALSE(std::get<plugins::pins::chat_part<message>>(conversation{}.plugins).pinned.has_value());
+  kept.apply(plugins::pins::pinned_now{with_juliet, {"$a", "$b"}});
+  const conversation& chat = *kept.find(with_juliet);
+  EXPECT_EQ(plugins::pins::pinned_of(chat), (std::vector<std::string>{"$a", "$b"}));
+  EXPECT_TRUE(parts_hold(chat, "$b"));
+  EXPECT_FALSE(parts_hold(chat, "$c"));
+  std::vector<std::string> held;
+  each_held_id(chat, [&](const std::string& id) { held.push_back(id); });
+  EXPECT_EQ(held, (std::vector<std::string>{"$a", "$b"}));
 }
 
 TEST(Model, OneWhoLeftTypesNoMore) {

@@ -1216,7 +1216,6 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .children = kept.state.space_children(),
                                      .member_count = kept.summary.joined_members,
                                      .alias = kept.state.canonical_alias(),
-                                     .pinned = kept.state.pinned(),
                                      .emotes = emotes_of(kept),
                                      .stickers = emotes_of(kept, true),
                                      .theirs = proto::matrix::room_rules{.join_rule = join_rule_from(kept.state.template content<loom::ev::m_room_join_rules_content_t>("m.room.join_rules")),
@@ -1230,6 +1229,9 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .replaced_why = replaced_why_of(kept),
                                      .predecessor = predecessor_of(kept)},
                                      .other_aliases = other_aliases_of(kept.state.template content<loom::ev::m_room_canonical_alias_content_t>("m.room.canonical_alias"))});
+  // And the room's state, to the plugins that hear it (matrix_room): its
+  // pins, for one.
+  this->plugins_hear_room(sink_plugins_tag{}, in, kept);
 }
 
 
@@ -1304,7 +1306,6 @@ auto account<Sink>::emotes_in(const std::string& room) const -> mux::emote_list 
   return {};
 }
 
-// The room's pinned messages: m.room.pinned_events' "pinned", as it says.
 
 
 

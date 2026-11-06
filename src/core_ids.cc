@@ -721,9 +721,6 @@ struct conversation {
   std::int64_t member_count = 0;
   // Its alias, where it has one: a Matrix room's canonical #alias.
   std::optional<std::string> alias;
-  // The messages pinned in it, by their ids, oldest first: a Matrix room's
-  // m.room.pinned_events.
-  std::vector<std::string> pinned;
   // The custom emoji that can be used in it: its packs' and the user's own.
   emote_list emotes;
   // And the stickers, of the same packs.

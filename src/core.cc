@@ -86,6 +86,30 @@ void parts_heard_members(Where& where, const Members& before, const Members& aft
     (members_now(part, before, after), ...);
   }, where.plugins);
 }
+// The messages a plugin's part of a chat holds on to, by their ids -- the
+// pinned, for one: kept among the quoted, fetched where they are not loaded
+// (held_ids; its own overload, more special than this).
+namespace held_defaults {
+template <class Part>
+const std::vector<std::string>& held_ids(const Part&) {
+  static const std::vector<std::string> none;
+  return none;
+}
+}  // namespace held_defaults
+template <class Where, class F>
+void each_held_id(const Where& where, F&& f) {
+  std::apply([&](const auto&... part) {
+    using held_defaults::held_ids;
+    ((std::ranges::for_each(held_ids(part), f)), ...);
+  }, where.plugins);
+}
+template <class Where>
+[[nodiscard]] bool parts_hold(const Where& where, const std::string& id) {
+  return std::apply([&](const auto&... part) {
+    using held_defaults::held_ids;
+    return (std::ranges::contains(held_ids(part), id) || ...);
+  }, where.plugins);
+}
 // Every list of messages the plugins keep aside in a chat -- out of its
 // timeline (a thread's answers, for one) -- given to f.
 template <class Where, class F>
@@ -246,7 +270,6 @@ struct conversation_updated {
   std::vector<std::string> groups;
   std::int64_t member_count = 0;
   std::optional<std::string> alias;
-  std::vector<std::string> pinned;
   emote_list emotes;
   emote_list stickers;
   room_part_t theirs;  // its protocol's own part of it
@@ -805,7 +828,6 @@ class model {
     kept.groups = one.groups;
     kept.member_count = one.member_count;
     kept.alias = one.alias;
-    kept.pinned = one.pinned;
     kept.emotes = one.emotes;
     kept.stickers = one.stickers;
     kept.theirs = one.theirs;
@@ -1042,14 +1064,15 @@ class model {
                           [&](placement::at_start) { in_time(); },
                           [&](placement::in_window) { in_time(); },
                           [&](placement::aside) {
-                            // Held to a number: what nothing here quotes or
-                            // pins goes first, then one more -- never all at
-                            // once, which lost every quote shown, a second
-                            // after it came, in a chat that quotes much.
+                            // Held to a number: what nothing here quotes, and
+                            // no plugin's part holds on to (a pin), goes
+                            // first, then one more -- never all at once,
+                            // which lost every quote shown, a second after
+                            // it came, in a chat that quotes much.
                             constexpr std::size_t kQuotedKept = 500;
                             if (where.quoted.size() >= kQuotedKept) {
                               std::erase_if(where.quoted, [&](const auto& kept) {
-                                return !std::ranges::contains(where.pinned, kept.first) &&
+                                return !parts_hold(where, kept.first) &&
                                        std::ranges::none_of(where.timeline, [&](const message& said) {
                                          return said.replies_to == kept.first;
                                        });

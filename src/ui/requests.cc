@@ -49,6 +49,9 @@ struct person_at {
 // What the plugins' rows at a message's menu's foot are made from, each its
 // own (contract::message_menu_foot).
 using menu_feet_t = typename composition::menu_feet_of<composition::providers<contract::message_menu_foot, enabled_plugins>>::type;
+// What the plugins' rows in a message's menu are made from, each its own
+// (contract::message_menu's row_facts).
+using menu_row_facts_t = typename composition::menu_row_facts_of<composition::providers<contract::message_menu, enabled_plugins>>::type;
 struct menu_facts {
   std::string id;
   bool own = false;
@@ -57,13 +60,12 @@ struct menu_facts {
   std::optional<skiff::scene::ClipboardFragment> copied_fragment;
   bool selection = false;
   menu_feet_t feet{};
+  menu_row_facts_t rows{};
   std::optional<std::string> media;  // a picture's or a file's source
   std::optional<std::string> picture;  // a picture's source, or a video's thumbnail's: what Copy Image copies
   bool captioned = false;  // a picture whose caption may be edited (not a video's)
   std::string media_name;
   bool moving = false;  // a GIF or a moving WebP: one that can be saved to the GIFs
-  bool pinned = false;  // pinned in its chat: the menu offers Unpin
-  bool pinnable = false;  // in a chat where pins are kept: a Matrix room
   bool editable = false;  // one's own, as its protocol's rule for edits allows
   bool history = false;   // edited here before: its edit history can be shown
   proto::account_ops can;  // what its account does: React, Forward, keep aside...
@@ -93,6 +95,11 @@ struct menu_facts {
 // emoji, and the menu made again at once had them rolled up (the user's:
 // "I can't even open it").
 static_assert(std::equality_comparable<menu_facts>);
+// A plugin's row's own facts, among a menu's.
+template <class Feature>
+[[nodiscard]] const auto& row_facts_of(const menu_facts& facts) {
+  return std::get<composition::menu_row_slot<Feature>>(facts.rows).facts;
+}
 namespace request {
 // A message's menu asked for: what it is opened over.
 using message_menu = menu_facts;

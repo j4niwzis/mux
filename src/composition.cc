@@ -234,6 +234,11 @@ struct media_pages {
 // A message's menu, its rows after Save As (mux.ui:context_menu):
 //   extend(c, f, palette, emoji_kept, menu_facts) -> its row: shown,
 //   or not, as the facts say, and what it sends its plugin's own
+//   and where it needs facts of its own: row_facts_type(c, f) ->
+//   type_tag<what>, in its types; row_facts(c, f, conversation, message)
+//   -> those, worked out as the menu opens -- held in menu_facts::rows
+//   (menu_row_facts_of), read by its row (row_facts_of<f>); nothing where
+//   it says nothing
 struct message_menu {
   static constexpr std::string_view name = "a message's menu";
 };
@@ -521,6 +526,31 @@ struct menu_feet_of;
 template <class... Features>
 struct menu_feet_of<plugin_list<Features...>> {
   using type = std::tuple<typename decltype(foot_facts_type(contract::message_menu_foot{}, type_tag<Features>{}))::type...>;
+};
+// What a plugin's row in a message's menu is made from (contract::
+// message_menu's row_facts_type), each in a slot of its own; nothing where
+// it says nothing.
+template <class Feature>
+struct menu_row_facts_type_of {
+  struct type {
+    friend bool operator==(const type&, const type&) = default;
+  };
+};
+template <class Feature>
+  requires requires { row_facts_type(contract::message_menu{}, type_tag<Feature>{}); }
+struct menu_row_facts_type_of<Feature> {
+  using type = typename decltype(row_facts_type(contract::message_menu{}, type_tag<Feature>{}))::type;
+};
+template <class Feature>
+struct menu_row_slot {
+  typename menu_row_facts_type_of<Feature>::type facts{};
+  friend bool operator==(const menu_row_slot&, const menu_row_slot&) = default;
+};
+template <class List>
+struct menu_row_facts_of;
+template <class... Features>
+struct menu_row_facts_of<plugin_list<Features...>> {
+  using type = std::tuple<menu_row_slot<Features>...>;
 };
 template <class List>
 struct row_marks_of;

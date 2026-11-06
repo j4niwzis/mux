@@ -41,4 +41,8 @@ template bool account<mux::app::post_change>::heard_here::news() const;
 template bool account<mux::app::post_change>::heard_here::history() const;
 template bool account<mux::app::post_change>::heard_here::mine() const;
 template std::string account<mux::app::post_change>::heard_here::party() const;
+// An event a plugin fetched (a thread's root, listed), taken aside: defined
+// in the class, called from the plugins' units (threads) -- made here, as
+// the extern template leaves it to be.
+template void account<mux::app::post_change>::took_aside(const conversation_id& in, const loom::ev::timeline_event& one);
 }  // namespace mux::proto::matrix::client

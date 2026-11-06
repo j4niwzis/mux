@@ -116,8 +116,9 @@ class chat_list_part {
     auto side = this->side_of(now, kept, list, chat);
     const bool elsewhere = s_->showing->look<mux::ui::elsewhere_shown>()->found.has_value();
     side.no_chats = !now.accounts().empty() && listing->chats.empty() && !elsewhere;
-    side.chats_on = !this->chats_covered(mux::composition::providers<mux::contract::side_panes, mux::enabled_plugins>{}) &&
-                    (!listing->chats.empty() || !elsewhere);
+    const bool covered = this->chats_covered(mux::composition::providers<mux::contract::side_panes, mux::enabled_plugins>{});
+    side.chats_on = !covered && (!listing->chats.empty() || !elsewhere);
+    side.panes_on = covered;
     this->put(std::move(side));
     this->put(mux::ui::listing_shown{++revision_, std::move(listing), list.account, now.accounts().keys() | std::ranges::to<std::vector>(),
                                      k_->state.root().looks.fValue.theme});

@@ -86,6 +86,10 @@ struct side_shown {
   // The chats' list up: not while messages found are in its place, and not
   // empty while the server's search is shown -- that taking the room.
   bool chats_on = true;
+  // A plugin's pane in the chats' place (contract::side_panes): their column
+  // up, taking the room the chats leave -- and none while no pane is, so
+  // that it does not halve the chats' height.
+  bool panes_on = false;
   friend bool operator==(const side_shown&, const side_shown&) = default;
 };
 // The chats screen's frame, as the program keeps it: how wide the side and

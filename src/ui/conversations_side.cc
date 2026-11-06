@@ -379,11 +379,14 @@ auto side_chats_for(const auto& needs) {
   }, c::remembered_scroll<side_list_place, decltype(viewport)>(std::move(contents))));
 }
 // What plugins put under the list of chats (contract::side_panes), each
-// shown as it says.
+// shown as it says; their column up only while one stands in the chats'
+// place (side_shown::panes_on) -- growing, it would else take half the
+// chats' height with nothing in it.
 template <class... Features>
 auto side_panes_of(plugin_list<Features...>, const palette& colours) {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
-                                extend(contract::side_panes{}, type_tag<Features>{}, colours)...);
+  namespace c = skiff::compose;
+  return c::shown_for<side_shown>([](const side_shown& now) { return now.panes_on; },
+      c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), extend(contract::side_panes{}, type_tag<Features>{}, colours)...));
 }
 auto side_server_for(const auto& colours) {
   namespace c = skiff::compose;

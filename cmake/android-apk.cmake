@@ -52,12 +52,25 @@ function(mux_add_android_apk target)
   add_custom_command(OUTPUT "${out}/classes.dex"
     COMMAND "${sdl-native-dex_PROGRAM}" --out "${out}/classes.dex" --library "$<TARGET_FILE_BASE_NAME:${target}>"
     DEPENDS "${sdl-native-dex_PROGRAM}" VERBATIM)
-  add_custom_command(OUTPUT "${out}/mux-resources.apk"
-    COMMAND "${MUX_AAPT2}" link -o "${out}/mux-resources.apk"
-      --manifest "${manifest}" -I "${MUX_ANDROID_FRAMEWORK_RES_APK}"
-      --min-sdk-version "${MUX_ANDROID_MIN_API}" --target-sdk-version "${MUX_ANDROID_TARGET_API}"
-      --version-code "${MUX_ANDROID_VERSION_CODE}" --version-name "${PROJECT_VERSION}"
-    DEPENDS "${manifest}" "${MUX_ANDROID_FRAMEWORK_RES_APK}" VERBATIM)
+  # The resources and manifest of each variant: the debug one linked with
+  # --debug-mode, which puts android:debuggable="true" in its manifest --
+  # what Android's own debugging goes by: run-as into the app's data,
+  # lldb-server or a JDWP debugger attached to its process, its heap and
+  # native allocations profiled. The stripped one is not debuggable.
+  foreach(variant stripped debug)
+    set(debug_mode)
+    if(variant STREQUAL "debug")
+      set(debug_mode --debug-mode)
+    endif()
+    file(MAKE_DIRECTORY "${out}/${variant}")
+    add_custom_command(OUTPUT "${out}/${variant}/mux-resources.apk"
+      COMMAND "${MUX_AAPT2}" link -o "${out}/${variant}/mux-resources.apk"
+        --manifest "${manifest}" -I "${MUX_ANDROID_FRAMEWORK_RES_APK}"
+        --min-sdk-version "${MUX_ANDROID_MIN_API}" --target-sdk-version "${MUX_ANDROID_TARGET_API}"
+        --version-code "${MUX_ANDROID_VERSION_CODE}" --version-name "${PROJECT_VERSION}"
+        ${debug_mode}
+      DEPENDS "${manifest}" "${MUX_ANDROID_FRAMEWORK_RES_APK}" VERBATIM)
+  endforeach()
   if(CMAKE_STRIP)
     set(mux_strip "${CMAKE_STRIP}")
   else()
@@ -73,12 +86,12 @@ function(mux_add_android_apk target)
     endif()
     add_custom_command(OUTPUT "${variant_out}/mux-unsigned.apk"
       COMMAND "${Python3_EXECUTABLE}" "${packager}"
-        --resources "${out}/mux-resources.apk" --dex "${out}/classes.dex"
+        --resources "${variant_out}/mux-resources.apk" --dex "${out}/classes.dex"
         --library "$<TARGET_FILE:${target}>" ${strip_args}
         ${search} --readelf "${MUX_READELF}" --abi "${MUX_ANDROID_ABI}" --out "${variant_out}/mux-unaligned.apk"
       COMMAND "${MUX_ZIPALIGN}" -f 4 "${variant_out}/mux-unaligned.apk" "${variant_out}/mux-unsigned.apk"
       COMMAND "${MUX_ZIPALIGN}" -c 4 "${variant_out}/mux-unsigned.apk"
-      DEPENDS ${target} "${out}/classes.dex" "${out}/mux-resources.apk" "${packager}"
+      DEPENDS ${target} "${out}/classes.dex" "${variant_out}/mux-resources.apk" "${packager}"
         "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../android/abis.json"
       VERBATIM COMMAND_EXPAND_LISTS)
     add_custom_target(mux-apk-${variant}-unsigned DEPENDS "${variant_out}/mux-unsigned.apk")

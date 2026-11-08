@@ -351,6 +351,11 @@ jobs:
           python3 test/android_apk_test.py
           python3 test/binary_artifacts_test.py
           dexdump -c build-android/apk/classes.dex
+          # Only the debug APK is debuggable.
+          aapt2 dump xmltree --file AndroidManifest.xml build-android/apk/debug/mux-test-signed.apk \
+            | grep -q 'android:debuggable.*=true'
+          ! aapt2 dump xmltree --file AndroidManifest.xml build-android/apk/stripped/mux-test-signed.apk \
+            | grep -q 'android:debuggable'
           for variant in stripped debug; do
             zipalign -c 4 "build-android/apk/$variant/mux-test-signed.apk"
             java -jar "$HOME/.cache/mux-android-$ABI/tools/apksigner.jar" verify --verbose \

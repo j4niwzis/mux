@@ -91,8 +91,10 @@ cmake --build build-android --target mux-apk -j4
 
 `mux-apk` packages both `apk/stripped/mux-test-signed.apk` and
 `apk/debug/mux-test-signed.apk` from one linked library. The debug APK keeps
-the symbols present in that library; the stripped APK removes symbols from
-a copy. Configure with `-DCMAKE_BUILD_TYPE=Debug
+the symbols present in that library and is **debuggable**: its manifest is
+linked with `aapt2 link --debug-mode`, which sets
+`android:debuggable="true"`. The stripped APK removes symbols from a copy and
+is not debuggable. Configure with `-DCMAKE_BUILD_TYPE=Debug
 -DCMAKE_CXX_FLAGS_DEBUG='-O3 -g -fno-omit-frame-pointer'
 -DCMAKE_C_FLAGS_DEBUG='-O3 -g -fno-omit-frame-pointer'` to retain source-level
 debug information, as CI does. The existing `apk/mux-test-signed.apk` path
@@ -104,6 +106,44 @@ contains the stripped APK.
 The default **test key** is shared between variants. For release packaging,
 set `MUX_ANDROID_TEST_KEY=OFF` and sign the unsigned output separately.
 Release keys and passwords are never passed to this CMake build.
+
+### Debugging on a device
+
+Android's debugging works only on a debuggable app: `run-as`, attaching
+`lldb-server` or a Java debugger, `am start -D`, heap dumps and the native
+allocation profiler. Install the debug APK (it replaces the stripped one
+in place: both are signed with the same test key, so data is kept):
+
+```sh
+adb install -r mux-android-arm64-v8a-client-debug-test-signed-<sha>/mux-test-signed.apk
+adb shell run-as io.github.j4niwzis.mux ls files   # the app's private data
+```
+
+Native debugging with the NDK's `lldb-server`, which `run-as` copies into
+the app's own directory and starts as the app's user:
+
+```sh
+NDK_LLDB=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/*/lib/linux/aarch64/lldb-server
+adb push $NDK_LLDB /data/local/tmp/lldb-server
+adb shell run-as io.github.j4niwzis.mux cp /data/local/tmp/lldb-server .
+adb shell run-as io.github.j4niwzis.mux chmod 700 lldb-server
+adb shell am start -n io.github.j4niwzis.mux/org.libsdl.nativeapp.NativeActivity
+adb shell run-as io.github.j4niwzis.mux ./lldb-server platform \
+  --listen unix-abstract:///io.github.j4niwzis.mux/debug.sock --server &
+lldb -o 'platform select remote-android' \
+     -o 'platform connect unix-abstract-connect:///io.github.j4niwzis.mux/debug.sock' \
+     -o "attach $(adb shell pidof io.github.j4niwzis.mux)"
+```
+
+`lib/arm64-v8a/libmux.so` from the same APK gives lldb its symbols
+(`target symbols add`, or `settings append target.exec-search-paths`).
+Android Studio's *Attach Debugger to Android Process* (debug type *Native
+Only* or *Dual*) does the same steps itself for any debuggable app.
+
+The CI build is `-O3 -g`: source lines and frames are right, but many
+locals are optimized out. For stepping through code, configure with
+`-DCMAKE_CXX_FLAGS_DEBUG='-Og -g -fno-omit-frame-pointer'` (and the same
+for C); `-O0` makes the library much larger and the UI slow.
 
 CI artifact names include the full commit hash, ABI, and `debug` or
 `stripped`. Keep the debug artifact from the same commit and ABI as a

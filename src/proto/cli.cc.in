@@ -96,7 +96,6 @@ std::string of(const change::media_progress& one) {
 std::string of(const change::preview_loaded& one) { return std::format("a preview of {}", one.url); }
 std::string of(const change::mentioned& one) { return std::format("mentioned in {}", one.in.id); }
 std::string of(const change::marks_shown&) { return std::string(); }
-std::string of(const change::threads_listed& one) { return std::format("{} threads in {}", one.roots.size(), one.in.id); }
 std::string of(const change::refused& one) { return one.what; }
 std::string of(const change::devices_listed& one) { return std::format("{} has {} sessions", one.user, one.devices.size()); }
 std::string of(const change::trust_changed& one) {
@@ -132,7 +131,7 @@ std::string of(const change::window_opened& one) { return std::format("a window 
 std::string of(const change::window_extended& one) {
   return std::format("{}'s window paged forward{}", one.in.id, one.future_from ? "" : ", to the newest");
 }
-std::string of(const change::receipts_changed& one) { return std::format("{}: {} receipts", one.in.id, one.read_by.size()); }
+std::string of(const change::read_marker& one) { return std::format("{}: read up to {}", one.in.id, one.event); }
 std::string of(const change::avatar_loaded& one) { return std::format("a picture from {}, {} bytes", one.source, one.bytes.size()); }
 std::string of(const change::marks_seen&) { return "marks read back as seen"; }
 std::string of(const change::protocol_state_changed& one) { return one.account.address + ": its protocol's state told"; }

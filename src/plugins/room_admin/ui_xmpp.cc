@@ -305,10 +305,23 @@ auto jid_list(const auto& colours, const muc_field& f) {
                  widgets::Button<sends<jids_removed>>(colours.widgets, "Remove", {{var}})))));
 }
 // What a field is edited with, by its kind; its trouble under it.
+// A multi-choice field's options, a checkbox each: made by one function, so
+// that the editor's variant names the type it makes -- in a release build a
+// combinator's result is a builder of its own lambda, and the type spelled
+// again elsewhere was another one.
+auto option_rows(const auto& colours, const muc_field& f) {
+  namespace c = skiff::compose;
+  return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                 f.options | std::views::transform([&](const std::pair<std::string, std::string>& option) {
+                   return c::row(c::hbox(8.0f, {.fillX = true, .height = 32.0f}),
+                                 form_checkbox(colours, f.var, option.second, option_flipped{f.var, option.second}),
+                                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                           elided(nodes::Text(option.first, 13.0f, colours.text))));
+                 }) | std::ranges::to<std::vector>());
+}
 template <class P> using field_editor_t = spl::variant<nodes::Text, decltype(form_checkbox(std::declval<P>(), "", std::nullopt, field_checked{})),
                                     choice_menu<field_chosen>,
-                                    decltype(skiff::compose::many(skiff::compose::vbox(),
-                                        std::vector<decltype(skiff::compose::row(skiff::compose::hbox(), form_checkbox(std::declval<P>(), "", std::optional<std::string>(), option_flipped{}), nodes::Text("", 13.0f, 0u)))>{})),
+                                    decltype(option_rows(std::declval<P>(), std::declval<const muc_field&>())),
                                     decltype(jid_list(std::declval<P>(), std::declval<const muc_field&>())),
                                     widgets::internal::TextBox<field_typed>, widgets::internal::TextArea<field_typed>>;
 MUX_INLINE_IN_RELEASE auto field_editor(const auto& colours, const muc_field& f) -> field_editor_t<decltype(colours)> {
@@ -338,14 +351,7 @@ MUX_INLINE_IN_RELEASE auto field_editor(const auto& colours, const muc_field& f)
                                                    field_chosen{f.var, f.options | std::views::values | std::ranges::to<std::vector<std::string>>()}));
           },
           [&](muc_kind::list_multi) {
-            return field_editor_t<decltype(colours)>(std::in_place_index<3>,
-                c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                        f.options | std::views::transform([&](const std::pair<std::string, std::string>& option) {
-                          return c::row(c::hbox(8.0f, {.fillX = true, .height = 32.0f}),
-                                        form_checkbox(colours, f.var, option.second, option_flipped{f.var, option.second}),
-                                        c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                                                  elided(nodes::Text(option.first, 13.0f, colours.text))));
-                        }) | std::ranges::to<std::vector>()));
+            return field_editor_t<decltype(colours)>(std::in_place_index<3>, option_rows(colours, f));
           },
           [&](muc_kind::text_single) { return text(false); }, [&](muc_kind::text_private) { return text(true); },
           [&](muc_kind::jid_single) { return text(false); },

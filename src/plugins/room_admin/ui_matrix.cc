@@ -21,6 +21,7 @@ import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.nodes.icon;
 import skiff.widgets.dropdown;
+import skiff.widgets.loader;
 import skiff.widgets.sliderbar;
 import skiff.widgets.textarea;
 import skiff.widgets.button;
@@ -787,9 +788,13 @@ auto knock_rows(const auto& colours, const knock_listing& listing) {
                                                 c::styled({.alignSelf = scene::align::kStart}, nodes::Text(fold_word, 12.0f, colours.accent)), fold_word)),
             c::visible(one.accepting || listing.may_decline || listing.may_accept,
                 c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::justify::end{}),
+                    // Being answered: the loader the chat shows while its messages
+                    // load, turning, and what it is doing.
                     c::visible(one.accepting.has_value(),
-                               c::styled({.alignSelf = scene::align::kMiddle},
-                                         nodes::Text(one.accepting.value_or(false) ? "Accepting…" : "Declining…", 12.0f, colours.dim))),
+                               c::row(c::hbox(6.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+                                      c::styled({.alignSelf = scene::align::kMiddle}, widgets::RadialLoader<>(20.0f)),
+                                      c::styled({.alignSelf = scene::align::kMiddle},
+                                                nodes::Text(one.accepting.value_or(false) ? "Accepting…" : "Declining…", 12.0f, colours.dim)))),
                     c::visible(!one.accepting && listing.may_decline,
                                action(colours, "Decline", ask(manage_change::answer_knock{one.id, one.asked_at, false}))),
                     c::visible(!one.accepting && listing.may_accept,

@@ -254,12 +254,19 @@ struct add_child {
 struct remove_child {
   std::string room;
 };
+// A knock answered: accepted (they are invited) or declined (their knock
+// refused, as a kick does it) -- its failure said back, as a write's is.
+struct answer_knock {
+  std::string user;
+  bool accept = false;
+};
 }  // namespace room_change
 using room_change_t = spl::variant<room_change::set_join_rule, room_change::set_history, room_change::set_power,
                                       room_change::encrypt, room_change::set_need, room_change::upgrade,
                                       room_change::set_event_need, room_change::add_child, room_change::remove_child,
                                       room_change::set_permissions, room_change::set_tags, room_change::set_directory,
-                                      room_change::create_alias, room_change::delete_alias, room_change::delete_aliases, room_change::set_addresses, room_change::set_profile, room_change::set_state_event>;
+                                      room_change::create_alias, room_change::delete_alias, room_change::delete_aliases, room_change::set_addresses, room_change::set_profile, room_change::set_state_event,
+                                      room_change::answer_knock>;
 
 constexpr room_part_list<room_rules> room_parts(const state&) { return {}; }
 

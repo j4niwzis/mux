@@ -356,6 +356,14 @@ struct general_up {
     return now && (tab_up<Kind, settings_tab::general>{}(now) || hosting_up<Kind>(plugin_tabs_t<Kind>{}, now));
   }
 };
+// What a tab shows by its title: its plugin's count (tab_badge), or nothing.
+template <class Tab>
+auto tab_badge_of(const auto& colours, Tab tab) {
+  if constexpr (requires { tab_badge(tab, colours); })
+    return tab_badge(tab, colours);
+  else
+    return skiff::compose::visible(false, nodes::Text("", 11.0f, colours.text));
+}
 // A tab's row: its icon and title, marked while it is up; pressed, it is.
 // Every row made is listed: the kind's tabs are its own, known while
 // compiling.
@@ -369,8 +377,9 @@ auto manage_tab_row(const auto& colours, Tab tab) {
                  c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, icon_mark(colours, tab_icon(tab))),
                  c::applied<room_facts_t<Kind>>([](const room_facts_t<Kind>& now) { return tab_up<Kind, Tab>{}(now); },
                                           [](nodes::Text& title, bool up) { title.setBold(up); },
-                                          c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                                                    elided(nodes::Text(std::string(tab_title(tab)), 14.0f, colours.text))))))));
+                                          c::styled({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                                    elided(nodes::Text(std::string(tab_title(tab)), 14.0f, colours.text)))),
+                 tab_badge_of(colours, tab)))));
 }
 // The client's tabs: General only where no tab of the kind's hosts it.
 template <class Kind>

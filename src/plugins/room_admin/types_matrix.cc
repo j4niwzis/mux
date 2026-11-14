@@ -45,8 +45,22 @@ enum class editor { profile, powers, power };
 // program's to keep (the permissions and tags staged until Apply), and for
 // each draft a page keeps that the program resets, a round: the draft made
 // again where it moves.
+// A join request being answered: the one it was (by when they asked: one
+// asking again is another), and how.
+struct knock_answering {
+  std::int64_t asked_at = 0;
+  bool accept = false;
+  friend bool operator==(const knock_answering&, const knock_answering&) = default;
+};
 struct manage_state {
   room_management data;
+  // Join requests: those being answered, each its own -- one answered does
+  // not hold up the rest -- those answered, out of the list before the room
+  // says so (by who and when they asked), and those whose long reason is
+  // shown whole.
+  std::map<std::string, knock_answering> answering;
+  std::set<std::pair<std::string, std::int64_t>> answered;
+  std::set<std::string> reasons_shown;
   bool loading = true, pending = false;
   std::string error;
   bool confirming_encryption = false, confirming_upgrade = false;
@@ -106,6 +120,9 @@ struct delete_power { std::string power; };
 struct edit_power { std::int64_t power = 0; };
 struct delete_tag { std::int64_t power = 0; };
 struct apply_tags { bool reset = false; };
+// A join request accepted or declined; its reason shown whole, or folded.
+struct answer_knock { std::string user; std::int64_t asked_at = 0; bool accept = false; };
+struct show_reason { std::string user; };
 }  // namespace manage_change
 using manage_change_t = spl::variant<
     manage_change::edit, manage_change::encryption, manage_change::directory, manage_change::address, manage_change::expand_addresses,
@@ -114,7 +131,7 @@ using manage_change_t = spl::variant<
     manage_change::upgrade, manage_change::cancel_upgrade, manage_change::member_power, manage_change::permission,
     manage_change::apply_permissions, manage_change::add_custom_permission, manage_change::remove_custom_permission,
     manage_change::save_power, manage_change::delete_power, manage_change::edit_power, manage_change::delete_tag,
-    manage_change::apply_tags>;
+    manage_change::apply_tags, manage_change::answer_knock, manage_change::show_reason>;
 namespace request {
 struct manage_room {
   manage_change_t change;

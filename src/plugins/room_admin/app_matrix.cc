@@ -335,6 +335,21 @@ struct manage_step {
       kept.deleted_powers.insert(one.power);
     return std::nullopt;
   }
+  // A join request answered: once, where one may -- invite to accept, kick
+  // to decline -- each on its own, whatever else is on its way.
+  asked operator()(const manage_change::answer_knock& one) {
+    const power_need_t need = one.accept ? power_need_t{power_need::invite{}} : power_need_t{power_need::kick{}};
+    if (kept.answering.contains(one.user) || kept.answered.contains({one.user, one.asked_at}) || !may(facts, need))
+      return std::nullopt;
+    kept.answering.insert_or_assign(one.user, knock_answering{one.asked_at, one.accept});
+    kept.error.clear();
+    return manage_ask_t{room_change::answer_knock{one.user, one.accept}};
+  }
+  asked operator()(const manage_change::show_reason& one) {
+    if (!kept.reasons_shown.erase(one.user))
+      kept.reasons_shown.insert(one.user);
+    return std::nullopt;
+  }
   asked operator()(const manage_change::apply_tags& one) {
     if (kept.pending)
       return std::nullopt;
@@ -365,6 +380,23 @@ void change_manage(ui::shown_model& showing, const mux::conversation_id& in, Cha
 // A write done: what it changed of the room, in the facts; the drafts it
 // settles let go.
 inline void saved_in(::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>& facts, manage_state& kept, const management_saved& one) {
+  // A join request answered: out of the list, or left in it with what went
+  // wrong said -- the other writes' waiting none of its business.
+  const bool knock = spl::visit(spl::overloaded{[&](const room_change::answer_knock& answer) {
+                                                  const auto asking = kept.answering.find(answer.user);
+                                                  if (asking == kept.answering.end())
+                                                    return true;
+                                                  if (one.error.empty())
+                                                    kept.answered.emplace(answer.user, asking->second.asked_at);
+                                                  else
+                                                    kept.error = std::format("Could not {} {}: {}", answer.accept ? "accept" : "decline", answer.user, one.error);
+                                                  kept.answering.erase(asking);
+                                                  return true;
+                                                },
+                                                [](const auto&) { return false; }},
+                                one.change);
+  if (knock)
+    return;
   kept.pending = false;
   kept.error = one.error;
   if (!one.error.empty())

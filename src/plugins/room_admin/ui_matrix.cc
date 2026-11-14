@@ -695,14 +695,32 @@ auto members_page(const auto& colours, const room_settings_facts&) {
 }
 
 // ---- Join Requests: those asking to join, as Voyage lists them ---------------------
-// Each with their picture, name, ID and when they asked, their reason under
-// it, and Accept (an invite) and Decline (their knock refused) -- each where
-// the account's level allows it. Read from the chat as it is now, so a
-// request answered (or withdrawn) leaves the list as the room says so.
+// Each with their picture, name, ID and when they asked, the latest first;
+// their reason under it, a long one folded until it is asked for whole; and
+// Decline (their knock refused) and Accept (an invite), each where one's
+// level allows it. One pressed: its row says so until the server answers,
+// then leaves the list -- or stays, with what went wrong said over it. Read
+// from the chat as it is now: a request withdrawn, or answered elsewhere,
+// leaves the list as the room says so.
+// What the settings keep of them: those being answered, those answered,
+// the reasons shown whole -- and what one may.
+struct knock_answers {
+  std::map<std::string, knock_answering> answering;
+  std::set<std::pair<std::string, std::int64_t>> answered;
+  std::set<std::string> reasons_shown;
+  bool may_accept = false, may_decline = false;
+  friend bool operator==(const knock_answers&, const knock_answers&) = default;
+};
+[[nodiscard]] inline knock_answers answers_of(const facts_t& now) {
+  const auto& kept = kept_of(now);
+  return {kept.answering, kept.answered, kept.reasons_shown, may(facts_of(now), power_need::invite{}), may(facts_of(now), power_need::kick{})};
+}
 struct knock_line {
-  std::string id, name, reason, about;
+  std::string id, name, about, reason;
   std::optional<std::string> avatar;
   std::int64_t asked_at = 0;
+  bool foldable = false, whole = false;
+  std::optional<bool> accepting;  // being answered: accepted, or declined
   friend bool operator==(const knock_line&, const knock_line&) = default;
 };
 struct knock_listing {
@@ -722,63 +740,101 @@ struct knock_listing {
   if (ago < std::chrono::days(7)) return std::format("{}d ago", std::chrono::duration_cast<std::chrono::days>(ago).count());
   return std::format("{:%Y-%m-%d}", std::chrono::floor<std::chrono::days>(then));
 }
-[[nodiscard]] inline knock_listing knocks_of(const conversation& chat) {
+// A reason folded: its first lines, as far as a few of them go -- cut
+// between characters, not inside one; none where it is short.
+[[nodiscard]] inline std::optional<std::string> folded(std::string_view reason) {
+  constexpr std::size_t kMost = 160;
+  std::size_t cut = std::min(reason.size(), kMost);
+  if (const auto first = reason.find('\n'); first != std::string_view::npos)
+    if (const auto second = reason.find('\n', first + 1); second != std::string_view::npos)
+      cut = std::min(cut, second);
+  if (cut == reason.size())
+    return std::nullopt;
+  while (cut > 0 && (static_cast<unsigned char>(reason[cut]) & 0xC0u) == 0x80u)
+    --cut;
+  return std::string(reason.substr(0, cut)) + "…";
+}
+[[nodiscard]] inline knock_listing knocks_of(const conversation& chat, const knock_answers& answers) {
   const auto now = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
-  auto rows = chat.knocking | std::views::transform([&](const knock_request& one) {
-    const std::string when = asked_when(one.asked_at, now);
-    const std::string name = one.name.empty() ? one.id : one.name;
-    // The ID where the name is not it, and when.
-    std::string about = name == one.id ? std::string() : one.id;
-    if (!when.empty()) about += about.empty() ? when : " · " + when;
-    return knock_line{one.id, name, one.reason, std::move(about), one.avatar, one.asked_at};
-  }) | std::ranges::to<std::vector>();
+  auto rows = chat.knocking | std::views::filter([&](const knock_request& one) { return !answers.answered.contains({one.id, one.asked_at}); }) |
+              std::views::transform([&](const knock_request& one) {
+                const std::string when = asked_when(one.asked_at, now);
+                const std::string name = one.name.empty() ? one.id : one.name;
+                // The ID where the name is not it, and when.
+                std::string about = name == one.id ? std::string() : one.id;
+                if (!when.empty()) about += about.empty() ? when : " · " + when;
+                const auto fold = folded(one.reason);
+                const bool whole = answers.reasons_shown.contains(one.id);
+                const auto asking = answers.answering.find(one.id);
+                return knock_line{one.id, name, std::move(about), fold && !whole ? *fold : one.reason, one.avatar, one.asked_at,
+                                  fold.has_value(), whole,
+                                  asking == answers.answering.end() ? std::nullopt : std::optional(asking->second.accept)};
+              }) |
+              std::ranges::to<std::vector>();
   // The latest first.
   std::ranges::stable_sort(rows, std::ranges::greater{}, &knock_line::asked_at);
-  const auto& rules = rules_of(chat);
-  const std::int64_t mine = level_of(rules, chat.id.account.address);
-  return {std::move(rows), mine >= rules.needs.of(power_need::invite{}), mine >= rules.needs.of(power_need::kick{})};
+  return {std::move(rows), answers.may_accept, answers.may_decline};
 }
-// Accepting a knock is inviting them; declining it, sending them out.
-struct accept_knock {
-  using Answer = ::mux::ui::request::room_act;
-  std::string user;
-  Answer operator()() const { return {::mux::room_action::invite{user}}; }
-};
-struct decline_knock {
-  using Answer = ::mux::ui::request::room_act;
-  std::string user;
-  Answer operator()() const { return {::mux::room_action::kick{user, std::nullopt}}; }
-};
 auto knock_rows(const auto& colours, const knock_listing& listing) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(knock_rows, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       c::many(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), listing.rows | std::views::transform([&](const knock_line& one) {
+        const std::string fold_word = one.whole ? "Show less" : "Show more";
         return card(colours,
             member_row(colours, ::mux::member{one.id, one.name, std::nullopt, one.avatar}, one.about),
             c::visible(!one.reason.empty(), wrapped(nodes::Text("Reason: " + one.reason, 13.0f, colours.dim))),
-            c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::justify::end{}),
-                c::visible(listing.may_decline, action(colours, "Decline", decline_knock{one.id})),
-                c::visible(listing.may_accept, action(colours, "Accept", accept_knock{one.id}, true, action_style::success))));
+            c::visible(one.foldable, c::onPress(ask(manage_change::show_reason{one.id}),
+                                                c::styled({.alignSelf = scene::align::kStart}, nodes::Text(fold_word, 12.0f, colours.accent)), fold_word)),
+            c::visible(one.accepting || listing.may_decline || listing.may_accept,
+                c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::justify::end{}),
+                    c::visible(one.accepting.has_value(),
+                               c::styled({.alignSelf = scene::align::kMiddle},
+                                         nodes::Text(one.accepting.value_or(false) ? "Accepting…" : "Declining…", 12.0f, colours.dim))),
+                    c::visible(!one.accepting && listing.may_decline,
+                               action(colours, "Decline", ask(manage_change::answer_knock{one.id, one.asked_at, false}))),
+                    c::visible(!one.accepting && listing.may_accept,
+                               action(colours, "Accept", ask(manage_change::answer_knock{one.id, one.asked_at, true}), true, action_style::success)))));
       }) | std::ranges::to<std::vector>()),
       c::visible(listing.rows.empty(), wrapped(nodes::Text("Nobody is asking to join right now.", 12.0f, colours.dim)))));
 }
-// The rows for the requests as the chat has them now.
-auto knock_listing_view(const auto& colours) {
+// The rows for the requests as the chat has them now, with what the
+// settings keep of them.
+auto knock_listing_view(const auto& colours, const knock_answers& answers) {
   namespace c = skiff::compose;
   using rows_t = decltype(knock_rows(colours, knock_listing{}));
-  return SKIFF_NAMED(knock_listing_view, c::projected<conversation>([](const conversation& chat) { return knocks_of(chat); },
+  return SKIFF_NAMED(knock_listing_view, c::projected<conversation>([answers](const conversation& chat) { return knocks_of(chat, answers); },
       c::mount<rows_t, knock_listing>([at = &colours](const knock_listing& listing) { return std::tuple{knock_rows(*at, listing)}; },
                                       {.fillX = true, .autoSize = scene::axes::kY})));
 }
-// The page: the chat whose settings are open, read where the model keeps it
-// (its scope moved to it as the settings say which chat they are for).
+// The chat whose settings are open, read where the model keeps it: its
+// scope moved to it as the settings say which chat they are for.
+[[nodiscard]] inline std::tuple<::mux::account_id, std::string> chat_key(const facts_t& now) {
+  return {facts_of(now).chat.account, facts_of(now).chat.id};
+}
+template <class N> auto in_managed_chat(N node) {
+  namespace c = skiff::compose;
+  return SKIFF_NAMED(in_managed_chat, c::rekeyed_by<facts_t>([](const facts_t& now) { return chat_key(now); },
+      c::scoped<conversation>(c::handlers(), std::move(node), ::mux::account_id{}, std::string())));
+}
+auto knock_view(const auto& colours, const knock_answers& answers) { return in_managed_chat(knock_listing_view(colours, answers)); }
+template <class P> using knock_view_t = decltype(knock_view(std::declval<P>(), knock_answers{}));
 auto requests_page(const auto& colours, const room_settings_facts&) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(requests_page, c::column(page_look(),
       explained(colours, "People asking to join this room. Accepting invites them; declining turns their request down."),
-      c::rekeyed_by<facts_t>(
-          [](const facts_t& now) { return std::tuple{facts_of(now).chat.account, facts_of(now).chat.id}; },
-          c::scoped<conversation>(c::handlers(), knock_listing_view(colours), ::mux::account_id{}, std::string()))));
+      status_line(colours, [](const facts_t& now) { return kept_of(now).error; }),
+      rows_of<knock_view_t<decltype(colours)>, knock_answers>(answers_of, [at = &colours](const knock_answers& answers) { return knock_view(*at, answers); })));
+}
+// The count by the tab's title, while there are any: Voyage's badge.
+auto requests_badge(const auto& colours) {
+  namespace c = skiff::compose;
+  return in_managed_chat(c::shown_for<conversation>([](const conversation& chat) { return !chat.knocking.empty(); },
+      c::column(c::justified(c::vbox(0.0f, {.height = 18.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .minWidth = 20.0f,
+                                            .alignSelf = scene::align::kMiddle, .padding = {1.0f, 6.0f, 1.0f, 6.0f}, .cornerRadius = 9.0f,
+                                            .background = colours.accent}),
+                             nodes::justify::middle{}),
+                c::text_for<conversation>([](const conversation& chat) { return std::to_string(chat.knocking.size()); },
+                                          c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 11.0f, colours.on_accent, true))))));
 }
 
 // ---- Permissions: named powers, then Users, Messages, Calls, Moderation,
@@ -1087,6 +1143,7 @@ export namespace mux::proto::matrix::manage {
 inline ui::icon_t tab_icon(room) { return ui::icon::gear{}; }
 inline ui::icon_t tab_icon(members) { return ui::icon::person{}; }
 inline ui::icon_t tab_icon(requests) { return ui::icon::add_person{}; }
+auto tab_badge(requests, const auto& colours) { return manage_detail::requests_badge(colours); }
 inline ui::icon_t tab_icon(roles) { return ui::icon::lock{}; }
 // Each tab's page.
 auto page_of(room, const auto& colours, const ::mux::plugins::room_settings::protocol_settings<::mux::protocol::matrix>& facts) { return manage_detail::general_page(colours, facts); }

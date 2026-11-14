@@ -543,11 +543,20 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
             // No longer: its entry with no via, which the spec reads as none.
             [&](const proto::matrix::room_change::remove_child& one) {
               set("m.space.child", loom::ev::m_space_child_content_t{}, one.room);
+            },
+            [&](const proto::matrix::room_change::answer_knock& one) {
+              if (one.accept)
+                told("accept", perform(*api_, loom::cs::invite_user{.room_id = room, .body = {.user_id = one.user}}));
+              else
+                told("decline", perform(*api_, loom::cs::kick{.room_id = room, .body = {.user_id = one.user}}));
             }},
         change);
-    const bool saved = error.empty();
+    // A knock answered changes nothing the settings read: the room's sync
+    // says the rest.
+    const bool reread = error.empty() && spl::visit(spl::overloaded{[](const proto::matrix::room_change::answer_knock&) { return false; },
+                                                                    [](const auto&) { return true; }}, change);
     sink_(proto::matrix::management_saved{{id_, room}, change, std::move(error), std::move(saved_state)});
-    if (saved) this->fetch_room_settings(room);
+    if (reread) this->fetch_room_settings(room);
   });
 }
 

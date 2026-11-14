@@ -24,6 +24,7 @@ export namespace mux::proto::matrix {
 namespace manage {
 struct room {};
 struct members {};
+struct requests {};  // those asking to join (Voyage's join requests)
 struct roles {};
 }  // namespace manage
 // The client's General shown under Matrix's own (the room's name, topic,
@@ -32,6 +33,7 @@ namespace manage {
 constexpr bool hosts_general(room) { return true; }
 constexpr std::string_view tab_title(room) { return "General"; }
 constexpr std::string_view tab_title(members) { return "Members"; }
+constexpr std::string_view tab_title(requests) { return "Join Requests"; }
 constexpr std::string_view tab_title(roles) { return "Permissions"; }
 }  // namespace manage
 // What a page has open: an editor, or a list unfolded.
@@ -152,7 +154,8 @@ export namespace mux::plugins::room_admin {
 // Matrix's realization: its tabs, what it keeps, and the settings as they
 // open for one of its rooms -- its General up first.
 struct matrix_admin {
-  using tabs = composition::page_list<proto::matrix::manage::room, proto::matrix::manage::members, proto::matrix::manage::roles>;
+  using tabs = composition::page_list<proto::matrix::manage::room, proto::matrix::manage::members, proto::matrix::manage::requests,
+                                      proto::matrix::manage::roles>;
   using kept = composition::page_list<proto::matrix::manage_state>;
   template <class Facts>
   static void opened(Facts& facts, const conversation& chat) {

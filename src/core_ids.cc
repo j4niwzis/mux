@@ -445,11 +445,15 @@ struct member {
   friend bool operator==(const member&, const member&) = default;
 };
 
-// One asking to join a room that lets people knock: who, and why they say.
+// One asking to join a room that lets people knock: who, and why they say;
+// their picture, and when they asked (their member event's time, in
+// milliseconds since the epoch; 0 where unknown).
 struct knock_request {
   std::string id;
   std::string name;
   std::string reason;
+  std::optional<std::string> avatar;  // an mxc://, as their member event says
+  std::int64_t asked_at = 0;
   friend bool operator==(const knock_request&, const knock_request&) = default;
 };
 

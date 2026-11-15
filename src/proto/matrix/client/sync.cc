@@ -1333,7 +1333,7 @@ void account<Sink>::members(const conversation_id& in, const loom::client::joine
     const auto* event = kept.state.find("m.room.member", user);
     const auto* asked = kept.state.content<loom::ev::m_room_member_content_t>("m.room.member", user);
     knocking.push_back({user, kept.state.display_name(user).value_or(user), asked && asked->reason ? *asked->reason : std::string(),
-                        asked ? asked->avatar_url : std::nullopt, event ? event->origin_server_ts.value_or(0) : 0});
+                        asked ? asked->avatar_url : std::nullopt, event ? event->origin_server_ts : 0});
   }
   sink_(change::members_changed{in, std::move(out), std::move(knocking)});
 }

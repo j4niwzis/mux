@@ -343,7 +343,7 @@ struct manage_step {
       return std::nullopt;
     kept.answering.insert_or_assign(one.user, knock_answering{one.asked_at, one.accept});
     kept.error.clear();
-    return manage_ask_t{room_change::answer_knock{one.user, one.accept}};
+    return manage_ask_t{room_change_t{room_change::answer_knock{one.user, one.accept}}};
   }
   asked operator()(const manage_change::show_reason& one) {
     if (!kept.reasons_shown.erase(one.user))

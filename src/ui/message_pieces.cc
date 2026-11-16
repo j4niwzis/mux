@@ -49,10 +49,10 @@ MUX_INLINE_IN_RELEASE auto link_card(const palette& colours, std::string where, 
     return node;
   };
   return SKIFF_NAMED(link_card, c::onClick(request::open_url{std::move(where)},
-      c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth, .margin = {4.0f, 0.0f, 2.0f, 0.0f}}),
+      c::row(c::hbox(8.0f) | c::content_x | c::content_y | c::with({.margin = {4.0f, 0.0f, 2.0f, 0.0f}}),
           c::styled({.width = 3.0f, .height = 36.0f, .cornerRadius = 1.5f}, nodes::Box<>(colours.accent)),
           c::styled({.alignSelf = scene::align::kMiddle}, face_spot(avatar_of::chat{}, std::move(avatar_id), std::move(avatar_name), 32.0f)),
-          c::column(c::vbox(1.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+          c::column(c::vbox(1.0f) | c::content_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
               line(std::move(title), colours.accent, true), line(std::move(said), colours.dim, false))),
       "Open linked room or message"));
 }

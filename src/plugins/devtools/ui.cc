@@ -99,9 +99,9 @@ template <class Back>
 auto head(const palette& colours, std::string title, Back back) {
   namespace c = skiff::compose;
   const scene::Spec middle{.alignSelf = scene::align::kMiddle};
-  return SKIFF_NAMED(devtools_head, c::row(c::hbox(8.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+  return SKIFF_NAMED(devtools_head, c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
       std::move(back),
-      c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+      c::column(c::vbox(0.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                 elided(nodes::Text(std::move(title), 16.0f, colours.text, true)),
                 c::fading_for<said>([](const said& now) { return now.copied; }, 1200.0, nodes::Text("Copied", 12.0f, colours.accent))),
       c::styled(middle, icon_button(colours, icon::close{}, sends<request::close_shown<shown>>{}))));
@@ -115,7 +115,7 @@ auto back_to(const palette& colours, Asked asked) {
 template <class... Parts>
 auto screen_column(Parts... parts) {
   namespace c = skiff::compose;
-  return c::local<said>(said_events{}, c::column(c::vbox(0.0f, {.fillX = true, .height = 560.0f}), std::move(parts)...));
+  return c::local<said>(said_events{}, c::column(c::vbox(0.0f) | c::fill_x | c::with({.height = 560.0f}), std::move(parts)...));
 }
 // A Save or Send button, asking what the draft makes while it has a type.
 template <class Draft, class Make>
@@ -164,7 +164,7 @@ MUX_INLINE_IN_RELEASE auto state_screen(const palette& colours, const screen::st
                c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::back{}, sends<state_back>{})))),
       c::shown_for<said>([](const said& now) { return !now.type; },
           c::styled({.fillX = true, .grow = scene::axes::kY},
-                    skiff::compose::scrolled(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(types))))),
+                    skiff::compose::scrolled(c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(types))))),
       c::shown_for<said>([](const said& now) { return !now.type; },
           c::styled({.width = 200.0f, .height = 34.0f, .margin = {8.0f, 10.0f, 12.0f, 10.0f}},
                     widgets::Button<sends<edit_state>>(colours.widgets, "New state event", {{std::string(), std::string()}}))),
@@ -174,7 +174,7 @@ MUX_INLINE_IN_RELEASE auto state_screen(const palette& colours, const screen::st
             const auto found = by_type.find(type);
             // Named: a conditional's temporary is no view to pipe.
             const std::vector<state_entry> entries = found == by_type.end() ? std::vector<state_entry>{} : found->second;
-            return std::tuple{c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+            return std::tuple{c::many(c::vbox(0.0f) | c::fill_x | c::content_y,
                 entries | std::views::transform([&](const state_entry& one) {
                       return row_item(colours, one.key.empty() ? std::string("(empty key)") : one.key, sends<state_picked>{{one.type, one.key}});
                     }) | std::ranges::to<std::vector>())};
@@ -203,7 +203,7 @@ MUX_INLINE_IN_RELEASE auto data_screen(const palette& colours, const screen::dat
   return screen_column(
       head(colours, "Account data", no_back()),
       c::styled({.fillX = true, .grow = scene::axes::kY},
-                skiff::compose::scrolled(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))),
+                skiff::compose::scrolled(c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(rows)))),
       c::styled({.width = 200.0f, .height = 34.0f, .margin = {8.0f, 10.0f, 12.0f, 10.0f}},
                 widgets::Button<sends<edit_data>>(colours.widgets, "New account data", {{std::string()}})));
 }
@@ -219,7 +219,7 @@ MUX_INLINE_IN_RELEASE auto state_editor_screen(const palette& colours, const scr
   return screen_column(
       head(colours, facts.fresh ? std::string("New state event") : facts.type + (facts.key.empty() ? std::string() : "  \"" + facts.key + "\""),
            back_to(colours, open_state{})),
-      c::local<draft>(c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 12.0f, 12.0f}}),
+      c::local<draft>(c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 12.0f, 12.0f, 12.0f}}),
           c::visible(facts.fresh, model_field<&draft::type>(colours, "Event type", "m.room.topic")),
           c::visible(facts.fresh, model_field<&draft::key>(colours, "State key (may be empty)", "")),
           caption(colours, "Content (a JSON object)"),
@@ -237,7 +237,7 @@ MUX_INLINE_IN_RELEASE auto data_editor_screen(const palette& colours, const scre
   using draft = data_draft;
   return screen_column(
       head(colours, facts.fresh ? std::string("New account data") : facts.type, back_to(colours, open_data{})),
-      c::local<draft>(c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 12.0f, 12.0f}}),
+      c::local<draft>(c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 12.0f, 12.0f, 12.0f}}),
           c::visible(facts.fresh, model_field<&draft::type>(colours, "Type", "org.example.data")),
           caption(colours, "Content (a JSON object)"),
           content_area<&draft::content>(colours),
@@ -254,7 +254,7 @@ MUX_INLINE_IN_RELEASE auto composer_screen(const palette& colours, const screen:
   namespace c = skiff::compose;
   return screen_column(
       head(colours, "Send custom event", no_back()),
-      c::local<composed>(c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 12.0f, 12.0f}}),
+      c::local<composed>(c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 12.0f, 12.0f, 12.0f}}),
           model_field<&composed::type>(colours, "Event type", "m.room.message"),
           model_field<&composed::key>(colours, "State key (for a state event; empty for a timeline one)", ""),
           caption(colours, "Content (a JSON object)"),
@@ -346,9 +346,7 @@ auto unfold_button(const palette& colours, std::string spoken, bool tab_kept::*o
   namespace c = skiff::compose;
   using facts_t = std::optional<Facts>;
   return SKIFF_NAMED(unfold_button, c::onPress(sends<Flip>{},
-      c::row(c::hbox(0.0f, {.height = 32.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle,
-                            .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .background = colours.chosen,
-                            .hoverBackground = colours.widgets.fSurfaceHover, .border = scene::Border{colours.widgets.fSurfaceActive, 1.0f}}),
+      c::row(c::hbox(0.0f) | c::content_x | c::with({.height = 32.0f, .alignSelf = scene::align::kMiddle, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .background = colours.chosen, .hoverBackground = colours.widgets.fSurfaceHover, .border = scene::Border{colours.widgets.fSurfaceActive, 1.0f}}),
              c::text_for<facts_t>([open](const facts_t& now) { return std::string(tab_of(now).*open ? "Collapse" : "Expand"); },
                                   c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 12.0f, colours.text)))),
       std::move(spoken)));
@@ -362,8 +360,7 @@ auto state_list_row(const palette& colours, std::string label, std::string detai
   namespace c = skiff::compose;
   // Pressed, it asks what act makes (onPress).
   auto spoken = label;
-  return SKIFF_NAMED(state_list_row, c::onPress(std::move(act), c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f},
-                                                          .cornerRadius = colours.widgets.fCorner, .hoverBackground = colours.chosen}),
+  return SKIFF_NAMED(state_list_row, c::onPress(std::move(act), c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f}, .cornerRadius = colours.widgets.fCorner, .hoverBackground = colours.chosen}),
       c::visible(kind != state_row_kind::key,
           c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle},
                     nodes::Icon(shape_of(kind == state_row_kind::add ? icon_t{icon::plus{}} : expanded ? icon_t{icon::down{}} : icon_t{icon::right{}}),
@@ -398,17 +395,16 @@ struct state_list_key {
 }
 MUX_INLINE_IN_RELEASE auto state_event_list(const palette& colours, const state_list_key& key) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(state_event_list, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(state_event_list, c::column(c::vbox(4.0f) | c::fill_x | c::content_y,
       setting_tile(colours, "Events", "", nodes::Text(std::format("Total: {}", key.groups.size()), 12.0f, colours.dim)),
       cutout(colours, {}, state_list_row(colours, "Add New", "", sends<compose_state_event>{{""}}, state_row_kind::add),
-          c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.groups | std::views::transform([&](const state_group& group) {
+          c::many(c::vbox(4.0f) | c::fill_x | c::content_y, key.groups | std::views::transform([&](const state_group& group) {
             const bool expanded = key.unfolded == group.type;
-            return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+            return c::column(c::vbox(4.0f) | c::fill_x | c::content_y,
                 state_list_row(colours, group.type, std::to_string(group.keys.size()), sends<unfold_type>{{group.type}}, state_row_kind::type, expanded),
-                c::visible(expanded, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 0.0f, 0.0f, 16.0f},
-                                                              .padding = {0.0f, 0.0f, 0.0f, 8.0f}, .border = scene::Border{colours.band, 1.0f}}),
+                c::visible(expanded, c::column(c::vbox(4.0f) | c::fill_x | c::content_y | c::with({.margin = {0.0f, 0.0f, 0.0f, 16.0f}, .padding = {0.0f, 0.0f, 0.0f, 8.0f}, .border = scene::Border{colours.band, 1.0f}}),
                     state_list_row(colours, "Add New", "", sends<compose_state_event>{{group.type}}, state_row_kind::add),
-                    c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), group.keys | std::views::transform([&](const std::string& one) {
+                    c::many(c::vbox(4.0f) | c::fill_x | c::content_y, group.keys | std::views::transform([&](const std::string& one) {
                       return state_list_row(colours, one.empty() ? "Default" : "\"" + one + "\"", "", sends<view_state_event>{{group.type, one}},
                                             state_row_kind::key);
                     }) | std::ranges::to<std::vector>()))));
@@ -433,20 +429,20 @@ struct state_basis {
 template <class Draft, class Make>
 auto writing(const palette& colours, std::string label, Make make, bool success = false) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(writing, c::column(c::vbox(0.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+  return SKIFF_NAMED(writing, c::column(c::vbox(0.0f) | c::content_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                                        c::asking_for<Draft>(std::move(make), action_face(colours, std::move(label), success ? action_style::success : action_style::secondary))));
 }
 MUX_INLINE_IN_RELEASE auto state_editor(const palette& colours, const state_basis& basis) {
   namespace c = skiff::compose;
   using draft = tab_state_draft;
   const auto save = [](const draft& now) { return write_state_event{now.type, now.key, now.json}; };
-  return SKIFF_NAMED(state_editor, c::local<draft>(c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(state_editor, c::local<draft>(c::column(c::vbox(16.0f) | c::fill_x | c::content_y,
       c::visible(!basis.composing, section(colours, "State Event", tile(colours, basis.first.type, basis.first.key,
-          c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth}),
+          c::row(c::hbox(8.0f) | c::content_x | c::content_y,
               writing<draft>(colours, "Save", save, true),
               action(colours, "Cancel", sends<view_state_event>{{basis.first.type, basis.first.key}}))))),
-      c::visible(basis.composing, c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-          c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::visible(basis.composing, c::column(c::vbox(16.0f) | c::fill_x | c::content_y,
+          c::row(c::hbox(12.0f) | c::fill_x | c::content_y,
               c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&draft::type>(colours, "State Event Type", "")),
               writing<draft>(colours, "Send", save, true)),
           model_field<&draft::key>(colours, "State Key (Optional)", ""))),
@@ -473,7 +469,7 @@ MUX_INLINE_IN_RELEASE auto data_editor(const palette& colours, const data_basis&
   return SKIFF_NAMED(data_editor, c::local<draft>(section(colours, "Account Data",
       model_field<&draft::type>(colours, "Type", ""),
       model_area<&draft::json>(colours, "Content", "{}", 12),
-      c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::row(c::hbox(12.0f) | c::fill_x | c::content_y,
           writing<draft>(colours, "Save", [](const draft& now) { return write_data_entry{now.type, now.json}; }),
           action(colours, "Cancel", sends<close_data_form>{}))),
       basis.first));
@@ -515,7 +511,7 @@ MUX_INLINE_IN_RELEASE auto make_manage_page(room_tab, const palette& colours, co
   return SKIFF_NAMED(devtools_tab_page, c::column(page_look(),
       tab_status<Facts>(colours),
       c::shown_for<facts_t>([](const facts_t& now) { return !tab_of(now).account_editor && on_page<tab_page::overview>(tab_of(now)); },
-          c::column(c::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::column(c::vbox(32.0f) | c::fill_x | c::content_y,
               section(colours, "Options",
                   tile(colours, "Enable Developer Tools", "", developer_switch(colours)),
                   c::shown_for<kept>(tools_on, tile(colours, "Room ID", "Copy room ID to clipboard. (\"" + facts.id + "\")",
@@ -534,13 +530,13 @@ MUX_INLINE_IN_RELEASE auto make_manage_page(room_tab, const palette& colours, co
                       setting_tile(colours, "Account Data", "Private personalization data stored within room.",
                                    unfold_button<Facts, flip_data_list>(colours, "Account data", &tab_kept::data_open)),
                       c::shown_for<facts_t>([](const facts_t& now) { return tab_of(now).data_open; },
-                          c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                          c::column(c::vbox(4.0f) | c::fill_x | c::content_y,
                               action(colours, "Add New", sends<new_data_entry>{}),
                               data_choice<Facts>(colours)))))))),
       c::shown_for<facts_t>([](const facts_t& now) { return !on_page<tab_page::overview>(tab_of(now)); },
-          c::column(c::vbox(16.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::column(c::vbox(16.0f) | c::fill_x | c::content_y,
               c::shown_for<facts_t>([](const facts_t& now) { return on_page<tab_page::view>(tab_of(now)); },
-                  c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  c::column(c::vbox(4.0f) | c::fill_x | c::content_y,
                       setting_tile(colours, "State Event", "", action(colours, "Edit", sends<edit_state_event>{})),
                       card(colours, c::text_for<facts_t>([](const facts_t& now) { return tab_of(now).source; }, [&] {
                         auto text = nodes::Text("", 13.0f, colours.text);
@@ -558,7 +554,7 @@ MUX_INLINE_IN_RELEASE auto make_manage_page(room_tab, const palette& colours, co
 MUX_INLINE_IN_RELEASE auto devtools_box(const ui_needs& n, const shown& facts) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
-  return SKIFF_NAMED(devtools_box, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(devtools_box, c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
       detail::screen_if<screen::reading>(facts, [&](const screen::reading& one) { return detail::reading_screen(colours, one); }),
       detail::screen_if<screen::state>(facts, [&](const screen::state& one) { return detail::state_screen(colours, one); }),
       detail::screen_if<screen::data>(facts, [&](const screen::data& one) { return detail::data_screen(colours, one); }),

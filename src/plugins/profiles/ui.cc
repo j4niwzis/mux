@@ -56,7 +56,7 @@ auto profile_fields(const palette& colours, const profile_form_seed& seed, bool 
   return SKIFF_NAMED(profile_fields, c::local<profile_draft>(
       c::spec_for<account_page_read>([](const account_page_read& now) {
         return scene::Spec{.disabled = now && now->profile_saving};
-      }, c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      }, c::column(c::vbox(12.0f) | c::fill_x | c::content_y,
           model_field<&profile_edit::name>(colours, "Display name", "Your name"),
           model_field<&profile_edit::language>(colours, "Pronouns language", "en"),
           model_area<&profile_edit::pronouns>(colours, "Pronouns", "One set per line", 3),
@@ -95,7 +95,7 @@ auto presence_fields(const palette& colours, const presence_form_seed& seed,
   const auto selected = seed.presence ? std::ranges::find(choices, seed.presence->state,
       [](const auto& choice) { return choice.second; }) : choices.end();
   const auto index = selected == choices.end() ? std::size_t{0} : static_cast<std::size_t>(selected - choices.begin());
-  return SKIFF_NAMED(presence_fields, c::local<presence_draft>(c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(presence_fields, c::local<presence_draft>(c::column(c::vbox(12.0f) | c::fill_x | c::content_y,
       c::projected<presence_draft>([](const presence_draft& draft) { return draft.choice; },
           make_choice_menu(colours, "Presence", choices | std::views::transform([](const auto& one) { return one.first; }) | std::ranges::to<std::vector>(), index, pick_presence_choice{})),
       model_field<&presence_draft::status>(colours, "Status", "What you are doing"),
@@ -109,7 +109,7 @@ MUX_INLINE_IN_RELEASE auto profile_view(const palette& colours, const account_pa
   namespace c = skiff::compose;
   using content = decltype(profile_fields(colours, profile_form_seed{}, false));
   using presence_content = decltype(presence_fields(colours, presence_form_seed{}, {}));
-  return SKIFF_NAMED(profile_view, c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(profile_view, c::column(c::vbox(12.0f) | c::fill_x | c::content_y,
       nodes::Text("Profile", 20.0f, colours.text, true),
       c::projected<account_page_read>([](const account_page_read& now) {
         return now ? std::optional(profile_form_seed{now->by, now->profile_round, now->profile}) : std::nullopt;

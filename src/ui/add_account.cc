@@ -37,7 +37,7 @@ struct add_account_shown {
 template <class... Tags>
 auto protocol_switch(const palette& colours, const protocol_t& speaks, protocol_list<Tags...>) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(protocol_switch, c::row(c::hbox(1.0f, {.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen}),
+  return SKIFF_NAMED(protocol_switch, c::row(c::hbox(1.0f) | c::content_x | c::content_y | c::with({.padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = colours.chosen}),
                 segment(colours, std::string(protocol_name(config::kept_of<Tags>{})), sends<request::add_account_of>{{protocol_t{Tags{}}}},
                         speaks.index() == protocol_t{Tags{}}.index())...));
 }
@@ -47,7 +47,7 @@ using protocol_switch_t = decltype(protocol_switch(std::declval<const palette&>(
 // order.
 template <class... Features>
 auto adding_parts_of(plugin_list<Features...>, const palette& colours) {
-  return skiff::compose::column(skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return skiff::compose::column(skiff::compose::vbox(12.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                 extend(contract::account_adding{}, type_tag<Features>{}, colours)...);
 }
 
@@ -56,7 +56,7 @@ auto adding_parts_of(plugin_list<Features...>, const palette& colours) {
 // protocol changes; the form itself as the program's facts say.
 MUX_INLINE_IN_RELEASE auto adding_form(const ui_needs& n) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(adding_form, c::appearing(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), account_form_view(n)), 0.0f));
+  return SKIFF_NAMED(adding_form, c::appearing(true, c::column(c::vbox(0.0f) | c::fill_x | c::content_y, account_form_view(n)), 0.0f));
 }
 using adding_form_t = decltype(adding_form(std::declval<const ui_needs&>()));
 
@@ -69,7 +69,7 @@ MUX_INLINE_IN_RELEASE auto add_account_view(const ui_needs& n) {
   // As tall as what it holds: the detail pane scrolls it, and a column as
   // tall as its pane's content, filled, was 0 high -- the form in it, grown
   // into what that left, nothing, and everything after the switch outside.
-  return SKIFF_NAMED(add_account_view, c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(add_account_view, c::column(c::vbox(12.0f) | c::fill_x | c::content_y,
       c::projected<add_account_shown>([](const add_account_shown& now) { return now.speaks; },
           c::mount<protocol_switch_t, protocol_t>(
               [at = &colours](const protocol_t& speaks) { return std::tuple{protocol_switch(*at, speaks, protocols{})}; },

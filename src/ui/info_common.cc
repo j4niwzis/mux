@@ -80,9 +80,7 @@ MUX_INLINE_IN_RELEASE auto id_line(const palette& colours, std::string text, std
   const std::string copied = a_link ? link : text;
   return SKIFF_NAMED(id_line, c::local<id_feedback>(id_copy_events{copied},
       c::onClick(copy_id_line{}, c::column(
-          c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY,
-              .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen,
-              .focusBackground = colours.chosen}),
+          c::vbox(2.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
           c::styled({.fillX = true}, wrapped(nodes::Text(std::move(text), 14.0f, colours.accent, false, true))),
           c::text_for<id_feedback>([label, a_link](const id_feedback& now) {
               return !now.copied ? label : a_link ? label + " · link copied, with its servers" : label + " · copied";

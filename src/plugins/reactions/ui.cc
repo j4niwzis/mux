@@ -62,13 +62,10 @@ MUX_INLINE_IN_RELEASE auto reaction_chip(const palette& colours, const looks_sho
     frost->setTint(tint);
   }
   return SKIFF_NAMED(reaction_chip, c::onClick(request::react{std::move(message), std::move(key)}, c::column(
-      c::vbox(0.0f, {.height = 26.0f, .autoSize = scene::axes::kX, .minWidth = 26.0f,
-                    .cornerRadius = 13.0f, .background = frost ? skia::SkColor{0} : tint}),
-      std::move(frost), c::row(c::hbox(4.0f, {.height = 26.0f, .autoSize = scene::axes::kX,
-                        .padding = {0.0f, 9.0f, 0.0f, 9.0f}}),
+      c::vbox(0.0f) | c::content_x | c::with({.height = 26.0f, .minWidth = 26.0f, .cornerRadius = 13.0f, .background = frost ? skia::SkColor{0} : tint}),
+      std::move(frost), c::row(c::hbox(4.0f) | c::content_x | c::with({.height = 26.0f, .padding = {0.0f, 9.0f, 0.0f, 9.0f}}),
         c::styled({.alignSelf = scene::align::kMiddle}, elided(std::move(label))),
-        c::visible(faces, c::many(c::hbox(0.0f, {.height = 20.0f, .autoSize = scene::axes::kX,
-                                               .alignSelf = scene::align::kMiddle}), std::move(avatars)))))));
+        c::visible(faces, c::many(c::hbox(0.0f) | c::content_x | c::with({.height = 20.0f, .alignSelf = scene::align::kMiddle}), std::move(avatars)))))));
 }
 using reaction_chip_t = decltype(reaction_chip(std::declval<const palette&>(), std::declval<const looks_shown&>(),
     std::string{}, std::string{}, std::size_t{}, bool{}, std::declval<const std::vector<emote>&>()));
@@ -143,8 +140,8 @@ MUX_INLINE_IN_RELEASE auto quick_reactions(const palette& colours) {
   auto each = keys | std::views::transform([&](auto key) {
     return quick_reaction(colours, std::string(key));
   }) | std::ranges::to<std::vector>();
-  return SKIFF_NAMED(quick_reactions, c::row(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}}),
-      c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(each)),
+  return SKIFF_NAMED(quick_reactions, c::row(c::hbox(0.0f) | c::content_x | c::content_y | c::with({.padding = {2.0f, 6.0f, 4.0f, 6.0f}}),
+      c::many(c::hbox(0.0f) | c::content_x | c::content_y, std::move(each)),
       // The arrow, put away once unrolled.
       c::shown_for<contract::message_menu_state>([](const contract::message_menu_state& now) { return now.unrolled == 0; },
           c::styled({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f},
@@ -166,7 +163,7 @@ struct react_with {
 MUX_INLINE_IN_RELEASE auto extend(contract::message_menu_top, type_tag<feature>, const palette& colours, const menu_facts& facts) {
   namespace c = skiff::compose;
   return c::visible(facts.can.react,
-      c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), quick_reactions(colours),
+      c::column(c::vbox(0.0f) | c::content_x | c::content_y, quick_reactions(colours),
           c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}}, nodes::Box<>(colours.band))));
 }
 // What it unrolls: every emoji, a press reacting with it.

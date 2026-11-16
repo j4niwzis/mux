@@ -428,11 +428,9 @@ MUX_INLINE_IN_RELEASE auto code_block(const palette& colours, std::string code, 
   // As wide as its code (and its head), within the bubble: filling a bubble
   // that takes its width from what it holds, neither said a width, and a
   // short block was squeezed to a few letters a line.
-  return SKIFF_NAMED(code_block, c::column(c::vbox(4.0f, {.autoSize = scene::axes::kBoth, .minWidth = 120.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f},
-                                  .padding = {6.0f, 8.0f, 6.0f, 12.0f}, .cornerRadius = 5.0f,
-                                  .background = (colour & 0x00FFFFFFu) | (0x1Fu << 24), .masking = true}),
+  return SKIFF_NAMED(code_block, c::column(c::vbox(4.0f) | c::content_x | c::content_y | c::with({.minWidth = 120.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}, .padding = {6.0f, 8.0f, 6.0f, 12.0f}, .cornerRadius = 5.0f, .background = (colour & 0x00FFFFFFu) | (0x1Fu << 24), .masking = true}),
       c::styled({.place = scene::anchor::kTopLeft, .x = -12.0f, .y = -6.0f, .fillY = true, .width = 3.0f}, nodes::Box<>(colour)),
-      c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::row(c::hbox(0.0f) | c::fill_x | c::content_y,
              c::styled({.grow = scene::axes::kX},
                        elided(nodes::Text(language.empty() ? std::string("Code") : std::move(language), 12.0f, colour, true))),
              // Copy: the block's code, as it is, onto the clipboard.
@@ -513,7 +511,7 @@ MUX_INLINE_IN_RELEASE auto code_piece(const palette& colours, const text_piece& 
   after.setLinks(words.links, colours.accent);
   after.setStyles(words.styles, quote);
   after.setShrinksToLines(true);
-  return SKIFF_NAMED(code_piece, skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(code_piece, skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::content_x | skiff::compose::content_y,
       code_block(colours, code.text, code.language, colour, text),
       skiff::compose::visible(!words.text.empty(), std::move(after))));
 }
@@ -532,7 +530,7 @@ MUX_INLINE_IN_RELEASE auto link_piece(const palette& colours, const mentioned_ca
   after.setLinks(words.links, colours.accent);
   after.setStyles(words.styles, quote);
   after.setShrinksToLines(true);
-  return SKIFF_NAMED(link_piece, skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(link_piece, skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::content_x | skiff::compose::content_y,
       card_of(colours, card.url, card.where, now),
       skiff::compose::visible(!words.text.empty(), std::move(after))));
 }
@@ -581,8 +579,7 @@ MUX_INLINE_IN_RELEASE auto disclosure_header(const palette& colours, const text_
   label.setSelectable(false);
   label.setBold(true);
   return disclosure_row(c::onClick(toggle_disclosure{index},
-      c::row(c::hbox(6.0f, {.autoSize = scene::axes::kBoth, .padding = {4.0f, 4.0f, 4.0f, 4.0f},
-                           .hoverBackground = colours.chosen}),
+      c::row(c::hbox(6.0f) | c::content_x | c::content_y | c::with({.padding = {4.0f, 4.0f, 4.0f, 4.0f}, .hoverBackground = colours.chosen}),
           c::projected<disclosure_state>([index](const disclosure_state& state) {
             return state.open[index] ? std::string("▾") : std::string("▸");
           }, c::TextOf(nodes::Text("▸", 13.0f, colours.dim))), std::move(label)), summary.text), ancestors);
@@ -667,9 +664,9 @@ MUX_INLINE_IN_RELEASE auto disclosure_piece(const palette& colours, const mentio
       for (std::size_t earlier = 0; earlier < i; ++earlier)
         if (initial.open[earlier] && shown.disclosures[earlier].group == shown.disclosures[i].group)
           initial.open[i] = false;
-  return SKIFF_NAMED(disclosure_piece, c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(disclosure_piece, c::column(c::vbox(0.0f) | c::content_x | c::content_y,
       c::local<disclosure_state>(disclosure_events{shown.disclosures},
-          c::many(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(rows)), std::move(initial)),
+          c::many(c::vbox(0.0f) | c::content_x | c::content_y, std::move(rows)), std::move(initial)),
       c::visible(!after.text.empty(), piece_text(colours, after, colours.text, quote))));
 }
 using disclosure_piece_t = decltype(disclosure_piece(std::declval<const palette&>(),
@@ -712,7 +709,7 @@ auto forward_line(const palette& colours, std::string who, std::vector<nodes::Te
   name.setBold(true);
   name.setShrinksToLines(true);
   name.setLinks(std::move(links), colours.accent);
-  return SKIFF_NAMED(forward_line, c::row(c::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(forward_line, c::row(c::hbox(4.0f) | c::content_x | c::content_y,
                 c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Forwarded from", 13.0f, colour, true)),
                 c::onPress(open_person{std::move(person)}, c::styled({.alignSelf = scene::align::kMiddle}, std::move(name)), "Open the sender")));
 }

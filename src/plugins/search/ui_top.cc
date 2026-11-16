@@ -26,7 +26,7 @@ using namespace ::mux::ui;
 MUX_INLINE_IN_RELEASE auto found_row(const palette& colours, const found_line& one) {
   namespace c = skiff::compose;
   return c::with_cursor(scene::cursor::arrow{}, c::onClick(pick{one.index},
-      c::row(c::hbox(10.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen}),
+      c::row(c::hbox(10.0f) | c::fill_x | c::with({.height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen}),
              message_line_text(colours, message_line{one.index, one.sender, one.name, one.at, one.snippet})),
       std::format("{}: {}", one.name, one.snippet)));
 }
@@ -42,7 +42,7 @@ MUX_INLINE_IN_RELEASE auto extend(contract::side_panes, type_tag<feature>, const
   }, c::styled({.fillX = true, .autoSize = scene::axes::kY},
                c::memo_rows<std::size_t, found_line, std::pair<std::size_t, found_line>>(found_row_make{&colours}, nodes::Stack{})));
   return SKIFF_NAMED(found_pane, c::shown_for<shown>([](const shown& now) { return now.found.has_value(); },
-      c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
+      c::column(c::vbox(0.0f) | c::fill_x | c::grow_y,
           c::styled({.margin = {4.0f, 16.0f, 6.0f, 16.0f}},
               c::text_for<shown>([](const shown& now) {
                 return !now.found ? std::string{} : *now.found == 0 ? std::string("No messages found")

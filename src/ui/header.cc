@@ -50,8 +50,7 @@ template <class Want, class Said>
 auto connection_bar_for(const palette& colours, Said said) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(connection_bar_for, c::shown_for<Want>([said](const Want& now) { return !std::invoke(said, now).empty(); },
-      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f},
-                               .background = (colours.error & 0x00FFFFFFu) | (0x22u << 24)}),
+      c::column(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 12.0f, 8.0f, 12.0f}, .background = (colours.error & 0x00FFFFFFu) | (0x22u << 24)}),
                 c::text_for<Want>([said](const Want& now) { return std::string(std::invoke(said, now)); }, c::styled({.fillX = true}, wrapped(nodes::Text("", 13.0f, colours.text)))))));
 }
 
@@ -70,9 +69,9 @@ struct notice_facts {
 }
 MUX_INLINE_IN_RELEASE auto notice_box(const palette& colours, const notice_facts& facts) {
   return SKIFF_NAMED(notice_box, skiff::compose::column(
-      skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+      skiff::compose::vbox(10.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       notice_line(facts.heading, 17.0f, colours.text, true), notice_line(facts.text, 14.0f, colours.dim),
-      skiff::compose::row(skiff::compose::hbox(8.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kEnd}),
+      skiff::compose::row(skiff::compose::hbox(8.0f) | skiff::compose::content_x | skiff::compose::content_y | skiff::compose::with({.alignSelf = scene::align::kEnd}),
           skiff::compose::visible(facts.delete_selection,
               skiff::compose::styled({.width = 90.0f, .height = 34.0f},
                   widgets::SendButton<request::selection_delete_confirm>(colours.widgets, "Delete", {}))),
@@ -107,7 +106,7 @@ struct header_buttons<plugin_list<Features...>> {
   using nodes_t = std::tuple<decltype(button_of<Features>(std::declval<const palette&>()))...>;
   // In a row of their own, in the plugins' order.
   static auto row_of(const palette& colours) {
-    return skiff::compose::row(skiff::compose::hbox(12.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+    return skiff::compose::row(skiff::compose::hbox(12.0f) | skiff::compose::content_x | skiff::compose::content_y | skiff::compose::with({.alignSelf = scene::align::kMiddle}),
                                button_of<Features>(colours)...);
   }
   static nodes_t made(const palette& colours, bool chat) {
@@ -188,16 +187,16 @@ MUX_INLINE_IN_RELEASE auto chat_header_for(const palette& colours) {
   const auto chat = [](const chat_head_shown& now) { return now.key.has_value(); };
   const scene::Spec middle{.alignSelf = scene::align::kMiddle};
   return SKIFF_NAMED(chat_header_for, c::shown_for<chat_head_shown>([](const chat_head_shown& now) { return now.key && !now.hidden; },
-    c::column(c::vbox(0.0f, {.fillX = true, .height = kChatHeadHeight, .background = colours.sidebar}),
+    c::column(c::vbox(0.0f) | c::fill_x | c::with({.height = kChatHeadHeight, .background = colours.sidebar}),
       c::onClick(request::head_pressed{},
-          c::row(c::hbox(12.0f, {.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 16.0f, 0.0f, 22.0f}}),
+          c::row(c::hbox(12.0f) | c::fill_x | c::grow_y | c::with({.padding = {0.0f, 16.0f, 0.0f, 22.0f}}),
               c::shown_for<chat_head_shown>([](const chat_head_shown& now) { return now.back && now.key; },
                   c::styled(middle, icon_button(colours, icon::back{}, sends<request::close_chat>{}))),
               c::shown_for<chat_head_shown>(chat,
                   avatar_for<chat_head_shown>(avatar_of::chat{}, 38.0f, [](const chat_head_shown& now) {
                     return avatar_who{now.key.value_or(""), now.title};
                   })),
-              c::column(c::vbox(3.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+              c::column(c::vbox(3.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                   c::text_for<chat_head_shown>([](const chat_head_shown& now) { return now.title; },
                       c::styled({.fillX = true}, elided(nodes::Text("", 15.0f, colours.text, true)))),
                   c::shown_for<chat_head_shown>(chat,
@@ -224,7 +223,7 @@ MUX_INLINE_IN_RELEASE auto composer_banner_for(const palette& colours) {
       c::spec_for<banner_shown>([&colours](const banner_shown& now) {
         return scene::Spec{.background = (tone_colour(colours, now.tone) & 0x00FFFFFFu) | (0x22u << 24)};
       },
-          c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {10.0f, 12.0f, 10.0f, 12.0f}}),
+          c::row(c::hbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {10.0f, 12.0f, 10.0f, 12.0f}}),
                  c::text_for<banner_shown>([](const banner_shown& now) { return now.text; },
                      c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text("", 13.0f, colours.text)))),
                  // The program's button, its label in its middle -- the hand
@@ -253,7 +252,7 @@ using selection_plugins = composition::providers<contract::selection_actions, en
 template <class... Features, std::size_t... I, class Make>
 auto selection_actions_of(plugin_list<Features...>, std::index_sequence<I...>, Make make) {
   namespace c = skiff::compose;
-  return c::row(c::hbox(8.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+  return c::row(c::hbox(8.0f) | c::content_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
       c::shown_if<selection_shown>([](const selection_shown& now) { return ((now.offered >> I) & 1u) != 0; },
           make(::mux::ui::request::selection_asked<Features>{}, std::string(label(contract::selection_actions{}, type_tag<Features>{}))))...);
 }
@@ -287,17 +286,13 @@ auto selection_bar(const ui_needs& n) {
   return SKIFF_NAMED(selection_bar, c::shown_if<selection_shown>(
       [](const selection_shown& now) { return now.count > 0; },
       c::onKey(scene::keys::kEscape, ::mux::ui::request::selection_cancel{},
-          c::row(c::hbox(8.0f, {.fillX = true, .height = kChatHeadHeight,
-                               .padding = {0.0f, 12.0f, 1.0f, 12.0f}, .background = colours.sidebar}),
+          c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = kChatHeadHeight, .padding = {0.0f, 12.0f, 1.0f, 12.0f}, .background = colours.sidebar}),
               selection_actions_of(selection_plugins{}, selected_action),
               c::spec_for<selection_shown>([](const selection_shown& now) { return scene::Spec{.disabled = !now.deletable}; },
                   selected_action(::mux::ui::request::selection_delete{}, "Delete")),
               c::styled({.grow = scene::axes::kX}, nodes::Box<>(skia::SkColor{0})),
               c::onClick(::mux::ui::request::selection_cancel{},
-                  c::row(c::hbox(0.0f, {.height = 32.0f, .autoSize = scene::axes::kX,
-                                       .alignSelf = scene::align::kMiddle, .padding = {0.0f, 10.0f, 0.0f, 10.0f},
-                                       .cornerRadius = 6.0f, .hoverBackground = colours.chosen,
-                                       .focusBackground = colours.chosen}),
+                  c::row(c::hbox(0.0f) | c::content_x | c::with({.height = 32.0f, .alignSelf = scene::align::kMiddle, .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
                       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Clear", 13.0f, colours.accent, true))),
                   "Clear message selection"),
               c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))))));

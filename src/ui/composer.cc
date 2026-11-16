@@ -778,7 +778,7 @@ void prepend_quote(composer_doc& doc, const scene::ClipboardFragment& selected) 
 // their order, each told which field it is.
 template <class Writing, class... Features>
 auto composer_buttons_of(plugin_list<Features...>, const palette& colours) {
-  return skiff::compose::row(skiff::compose::hbox(6.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kEnd}),
+  return skiff::compose::row(skiff::compose::hbox(6.0f) | skiff::compose::content_x | skiff::compose::content_y | skiff::compose::with({.alignSelf = scene::align::kEnd}),
                              extend(contract::composer_buttons{}, type_tag<Features>{}, colours, Writing{})...);
 }
 // Which field a draft's input is, for the keys.
@@ -794,7 +794,7 @@ auto message_input(const palette& colours, std::string placeholder, Attach attac
   // the program gives them to it.
   using target = decltype(keys_target_of(std::type_identity<Draft>{}));
   auto field = c::focused_by<keys_asked>(keys_on<target>{}, c::projected<Draft>([](const Draft& now) { return now.now; }, std::move(text)));
-  return SKIFF_NAMED(message_input, c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}}),
+  return SKIFF_NAMED(message_input, c::row(c::hbox(6.0f) | c::fill_x | c::content_y | c::with({.minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}}),
                 c::styled({.alignSelf = scene::align::kEnd}, icon_button<Attach>(colours, icon::clip{}, std::move(attach_it))),
                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, std::move(field)),
                 composer_buttons_of<Writing>(composition::providers<contract::composer_buttons, enabled_plugins>{}, colours),
@@ -857,9 +857,9 @@ template <class First, class Second>
 auto two_choice_bar(const palette& colours, std::string said, skia::SkColor said_colour, std::string first_name, First first,
                     std::string second_name, Second second) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(two_choice_bar, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}}),
+  return SKIFF_NAMED(two_choice_bar, c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 12.0f, 8.0f, 12.0f}}),
                    c::styled({.fillX = true}, wrapped(nodes::Text(std::move(said), 13.0f, said_colour))),
-                   c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                   c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
                           c::styled({.height = 36.0f, .grow = scene::axes::kX},
                                     widgets::Button<First>(colours.widgets, std::move(first_name), std::move(first))),
                           c::styled({.height = 36.0f, .grow = scene::axes::kX},
@@ -870,8 +870,7 @@ auto two_choice_bar(const palette& colours, std::string said, skia::SkColor said
 // pane: the explanation wraps above a separate button.
 MUX_INLINE_IN_RELEASE auto replaced_room_bar(const palette& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(replaced_room_bar, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
-      .minHeight = 54.0f, .padding = {12.0f, 12.0f, 12.0f, 12.0f}}),
+  return SKIFF_NAMED(replaced_room_bar, c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.minHeight = 54.0f, .padding = {12.0f, 12.0f, 12.0f, 12.0f}}),
       c::styled({.fillX = true},
           wrapped(nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim))),
       c::styled({.height = 30.0f}, primary(widgets::Button<sends<request::open_replacement>>(
@@ -882,8 +881,7 @@ MUX_INLINE_IN_RELEASE auto replaced_room_bar(const palette& colours) {
 // out.
 auto no_post_line(const palette& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(no_post_line, c::row(c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f,
-                                            .padding = {18.0f, 12.0f, 18.0f, 12.0f}}),
+  return SKIFF_NAMED(no_post_line, c::row(c::justified(c::hbox(0.0f) | c::fill_x | c::content_y | c::with({.minHeight = 54.0f, .padding = {18.0f, 12.0f, 18.0f, 12.0f}}),
                              nodes::justify::middle{}),
                 c::styled({.alignSelf = scene::align::kMiddle},
                           nodes::Text("You don't have permission to post in this chat", 13.0f, colours.dim))));
@@ -983,7 +981,7 @@ auto composer_bar(const ui_needs& n, typename Where::cancel cancel = {}, typenam
   const palette& colours = *n.colours;
   const ui_shared* shared = n.shared;
   return in_chosen_chat(reads{},
-      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .background = colours.sidebar}),
+      c::column(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.background = colours.sidebar}),
                 c::styled({.fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)),
                 read_from_chat(reads{}, [shared](const conversation& chat) { return first_knock(*shared, chat); },
                                c::mount<knock_bar_t, knock_facts>(

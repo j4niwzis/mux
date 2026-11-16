@@ -100,11 +100,11 @@ inline auto asked_row(const palette& colours, const registration_field& one) {
   namespace c = skiff::compose;
   const std::string said = note_of(one);
   return c::visible(shown_at_all(one), c::column(
-      c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::vbox(6.0f) | c::fill_x | c::content_y,
       c::visible(!one.picture.empty(), c::styled({.width = 240.0f, .height = 90.0f, .cornerRadius = 6.0f, .background = colours.tile},
                                                  nodes::Image<sent_picture>(picture_of(one), nodes::fit::contain{}))),
       c::visible(!said.empty(), c::styled({.fillX = true}, selectable_text(wrapped(nodes::Text(said, 13.0f, colours.dim))))),
-      c::visible(typed_into(one), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::visible(typed_into(one), c::column(c::vbox(4.0f) | c::fill_x | c::content_y,
           nodes::Text(one.label + (one.required ? " (required)" : ""), 13.0f, colours.dim),
           c::styled({.fillX = true, .height = 36.0f}, answer_box(colours, one))))));
 }
@@ -114,9 +114,9 @@ using asked_row_t = decltype(asked_row(std::declval<const palette&>(), std::decl
 inline auto asked_rows(const palette& colours, const registration_asked& asked) {
   namespace c = skiff::compose;
   const std::string said = asked.instructions + (asked.page ? "\nOr make the account on the server's page: " + *asked.page : std::string());
-  return SKIFF_NAMED(asked_rows, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(asked_rows, c::column(c::vbox(10.0f) | c::fill_x | c::content_y,
       c::visible(!said.empty(), c::styled({.fillX = true}, selectable_text(wrapped(nodes::Text(said, 13.0f, colours.text))))),
-      c::many(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::many(c::vbox(10.0f) | c::fill_x | c::content_y,
               asked.fields | std::views::transform([&](const registration_field& one) { return asked_row(colours, one); }) | std::ranges::to<std::vector>())));
 }
 using asked_rows_t = decltype(asked_rows(std::declval<const palette&>(), std::declval<const registration_asked&>()));
@@ -140,7 +140,7 @@ inline auto asked_part(const palette& colours) {
 inline auto advanced_fields(const palette& colours) {
   namespace c = skiff::compose;
   using d = account_draft;
-  return SKIFF_NAMED(advanced_fields, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+  return SKIFF_NAMED(advanced_fields, c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
                    model_field<&d::resource>(colours, "Device name (resource)", "mux"),
                    model_field<&d::host>(colours, "Host", "from the domain's SRV records"),
                    model_field<&d::port>(colours, "Port", "5222"),
@@ -166,7 +166,7 @@ inline auto account_form_of(const account_draft& seed, const ui::palette& colour
   using d = account_draft;
   return SKIFF_NAMED(account_form_of, c::local<d>(
       submitted_by_enter<d>(c::column(
-          c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::vbox(12.0f) | c::fill_x | c::content_y,
           model_field<&d::address>(colours, "Address (JID)", "user@example.com"),
           model_field<&d::password>(colours, "Password", "Password", true),
           c::visible(!editing || seed.creating, choice_field<&d::creating, bool>(colours, "Account",

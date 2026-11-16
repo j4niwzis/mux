@@ -68,9 +68,9 @@ struct pack_draft {
 };
 MUX_INLINE_IN_RELEASE auto pack_maker(const palette& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(pack_maker, c::local<pack_draft>(c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(pack_maker, c::local<pack_draft>(c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
       c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, model_field<&pack_draft::name>(colours, "Name", "Pack name")),
-      c::column(c::vbox(0.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+      c::column(c::vbox(0.0f) | c::content_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                 c::asking_for<pack_draft>([](const pack_draft& now) { return create_room_pack{now.name}; }, action_face(colours, "Create")))),
       pack_draft{}));
 }
@@ -86,7 +86,7 @@ struct packs_key {
 };
 MUX_INLINE_IN_RELEASE auto pack_cards(const palette& colours, const packs_key& key) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(pack_cards, c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), key.packs | std::views::transform([&](const pack_line& one) {
+  return SKIFF_NAMED(pack_cards, c::many(c::vbox(4.0f) | c::fill_x | c::content_y, key.packs | std::views::transform([&](const pack_line& one) {
     return card(colours, setting_tile(colours, one.name.empty() ? "Unnamed Pack" : one.name, std::format("{} images", one.pictures),
                                       action(colours, "View", sends<open_room>{{one.key}})));
   }) | std::ranges::to<std::vector>()));
@@ -209,7 +209,7 @@ MUX_INLINE_IN_RELEASE auto pack_row(const palette& colours, const std::optional<
   picture.apply({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f, .background = colours.tile});
   picture.keepBox();
   return SKIFF_NAMED(pack_row, c::onClick(pack_open{index},
-      c::row(c::hbox(12.0f, {.fillX = true, .height = 56.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
+      c::row(c::hbox(12.0f) | c::fill_x | c::with({.height = 56.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
              std::move(picture),
              two_lines(colours, pack.name.empty() ? "Unnamed pack" : pack.name,
                        std::format("{} images · {}{}", pack.pictures.size(),
@@ -265,7 +265,7 @@ struct picture_row_of {
     emoji.setOnNow(use.first);
     auto sticker = widgets::Toggle<sends<picture_use>>(colours->widgets, {{one.url, false}});
     sticker.setOnNow(use.second);
-    return c::row(c::hbox(8.0f, {.fillX = true, .height = 52.0f, .padding = {6.0f, 10.0f, 6.0f, 10.0f}}),
+    return c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 52.0f, .padding = {6.0f, 10.0f, 6.0f, 10.0f}}),
                   std::move(face),
                   c::styled({.height = 32.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                             std::move(shortcode)),
@@ -294,16 +294,16 @@ MUX_INLINE_IN_RELEASE auto pack_editor(const palette& colours, const pack_opened
   const auto field = [&](std::string caption, std::string placeholder, std::string now, bool attribution) {
     auto box = widgets::internal::TextBox<pack_named_typed>(colours.widgets, std::move(placeholder), pack_named_typed{attribution});
     box.setText(std::move(now));
-    return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .disabled = !opened.editable}),
+    return c::column(c::vbox(4.0f) | c::fill_x | c::content_y | c::with({.disabled = !opened.editable}),
                      nodes::Text(std::move(caption), 13.0f, colours.dim), c::styled({.fillX = true, .height = 36.0f}, std::move(box)));
   };
   // The rows kept by their keys, each built as it is made (memo_rows).
   using picture_item = std::tuple<std::string, std::pair<bool, bool>, pack_picture>;
   const scene::Spec button{.width = 110.0f, .height = 34.0f};
-  return SKIFF_NAMED(pack_editor, c::column(c::vbox(8.0f, {.fillX = true, .grow = scene::axes::kY}),
+  return SKIFF_NAMED(pack_editor, c::column(c::vbox(8.0f) | c::fill_x | c::grow_y,
       field("Name", "Pack name", opened.pack.name, false),
       field("Attribution (optional)", "Where its images are from", opened.pack.attribution, true),
-      c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}, .disabled = !opened.editable}),
+      c::row(c::hbox(10.0f) | c::fill_x | c::content_y | c::with({.padding = {4.0f, 10.0f, 4.0f, 10.0f}, .disabled = !opened.editable}),
              c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Use as emoji", 13.0f, colours.text)),
              use_switch(colours, sends<pack_use>{{true}}, [](const shown& now) { return now.draft && now.draft->emoji; }),
              c::styled({.alignSelf = scene::align::kMiddle, .margin = {0.0f, 0.0f, 0.0f, 14.0f}}, nodes::Text("Use as stickers", 13.0f, colours.text)),
@@ -317,7 +317,7 @@ MUX_INLINE_IN_RELEASE auto pack_editor(const palette& colours, const pack_opened
                                                : std::vector<std::tuple<std::string, std::pair<bool, bool>, pack_picture>>{};
                 },
                     c::styled({.fillX = true, .autoSize = scene::axes::kY}, c::memo_rows<std::string, std::pair<bool, bool>, picture_item>(picture_row_of{&colours}, nodes::Stack{}))))),
-      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}}),
+      c::row(c::hbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {6.0f, 10.0f, 0.0f, 10.0f}}),
              c::visible(opened.editable, c::styled(button, widgets::Button<sends<pick_images>>(colours.widgets, "Add images", {}))),
              c::styled({.height = 1.0f, .grow = scene::axes::kX}, nodes::Box<>(skia::SkColor{0})),
              c::visible(opened.editable && opened.in_room && !opened.new_pack,
@@ -333,8 +333,8 @@ MUX_INLINE_IN_RELEASE auto packs_box(const ui_needs& n, const shown& first) {
   const palette& colours = *n.colours;
   using facts_t = std::optional<shown>;
   const auto listing = [](const facts_t& facts) { return facts && !facts->draft; };
-  return SKIFF_NAMED(packs_box, c::column(c::vbox(8.0f, {.fillX = true, .height = 600.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}}),
-      c::row(c::hbox(8.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+  return SKIFF_NAMED(packs_box, c::column(c::vbox(8.0f) | c::fill_x | c::with({.height = 600.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}}),
+      c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
              c::text_for<facts_t>([](const facts_t& facts) {
                return !facts || !facts->draft ? std::string("Emojis & Stickers") : facts->new_pack ? std::string("New pack")
                                                 : facts->draft->name.empty() ? std::string("Pack") : facts->draft->name;
@@ -349,9 +349,9 @@ MUX_INLINE_IN_RELEASE auto packs_box(const ui_needs& n, const shown& first) {
                       return facts ? std::views::zip(std::views::iota(std::size_t{0}), facts->packs) | std::views::transform([](const auto& one) { return pack_item{std::get<0>(one), std::get<1>(one)}; }) | std::ranges::to<std::vector>()
                                    : std::vector<pack_item>{};
                     },
-                        c::listed<pack_item>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), pack_row_of{&colours, first.room}))))),
+                        c::listed<pack_item>(c::vbox(0.0f) | c::fill_x | c::content_y, pack_row_of{&colours, first.room}))))),
       c::shown_for<facts_t>([](const facts_t& facts) { return facts && !facts->draft && facts->room && facts->editable; },
-          c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}}),
+          c::row(c::hbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {6.0f, 10.0f, 0.0f, 10.0f}}),
                  c::styled({.width = 140.0f, .height = 34.0f},
                            skiff::compose::primary(widgets::Button<sends<pack_open>>(colours.widgets, "Create pack", {{std::nullopt}}))))),
       c::projected<facts_t>([](const facts_t& facts) {

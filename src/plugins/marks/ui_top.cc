@@ -27,8 +27,7 @@ using namespace ::mux::ui;
 MUX_INLINE_IN_RELEASE auto mark_badge(const palette& colours, const std::string& who, const std::string& name, const std::string& key) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(mark_badge, c::row(
-      c::hbox(4.0f, {.place = scene::anchor::kBottomRight, .x = -14.0f, .y = -2.0f, .autoSize = scene::axes::kBoth,
-                     .padding = {2.0f, 6.0f, 2.0f, 3.0f}, .cornerRadius = 12.0f, .background = colours.sidebar}),
+      c::hbox(4.0f) | c::content_x | c::content_y | c::with({.place = scene::anchor::kBottomRight, .x = -14.0f, .y = -2.0f, .padding = {2.0f, 6.0f, 2.0f, 3.0f}, .cornerRadius = 12.0f, .background = colours.sidebar}),
       face_spot(avatar_of::person{}, who, name, 20.0f),
       c::styled({.alignSelf = scene::align::kMiddle},
                 nodes::Text(proto::is_media(key) ? std::string(":emoji:") : key, 15.0f, colours.text))));
@@ -44,8 +43,7 @@ MUX_INLINE_IN_RELEASE auto mark_row(const ui_needs& n, mark_kind_t which, const 
   const std::string who = one.who.value_or("");
   return SKIFF_NAMED(mark_row, c::onPress(
       go_to_act{which, one.event},
-      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 8.0f, 12.0f},
-                               .hoverBackground = n.colours->chosen}),
+      c::column(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {4.0f, 12.0f, 8.0f, 12.0f}, .hoverBackground = n.colours->chosen}),
                 message_alone(n, in, one.said, true, true, now),
                 c::visible(one.who.has_value(), mark_badge(*n.colours, who, who.empty() ? std::string() : sender_name(in, who), one.key))),
       "Go to message"));
@@ -67,7 +65,7 @@ MUX_INLINE_IN_RELEASE auto marks_panel(const ui_needs& n, const listed& facts) {
                                                                  [](mark_kind::reaction) { return std::string("Reactions"); }},
                                                  facts.kind),
                                       {}, {}, false, true),
-      dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))));
+      dialog_list(c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(rows)))));
 }
 using box = decltype(marks_panel(std::declval<const ui_needs&>(), std::declval<const listed&>()));
 inline dialog_look content_look(std::type_identity<listed>) { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 520.0f}}; }

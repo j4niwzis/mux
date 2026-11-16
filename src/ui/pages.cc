@@ -167,14 +167,12 @@ template <class Rule, class Variant>
 // built so (a room's admin tabs, the developer tools): no plugin makes its
 // own.
 inline skiff::compose::Look page_look() {
-  return skiff::compose::vbox(32.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {16.0f, 16.0f, 100.0f, 16.0f}});
+  return skiff::compose::vbox(32.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.padding = {16.0f, 16.0f, 100.0f, 16.0f}});
 }
 auto settings_section_heading(const auto& colours, std::string title) { return nodes::Text(std::move(title), 12.0f, colours.text); }
 template <class... Children>
 auto settings_surface(const auto& colours, skia::SkColor background, scene::Margin padding, float gap, Children... children) {
-  return SKIFF_NAMED(settings_surface, skiff::compose::column(skiff::compose::vbox(gap, {.fillX = true, .autoSize = scene::axes::kY, .padding = padding,
-                                                           .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = background,
-                                                           .masking = true}),
+  return SKIFF_NAMED(settings_surface, skiff::compose::column(skiff::compose::vbox(gap) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.padding = padding, .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = background, .masking = true}),
                                 std::move(children)...));
 }
 template <class... Children> auto card(const auto& colours, Children... children) {
@@ -184,14 +182,14 @@ template <class... Children> auto cutout(const auto& colours, scene::Margin padd
   return settings_surface(colours, colours.background, padding, 4.0f, std::move(children)...);
 }
 template <class... Children> auto section(const auto& colours, std::string title, Children... children) {
-  return SKIFF_NAMED(section, skiff::compose::column(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(section, skiff::compose::column(skiff::compose::vbox(4.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                 settings_section_heading(colours, std::move(title)), std::move(children)...));
 }
 template <class Control> auto setting_tile(const auto& colours, std::string title, std::string description, Control control) {
   namespace c = skiff::compose;
   const bool described = !description.empty();
-  return SKIFF_NAMED(setting_tile, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::column(c::vbox(4.0f, {.relativeSize = scene::axes::kNone, .autoSize = scene::axes::kY, .grow = scene::axes::kX}),
+  return SKIFF_NAMED(setting_tile, c::row(c::hbox(12.0f) | c::fill_x | c::content_y,
+      c::column(c::vbox(4.0f) | c::grow_x | c::content_y,
           wrapped(nodes::Text(std::move(title), 14.0f, colours.text)),
           c::visible(described, wrapped(nodes::Text(std::move(description), 12.0f, colours.dim)))),
       c::styled({.alignSelf = scene::align::kMiddle}, std::move(control))));
@@ -206,11 +204,7 @@ auto action_face(const auto& colours, std::string label, action_style style = ac
   namespace c = skiff::compose;
   const auto background = style == action_style::secondary ? colours.chosen : colours.accent;
   const auto ink = style == action_style::secondary ? colours.text : colours.on_accent;
-  return SKIFF_NAMED(action_face, c::row(c::hbox(0.0f, {.height = 32.0f, .relativeSize = scene::axes::kNone, .autoSize = scene::axes::kX, .alignSelf = scene::align::kMiddle,
-                               .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .background = background,
-                               .hoverBackground = colours.widgets.fSurfaceHover,
-                               .border = scene::Border{colours.widgets.fSurfaceActive, style == action_style::secondary ? 1.0f : 0.0f},
-                               .alpha = allowed ? 1.0f : 0.38f, .disabled = !allowed}),
+  return SKIFF_NAMED(action_face, c::row(c::hbox(0.0f) | c::content_x | c::with({.height = 32.0f, .alignSelf = scene::align::kMiddle, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .background = background, .hoverBackground = colours.widgets.fSurfaceHover, .border = scene::Border{colours.widgets.fSurfaceActive, style == action_style::secondary ? 1.0f : 0.0f}, .alpha = allowed ? 1.0f : 0.38f, .disabled = !allowed}),
                 c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 12.0f, ink))));
 }
 // A button: its words, and whether it does anything now, as said once or
@@ -265,7 +259,7 @@ template <class Contract, class... Features>
 struct row_list<Contract, plugin_list<Features...>> {
   template <class Place>
   static auto made(const auto& colours, const Place& place) {
-    return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+    return skiff::compose::column(skiff::compose::vbox(6.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                   extend(Contract{}, type_tag<Features>{}, colours, place)...);
   }
 };
@@ -276,7 +270,7 @@ using choice_row_plugins = rows_of<contract::choice_rows>;
 // Where what a page has by its type alone is not there: nothing in its
 // place -- known while compiling, not hidden.
 MUX_INLINE_IN_RELEASE auto nothing_shown() {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}));
+  return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y);
 }
 // The rows plugins put on a page of an account's
 // (contract::account_page_rows), in their order: each where it says it
@@ -298,7 +292,7 @@ template <class Page, class... Features>
 struct page_rows<Page, plugin_list<Features...>> {
   template <class Place>
   static auto made(const auto& colours, const Place& place) {
-    return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+    return skiff::compose::column(skiff::compose::vbox(6.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                   account_row_of<Page, Features>(colours, place)...);
   }
 };
@@ -322,11 +316,11 @@ template <class Protocol>
 auto chat_settings_view(const auto& colours, const conversation_id& chat) {
   using choices = config::chat_choices;
   const choice_level_t level = choice_level::chat{};
-  return SKIFF_NAMED(chat_settings_view, skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(chat_settings_view, skiff::compose::column(skiff::compose::vbox(6.0f) | skiff::compose::fill_x | skiff::compose::content_y,
     skiff::compose::scoped<choices>(
       skiff::compose::handlers(),
       skiff::compose::column(
-          skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          skiff::compose::vbox(6.0f) | skiff::compose::fill_x | skiff::compose::content_y,
           room_events_part<Protocol, choices>(colours, level),
           skiff::compose::bound<skiff::model::Field<&choices::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&choices::jump_search>>(colours, level))),
       chat),
@@ -371,7 +365,7 @@ MUX_INLINE_IN_RELEASE auto chat_notify_view(const palette& colours, const conver
   return SKIFF_NAMED(chat_notify_view, skiff::compose::scoped<config::chat_choices>(
       skiff::compose::handlers(),
       skiff::compose::column(
-          skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          skiff::compose::vbox(8.0f) | skiff::compose::fill_x | skiff::compose::content_y,
           bound<config::chat_choices>(chat_on_field(colours)),
           bound<skiff::model::Field<&notify::mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>, skiff::model::Field<&notify::mentions>>(colours, level)),
           bound<skiff::model::Field<&notify::sound>>(show_hide_field<notify_sound_setting, std::optional<bool>, skiff::model::Field<&notify::sound>>(colours, level))),
@@ -382,8 +376,7 @@ MUX_INLINE_IN_RELEASE auto chat_notify_view(const palette& colours, const conver
 template <auto Member>
 MUX_INLINE_IN_RELEASE auto space_choice_row(const palette& colours, std::string label, bool allowed = true) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(space_choice_row, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
-                              .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = !allowed}),
+  return SKIFF_NAMED(space_choice_row, c::row(c::hbox(12.0f) | c::fill_x | c::content_y | c::with({.padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = !allowed}),
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                 wrapped(nodes::Text(std::move(label), 14.0f, colours.text))),
       c::bound<skiff::model::Field<Member>>(c::styled({.alignSelf = scene::align::kMiddle},
@@ -398,7 +391,7 @@ template <class Act>
 auto switch_row(const palette& colours, std::string text, Act act) {
   namespace c = skiff::compose;
   std::string label = text;
-  return SKIFF_NAMED(switch_row, c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+  return SKIFF_NAMED(switch_row, c::row(c::hbox(16.0f) | c::fill_x | c::with({.height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(text), 15.0f, colours.text))),
                 c::named(std::move(label), {}, c::styled({.alignSelf = scene::align::kMiddle}, toggle_for<Act>(colours.widgets, std::move(act))))));
 }
@@ -426,9 +419,7 @@ inline nodes::Text note_text(const palette& colours, std::string text) { return 
 template <auto Setting, class T = bool>
 auto setting_switch(const palette& colours, std::string text) {
   return SKIFF_NAMED(setting_switch, skiff::compose::row(
-      skiff::compose::hbox(16.0f, {.fillX = true,
-                                   .height = kRowHeight,
-                                   .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+      skiff::compose::hbox(16.0f) | skiff::compose::fill_x | skiff::compose::with({.height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
       skiff::compose::styled(
           {.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
           elided(nodes::Text(std::move(text), 15.0f, colours.text))),
@@ -497,9 +488,7 @@ struct card_facts {
 
 
 [[nodiscard]] inline skiff::compose::Look list_dialog(float height) {
-  return skiff::compose::vbox(
-      0.0f,
-      {.fillX = true, .height = height, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
+  return skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::with({.height = height, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
 }
 // Rows, nodes or builders, scrolling: skiff's scrolled() makes the
 // container over them as they are built.
@@ -533,7 +522,7 @@ MUX_INLINE_IN_RELEASE auto member_row(const palette& colours, const member& one,
   namespace c = skiff::compose;
   const std::string name = one.name.empty() ? one.id : one.name;
   return c::recorded(c::onClick(request::open_member_info{one.id}, c::row(
-      c::hbox(12.0f, {.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen}),
+      c::hbox(12.0f) | c::fill_x | c::with({.height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen}),
       member_text(colours, one, std::move(how)),
       c::visible(one.role.has_value(), c::styled(
           {.alignSelf = scene::align::kStart, .margin = {10.0f, 0.0f, 0.0f, 0.0f}},
@@ -558,7 +547,7 @@ struct level_section_list<plugin_list<Features...>> {
   }
   template <class Colours>
   static auto made(const Colours& colours, choice_level_t level, const ui_shared& shared) {
-    return skiff::compose::column(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), section_of<Features>(colours, level, shared)...);
+    return skiff::compose::column(skiff::compose::vbox(8.0f) | skiff::compose::fill_x | skiff::compose::content_y, section_of<Features>(colours, level, shared)...);
   }
 };
 using level_section_plugins = level_section_list<composition::providers<contract::level_sections, enabled_plugins>>;

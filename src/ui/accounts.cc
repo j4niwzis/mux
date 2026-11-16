@@ -118,16 +118,14 @@ MUX_INLINE_IN_RELEASE auto account_row_view(const palette& colours, const accoun
   namespace c = skiff::compose;
   return SKIFF_NAMED(account_row_view, c::said(scene::SemanticRole{scene::semantic_role::list_item{}}, one.chosen,
       c::onPress(sends<request::select_account>{{one.address}}, c::column(
-          c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {7.0f, 16.0f, 7.0f, 16.0f},
-                         .background = colours.sidebar, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen,
-                         .focusBackground = colours.chosen, .selected = one.chosen}),
+          c::vbox(4.0f) | c::fill_x | c::content_y | c::with({.padding = {7.0f, 16.0f, 7.0f, 16.0f}, .background = colours.sidebar, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .focusBackground = colours.chosen, .selected = one.chosen}),
           c::styled({.fillX = true}, elided(nodes::Text(one.address, 15.0f, colours.text, true))),
           c::styled({.fillX = true}, elided(nodes::Text(one.line, 13.0f, one.failed ? colours.error : colours.dim)))),
           one.address)));
 }
 MUX_INLINE_IN_RELEASE auto account_list(const palette& colours, const std::vector<account_row>& rows) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(account_list, c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(account_list, c::many(c::vbox(0.0f) | c::fill_x | c::content_y,
                  rows | std::views::transform([&](const account_row& one) { return account_row_view(colours, one); }) | std::ranges::to<std::vector>()));
 }
 using account_list_t = decltype(account_list(std::declval<const palette&>(), {}));
@@ -135,12 +133,12 @@ using account_list_t = decltype(account_list(std::declval<const palette&>(), {})
 // added, and the accounts under it.
 MUX_INLINE_IN_RELEASE auto accounts_side(const palette& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(accounts_side, c::column(c::vbox(0.0f, {.fill = true}),
+  return SKIFF_NAMED(accounts_side, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y,
       c::spec_for<panel_read>([](const panel_read& now) { return scene::Spec{.selected = adding_now(now)}; },
-          c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .selectedBackground = colours.chosen}),
+          c::column(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.selectedBackground = colours.chosen}),
                     row_item(colours, "Add account", sends<request::open_new_account>{}, icon::plus{}))),
       c::styled({.fillX = true, .grow = scene::axes::kY}, skiff::compose::scrolled(c::column(
-          c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::vbox(0.0f) | c::fill_x | c::content_y,
           c::projected<panel_read>([](const panel_read& now) { return now ? std::optional(now->rows) : std::nullopt; },
               c::mount<account_list_t, std::vector<account_row>>(
                   [at = &colours](const std::vector<account_row>& rows) { return std::tuple{account_list(*at, rows)}; },
@@ -159,9 +157,7 @@ MUX_INLINE_IN_RELEASE auto account_page_row(const palette& colours, account_page
   namespace c = skiff::compose;
   const bool lit = link.page.index() == selected.index();
   return SKIFF_NAMED(account_page_row, c::onClick(request::account_page{std::move(link.page)}, c::row(
-      c::hbox(17.0f, {.fillX = true, .height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
-          .hoverBackground = colours.chosen, .selectedBackground = colours.chosen,
-          .focusBackground = colours.chosen, .selected = lit}),
+      c::hbox(17.0f) | c::fill_x | c::with({.height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .focusBackground = colours.chosen, .selected = lit}),
       c::styled({.alignSelf = scene::align::kMiddle}, icon_mark(colours, link.icon, 24.0f, 24.0f)),
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
           elided(nodes::Text(std::move(link.title), 15.0f, colours.text))))));
@@ -212,7 +208,7 @@ auto account_pages_view(const palette& colours, const account_page_t& selected) 
   auto rows = groups | std::views::join | std::views::transform([&](auto link) {
     return account_page_row(colours, std::move(link), selected);
   }) | std::ranges::to<std::vector>();
-  return SKIFF_NAMED(account_pages_view, c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 0.0f, 0.0f}}), std::move(rows)));
+  return SKIFF_NAMED(account_pages_view, c::many(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {6.0f, 0.0f, 0.0f, 0.0f}}), std::move(rows)));
 }
 // One protocol's list or another's, as the account chosen is.
 template <class>
@@ -224,7 +220,7 @@ struct account_pages_of_list<protocol_list<Protocols...>> {
 using account_pages_variant = typename account_pages_of_list<protocols>::type;
 // In a column, as the side's own variant is: what is mounted stays one type.
 MUX_INLINE_IN_RELEASE auto account_pages_in(account_pages_variant pages) {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(pages));
+  return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y, std::move(pages));
 }
 using account_pages = decltype(account_pages_in(std::declval<account_pages_variant>()));
 // Which page is up, of which protocol: the links made again where either
@@ -257,7 +253,7 @@ auto account_switch(const palette& colours, std::string text, On on, Allowed all
   return SKIFF_NAMED(account_switch, c::spec_for<page_read>([allowed](const page_read& now) {
     const bool may = now && allowed(now->account);
     return scene::Spec{.alpha = may ? 1.0f : 0.4f, .disabled = !may};
-  }, c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+  }, c::row(c::hbox(16.0f) | c::fill_x | c::with({.height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
             c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(text, 15.0f, colours.text))),
             c::named(text, {}, c::applied<page_read>([on](const page_read& now) { return now && on(now->account); },
                                   [](toggle_t& toggle, bool now) { toggle.setOn(now); },
@@ -269,7 +265,7 @@ inline constexpr auto always = [](const config::account_t&) { return true; };
 // those put on that protocol's.
 template <class Protocol, class... Features>
 auto account_rows_of(plugin_list<Features...>, const palette& colours, const std::string& address) {
-  return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return skiff::compose::column(skiff::compose::vbox(6.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       extend(contract::account_rows<Protocol>{}, type_tag<Features>{}, colours, address)...);
 }
 // The connection: its address, on or off and Remove; how it is now; and
@@ -279,8 +275,8 @@ auto account_editor_view(const ui_needs& n, const std::string& address) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   using toggle_t = widgets::Toggle<flip_account>;
-  return SKIFF_NAMED(account_editor_view, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(account_editor_view, c::column(c::vbox(6.0f) | c::fill_x | c::content_y,
+      c::row(c::hbox(10.0f) | c::fill_x | c::content_y,
              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(address, 20.0f, colours.text, true))),
              c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("On", 13.0f, colours.dim)),
              c::applied<page_read>([](const page_read& now) { return now && config::enabled_of(now->account); },
@@ -308,7 +304,7 @@ template <class Protocol>
   requires(proto::offered_by<state_of<Protocol>, proto::feature::shared_mentions>())
 auto mentions_part(const palette& colours) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
           account_switch<sends<request::flip_account_mentions_shared>>(colours, "Sync read mentions between sessions",
               [](const config::account_t& one) { return config::mentions_choice_of(one).value_or(config::mentions_choice{}).shared; }, always),
           account_switch<sends<request::flip_account_mentions_sealed>>(colours, "Encrypt them (with the recovery key)",
@@ -321,7 +317,7 @@ auto mentions_part(const palette& colours) {
 template <class Protocol>
 auto account_privacy_view(const palette& colours, const std::string& address) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(account_privacy_view, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(account_privacy_view, c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
       section_title(colours, "PRIVACY"),
       account_switch<sends<request::flip_account_receipts>>(colours, "Send read receipts",
           [](const config::account_t& one) { return config::read_receipts_of(one); }, always),
@@ -342,7 +338,7 @@ MUX_INLINE_IN_RELEASE auto account_notify_view(const palette& colours, std::stri
   return SKIFF_NAMED(account_notify_view, skiff::compose::scoped<config::account_t>(
       skiff::compose::handlers(),
       skiff::compose::column(
-          skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          skiff::compose::vbox(8.0f) | skiff::compose::fill_x | skiff::compose::content_y,
           bound<skiff::model::Field<&shared::notify>>(show_hide_field<notify_on_setting, std::optional<bool>, skiff::model::Field<&shared::notify>>(colours, level)),
           bound<skiff::model::Field<&shared::notify_mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>, skiff::model::Field<&shared::notify_mentions>>(colours, level)),
           bound<skiff::model::Field<&shared::notify_sound>>(show_hide_field<notify_sound_setting, std::optional<bool>, skiff::model::Field<&shared::notify_sound>>(colours, level))),
@@ -350,7 +346,7 @@ MUX_INLINE_IN_RELEASE auto account_notify_view(const palette& colours, std::stri
 }
 MUX_INLINE_IN_RELEASE auto account_notifications_view(const palette& colours, const std::string& address) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(account_notifications_view, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(account_notifications_view, c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
       section_title(colours, "NOTIFICATIONS"),
       account_notify_view(colours, address),
       c::styled({.fillX = true, .margin = {10.0f, 0.0f, 0.0f, 0.0f}},
@@ -365,11 +361,11 @@ auto account_chats_view(const palette& colours, std::string address) {
   using skiff::compose::bound;
   const choice_level_t level = choice_level::account{};
   auto rows = account_page_rows_of<account_page::chats>::made(colours, level_place::account_in<Protocol>{{address}});
-  return SKIFF_NAMED(account_chats_view, skiff::compose::column(skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(account_chats_view, skiff::compose::column(skiff::compose::vbox(8.0f) | skiff::compose::fill_x | skiff::compose::content_y,
     skiff::compose::scoped<config::account_t>(
       skiff::compose::handlers(),
       skiff::compose::column(
-          skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          skiff::compose::vbox(8.0f) | skiff::compose::fill_x | skiff::compose::content_y,
           room_events_part<Protocol, shared>(colours, level),
           bound<skiff::model::Field<&shared::jump_search>>(jump_search_field<std::optional<std::int64_t>, skiff::model::Field<&shared::jump_search>>(colours, level))),
       std::move(address)),
@@ -389,7 +385,7 @@ auto account_chats_page(const ui_needs& n, const std::string& address, const con
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
   const auto spaced = [](nodes::Text title) { return c::styled({.margin = {10.0f, 0.0f, 0.0f, 0.0f}}, std::move(title)); };
-  return SKIFF_NAMED(account_chats_page, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(account_chats_page, c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
       section_title(colours, "COLOUR"),
       accent_circles_for<page_read>(set_colour{}, theme, false, [](const page_read& now) {
         return now ? config::colour_of(now->account) : config::accent_t{};
@@ -405,7 +401,7 @@ auto account_chats_page(const ui_needs& n, const std::string& address, const con
 MUX_INLINE_IN_RELEASE auto account_appearance_view(const palette& colours, std::string address) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(account_appearance_view, c::scoped<config::account_t>(c::handlers(), c::column(
-      c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::vbox(8.0f) | c::fill_x | c::content_y,
       section_title(colours, "APPEARANCE"), style_controls(colours)), std::move(address)));
 }
 
@@ -490,7 +486,7 @@ template <class Protocol>
 // move came from: across the pane, as tall as what it holds.
 MUX_INLINE_IN_RELEASE auto detail_shown(const ui_needs& n, const detail_key& key) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(detail_shown, c::appearing_across(true, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), detail_made(n, key)),
+  return SKIFF_NAMED(detail_shown, c::appearing_across(true, c::column(c::vbox(0.0f) | c::fill_x | c::content_y, detail_made(n, key)),
                              28.0f * key.toward, 200.0f));
 }
 using detail_shown_t = decltype(detail_shown(std::declval<const ui_needs&>(), detail_key{}));
@@ -498,8 +494,8 @@ using detail_shown_t = decltype(detail_shown(std::declval<const ui_needs&>(), de
 // -- a page taller than the window scrolls.
 MUX_INLINE_IN_RELEASE auto detail_column(const ui_needs& n) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(detail_column, c::column(c::vbox(0.0f, {.fill = true, .padding = {24.0f, 28.0f, 24.0f, 28.0f}}),
-      c::styled({.fill = true}, skiff::compose::scrolled(c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(detail_column, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.padding = {24.0f, 28.0f, 24.0f, 28.0f}}),
+      c::styled({.fill = true}, skiff::compose::scrolled(c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
           c::projected<panel_read>([](const panel_read& now) { return now ? std::optional(detail_key{now->detail, now->theme, now->toward}) : std::nullopt; },
               c::mount<detail_shown_t, detail_key>(
                   [at = &n](const detail_key& key) { return std::tuple{detail_shown(*at, key)}; },
@@ -519,7 +515,7 @@ struct side_key {
 MUX_INLINE_IN_RELEASE auto side_made(const palette& colours, const side_key& key) {
   namespace c = skiff::compose;
   using side_t = spl::variant<accounts_side_t, pages_side_t>;
-  return SKIFF_NAMED(side_made, c::appearing_across(true, c::column(c::vbox(0.0f, {.fill = true}),
+  return SKIFF_NAMED(side_made, c::appearing_across(true, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y,
                                              key.account ? side_t(pages_side(colours)) : side_t(accounts_side(colours))),
                              36.0f * key.toward, 220.0f));
 }
@@ -533,7 +529,7 @@ MUX_INLINE_IN_RELEASE auto side_column(const palette& colours) {
     // the window's (280 of them, as wide as a hundred thousand pixels).
     return scene::Spec{.fillX = narrow, .fillY = true, .width = narrow ? 1.0f : kListWidth,
                        .relativeSize = narrow ? scene::Axes(scene::axes::kBoth) : scene::Axes(scene::axes::kY)};
-  }, c::column(c::vbox(0.0f, {.fillY = true, .background = colours.sidebar}),
+  }, c::column(c::vbox(0.0f) | c::fill_y | c::with({.background = colours.sidebar}),
       c::projected<panel_read>([](const panel_read& now) { return side_key{chosen_of(now).has_value(), now ? now->toward : 1.0f}; },
           c::mount<side_made_t, side_key>([at = &colours](const side_key& key) { return std::tuple{side_made(*at, key)}; },
                                           {.fillX = true, .grow = scene::axes::kY})),
@@ -546,7 +542,7 @@ MUX_INLINE_IN_RELEASE auto side_column(const palette& colours) {
 // or Accounts.
 MUX_INLINE_IN_RELEASE auto panel_header(const palette& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(panel_header, c::row(c::hbox(12.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+  return SKIFF_NAMED(panel_header, c::row(c::hbox(12.0f) | c::fill_x | c::with({.height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
       c::styled({.alignSelf = scene::align::kMiddle}, icon_button(colours, icon::back{}, sends<request::accounts_back>{})),
       c::text_for<panel_read>([](const panel_read& now) { return chosen_of(now).value_or("Accounts"); },
           c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text("", 17.0f, colours.text, true))))));
@@ -558,12 +554,12 @@ MUX_INLINE_IN_RELEASE auto panel_header(const palette& colours) {
 MUX_INLINE_IN_RELEASE auto accounts_view(const ui_needs& n) {
   namespace c = skiff::compose;
   const palette& colours = *n.colours;
-  return SKIFF_NAMED(accounts_view, closes_on_escape<sends<request::accounts_back>>(c::column(c::vbox(0.0f, {.fill = true}),
+  return SKIFF_NAMED(accounts_view, closes_on_escape<sends<request::accounts_back>>(c::column(c::vbox(0.0f) | c::fill_x | c::fill_y,
       panel_header(colours),
-      c::row(c::hbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
+      c::row(c::hbox(0.0f) | c::fill_x | c::grow_y,
              c::shown_for<panel_read>([](const panel_read& now) { return !now || !now->narrow || !now->detail_up; }, side_column(colours)),
              c::shown_for<panel_read>([](const panel_read& now) { return !now || !now->narrow || now->detail_up; },
-                                      c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX}), detail_column(n)))))));
+                                      c::column(c::vbox(0.0f) | c::grow_x | c::fill_y, detail_column(n)))))));
 }
 // The panel as the pages make it, when it slides in: a node, built where it
 // is said (made_now).

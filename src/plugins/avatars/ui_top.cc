@@ -23,7 +23,7 @@ using namespace ::mux::ui;
 struct found_picture {
   auto operator()(auto text, const message_line_facts& f) const {
     namespace c = skiff::compose;
-    return c::row(c::hbox(10.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+    return c::row(c::hbox(10.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                   c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(avatar_of::person{}, f.sender, f.name, 40.0f)), std::move(text));
   }
 };
@@ -35,7 +35,7 @@ struct picture_beside {
   float gap;
   auto operator()(auto text, const auto& facts) const {
     namespace c = skiff::compose;
-    return c::row(c::hbox(gap, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+    return c::row(c::hbox(gap) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                   c::styled({.alignSelf = scene::align::kMiddle}, avatar_mark(Kind{}, facts.id, facts.name, size)), std::move(text));
   }
 };
@@ -46,7 +46,7 @@ struct face_beside {
   auto operator()(auto line, const sender_face_facts& f) const {
     namespace c = skiff::compose;
     const float room = f.with_face ? kBubbleAvatar + 8.0f : 0.0f;
-    return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 0.0f, room}}),
+    return c::column(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 0.0f, 0.0f, room}}),
                      std::move(line),
                      c::visible(f.with_face, c::styled({.place = scene::anchor::kBottomLeft, .x = -(kBubbleAvatar + 8.0f), .y = -1.0f,
                                                         .alpha = f.shown ? f.opacity : 0.0f},
@@ -62,7 +62,7 @@ struct button_beside {
   float gap;
   auto operator()(auto text, const auto& facts) const {
     namespace c = skiff::compose;
-    return c::row(c::hbox(gap, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+    return c::row(c::hbox(gap) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                   c::styled({.alignSelf = scene::align::kMiddle}, avatar_button(Kind{}, facts.id, facts.name, size)), std::move(text));
   }
 };
@@ -73,7 +73,7 @@ struct picture_above {
   float size;
   auto operator()(auto heading, const auto& facts) const {
     namespace c = skiff::compose;
-    return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+    return c::column(c::vbox(2.0f) | c::fill_x | c::content_y,
                      c::styled({.alignSelf = scene::align::kMiddle}, avatar_button(Kind{}, facts.id, facts.name, size)), std::move(heading));
   }
 };
@@ -91,7 +91,7 @@ struct summary_faces {
                                      .border = scene::Border{f.ring, 2.0f}},
                                     avatar_mark(avatar_of::person{}, f.faces[i].id, f.faces[i].name, kSummaryFace));
                  }) | std::ranges::to<std::vector>();
-    return c::row(c::hbox(0.0f, {.fill = true, .padding = {0.0f, shown ? width + 8.0f : 0.0f, 0.0f, 0.0f}}),
+    return c::row(c::hbox(0.0f) | c::fill_x | c::fill_y | c::with({.padding = {0.0f, shown ? width + 8.0f : 0.0f, 0.0f, 0.0f}}),
                   std::move(said), c::many(c::hbox(), std::move(faces)));
   }
 };

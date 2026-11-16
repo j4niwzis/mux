@@ -55,23 +55,19 @@ auto video_marks(std::int64_t ms) {
   namespace c = skiff::compose;
   const skia::SkColor shade = skia::colorSetARGB(0x54, 0, 0, 0), white = skia::colorSetARGB(255, 255, 255, 255);
   // Over the picture, out of the box's flow, as the preview under it.
-  return SKIFF_NAMED(video_marks, c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
+  return SKIFF_NAMED(video_marks, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.place = scene::anchor::kTopLeft}),
       c::column(c::justified(c::vbox(0.0f, {.place = scene::anchor::kCentre, .width = 44.0f, .height = 44.0f, .cornerRadius = 22.0f,
                                             .background = shade}),
                              nodes::justify::middle{}),
                 c::styled({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::play{}), white))),
-      c::visible(ms > 0, c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .autoSize = scene::axes::kBoth,
-                                                  .margin = {6.0f, 0.0f, 0.0f, 6.0f}, .padding = {2.0f, 8.0f, 2.0f, 8.0f},
-                                                  .cornerRadius = 9.0f, .background = shade}),
+      c::visible(ms > 0, c::column(c::vbox(0.0f) | c::content_x | c::content_y | c::with({.place = scene::anchor::kTopLeft, .margin = {6.0f, 0.0f, 0.0f, 6.0f}, .padding = {2.0f, 8.0f, 2.0f, 8.0f}, .cornerRadius = 9.0f, .background = shade}),
                                    nodes::Text(std::format("{}:{:02}", ms / 60000, (ms / 1000) % 60), 11.0f, white)))));
 }
 // The time on a dark pill over a picture's corner.
 auto time_pill(std::string when) {
   namespace c = skiff::compose;
   const bool shown = !when.empty();
-  return c::visible(shown, c::column(c::vbox(0.0f, {.place = scene::anchor::kBottomRight, .autoSize = scene::axes::kBoth,
-                                                    .margin = {0.0f, 6.0f, 6.0f, 0.0f}, .padding = {2.0f, 8.0f, 2.0f, 8.0f},
-                                                    .cornerRadius = 9.0f, .background = skia::colorSetARGB(0x54, 0, 0, 0)}),
+  return c::visible(shown, c::column(c::vbox(0.0f) | c::content_x | c::content_y | c::with({.place = scene::anchor::kBottomRight, .margin = {0.0f, 6.0f, 6.0f, 0.0f}, .padding = {2.0f, 8.0f, 2.0f, 8.0f}, .cornerRadius = 9.0f, .background = skia::colorSetARGB(0x54, 0, 0, 0)}),
                                      nodes::Text(std::move(when), 11.0f, skia::colorSetARGB(255, 255, 255, 255))));
 }
 // A picture in a message, as tdesktop sizes one: its own size fitted into
@@ -111,7 +107,7 @@ MUX_INLINE_IN_RELEASE auto picture_box(const palette& colours, const std::string
     video.emplace(video_marks(*look.video_ms));
   return SKIFF_NAMED(picture_box, c::column(c::vbox(0.0f, {.cornerRadius = 10.0f, .background = look.sticker ? skia::SkColor{0} : colours.tile, .masking = true}),
                    std::move(preview),
-                   c::while_coming(c::vbox(0.0f, {.fill = true}), std::move(picture), std::move(loader)),
+                   c::while_coming(c::vbox(0.0f) | c::fill_x | c::fill_y, std::move(picture), std::move(loader)),
                    std::move(video), time_pill(std::move(look.time))));
 }
 // The picture fitted: its own type, for an album to shrink its cells alike
@@ -153,7 +149,7 @@ auto album_view(const palette& colours, const std::vector<attachment>& items, st
   std::size_t at = 0;
   for (const std::size_t count : album_rows(items.size())) {
     const float w = (kAlbumWidth - kAlbumGap * static_cast<float>(count - 1)) / static_cast<float>(count);
-    rows.push_back(c::many(c::hbox(kAlbumGap, {.autoSize = scene::axes::kBoth}),
+    rows.push_back(c::many(c::hbox(kAlbumGap) | c::content_x | c::content_y,
         std::views::iota(at, at + count) | std::views::transform([&](std::size_t i) {
           const attachment& item = items[i];
           const float ratio = item.width > 0 && item.height > 0 ? static_cast<float>(item.height) / static_cast<float>(item.width) : 0.75f;
@@ -177,7 +173,7 @@ auto album_view(const palette& colours, const std::vector<attachment>& items, st
           cell.invalidateLayout();
         });
       },
-      c::many(c::vbox(kAlbumGap, {.autoSize = scene::axes::kBoth}), std::move(rows))));
+      c::many(c::vbox(kAlbumGap) | c::content_x | c::content_y, std::move(rows))));
 }
 using album_view_t = decltype(album_view(std::declval<const palette&>(), {}, {}));
 
@@ -212,7 +208,7 @@ auto file_row(const palette& colours, std::string source, std::string name, std:
     text.setMaxWidth(360.0f);
     return text;
   };
-  return SKIFF_NAMED(file_row, c::row(c::hbox(11.0f, {.autoSize = scene::axes::kBoth, .minWidth = 268.0f - 24.0f, .padding = {2.0f, 0.0f, 2.0f, 0.0f}}),
+  return SKIFF_NAMED(file_row, c::row(c::hbox(11.0f) | c::content_x | c::content_y | c::with({.minWidth = 268.0f - 24.0f, .padding = {2.0f, 0.0f, 2.0f, 0.0f}}),
       c::applied<audio_shown>([plays](const audio_shown& now) { return plays(now) && now.playing; },
           [sound](nodes::Icon& disc, bool playing) {
             disc.setShape(shape_of(!sound ? icon_t{icon::clip{}} : playing ? icon_t{icon::pause{}} : icon_t{icon::play{}}));
@@ -220,7 +216,7 @@ auto file_row(const palette& colours, std::string source, std::string name, std:
           c::styled({.width = kFileIcon, .height = kFileIcon, .alignSelf = scene::align::kMiddle, .cornerRadius = kFileIcon / 2.0f,
                      .background = colours.accent},
                     nodes::Icon(shape_of(sound ? icon_t{icon::play{}} : icon_t{icon::clip{}}), colours.on_accent))),
-      c::column(c::vbox(4.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+      c::column(c::vbox(4.0f) | c::content_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                 capped(nodes::Text(std::move(name), 14.0f, colours.text, true)),
                 c::text_for<audio_shown>(line, capped(nodes::Text(size_text(bytes), 12.0f, colours.dim)))),
       c::shown_for<audio_shown>([plays](const audio_shown& now) { return plays(now) && now.playing; },

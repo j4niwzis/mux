@@ -26,7 +26,7 @@ using namespace ::mux::ui;
 MUX_INLINE_IN_RELEASE auto motion_settings_view(const palette& colours) {
   using field = skiff::model::Field<&kept::motion>;
   return SKIFF_NAMED(motion_settings_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       skiff::compose::styled({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}},
           wrapped(note_text(colours, "How much the window moves. Reduced keeps the small movements, such as a section unfolding, and shows panels at once."))),
       skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "Full", config::motion::full{})),
@@ -35,7 +35,7 @@ MUX_INLINE_IN_RELEASE auto motion_settings_view(const palette& colours) {
 }
 MUX_INLINE_IN_RELEASE auto animations_view(const palette& colours) {
   return SKIFF_NAMED(animations_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
           page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Animations", {}, {}, true, true)),
       motion_settings_view(colours)));
@@ -47,7 +47,7 @@ MUX_INLINE_IN_RELEASE auto animations_view(const palette& colours) {
 MUX_INLINE_IN_RELEASE auto frame_settings_view(const palette& colours) {
   using frames = kept;
   return SKIFF_NAMED(frame_settings_view, skiff::compose::column(
-      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+      skiff::compose::vbox(4.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
       spaced_title(colours, "FRAMES"), setting_switch<&frames::partial_redraw>(colours, "Partial redraw"),
       setting_switch<&frames::flash_redraws>(colours, "Flash redrawn areas"), setting_switch<&frames::vsync>(colours, "Vsync"),
       setting_switch<&frames::show_fps>(colours, "Show frames a second"),
@@ -61,10 +61,10 @@ MUX_INLINE_IN_RELEASE auto rendering_view(const palette& colours) {
   using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
   using field = skiff::model::Field<&kept::renderer>;
   return SKIFF_NAMED(rendering_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Rendering", {}, {}, true, true)),
       skiff::compose::column(
-          skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+          skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
           skiff::compose::bound<field>(widgets::ChoiceRowField<config::renderer_t>(colours.widgets, "OpenGL (the graphics card)", config::renderer::opengl{})),
           skiff::compose::bound<field>(widgets::ChoiceRowField<config::renderer_t>(colours.widgets, "Software (the processor)", config::renderer::software{})),
           skiff::compose::styled({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}}, wrapped(note_text(colours, "Takes effect when mux starts again.")))),
@@ -73,7 +73,7 @@ MUX_INLINE_IN_RELEASE auto rendering_view(const palette& colours) {
 
 // Settings' links to them, and the pages.
 MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                 settings_link(colours, "Animations", icon::motion{}, open_animations{}),
                                 settings_link(colours, "Rendering", icon::sliders{}, open_rendering{}));
 }

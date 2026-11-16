@@ -55,11 +55,11 @@ auto server_search_arguments(const auto& colours, const server_search_facts& fac
   }) | std::ranges::to<std::vector>();
   const scene::Spec caption{.margin = {6.0f, 16.0f, 2.0f, 16.0f}};
   return std::tuple{
-      c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 8.0f, 0.0f}}),
+      c::vbox(4.0f) | c::fill_x | c::content_y | c::with({.padding = {4.0f, 0.0f, 8.0f, 0.0f}}),
       c::visible(!rooms.empty(), c::styled(caption, nodes::Text("Rooms", 13.0f, colours.dim, true))),
-      c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rooms)),
+      c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(rooms)),
       c::visible(!people.empty(), c::styled(caption, nodes::Text("People", 13.0f, colours.dim, true))),
-      c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(people)),
+      c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(people)),
       c::visible(facts.waiting || (facts.rooms.empty() && facts.people.empty()), c::styled(caption,
           wrapped(nodes::Text(facts.waiting ? "Searching the server…" : "No rooms or people found.", 13.0f, colours.dim))))};
 }
@@ -150,10 +150,7 @@ auto side_folder_tab(const auto& colours, std::string name, folder_t which,
   label.setMaxWidth(160.0f);
   return c::with_cursor(scene::cursor::arrow{}, c::said(scene::SemanticRole{scene::semantic_role::tab{}}, chosen,
       c::onPress(pick_side_folder<Pick>{std::move(pick), std::move(which)},
-          c::column(c::vbox(0.0f,
-              {.height = 32.0f, .autoSize = scene::axes::kX,
-               .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f,
-               .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
+          c::column(c::vbox(0.0f) | c::content_x | c::with({.height = 32.0f, .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
               c::styled({.anchor = scene::anchor::kCentreLeft, .origin = scene::anchor::kCentreLeft}, std::move(label)),
               c::visible(chosen, c::styled(
                   {.place = scene::anchor::kBottomLeft, .fillX = true, .height = 3.0f, .cornerRadius = 1.5f},
@@ -166,8 +163,7 @@ auto side_folder_tab(const auto& colours, std::string name, folder_t which,
 auto side_scope_head(const auto& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(side_scope_head, c::shown_for<side_shown>([](const side_shown& now) { return now.scope.has_value(); },
-      c::row(c::hbox(8.0f, {.fillX = true, .height = 40.0f,
-          .padding = {0.0f, 8.0f, 0.0f, 8.0f}}),
+      c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 40.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f}}),
           c::styled({.alignSelf = scene::align::kMiddle},
               icon_button(colours, icon::back{}, sends<request::close_scope>{})),
           c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
@@ -189,9 +185,7 @@ auto side_search_field(const auto& colours) {
   field.apply({.fillX = true, .margin = {2.0f, 14.0f, 0.0f, 14.0f}});
   auto text = c::applied<list_shown>([](const list_shown& now) { return now.search; },
       [](auto& node, const std::string& now) { if (node.text() != now) node.setText(now); }, std::move(field));
-  return SKIFF_NAMED(side_search_field, c::focus_frame(c::vbox(0.0f, {.fillX = true, .height = 36.0f,
-      .margin = {0.0f, 10.0f, 8.0f, 10.0f}, .cornerRadius = 18.0f,
-      .background = colours.tile, .selectedBackground = colours.chosen}), std::move(text)));
+  return SKIFF_NAMED(side_search_field, c::focus_frame(c::vbox(0.0f) | c::fill_x | c::with({.height = 36.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}, .cornerRadius = 18.0f, .background = colours.tile, .selectedBackground = colours.chosen}), std::move(text)));
 }
 
 struct chat_settings_act {
@@ -231,11 +225,7 @@ struct strip_colour_act {
 };
 
 auto side_popup_look(const auto& colours, float width) {
-  return skiff::compose::vbox(4.0f,
-      {.width = width, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 8.0f, 8.0f},
-       .cornerRadius = 10.0f, .background = colours.popup(),
-       .border = scene::Border{colours.band, 1.0f},
-       .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
+  return skiff::compose::vbox(4.0f) | skiff::compose::content_y | skiff::compose::with({.width = width, .padding = {8.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
 }
 template <class Act>
 auto side_menu_button(const auto& colours, std::string label, Act act) {
@@ -247,7 +237,7 @@ auto side_chat_menu(const auto& colours, const conversation_id& id, std::string 
                            const config::theme_t& theme) {
   namespace c = skiff::compose;
   auto places = accounts | std::views::filter([&](const auto& to) { return to != id.account && to != listing; }) | std::views::transform([&](const auto& to) {
-        return c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+        return c::column(c::vbox(4.0f) | c::fill_x | c::content_y,
             side_menu_button(colours, std::format("Copy to {}", to.address), place_act{id, to, false}),
             side_menu_button(colours, std::format("Move to {}", to.address), place_act{id, to, true}));
       }) | std::ranges::to<std::vector>();
@@ -263,8 +253,7 @@ auto side_chat_menu(const auto& colours, const conversation_id& id, std::string 
       c::visible(id.account != listing,
           side_menu_button(colours, "Strip on or off", strip_act{id, listing})),
       c::visible(id.account != listing,
-          c::many(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY,
-              .margin = {4.0f, 0.0f, 0.0f, 0.0f}}), std::move(accents)))));
+          c::many(c::hbox(4.0f) | c::fill_x | c::content_y | c::with({.margin = {4.0f, 0.0f, 0.0f, 0.0f}}), std::move(accents)))));
 }
 } // namespace mux::ui
 
@@ -319,10 +308,7 @@ MUX_INLINE_IN_RELEASE auto conversation_row(const ui_needs& needs, const convers
   return c::recorded(c::with_cursor(scene::cursor::arrow{},
       c::said(scene::SemanticRole{scene::semantic_role::list_item{}}, view.chosen,
           c::onClick(request::choose{one.id},
-              c::row(c::hbox(12.0f, {.fillX = true,
-                  .height = conversation_height(one),
-                  .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen,
-                  .selectedBackground = colours.selected, .focusBackground = colours.chosen, .selected = view.chosen}),
+              c::row(c::hbox(12.0f) | c::fill_x | c::with({.height = conversation_height(one), .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen, .selectedBackground = colours.selected, .focusBackground = colours.chosen, .selected = view.chosen}),
                   chat_row_text(needs, one, view, preview),
                   c::visible(view.strip.has_value(), c::styled(
                       {.place = scene::anchor::kCentreLeft, .x = -8.0f, .width = 4.0f, .height = 38.0f, .cornerRadius = 2.0f},
@@ -353,7 +339,7 @@ auto side_chats_for(const auto& needs) {
   // Its rows builders (their text pieces): made, as they come, under the
   // rules the list is built under.
   auto line = c::styled({.fillX = true, .autoSize = scene::axes::kY},
-                        c::memo_rows<conversation_id, side_chat_view, side_chat_item>(make_side_chat_row, nodes::Stack{}));
+                        c::memo_rows<conversation_id, side_chat_view, side_chat_item>(make_side_chat_row, nodes::ColumnStack{}));
   // The view that scrolls, marked: what keeps each list's offset finds it
   // under what tells it the list.
   auto scroll = c::virtual_rows<side_chat_item>([](const side_chat_item& item) {
@@ -386,7 +372,7 @@ template <class... Features>
 auto side_panes_of(plugin_list<Features...>, const palette& colours) {
   namespace c = skiff::compose;
   return c::shown_for<side_shown>([](const side_shown& now) { return now.panes_on; },
-      c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), extend(contract::side_panes{}, type_tag<Features>{}, colours)...));
+      c::column(c::vbox(0.0f) | c::fill_x | c::grow_y, extend(contract::side_panes{}, type_tag<Features>{}, colours)...));
 }
 auto side_server_for(const auto& colours) {
   namespace c = skiff::compose;
@@ -441,7 +427,7 @@ struct side_buttons<plugin_list<Features...>> {
     return extend(contract::side_header{}, type_tag<Feature>{}, colours);
   }
   static auto row_of(const palette& colours) {
-    return skiff::compose::row(skiff::compose::hbox(10.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+    return skiff::compose::row(skiff::compose::hbox(10.0f) | skiff::compose::content_x | skiff::compose::content_y | skiff::compose::with({.alignSelf = scene::align::kMiddle}),
                                button_of<Features>(colours)...);
   }
 };
@@ -472,8 +458,7 @@ using side_bar_plugins = side_bar_list<composition::providers<contract::side_bar
 auto side_header_for(const auto& colours) {
   namespace c = skiff::compose;
   auto top = side_bar_plugins::top(colours, false);
-  auto head = c::row(c::hbox(10.0f, {.fillX = true, .height = 52.0f,
-      .padding = {8.0f, 8.0f, 8.0f, 8.0f}}),
+  auto head = c::row(c::hbox(10.0f) | c::fill_x | c::with({.height = 52.0f, .padding = {8.0f, 8.0f, 8.0f, 8.0f}}),
       menu_button(colours),
       c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("mux", 17.0f, colours.text, true)),
       std::move(top), side_header_plugins::row_of(colours));
@@ -484,14 +469,14 @@ auto side_body_for(const auto& needs) {
   const auto& colours = *needs.colours;
   auto side = side_bar_plugins::lane(colours);
   auto chats = c::shown_for<side_shown>([](const side_shown& now) { return now.chats_on; },
-      c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), side_chats_for(needs)));
-  auto rest = c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX}),
+      c::column(c::vbox(0.0f) | c::fill_x | c::grow_y, side_chats_for(needs)));
+  auto rest = c::column(c::vbox(0.0f) | c::grow_x | c::fill_y,
       side_scope_head(colours), side_search_field(colours), side_bar_plugins::top(colours, true), side_folders_for(colours, side_pick_folder{}),
       c::shown_for<side_shown>([](const side_shown& now) { return now.no_chats; },
           c::styled({.margin = {12.0f, 16.0f, 0.0f, 16.0f}}, nodes::Text("No chats yet.", 13.0f, colours.dim))),
       std::move(chats),
       side_panes_of(composition::providers<contract::side_panes, enabled_plugins>{}, colours), side_server_for(colours));
-  auto body = c::row(c::hbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), std::move(side), std::move(rest));
+  auto body = c::row(c::hbox(0.0f) | c::fill_x | c::grow_y, std::move(side), std::move(rest));
   return body;
 }
 } // namespace mux::ui
@@ -506,8 +491,8 @@ auto side_column(const auto& needs) {
   // The space's and the chat's menus, over the column: a tap off them closes
   // the one up.
   auto popups = c::tapped_off(sends<close_side_menu>{},
-      c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), side_chat_popup(colours)));
-  auto surface = c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar}),
+      c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.place = scene::anchor::kTopLeft}), side_chat_popup(colours)));
+  auto surface = c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.background = colours.sidebar}),
       std::move(head), connection_bar_for<connection_shown>(colours, &connection_shown::list), std::move(body), std::move(popups));
   // The plugin's bars' own around it: their menus, an icon dragged.
   auto reorder = side_bar_plugins::wrap(colours, std::move(surface));

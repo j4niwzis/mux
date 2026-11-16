@@ -34,7 +34,7 @@ using namespace ::mux::ui;
 MUX_INLINE_IN_RELEASE auto files_settings_view(const palette& colours) {
   using sending = config::sending_settings;
   return SKIFF_NAMED(files_settings_view, skiff::compose::column(
-      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(4.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       spaced_title(colours, "PICTURES DROPPED ON THE WINDOW"),
       setting_switch<&sending::strip_metadata>(colours, "Remove metadata"),
       setting_switch<&sending::rename>(colours, "Name them image.<type>"),
@@ -44,7 +44,7 @@ MUX_INLINE_IN_RELEASE auto files_settings_view(const palette& colours) {
 MUX_INLINE_IN_RELEASE auto files_view(const palette& colours) {
   using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
   return SKIFF_NAMED(files_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Files", {}, {}, true, true)),
       files_settings_view(colours)));
 }

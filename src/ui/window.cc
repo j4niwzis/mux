@@ -64,9 +64,7 @@ inline float text_menu_height(const std::vector<text_menu_item>& items) {
 MUX_INLINE_IN_RELEASE auto text_menu_row(const palette& colours, const text_menu_item& item) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(text_menu_row, c::onClick(item.action,
-      c::row(c::hbox(12.0f, {.fillX = true, .height = item.separate ? 39.0f : 33.0f,
-                            .padding = {item.separate ? 6.0f : 0.0f, 17.0f, 0.0f, 17.0f},
-                            .hoverBackground = colours.chosen, .disabled = !item.enabled}),
+      c::row(c::hbox(12.0f) | c::fill_x | c::with({.height = item.separate ? 39.0f : 33.0f, .padding = {item.separate ? 6.0f : 0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = colours.chosen, .disabled = !item.enabled}),
              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                        nodes::Text(item.label, 13.0f, item.enabled ? colours.text : colours.dim)),
              c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(item.shortcut, 12.0f, colours.dim)),
@@ -74,7 +72,7 @@ MUX_INLINE_IN_RELEASE auto text_menu_row(const palette& colours, const text_menu
                                                 nodes::Box<>(colours.band)))), item.label));
 }
 MUX_INLINE_IN_RELEASE auto make_text_menu(const palette& colours, const std::vector<text_menu_item>& items) {
-  auto rows = skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  auto rows = skiff::compose::many(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       items | std::views::transform([&](const auto& item) { return text_menu_row(colours, item); }) | std::ranges::to<std::vector>());
   return SKIFF_NAMED(make_text_menu, skiff::compose::styled(
       {.width = 260.0f, .height = text_menu_height(items), .padding = {6.0f, 0.0f, 6.0f, 0.0f},
@@ -167,7 +165,7 @@ inline text_menu_facts text_menu_at(std::vector<text_menu_item> items, std::opti
 // Copy menu again -- and the menu could not be got rid of.
 MUX_INLINE_IN_RELEASE auto text_menu_layer(const ui_needs& n, const text_menu_facts& facts) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(text_menu_layer, c::column(c::vbox(0.0f, {.fill = true}),
+  return SKIFF_NAMED(text_menu_layer, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y,
                    c::onClick(request::close_text_menu{},
                               c::styled({.place = scene::anchor::kTopLeft, .fill = true}, nodes::Box<>(skia::colorSetARGB(0, 0, 0, 0)))),
                    c::styled({.place = scene::anchor::kTopLeft, .x = facts.x, .y = facts.y, .width = facts.width, .height = facts.height},
@@ -735,7 +733,7 @@ struct plugin_dialogs<type_list<dialog_entry<Features, Facts>...>> {
   template <class Feature, class Of>
   using box_t = typename decltype(box_of<Feature, Of>())::type;
   static auto made(const ui_needs& n) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), shown_made<box_t<Features, Facts>, Facts>(n)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::fill_y | skiff::compose::with({.place = scene::anchor::kTopLeft}), shown_made<box_t<Features, Facts>, Facts>(n)...);
   }
 };
 // The protocols' dialogs, each made by its dialog_content from its facts.
@@ -743,7 +741,7 @@ template <class Facts>
 using tool_content_t = decltype(dialog_content(std::declval<const ui_needs&>(), std::declval<const Facts&>()));
 template <class... Facts>
 auto tool_dialogs(const ui_needs& n, type_list<Facts...>) {
-  return SKIFF_NAMED(tool_dialogs, skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), shown_made<tool_content_t<Facts>, Facts>(n)...));
+  return SKIFF_NAMED(tool_dialogs, skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::fill_y | skiff::compose::with({.place = scene::anchor::kTopLeft}), shown_made<tool_content_t<Facts>, Facts>(n)...));
 }
 // The plugins' layers, each its node from its extend(), over everything: a
 // call's card -- on a phone the whole window, as Element's phone apps.
@@ -760,7 +758,7 @@ struct plugin_layers<plugin_list<Features...>> {
     return extend(contract::window_layers{}, type_tag<Feature>{}, n);
   }
   static auto made(const ui_needs& n) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::fill_y | skiff::compose::with({.place = scene::anchor::kTopLeft}),
                                   skiff::compose::styled({.place = scene::anchor::kTopLeft}, made_of<Features>(n))...);
   }
 };
@@ -778,8 +776,8 @@ MUX_INLINE_IN_RELEASE auto window_body(const ui_needs& n) {
     made.setWidthFittingContent(440.0f);
     return made;
   }, shown_made<send_box_t, send_facts>(n));
-  return SKIFF_NAMED(window_body, c::column(c::vbox(0.0f, {.fill = true}),
-      c::frozen_under(c::vbox(0.0f, {.fill = true}),
+  return SKIFF_NAMED(window_body, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y,
+      c::frozen_under(c::vbox(0.0f) | c::fill_x | c::fill_y,
       c::column(c::vbox(0.0f, everywhere), c::styled(everywhere, nodes::Box<>(n.colours->background)), std::move(behind), std::move(frame)),
       c::column(c::vbox(0.0f, everywhere),
           shown_made<settings_view_t, settings_facts>(n),

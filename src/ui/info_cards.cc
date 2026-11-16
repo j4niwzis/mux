@@ -52,7 +52,7 @@ struct person_shown {
 static_assert(std::equality_comparable<person_shown>);
 auto person_cover(const palette& colours, const std::string& key, const person_facts& facts) {
   return SKIFF_NAMED(person_cover, skiff::compose::row(
-      skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
+      skiff::compose::hbox(16.0f) | skiff::compose::fill_x | skiff::compose::with({.height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
       // Their name and how they are, a piece (the avatars plugin's picture
       // beside it): the card a builder, built as its dialog opens.
       person_cover_text(colours, key, facts.name, facts.status)));
@@ -83,7 +83,7 @@ inline palette profile_text_colours(palette colours, bool banner) {
 MUX_INLINE_IN_RELEASE auto profile_cover_details(const palette& colours, const std::string& key, const person_facts& facts) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(profile_cover_details, c::column(
-      c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::vbox(0.0f) | c::fill_x | c::content_y,
       person_cover(colours, key, facts),
       c::visible(!facts.profile.pronouns.empty(), c::styled(
           {.fillX = true, .margin = {0.0f, 22.0f, 8.0f, 22.0f}},
@@ -99,7 +99,7 @@ MUX_INLINE_IN_RELEASE auto profile_cover(const palette& colours, const std::stri
   nodes::Image<from_moving_thumbnail> banner(from_moving_thumbnail{facts.profile.banner.value_or("")});
   banner.keepBox();
   return SKIFF_NAMED(profile_cover, c::column(
-      c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::vbox(0.0f) | c::fill_x | c::content_y,
       c::visible(has_banner, c::styled({.place = scene::anchor::kTopLeft, .fill = true}, std::move(banner))),
       c::visible(has_banner, c::styled({.place = scene::anchor::kTopLeft, .fill = true}, nodes::Box<>(skia::colorSetARGB(96, 0, 0, 0)))),
       profile_cover_details(profile_text_colours(colours, has_banner), key, facts)));
@@ -139,7 +139,7 @@ auto person_part_of(const palette& colours, const account_id& account, const std
 }
 template <class Place, class Protocol, class... Features>
 auto person_parts_of(plugin_list<Features...>, const palette& colours, const account_id& account, const std::string& key, const person_facts& facts) {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                 person_part_of<Place, Features, Protocol>(colours, account, key, facts)...);
 }
 // Everything below the title scrolls within the height the dialog gives it.
@@ -156,7 +156,7 @@ auto person_card_details(const palette& colours, const ui_shared& shared,
                       colours, label, icon::check{}, {{account, key, static_cast<std::size_t>(index)}}));
                 }) | std::ranges::to<std::vector>();
   return SKIFF_NAMED(person_card_details, c::column(
-      c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::vbox(0.0f) | c::fill_x | c::content_y,
       profile_cover(colours, key, facts),
       section_band(colours),
       id_line(colours, key, proto::person_link(proto_state, key).value_or("")),
@@ -169,7 +169,7 @@ auto person_card_details(const palette& colours, const ui_shared& shared,
           colours, "Ban from room", icon::close{}, {room_action::ban{key}}))),
       person_parts_of<person_place::details, Protocol>(composition::providers<contract::person_card_parts, enabled_plugins>{}, colours, account,
                                                        key, facts),
-      c::visible(!theirs.empty(), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(theirs)))));
+      c::visible(!theirs.empty(), c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(theirs)))));
 }
 
 // What the card holds of its protocol's: its details, one type for each
@@ -188,12 +188,12 @@ MUX_INLINE_IN_RELEASE auto person_card(const palette& colours, const ui_shared& 
                         const account_id& account, const std::string& key, const person_facts& facts) {
   namespace c = skiff::compose;
   using close_act = sends<::mux::ui::request::close_person_info>;
-  auto details = c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  auto details = c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
       spl::visit([&]<class Protocol>(Protocol) {
         return person_details_t(person_card_details<Protocol>(colours, shared, account, key, facts));
       }, account.speaks));
   return c::arranged<card_fit>({}, card_box(
-      c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
+      c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
       page_header<no_back, close_act>(colours, "User info", {}, {}, false, true),
       c::styled({.fillX = true}, c::scrolled(std::move(details)))));
 }

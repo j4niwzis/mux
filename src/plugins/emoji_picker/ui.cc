@@ -182,8 +182,7 @@ struct popup_pages<plugin_list<Features...>> {
   // top half of it, their groups' bar over the field under it.
   template <class Needs>
   static auto pages(const Needs& needs, const emoji_facts& facts) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY,
-                                                              .visible = facts.page != popup_page_t(popup_page::emoji{})}),
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::grow_y | skiff::compose::with({.visible = facts.page != popup_page_t(popup_page::emoji{})}),
                                   page_of<Features, Needs>(needs, facts)...);
   }
   static auto tabs(const palette& colours, const emoji_facts& facts, skiff::compose::Look look) {
@@ -231,14 +230,12 @@ auto emoji_popup(const Needs& n, const emoji_facts& facts) {
               // In a column that grows, the panel filling it: styled so, the
               // panel's own fill took the place of the grow, and it was as tall
               // as the whole card -- its footer under the card's bottom edge.
-              c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY, .masking = true,
-                                       .visible = facts.page == popup_page_t(popup_page::emoji{})}),
+              c::column(c::vbox(0.0f) | c::fill_x | c::grow_y | c::with({.masking = true, .visible = facts.page == popup_page_t(popup_page::emoji{})}),
                         emoji_panel(colours, *n.emoji, insert_emoji_into{})),
               popup_pages_t::pages(n, facts),
               c::shown_for<window_shape>(phone,
                   popup_pages_t::tabs(colours, facts,
-                      c::justified(c::hbox(4.0f, {.place = scene::anchor::kBottomLeft, .y = kPopupTabsHigh, .fillX = true, .height = 36.0f,
-                                                  .depth = 1.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f}}),
+                      c::justified(c::hbox(4.0f) | c::fill_x | c::with({.place = scene::anchor::kBottomLeft, .y = kPopupTabsHigh, .height = 36.0f, .depth = 1.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f}}),
                                    nodes::justify::middle{}))))));
   // Its own floating backdrop painted: the full-window layer has no fill,
   // and a plate taken for an inner panel's was dropped under live blur --
@@ -247,7 +244,7 @@ auto emoji_popup(const Needs& n, const emoji_facts& facts) {
     skiff::compose::state_of(made).setFloats(true);
     return made;
   }, std::move(card));
-  return SKIFF_NAMED(emoji_popup, c::column(c::vbox(0.0f, {.fill = true}), std::move(floating)));
+  return SKIFF_NAMED(emoji_popup, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y, std::move(floating)));
 }
 
 // Its layer over the window: there while the panel is open, a tap off it

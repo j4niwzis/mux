@@ -55,8 +55,7 @@ MUX_INLINE_IN_RELEASE auto search_bar(const palette& colours) {
   };
   return SKIFF_NAMED(search_bar, c::shown_for<shown>([](const shown& now) { return now.open; },
       c::onKeys(keys,
-          c::row(c::hbox(4.0f, {.fillX = true, .height = kChatHeadHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
-                                .background = colours.sidebar}),
+          c::row(c::hbox(4.0f) | c::fill_x | c::with({.height = kChatHeadHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f}, .background = colours.sidebar}),
                  c::focused_by<keys_asked>(keys_on<keys::of<feature>>{},
                      c::applied<shown>([](const shown& now) { return now.open; },
                          [](widgets::TextBox<typed_act>& typed, bool open) {

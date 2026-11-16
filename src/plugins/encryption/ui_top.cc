@@ -48,7 +48,7 @@ inline constexpr scene::Spec kTileSpec{.fillX = true, .margin = {8.0f, 22.0f, 0.
 // or not any more; Withdraw verification, where their identity was reset.
 template <class Protocol>
 auto verify_tile(const palette&, const account_id&, const std::string&, const person_facts&) {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}));
+  return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y);
 }
 template <class Protocol>
   requires(proto::offered_by<state_of<Protocol>, proto::feature::identity_verification>())
@@ -61,7 +61,7 @@ template <class Protocol>
 auto extend(contract::person_card_parts, type_tag<feature>, const palette& colours, person_place::actions, type_tag<Protocol>,
             const account_id& account, const std::string& key, const person_facts& facts) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
       verify_tile<Protocol>(colours, account, key, facts),
       c::visible(reset(facts), c::styled(kTileSpec, action_tile<person_accept_act>(
           colours, "Withdraw verification", icon::close{}, {conversation_id{account, key}}))));
@@ -80,12 +80,12 @@ auto extend(contract::person_card_parts, type_tag<feature>, const palette& colou
                                         one.verified ? std::string(" · Verified") : std::string(" · Not verified")),
                             13.0f, one.verified ? colours.text : colours.dim)));
                   }) | std::ranges::to<std::vector>();
-  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
       c::styled({.margin = {14.0f, 22.0f, 2.0f, 22.0f}},
           c::visible(!facts.devices.empty(), nodes::Text(
               facts.devices.empty() ? std::string() : std::format("SESSIONS ({})", facts.devices.size()),
               13.0f, colours.dim, true))),
-      c::visible(!sessions.empty(), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(sessions))));
+      c::visible(!sessions.empty(), c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(sessions))));
 }
 
 }  // namespace mux::plugins::encryption

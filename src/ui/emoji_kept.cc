@@ -98,9 +98,7 @@ inline constexpr double kPreviewAfterMs = 450.0;
   // The node itself, its spec applied on it: styled() makes a builder.
   if (shown.picture)
     picture.emplace(from_emotes{shown.key, shown.kind}).apply({.width = 200.0f, .height = 200.0f, .alignSelf = scene::align::kMiddle});
-  return c::column(c::justified(c::vbox(8.0f, {.place = scene::anchor::kCentre,
-      .autoSize = scene::axes::kBoth, .padding = {16.0f, 16.0f, 16.0f, 16.0f},
-      .cornerRadius = 14.0f, .background = (colours.sidebar & 0x00FFFFFFu) | (0xF0u << 24)}),
+  return c::column(c::justified(c::vbox(8.0f) | c::content_x | c::content_y | c::with({.place = scene::anchor::kCentre, .padding = {16.0f, 16.0f, 16.0f, 16.0f}, .cornerRadius = 14.0f, .background = (colours.sidebar & 0x00FFFFFFu) | (0xF0u << 24)}),
       nodes::justify::middle{}),
     std::move(picture),
     c::styled({.alignSelf = scene::align::kMiddle}, c::visible(!shown.picture,
@@ -142,7 +140,7 @@ template <class N>
 auto with_preview(const palette& colours, N page) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(with_preview, c::local<preview_shown>(preview_events{},
-      c::column(c::vbox(0.0f, {.fill = true}),
+      c::column(c::vbox(0.0f) | c::fill_x | c::fill_y,
                 c::styled({.fill = true}, std::move(page)),
                 c::bound<skiff::model::Field<&preview_shown::now>>(c::mount<emote_preview_t, previewed>(
                     [at = &colours](const previewed& one) { return std::tuple{emote_preview(*at, one)}; },

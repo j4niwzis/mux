@@ -295,7 +295,7 @@ template <class Kind, class... Features>
 // The plugins' sections of it (contract::general_sections), after its own.
 template <class Kind, class... Features>
 auto general_sections_of(plugin_list<Features...>, const auto& colours, const room_settings_of<Kind>& facts) {
-  return skiff::compose::column(skiff::compose::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return skiff::compose::column(skiff::compose::vbox(6.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                 extend(contract::general_sections{}, type_tag<Features>{}, colours, facts)...);
 }
 // What the General has by its kind alone, known while compiling: the note
@@ -318,15 +318,14 @@ template <class Kind>
   requires(Kind::leavable)
 auto leave_part(const auto& colours) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}), part_heading(colours, "Leave room"),
+  return c::column(c::vbox(6.0f) | c::fill_x | c::content_y, part_heading(colours, "Leave room"),
                    c::styled({.width = 130.0f, .height = 32.0f},
                              button_for<sends<::mux::ui::request::leave_chat>>(colours.widgets, "Leave room", {})));
 }
 template <class Kind>
 auto room_general_page(const auto& colours, const room_settings_of<Kind>& facts, bool has_page_header = false) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(room_general_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY,
-                                .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
+  return SKIFF_NAMED(room_general_page, c::column(c::vbox(6.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       c::visible(!has_page_header, tab_heading(colours, general_title<Kind>())),
       room_events_note<Kind>(colours),
       chat_settings_view<typename Kind::protocol>(colours, facts.chat),
@@ -372,8 +371,7 @@ auto manage_tab_row(const auto& colours, Tab tab) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(manage_tab_row, c::spec_for<room_facts_t<Kind>>([](const room_facts_t<Kind>& now) { return scene::Spec{.selected = tab_up<Kind, Tab>{}(now)}; },
       c::onPress(sends<manage_tab<Kind>>{{manage_tab_t<Kind>{tab}}},
-          c::row(c::hbox(8.0f, {.fillX = true, .height = 40.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner,
-                                .hoverBackground = colours.background, .selectedBackground = colours.tile}),
+          c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 40.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = colours.widgets.fCorner, .hoverBackground = colours.background, .selectedBackground = colours.tile}),
                  c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, icon_mark(colours, tab_icon(tab))),
                  c::applied<room_facts_t<Kind>>([](const room_facts_t<Kind>& now) { return tab_up<Kind, Tab>{}(now); },
                                           [](nodes::Text& title, bool up) { title.setBold(up); },
@@ -386,10 +384,10 @@ template <class Kind>
 auto client_tab_rows(const auto& colours) {
   namespace c = skiff::compose;
   if constexpr (general_on_its_own<Kind>)
-    return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}), manage_tab_row<Kind>(colours, settings_tab::general{}),
+    return c::column(c::vbox(2.0f) | c::fill_x | c::content_y, manage_tab_row<Kind>(colours, settings_tab::general{}),
                      manage_tab_row<Kind>(colours, settings_tab::notifications{}), manage_tab_row<Kind>(colours, settings_tab::looks{}));
   else
-    return c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+    return c::column(c::vbox(2.0f) | c::fill_x | c::content_y,
                      manage_tab_row<Kind>(colours, settings_tab::notifications{}), manage_tab_row<Kind>(colours, settings_tab::looks{}));
 }
 
@@ -399,18 +397,18 @@ auto client_tab_rows(const auto& colours) {
 // opened; it reads them as they move.
 template <class Kind, class... Tabs>
 auto plugin_tab_rows(ui::type_list<Tabs...>, const auto& colours) {
-  return SKIFF_NAMED(plugin_tab_rows, skiff::compose::column(skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(plugin_tab_rows, skiff::compose::column(skiff::compose::vbox(2.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                 manage_tab_row<Kind>(colours, Tabs{})...));
 }
 template <class Kind, class Tab>
 auto plugin_page(const auto& colours, const room_settings_of<Kind>& facts) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(plugin_page, c::shown_for<room_facts_t<Kind>>(tab_up<Kind, Tab>{},
-      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), make_manage_page(Tab{}, colours, facts))));
+      c::column(c::vbox(0.0f) | c::fill_x | c::content_y, make_manage_page(Tab{}, colours, facts))));
 }
 template <class Kind, class... Tabs>
 auto plugin_pages(ui::type_list<Tabs...>, const auto& colours, const room_settings_of<Kind>& facts) {
-  return SKIFF_NAMED(plugin_pages, skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(plugin_pages, skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                 plugin_page<Kind, Tabs>(colours, facts)...));
 }
 
@@ -418,7 +416,7 @@ auto plugin_pages(ui::type_list<Tabs...>, const auto& colours, const room_settin
 template <class Kind>
 auto notifications_page(const palette& colours, const room_settings_of<Kind>& facts) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(notifications_page, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
+  return SKIFF_NAMED(notifications_page, c::column(c::vbox(10.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Notifications"), chat_notify_view(colours, facts.chat),
       c::styled({.fillX = true}, wrapped(nodes::Text(facts.space ? "For every chat in this space, unless the chat chooses again; Default is "
                                                                     "as the space above it, or the account, says."
@@ -429,7 +427,7 @@ auto notifications_page(const palette& colours, const room_settings_of<Kind>& fa
 template <class Kind>
 auto looks_page(const auto& colours, const ui_shared& shared, const room_settings_of<Kind>& facts) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(looks_page, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
+  return SKIFF_NAMED(looks_page, c::column(c::vbox(6.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
       tab_heading(colours, "Appearance"),
       c::scoped<config::chat_choices>(c::handlers(), style_controls(colours), facts.chat),
       level_section_plugins::made(colours, choice_level::chat{}, shared)));
@@ -437,7 +435,7 @@ auto looks_page(const auto& colours, const ui_shared& shared, const room_setting
 template <class Kind, class Up, class Page>
 auto client_page(Up up, Page page) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(client_page, c::shown_for<room_facts_t<Kind>>(up, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(page))));
+  return SKIFF_NAMED(client_page, c::shown_for<room_facts_t<Kind>>(up, c::column(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(page))));
 }
 
 // The tab up's title: Preferences for the client's General where another's
@@ -465,25 +463,24 @@ auto room_settings_view(const Needs& n, const room_settings_of<Kind>& facts) {
   const auto tabs_up = [](const facts_t& now) { return !now || !now->narrow || now->navigation; };
   const auto page_up = [](const facts_t& now) { return !now || !now->narrow || !now->navigation; };
   const float across = presentation.navigation_width;
-  return SKIFF_NAMED(room_settings_view, c::column(c::vbox(0.0f, {.fill = true, .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = colours.background,
-                                  .masking = true}),
+  return SKIFF_NAMED(room_settings_view, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = colours.background, .masking = true}),
       // Without a head over each page: the dialog's own, its ← on a narrow
       // window's page.
       c::visible(!presentation.page_header,
-          c::row(c::hbox(12.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+          c::row(c::hbox(12.0f) | c::fill_x | c::with({.height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
                  c::shown_for<facts_t>(narrow_page, icon_button(colours, icon::back{}, sends<manage_back>{})),
                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                            elided(nodes::Text("Room Settings - " + facts.name, 18.0f, colours.text, true))),
                  icon_button(colours, icon::close{}, sends<closed>{}))),
-      c::row(c::hbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
+      c::row(c::hbox(0.0f) | c::fill_x | c::grow_y,
           // The tabs: across the window where it is narrow.
           c::shown_for<facts_t>(tabs_up,
               c::spec_for<facts_t>([across](const facts_t& now) {
                 return now && now->narrow ? scene::Spec{.width = 1.0f, .relativeSize = scene::axes::kBoth}
                                           : scene::Spec{.width = across, .relativeSize = scene::axes::kY};
               },
-                  c::column(c::vbox(0.0f, {.fillY = true, .width = across, .padding = {0.0f, 8.0f, 32.0f, 8.0f}, .background = colours.sidebar}),
-                      c::row(c::hbox(8.0f, {.fillX = true, .height = 54.0f}), face_spot(avatar_of::chat{}, facts.id, facts.name, 24.0f),
+                  c::column(c::vbox(0.0f) | c::fill_y | c::with({.width = across, .padding = {0.0f, 8.0f, 32.0f, 8.0f}, .background = colours.sidebar}),
+                      c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 54.0f}), face_spot(avatar_of::chat{}, facts.id, facts.name, 24.0f),
                              c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .shrink = scene::axes::kX,
                                         .alignSelf = scene::align::kMiddle},
                                        elided(nodes::Text(facts.name, 18.0f, colours.text, true))),
@@ -493,9 +490,9 @@ auto room_settings_view(const Needs& n, const room_settings_of<Kind>& facts) {
                       client_tab_rows<Kind>(colours)))),
           // The tab up, under its head where the look has one.
           c::shown_for<facts_t>(page_up,
-              c::column(c::vbox(0.0f, {.fillY = true, .relativeSize = scene::axes::kY, .grow = scene::axes::kX, .background = colours.background}),
+              c::column(c::vbox(0.0f) | c::grow_x | c::fill_y | c::with({.background = colours.background}),
                   c::visible(presentation.page_header,
-                      c::row(c::hbox(12.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+                      c::row(c::hbox(12.0f) | c::fill_x | c::with({.height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
                              c::shown_for<facts_t>([](const facts_t& now) { return now && (manage_editor_up(*now) || now->narrow); },
                                                         icon_button(colours, icon::back{}, sends<manage_back>{})),
                              c::text_for<facts_t>([](const facts_t& now) { return now ? manage_title<Needs>(*now) : std::string(); },
@@ -505,7 +502,7 @@ auto room_settings_view(const Needs& n, const room_settings_of<Kind>& facts) {
                   c::styled({.fillX = true, .relativeSize = scene::axes::kX, .grow = scene::axes::kY},
                       c::projected<facts_t>([](const facts_t& now) { return now ? now->tab.index() : std::size_t{0}; },
                           c::restarted_scroll<std::size_t>(c::scrolled(
-                              c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                              c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
                                         client_page<Kind>(tab_up<Kind, settings_tab::notifications>{}, notifications_page(colours, facts)),
                                         client_page<Kind>(tab_up<Kind, settings_tab::looks>{}, looks_page(colours, *n.shared, facts)),
                                         plugin_pages(plugin_tabs_t<Kind>{}, colours, facts),

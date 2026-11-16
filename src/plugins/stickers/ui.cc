@@ -118,7 +118,7 @@ MUX_INLINE_IN_RELEASE auto page(const palette& colours, emoji_kept& kept) {
   namespace c = skiff::compose;
   auto field = widgets::TextField<std::string>(colours.widgets, "Search stickers");
   field.setSearchIcon(true);
-  auto packs = c::sections<pack>(c::vbox(4.0f, {.fill = true}), c::vbox(0.0f),
+  auto packs = c::sections<pack>(c::vbox(4.0f) | c::fill_x | c::fill_y, c::vbox(0.0f),
       [&colours](const pack& one) { return tab(colours, one); },
       [&colours, &kept](const pack& one) {
         return cell_section(colours, one.name,
@@ -126,7 +126,7 @@ MUX_INLINE_IN_RELEASE auto page(const palette& colours, emoji_kept& kept) {
                             source_pack(one.stickers, one.name), kept.pack_account);
       },
       // The footer: the tabs in rows that wrap, 36 high, scrolled to the one lit.
-      c::wrapped<pack>(c::vbox(0.0f, {.fillX = true, .height = 36.0f}), c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+      c::wrapped<pack>(c::vbox(0.0f) | c::fill_x | c::with({.height = 36.0f}), c::hbox(4.0f) | c::fill_x | c::content_y),
       [](std::size_t) { return leave_search{}; });
   return with_preview(colours,
       c::local<search>(search_events{},

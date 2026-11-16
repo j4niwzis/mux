@@ -27,7 +27,7 @@ using namespace ::mux::ui;
 // version, not edited again.
 MUX_INLINE_IN_RELEASE auto version_row(const ui_needs& n, const conversation& in, const message& event, const model* known) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(version_row, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
+  return SKIFF_NAMED(version_row, c::column(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {4.0f, 12.0f, 4.0f, 12.0f}}),
                    message_alone(n, in, event, true, true, known, true)));
 }
 MUX_INLINE_IN_RELEASE auto panel(const ui_needs& n, const shown& facts) {
@@ -46,7 +46,7 @@ MUX_INLINE_IN_RELEASE auto panel(const ui_needs& n, const shown& facts) {
     skiff::nodes::ScrollContainer<decltype(many)> made(std::move(many));
     made.scrollToEnd(false);
     return made;
-  }, c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
+  }, c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(rows))));
   return SKIFF_NAMED(panel, c::column(list_dialog(560.0f),
       page_header<no_back, sends<request::close_shown<shown>>>(*n.colours, "Edit History", {}, {}, false, true), std::move(list)));
 }

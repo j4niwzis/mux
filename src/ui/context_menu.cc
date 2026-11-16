@@ -37,7 +37,7 @@ export namespace mux::ui {
 MUX_INLINE_IN_RELEASE auto emoji_favourite_row(const palette& colours, const emoji_kept& kept, const std::optional<emote>& emoji) {
   namespace c = skiff::compose;
   return c::visible(emoji.has_value(), c::onClick(request::favourite_emoji{emoji.value_or(emote{})},
-      c::row(c::hbox(0.0f, {.fillX = true, .height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = colours.chosen}),
+      c::row(c::hbox(0.0f) | c::fill_x | c::with({.height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = colours.chosen}),
           c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(emoji && kept.emoji_is_favourite(emoji->url)
               ? "Remove from favorites" : "Add to favorites", 13.0f, colours.text)))));
 }
@@ -97,7 +97,7 @@ struct menu_tops<plugin_list<Features...>> {
     return extend(contract::message_menu_top{}, type_tag<Feature>{}, colours, facts);
   }
   static auto heads(const palette& colours, const menu_facts& facts) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}), head_of<Features>(colours, facts)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::content_x | skiff::compose::content_y, head_of<Features>(colours, facts)...);
   }
   // Each's own, over the items: made once it unrolls, from their top,
   // filling them -- grown where they left too little room for a list.
@@ -112,7 +112,7 @@ struct menu_tops<plugin_list<Features...>> {
                                {.place = scene::anchor::kTopLeft, .fill = true, .background = colours.sidebar, .masking = true}));
   }
   static auto overs(const palette& colours, emoji_kept& kept) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), over_of<Features>(colours, kept)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::fill_y | skiff::compose::with({.place = scene::anchor::kTopLeft}), over_of<Features>(colours, kept)...);
   }
 };
 using menu_tops_t = menu_tops<composition::providers<contract::message_menu_top, enabled_plugins>>;
@@ -134,11 +134,11 @@ struct menu_feet;
 template <class... Features>
 struct menu_feet<plugin_list<Features...>> {
   static auto rows(const palette& colours, const menu_facts& facts) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                   extend(contract::message_menu_foot{}, type_tag<Features>{}, colours, facts)...);
   }
   static auto popovers(const palette& colours, const menu_facts& facts) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::fill_y | skiff::compose::with({.place = scene::anchor::kTopLeft}),
                                   foot_popover(contract::message_menu_foot{}, type_tag<Features>{}, colours, facts)...);
   }
   template <class Node>
@@ -170,7 +170,7 @@ struct menu_rows<plugin_list<Features...>> {
     return extend(contract::message_menu{}, type_tag<Feature>{}, colours, kept, facts);
   }
   static auto rows(const palette& colours, const emoji_kept& kept, const menu_facts& facts) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), row_of<Features>(colours, kept, facts)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y, row_of<Features>(colours, kept, facts)...);
   }
 };
 using menu_rows_t = menu_rows<composition::providers<contract::message_menu, enabled_plugins>>;
@@ -189,7 +189,7 @@ MUX_INLINE_IN_RELEASE auto menu_card(const palette& colours, emoji_kept& kept, c
   const auto item = [&](bool shown, std::string label, auto act, icon_t mark) {
     return c::visible(shown, row_item(colours, std::move(label), std::move(act), mark, std::nullopt, menu_row_look));
   };
-  auto items = c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  auto items = c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
       item(facts.editable && !facts.reaction && ((!facts.text.empty() && !facts.media) || facts.captioned), "Edit", sends<request::menu_edit>{},
            icon::sliders{}),
       item(!facts.copied.empty(), facts.selection ? "Copy Selected Text" : "Copy Text", sends<request::menu_copy>{}, icon::clip{}),
@@ -208,9 +208,7 @@ MUX_INLINE_IN_RELEASE auto menu_card(const palette& colours, emoji_kept& kept, c
           c::moves_focus([](const scene::key::down& press) {
                            return press.key == scene::keys::kEscape ? std::optional(request::close_menu{}) : std::nullopt;
                          },
-                         c::column(c::vbox(0.0f, {.autoSize = scene::axes::kBoth, .minWidth = 220.0f, .padding = {6.0f, 0.0f, 6.0f, 0.0f},
-                                                  .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
-                                                  .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
+                         c::column(c::vbox(0.0f) | c::content_x | c::content_y | c::with({.minWidth = 220.0f, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
               menu_tops_t::heads(colours, facts),
               // The items, and over them what a top unrolled: the items kept
               // under it, unseen, so the menu keeps its size -- grown only
@@ -218,7 +216,7 @@ MUX_INLINE_IN_RELEASE auto menu_card(const palette& colours, emoji_kept& kept, c
               c::spec_for<contract::message_menu_state>([](const contract::message_menu_state& now) {
                 return scene::Spec{.minHeight = now.unrolled ? kMenuListLeast : 0.0f};
               },
-                  c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                  c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
                             c::spec_for<contract::message_menu_state>([](const contract::message_menu_state& now) {
                               return scene::Spec{.alpha = now.unrolled ? 0.0f : 1.0f, .disabled = now.unrolled != 0};
                             }, std::move(items)),
@@ -235,7 +233,7 @@ MUX_INLINE_IN_RELEASE auto context_menu(const ui_needs& n, const menu_facts& fac
   // menu left open.
   return SKIFF_NAMED(context_menu, menu_feet_t::held(c::local<contract::message_menu_state>(menu_events{},
       c::onRightPress(request::menu_pressed_off{}, c::onClick(request::close_menu{},
-          c::column(c::vbox(0.0f, {.fill = true}),
+          c::column(c::vbox(0.0f) | c::fill_x | c::fill_y,
               c::popped_at<contract::message_menu_state>([at](const contract::message_menu_state&) { return std::optional(at); }, 8.0f,
                                                          c::styled({}, menu_card(colours, *n.emoji, facts))),
               menu_feet_t::popovers(colours, facts)))))));

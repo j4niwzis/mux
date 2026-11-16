@@ -156,11 +156,7 @@ template <class Act> struct space_menu_pick {
   Answer operator()() { return {close_space_menu{}, act()}; }
 };
 auto side_popup_look(const auto& colours, float width) {
-  return skiff::compose::vbox(4.0f,
-      {.width = width, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 8.0f, 8.0f},
-       .cornerRadius = 10.0f, .background = colours.popup(),
-       .border = scene::Border{colours.band, 1.0f},
-       .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
+  return skiff::compose::vbox(4.0f) | skiff::compose::content_y | skiff::compose::with({.width = width, .padding = {8.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
 }
 template <class Act>
 auto side_menu_button(const auto& colours, std::string label, Act act) {
@@ -174,7 +170,7 @@ struct space_menu_rows;
 template <class... Features>
 struct space_menu_rows<plugin_list<Features...>> {
   static auto made(const auto& colours, const std::string& room) {
-    return skiff::compose::column(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+    return skiff::compose::column(skiff::compose::vbox(4.0f) | skiff::compose::fill_x | skiff::compose::content_y,
         skiff::compose::visible(!room.empty(), side_menu_button(colours, std::string(label(contract::space_menu{}, type_tag<Features>{})),
                                                                 act(contract::space_menu{}, type_tag<Features>{}, room)))...);
   }
@@ -313,8 +309,8 @@ template <class Pick>
 auto side_space_rows(const auto& colours, Pick pick, bool horizontal) {
   namespace c = skiff::compose;
   return c::memo_rows<config::space_item_t, side_space_view, side_space_item>(side_space_row_make<Pick>{&colours, std::move(pick)}, c::Box<>(horizontal
-      ? c::hbox(4.0f, {.fillY = true, .autoSize = scene::axes::kX})
-      : c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 6.0f, 8.0f, 6.0f}})),
+      ? c::hbox(4.0f) | c::content_x | c::fill_y
+      : c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {4.0f, 6.0f, 8.0f, 6.0f}})),
       {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
 }
 template <class Lane, class Pick>
@@ -416,8 +412,8 @@ template <class Surface>
 auto wrap_side(contract::side_bars, type_tag<feature>, const palette& colours, Surface surface) {
   namespace c = skiff::compose;
   auto popup = c::tapped_off(sends<close_space_menu>{},
-      c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}), side_space_popup(colours)));
-  auto over = c::column(c::vbox(0.0f, {.fill = true}), std::move(surface), std::move(popup));
+      c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.place = scene::anchor::kTopLeft}), side_space_popup(colours)));
+  auto over = c::column(c::vbox(0.0f) | c::fill_x | c::fill_y, std::move(surface), std::move(popup));
   auto reorder = c::reorder_bars<config::space_item_t, side_space_view>(std::move(over),
       side_space_row_make<side_pick_folder>{&colours, {}}, side_lanes<decltype(colours)>{}, colours.chosen);
   return c::local<space_menu_state>(space_menu_events{}, std::move(reorder));
@@ -475,7 +471,7 @@ struct leave_events {
   }
 };
 MUX_INLINE_IN_RELEASE auto leave_room_row(const palette& colours, const named_room& room) {
-  return SKIFF_NAMED(leave_room_row, skiff::compose::row(skiff::compose::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
+  return SKIFF_NAMED(leave_room_row, skiff::compose::row(skiff::compose::hbox(10.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
       skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(room.name, 14.0f, colours.text))),
       // On while the room is among those to leave; pressed, flipped there.
       skiff::compose::named(room.name, {}, skiff::compose::applied<skiff::model::Field<&leave_draft::chosen>>(
@@ -486,7 +482,7 @@ MUX_INLINE_IN_RELEASE auto leave_room_row(const palette& colours, const named_ro
 MUX_INLINE_IN_RELEASE auto leave_space_box(const palette& colours, const leave_space_facts& facts) {
   using choice = skiff::model::Field<&leave_draft::choice>;
   return SKIFF_NAMED(leave_space_box, skiff::compose::local<leave_draft>(leave_events{facts}, skiff::compose::column(
-      skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+      skiff::compose::vbox(8.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       nodes::Text("Leave " + facts.name, 17.0f, colours.text, true),
       explained(colours, facts.rooms.empty() ? "You are in none of its rooms." : "Would you like to leave the rooms in this space too?"),
       skiff::compose::visible(!facts.rooms.empty(), skiff::compose::bound<choice>(
@@ -496,10 +492,10 @@ MUX_INLINE_IN_RELEASE auto leave_space_box(const palette& colours, const leave_s
       skiff::compose::visible(!facts.rooms.empty(), skiff::compose::bound<choice>(
           widgets::ChoiceRowField<leave_choice_t>(colours.widgets, "Leave some rooms", leave_choice::some{}))),
       skiff::compose::shown_for<choice>([](const auto& picked) { return picked == leave_choice_t(leave_choice::some{}); },
-          skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          skiff::compose::many(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
               facts.rooms | std::views::transform([&](const auto& room) { return leave_room_row(colours, room); }) | std::ranges::to<std::vector>())),
       skiff::compose::row(skiff::compose::justified(
-          skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}), nodes::justify::end{}),
+          skiff::compose::hbox(8.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.margin = {8.0f, 0.0f, 0.0f, 0.0f}}), nodes::justify::end{}),
           skiff::compose::styled({.width = 130.0f, .height = 36.0f}, widgets::SendButton<::mux::ui::request::close_shown<leave_space_facts>>(colours.widgets, "Cancel", {})),
           skiff::compose::styled({.width = 130.0f, .height = 36.0f}, primary(widgets::SendButton<submit_leave_space>(colours.widgets, "Leave space", {})))))));
 }
@@ -535,7 +531,7 @@ struct pick_space_bars {
 }
 MUX_INLINE_IN_RELEASE auto space_bars_row(const palette& colours, const std::string& account, const space_item_shown& one) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(space_bars_row, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}}),
+  return SKIFF_NAMED(space_bars_row, c::column(c::vbox(4.0f) | c::fill_x | c::content_y | c::with({.margin = {4.0f, 20.0f, 4.0f, 20.0f}}),
                    nodes::Text(one.name, 14.0f, colours.text),
                    make_choice_menu(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"}, space_bars_way(one),
                                     pick_space_bars{account, one.item})));
@@ -549,7 +545,7 @@ struct space_choices_key {
 };
 MUX_INLINE_IN_RELEASE auto space_choice_rows(const palette& colours, const space_choices_key& key) {
   namespace c = skiff::compose;
-  return c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return c::many(c::vbox(2.0f) | c::fill_x | c::content_y,
                  key.items | std::views::transform([&](const space_item_shown& one) { return space_bars_row(colours, key.account, one); }) |
                      std::ranges::to<std::vector>());
 }
@@ -597,7 +593,7 @@ MUX_INLINE_IN_RELEASE auto account_home_view(const palette& colours) {
 // without what spaces hold -- and without direct messages, only then.
 MUX_INLINE_IN_RELEASE auto everywhere_view(const palette& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(spaces_everywhere, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(spaces_everywhere, c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
       spaced_title(colours, "SPACES"),
       setting_switch<&kept::bars>(colours, "Space bars"),
       setting_switch<&kept::top_bar>(colours, "The bar after \"mux\""),
@@ -614,9 +610,9 @@ MUX_INLINE_IN_RELEASE auto extend(contract::level_sections, type_tag<feature>, c
   const auto is = [&](auto which) {
     return spl::visit(spl::overloaded{[](decltype(which)) { return true; }, [](const auto&) { return false; }}, level);
   };
-  return SKIFF_NAMED(spaces_section, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(spaces_section, c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
       c::visible(is(choice_level::everywhere{}), everywhere_view(colours)),
-      c::visible(is(choice_level::account{}), c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::visible(is(choice_level::account{}), c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
                                                         spaced_title(colours, "SPACES"), account_home_view(colours))),
       c::visible(!is(choice_level::chat{}), spaces_choices(colours, shared))));
 }
@@ -628,7 +624,7 @@ auto extend(room_settings::contract::general_sections, type_tag<feature>, const 
   namespace c = skiff::compose;
   using toggle_t = widgets::Toggle<sends<flip_home_hide>>;
   return SKIFF_NAMED(home_section, c::visible(facts.space,
-      c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
+      c::row(c::hbox(12.0f) | c::fill_x | c::content_y | c::with({.padding = {6.0f, 0.0f, 6.0f, 0.0f}}),
           c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text("Its rooms not in Home", 14.0f, colours.text))),
           c::applied<shown>([chat = facts.chat](const shown& now) { return now.hidden.contains(chat); },
                             [](toggle_t& toggle, bool on) { toggle.setOn(on); },

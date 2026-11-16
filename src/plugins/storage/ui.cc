@@ -59,7 +59,7 @@ template <class Which> struct limit_words {
 template <class Which>
 auto limit_stepper(const palette& colours, std::string what, std::string_view unit) {
   return SKIFF_NAMED(limit_stepper, skiff::compose::row(
-      skiff::compose::hbox(6.0f, {.fillX = true, .height = 50.0f, .padding = {0.0f, 12.0f, 0.0f, 20.0f}}),
+      skiff::compose::hbox(6.0f) | skiff::compose::fill_x | skiff::compose::with({.height = 50.0f, .padding = {0.0f, 12.0f, 0.0f, 20.0f}}),
       skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                              elided(nodes::Text(std::move(what), 15.0f, colours.text))),
       skiff::compose::text_for<config::cache_limits>(limit_words<Which>{unit},
@@ -79,9 +79,8 @@ auto limit_stepper(const palette& colours, std::string what, std::string_view un
 MUX_INLINE_IN_RELEASE auto seal_settings_view(const palette& colours) {
   using field = skiff::model::Field<&local_seal::on>;
   return SKIFF_NAMED(seal_settings_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      skiff::compose::row(skiff::compose::hbox(16.0f, {.fillX = true, .height = kRowHeight,
-          .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
+      skiff::compose::row(skiff::compose::hbox(16.0f) | skiff::compose::fill_x | skiff::compose::with({.height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
           skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
               nodes::Text("Encrypt local data", 15.0f, colours.text)),
           skiff::compose::bound<field>(skiff::compose::onClick(request::flip_local_encryption{},
@@ -95,9 +94,7 @@ MUX_INLINE_IN_RELEASE auto storage_settings_view(const auto& colours) {
     using skiff::compose::bound;
     auto clear = settings_link(colours, "Clear stored messages and pictures", icon::close{}, request::clear_stored{});
     return SKIFF_NAMED(storage_settings_view, skiff::compose::column(
-        skiff::compose::vbox(0.0f, {.fillX = true,
-                                    .autoSize = scene::axes::kY,
-                                    .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+        skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
 #ifdef MUX_LOCAL_ENCRYPTION
         spaced_title(colours, "ENCRYPTION"), seal_settings_view(colours),
         spaced_note(colours, "Off by default. On, everything mux keeps on disk "
@@ -139,7 +136,7 @@ MUX_INLINE_IN_RELEASE auto storage_settings_view(const auto& colours) {
   }
 MUX_INLINE_IN_RELEASE auto storage_view(const auto& colours) {
   return SKIFF_NAMED(storage_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Storage", {}, {}, true, true),
       storage_settings_view(colours)));
 }
@@ -147,7 +144,7 @@ MUX_INLINE_IN_RELEASE auto storage_view(const auto& colours) {
 
 // Settings' links to them, and the pages.
 MUX_INLINE_IN_RELEASE auto extend(contract::settings_links, type_tag<feature>, const palette& colours) {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
                                 settings_link(colours, "Storage", icon::clip{}, open_storage{}));
 }
 MUX_INLINE_IN_RELEASE auto extend(contract::settings_pages, const auto& n, const storage_page&) { return storage_view(*n.colours); }

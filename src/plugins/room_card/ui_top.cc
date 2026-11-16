@@ -30,7 +30,7 @@ using namespace ::mux::ui;
 
 MUX_INLINE_IN_RELEASE auto room_cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line) {
   return SKIFF_NAMED(room_cover, skiff::compose::row(
-      skiff::compose::hbox(16.0f, {.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
+      skiff::compose::hbox(16.0f) | skiff::compose::fill_x | skiff::compose::with({.height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}}),
       face_spot(avatar_of::chat{}, key, name, 72.0f),
       two_lines(colours, name, line, 17.0f, 6.0f, two_line_style{.selectable = true})));
 }
@@ -70,7 +70,7 @@ MUX_INLINE_IN_RELEASE auto room_card_details(const palette& colours, const std::
       14.0f, known.topic.empty() ? colours.dim : colours.text);
   about.setSelectable(true);
   return SKIFF_NAMED(room_card_details, c::column(
-      c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::vbox(0.0f) | c::fill_x | c::content_y,
       room_cover(colours, key, room_card_name(asked, known), room_card_line(asked, known)),
       section_band(colours),
       c::styled({.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}}, wrapped(std::move(about))),
@@ -83,7 +83,7 @@ MUX_INLINE_IN_RELEASE auto card_of(const palette& colours, const std::string& as
   auto details = room_card_details(colours, asked, known);
   const scene::Spec tile_spec{.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}};
   return c::arranged<card_fit>({}, card_box(
-      c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
+      c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 0.0f, 16.0f, 0.0f}}),
       page_header<no_back, close_act>(colours, known.invite ? "Invite" : "Room info", {}, {}, false, true),
       c::styled({.fillX = true}, c::scrolled(std::move(details))),
       c::styled(tile_spec, action_tile<join_act>(

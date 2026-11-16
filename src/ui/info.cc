@@ -49,7 +49,7 @@ export namespace mux::ui {
 // protocol lets it be left.
 MUX_INLINE_IN_RELEASE auto info_tiles(const palette& colours, bool muted, bool leavable) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(info_tiles, c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}}),
+  return SKIFF_NAMED(info_tiles, c::row(c::hbox(8.0f) | c::fill_x | c::content_y | c::with({.margin = {16.0f, 16.0f, 4.0f, 16.0f}}),
       c::styled({.grow = scene::axes::kX}, action_tile<sends<request::toggle_mute>>(colours, muted ? "Unmute" : "Mute", icon::bell{})),
       c::styled({.grow = scene::axes::kX}, action_tile<sends<request::open_manage>>(colours, "Manage", icon::sliders{})),
       c::visible(leavable, c::styled({.grow = scene::axes::kX}, action_tile<sends<request::leave_chat>>(colours, "Leave", icon::leave{})))));
@@ -80,16 +80,16 @@ MUX_INLINE_IN_RELEASE auto info_head(const palette& colours, const info_view& sh
   description.setSelectable(true);
   description.setLinks(link_spans_in(shown.topic), colours.accent);
   description.apply({.fillX = true});
-  return SKIFF_NAMED(info_head, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::row(c::justified(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}}), nodes::justify::end{}),
+  return SKIFF_NAMED(info_head, c::column(c::vbox(2.0f) | c::fill_x | c::content_y,
+      c::row(c::justified(c::hbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 8.0f, 0.0f, 8.0f}}), nodes::justify::end{}),
                    icon_button(colours, icon::close{}, sends<request::toggle_info>{})),
       // Its name and how it is, a piece (the avatars plugin's picture above).
       chat_heading(colours, shown.key, shown.name, shown.status),
       info_tiles(colours, shown.muted, shown.leavable),
       section_band(colours),
-      c::visible(!shown.topic.empty(), c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}}),
+      c::visible(!shown.topic.empty(), c::column(c::vbox(2.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 20.0f, 8.0f, 20.0f}}),
                                                  std::move(description), nodes::Text("Description", 12.0f, colours.dim))),
-      c::many(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::many(c::vbox(2.0f) | c::fill_x | c::content_y,
               shown.addresses | std::views::transform([&](const std::string& address) { return id_line(colours, address, "", "Address"); }) | std::ranges::to<std::vector>()),
       id_line(colours, shown.key, shown.copied)));
 }
@@ -105,7 +105,7 @@ struct info_members_heading {
 };
 MUX_INLINE_IN_RELEASE auto info_members_head(const palette& colours, const info_members_heading& facts) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(info_members_head, c::row(c::hbox(10.0f, {.fillX = true, .height = 48.0f, .padding = {6.0f, 10.0f, 6.0f, 16.0f}}),
+  return SKIFF_NAMED(info_members_head, c::row(c::hbox(10.0f) | c::fill_x | c::with({.height = 48.0f, .padding = {6.0f, 10.0f, 6.0f, 16.0f}}),
       icon_view(colours, icon::people{}),
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                 nodes::Text(std::format("{} MEMBER{}", facts.count, facts.count == 1 ? "" : "S"), 13.0f, colours.dim, true)),
@@ -158,7 +158,7 @@ struct info_member_row {
 // The rows builders (their text pieces): kept by their keys, made under the
 // rules the panel is built under.
 MUX_INLINE_IN_RELEASE auto info_member_rows(const palette& colours) {
-  return skiff::compose::memo_rows<std::string, info_member, std::tuple<std::string, info_member>>(info_member_row{&colours}, nodes::Stack{});
+  return skiff::compose::memo_rows<std::string, info_member, std::tuple<std::string, info_member>>(info_member_row{&colours}, nodes::ColumnStack{});
 }
 
 // The panel: its column, and its left edge. Near the end of the members
@@ -168,13 +168,13 @@ MUX_INLINE_IN_RELEASE auto info_panel(const ui_needs& n) {
   const palette& colours = *n.colours;
   const auto listed = [](const info_shown& now) { return now.head.group; };
   // Filling the column the screen sizes for it, as the threads' panel does.
-  return SKIFF_NAMED(info_panel, c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar, .masking = true}),
+  return SKIFF_NAMED(info_panel, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.background = colours.sidebar, .masking = true}),
       c::styled({.fillX = true, .grow = scene::axes::kY},
           c::fetching_for<info_shown, conversation_id>([](const info_shown& now) {
             return c::Fetched<conversation_id>{now.heading.room, now.members.size(), now.more};
           },
               sends<request::info_more>{},
-              c::scrolled(c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::scrolled(c::column(c::vbox(2.0f) | c::fill_x | c::content_y,
                   c::projected<info_shown>([](const info_shown& now) { return std::optional(now.head); },
                       c::mount<info_head_t, info_view>([at = &colours](const info_view& view) { return std::tuple{info_head(*at, view)}; },
                                                        {.fillX = true, .autoSize = scene::axes::kY})),
@@ -182,7 +182,7 @@ MUX_INLINE_IN_RELEASE auto info_panel(const ui_needs& n) {
                   // a file -- not to go to another client for them (a
                   // tester's).
                   c::shown_for<info_shown>([](const info_shown& now) { return !now.files.empty(); },
-                      c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                      c::column(c::vbox(2.0f) | c::fill_x | c::content_y,
                           section_band(colours),
                           c::text_for<info_shown>([](const info_shown& now) {
                             return std::format("{} FILE{}", now.files.size(), now.files.size() == 1 ? "" : "S");
@@ -192,8 +192,8 @@ MUX_INLINE_IN_RELEASE auto info_panel(const ui_needs& n) {
                             return now.files | std::views::transform([](const info_file& one) { return std::tuple{one.id, one}; }) | std::ranges::to<std::vector>();
                           },
                               c::styled({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 16.0f, 8.0f, 16.0f}},
-                                        skiff::compose::memo_rows<std::string, info_file, std::tuple<std::string, info_file>>(info_file_row{&colours}, nodes::Stack{}))))),
-                  c::shown_for<info_shown>(listed, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                        skiff::compose::memo_rows<std::string, info_file, std::tuple<std::string, info_file>>(info_file_row{&colours}, nodes::ColumnStack{}))))),
+                  c::shown_for<info_shown>(listed, c::column(c::vbox(2.0f) | c::fill_x | c::content_y,
                       section_band(colours),
                       c::projected<info_shown>([](const info_shown& now) { return std::optional(now.heading); },
                           c::mount<info_members_head_t, info_members_heading>(

@@ -97,7 +97,7 @@ struct room_creation_events {
 template <auto Member>
 auto room_form_toggle(const palette& colours, std::string label) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(room_form_toggle, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(room_form_toggle, c::row(c::hbox(12.0f) | c::fill_x | c::content_y,
       c::styled({.grow = scene::axes::kX}, wrapped(nodes::Text(label, 13.0f, colours.text))),
       c::bound<skiff::model::Field<Member>>(widgets::ToggleField<bool>(colours.widgets))));
 }
@@ -107,9 +107,7 @@ MUX_INLINE_IN_RELEASE auto room_access_choice(const palette& colours, std::strin
   using access = skiff::model::Field<&room_draft::access>;
   return SKIFF_NAMED(room_access_choice, c::spec_for<access>([choice](const auto& selected) { return scene::Spec{.selected = selected == choice}; },
       c::onClick(skiff::bind::own(skiff::model::setTo(choice)),
-          c::row(c::hbox(16.0f, {.fillX = true, .height = 46.0f,
-                                .padding = {0.0f, 20.0f, 0.0f, 20.0f},
-                                .hoverBackground = colours.chosen}),
+          c::row(c::hbox(16.0f) | c::fill_x | c::with({.height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}, .hoverBackground = colours.chosen}),
               c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                   nodes::Text(label, 15.0f, colours.text)),
               c::styled({.width = 20.0f, .alignSelf = scene::align::kMiddle},
@@ -153,7 +151,7 @@ template <class Protocol>
   requires(traits_of<Protocol>.federation)
 auto federation_part(const palette& colours) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
                    room_form_toggle<&room_draft::advanced>(colours, "Advanced"),
                    c::shown_for<skiff::model::Field<&room_draft::advanced>>([](bool shown) { return shown; },
                        room_form_toggle<&room_draft::federate>(colours, "Allow people from other servers")));
@@ -165,11 +163,11 @@ auto create_room_view(const palette& colours, const Facts& facts) {
   const auto in = place_of(facts);
   const auto form = proto::room_creation_form_of(state_before(facts.by.speaks), facts.own_server);
   return SKIFF_NAMED(create_room_view, c::local<room_draft>(room_creation_events<Facts>{facts}, c::column(
-      c::vbox(8.0f, {.fill = true, .padding = {0.0f, 22.0f, 18.0f, 22.0f}}),
+      c::vbox(8.0f) | c::fill_x | c::fill_y | c::with({.padding = {0.0f, 22.0f, 18.0f, 22.0f}}),
       page_header<no_back, sends<request::close_shown<Facts>>>(colours,
           in ? std::string(in->make_space ? "Create a space in " : "Create a room in ") + in->name : "Create a room", {}, {}, false, true),
       c::styled({.fillX = true, .grow = scene::axes::kY}, skiff::compose::scrolled(c::column(
-          c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::vbox(8.0f) | c::fill_x | c::content_y,
           model_field<&room_draft::name>(colours, "Name", ""),
           model_field<&room_draft::topic>(colours, "Topic (optional)", ""),
           nodes::Text("Who can join", 13.0f, colours.dim),
@@ -179,7 +177,7 @@ auto create_room_view(const palette& colours, const Facts& facts) {
           address_part<Protocol>(colours, form.address_hint),
           encryption_part<Protocol>(colours),
           federation_part<Protocol>(colours)))),
-      c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), nodes::justify::end{}),
+      c::row(c::justified(c::hbox(8.0f) | c::fill_x | c::content_y, nodes::justify::end{}),
           c::styled({.width = 90.0f, .height = 34.0f}, widgets::SendButton<request::close_shown<Facts>>(colours.widgets, "Cancel", {})),
           c::styled({.width = 128.0f, .height = 34.0f},
               skiff::compose::primary(widgets::SendButton<submit_room>(colours.widgets, in && in->make_space ? "Create space" : "Create room", {}))))),

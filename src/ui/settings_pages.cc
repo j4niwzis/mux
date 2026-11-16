@@ -48,12 +48,12 @@ auto settings_link_of(const palette& colours) {
 }
 template <class... Features>
 auto settings_links_of(plugin_list<Features...>, const palette& colours) {
-  return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       settings_link_of<Features>(colours)...);
 }
 MUX_INLINE_IN_RELEASE auto settings_home(const palette& colours) {
   return SKIFF_NAMED(settings_home, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
           page_header<sends<request::close_settings>, sends<request::close_settings>>(colours, "Settings", {}, {}, false, true)),
       settings_link(colours, "Accounts", icon::person{}, request::open_accounts{}),

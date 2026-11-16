@@ -34,9 +34,9 @@ MUX_INLINE_IN_RELEASE auto adding_row(const palette& colours, const adding_choic
   const auto one = [&](std::optional<std::string> name) {
     return segment(colours, name.value_or("None"), sends<choose_adding>{{name}}, name == now.chosen);
   };
-  return SKIFF_NAMED(proxy_row, c::row(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(proxy_row, c::row(c::hbox(4.0f) | c::fill_x | c::content_y,
                 c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Proxy", 13.0f, colours.dim)),
-                c::many(c::hbox(4.0f, {.autoSize = scene::axes::kBoth}),
+                c::many(c::hbox(4.0f) | c::content_x | c::content_y,
                         std::views::iota(std::size_t{0}, now.names.size() + 1) | std::views::transform([&](std::size_t at) {
                           return one(at == 0 ? std::nullopt : std::optional(now.names[at - 1]));
                         }) | std::ranges::to<std::vector>()),
@@ -62,10 +62,10 @@ MUX_INLINE_IN_RELEASE auto list_view(const palette& colours, const std::vector<c
                              icon::dot{proxy_colour(profile.name)}, edit{static_cast<int>(index)});
       }) | std::ranges::to<std::vector>();
   return SKIFF_NAMED(list_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
           page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Proxies", {}, {}, with_back, true)),
-      skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)),
+      skiff::compose::many(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y, std::move(rows)),
       settings_link(colours, "Add proxy", icon::plus{}, add{}),
       skiff::compose::visible(profiles.empty(), skiff::compose::styled({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}},
           wrapped(note_text(colours, "No proxies yet. Accounts connect directly."))))));
@@ -110,7 +110,7 @@ MUX_INLINE_IN_RELEASE auto editor_view(const palette& colours, const std::option
       .port = std::to_string(from->port), .username = from->username.value_or(""),
       .password = from->password.value_or(""), .resolver = from->srv_resolver.value_or("")};
   return SKIFF_NAMED(editor_view, skiff::compose::local<draft>(draft_events{}, skiff::compose::column(
-      skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(8.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       page_header<sends<open_list>, sends<request::close_settings>>(colours, from ? from->name : "New proxy", {}, {}, true, true),
       model_field<&draft::name>(colours, "Name", "Home, Tor, Work…", false, scene::Margin::horizontal(16.0f)),
       skiff::compose::bound<skiff::model::Field<&draft::kind>>(skiff::compose::styled(
@@ -124,8 +124,7 @@ MUX_INLINE_IN_RELEASE auto editor_view(const palette& colours, const std::option
       skiff::compose::text_for<shown>([](const shown& now) { return now.error; },
           skiff::compose::styled({.fillX = true, .margin = scene::Margin::horizontal(16.0f)},
                                         wrapped(nodes::Text("", 13.0f, colours.error)))),
-      skiff::compose::row(skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
-          .margin = scene::Margin::horizontal(16.0f)}),
+      skiff::compose::row(skiff::compose::hbox(8.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.margin = scene::Margin::horizontal(16.0f)}),
           // The program's buttons, their labels in their middle.
           skiff::compose::styled({.width = 110.0f, .height = 34.0f},
               skiff::compose::primary(button_for<sends<save_draft>>(colours.widgets, "Save", {}))),
@@ -156,13 +155,13 @@ MUX_INLINE_IN_RELEASE auto choice_rows(const palette& colours, const std::string
     return row_item(colours, key.labels[static_cast<std::size_t>(at)], sends<choose>{choose{account, at}}, icon::dot{proxy_colour(name)},
                     key.current == name);
   }) | std::ranges::to<std::vector>();
-  return SKIFF_NAMED(choice_rows, c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)));
+  return SKIFF_NAMED(choice_rows, c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(rows)));
 }
 using choice_rows_t = decltype(choice_rows(std::declval<const palette&>(), std::string(), rows_key{}));
 MUX_INLINE_IN_RELEASE auto page_view(account_page, const palette& colours, const account_page_facts& facts) {
   namespace c = skiff::compose;
   const std::string address = facts.by.address;
-  return SKIFF_NAMED(page_view, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(page_view, c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
       c::styled({.margin = {0.0f, 0.0f, 4.0f, 0.0f}}, section_title(colours, "PROXY")),
       c::projected<shown>([address](const shown& now) {
         const auto found = now.through.find(address);

@@ -110,7 +110,7 @@ auto own_link_part(const palette&, const invite_of<Protocol>&) { return nothing_
 template <class Protocol>
 auto own_link_part(const palette& colours, const start_of<Protocol>& facts) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
       c::styled({.fillX = true}, wrapped(nodes::Text("You can share your address with someone you haven't chatted with yet.", 13.0f, colours.dim))),
       nodes::Text(facts.own_link, 13.0f, colours.accent),
       widgets::SendButton<request::copy_text>(colours.widgets, "Copy link", {facts.own_link}));
@@ -120,10 +120,10 @@ auto start_chat_view(const palette& colours, const Facts& facts) {
   namespace c = skiff::compose;
   const auto words = proto::direct_chat_form_of(state_before(facts.by.speaks));
   return SKIFF_NAMED(start_chat_view, c::scoped<Facts>(start_chat_events{}, c::column(
-      c::vbox(8.0f, {.fill = true, .padding = {0.0f, 12.0f, 16.0f, 12.0f}}),
+      c::vbox(8.0f) | c::fill_x | c::fill_y | c::with({.padding = {0.0f, 12.0f, 16.0f, 12.0f}}),
       page_header<no_back, sends<request::close_shown<Facts>>>(colours, title_of(facts), {}, {}, false, true),
       c::styled({.fillX = true}, wrapped(nodes::Text(intro_of(facts, words), 14.0f, colours.text))),
-      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
           c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX},
               widgets::TextBox<find_people_typed>(colours.widgets, words.hint, {})),
           c::styled({.width = 64.0f, .height = 34.0f},
@@ -137,7 +137,7 @@ auto start_chat_view(const palette& colours, const Facts& facts) {
       c::styled({.fillX = true, .grow = scene::axes::kY}, c::scrolled(
           c::projected<Facts>([](const auto& now) { return std::optional(now); },
               c::mount<person_rows_t<Facts>, Facts>([colours = &colours](const auto& now) {
-                return std::tuple{c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), person_rows(*colours, now))};
+                return std::tuple{c::many(c::vbox(0.0f) | c::fill_x | c::content_y, person_rows(*colours, now))};
               }, {.fillX = true, .autoSize = scene::axes::kY})))),
       own_link_part(colours, facts))));
 }

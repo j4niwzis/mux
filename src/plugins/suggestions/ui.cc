@@ -46,8 +46,7 @@ template <class Pick>
 auto suggestion_row(const palette& colours, Pick pick, const suggestion& one) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(suggestion_row, c::onPress(std::move(pick), c::row(
-      c::hbox(10.0f, {.fillX = true, .height = 44.0f, .padding = {0.0f, 14.0f, 0.0f, 14.0f},
-                     .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .selected = one.lit}),
+      c::hbox(10.0f) | c::fill_x | c::with({.height = 44.0f, .padding = {0.0f, 14.0f, 0.0f, 14.0f}, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .selected = one.lit}),
       c::visible(one.person, face_spot(avatar_of::person{}, one.id, one.title, 28.0f)),
       mark_of(colours, one),
       two_lines(colours, one.title, one.sub, 14.0f, 1.0f)), one.title));
@@ -57,7 +56,7 @@ MUX_INLINE_IN_RELEASE auto extend(contract::composer_top, type_tag<feature>, con
   namespace c = skiff::compose;
   return SKIFF_NAMED(suggestions_for, c::shown_for<shown>([](const shown& now) { return !now.items.empty(); },
       c::projected<shown>([](const shown& now) { return now.items; },
-          c::listed<suggestion>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .background = colours.sidebar}),
+          c::listed<suggestion>(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.background = colours.sidebar}),
               [&colours](const suggestion& one) { return suggestion_row(colours, sends<suggestion_pick>{{one.at}}, one); }))));
 }
 

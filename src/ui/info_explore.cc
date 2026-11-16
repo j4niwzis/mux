@@ -42,7 +42,7 @@ struct directory_join {
 };
 auto directory_room_row(const palette& colours, const directory_room& one, const std::string& server, std::optional<account_id> by = std::nullopt) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(directory_room_row, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}}),
+  return SKIFF_NAMED(directory_room_row, c::row(c::hbox(12.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 16.0f, 8.0f, 16.0f}}),
       directory_room_text(colours, one),
       c::styled({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle},
           primary(widgets::Button<directory_join>(colours.widgets, one.space ? "Open" : "Join",

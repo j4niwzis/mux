@@ -98,17 +98,17 @@ MUX_INLINE_IN_RELEASE auto send_box(const ui_needs& n, const send_facts& facts) 
                  return file_row(colours, std::string(), one.name, one.size, false);
                }) | std::ranges::to<std::vector>();
   return SKIFF_NAMED(send_box, c::local<send_draft>(
-      c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {18.0f, 20.0f, 16.0f, 20.0f}}),
+      c::column(c::vbox(12.0f) | c::fill_x | c::content_y | c::with({.padding = {18.0f, 20.0f, 16.0f, 20.0f}}),
           nodes::Text(send_title_of(all), 17.0f, colours.text, true),
           c::spec_for<window_shape>([needed = send_height_of(all)](const window_shape& now) {
             return scene::Spec{.fillX = true, .height = send_room_of(needed, now.height)};
           },
-                    skiff::compose::scrolled(c::column(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}),
-                                                     c::many(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}), std::move(pictures)),
-                                                     c::many(c::vbox(kSendGap, {.fillX = true, .autoSize = scene::axes::kY}), std::move(files))))),
+                    skiff::compose::scrolled(c::column(c::vbox(kSendGap) | c::fill_x | c::content_y,
+                                                     c::many(c::vbox(kSendGap) | c::fill_x | c::content_y, std::move(pictures)),
+                                                     c::many(c::vbox(kSendGap) | c::fill_x | c::content_y, std::move(files))))),
           c::bound<skiff::model::Field<&send_draft::caption>>(
               c::styled({.fillX = true}, widgets::TextAreaField<std::string>(colours.widgets, "Add a caption\u2026", 3))),
-          c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}), nodes::justify::end{}),
+          c::row(c::justified(c::hbox(8.0f) | c::fill_x | c::content_y | c::with({.margin = {8.0f, 0.0f, 0.0f, 0.0f}}), nodes::justify::end{}),
                  // More pictures or files for the same message: a gallery.
                  c::asking_for<send_draft>([](const send_draft& draft) { return request::attach_more{draft.caption}; },
                      c::styled({.width = 110.0f, .height = 36.0f},

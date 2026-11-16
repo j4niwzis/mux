@@ -86,7 +86,7 @@ struct composer_top_list<plugin_list<Features...>> {
     return extend(contract::composer_top{}, type_tag<Feature>{}, colours);
   }
   static auto made(const palette& colours) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), node_of<Features>(colours)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y, node_of<Features>(colours)...);
   }
 };
 using composer_top_plugins = composer_top_list<composition::providers<contract::composer_top, enabled_plugins>>;
@@ -94,7 +94,7 @@ using composer_top_plugins = composer_top_list<composition::providers<contract::
 MUX_INLINE_IN_RELEASE auto no_accounts_yet(const palette& colours) {
   using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
   return SKIFF_NAMED(no_accounts_yet, skiff::compose::column(
-      skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {120.0f, 48.0f, 0.0f, 48.0f}}),
+      skiff::compose::vbox(12.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.padding = {120.0f, 48.0f, 0.0f, 48.0f}}),
       nodes::Text("No accounts yet", 22.0f, colours.text, true),
       skiff::compose::styled({.fillX = true},
                              wrapped(nodes::Text("Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, colours.dim))),
@@ -106,7 +106,7 @@ MUX_INLINE_IN_RELEASE auto no_accounts_yet(const palette& colours) {
 // to do, as tdesktop's (its service message look).
 MUX_INLINE_IN_RELEASE auto select_a_chat() {
   return SKIFF_NAMED(select_a_chat, skiff::compose::column(
-      skiff::compose::justified(skiff::compose::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), nodes::justify::middle{}),
+      skiff::compose::justified(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::grow_y, nodes::justify::middle{}),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle},
                              widgets::Pill("Select a chat to start messaging",
                                            {.plate = skia::colorSetARGB(0x66, 0, 0, 0), .size = 13.0f, .height = 26.0f, .padX = 12.0f}))));
@@ -182,7 +182,7 @@ template <class Holder, class Make>
   std::optional<Holder> held;
   if (const conversation* one = chat_of(key))
     held = spl::visit([&](const auto& state) { return held_view<Holder>(Make{}(state, *one)); }, protocol_state_of(*key.shared, key.id.account));
-  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(held));
+  return c::column(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(held));
 }
 template <class Holder, class Make>
 auto protocol_view_for(const ui_needs& n) {
@@ -210,7 +210,7 @@ struct column_parts<plugin_list<Features...>> {
   }
   // One under another, in the plugins' order.
   static auto column_of(const ui_needs& n) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), made_of<Features>(n)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y, made_of<Features>(n)...);
   }
 };
 using column_parts_t = column_parts<composition::providers<contract::chat_column, enabled_plugins>>;
@@ -229,7 +229,7 @@ MUX_INLINE_IN_RELEASE auto chat_column(const ui_needs& n) {
       // Filling the column the screen grows it in: a grow said here, across
       // that column, meant nothing -- it was 0 wide, and what it showed
       // (No accounts yet, its button) stood outside it, taking no press.
-      c::column(c::vbox(0.0f, {.fill = true, .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat}),
+      c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat}),
       chat_header_for(*n.colours),
       connection_bar_for<connection_shown>(*n.colours, &connection_shown::chat),
       selection_bar(n),
@@ -376,7 +376,7 @@ struct beside_panel_list<plugin_list<Features...>> {
     return extend(contract::beside_panels{}, type_tag<Feature>{}, n);
   }
   static auto made(const ui_needs& n) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillY = true}), panel_of<Features>(n)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_y, panel_of<Features>(n)...);
   }
 };
 using beside_plugins = beside_panel_list<composition::providers<contract::beside_panels, enabled_plugins>>;
@@ -395,15 +395,15 @@ MUX_INLINE_IN_RELEASE auto chats_screen(const ui_needs& n) {
       c::onKeys(screen_keys{},
           c::flicked(90.0f, screen_swiped{},
               c::slid_for<screen_shown>([](const screen_shown& now) { return c::Paned{now.single, static_cast<int>(now.pane.index())}; },
-                  c::row(c::hbox(0.0f, {.fill = true}),
+                  c::row(c::hbox(0.0f) | c::fill_x | c::fill_y,
                       c::shown_for<screen_shown>(up(&screen_shown::side_up),
-                          c::column(c::vbox(0.0f, {.fillY = true, .autoSize = scene::axes::kX}), side_column_of(n))),
+                          c::column(c::vbox(0.0f) | c::content_x | c::fill_y, side_column_of(n))),
                       c::shown_for<screen_shown>(up(&screen_shown::side_edge), c::styled(edge, drag_edge(colours, resize_sidebar_to{}))),
                       c::shown_for<screen_shown>(up(&screen_shown::chat_up),
-                          c::column(c::vbox(0.0f, {.fillY = true, .grow = scene::axes::kX}), chat_column(n))),
+                          c::column(c::vbox(0.0f) | c::grow_x | c::fill_y, chat_column(n))),
                       c::shown_for<screen_shown>(up(&screen_shown::beside_edge), c::styled(edge, drag_edge(colours, resize_info_to{}, false))),
                       c::shown_for<screen_shown>(up(&screen_shown::info_up),
-                          c::spec_for<screen_shown>(beside_width, c::column(c::vbox(0.0f, {.fillY = true}), info_panel(n)))),
+                          c::spec_for<screen_shown>(beside_width, c::column(c::vbox(0.0f) | c::fill_y, info_panel(n)))),
                       c::shown_for<screen_shown>(up(&screen_shown::panel_up),
                           c::spec_for<screen_shown>(beside_width, beside_plugins::made(n)))))))));
 }

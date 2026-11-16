@@ -408,7 +408,7 @@ struct corner_buttons<plugin_list<Features...>> {
     return extend(contract::list_corner{}, type_tag<Feature>{}, colours);
   }
   static auto made(const palette& colours) {
-    return skiff::compose::column(skiff::compose::vbox(10.0f, {.autoSize = scene::axes::kBoth}), button_of<Features>(colours)...);
+    return skiff::compose::column(skiff::compose::vbox(10.0f) | skiff::compose::content_x | skiff::compose::content_y, button_of<Features>(colours)...);
   }
 };
 using corner_plugins = corner_buttons<composition::providers<contract::list_corner, enabled_plugins>>;
@@ -422,7 +422,7 @@ MUX_INLINE_IN_RELEASE auto list_corner(const palette& colours) {
   namespace c = skiff::compose;
   const scene::Spec plate{.width = 42.0f, .height = 42.0f, .cornerRadius = 21.0f, .background = colours.sidebar,
                           .hoverBackground = colours.chosen, .border = scene::Border{colours.band, 1.0f}};
-  return SKIFF_NAMED(list_corner, c::column(c::vbox(10.0f, {.place = scene::anchor::kBottomRight, .x = -18.0f, .y = -12.0f, .autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(list_corner, c::column(c::vbox(10.0f) | c::content_x | c::content_y | c::with({.place = scene::anchor::kBottomRight, .x = -18.0f, .y = -12.0f}),
                    corner_plugins::made(colours),
                    c::shown_for<chat_ways>([](const chat_ways& now) { return now.back_to_chat; },
                        c::onClick(request::return_to_chat{},
@@ -459,11 +459,11 @@ MUX_INLINE_IN_RELEASE auto chat_area(const ui_needs& n) {
       },
       std::move(backdrop));
   auto list = c::projected<chat_ways>([](const chat_ways& now) { return now.back_here || now.detached; },
-      c::with_way_down(c::vbox(0.0f, {.fill = true}), timeline_list<chat_told, chat_list_tag>(), list_corner(*n.colours),
+      c::with_way_down(c::vbox(0.0f) | c::fill_x | c::fill_y, timeline_list<chat_told, chat_list_tag>(), list_corner(*n.colours),
                        [](bool wanted, std::size_t unseen) { return request::way_down{wanted, unseen}; }));
   auto loading = c::shown_for<chat_ways>([](const chat_ways& now) { return now.loading; },
       c::styled({.place = scene::anchor::kCentre}, widgets::RadialLoader<stop_jump_act>(44.0f, {})));
-  return SKIFF_NAMED(chat_area, c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}), std::move(wall), std::move(list), std::move(loading)));
+  return SKIFF_NAMED(chat_area, c::column(c::vbox(0.0f) | c::fill_x | c::grow_y, std::move(wall), std::move(list), std::move(loading)));
 }
 using chat_area_t = decltype(chat_area(std::declval<const ui_needs&>()));
 

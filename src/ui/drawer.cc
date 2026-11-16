@@ -40,8 +40,7 @@ struct drawer_accounts {
 MUX_INLINE_IN_RELEASE auto drawer_account_row(const palette& colours, const drawer_account& one) {
   namespace c = skiff::compose;
   auto row = c::onPress(sends<request::switch_account>{{one.address}},
-      c::row(c::hbox(14.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen,
-                             .selectedBackground = colours.chosen, .focusBackground = colours.chosen, .selected = one.current}),
+      c::row(c::hbox(14.0f) | c::fill_x | c::with({.height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .focusBackground = colours.chosen, .selected = one.current}),
              // Its text, a piece the plugins shape (the avatars plugin's
              // picture beside it): the row a builder, made under the rules
              // the list is built under.
@@ -70,7 +69,7 @@ struct drawer_row_list<plugin_list<Features...>> {
     return extend(contract::drawer_rows{}, type_tag<Feature>{}, colours);
   }
   static auto rows(const palette& colours) {
-    return skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), row_of<Features>(colours)...);
+    return skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y, row_of<Features>(colours)...);
   }
 };
 using drawer_plugins = drawer_row_list<composition::providers<contract::drawer_rows, enabled_plugins>>;
@@ -80,12 +79,12 @@ MUX_INLINE_IN_RELEASE auto drawer_view(const ui_needs& n) {
   // Under its title, all of it scrolled where the window is lower than it
   // -- a phone's in split screen, 300 high, had Settings and Quit below its
   // edge.
-  return SKIFF_NAMED(drawer_view, c::column(c::vbox(0.0f, {.fill = true}),
+  return SKIFF_NAMED(drawer_view, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y,
       c::styled({.margin = {18.0f, 20.0f, 14.0f, 20.0f}}, nodes::Text("mux", 20.0f, colours.text, true)),
       c::styled({.fillX = true, .grow = scene::axes::kY},
-          c::scrolled(c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::scrolled(c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
               c::projected<drawer_accounts>([](const drawer_accounts& now) { return now.accounts; },
-                  c::listed<drawer_account>(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), drawer_account_row_of{&colours})),
+                  c::listed<drawer_account>(c::vbox(0.0f) | c::fill_x | c::content_y, drawer_account_row_of{&colours})),
               c::styled({.margin = {0.0f, 0.0f, 6.0f, 0.0f}}, row_item(colours, "Manage accounts", sends<request::open_accounts>{}, icon::person{})),
               c::styled({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 6.0f, 0.0f}}, nodes::Box<>(colours.chosen)),
               drawer_plugins::rows(colours),

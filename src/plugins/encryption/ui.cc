@@ -36,7 +36,7 @@ using namespace ::mux::ui;
 // One emoji, big, its name under it.
 [[nodiscard]] MUX_INLINE_IN_RELEASE auto verification_emoji(const palette& colours, std::string_view picture, std::string_view name) {
   using skiff::compose::styled;
-  return skiff::compose::column(skiff::compose::vbox(4.0f, {.width = 52.0f, .autoSize = scene::axes::kY}),
+  return skiff::compose::column(skiff::compose::vbox(4.0f) | skiff::compose::content_y | skiff::compose::with({.width = 52.0f}),
                                 styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::string(picture), 30.0f, colours.text)),
                                 styled({.fillX = true, .alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(std::string(name), 11.0f, colours.dim))));
 }
@@ -101,7 +101,7 @@ template <class Button>
 // step moves on.
 MUX_INLINE_IN_RELEASE auto verification_box_of(const palette& colours, const verification_view& view) {
   return SKIFF_NAMED(verification_box_of, skiff::compose::column(
-      skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+      skiff::compose::vbox(10.0f) | skiff::compose::fill_x | skiff::compose::content_y | skiff::compose::with({.padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       verification_line("Verify " + view.user, 17.0f, colours.text, true), verification_line(verification_note(view), 14.0f, colours.dim),
       emoji_row(colours, view.step),
       verification_answer(step_asks(view.step), 120.0f, primary(button_for<sends<verify_accept_now>>(colours.widgets, "Accept", {}))),

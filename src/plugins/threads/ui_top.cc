@@ -46,10 +46,9 @@ MUX_INLINE_IN_RELEASE auto thread_row(const palette& colours, const thread_root&
     return c::styled({.fillX = true}, elided(nodes::Text(std::move(text), size, colour, bold)));
   };
   return SKIFF_NAMED(thread_row, c::onClick(request::open_aside{one.root},
-      c::row(c::hbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 8.0f,
-                             .hoverBackground = colours.chosen}),
+      c::row(c::hbox(10.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
              c::styled({.alignSelf = scene::align::kStart}, face_spot(avatar_of::person{}, one.sender, one.name, 36.0f)),
-             c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+             c::column(c::vbox(2.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                        line(one.name, 13.0f, colours.accent, true), line(one.words, 13.0f, colours.text), line(one.meta, 12.0f, colours.dim))),
       one.name));
 }
@@ -77,8 +76,8 @@ MUX_INLINE_IN_RELEASE auto threads_panel(const ui_needs& n) {
   const auto open = [](const shown& now) { return !now.listing; };
   // Filling the column the screen sizes for it: as tall alone, it was 0
   // wide, its rows' text with no room at all.
-  return SKIFF_NAMED(threads_panel, c::column(c::vbox(0.0f, {.fill = true, .background = colours.sidebar}),
-      c::row(c::hbox(8.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}}),
+  return SKIFF_NAMED(threads_panel, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.background = colours.sidebar}),
+      c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}}),
              c::shown_for<shown>(open, c::styled({.alignSelf = scene::align::kMiddle},
                                                          icon_button(colours, icon::back{}, sends<close_aside>{}))),
              c::text_for<shown>([](const shown& now) { return std::string(now.listing ? "Threads" : "Thread"); },
@@ -90,7 +89,7 @@ MUX_INLINE_IN_RELEASE auto threads_panel(const ui_needs& n) {
       c::shown_for<shown>(listing,
           c::styled({.fillX = true, .grow = scene::axes::kY},
               c::scrolled(c::projected<shown>([](const shown& now) { return now.roots; },
-                  c::listed<thread_root>(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}}),
+                  c::listed<thread_root>(c::vbox(2.0f) | c::fill_x | c::content_y | c::with({.padding = {4.0f, 4.0f, 4.0f, 4.0f}}),
                                          [&colours](const thread_root& one) { return thread_row(colours, one); }))))),
       // Across the panel and as tall as what its head and composer leave:
       // the list fills what it is put in, and said only to grow, it kept

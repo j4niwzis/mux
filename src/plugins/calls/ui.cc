@@ -121,7 +121,7 @@ MUX_INLINE_IN_RELEASE auto call_buttons(const palette& colours, float size, cons
   const auto white = skia::colorSetARGB(255, 255, 255, 255);
   const bool ringing = rings_here(view), ended = has_ended(view);
   return SKIFF_NAMED(call_buttons, skiff::compose::keep_ticking(ended, skiff::compose::row(
-      skiff::compose::hbox(size / 2.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+      skiff::compose::hbox(size / 2.0f) | skiff::compose::content_x | skiff::compose::content_y | skiff::compose::with({.alignSelf = scene::align::kMiddle}),
       call_button(colours, size, colours.tile, colours.chosen, colours.text,
                   view.muted ? icon_t{icon::microphone_off{}} : icon_t{icon::microphone{}},
                   mute_call{}, !ringing && !ended, view.muted ? "Unmute" : "Mute"),
@@ -147,9 +147,7 @@ MUX_INLINE_IN_RELEASE auto call_status(const palette& colours, const call_view& 
 // The call in its chat, beneath the header.
 MUX_INLINE_IN_RELEASE auto call_panel(const palette& colours, const call_view& view) {
   return SKIFF_NAMED(call_panel, skiff::compose::column(
-      skiff::compose::justified(skiff::compose::vbox(10.0f,
-          {.fillX = true, .height = 280.0f, .padding = {20.0f, 16.0f, 20.0f, 16.0f},
-           .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f}}), nodes::justify::middle{}),
+      skiff::compose::justified(skiff::compose::vbox(10.0f) | skiff::compose::fill_x | skiff::compose::with({.height = 280.0f, .padding = {20.0f, 16.0f, 20.0f, 16.0f}, .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f}}), nodes::justify::middle{}),
       call_avatar(view, 88.0f),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(view.who, 18.0f, colours.text, true)),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle, .margin = {0.0f, 0.0f, 8.0f, 0.0f}}, call_status(colours, view, 13.0f)),
@@ -158,8 +156,7 @@ MUX_INLINE_IN_RELEASE auto call_panel(const palette& colours, const call_view& v
 // On a phone the call fills the window and takes presses off its controls.
 MUX_INLINE_IN_RELEASE auto call_screen(const palette& colours, const call_view& view) {
   return SKIFF_NAMED(call_screen, skiff::compose::onClick(scene::Taken{}, skiff::compose::column(
-      skiff::compose::vbox(12.0f, {.place = scene::anchor::kTopLeft, .fill = true,
-                                 .padding = {24.0f, 24.0f, 48.0f, 24.0f}, .background = colours.sidebar}),
+      skiff::compose::vbox(12.0f) | skiff::compose::fill_x | skiff::compose::fill_y | skiff::compose::with({.place = scene::anchor::kTopLeft, .padding = {24.0f, 24.0f, 48.0f, 24.0f}, .background = colours.sidebar}),
       skiff::compose::styled({.fillX = true, .height = 1.0f, .grow = scene::axes::kY}, nodes::Box<>(skia::SkColor{0})),
       call_avatar(view, 128.0f),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(view.who, 24.0f, colours.text, true))),
@@ -170,14 +167,10 @@ MUX_INLINE_IN_RELEASE auto call_screen(const palette& colours, const call_view& 
 // A compact card above the conversation while the call rings elsewhere.
 MUX_INLINE_IN_RELEASE auto call_bar(const palette& colours, const call_view& view) {
   return SKIFF_NAMED(call_bar, skiff::compose::row(
-      skiff::compose::hbox(12.0f, {.place = scene::anchor::kTopRight, .x = 12.0f, .y = 12.0f,
-                                  .width = 360.0f, .autoSize = scene::axes::kY,
-                                  .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .cornerRadius = 12.0f,
-                                  .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
-                                  .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
+      skiff::compose::hbox(12.0f) | skiff::compose::content_y | skiff::compose::with({.place = scene::anchor::kTopRight, .x = 12.0f, .y = 12.0f, .width = 360.0f, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .cornerRadius = 12.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
       call_avatar(view, 40.0f),
       skiff::compose::column(
-          skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+          skiff::compose::vbox(2.0f) | skiff::compose::grow_x | skiff::compose::content_y | skiff::compose::with({.alignSelf = scene::align::kMiddle}),
           skiff::compose::styled({.fillX = true}, elided(nodes::Text(view.who, 15.0f, colours.text, true))),
           skiff::compose::styled({.fillX = true}, call_status(colours, view, 13.0f, false, true))),
       call_buttons(colours, 40.0f, view)));
@@ -205,7 +198,7 @@ template <class Which, class View>
 // another chat; the whole window, on a phone.
 MUX_INLINE_IN_RELEASE auto extend(contract::window_layers, type_tag<feature>, const ui_needs& needs) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(extend, c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
+  return SKIFF_NAMED(extend, c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.place = scene::anchor::kTopLeft}),
       call_layer(needs, call_card_of{}, call_ui::card{}, {.fill = true}, true),
       call_layer(needs, call_screen_of{}, call_ui::screen{}, {.fill = true}, true)));
 }
@@ -228,10 +221,10 @@ MUX_INLINE_IN_RELEASE auto extend(contract::chat_header, type_tag<feature>, cons
 MUX_INLINE_IN_RELEASE auto calls_settings_view(const palette& colours) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(calls_settings_view, c::column(
-      c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::vbox(0.0f) | c::fill_x | c::content_y,
       c::styled({.depth = 1.0f, .background = colours.sidebar},
           page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Calls", {}, {}, true, true)),
-      c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+      c::column(c::vbox(4.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
           spaced_title(colours, "CONNECTION"),
           setting_switch<&kept::peer_to_peer>(colours, "Allow peer-to-peer for 1:1 calls"),
           spaced_note(colours, "Off, a call goes through your homeserver's relay (TURN) only: the other side never learns your "

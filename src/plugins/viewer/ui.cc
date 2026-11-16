@@ -44,15 +44,13 @@ MUX_INLINE_IN_RELEASE auto viewer_menu(const palette& colours, const std::string
   namespace c = skiff::compose;
   const auto item = [&](auto asked, std::string label) {
     return c::onClick(std::tuple{asked, viewer_menu_closed{}},
-        c::column(c::vbox(0.0f, {.fillX = true, .height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = colours.chosen}),
+        c::column(c::vbox(0.0f) | c::fill_x | c::with({.height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = colours.chosen}),
                   c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(label, 13.0f, colours.text))),
         label);
   };
   return SKIFF_NAMED(viewer_menu, c::onClick(viewer_menu_closed{},
-      c::column(c::vbox(0.0f, {.fill = true}),
-          c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .x = x, .y = y, .width = 200.0f, .autoSize = scene::axes::kY,
-                                   .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = colours.sidebar,
-                                   .border = scene::Border{colours.band, 1.0f}, .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
+      c::column(c::vbox(0.0f) | c::fill_x | c::fill_y,
+          c::column(c::vbox(0.0f) | c::content_y | c::with({.place = scene::anchor::kTopLeft, .x = x, .y = y, .width = 200.0f, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f}, .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
                     item(request::copy_picture{source}, "Copy Image"), item(request::save_picture{source}, "Save As\u2026")))));
 }
 // The viewer's own state, as its parts change it: how far zoomed and moved,
@@ -151,7 +149,7 @@ MUX_INLINE_IN_RELEASE auto picture_viewer(const ui_needs& n, const viewer_facts&
             },
             c::styled({.place = scene::anchor::kCentre}, widgets::RadialLoader<sends<Pressed>>(44.0f, {std::move(pressed)})))));
   };
-  auto loader = c::column(c::vbox(0.0f, {.place = scene::anchor::kTopLeft, .fill = true}),
+  auto loader = c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.place = scene::anchor::kTopLeft}),
       loader_of(std::type_identity<request::press_loader>{}, facts.video.empty(), request::press_loader{facts.source}),
       loader_of(std::type_identity<press_video_loader>{}, !facts.video.empty(), press_video_loader{facts.video}));
   auto menu = c::bound<skiff::model::Field<&viewer_view::menu>>(c::mount<decltype(viewer_menu(colours, facts.source, 0.0f, 0.0f)), std::pair<float, float>>(
@@ -163,8 +161,8 @@ MUX_INLINE_IN_RELEASE auto picture_viewer(const ui_needs& n, const viewer_facts&
       c::onKeys([](const scene::key::down& press) {
                   return press.key == scene::keys::kSpace ? std::optional(toggle_video{}) : std::nullopt;
                 },
-          c::column(c::vbox(0.0f, {.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)}),
-              c::row(c::hbox(8.0f, {.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}}),
+          c::column(c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.background = skia::colorSetARGB(0xe6, 0, 0, 0)}),
+              c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}}),
                      face_spot(avatar_of::person{}, facts.sender, facts.name, 36.0f),
                      two_lines(colours, facts.name, facts.when, 14.0f, 2.0f,
                                two_line_style{.first_ink = white, .second_ink = skia::colorSetARGB(255, 200, 200, 200)}),
@@ -173,14 +171,14 @@ MUX_INLINE_IN_RELEASE auto picture_viewer(const ui_needs& n, const viewer_facts&
                      c::styled(middle, icon_button(colours, icon::plus{}, sends<skiff::compose::ZoomBy<viewer_tag>>{{1.25f}}, white)),
                      c::styled(middle, icon_button(colours, icon::download{}, sends<request::save_picture>{{facts.source}}, white)),
                      c::styled(middle, icon_button(colours, icon::close{}, sends<::mux::ui::request::close_shown<viewer_facts>>{}, white))),
-              c::column(c::vbox(0.0f, {.fillX = true, .grow = scene::axes::kY}),
+              c::column(c::vbox(0.0f) | c::fill_x | c::grow_y,
                   c::zoomable_for<viewer_view, viewer_tag>([](const viewer_view& now) { return skiff::compose::ZoomView{now.zoom, now.x, now.y}; },
                       48.0f, ::mux::ui::request::close_shown<viewer_facts>{}, toggle_video{},
                       nodes::Image<viewer_picture>({facts.source, facts.video}),
                       {.fill = true, .masking = true}),
                   std::move(loader), std::move(menu)),
               c::shown_for<viewer_progress>([](const viewer_progress& now) { return now.video.length > 0.0; },
-                  c::row(c::hbox(12.0f, {.fillX = true, .height = 44.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+                  c::row(c::hbox(12.0f) | c::fill_x | c::with({.height = 44.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
                          c::applied<viewer_progress>([](const viewer_progress& now) { return now.video.length > 0.0 ? static_cast<float>(now.video.at / now.video.length) : 0.0f; },
                              [](widgets::SliderBar<seek_to>& bar, float share) { bar.setFraction(share); },
                              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, widgets::SliderBar<seek_to>(colours.widgets, seek_to{}))),

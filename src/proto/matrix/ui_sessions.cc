@@ -100,8 +100,7 @@ inline auto session_row(const palette& colours, const session_key& key) {
   namespace c = skiff::compose;
   const session_info& one = key.one;
   return SKIFF_NAMED(session_row, c::local<name_draft>(
-      c::row(c::hbox(8.0f, {.fillX = true, .height = 60.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f,
-                            .background = colours.tile}),
+      c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 60.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f, .background = colours.tile}),
              c::visible(!key.renaming, c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                  two_lines(colours, one.name.empty() ? std::string("Unnamed session") : one.name, facts_of(one, key.current), 15.0f, 2.0f, 12.0f))),
              c::visible(key.renaming, c::bound<skiff::model::Field<&name_draft::name>>(
@@ -144,14 +143,14 @@ struct sessions_key {
 // A list of them under its title, where it has any.
 inline auto session_rows(const palette& colours, std::string title, const std::vector<session_key>& rows) {
   namespace c = skiff::compose;
-  return c::visible(!rows.empty(), c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {10.0f, 0.0f, 0.0f, 0.0f}}),
+  return c::visible(!rows.empty(), c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.margin = {10.0f, 0.0f, 0.0f, 0.0f}}),
       section_title(colours, std::move(title)),
-      c::many(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::many(c::vbox(8.0f) | c::fill_x | c::content_y,
               rows | std::views::transform([&](const session_key& one) { return session_row(colours, one); }) | std::ranges::to<std::vector>())));
 }
 inline auto sessions_list(const palette& colours, const sessions_key& key) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(sessions_list, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(sessions_list, c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
                    session_rows(colours, "CURRENT SESSION", key.current),
                    session_rows(colours, "OTHER SESSIONS", key.others)));
 }
@@ -196,9 +195,9 @@ struct password_draft {
 // asked again with it.
 inline auto password_row(const palette& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(password_row, c::local<password_draft>(c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(password_row, c::local<password_draft>(c::column(c::vbox(6.0f) | c::fill_x | c::content_y,
       nodes::Text("Your password, to sign sessions out:", 13.0f, colours.dim),
-      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
              c::bound<skiff::model::Field<&password_draft::password>>(
                  c::styled({.height = 34.0f, .grow = scene::axes::kX}, widgets::TextField<std::string>(colours.widgets, "Password", true))),
              c::asking_for<password_draft>(
@@ -211,7 +210,7 @@ inline auto password_row(const palette& colours) {
 // page.)
 inline auto account_sessions(const palette& colours, const account_page_facts&) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(account_sessions, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(account_sessions, c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
       section_title(colours, "SESSIONS"),
       c::shown_for<facts_t>([](const facts_t& now) { return !kept_of(now).refused.empty(); },
           c::text_for<facts_t>([](const facts_t& now) { return kept_of(now).refused; },

@@ -17,7 +17,7 @@ export namespace mux::plugins::replies {
 inline auto extend(contract::message_menu, type_tag<feature>, const ui::palette& colours, const ui::emoji_kept&,
                    const ui::menu_facts& facts) {
   namespace c = skiff::compose;
-  return c::column(c::vbox(0.0f, {.fillX = true, .autoSize = skiff::scene::axes::kY}),
+  return c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
       c::visible(facts.answerable, ui::row_item(colours, "Reply", ui::sends<reply>{}, ui::icon::back{}, std::nullopt, ui::menu_row_look)),
       c::visible(facts.answerable && facts.selection && !facts.own && !facts.copied.empty(),
                  ui::row_item(colours, "Quote & Reply", ui::sends<quote_reply>{}, ui::icon::back{}, std::nullopt, ui::menu_row_look)));

@@ -67,8 +67,7 @@ MUX_INLINE_IN_RELEASE auto extend(contract::chat_header, type_tag<feature>, cons
 MUX_INLINE_IN_RELEASE auto message_thread_link(const palette& colours, std::string root, std::string line) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(message_thread_link, c::onClick(request::open_aside{std::move(root)},
-      c::row(c::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 0.0f, 0.0f, 0.0f},
-                            .hoverBackground = colours.chosen}),
+      c::row(c::hbox(0.0f) | c::fill_x | c::content_y | c::with({.margin = {4.0f, 0.0f, 0.0f, 0.0f}, .hoverBackground = colours.chosen}),
           c::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(line), 13.0f, colours.accent, true)))),
       "Open thread"));
 }

@@ -88,7 +88,7 @@ MUX_INLINE_IN_RELEASE auto extend(contract::message_menu_foot, type_tag<feature>
                            : readers.size() == 1 ? readers.front().name
                                                  : std::to_string(readers.size()) + " Seen";
   return SKIFF_NAMED(seen_row, c::hovering(seen_row_says{},
-      c::row(c::hbox(0.0f, {.fillX = true, .height = kSeenHeight, .padding = {9.0f, kSeenRight, 7.0f, 44.0f}, .hoverBackground = colours.chosen}),
+      c::row(c::hbox(0.0f) | c::fill_x | c::with({.height = kSeenHeight, .padding = {9.0f, kSeenRight, 7.0f, 44.0f}, .hoverBackground = colours.chosen}),
              c::styled({.place = scene::anchor::kCentreLeft, .x = 15.0f - 44.0f}, icon_mark(colours, icon::check{})),
              faces_summary(colours, readers, said))));
 }
@@ -96,7 +96,7 @@ MUX_INLINE_IN_RELEASE auto extend(contract::message_menu_foot, type_tag<feature>
 MUX_INLINE_IN_RELEASE auto reader_row(const palette& colours, const person_at& one) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(reader_row, c::onClick(std::tuple{request::close_menu{}, request::open_member_info{one.id}},
-      c::row(c::hbox(14.0f, {.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = colours.chosen}),
+      c::row(c::hbox(14.0f) | c::fill_x | c::with({.height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = colours.chosen}),
              person_line_text(colours, one, one.at ? clock_of(*one.at) : std::string("seen"))),
       one.name));
 }
@@ -108,11 +108,11 @@ MUX_INLINE_IN_RELEASE auto seen_list(const palette& colours, const std::vector<p
   const float tall = std::min(kSeenMostTall, kSeenRow * static_cast<float>(readers.size()) + 10.0f);
   // Hovered in a box as big as the list: filling across, as a row's does, it
   // was popped as wide as the window, at its left edge.
-  return SKIFF_NAMED(seen_list, c::hovering(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), seen_list_says{},
+  return SKIFF_NAMED(seen_list, c::hovering(c::vbox(0.0f) | c::content_x | c::content_y, seen_list_says{},
       c::column(c::vbox(0.0f, {.width = kSeenListWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f}, .cornerRadius = 10.0f,
                                .background = colours.popup(), .border = scene::Border{colours.band, 1.0f}, .masking = true}),
                 c::styled({.fill = true},
-                          c::scrolled(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                          c::scrolled(c::many(c::vbox(0.0f) | c::fill_x | c::content_y,
                               readers | std::views::transform([&](const person_at& one) { return reader_row(colours, one); }) | std::ranges::to<std::vector>()))))));
 }
 MUX_INLINE_IN_RELEASE auto foot_popover(contract::message_menu_foot, type_tag<feature>, const palette& colours, const menu_facts& facts) {

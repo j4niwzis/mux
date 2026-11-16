@@ -57,16 +57,12 @@ export namespace mux::ui {
     text = wrapped(std::move(text));
   else
     text = elided(std::move(text));
-  return c::row(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY,
-      .margin = {2.0f, 0.0f, 4.0f, 0.0f},
-      .padding = {2.0f, 6.0f, 2.0f, picture ? 7.0f : 11.0f}, .cornerRadius = 5.0f,
-      .background = quote_tint(colour, 0.12f), .masking = true}),
+  return c::row(c::hbox(4.0f) | c::fill_x | c::content_y | c::with({.margin = {2.0f, 0.0f, 4.0f, 0.0f}, .padding = {2.0f, 6.0f, 2.0f, picture ? 7.0f : 11.0f}, .cornerRadius = 5.0f, .background = quote_tint(colour, 0.12f), .masking = true}),
     c::styled({.place = scene::anchor::kTopLeft, .x = picture ? -7.0f : -11.0f,
                 .y = -2.0f, .fillY = true, .width = 3.0f}, nodes::Box<>(quote_tint(colour, 0.9f))),
     std::move(thumb),
-    c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
-                             .alignSelf = scene::align::kMiddle}),
-      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+    c::column(c::vbox(0.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
+      c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
         c::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(who), 13.0f, colour, true))),
         std::move(tag)),
       c::styled({.fillX = true}, std::move(text))));
@@ -131,7 +127,7 @@ auto sender_line(const palette& colours, std::string who, skia::SkColor colour, 
   auto name = elided(nodes::Text(std::move(who), 13.0f, colour, true));
   name.setMaxWidth(widest);
   const bool has_role = !role.empty();
-  return SKIFF_NAMED(sender_line, skiff::compose::row(skiff::compose::hbox(10.0f, {.autoSize = scene::axes::kBoth}), std::move(name),
+  return SKIFF_NAMED(sender_line, skiff::compose::row(skiff::compose::hbox(10.0f) | skiff::compose::content_x | skiff::compose::content_y, std::move(name),
                              skiff::compose::visible(has_role, skiff::compose::styled({.alignSelf = scene::align::kEnd},
                                                                                       nodes::Text(std::move(role), 12.0f, colours.dim)))));
 }
@@ -140,8 +136,7 @@ auto sender_line(const palette& colours, std::string who, skia::SkColor colour, 
 inline constexpr float kUnreadBarHeight = 26.0f;
 auto unread_bar(const palette& colours) {
   return SKIFF_NAMED(unread_bar, skiff::compose::column(
-      skiff::compose::justified(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .y = -(kUnreadBarHeight + 4.0f), .fillX = true,
-                                                            .height = kUnreadBarHeight, .background = colours.sidebar}),
+      skiff::compose::justified(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::with({.place = scene::anchor::kTopLeft, .y = -(kUnreadBarHeight + 4.0f), .height = kUnreadBarHeight, .background = colours.sidebar}),
                                 nodes::justify::middle{}),
       skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("Unread messages", 13.0f, colours.dim, true))));
 }
@@ -928,7 +923,7 @@ auto message_body(const auto& n, const auto& in, const auto& f, const auto* now)
           auto made = make_sticker(state, said);
           if constexpr (!std::same_as<decltype(made), std::nullopt_t>)
             if (made)
-              their_sticker.emplace(c::vbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(*made));
+              their_sticker.emplace(c::vbox(0.0f) | c::content_x | c::content_y, std::move(*made));
         },
         protocol_state_of(*n.shared, in.id.account));
   // What a picture of it opens, pressed: it in the viewer -- a video played
@@ -1303,8 +1298,7 @@ inline constexpr struct bubble_piece_fn : skiff::compose::piece<bubble_piece_fn>
     const nodes::Justify justify = said.service                    ? nodes::Justify{nodes::justify::middle{}}
                                    : said.outgoing && !as_lines ? nodes::Justify{nodes::justify::end{}}
                                                                 : nodes::Justify{nodes::justify::start{}};
-    return c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY,
-                                              .padding = {f.first ? 8.0f : 1.0f, 0.0f, 1.0f, 0.0f}}),
+    return c::row(c::justified(c::hbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {f.first ? 8.0f : 1.0f, 0.0f, 1.0f, 0.0f}}),
                                justify),
                   bubble_of(n, in, f, now));
   }
@@ -1337,8 +1331,7 @@ auto message_row(const bubble_needs& n, const conversation& in, const bubble_fac
   const bool frosted = frosts(looks.bubbles);
   // Not shown where the chat's settings say so: kept, and out of the flow.
   auto row = c::visible(!said.service || f.events_shown, c::recorded(
-      c::onRightPressAt(row_menu{n, in.id, said, f.version}, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
-                                      .padding = {f.unread_start ? kUnreadBarHeight + 6.0f : 0.0f, 0.0f,
+      c::onRightPressAt(row_menu{n, in.id, said, f.version}, c::column(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {f.unread_start ? kUnreadBarHeight + 6.0f : 0.0f, 0.0f,
                                                   footer > 0.0f ? footer + 2.0f : 0.0f, 0.0f}}),
                        c::swiped(kSwipeToReply, 120.0f, sends<request::reply_to>{{said.id, said.body.plain}}, swipe_shown{&colours},
                                  std::move(mark), std::move(inner)),

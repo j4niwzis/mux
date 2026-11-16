@@ -35,11 +35,11 @@ MUX_INLINE_IN_RELEASE auto list_view(const palette& colours) {
                                      open_plugin{static_cast<std::size_t>(at)});
               }) | std::ranges::to<std::vector>();
   return SKIFF_NAMED(catalog_list_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Plugins", {}, {}, true, true),
       catalog_words(colours, std::format("{} plugins built in. Third parties' are built in the same way, from their own folders "
                                          "(MUX_EXTRA_PLUGINS).", plugin_infos.size()), 13.0f),
-      skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows))));
+      skiff::compose::many(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y, std::move(rows))));
 }
 MUX_INLINE_IN_RELEASE auto plugin_view(const palette& colours, std::size_t index) {
   const plugin_info missing{"unknown", "", "", "", "", true};
@@ -47,7 +47,7 @@ MUX_INLINE_IN_RELEASE auto plugin_view(const palette& colours, std::size_t index
   auto repository = skiff::compose::visible(!one.repository.empty(),
       settings_link(colours, "Repository", icon::gear{}, request::open_url{std::string(one.repository)}));
   return SKIFF_NAMED(catalog_plugin_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       page_header<sends<open_list>, sends<request::close_settings>>(colours, std::string(one.name), {}, {}, true, true),
       catalog_words(colours, std::string(one.summary)),
       catalog_words(colours, std::format("Licence: {}\nFrom: {}\nRepository: {}", one.license, origin_of(one),

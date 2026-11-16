@@ -44,7 +44,7 @@ inline auto account_form_of(const account_draft& seed, const ui::palette& colour
   const auto registers_here = [](const d& now) { return now.creating && !now.in_browser; };
   return SKIFF_NAMED(account_form_of, c::local<d>(
       submitted_by_enter<d>(c::column(
-          c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::vbox(12.0f) | c::fill_x | c::content_y,
           model_field<&d::user_id>(colours, "User ID", "@user:example.org"),
           choice_field<&d::in_browser, bool>(colours, "Sign in",
                                              {{"With a password", false}, {"In the browser, on the server's page", true}}),

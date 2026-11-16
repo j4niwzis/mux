@@ -43,8 +43,7 @@ MUX_INLINE_IN_RELEASE auto theme_card(const palette& colours, config::theme_t th
                 return {.border = scene::Border{selected ? ring : 0u, selected ? 2.0f : 0.0f}};
               },
               skiff::compose::column(
-                  skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopLeft, .y = -62.0f, .fillX = true,
-                                             .height = 56.0f, .cornerRadius = 8.0f, .background = back}),
+                  skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::with({.place = scene::anchor::kTopLeft, .y = -62.0f, .height = 56.0f, .cornerRadius = 8.0f, .background = back}),
                   skiff::compose::styled({.place = scene::anchor::kTopLeft, .x = 6.0f, .y = 8.0f,
                                          .width = 44.0f, .height = 14.0f, .cornerRadius = 7.0f}, nodes::Box<>(incoming)),
                   skiff::compose::styled({.place = scene::anchor::kTopRight, .x = -6.0f, .y = 30.0f,
@@ -182,17 +181,15 @@ template <std::size_t Index> auto theme_colour_row(const palette& colours, const
   const auto inherited = base.*theme_colour_fields[Index].base;
   auto swatch = c::spec_for<skiff::model::Field<member>>([inherited](const std::string& value) -> scene::Spec {
     return {.background = value.empty() ? inherited : theme_colour_of(value).value_or(inherited)};
-  }, c::column(c::vbox(0.0f, {.width = 28.0f, .height = 28.0f, .relativeSize = scene::axes::kNone,
-      .alignSelf = scene::align::kMiddle, .cornerRadius = colours.widgets.fCorner,
-      .border = scene::Border{colours.band, 1.0f}})));
-  return SKIFF_NAMED(theme_colour_row, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  }, c::column(c::vbox(0.0f) | c::with({.width = 28.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = colours.widgets.fCorner, .border = scene::Border{colours.band, 1.0f}})));
+  return SKIFF_NAMED(theme_colour_row, c::row(c::hbox(12.0f) | c::fill_x | c::content_y,
       std::move(swatch), c::styled({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX},
           model_field<member>(colours, std::string(theme_colour_fields[Index].label), theme_colour_word(inherited)))));
 }
 template <std::size_t... Index> auto theme_colour_rows(const palette& colours, const palette& base, std::index_sequence<Index...>) {
   // The palette has fixed fields. Bind each directly into the local draft;
   // Each's list walker resolves collections in the outer model instead.
-  return SKIFF_NAMED(theme_colour_rows, skiff::compose::column(skiff::compose::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(theme_colour_rows, skiff::compose::column(skiff::compose::vbox(12.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       theme_colour_row<Index>(colours, base)...));
 }
 MUX_INLINE_IN_RELEASE auto theme_details_view(const palette& colours, const config::theme_t& theme,
@@ -200,19 +197,17 @@ MUX_INLINE_IN_RELEASE auto theme_details_view(const palette& colours, const conf
   namespace c = skiff::compose; using draft = theme_details_draft;
   const auto base = palette_of(theme, config::accent::theme_own{}, 100);
   auto fields = theme_colour_rows(colours, base, std::make_index_sequence<theme_colour_fields.size()>{});
-  return SKIFF_NAMED(theme_details_view, c::local<draft>(theme_details_events{}, c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY,
-      .padding = {8.0f, 20.0f, 16.0f, 20.0f}}),
+  return SKIFF_NAMED(theme_details_view, c::local<draft>(theme_details_events{}, c::column(c::vbox(12.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 20.0f, 16.0f, 20.0f}}),
       c::onClick(toggle_theme_details{}, c::styled({.fillX = true, .height = 36.0f}, widgets::Button<>(colours.widgets, "Configure selected theme"))),
       c::shown_for<skiff::model::Field<&draft::open>>([](bool open) { return open; },
-          c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {12.0f, 12.0f, 12.0f, 12.0f},
-              .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = colours.tile}),
+          c::column(c::vbox(12.0f) | c::fill_x | c::content_y | c::with({.padding = {12.0f, 12.0f, 12.0f, 12.0f}, .cornerRadius = std::max(10.0f, colours.widgets.fCorner), .background = colours.tile}),
               wrapped(nodes::Text("Blank fields keep the theme defaults. Colors accept #RRGGBB or #AARRGGBB (alpha first). Save applies this theme's changes; Reset restores its defaults.", 13.0f, colours.dim)),
               c::text_for<skiff::model::Field<&draft::error>>([](const std::string& error) { return error; }, nodes::Text("", 13.0f, colours.error)),
               std::move(fields),
               model_field<&draft::corner>(colours, "Corner radius (0–32)", "Theme default"),
               model_field<&draft::font>(colours, "Control font size (9–24)", "Theme default"),
               model_field<&draft::height>(colours, "Control height (24–64)", "Theme default"),
-              c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
                   c::onClick(save_theme_details{}, c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, widgets::Button<>(colours.widgets, "Save"))),
                   c::onClick(reset_theme_details{}, c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, widgets::Button<>(colours.widgets, "Reset theme"))),
                   c::onClick(cancel_theme_details{}, c::styled({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX}, widgets::Button<>(colours.widgets, "Cancel"))))))),
@@ -224,7 +219,7 @@ MUX_INLINE_IN_RELEASE auto theme_details_view(const palette& colours, const conf
 // theme the model holds, the one in use ringed.
 MUX_INLINE_IN_RELEASE auto theme_row(const palette& colours) {
   return SKIFF_NAMED(theme_row, skiff::compose::row(
-      skiff::compose::hbox(6.0f, {.autoSize = scene::axes::kBoth}),
+      skiff::compose::hbox(6.0f) | skiff::compose::content_x | skiff::compose::content_y,
       theme_card(colours, config::theme::classic{}, "Classic", skia::colorSetARGB(255, 155, 212, 148),
                  skia::colorSetARGB(255, 255, 255, 255), skia::colorSetARGB(255, 234, 255, 220)),
       theme_card(colours, config::theme::day{}, "Day", skia::colorSetARGB(255, 126, 196, 234),
@@ -265,7 +260,7 @@ inline std::vector<std::optional<int>> rounding_steps() {
 template <auto Member>
 MUX_INLINE_IN_RELEASE auto rounding_setting(const palette& colours, std::string_view what) {
   using field = skiff::model::Field<Member>;
-  return SKIFF_NAMED(rounding_setting, skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(rounding_setting, skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       skiff::compose::text_for<field>(
           [what](const std::optional<int>& percent) { return std::format("{}: {}%", what, percent.value_or(kRoundAvatar)); },
           skiff::compose::styled({.margin = {10.0f, 0.0f, 4.0f, 20.0f}}, nodes::Text(std::string(what), 12.0f, colours.dim))),
@@ -276,7 +271,7 @@ MUX_INLINE_IN_RELEASE auto rounding_setting(const palette& colours, std::string_
 }
 MUX_INLINE_IN_RELEASE auto avatar_rounding_view(const palette& colours) {
   using looks = config::look_settings;
-  return SKIFF_NAMED(avatar_rounding_view, skiff::compose::column(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(avatar_rounding_view, skiff::compose::column(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       spaced_title(colours, "AVATARS"),
       rounding_setting<&looks::chat_avatar_rounding>(colours, "Chats"),
       rounding_setting<&looks::person_avatar_rounding>(colours, "People"),
@@ -296,14 +291,14 @@ MUX_INLINE_IN_RELEASE auto appearance_settings_view(const palette& colours, cons
        .margin = {4.0f, 16.0f, 8.0f, 16.0f}},
       theme_field(colours));
   return SKIFF_NAMED(appearance_settings_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       spaced_title(colours, "THEME"), std::move(themes),
       spaced_title(colours, "ACCENT"), accent_view(theme), avatar_rounding_view(colours)));
 }
 MUX_INLINE_IN_RELEASE auto window_settings_view(const palette& colours) {
   using looks = config::look_settings;
   return SKIFF_NAMED(window_settings_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       spaced_title(colours, "LAYOUT"),
       skiff::compose::bound<skiff::model::Field<&looks::layout>>(
           widgets::ChoiceRowField<config::layout_t>(colours.widgets, "Automatic", config::layout::automatic{})),
@@ -316,7 +311,7 @@ MUX_INLINE_IN_RELEASE auto window_settings_view(const palette& colours) {
 MUX_INLINE_IN_RELEASE auto frame_look_view(const palette& colours, bool see_through) {
   using looks = config::look_settings;
   return SKIFF_NAMED(frame_look_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       setting_switch<&looks::wallpaper_behind>(
           colours, "Background behind the whole window"),
       setting_switch<&looks::live_blur>(
@@ -347,7 +342,7 @@ MUX_INLINE_IN_RELEASE auto frame_look_view(const palette& colours, bool see_thro
 MUX_INLINE_IN_RELEASE auto enter_settings_view(const palette& colours) {
   using field = skiff::model::Field<&config::look_settings::enter>;
   namespace c = skiff::compose;
-  return SKIFF_NAMED(enter_settings_view, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+  return SKIFF_NAMED(enter_settings_view, c::column(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
       spaced_title(colours, "ENTER IN A MESSAGE"),
       c::bound<field>(widgets::ChoiceRowField<config::enter_t>(colours.widgets, "As the keyboard is", config::enter_key::automatic{})),
       c::bound<field>(widgets::ChoiceRowField<config::enter_t>(colours.widgets, "Sends", config::enter_key::sends{})),
@@ -366,7 +361,7 @@ MUX_INLINE_IN_RELEASE auto appearance_page(const ui_needs& needs, const config::
   // Its sections held on the heap as they are built (builders: held once
   // built, under the page's rules), its head as it is.
   return c::lifted([](auto head, auto... sections) {
-    return c::Box(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(head), held(std::move(sections))...);
+    return c::Box(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(head), held(std::move(sections))...);
   },
       c::styled({.depth = 1.0f, .background = colours.sidebar},
                 page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Appearance", {}, {}, true, true)),

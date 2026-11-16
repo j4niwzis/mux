@@ -46,7 +46,7 @@ inline constexpr struct person_line_text_fn : skiff::compose::piece<person_line_
   static face_facts facts(const palette&, const person_at& one, const std::string&) { return {one.id, one.name}; }
   auto make(const palette& colours, const person_at& one, std::string under) const {
     namespace c = skiff::compose;
-    return SKIFF_NAMED(person_line_text, c::column(c::vbox(0.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+    return SKIFF_NAMED(person_line_text, c::column(c::vbox(0.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
         elided(nodes::Text(one.name, 13.0f, colours.text)),
         elided(nodes::Text(std::move(under), 12.0f, colours.dim))));
   }
@@ -58,8 +58,7 @@ inline constexpr struct directory_room_text_fn : skiff::compose::piece<directory
   static face_facts facts(const palette&, const directory_room& one) { return {one.id, one.name.empty() ? one.alias : one.name}; }
   auto make(const palette& colours, const directory_room& one) const {
     namespace c = skiff::compose;
-    return SKIFF_NAMED(directory_room_text, c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
-                                                                     .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+    return SKIFF_NAMED(directory_room_text, c::column(c::vbox(2.0f) | c::grow_x | c::content_y | c::with({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
         c::styled({.fillX = true}, elided(nodes::Text(
             one.name.empty() ? (one.alias.empty() ? one.id : one.alias) : one.name, 14.0f, colours.text, true))),
         c::styled({.fillX = true}, elided(nodes::Text(
@@ -81,8 +80,7 @@ inline constexpr struct toast_text_fn : skiff::compose::piece<toast_text_fn> {
 MUX_INLINE_IN_RELEASE auto toast_card(const palette& colours, std::string key, std::string title, std::string text) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(toast_card, c::row(
-      c::hbox(12.0f, {.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar,
-                      .border = scene::Border{colours.band, 1.0f}}),
+      c::hbox(12.0f) | c::fill_x | c::fill_y | c::with({.padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f}}),
       toast_text(colours, std::move(key), std::move(title), std::move(text))));
 }
 
@@ -99,7 +97,7 @@ inline constexpr struct chat_heading_fn : skiff::compose::piece<chat_heading_fn>
       node.setSelectable(true);
       return c::styled({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}}, elided(std::move(node)));
     };
-    return SKIFF_NAMED(chat_heading, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+    return SKIFF_NAMED(chat_heading, c::column(c::vbox(2.0f) | c::fill_x | c::content_y,
         centred(std::move(name), 17.0f, colours.text, true), centred(std::move(status), 13.0f, colours.dim, false)));
   }
 } chat_heading{};

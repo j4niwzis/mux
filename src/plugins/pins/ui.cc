@@ -36,10 +36,9 @@ MUX_INLINE_IN_RELEASE auto pinned_bar(const palette& colours) {
   const auto pin = [](const shown& now) { return now.pin.value_or(pin_view{}); };
   return SKIFF_NAMED(pinned_bar, c::shown_for<shown>([](const shown& now) { return now.pin.has_value(); },
       c::flicked_holding(60.0f, swiped{}, c::onClick(pressed{},
-          c::row(c::hbox(10.0f, {.fillX = true, .height = kBarHeight, .padding = {5.5f, 16.0f, 6.0f, 18.0f},
-                                 .background = colours.sidebar, .hoverBackground = colours.chosen}),
+          c::row(c::hbox(10.0f) | c::fill_x | c::with({.height = kBarHeight, .padding = {5.5f, 16.0f, 6.0f, 18.0f}, .background = colours.sidebar, .hoverBackground = colours.chosen}),
                  c::styled({.fillY = true, .width = 2.0f, .cornerRadius = 1.0f}, nodes::Box<>(colours.accent)),
-                 c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+                 c::column(c::vbox(2.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                            c::text_for<shown>([pin](const shown& now) { return pin(now).title; },
                                c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.accent)))),
                            c::text_for<shown>([pin](const shown& now) { return pin(now).line; },

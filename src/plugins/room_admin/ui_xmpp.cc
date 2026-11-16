@@ -273,7 +273,7 @@ struct jid_row_of {
     box.apply({.alignSelf = scene::align::kMiddle});
     auto field = widgets::internal::TextBox<jid_line_typed>(colours->widgets, "user@example.org", jid_line_typed{var, row});
     field.setText(address);
-    return c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(box),
+    return c::row(c::hbox(8.0f) | c::fill_x | c::content_y, std::move(box),
                   c::styled({.height = 36.0f, .grow = scene::axes::kX}, std::move(field)));
   }
 };
@@ -282,7 +282,7 @@ auto jid_list(const auto& colours, const muc_field& f) {
   // The rows kept by their keys, each built as it is made (memo_rows).
   using jid_item = std::tuple<std::uint32_t, bool, std::string>;
   const std::string var = f.var;
-  return SKIFF_NAMED(jid_list, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(jid_list, c::column(c::vbox(6.0f) | c::fill_x | c::content_y,
       c::spec_for<muc_form>([var](const muc_form& form) {
         const auto lines = form.jids.find(var);
         const auto count = lines == form.jids.end() ? 0u : lines->second.size();
@@ -295,8 +295,8 @@ auto jid_list(const auto& colours, const muc_field& f) {
                                                 return std::tuple{one.row, one.picked, one.address};
                                               }) | std::ranges::to<std::vector>();
           },
-              c::styled({.fillX = true, .autoSize = scene::axes::kY}, c::memo_rows<std::uint32_t, bool, jid_item>(jid_row_of{&colours, var}, nodes::Stack{}))))),
-      c::row(c::hbox(6.0f, {.fillX = true, .height = 32.0f}),
+              c::styled({.fillX = true, .autoSize = scene::axes::kY}, c::memo_rows<std::uint32_t, bool, jid_item>(jid_row_of{&colours, var}, nodes::ColumnStack{}))))),
+      c::row(c::hbox(6.0f) | c::fill_x | c::with({.height = 32.0f}),
              c::styled({.height = 32.0f}, widgets::Button<sends<jid_added>>(colours.widgets, "Add", {{var}})),
              c::spec_for<muc_form>([var](const muc_form& form) {
                const auto lines = form.jids.find(var);
@@ -311,9 +311,9 @@ auto jid_list(const auto& colours, const muc_field& f) {
 // again elsewhere was another one.
 auto option_rows(const auto& colours, const muc_field& f) {
   namespace c = skiff::compose;
-  return c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return c::many(c::vbox(0.0f) | c::fill_x | c::content_y,
                  f.options | std::views::transform([&](const std::pair<std::string, std::string>& option) {
-                   return c::row(c::hbox(8.0f, {.fillX = true, .height = 32.0f}),
+                   return c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 32.0f}),
                                  form_checkbox(colours, f.var, option.second, option_flipped{f.var, option.second}),
                                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                                            elided(nodes::Text(option.first, 13.0f, colours.text))));
@@ -375,9 +375,9 @@ auto config_row(const auto& colours, const muc_room& room, const muc_field& f) {
   const bool labelled = spl::visit(spl::overloaded{[](muc_kind::fixed) { return false; }, [](const auto&) { return true; }}, f.kind);
   const bool hidden = spl::visit(spl::overloaded{[](muc_kind::hidden) { return true; }, [](const auto&) { return false; }}, f.kind);
   return SKIFF_NAMED(config_row, c::shown_for<muc_form>([room, f, hidden](const muc_form& form) { return !hidden && applies(form, room, f); },
-      c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .maxWidth = 435.0f, .alignSelf = scene::align::kStart}),
+      c::row(c::hbox(12.0f) | c::fill_x | c::content_y | c::with({.maxWidth = 435.0f, .alignSelf = scene::align::kStart}),
              c::visible(labelled, config_label(colours, f)),
-             c::column(c::vbox(4.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX}),
+             c::column(c::vbox(4.0f) | c::grow_x | c::content_y,
                        field_editor(colours, f),
                        c::shown_for<muc_form>([room, f](const muc_form& form) { return trouble_of(form, room, f).has_value(); },
                            c::text_for<muc_form>([room, f](const muc_form& form) { return trouble_of(form, room, f).value_or(""); },
@@ -408,14 +408,14 @@ auto configuration_page(const auto& colours, const muc_room& room) {
   };
   const auto saving = [](const facts_t& facts) { return room_of(facts).saving; };
   return SKIFF_NAMED(configuration_page, c::local<muc_form>(muc_form_events{},
-      c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {12.0f, 12.0f, 18.0f, 12.0f}}),
+      c::column(c::vbox(12.0f) | c::fill_x | c::content_y | c::with({.padding = {12.0f, 12.0f, 18.0f, 12.0f}}),
           c::visible(!room.title.empty(), wrapped(nodes::Text(room.title, 16.0f, colours.text, true))),
           wrapped(nodes::Text(room.configuring ? room.instructions | std::views::join_with(std::string_view("\n")) | std::ranges::to<std::string>()
                                                : "You need Owner permission to change the configuration.",
                               13.0f, colours.dim)),
           // Neither while a save is on its way.
           c::spec_for<facts_t>([saving](const facts_t& facts) { return scene::Spec{.disabled = saving(facts)}; },
-              c::column(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::column(c::vbox(12.0f) | c::fill_x | c::content_y,
                   c::styled({.width = 100.0f, .height = 32.0f, .alignSelf = scene::align::kStart},
                             button_for<sends<request::refresh_muc>>(colours.widgets, "Refresh", {})),
                   c::visible(room.configuring,
@@ -431,7 +431,7 @@ auto configuration_page(const auto& colours, const muc_room& room) {
                 return room_of(facts).saving ? std::string("Saving\u2026") : room_of(facts).failure.value_or("");
               },
                   wrapped(nodes::Text("", 13.0f, colours.dim)))),
-          c::many(c::vbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::many(c::vbox(12.0f) | c::fill_x | c::content_y,
                   room.fields | std::views::transform([&](const muc_field& f) { return config_row(colours, room, f); }) | std::ranges::to<std::vector>())),
       form_of(room)));
 }
@@ -454,7 +454,7 @@ auto room_page(const auto& colours, const room_basis& basis) {
   const muc_room& room = basis.room;
   const scene::Spec button{.height = 32.0f, .alignSelf = scene::align::kStart};
   return SKIFF_NAMED(room_page, c::local<room_form>(
-      c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
+      c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
           tab_heading(colours, "Room"),
           wrapped(nodes::Text("Nickname: " + room.nick + " · " + room.affiliation + " · " + room.role, 13.0f, colours.dim)),
           model_field<&room_form::topic>(colours, "Subject", "Room subject"),
@@ -519,12 +519,12 @@ auto roles_page(const auto& colours, const roles_basis& basis) {
   const muc_room& room = basis.room;
   const bool owner = room.affiliation == "owner";
   return SKIFF_NAMED(roles_page, c::local<roles_form>(
-      c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
+      c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 28.0f, 24.0f, 12.0f}}),
           tab_heading(colours, "Roles & Permissions"),
           wrapped(nodes::Text("Affiliations use a real bare JID: none, member, admin, owner, outcast (ban). Roles use an occupant nickname: visitor, "
                               "participant, moderator, none (kick). The server checks your privileges.",
                               13.0f, colours.dim)),
-          c::many(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::many(c::vbox(4.0f) | c::fill_x | c::content_y,
                   permission_rows(room) | std::views::transform([&](std::string text) { return wrapped(nodes::Text(std::move(text), 13.0f, colours.text)); }) | std::ranges::to<std::vector>()),
           model_field<&roles_form::user>(colours, "User JID or occupant nickname", "user@example.org or nickname"),
           model_field<&roles_form::rank>(colours, "Affiliation or role", "member"),
@@ -534,7 +534,7 @@ auto roles_page(const auto& colours, const roles_basis& basis) {
           c::asking_for<roles_form>([](const roles_form& form) { return request::muc_privilege{form.user, "", form.rank}; },
               c::styled({.height = 32.0f, .alignSelf = scene::align::kStart, .disabled = room.role != "moderator"},
                         widgets::Button<scene::NoAction>(colours.widgets, "Set occupant role", {}))),
-          c::visible(owner, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::visible(owner, c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
               wrapped(nodes::Text("Destroy room permanently (owner only). Type the room address to confirm.", 13.0f, colours.error)),
               model_field<&roles_form::reason>(colours, "Reason", "Optional reason"),
               model_field<&roles_form::confirm>(colours, "Confirm room address", basis.id),

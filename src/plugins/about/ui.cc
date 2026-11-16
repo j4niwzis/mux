@@ -68,13 +68,13 @@ MUX_INLINE_IN_RELEASE auto about_view(const palette& colours) {
         return library_link(colours, *library_of(id));
       }) | std::ranges::to<std::vector>();
   return SKIFF_NAMED(about_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "About mux", {}, {}, true, true),
       about_words(colours, std::format("mux {}\n{}\nCommit: {}\nLicense: {}", about_data::version,
                                      ui::build_branch(), ui::build_commit(), about_data::license)),
       settings_link(colours, "GitHub repository", icon::gear{}, request::open_url{std::string(about_data::repository)}),
       settings_link(colours, "Copy log", icon::clip{}, request::copy_log{}),
-      about_words(colours, "Libraries"), skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(libraries)),
+      about_words(colours, "Libraries"), skiff::compose::many(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y, std::move(libraries)),
       about_words(colours, std::string(about_data::license_text))));
 }
 MUX_INLINE_IN_RELEASE auto library_view(const palette& colours, std::string_view id) {
@@ -86,13 +86,13 @@ MUX_INLINE_IN_RELEASE auto library_view(const palette& colours, std::string_view
     return library_link(colours, info ? *info : missing);
   }) | std::ranges::to<std::vector>();
   return SKIFF_NAMED(library_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       page_header<sends<open_about>, sends<request::close_settings>>(colours, std::string(library.name), {}, {}, true, true),
       about_words(colours, std::format("Version: {}\nRevision: {}\nLicense: {}", library.version,
                                      library.revision.empty() ? "Not reported" : library.revision, library.license)),
       skiff::compose::visible(!library.repository.empty(), settings_link(colours, "Repository", icon::gear{}, request::open_url{std::string(library.repository)})),
       skiff::compose::visible(!dependencies.empty(), about_words(colours, "Dependencies")),
-      skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(dependencies)),
+      skiff::compose::many(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y, std::move(dependencies)),
       about_words(colours, library.license_text.empty() ? std::format("License: {}\nLicense text was not supplied by the installed package.", library.license)
                                                      : std::string(library.license_text))));
 }

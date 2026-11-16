@@ -146,7 +146,7 @@ struct two_line_style {
 MUX_INLINE_IN_RELEASE auto two_lines(const palette& colours, std::string first, std::string second,
                       float size, float gap, two_line_style style = {}) {
   return SKIFF_NAMED(two_lines, skiff::compose::column(
-      skiff::compose::vbox(gap, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+      skiff::compose::vbox(gap) | skiff::compose::grow_x | skiff::compose::content_y | skiff::compose::with({.alignSelf = scene::align::kMiddle}),
       skiff::compose::styled({.fillX = true}, elided(nodes::Text(std::move(first), size,
           style.first_ink.value_or(colours.text), true, style.selectable))),
       skiff::compose::visible(style.show_second.value_or(!second.empty()),
@@ -182,9 +182,7 @@ auto row_item(const palette& colours, std::string text, Act act, icon_t icon = i
   std::string label = text;
   return SKIFF_NAMED(row_item, c::said(std::nullopt, choice.value_or(false),
       c::onPress(std::move(act),
-          c::row(c::hbox(look.gap, {.fillX = true, .height = look.height, .padding = look.padding,
-                                    .hoverBackground = colours.chosen, .selectedBackground = colours.chosen,
-                                    .focusBackground = colours.chosen}),
+          c::row(c::hbox(look.gap) | c::fill_x | c::with({.height = look.height, .padding = look.padding, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .focusBackground = colours.chosen}),
                  c::visible(spl::visit([](auto one) { return drawn(one); }, icon), icon_mark(colours, icon, look.icon_width, look.icon_height)),
                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                            elided(nodes::Text(std::move(text), look.text_size, colours.text))),
@@ -224,8 +222,7 @@ struct no_action {
 template <class Event>
 auto settings_link(const palette& colours, std::string label, icon_t icon, Event event) {
   return SKIFF_NAMED(settings_link, skiff::compose::onClick(std::move(event), skiff::compose::row(
-      skiff::compose::hbox(16.0f, {.fillX = true, .height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
-                                  .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
+      skiff::compose::hbox(16.0f) | skiff::compose::fill_x | skiff::compose::with({.height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}, .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
       skiff::compose::styled({.width = 28.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon), colours.dim)),
       skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(label, 15.0f, colours.text)))), label));
 }
@@ -240,7 +237,7 @@ inline constexpr float kChatHeadHeight = 56.0f;
 template <class Back, class Close>
 auto page_header(const palette& colours, std::string name, Back back, Close close, bool has_back, bool has_close) {
   return SKIFF_NAMED(page_header, skiff::compose::row(
-      skiff::compose::hbox(12.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+      skiff::compose::hbox(12.0f) | skiff::compose::fill_x | skiff::compose::with({.height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
       skiff::compose::visible(has_back, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
           icon_button<Back>(colours, icon::back{}, std::move(back)))),
       skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle,
@@ -335,9 +332,7 @@ MUX_INLINE_IN_RELEASE auto menu_button(const palette& colours) {
 // said (made_now), the one type the menu keeps and the one it makes again.
 MUX_INLINE_IN_RELEASE auto choice_menu_head(const palette& colours, std::string label, std::string value) {
   namespace c = skiff::compose;
-  return c::made_now(SKIFF_NAMED(choice_menu_head, c::row(c::hbox(8.0f, {.fillX = true, .height = 36.0f,
-      .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
-      .background = colours.tile, .hoverBackground = colours.chosen, .border = scene::Border{colours.band, 1.0f}}),
+  return c::made_now(SKIFF_NAMED(choice_menu_head, c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 36.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f, .background = colours.tile, .hoverBackground = colours.chosen, .border = scene::Border{colours.band, 1.0f}}),
       c::visible(!label.empty(), c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(label, 13.0f, colours.dim)))),
       c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 14.0f, colours.text))),
       c::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.dim)))));
@@ -345,8 +340,7 @@ MUX_INLINE_IN_RELEASE auto choice_menu_head(const palette& colours, std::string 
 // An option, the one chosen in the accent and bold.
 MUX_INLINE_IN_RELEASE auto choice_menu_option(const palette& colours, std::string name, bool chosen = false) {
   namespace c = skiff::compose;
-  return c::made_now(SKIFF_NAMED(choice_menu_option, c::row(c::hbox(0.0f, {.fillX = true, .height = 32.0f,
-      .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = colours.chosen}),
+  return c::made_now(SKIFF_NAMED(choice_menu_option, c::row(c::hbox(0.0f) | c::fill_x | c::with({.height = 32.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = colours.chosen}),
       // On one line, cut short with an ellipsis where the list is narrower
       // than the name: wrapped, a long name in a narrow list overflowed its
       // row onto the next ones (a tester's).
@@ -399,8 +393,7 @@ MUX_INLINE_IN_RELEASE auto make_choice_menu(const palette& colours, std::string 
 // (made_now), as the choice menu's own head is.
 auto choice_head(const auto& colours, std::string value) {
   namespace c = skiff::compose;
-  return c::made_now(SKIFF_NAMED(choice_head, c::row(c::hbox(4.0f, {.fillX = true, .height = 24.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f},
-      .cornerRadius = colours.widgets.fCorner, .background = colours.chosen, .hoverBackground = colours.widgets.fSurfaceHover}),
+  return c::made_now(SKIFF_NAMED(choice_head, c::row(c::hbox(4.0f) | c::fill_x | c::with({.height = 24.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f}, .cornerRadius = colours.widgets.fCorner, .background = colours.chosen, .hoverBackground = colours.widgets.fSurfaceHover}),
       c::styled({.width = 12.0f, .height = 12.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon::down{}), colours.text)),
       c::styled({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(value), 12.0f, colours.text))))));
 }
@@ -479,7 +472,7 @@ struct room_events_picked {
 // A setting's row at a level: its label at the left, cut short where the
 // room runs out, and its choices at the right.
 [[nodiscard]] inline skiff::compose::Look setting_row() {
-  return skiff::compose::hbox(4.0f, {.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+  return skiff::compose::hbox(4.0f) | skiff::compose::fill_x | skiff::compose::with({.height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
 }
 [[nodiscard]] inline auto setting_label(nodes::Text label) {
   return skiff::compose::styled({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
@@ -605,8 +598,8 @@ MUX_INLINE_IN_RELEASE auto event_kinds_field(const palette& colours, choice_leve
   auto rows = kinds | std::views::transform([&](const room_event_t& kind) {
     return event_kind_row<Owner>(colours, level, kind);
   }) | std::ranges::to<std::vector>();
-  return c::visible(!kinds.empty(), c::scoped<Owner>(c::handlers(), c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      std::move(mode), c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))));
+  return c::visible(!kinds.empty(), c::scoped<Owner>(c::handlers(), c::column(c::vbox(4.0f) | c::fill_x | c::content_y,
+      std::move(mode), c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(rows)))));
 }
 
 struct pick_style_theme {
@@ -620,7 +613,7 @@ struct pick_style_theme {
 template <auto Member>
 MUX_INLINE_IN_RELEASE auto style_text_field(const palette& colours, std::string label, std::string hint) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(style_text_field, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(style_text_field, c::column(c::vbox(4.0f) | c::fill_x | c::content_y,
       nodes::Text(std::move(label), 13.0f, colours.dim),
       c::bound<skiff::model::Field<Member>>(c::styled({.fillX = true, .height = 36.0f},
           widgets::TextField<std::string>(colours.widgets, std::move(hint))))));
@@ -632,7 +625,7 @@ MUX_INLINE_IN_RELEASE auto style_controls(const palette& colours, bool choose_ba
     return now ? now->index() + 1 : 0;
   }, make_choice_menu(colours, "Theme", {"As above", "Classic", "Day", "Tinted", "Night", "Graphite"}, 0, pick_style_theme{}));
   return SKIFF_NAMED(style_controls, c::scoped<style>(c::handlers(), c::column(
-      c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}}),
+      c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 20.0f, 8.0f, 20.0f}}),
       nodes::Text("FONTS AND THEME", 13.0f, colours.dim, true), c::visible(choose_base, std::move(theme)),
       style_text_field<&style::theme_file>(colours, "Custom theme", "JSON palette file path; empty inherits"),
       style_text_field<&style::font>(colours, "Text font", "Installed family or font file path; empty inherits"),
@@ -680,7 +673,7 @@ auto jump_search_field(const palette& colours, choice_level_t level) {
       setting_label(nodes::Text("Look back for a message", 14.0f, colours.text)),
       c::visible(has_level_above(level), setting_button<Want>(colours, "Default", 64.0f,
           [shown](const T& now) { return !shown(now); }, sets<T>{count_of(std::nullopt, std::type_identity<T>{})})),
-      c::many(c::hbox(0.0f, {.autoSize = scene::axes::kBoth}), std::move(choices))));
+      c::many(c::hbox(0.0f) | c::content_x | c::content_y, std::move(choices))));
 }
 
 // Notifications, the same rows at every level: on, of mentions alone, the
@@ -783,13 +776,13 @@ auto context_bar(const palette& colours, Said said, Cancel cancel) {
     };
   };
   return SKIFF_NAMED(context_bar, c::shown_for<Want>([said](const auto& now) { return said(now).has_value(); },
-      c::row(c::hbox(8.0f, {.fillX = true, .height = kContextHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}}),
+      c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = kContextHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}}),
              c::applied<Want>(said,
                               [](nodes::Icon& mark, const std::optional<compose_context>& now) {
                                 mark.setShape(now ? shape_of(now->mark) : IconShape{});
                               },
                               c::styled({.fillY = true, .width = kContextSkip - 8.0f}, nodes::Icon(IconShape{}, colours.accent))),
-             c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+             c::column(c::vbox(2.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
                        c::text_for<Want>(line(&compose_context::title),
                                          c::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.accent, true)))),
                        c::text_for<Want>(line(&compose_context::line),
@@ -802,9 +795,7 @@ auto context_bar(const palette& colours, Said said, Cancel cancel) {
 // the part Want.
 MUX_INLINE_IN_RELEASE auto count_badge(const palette& colours, std::string count = {}) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(count_badge, c::column(c::justified(c::vbox(0.0f, {.place = scene::anchor::kTopCentre, .y = -10.0f, .height = 18.0f,
-                                               .autoSize = scene::axes::kX, .minWidth = 20.0f, .padding = {1.0f, 5.0f, 1.0f, 5.0f},
-                                               .cornerRadius = 9.0f, .background = colours.accent}),
+  return SKIFF_NAMED(count_badge, c::column(c::justified(c::vbox(0.0f) | c::content_x | c::with({.place = scene::anchor::kTopCentre, .y = -10.0f, .height = 18.0f, .minWidth = 20.0f, .padding = {1.0f, 5.0f, 1.0f, 5.0f}, .cornerRadius = 9.0f, .background = colours.accent}),
                                 nodes::justify::middle{}),
                    c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(count), 11.0f, colours.on_accent, true))));
 }
@@ -812,9 +803,7 @@ template <class Want, class Count>
 auto count_badge_for(const palette& colours, Count count) {
   namespace c = skiff::compose;
   return SKIFF_NAMED(count_badge_for, c::shown_for<Want>([count](const auto& now) { return count(now) > 0; },
-      c::column(c::justified(c::vbox(0.0f, {.place = scene::anchor::kTopCentre, .y = -10.0f, .height = 18.0f,
-                                            .autoSize = scene::axes::kX, .minWidth = 20.0f, .padding = {1.0f, 5.0f, 1.0f, 5.0f},
-                                            .cornerRadius = 9.0f, .background = colours.accent}),
+      c::column(c::justified(c::vbox(0.0f) | c::content_x | c::with({.place = scene::anchor::kTopCentre, .y = -10.0f, .height = 18.0f, .minWidth = 20.0f, .padding = {1.0f, 5.0f, 1.0f, 5.0f}, .cornerRadius = 9.0f, .background = colours.accent}),
                              nodes::justify::middle{}),
                 c::text_for<Want>([count](const auto& now) { return std::to_string(count(now)); },
                                   c::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 11.0f, colours.on_accent, true))))));
@@ -825,7 +814,7 @@ auto count_badge_for(const palette& colours, Count count) {
 template <class Act>
 auto label_button_row(const palette& colours, std::string label, std::string button, Act act, bool shown) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(label_button_row, c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(label_button_row, c::row(c::hbox(6.0f) | c::fill_x | c::content_y,
                 c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 13.0f, colours.text)),
                 c::visible(shown, c::styled({.width = 96.0f, .height = 26.0f}, button_for<Act>(colours.widgets, std::move(button), std::move(act))))));
 }
@@ -835,7 +824,7 @@ auto label_button_row(const palette& colours, std::string label, std::string but
 template <class Want, class Label, class Act, class Shown>
 auto label_button_row_for(const palette& colours, Label label, std::string button, Act act, Shown shown) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(label_button_row_for, c::row(c::hbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(label_button_row_for, c::row(c::hbox(6.0f) | c::fill_x | c::content_y,
                 c::text_for<Want>(std::move(label),
                                   c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, nodes::Text("", 13.0f, colours.text))),
                 c::shown_for<Want>(std::move(shown),
@@ -855,8 +844,8 @@ template <class Cell>
 auto cell_section(const palette& colours, std::string name, std::vector<Cell> cells,
                   std::optional<emote_pack> pack = std::nullopt, std::optional<account_id> by = std::nullopt) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(cell_section, c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      c::row(c::hbox(8.0f, {.fillX = true, .height = 32.0f, .padding = {0.0f, 7.0f, 0.0f, 7.0f}}),
+  return SKIFF_NAMED(cell_section, c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
+      c::row(c::hbox(8.0f) | c::fill_x | c::with({.height = 32.0f, .padding = {0.0f, 7.0f, 0.0f, 7.0f}}),
           c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                     nodes::Text(std::move(name), 13.0f, colours.dim, true)),
           c::visible(pack && pack->chat,
@@ -877,7 +866,7 @@ using cell_section_t = decltype(cell_section(std::declval<const palette&>(), "",
 template <class Cancel, class Confirm>
 auto dialog_buttons(const palette& colours, std::string confirm, Cancel cancel_it, Confirm confirm_it, float width = 96.0f) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(dialog_buttons, c::row(c::justified(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}}),
+  return SKIFF_NAMED(dialog_buttons, c::row(c::justified(c::hbox(8.0f) | c::fill_x | c::content_y | c::with({.margin = {8.0f, 0.0f, 0.0f, 0.0f}}),
                              nodes::justify::end{}),
                 c::styled({.width = width, .height = 36.0f}, widgets::Button<Cancel>(colours.widgets, "Cancel", std::move(cancel_it))),
                 c::styled({.width = width, .height = 36.0f},
@@ -889,7 +878,7 @@ auto dialog_buttons(const palette& colours, std::string confirm, Cancel cancel_i
 MUX_INLINE_IN_RELEASE auto name_time_line(std::string name, std::string time, skia::SkColor name_colour, skia::SkColor time_colour,
                            float time_size) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(name_time_line, c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(name_time_line, c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
                 c::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(name), 13.0f, name_colour, true))),
                 nodes::Text(std::move(time), time_size, time_colour)));
 }
@@ -936,7 +925,7 @@ auto accent_circle(Choose choose, config::accent_t which, const config::theme_t&
 template <class Want, class Choose, class Chosen>
 auto accent_circles_for(Choose choose, const config::theme_t& in, bool with_theme_own, Chosen chosen) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(accent_circles_for, c::many(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}}),
+  return SKIFF_NAMED(accent_circles_for, c::many(c::hbox(4.0f) | c::fill_x | c::content_y | c::with({.margin = {4.0f, 16.0f, 8.0f, 16.0f}}),
                  accents_of(with_theme_own) | std::views::transform([&](const config::accent_t& one) {
                    return c::spec_for<Want>(
                        [chosen, one, shade = colour_of(one, in)](const auto& now) { return accent_ring(shade, chosen(now) == one); },
@@ -962,8 +951,7 @@ MUX_INLINE_IN_RELEASE auto person_pick_row(const palette& colours, const found_p
   namespace c = skiff::compose;
   const std::string name = one.name.empty() ? one.id : one.name;
   return SKIFF_NAMED(person_pick_row, c::onClick(std::move(event), c::row(
-      c::hbox(12.0f, {.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
-          .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
+      c::hbox(12.0f) | c::fill_x | c::with({.height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
       person_pick_text(colours, one)), name));
 }
 MUX_INLINE_IN_RELEASE auto found_person_row(const palette& colours, const found_person& one) {

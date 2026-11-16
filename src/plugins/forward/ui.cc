@@ -42,10 +42,7 @@ MUX_INLINE_IN_RELEASE auto target_row(const palette& colours, const target& one)
   namespace c = skiff::compose;
   return SKIFF_NAMED(target_row, c::onPress(
       sends<to>{to{one.id}},
-      c::row(c::hbox(12.0f, {.fillX = true,
-                             .height = 50.0f,
-                             .padding = {0.0f, 20.0f, 0.0f, 20.0f},
-                             .hoverBackground = colours.chosen}),
+      c::row(c::hbox(12.0f) | c::fill_x | c::with({.height = 50.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}, .hoverBackground = colours.chosen}),
              face_spot(avatar_of::chat{}, one.id.id, one.name, 36.0f),
              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                        elided(nodes::Text(one.name, 15.0f, colours.text)))),
@@ -66,7 +63,7 @@ MUX_INLINE_IN_RELEASE auto panel(const palette& colours, const std::vector<targe
   return SKIFF_NAMED(panel, c::local<draft>(
       draft_events{},
       c::column(
-          c::vbox(0.0f, {.fillX = true, .height = 520.0f}),
+          c::vbox(0.0f) | c::fill_x | c::with({.height = 520.0f}),
           page_header<no_back, sends<request::close_shown<shown>>>(colours, "Forward to…", {}, {}, false, true),
           c::styled({.fillX = true, .height = 34.0f, .margin = {0.0f, 16.0f, 8.0f, 16.0f}},
                     c::bound<query>(std::move(field))),
@@ -75,7 +72,7 @@ MUX_INLINE_IN_RELEASE auto panel(const palette& colours, const std::vector<targe
                         c::projected<query>(
                             [all = chats](const std::string& text) { return matching(all, text); },
                             c::listed<target>(
-                                c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                c::vbox(0.0f) | c::fill_x | c::content_y,
                                 [colours = &colours](const target& one) { return target_row(*colours, one); }))))),
       draft{}));
 }

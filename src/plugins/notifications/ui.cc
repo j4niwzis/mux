@@ -37,12 +37,12 @@ MUX_INLINE_IN_RELEASE auto distributor_rows(const palette& colours, const push_s
                 return settings_link(colours, std::format("{}{}", name == now.chosen ? "✓ " : "", shown), icon::bell{},
                                      choose_distributor{static_cast<std::size_t>(at)});
               }) | std::ranges::to<std::vector>();
-  return skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows));
+  return skiff::compose::many(skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y, std::move(rows));
 }
 using distributor_rows_t = decltype(distributor_rows(std::declval<const palette&>(), push_shown{}));
 MUX_INLINE_IN_RELEASE auto distributors_view(const palette& colours) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(distributors_view, c::column(c::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(distributors_view, c::column(c::vbox(2.0f) | c::fill_x | c::content_y,
       c::text_for<push_shown>([](const push_shown& now) {
         return now.status.empty() ? std::string("Not registered: turn on Wake by UnifiedPush.")
                                   : now.endpoint ? std::format("{}\nEndpoint: {}", now.status, *now.endpoint) : now.status;
@@ -58,7 +58,7 @@ MUX_INLINE_IN_RELEASE auto notification_settings_view(const palette& colours) {
       skiff::compose::styled({.margin = {4.0f, 20.0f, 4.0f, 20.0f}}, themed_tabs<config::notify_backend_t>(colours, 
           {{"System", config::notify_backend::native{}}, {"Built in", config::notify_backend::built_in{}}})));
   return SKIFF_NAMED(notification_settings_view, skiff::compose::column(
-      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), spaced_title(colours, "NOTIFICATIONS"),
+      skiff::compose::vbox(4.0f) | skiff::compose::fill_x | skiff::compose::content_y, spaced_title(colours, "NOTIFICATIONS"),
       setting_switch<&every::desktop>(colours, "Notifications"),
       setting_switch<&every::mentions_only, std::optional<bool>>(colours, "Only mentions and keywords"),
       setting_switch<&every::sound>(colours, "Sound"),
@@ -79,7 +79,7 @@ MUX_INLINE_IN_RELEASE auto notification_settings_view(const palette& colours) {
 MUX_INLINE_IN_RELEASE auto notifications_view(const palette& colours) {
   using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
   return SKIFF_NAMED(notifications_view, skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::vbox(0.0f) | skiff::compose::fill_x | skiff::compose::content_y,
       skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Notifications", {}, {}, true, true)),
       notification_settings_view(colours)));
 }

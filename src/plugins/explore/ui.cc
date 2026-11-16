@@ -63,10 +63,9 @@ struct row_act {
 };
 auto room_row(const palette& colours, const directory_room& one, const std::string& server, std::optional<account_id> by = std::nullopt) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(explore_room_row, c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}}),
+  return SKIFF_NAMED(explore_room_row, c::row(c::hbox(12.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 16.0f, 8.0f, 16.0f}}),
       face_spot(avatar_of::chat{}, one.id, one.name.empty() ? one.alias : one.name, 40.0f),
-      c::column(c::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
-                              .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+      c::column(c::vbox(2.0f) | c::grow_x | c::content_y | c::with({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
           c::styled({.fillX = true}, elided(nodes::Text(
               one.name.empty() ? (one.alias.empty() ? one.id : one.alias) : one.name, 14.0f, colours.text, true))),
           c::styled({.fillX = true}, elided(nodes::Text(
@@ -100,7 +99,7 @@ auto explore_view(const palette& colours, const shown& facts) {
   const auto status = facts.loading ? std::string("Loading rooms…") :
       !facts.listed ? std::string() : rooms.empty() ? std::string("No rooms found.") : std::format("{} rooms", rooms.size());
   return SKIFF_NAMED(explore_view, c::local<explore_draft>(explore_events{}, c::column(
-      c::vbox(0.0f, {.fill = true, .padding = {0.0f, 12.0f, 12.0f, 12.0f}}),
+      c::vbox(0.0f) | c::fill_x | c::fill_y | c::with({.padding = {0.0f, 12.0f, 12.0f, 12.0f}}),
       page_header<no_back, sends<request::close_shown<shown>>>(colours, "Explore rooms", {}, {}, false, true),
       c::visible(facts.space.has_value(), c::styled({.fillX = true, .margin = {0.0f, 10.0f, 8.0f, 10.0f}},
           nodes::Text(facts.space ? facts.space->name : std::string(), 17.0f, colours.text, true))),
@@ -123,7 +122,7 @@ auto explore_view(const palette& colours, const shown& facts) {
       c::visible(!status.empty(), c::styled({.fillX = true, .margin = {6.0f, 10.0f, 4.0f, 10.0f}},
           wrapped(nodes::Text(status, 13.0f, colours.dim)))),
       c::styled({.fillX = true, .grow = scene::axes::kY}, c::scrolled(
-          c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))),
+          c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(rows)))),
       c::visible(more, c::styled({.fillX = true, .height = 32.0f,
                                 .margin = {6.0f, 10.0f, 0.0f, 10.0f}, .disabled = facts.loading},
           widgets::SendButton<search_rooms>(colours.widgets, "Load more",

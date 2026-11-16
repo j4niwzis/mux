@@ -249,7 +249,7 @@ template <class Which>
 MUX_INLINE_IN_RELEASE auto element_row(const palette& colours, choice_level_t level, std::string_view name, Which which) {
   namespace c = skiff::compose;
   const auto look = [level](const looks_picked& now) { return look_in(now, level, config::look_part::bubbles{}); };
-  return SKIFF_NAMED(element_row, c::column(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(element_row, c::column(c::vbox(4.0f) | c::fill_x | c::content_y,
       label_button_row_for<looks_picked>(colours,
           [look, name, which](const looks_picked& now) { return element_label(look(now), now.window, name, which); },
           "As bubbles", element_given_back<Which>{level, which},
@@ -261,7 +261,7 @@ template <class Which, std::size_t N>
 MUX_INLINE_IN_RELEASE auto element_rows(const palette& colours, choice_level_t level, const std::array<std::string_view, N>& labels,
                          const std::array<std::pair<std::string_view, Which>, N>& elements) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(element_rows, c::many(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(element_rows, c::many(c::vbox(8.0f) | c::fill_x | c::content_y,
                  std::views::zip(labels, elements) | std::views::transform([&](const auto& one) {
                    return element_row(colours, level, std::get<0>(one), std::get<1>(one).second);
                  }) | std::ranges::to<std::vector>()));
@@ -281,33 +281,33 @@ MUX_INLINE_IN_RELEASE auto bubbles_picker(const palette& colours, choice_level_t
   const auto greyed = [](bool live) { return scene::Spec{.alpha = live ? 1.0f : 0.4f, .disabled = !live}; };
   static constexpr std::array<std::string_view, 4> kElementLabels{"Service lines", "Images", "Avatars", "Reactions"};
   static constexpr std::array<std::string_view, 2> kBlurLabels{"Service lines", "Reactions"};
-  return c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+  return c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
       nodes::Text(bubbles ? "MESSAGE BUBBLES" : "PANELS", 13.0f, colours.dim, true),
       c::visible(!bubbles, c::styled({.fillX = true},
           wrapped(nodes::Text("The chat list, the bars and the side panels: only over a background behind the whole window "
                               "(Appearance → Chat background → Behind the whole window).",
                               12.0f, colours.dim)))),
       c::spec_for<looks_picked>([part](const looks_picked& now) { return scene::Spec{.alpha = look_usable(now, part) ? 1.0f : 0.4f}; },
-          c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::column(c::vbox(0.0f) | c::fill_x | c::content_y,
               c::projected<looks_picked>([level, part](const looks_picked& now) { return kind_index(now, level, part); },
                   make_choice_menu(colours, "", kind_names(level), 0, pick_kind_at{level, part})))),
       c::spec_for<looks_picked>([level, part, greyed](const looks_picked& now) {
         return greyed(look_usable(now, part) && look_own(now, level, part));
       },
-          c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
               c::text_for<looks_picked>([look](const looks_picked& now) { return std::format("Opacity: {}%", look(now).opacity); },
                   nodes::Text("", 13.0f, colours.text)),
               look_slider(colours, [look](const looks_picked& now) { return static_cast<float>(look(now).opacity - 10) / 90.0f; },
                           look_slid<request::bubbles_change::opacity>{level, part}, {.margin = {4.0f, 8.0f, 8.0f, 8.0f}}),
               // Frosted only: how much it blurs.
-              c::shown_for<looks_picked>(frosted, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::shown_for<looks_picked>(frosted, c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
                   c::text_for<looks_picked>([look](const looks_picked& now) { return std::format("Blur: {:.1f}%", blur_of(look(now), now.window) * 100.0f); },
                       nodes::Text("", 13.0f, colours.text)),
                   look_slider(colours, [look](const looks_picked& now) { return blur_of(look(now), now.window); },
                               look_slid<request::bubbles_change::blur>{level, part}, {.margin = {4.0f, 8.0f, 8.0f, 8.0f}}))),
               // The bubbles' only: what else is in a chat, each apart where
               // chosen; those drawn frosted where the bubbles are, each its blur.
-              c::visible(bubbles, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+              c::visible(bubbles, c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
                   nodes::Text("EVERYTHING ELSE IN A CHAT", 12.0f, colours.dim, true),
                   element_rows(colours, level, kElementLabels, config::kElementNames),
                   c::shown_for<looks_picked>(frosted, element_rows(colours, level, kBlurLabels, config::kElementBlurNames)))))));
@@ -362,7 +362,7 @@ using background_menu_t = choice_menu<pick_wallpaper_at>;
 // (its own), Manage's Appearance (a room's) and the background dialog.
 MUX_INLINE_IN_RELEASE auto look_choices(const palette& colours, choice_level_t level) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(look_choices, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(look_choices, c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
       c::styled({.margin = {0.0f, 10.0f, 0.0f, 10.0f}}, nodes::Text("BACKGROUND", 13.0f, colours.dim, true)),
       c::text_for<looks_picked>([level](const looks_picked& now) { return background_note(now, level); },
           c::styled({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}}, wrapped(nodes::Text("", 13.0f, colours.dim)))),

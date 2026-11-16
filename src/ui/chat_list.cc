@@ -162,7 +162,7 @@ using protocol_row_holder = skiff::compose::Holding<protocol_row_view>;
 template <class V>
 [[nodiscard]] inline std::optional<protocol_row_holder> row_holder_of(std::optional<V> made) {
   if (!made) return std::nullopt;
-  return protocol_row_holder(skiff::compose::vbox(0.0f, {.autoSize = scene::axes::kBoth}),
+  return protocol_row_holder(skiff::compose::vbox(0.0f) | skiff::compose::content_x | skiff::compose::content_y,
                              protocol_row_view(std::move(*made)));
 }
 [[nodiscard]] inline std::optional<protocol_row_holder> protocol_row_of(
@@ -199,7 +199,7 @@ MUX_INLINE_IN_RELEASE auto chat_preview_line(const ui_needs& needs, const conver
                               const conversation_view& view, const chat_preview& preview) {
   namespace c = skiff::compose;
   const palette& colours = *needs.colours;
-  return SKIFF_NAMED(chat_preview_line, c::row(c::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(chat_preview_line, c::row(c::hbox(4.0f) | c::fill_x | c::content_y,
       c::visible(!preview.sender.empty(), c::styled({.alignSelf = scene::align::kMiddle},
           elided(nodes::Text(preview.sender, 13.0f,
               view.chosen ? colours.selected_text : preview.draft ? colours.error : colours.accent)))),
@@ -225,8 +225,7 @@ inline constexpr struct chat_row_text_fn : skiff::compose::piece<chat_row_text_f
   auto make(const ui_needs& needs, const conversation& one, const conversation_view& view, const chat_preview& preview) const {
     namespace c = skiff::compose;
     const palette& colours = *needs.colours;
-    return SKIFF_NAMED(chat_row_text_view, c::column(c::vbox(6.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX,
-                                                                  .alignSelf = scene::align::kMiddle}),
+    return SKIFF_NAMED(chat_row_text_view, c::column(c::vbox(6.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
         name_time_line(view.name, preview.time, view.chosen ? colours.selected_text : colours.text,
                        view.chosen ? colours.selected_text : colours.dim, 13.0f),
         c::visible(preview.topic.has_value(), c::styled({.fillX = true},
@@ -248,8 +247,7 @@ inline constexpr struct message_line_text_fn : skiff::compose::piece<message_lin
   static message_line_facts facts(const palette&, const message_line& one) { return {one.sender, one.name}; }
   auto make(const palette& colours, const message_line& one) const {
     namespace c = skiff::compose;
-    return SKIFF_NAMED(message_line_text_view, c::column(c::vbox(4.0f,
-        {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+    return SKIFF_NAMED(message_line_text_view, c::column(c::vbox(4.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
         name_time_line(one.name, std::format("{:%d.%m.%y}", std::chrono::floor<std::chrono::days>(one.at)),
                        colours.text, colours.dim, 12.0f),
         c::styled({.fillX = true}, elided(nodes::Text(one.snippet, 13.0f, colours.dim)))));

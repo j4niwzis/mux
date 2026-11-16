@@ -37,7 +37,7 @@ using namespace ::mux::ui;
 // it is done there -- or Cancel.
 inline auto uia_view(const palette& colours, const tool::uia_step& facts) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(uia_view, c::column(c::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+  return SKIFF_NAMED(uia_view, c::column(c::vbox(10.0f) | c::fill_x | c::content_y | c::with({.padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
       nodes::Text(facts.what, 17.0f, colours.text, true),
       c::styled({.fillX = true},
                 wrapped(nodes::Text("Your server asks you to confirm this in your browser: the page is open there. Once you have done what it asks, "

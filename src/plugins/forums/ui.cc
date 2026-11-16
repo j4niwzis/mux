@@ -27,9 +27,9 @@ auto extend(room_settings::contract::general_sections, type_tag<feature>, const 
             const auto& facts) {
   namespace c = skiff::compose;
   using toggle_t = widgets::Toggle<sends<flip_forum>>;
-  return SKIFF_NAMED(forum_section, c::visible(facts.space, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(forum_section, c::visible(facts.space, c::column(c::vbox(6.0f) | c::fill_x | c::content_y,
       part_heading(colours, "Shown as"),
-      c::row(c::hbox(12.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = facts.holds_spaces}),
+      c::row(c::hbox(12.0f) | c::fill_x | c::content_y | c::with({.padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = facts.holds_spaces}),
           c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                     wrapped(nodes::Text("One chat, its rooms as topics", 14.0f, colours.text))),
           c::applied<shown>([chat = facts.chat](const shown& now) { return now.chats.contains(chat); },

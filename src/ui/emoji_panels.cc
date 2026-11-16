@@ -43,7 +43,7 @@ export namespace mux::ui {
 // panel's height under the field, and pushed the footer out of the card:
 // the packs' tabs never seen.
 [[nodiscard]] inline skiff::compose::Look picker_look() {
-  return skiff::compose::vbox(4.0f, {.fill = true, .padding = {7.0f, 0.0f, 4.0f, 7.0f}});
+  return skiff::compose::vbox(4.0f) | skiff::compose::fill_x | skiff::compose::fill_y | skiff::compose::with({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
 }
 // Group by source and state key, not the displayed title. Old cached and
 // protocol-neutral packs without a source retain their named grouping.
@@ -305,13 +305,13 @@ auto emoji_panel(const palette& colours, emoji_kept& kept, Pick pick) {
                 .hoverBackground = colours.chosen});
     return made;
   };
-  auto footer = c::split<emoji_group>(c::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  auto footer = c::split<emoji_group>(c::vbox(4.0f) | c::fill_x | c::content_y,
       [](const emoji_group& one) { return one.picture.has_value(); },
-      c::in_row<emoji_group>(c::hbox(0.0f, {.fillX = true, .height = 36.0f})),
-      c::paged<emoji_group>(c::hbox(0.0f, {.fillX = true, .height = 30.0f}),
-                            c::justified(c::hbox(0.0f, {.height = 30.0f, .grow = scene::axes::kX}), nodes::justify::middle{}), 30.0f, 60.0f,
+      c::in_row<emoji_group>(c::hbox(0.0f) | c::fill_x | c::with({.height = 36.0f})),
+      c::paged<emoji_group>(c::hbox(0.0f) | c::fill_x | c::with({.height = 30.0f}),
+                            c::justified(c::hbox(0.0f) | c::grow_x | c::with({.height = 30.0f}), nodes::justify::middle{}), 30.0f, 60.0f,
                             arrow, "Previous emoji packs", "Next emoji packs"));
-  auto groups = c::sections<emoji_group>(c::vbox(4.0f, {.fill = true}), c::vbox(0.0f),
+  auto groups = c::sections<emoji_group>(c::vbox(4.0f) | c::fill_x | c::fill_y, c::vbox(0.0f),
       [&colours](const emoji_group& one) { return emoji_tab(colours, one); },
       [&colours, &kept, pick](const emoji_group& one) {
         return cell_section(colours, one.name,
@@ -337,14 +337,10 @@ auto emoji_panel(const palette& colours, emoji_kept& kept, Pick pick) {
             items.push_back(item_of(one));
         }
         return items;
-      }, c::listed<emoji_item>(c::hbox(0.0f, {.autoSize = scene::axes::kBoth, .padding = {4.0f, 4.0f, 4.0f, 4.0f}, .cornerRadius = 8.0f,
-                                              .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f},
-                                              .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
+      }, c::listed<emoji_item>(c::hbox(0.0f) | c::content_x | c::content_y | c::with({.padding = {4.0f, 4.0f, 4.0f, 4.0f}, .cornerRadius = 8.0f, .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f}, .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
                                [&colours, &kept, pick](const emoji_item& one) { return emoji_cell(colours, kept, pick, one); })));
   auto typed = c::shown_for<query>([at = &kept](const emoji_search& now) { return Pick::takes_text() && !typed_reaction(*at, now).key.empty(); },
-      c::onClick(pick_typed{}, c::row(c::hbox(0.0f, {.fillX = true, .height = 34.0f, .margin = {4.0f, 7.0f, 2.0f, 0.0f},
-                                                     .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 17.0f,
-                                                     .background = colours.tile, .hoverBackground = colours.chosen}),
+      c::onClick(pick_typed{}, c::row(c::hbox(0.0f) | c::fill_x | c::with({.height = 34.0f, .margin = {4.0f, 7.0f, 2.0f, 0.0f}, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 17.0f, .background = colours.tile, .hoverBackground = colours.chosen}),
           c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
               c::text_for<query>([at = &kept](const emoji_search& now) { return std::format("React with \u201C{}\u201D", typed_reaction(*at, now).label); },
                                  elided(nodes::Text("", 13.0f, colours.text))))), "React with search text"));

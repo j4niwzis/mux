@@ -57,8 +57,7 @@ MUX_INLINE_IN_RELEASE auto reaction_event_row(const ui_needs& n, const conversat
   auto bubble = message_alone(n, in, reaction_message_of(in, one), first, last, known);
   return SKIFF_NAMED(reaction_event_row, c::onClick(std::tuple{one.event.empty() ? std::optional<request::reply_to>{}
         : std::optional(request::reply_to{one.event, std::format("{} reacted {}", one.name, one.key)}), request::close_shown<shown>{}},
-      c::column(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY,
-          .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .hoverBackground = n.colours->chosen}), std::move(bubble)), "Reply to reaction"));
+      c::column(c::vbox(0.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 12.0f, 0.0f, 12.0f}, .hoverBackground = n.colours->chosen}), std::move(bubble)), "Reply to reaction"));
 }
 MUX_INLINE_IN_RELEASE auto panel(const ui_needs& n, const shown& facts) {
   namespace c = skiff::compose;
@@ -69,7 +68,7 @@ MUX_INLINE_IN_RELEASE auto panel(const ui_needs& n, const shown& facts) {
           i + 1 == entries.size() || entries[i + 1].who != entries[i].who, facts.now); }) | std::ranges::to<std::vector>();
   return SKIFF_NAMED(panel, c::column(list_dialog(420.0f),
       page_header<sends<back>, sends<request::close_shown<shown>>>(*n.colours, "Reactions", {}, {}, facts.back, true),
-      dialog_list(c::many(c::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)))));
+      dialog_list(c::many(c::vbox(0.0f) | c::fill_x | c::content_y, std::move(rows)))));
 }
 using box = decltype(panel(std::declval<const ui_needs&>(), std::declval<const shown&>()));
 MUX_INLINE_IN_RELEASE auto make_content(const ui_needs& n, const shown& facts) {

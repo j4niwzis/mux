@@ -61,12 +61,9 @@ MUX_INLINE_IN_RELEASE auto page_preview(const palette& colours, const link_previ
   if (shown.image)
     picture.emplace(from_avatars{*shown.image}).apply({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f});
   return SKIFF_NAMED(page_preview, c::onClick(request::open_url{std::move(where)},
-      c::row(c::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {6.0f, 0.0f, 2.0f, 0.0f},
-                            .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f,
-                            .background = (colours.accent & 0x00FFFFFFu) | (0x18u << 24),
-                            .hoverBackground = (colours.accent & 0x00FFFFFFu) | (0x34u << 24)}),
+      c::row(c::hbox(8.0f) | c::fill_x | c::content_y | c::with({.margin = {6.0f, 0.0f, 2.0f, 0.0f}, .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f, .background = (colours.accent & 0x00FFFFFFu) | (0x18u << 24), .hoverBackground = (colours.accent & 0x00FFFFFFu) | (0x34u << 24)}),
              c::styled({.fillY = true, .width = 3.0f, .cornerRadius = 1.5f}, nodes::Box<>(colours.accent)),
-             c::column(c::vbox(1.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX}),
+             c::column(c::vbox(1.0f) | c::grow_x | c::content_y,
                        c::visible(!shown.site.empty(), c::styled({.fillX = true}, elided(nodes::Text(shown.site, 13.0f, colours.accent, true)))),
                        c::visible(!shown.title.empty(), c::styled({.fillX = true}, elided(nodes::Text(shown.title, 13.0f, colours.text, true)))),
                        c::visible(!shown.description.empty(),
@@ -127,7 +124,7 @@ template <class Place>
 MUX_INLINE_IN_RELEASE auto extend(contract::choice_rows, type_tag<feature>, const auto& colours, const Place& place) {
   namespace c = skiff::compose;
   using shown = skiff::model::Field<&choices::shown>;
-  return choices_scoped<choices>(place, c::column(c::vbox(6.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return choices_scoped<choices>(place, c::column(c::vbox(6.0f) | c::fill_x | c::content_y,
       c::bound<shown>(show_hide_field<link_previews_setting, std::optional<bool>, shown>(colours, level_of(place))),
       direct_row(colours, place)));
 }

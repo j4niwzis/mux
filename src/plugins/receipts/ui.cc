@@ -27,9 +27,8 @@ inline constexpr float kReadersHeight = 16.0f;
 inline constexpr std::size_t kReadersShown = 3;
 MUX_INLINE_IN_RELEASE auto readers_row(const palette& colours, const conversation& in, const std::vector<std::string>& users) {
   namespace c = skiff::compose;
-  return SKIFF_NAMED(readers_row, c::row(c::hbox(2.0f, {.place = scene::anchor::kBottomRight, .x = -4.0f, .y = kReadersHeight + 1.0f,
-                                                       .autoSize = scene::axes::kBoth}),
-      c::many(c::hbox(2.0f, {.autoSize = scene::axes::kBoth}),
+  return SKIFF_NAMED(readers_row, c::row(c::hbox(2.0f) | c::content_x | c::content_y | c::with({.place = scene::anchor::kBottomRight, .x = -4.0f, .y = kReadersHeight + 1.0f}),
+      c::many(c::hbox(2.0f) | c::content_x | c::content_y,
               users | std::views::take(kReadersShown) | std::views::transform([&](const std::string& user) {
                 return face_spot(avatar_of::person{}, user, sender_name(in, user), kReaderFace);
               }) | std::ranges::to<std::vector>()),

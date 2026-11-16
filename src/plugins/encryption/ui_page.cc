@@ -60,9 +60,9 @@ MUX_INLINE_IN_RELEASE auto security_view(const palette& colours, const account_p
   namespace c = skiff::compose;
   using flip = sends<::mux::ui::request::flip_only_verified>;
   using toggle_t = toggle_for<flip>;
-  return SKIFF_NAMED(security_view, c::column(c::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+  return SKIFF_NAMED(security_view, c::column(c::vbox(8.0f) | c::fill_x | c::content_y,
       section_title(colours, "ENCRYPTION"),
-      c::row(c::hbox(16.0f, {.fillX = true, .height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+      c::row(c::hbox(16.0f) | c::fill_x | c::with({.height = kRowHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
              c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
                        elided(nodes::Text("Never send encrypted messages to unverified sessions", 15.0f, colours.text))),
              c::applied<facts_t>([](const facts_t& now) { return now && config::only_verified_of(now->account); },

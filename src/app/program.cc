@@ -570,6 +570,7 @@ struct app : kept_settings {
   // offered the request first (route), and takes it.
   void apply(const request::typing&) {}
   void apply(const request::open_manage&) {}
+  void apply(const request::open_join_requests&) {}
   void apply(const request::manage_space&) {}
   void apply(const request::manage_scope&) {}
   void apply(const request::pick_room_avatar&) {}

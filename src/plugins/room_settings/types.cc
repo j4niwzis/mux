@@ -44,7 +44,9 @@ namespace contract {
 //   for each kind it has tabs for; none for the others. Each tab a type of
 //   its own, with tab_title(tab) -> std::string_view, tab_icon(tab),
 //   make_manage_page(tab, palette, facts) -> its page. One whose page holds
-//   the client's General under its own says hosts_general(tab) -> true. An
+//   the client's General under its own says hosts_general(tab) -> true; one
+//   that answers join requests, answers_knocks(tab) -> true (opened by a
+//   knock bar's View all). An
 //   editor open on its page: manage_editor_header(tab, kept) -> bool, a way
 //   back shown over it, and manage_close_editor(tab, kept&) -> bool, closed
 //   by Back or Esc first. All found by ADL; those taking only its types and

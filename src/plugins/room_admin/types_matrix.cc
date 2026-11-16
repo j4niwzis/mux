@@ -31,6 +31,8 @@ struct roles {};
 // address): one General tab, not two.
 namespace manage {
 constexpr bool hosts_general(room) { return true; }
+// Those asking to join answered on their own page.
+constexpr bool answers_knocks(requests) { return true; }
 constexpr std::string_view tab_title(room) { return "General"; }
 constexpr std::string_view tab_title(members) { return "Members"; }
 constexpr std::string_view tab_title(requests) { return "Join Requests"; }

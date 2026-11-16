@@ -722,6 +722,9 @@ struct selection_taken {
   std::vector<std::string> events;
 };
 struct open_manage {};
+// The chosen chat's settings, open on the page its join requests are
+// answered on (a knock bar's View all).
+struct open_join_requests {};
 struct pick_room_avatar { conversation_id room; };
 struct room_act {
   mux::room_action_t action;

@@ -54,6 +54,14 @@ class part {
     if (const auto chosen = s_->chosen())
       this->manage_chat(*chosen);
   }
+  // The room's settings, on the tab its join requests are answered on: a
+  // knock bar's View all.
+  void apply(const ui::request::open_join_requests&) {
+    if (const auto chosen = s_->chosen()) {
+      this->manage_chat(*chosen);
+      this->each_open([](auto& now) { show_join_requests(now); });
+    }
+  }
   // A space's settings, from its menu or from the list of chats open (a forum).
   void apply(const ui::request::manage_space& one) {
     if (const auto by = s_->listed())

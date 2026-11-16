@@ -887,9 +887,12 @@ auto no_post_line(const palette& colours) {
                           nodes::Text("You don't have permission to post in this chat", 13.0f, colours.dim))));
 }
 
-// Those asking to join, for those who may let them in: the first of them --
-// who, and why -- with Approve (an invite) and Deny (their knock refused),
-// and how many more.
+// Those asking to join, for those who may let them in, as Voyage shows
+// them over the field: one -- their face and name over why they ask, each
+// line cut where it runs out of room, however long the name -- with
+// Decline (their knock refused) and Accept (an invite); several -- how many,
+// the first few faces. And View all: the room's Join Requests, where each
+// is answered with their reason whole.
 struct approve_knock {
   using Answer = ::mux::ui::request::room_act;
   std::string user;
@@ -901,21 +904,35 @@ struct deny_knock {
   ::mux::ui::request::room_act operator()() { return ::mux::ui::request::room_act{room_action::kick{user}}; }
 };
 struct knock_facts {
-  std::string user, name, reason;
-  std::size_t more = 0;
+  member first;
+  std::string reason;            // the first's, on one line
+  std::vector<person_at> asking;  // all of them, the first first
   friend bool operator==(const knock_facts&, const knock_facts&) = default;
 };
 [[nodiscard]] inline std::optional<knock_facts> first_knock(const ui_shared& shared, const conversation& chat) {
   if (chat.knocking.empty() || !proto::chat_rights(protocol_state_of(shared, chat.id.account), chat).invite)
     return std::nullopt;
   const knock_request& first = chat.knocking.front();
-  return knock_facts{first.id, first.name, first.reason, chat.knocking.size() - 1};
+  return knock_facts{
+      member{first.id, first.name.empty() ? first.id : first.name, std::nullopt, first.avatar},
+      first.reason | std::views::transform([](char ch) { return ch == '\n' || ch == '\r' ? ' ' : ch; }) | std::ranges::to<std::string>(),
+      chat.knocking | std::views::transform([](const knock_request& one) {
+        return person_at{one.id, one.name.empty() ? one.id : one.name, std::nullopt};
+      }) | std::ranges::to<std::vector>()};
 }
-MUX_INLINE_IN_RELEASE auto knock_bar(const palette& colours, const knock_facts& one) {
-  return two_choice_bar(colours,
-                        std::format("{} asks to join{}{}", one.name, one.reason.empty() ? std::string() : ": " + one.reason,
-                                    one.more ? std::format(" (and {} more)", one.more) : std::string()),
-                        colours.text, "Deny", deny_knock{one.user}, "Approve", approve_knock{one.user});
+MUX_INLINE_IN_RELEASE auto knock_bar(const palette& colours, const knock_facts& knocks) {
+  namespace c = skiff::compose;
+  const bool one = knocks.asking.size() == 1;
+  const auto choice = [](auto button) { return c::styled({.height = 36.0f, .grow = scene::axes::kX}, std::move(button)); };
+  return SKIFF_NAMED(knock_bar, c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 12.0f, 8.0f, 12.0f}}),
+      c::visible(one, c::row(c::hbox(0.0f) | c::fill_x | c::content_y,
+          member_text(colours, knocks.first, knocks.reason.empty() ? std::string("Asks to join") : "Asks to join: " + knocks.reason))),
+      c::visible(!one, c::row(c::hbox(0.0f) | c::fill_x | c::with({.height = 28.0f}),
+          faces_summary(colours, knocks.asking, std::format("{} people ask to join", knocks.asking.size())))),
+      c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
+          choice(widgets::Button<sends<request::open_join_requests>>(colours.widgets, "View all", {})),
+          c::visible(one, choice(widgets::Button<deny_knock>(colours.widgets, "Decline", deny_knock{knocks.first.id}))),
+          c::visible(one, choice(primary(widgets::Button<approve_knock>(colours.widgets, "Accept", approve_knock{knocks.first.id})))))));
 }
 using knock_bar_t = decltype(knock_bar(std::declval<const palette&>(), std::declval<const knock_facts&>()));
 // Element's bar over the field while messages here were not sent

@@ -40,6 +40,7 @@ import :controls;
 import :themes;
 import :names;
 import :forms;
+import :requests;
 import mux.levels;
 
 export namespace mux::ui {
@@ -515,6 +516,27 @@ inline constexpr struct member_text_fn : skiff::compose::piece<member_text_fn> {
     return two_lines(colours, one.name.empty() ? one.id : one.name, std::move(how), 14.0f, 4.0f);
   }
 } member_text{};
+// A line about some people, as a plugin says it (how many have read a
+// message, or who) or a bar does (how many ask to join) -- a piece, about the first few of them (the avatars
+// plugin's faces of them at its right, overlapping).
+inline constexpr float kSummaryFace = 22.0f, kSummaryOverlap = 8.0f;
+inline constexpr std::size_t kSummaryMostFaces = 3;
+struct faces_summary_facts {
+  std::vector<face_facts> faces;
+  skia::SkColor ring = 0;
+};
+inline constexpr struct faces_summary_fn : skiff::compose::piece<faces_summary_fn> {
+  using facts_type = faces_summary_facts;
+  static faces_summary_facts facts(const palette& colours, const std::vector<person_at>& people, const std::string&) {
+    return {people | std::views::take(kSummaryMostFaces) | std::views::transform([](const person_at& one) { return face_facts{one.id, one.name}; }) |
+                std::ranges::to<std::vector>(),
+            colours.sidebar};
+  }
+  auto make(const palette& colours, const std::vector<person_at>&, std::string said) const {
+    namespace c = skiff::compose;
+    return c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(std::move(said), 13.0f, colours.text)));
+  }
+} faces_summary{};
 // A member as a list shows them: their name over how they are, their role;
 // pressed, their info. A builder (its text a piece): built where the
 // program's rules are known.

@@ -68,6 +68,7 @@ namespace tab_defaults {
 constexpr composition::page_list<> room_tabs(contract::tabs, const auto&, const auto&) { return {}; }
 constexpr composition::page_list<> kept_parts(contract::kept, const auto&, const auto&) { return {}; }
 constexpr bool hosts_general(const auto&) { return false; }
+constexpr bool answers_knocks(const auto&) { return false; }
 inline bool manage_close_editor(const auto&, auto&) { return false; }
 inline bool manage_editor_header(const auto&, const auto&) { return false; }
 constexpr void avatar_sending(auto&) {}
@@ -241,6 +242,22 @@ template <class... Tabs>
 }
 template <class Kind>
 inline constexpr bool general_on_its_own = !general_hosted(plugin_tabs_t<Kind>{});
+// The tab join requests are answered on (Matrix's Join Requests), up --
+// the first of a kind's tabs that says it answers them; none, where no tab
+// of the kind does. Known from the kind's tabs, while compiling.
+template <class Tab>
+[[nodiscard]] constexpr bool tab_answers_knocks() {
+  using tab_defaults::answers_knocks;
+  return answers_knocks(Tab{});
+}
+template <class Kind, class... Tabs>
+void knocks_tab_up(room_settings_of<Kind>& now, ui::type_list<Tabs...>) {
+  (void)((tab_answers_knocks<Tabs>() && (now.tab = Tabs{}, now.navigation = false, true)) || ...);
+}
+template <class Kind>
+void show_join_requests(room_settings_of<Kind>& now) {
+  knocks_tab_up(now, plugin_tabs_t<Kind>{});
+}
 // What the client's General is called: General where it is a tab of its
 // own; Preferences where another's page holds it.
 template <class Kind>

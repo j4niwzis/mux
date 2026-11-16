@@ -162,25 +162,42 @@ void account<Sink>::load_older(std::string room, std::string from) {
   this->spawn_guarded([this, room = std::move(room), from = std::move(from)] {
     if (!api_)
       return;
-    // No token: from the room's newest, back.
-    auto got = perform(*api_, loom::cs::get_room_events{.room_id = room,
-                                                        .from = from.empty() ? std::nullopt
-                                                                             : std::optional<std::string>(from),
-                                                        .dir = loom::cs::get_room_events::dir_values::b{},
-                                                        .limit = 40});
-    if (!got) {
-      log(id_, "history of {}: {}", room, got.error().said());
-      return;
-    }
-    log(id_, "history of {}: {} event{}", room, got->chunk.size(), got->chunk.size() == 1 ? "" : "s");
     const conversation_id in{id_, room};
-    for (const auto& one : got->chunk)  // newest first: each goes before the rest
-      event(in, one, placement::at_start{});
-    // Nothing came, or the token did not move: the room's start. A server
-    // that hands out a token with an empty page each time had an empty chat
-    // -- at its top all along -- page back again at every one, for ever.
-    const bool start = got->chunk.empty() || !got->end || *got->end == from;
-    sink_(change::history_position{in, start ? std::nullopt : got->end});
+    // No token: from the room's newest, back.
+    std::optional<std::string> at = from.empty() ? std::nullopt : std::optional<std::string>(from);
+    // The room's start is where the server gives no token to go on from, or
+    // the one it was asked from again. An empty page with a token on is not
+    // it: the server left out what the reader may not see -- the history
+    // before they joined, events it filters -- and says where to go on from
+    // (the spec's /messages; Element pages on). Taken for the start, it was
+    // kept on disk as the room's beginning, and the chat never paged back
+    // again (a tester's: scrolled to the top, nothing older came, until a
+    // reply jumped to opened a window there). Gone on from a few such pages
+    // in a row; past them, the token said, to go on from as the reader
+    // scrolls up again -- never paged for ever on one ask.
+    constexpr int kEmptyPagesAtOnce = 10;
+    for (int page = 0;; ++page) {
+      auto got = perform(*api_, loom::cs::get_room_events{.room_id = room,
+                                                          .from = at,
+                                                          .dir = loom::cs::get_room_events::dir_values::b{},
+                                                          .limit = 40});
+      if (!got) {
+        log(id_, "history of {}: {}", room, got.error().said());
+        return;
+      }
+      log(id_, "history of {}: {} event{}", room, got->chunk.size(), got->chunk.size() == 1 ? "" : "s");
+      for (const auto& one : got->chunk)  // newest first: each goes before the rest
+        event(in, one, placement::at_start{});
+      if (!got->end || got->end == at) {
+        sink_(change::history_position{in, std::nullopt});
+        return;
+      }
+      if (!got->chunk.empty() || page + 1 == kEmptyPagesAtOnce) {
+        sink_(change::history_position{in, got->end});
+        return;
+      }
+      at = got->end;
+    }
   });
 }
 

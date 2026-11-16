@@ -118,12 +118,16 @@ class history_part {
                 // (on_disk_, read then): the gap is closed, and the disk goes
                 // on from there -- else every run's first page back left a
                 // gap past which everything was asked of the server again.
+                // A page that brought nothing older -- its oldest still the
+                // one paged from -- reached nothing: the gap stays before it,
+                // with where to go on from now. Taken for one that reached
+                // the disk, it was closed, and the disk thought whole there.
                 const auto known = on_disk_.find(c.in);
-                const bool overlapped = chat && !chat->timeline.empty() && known != on_disk_.end() &&
-                                        known->second.contains(chat->timeline.front().id);
+                const bool came = chat && !chat->timeline.empty() && chat->timeline.front().id != paged->second;
+                const bool overlapped = came && known != on_disk_.end() && known->second.contains(chat->timeline.front().id);
                 if (chat && !chat->timeline.empty() && !overlapped)
                   gaps.insert_or_assign(chat->timeline.front().id,
-                                        message_store::gap_mark{.token = c.from, .start = !c.from.has_value()});
+                                        message_store::gap_mark{.token = c.from, .start = !c.from.has_value(), .sure = true});
                 paging_from_.erase(paged);
                 this->changed(c.in);
               } else {
@@ -136,7 +140,8 @@ class history_part {
                                   if (const auto pending = sync_gap_.find(c.message.in); pending != sync_gap_.end()) {
                                     gaps_of(c.message.in)
                                         .insert_or_assign(c.message.id, message_store::gap_mark{.token = pending->second,
-                                                                                                .start = !pending->second});
+                                                                                                .start = !pending->second,
+                                                                                                .sure = true});
                                     sync_gap_.erase(pending);
                                     this->changed(c.message.in);
                                   }
@@ -230,7 +235,7 @@ class history_part {
         // time the page comes, it is taken not to.
         this->read_on_disk(in);
         if (const auto gap = gaps_of(in).find(*paged_from); gap != gaps_of(in).end()) {
-          if (gap->second.start)
+          if (gap->second.beginning())
             return;  // the room's beginning: nothing older anywhere
           if (gap->second.token)
             from = *gap->second.token;
@@ -270,6 +275,13 @@ class history_part {
                                               [&](const mux::message& said) { return gaps.contains(said.id); });
         if (cut != (kept | std::views::reverse).end())
           kept.erase(kept.begin(), std::prev(cut.base()));
+        // Those the timeline holds already: no page. Older by their time
+        // than its first, though held -- come live with a clock behind, kept
+        // where they came -- they were all the disk gave at the top of a
+        // chat new to it; added again, they changed nothing, and every ask
+        // read them again, the server never asked.
+        if (const mux::conversation* held = s_->model->find(in))
+          std::erase_if(kept, [&](const mux::message& said) { return std::ranges::contains(held->timeline, said.id, &mux::message::id); });
         if (kept.empty()) {
           from_server(in, front, from);
           return;

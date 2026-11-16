@@ -246,6 +246,12 @@ class message_store {
   struct gap_mark {
     std::optional<std::string> token;  // the server's token, to page back from
     bool start = false;                // the room's beginning: nothing older
+    // Said by the server giving no token to go on from. None in marks kept
+    // before: mux took an empty page for the beginning then, where the
+    // server had only left out what the reader may not see -- such a
+    // beginning is asked about again.
+    std::optional<bool> sure;
+    [[nodiscard]] bool beginning() const { return start && sure.value_or(false); }
     friend consteval auto json_schema(knot::type<gap_mark>) { return knot::schema<gap_mark>(); }
   };
   using gaps_t = std::map<std::string, gap_mark>;

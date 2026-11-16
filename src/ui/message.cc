@@ -52,6 +52,9 @@ export namespace mux::ui {
     thumb.emplace(from_thumbnails{*picture, sticker})
         .apply({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle, .margin = {2.0f, 0.0f, 2.0f, 0.0f},
                 .cornerRadius = 3.0f, .background = colours.tile});
+  // Its box fixed: its picture coming repaints it, lays nothing out.
+  if (thumb)
+    thumb->keepBox();
   auto text = nodes::Text(std::move(said), 13.0f, colours.text);
   if (quoted)
     text = wrapped(std::move(text));

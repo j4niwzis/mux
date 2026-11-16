@@ -58,8 +58,14 @@ using namespace ::mux::ui;
 MUX_INLINE_IN_RELEASE auto page_preview(const palette& colours, const link_preview& shown, std::string where) {
   namespace c = skiff::compose;
   std::optional<nodes::Image<from_avatars>> picture;
-  if (shown.image)
+  if (shown.image) {
     picture.emplace(from_avatars{*shown.image}).apply({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f});
+    // Its box fixed: the picture coming -- and coming back, let go by the
+    // cache as the chat scrolls past many -- repaints it and lays nothing
+    // out. Laid out again at each, a timeline of previews was laid out in
+    // the middle of its scroll, frame after frame (slow in a Debug build).
+    picture->keepBox();
+  }
   return SKIFF_NAMED(page_preview, c::onClick(request::open_url{std::move(where)},
       c::row(c::hbox(8.0f) | c::fill_x | c::content_y | c::with({.margin = {6.0f, 0.0f, 2.0f, 0.0f}, .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f, .background = (colours.accent & 0x00FFFFFFu) | (0x18u << 24), .hoverBackground = (colours.accent & 0x00FFFFFFu) | (0x34u << 24)}),
              c::styled({.fillY = true, .width = 3.0f, .cornerRadius = 1.5f}, nodes::Box<>(colours.accent)),

@@ -93,8 +93,11 @@ MUX_INLINE_IN_RELEASE auto picture_box(const palette& colours, const std::string
   // Under the picture, not above it in the column: placed over the box, out
   // of its flow -- in the flow, the picture went under it, past the box's
   // bottom, cut off by its corners: only the blurred preview was ever seen.
+  // The box's own size, whatever the preview: its coming repaints it.
+  nodes::Image<from_previews> blurred({source});
+  blurred.keepBox();
   auto preview = c::visible(look.thumbnail, c::styled({.place = scene::anchor::kTopLeft, .fill = true, .cornerRadius = 10.0f},
-                                                     nodes::Image<from_previews>({source})));
+                                                     std::move(blurred)));
   // The picture itself, found by its mark: a node, its spec and whether it
   // shows set on it (styled() and visible() make builders).
   picture_image_t image({source, look.sticker});

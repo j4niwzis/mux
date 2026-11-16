@@ -116,7 +116,8 @@ runs:
           cargo --version
           cmake --version
           ninja --version
-          dpkg-query -W libc++-23-dev libc++abi-23-dev
+          # The nightly the build machine's tools are made by: its date and commit.
+          dpkg-query -W libc++-23-dev libc++abi-23-dev clang-23 libclang-cpp23 llvm-23
           git -C ndk-tool rev-parse HEAD
           printf '%s\n' "$PROFILE_HASH"
         } | sha256sum)

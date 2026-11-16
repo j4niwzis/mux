@@ -65,7 +65,12 @@ runs:
     - name: the compiler's build
       shell: bash
       run: |
-        digest=$({ clang++ --version; rustc -vV; cargo --version; } | sha256sum)
+        # The packages' versions name the nightly (its date and commit);
+        # `clang++ --version` alone was the same for two nightlies, and a
+        # build made by one was restored for the next -- every module file
+        # refused ("built from a different branch than the compiler").
+        llvm=${{ inputs.llvm }}
+        digest=$({ /usr/lib/llvm-$llvm/bin/clang++ --version; dpkg-query -W "clang-$llvm" "libclang-cpp$llvm" "libc++-$llvm-dev" "llvm-$llvm"; rustc -vV; cargo --version; } | sha256sum)
         echo "COMPILER_BUILD=${digest:0:12}" >> "$GITHUB_ENV"
     # Template-heavy units need room beyond the runner's physical memory.
     # These preinstalled SDKs are unused by this build; removing them leaves

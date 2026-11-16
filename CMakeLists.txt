@@ -324,14 +324,14 @@ cme_declare_port(NAME skiff PROVIDES skiff
   VERSION 0.1.0)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG b7f73bc7e8ab7ca20f46cb186a3285cb1bde19b5
+  GIT_TAG 2c68dcf98aa841b23dfa3e5b6799b0a13d5b7da1
   VERSION 0.1.0)
 # skiff-framework: the window (skiff.platform.window) -- SDL3 makes it and
 # brings its input, Skia draws skiff's scene into it -- as any program of
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG 1a9edb86e9017de93144adaba3f2a198ed40ed0a
+  GIT_TAG d876a1a47eaaaef02b016ac72227689aca7c3858
   VERSION 0.1.0)
 # `mux --page`: the same program laid out and painted by an HTML engine
 # called directly (Blitz, through skiff.platform.page) -- for measuring it

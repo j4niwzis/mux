@@ -127,7 +127,7 @@ class history_part {
                 const bool overlapped = came && known != on_disk_.end() && known->second.contains(chat->timeline.front().id);
                 if (chat && !chat->timeline.empty() && !overlapped)
                   gaps.insert_or_assign(chat->timeline.front().id,
-                                        message_store::gap_mark{.token = c.from, .start = !c.from.has_value(), .sure = true});
+                                        message_store::gap_mark{.token = c.from, .start = !c.from.has_value(), .sure = true, .rule = message_store::gap_mark::kRule});
                 paging_from_.erase(paged);
                 this->changed(c.in);
               } else {
@@ -144,7 +144,7 @@ class history_part {
                                     gaps_of(c.message.in)
                                         .insert_or_assign(c.message.id, message_store::gap_mark{.token = pending->second,
                                                                                                 .start = !pending->second,
-                                                                                                .sure = true});
+                                                                                                .sure = true, .rule = message_store::gap_mark::kRule});
                                     sync_gap_.erase(pending);
                                     this->changed(c.message.in);
                                   }

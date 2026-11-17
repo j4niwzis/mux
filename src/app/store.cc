@@ -251,7 +251,12 @@ class message_store {
     // server had only left out what the reader may not see -- such a
     // beginning is asked about again.
     std::optional<bool> sure;
-    [[nodiscard]] bool beginning() const { return start && sure.value_or(false); }
+    // Which rule said the beginning: 2 where only no token to go on from
+    // says it. Marks of the rule before (sure, no rule) also took a token
+    // given back for the beginning -- asked about again too.
+    std::optional<int> rule;
+    static constexpr int kRule = 2;
+    [[nodiscard]] bool beginning() const { return start && rule.value_or(0) >= kRule; }
     friend consteval auto json_schema(knot::type<gap_mark>) { return knot::schema<gap_mark>(); }
   };
   using gaps_t = std::map<std::string, gap_mark>;

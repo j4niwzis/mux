@@ -259,12 +259,24 @@ void account<Sink>::load_older_before(std::string room, std::string event) {
   this->spawn_guarded([this, room = std::move(room), event = std::move(event)] {
     if (!api_)
       return;
-    const auto around = perform(*api_, loom::cs::get_event_context{.room_id = room, .event_id = event, .limit = 0});
-    if (!around || !around->start) {
-      log(id_, "history of {}: no token before {}: {}", room, event, around ? std::string("none given") : around.error().said());
+    // With what is before it, not nothing: asked for none (limit 0), a
+    // server may say no token either, and the chat never paged back from its
+    // oldest held message -- every ask the same refusal. What it gives before
+    // the message is put before it; its token, gone on from.
+    const auto around = perform(*api_, loom::cs::get_event_context{.room_id = room, .event_id = event, .limit = 40});
+    if (!around) {
+      log(id_, "history of {}: nothing before {}: {}", room, event, around.error().said());
       return;
     }
-    this->load_older(room, *around->start);
+    const conversation_id in{id_, room};
+    // Newest first, each before the rest: given newest first.
+    if (around->events_before)
+      for (const auto& one : *around->events_before)
+        this->event(in, one, placement::at_start{});
+    log(id_, "history of {}: {} event{} before {}", room, around->events_before ? around->events_before->size() : 0,
+        around->events_before && around->events_before->size() == 1 ? "" : "s", event);
+    if (around->start)
+      this->load_older(room, *around->start);
   });
 }
 

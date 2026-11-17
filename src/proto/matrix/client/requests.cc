@@ -165,8 +165,8 @@ void account<Sink>::load_older(std::string room, std::string from) {
     const conversation_id in{id_, room};
     // No token: from the room's newest, back.
     std::optional<std::string> at = from.empty() ? std::nullopt : std::optional<std::string>(from);
-    // The room's start is where the server gives no token to go on from, or
-    // the one it was asked from again. An empty page with a token on is not
+    // The room's start is where the server gives no token to go on from. An
+    // empty page with a token on is not
     // it: the server left out what the reader may not see -- the history
     // before they joined, events it filters -- and says where to go on from
     // (the spec's /messages; Element pages on). Taken for the start, it was
@@ -188,8 +188,18 @@ void account<Sink>::load_older(std::string room, std::string from) {
       log(id_, "history of {}: {} event{}", room, got->chunk.size(), got->chunk.size() == 1 ? "" : "s");
       for (const auto& one : got->chunk)  // newest first: each goes before the rest
         event(in, one, placement::at_start{});
-      if (!got->end || got->end == at) {
+      // No token to go on from: the start, as the spec says.
+      if (!got->end) {
         sink_(change::history_position{in, std::nullopt});
+        return;
+      }
+      // The token it was asked from given back: nothing further now -- not
+      // the start, which is said by giving none. Taken for it, the mark was
+      // kept on disk as the room's beginning and the chat never paged back
+      // again (a server that answers a token from /context so): the same
+      // token said, asked again as the reader scrolls up again.
+      if (got->end == at) {
+        sink_(change::history_position{in, got->end});
         return;
       }
       if (!got->chunk.empty() || page + 1 == kEmptyPagesAtOnce) {

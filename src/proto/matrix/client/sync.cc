@@ -1013,7 +1013,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       if (part.timeline && part.timeline->prev_batch) {
         const bool first = paged_.insert(room).second;
         if (first || part.timeline->limited.value_or(false))
-          sink_(change::history_position{in, *part.timeline->prev_batch});
+          sink_(change::sync_gap{in, *part.timeline->prev_batch});
       }
       if (part.timeline)
         for (const auto& one : part.timeline->events)

@@ -131,9 +131,12 @@ class history_part {
                 paging_from_.erase(paged);
                 this->changed(c.in);
               } else {
+                // Not a page this part asked for: where to go on from, said
+                // as a chat opens (XMPP's), before what comes next.
                 sync_gap_.insert_or_assign(c.in, c.from);
               }
             },
+            [&](const mux::change::sync_gap& c) { sync_gap_.insert_or_assign(c.in, std::optional<std::string>(c.from)); },
             [&](const mux::change::message_added& c) {
               spl::visit(spl::overloaded{
                                 [&](mux::placement::at_end) {

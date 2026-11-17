@@ -516,6 +516,19 @@ struct history_position {
   conversation_id in;
   std::optional<std::string> from;
 };
+// A sync's messages come cut short: older ones were sent that it does not
+// give, and this is where to page back from for them -- a gap before the
+// first of what it gives, not where the chat's oldest held message pages
+// back from (history_position). Said as one, a sync's token was taken for
+// the chat's own: every later page back from its top asked for what lay
+// just before the newest batch -- the middle of what was held -- and the
+// chat paged through it a page an ask before anything older came (a
+// tester's: scrolled to the top, nothing loaded until a reply jumped to
+// opened a window of its own).
+struct sync_gap {
+  conversation_id in;
+  std::string from;
+};
 // The first message of a chat from a time on, as its account found it
 // (find_message_at): none where there is none from then.
 struct message_found_at {
@@ -537,7 +550,7 @@ struct event_missing {
 // change list -- changes_type(state), found by ADL in its folder (mux.proto.
 // <p>.changes), none where it gives none; and the plugins', in one list
 // (mux.plugins.changes) -- all one variant.
-using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::history_position, change::message_found_at, change::event_missing, change::members_changed, change::avatar_loaded, change::read_marker, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved>;
+using core_changes = spl::variant<change::notifications_changed, change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::history_position, change::sync_gap, change::message_found_at, change::event_missing, change::members_changed, change::avatar_loaded, change::read_marker, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::profile_saved>;
 namespace changes_defaults {
 constexpr type_tag<change_list<>> changes_type(const auto&) { return {}; }
 }  // namespace changes_defaults
@@ -1393,6 +1406,16 @@ class model {
   }
   void on(const change::history_position& one) {
     this->in_chat(one.in, [&](conversation& where) { where.history_from = one.from; });
+  }
+  // Where the chat held nothing before the sync's messages, their gap is
+  // what its oldest pages back from; else it is a gap in the middle (the
+  // history part marks it), and the chat's own token stays -- and a window
+  // of the history away from the newest keeps its own.
+  void on(const change::sync_gap& one) {
+    this->in_chat(one.in, [&](conversation& where) {
+      if (where.timeline.empty() && !where.detached)
+        where.history_from = one.from;
+    });
   }
   // Told to whoever asked (a command): nothing of the model.
   void on(const change::message_found_at&) {}

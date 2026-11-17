@@ -50,7 +50,7 @@ export namespace mux::ui {
   std::optional<nodes::Image<from_thumbnails>> thumb;
   if (picture)
     thumb.emplace(from_thumbnails{*picture, sticker})
-        .apply({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle, .margin = {2.0f, 0.0f, 2.0f, 0.0f},
+        .apply({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle, .margin = {4.0f, 0.0f, 4.0f, 0.0f},
                 .cornerRadius = 3.0f, .background = colours.tile});
   // Its box fixed: its picture coming repaints it, lays nothing out.
   if (thumb)
@@ -60,11 +60,14 @@ export namespace mux::ui {
     text = wrapped(std::move(text));
   else
     text = elided(std::move(text));
-  return c::row(c::hbox(4.0f) | c::fill_x | c::content_y | c::with({.margin = {2.0f, 0.0f, 4.0f, 0.0f}, .padding = {2.0f, 6.0f, 2.0f, picture ? 7.0f : 11.0f}, .cornerRadius = 5.0f, .background = quote_tint(colour, 0.12f), .masking = true}),
+  // Its stripe down the whole of its left edge: the row padded only across,
+  // what is in it padded down -- with the row padded down, the stripe,
+  // filling the content box from 2 above it, stopped 4 short of the bottom.
+  return c::row(c::hbox(4.0f) | c::fill_x | c::content_y | c::with({.margin = {2.0f, 0.0f, 4.0f, 0.0f}, .padding = {0.0f, 6.0f, 0.0f, picture ? 7.0f : 11.0f}, .cornerRadius = 5.0f, .background = quote_tint(colour, 0.12f), .masking = true}),
     c::styled({.place = scene::anchor::kTopLeft, .x = picture ? -7.0f : -11.0f,
-                .y = -2.0f, .fillY = true, .width = 3.0f}, nodes::Box<>(quote_tint(colour, 0.9f))),
+                .fillY = true, .width = 3.0f}, nodes::Box<>(quote_tint(colour, 0.9f))),
     std::move(thumb),
-    c::column(c::vbox(0.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
+    c::column(c::vbox(0.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle, .padding = {2.0f, 0.0f, 2.0f, 0.0f}}),
       c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
         c::styled({.grow = scene::axes::kX}, elided(nodes::Text(std::move(who), 13.0f, colour, true))),
         std::move(tag)),

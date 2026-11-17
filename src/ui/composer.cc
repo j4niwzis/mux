@@ -11,6 +11,7 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 import skiff.compose;
+import skiff.model;
 import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
@@ -920,19 +921,40 @@ struct knock_facts {
         return person_at{one.id, one.name.empty() ? one.id : one.name, std::nullopt};
       }) | std::ranges::to<std::vector>()};
 }
+// The bar put away by its ✕: its own state, kept while the requests it
+// shows are the same -- another asking makes it again, shown.
+struct knock_bar_hidden {
+  bool hidden = false;
+  friend bool operator==(const knock_bar_hidden&, const knock_bar_hidden&) = default;
+};
+struct hide_knock_bar {};
+struct knock_bar_events {
+  auto on(const hide_knock_bar&, const knock_bar_hidden&) const {
+    return skiff::model::over<knock_bar_hidden>(skiff::model::setTo(knock_bar_hidden{.hidden = true}));
+  }
+};
+// Its first line: who asks (their face, their name over why), or how many
+// and their faces -- with View all in its middle at the right, and ✕; one
+// asking, Decline and Accept under it.
 MUX_INLINE_IN_RELEASE auto knock_bar(const palette& colours, const knock_facts& knocks) {
   namespace c = skiff::compose;
   const bool one = knocks.asking.size() == 1;
   const auto choice = [](auto button) { return c::styled({.height = 36.0f, .grow = scene::axes::kX}, std::move(button)); };
-  return SKIFF_NAMED(knock_bar, c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 12.0f, 8.0f, 12.0f}}),
-      c::visible(one, c::row(c::hbox(0.0f) | c::fill_x | c::content_y,
-          member_text(colours, knocks.first, knocks.reason.empty() ? std::string("Asks to join") : "Asks to join: " + knocks.reason))),
-      c::visible(!one, c::row(c::hbox(0.0f) | c::fill_x | c::with({.height = 28.0f}),
-          faces_summary(colours, knocks.asking, std::format("{} people ask to join", knocks.asking.size())))),
-      c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
-          choice(widgets::Button<sends<request::open_join_requests>>(colours.widgets, "View all", {})),
-          c::visible(one, choice(widgets::Button<deny_knock>(colours.widgets, "Decline", deny_knock{knocks.first.id}))),
-          c::visible(one, choice(primary(widgets::Button<approve_knock>(colours.widgets, "Accept", approve_knock{knocks.first.id})))))));
+  return SKIFF_NAMED(knock_bar, c::local<knock_bar_hidden>(knock_bar_events{},
+      c::spec_for<knock_bar_hidden>([](const knock_bar_hidden& now) { return scene::Spec{.visible = !now.hidden}; },
+      c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {8.0f, 8.0f, 8.0f, 12.0f}}),
+          c::row(c::hbox(8.0f) | c::fill_x | c::content_y,
+              c::visible(one, c::row(c::hbox(0.0f) | c::grow_x | c::content_y | c::with({.alignSelf = scene::align::kMiddle}),
+                  member_text(colours, knocks.first, knocks.reason.empty() ? std::string("Asks to join") : "Asks to join: " + knocks.reason))),
+              c::visible(!one, c::row(c::hbox(0.0f) | c::grow_x | c::with({.height = 28.0f, .alignSelf = scene::align::kMiddle}),
+                  faces_summary(colours, knocks.asking, std::format("{} people ask to join", knocks.asking.size())))),
+              c::styled({.height = 32.0f, .alignSelf = scene::align::kMiddle},
+                        widgets::Button<sends<request::open_join_requests>>(colours.widgets, "View all", {})),
+              c::styled({.alignSelf = scene::align::kMiddle},
+                        icon_button(colours, icon::close{}, sends<hide_knock_bar>{}, colours.dim, "Hide"))),
+          c::visible(one, c::row(c::hbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 4.0f, 0.0f, 0.0f}}),
+              choice(widgets::Button<deny_knock>(colours.widgets, "Decline", deny_knock{knocks.first.id})),
+              choice(primary(widgets::Button<approve_knock>(colours.widgets, "Accept", approve_knock{knocks.first.id})))))))));
 }
 using knock_bar_t = decltype(knock_bar(std::declval<const palette&>(), std::declval<const knock_facts&>()));
 // Element's bar over the field while messages here were not sent

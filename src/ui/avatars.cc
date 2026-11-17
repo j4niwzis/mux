@@ -397,7 +397,18 @@ struct from_previews {  // blurred, from a blurhash, until the picture comes
 struct from_thumbnails {
   std::string key;
   bool sticker = false;
-  picture_ptr operator()() const { return (sticker ? sticker_images() : thumbnails()).find(key); }
+  // Its thumbnail; else the whole of it, where that came instead -- as the
+  // picture itself is drawn (from_moving_thumbnail). The thumbnail is not
+  // fetched where the whole picture is held (pictures: want_thumbnail), so a
+  // quote of a photo held whole -- one's own just sent, one opened in the
+  // viewer -- looked only for the thumbnail and stayed its plate for good.
+  picture_ptr operator()() const {
+    if (sticker)
+      return sticker_images().find(key);
+    if (picture_ptr small = thumbnails().find(key); small && *small)
+      return small;
+    return whole_pictures().find(key);
+  }
   skiff::scene::Waiters& waiters() const { return (sticker ? sticker_images() : thumbnails()).waiting; }
 };
 // Where it moves, the frame for now; else its thumbnail.

@@ -79,7 +79,11 @@ struct picture_above {
 };
 // A summary's people, in a menu: their faces at the right of what it says,
 // out of the flow in the room kept for them -- the first the rightmost, each
-// next overlapping it a little to its left, ringed.
+// next overlapping it a little to its left, ringed. Placed in a box as tall
+// as the line and no wider than nothing, where the room kept starts: in one
+// as tall as nothing too -- what holds only faces out of its flow takes no
+// height from them -- they were centred on the top of the line, half over
+// what was above it (the knock bar's faces, over the messages).
 struct summary_faces {
   auto operator()(auto said, const faces_summary_facts& f) const {
     namespace c = skiff::compose;
@@ -92,7 +96,7 @@ struct summary_faces {
                                     avatar_mark(avatar_of::person{}, f.faces[i].id, f.faces[i].name, kSummaryFace));
                  }) | std::ranges::to<std::vector>();
     return c::row(c::hbox(0.0f) | c::fill_x | c::fill_y | c::with({.padding = {0.0f, shown ? width + 8.0f : 0.0f, 0.0f, 0.0f}}),
-                  std::move(said), c::many(c::hbox(), std::move(faces)));
+                  std::move(said), c::many(c::hbox() | c::fill_y | c::with({.width = 0.0f}), std::move(faces)));
   }
 };
 // A face where one goes (face_spot): the mark of whose it is.

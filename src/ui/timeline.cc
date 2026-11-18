@@ -293,7 +293,13 @@ struct timeline_rows {
     };
     // What the plugins mark rows with, over the messages as they are and
     // whether each is shown (contract::row_marks).
-    const std::vector<const message*> in_order = std::views::iota(std::size_t{0}, all.size()) |
+    // From the window on, to the newest: what a mark on a row of the window
+    // is worked out from -- a receipt on one of them, or on a newer message
+    // (then on none of the window's). Over the whole chat -- every message
+    // it holds, put in order and in a map by id at each change of the chat
+    // -- a long chat's every receipt or message cost milliseconds.
+    const std::size_t marked_from = from > 0 ? from - 1 : 0;
+    const std::vector<const message*> in_order = std::views::iota(marked_from, all.size()) |
                                                  std::views::transform([&](std::size_t i) { return &all.at(i); }) | std::ranges::to<std::vector>();
     const std::vector<bool> shown_each = in_order | std::views::transform([&](const message* one) { return shows(*one); }) | std::ranges::to<std::vector>();
     const auto marks = plugins_marks(told.flags, *chat, in_order, shown_each, composition::providers<contract::row_marks, enabled_plugins>{});

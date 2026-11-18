@@ -428,14 +428,18 @@ MUX_INLINE_IN_RELEASE auto code_block(const palette& colours, std::string code, 
   // As wide as its code (and its head), within the bubble: filling a bubble
   // that takes its width from what it holds, neither said a width, and a
   // short block was squeezed to a few letters a line.
-  return SKIFF_NAMED(code_block, c::column(c::vbox(4.0f) | c::content_x | c::content_y | c::with({.minWidth = 120.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}, .padding = {6.0f, 8.0f, 6.0f, 12.0f}, .cornerRadius = 5.0f, .background = (colour & 0x00FFFFFFu) | (0x1Fu << 24), .masking = true}),
-      c::styled({.place = scene::anchor::kTopLeft, .x = -12.0f, .y = -6.0f, .fillY = true, .width = 3.0f}, nodes::Box<>(colour)),
-      c::row(c::hbox(0.0f) | c::fill_x | c::content_y,
+  return SKIFF_NAMED(code_block, c::column(c::vbox(4.0f) | c::content_x | c::content_y | c::with({.minWidth = 120.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}, .padding = {0.0f, 8.0f, 0.0f, 12.0f}, .cornerRadius = 5.0f, .background = (colour & 0x00FFFFFFu) | (0x1Fu << 24), .masking = true}),
+      // Its bar down the whole of its left edge: the block padded only
+      // across, what is in it spaced down -- padded down too, the bar,
+      // filling the content box from 6 above it, stopped 12 short of the end
+      // (as a quote's stripe did).
+      c::styled({.place = scene::anchor::kTopLeft, .x = -12.0f, .fillY = true, .width = 3.0f}, nodes::Box<>(colour)),
+      c::row(c::hbox(0.0f) | c::fill_x | c::content_y | c::with({.margin = {6.0f, 0.0f, 0.0f, 0.0f}}),
              c::styled({.grow = scene::axes::kX},
                        elided(nodes::Text(language.empty() ? std::string("Code") : std::move(language), 12.0f, colour, true))),
              // Copy: the block's code, as it is, onto the clipboard.
              c::onClick(request::copy_text{code}, nodes::Text("Copy", 12.0f, colour, true), "Copy code")),
-      std::move(body)));
+      c::styled({.margin = {0.0f, 0.0f, 6.0f, 0.0f}}, std::move(body))));
 }
 using code_block_t = decltype(code_block(std::declval<const palette&>(), std::string(), std::string(), skia::SkColor{}, skia::SkColor{}));
 // A message's text split around code blocks and positioned link cards.

@@ -314,6 +314,15 @@ class history_part {
         for (auto it = kept.rbegin(); it != kept.rend(); ++it)
           s_->model->apply(mux::change_t{mux::change::message_added{.message = std::move(*it), .where = mux::placement::at_start{}}});
         s_->refresh_due = true;
+        // Nothing of it before the oldest held -- all of it folded into what
+        // is there (reactions, edits, kept as messages of their own) or let go
+        // by the chat: the same read again at every ask, the server never
+        // asked, and the chat stood at its top (a tester’s, until a reply
+        // jumped to went to the server). From the server, then.
+        const mux::conversation* now = s_->model->find(in);
+        const std::optional<std::string> first = now && !now->timeline.empty() ? std::optional(now->timeline.front().id) : std::nullopt;
+        if (first == front)
+          from_server(in, front, from);
       };
     });
   }

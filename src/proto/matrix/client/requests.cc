@@ -183,6 +183,13 @@ void account<Sink>::load_older(std::string room, std::string from) {
                                                           .limit = 40});
       if (!got) {
         log(id_, "history of {}: {}", room, got.error().said());
+        // Nothing came: said, with the token it was asked from, so that the
+        // program pages back another way (from the oldest held message's
+        // context) -- said nothing, it asked with the same token for good,
+        // every ask refused, and the chat stood at its top until a reply
+        // jumped to brought a token of its own.
+        if (at)
+          sink_(change::history_position{in, at});
         return;
       }
       log(id_, "history of {}: {} event{}", room, got->chunk.size(), got->chunk.size() == 1 ? "" : "s");

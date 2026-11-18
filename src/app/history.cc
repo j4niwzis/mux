@@ -125,6 +125,17 @@ class history_part {
                 const auto known = on_disk_.find(c.in);
                 const bool came = chat && !chat->timeline.empty() && chat->timeline.front().id != paged->second;
                 const bool overlapped = came && known != on_disk_.end() && known->second.contains(chat->timeline.front().id);
+                // Nothing older came from the token it was paged from: that
+                // token is gone on from another way next time (fruitless_).
+                // Given back as it was asked: refused, or nothing past it now.
+                // (A new token after empty pages is gone on from as it says.)
+                const auto asked = asked_token_.find(c.in);
+                if (!came && c.from && asked != asked_token_.end() && asked->second == *c.from)
+                  fruitless_.insert_or_assign(c.in, *c.from);
+                else
+                  fruitless_.erase(c.in);
+                if (asked != asked_token_.end())
+                  asked_token_.erase(asked);
                 if (chat && !chat->timeline.empty() && !overlapped)
                   gaps.insert_or_assign(chat->timeline.front().id,
                                         message_store::gap_mark{.token = c.from, .start = !c.from.has_value(), .sure = true, .rule = message_store::gap_mark::kRule});
@@ -248,10 +259,21 @@ class history_part {
       // archive is not asked, to time out.
       if (!mux::proto::can_page_back(mux::ui::protocol_state_of(s_->ui, in.account)))
         return;
+      // A token that brought nothing the last time -- refused, or given back
+      // as it was asked: from before the oldest message held instead, where
+      // the account finds a token of its own (a Matrix room's /context).
+      // Asked again from it, the chat stood at its top for good.
+      if (const auto spent = fruitless_.find(in); from && paged_from && spent != fruitless_.end() && spent->second == *from) {
+        fruitless_.erase(spent);
+        s_->net->load_older_before(in, *paged_from);
+        return;
+      }
       // No token to page back from: from before the oldest message held,
       // where the account can find where that is (a Matrix room's /context).
-      if (from)
+      if (from) {
+        asked_token_.insert_or_assign(in, *from);
         s_->net->load_older(in, std::move(*from));
+      }
       else if (paged_from)
         s_->net->load_older_before(in, *paged_from);
     };
@@ -355,6 +377,10 @@ class history_part {
   std::map<mux::conversation_id, message_store::gaps_t> gaps_;
   std::set<mux::conversation_id> gaps_kept_before_;
   std::map<mux::conversation_id, std::string> paging_from_;
+  // The token each chat last paged back from that brought nothing older.
+  std::map<mux::conversation_id, std::string> fruitless_;
+  // The token each chat is being paged back from.
+  std::map<mux::conversation_id, std::string> asked_token_;
   std::map<mux::conversation_id, std::optional<std::string>> sync_gap_;
   // The ids of each chat's messages on disk, read once when a window is
   // loaded in it: a window over what is there leaves no gap.

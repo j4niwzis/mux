@@ -80,6 +80,25 @@ void app::take_arriving(std::chrono::milliseconds most) {
     one_began = std::chrono::steady_clock::now();
     changes.push_back(std::move(arriving_.front()));
     arriving_.pop_front();
+    // A deleted message come again as the server keeps it -- emptied, after
+    // a restart -- that is not held: shown as the archive kept it whole, where
+    // deleted messages are shown, still marked deleted, by whom and why.
+    if (!ask.demo && model->show_deleted)
+      spl::visit(spl::overloaded{[&](mux::change::message_added& added) {
+                                   if (!added.message.redacted || added.message.id.empty())
+                                     return;
+                                   const mux::conversation* chat = model->find(added.message.in);
+                                   if (chat && std::ranges::contains(chat->timeline, added.message.id, &mux::message::id))
+                                     return;
+                                   if (auto whole = store.archived(added.message.in, added.message.id)) {
+                                     whole->redacted = true;
+                                     whole->redacted_by = added.message.redacted_by;
+                                     whole->redacted_reason = added.message.redacted_reason;
+                                     added.message = std::move(*whole);
+                                   }
+                                 },
+                                 [](auto&) {}},
+                 changes.back());
     const mux::change_t& one = changes.back();
     // What the plugins' parts take of it: a call's signalling.
     this->plugins_take(one);

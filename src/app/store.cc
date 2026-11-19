@@ -203,7 +203,24 @@ class message_store {
   void mark_deleted(const mux::conversation_id& in, const std::string& id, mux::message whole) {
     append(in, knot::to_json_string(store_file::message_line{.id = id, .deleted = true}));
     whole.redacted = true;
+    if (const auto known = archived_.find(in); known != archived_.end())
+      known->second.insert_or_assign(id, whole);
     this->queue(queued::line{.where = deleted_file_of(in), .text = line_of(whole), .archive = true});
+  }
+  // A message deleted, as it was kept whole in the archive: what the server
+  // sends again of it after a restart is its emptied copy, and shown so, what
+  // the archive kept of it was never seen again. Each chat's archive read
+  // once, on the window's thread, as its first deleted message comes.
+  [[nodiscard]] std::optional<mux::message> archived(const mux::conversation_id& in, const std::string& id) {
+    auto known = archived_.find(in);
+    if (known == archived_.end()) {
+      std::map<std::string, mux::message> all;
+      read_lines(deleted_file_of(in), in, all);
+      this->waiting_into(deleted_file_of(in), in, all);
+      known = archived_.emplace(in, std::move(all)).first;
+    }
+    const auto found = known->second.find(id);
+    return found == known->second.end() ? std::nullopt : std::optional(found->second);
   }
   // Messages deleted that are not held in memory -- older than what is, or
   // told again from the sync kept at every start: each found in the chat's
@@ -480,6 +497,9 @@ class message_store {
   std::uintmax_t budget = 512u << 20;
   // The deleted messages' archive held to this size; set from Storage.
   std::uintmax_t deleted_budget = 256u << 20;
+  // Each chat's archive of deleted messages, as read (archived): the
+  // window's thread only.
+  std::map<mux::conversation_id, std::map<std::string, mux::message>> archived_;
 
  private:
   // History held to `cap`: the chats used longest ago go first, whole.

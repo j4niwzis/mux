@@ -116,8 +116,8 @@ jobs:
           # CTestTestfile.cmake of its directory.
           written = {}
           for path in glob.glob("build/**/CTestTestfile.cmake", recursive=True):
-              for name, command in re.findall(r'add_test\(\[=\[([^\]]+)\]=\]\s+"([^"]+)"', open(path).read()):
-                  written[name] = command
+              for bracketed, quoted, command in re.findall(r'add_test\((?:\[=\[([^\]]+)\]=\]|"([^"]+)")\s+"([^"]+)"', open(path).read()):
+                  written[bracketed or quoted] = command
           for t in tests:
               if not t.get("command") and t["name"] in written:
                   t["command"] = [written[t["name"]]]

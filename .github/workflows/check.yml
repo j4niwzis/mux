@@ -108,9 +108,21 @@ jobs:
           ctest --test-dir build --show-only=json-v1 > /tmp/tests.json
           python3 - >> "$GITHUB_OUTPUT" <<'EOF'
           import json, os, sys
+          import glob, re
           tests = json.load(open("/tmp/tests.json"))["tests"]
-          # A test ctest has no command for in this configuration (none is
-          # given in its JSON) is nothing a job could run: said, and left out.
+          # ctest gives no command for a test whose program is not built yet
+          # -- none is, at this stage: every C++ test was left out, and no
+          # job ever ran one. Its command found where CMake wrote it, in the
+          # CTestTestfile.cmake of its directory.
+          written = {}
+          for path in glob.glob("build/**/CTestTestfile.cmake", recursive=True):
+              for name, command in re.findall(r'add_test\(\[=\[([^\]]+)\]=\]\s+"([^"]+)"', open(path).read()):
+                  written[name] = command
+          for t in tests:
+              if not t.get("command") and t["name"] in written:
+                  t["command"] = [written[t["name"]]]
+          # A test with no command even so is nothing a job could run: said,
+          # and left out.
           for t in tests:
               if not t.get("command"):
                   print(f"no command, not run: {t['name']}", file=sys.stderr)

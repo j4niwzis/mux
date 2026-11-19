@@ -109,3 +109,81 @@ TEST(SideColumn, RightPressOpensALocalMenuAndOutsidePressClosesIt) {
   tree.layoutIfNeeded(viewport);
   EXPECT_FALSE(tree.root().fModel.root().chat.has_value());
 }
+
+namespace {
+// The side column as the window runs it, frame after frame: both models
+// refreshed, ticked, laid out, finished.
+struct side_frames {
+  ui::palette colours{};
+  ui::ui_shared shared{};
+  ui::ui_needs needs{.colours = &colours, .shared = &shared};
+  shown_model shown{facts(300)};
+  mux::chats_model chats{mux::chats_root{}};
+  skiff::bind::Binding<shown_model> shown_binding;
+  skiff::bind::Binding<mux::chats_model> chats_binding;
+  scene::Scene<decltype(ui::side_column(std::declval<const ui::ui_needs&>()))> tree{ui::side_column(needs)};
+  double now = 0.0;
+  scene::FrameResult frame() {
+    now += 16.0;
+    shown_binding.refresh(tree.root(), shown);
+    chats_binding.refresh(tree.root(), chats);
+    tree.update(now);
+    tree.layoutIfNeeded(viewport);
+    return tree.finishFrame();
+  }
+};
+}
+
+// The rooms standing still, at their top or away from it: no frame asked
+// for, nothing laid out. (Away from the top, every frame was asked for and
+// laid the list out again, 7 ms each.)
+TEST(SideColumn, RoomsStandingStillAskForNoFramesAtTheTopOrAwayFromIt) {
+  for (const float at : {0.0f, 3000.0f, 3000.5f}) {
+    side_frames side;
+    for (int i = 0; i < 5; ++i)
+      (void)side.frame();
+    auto& list = chat_scroll(side.tree.root());
+    list.setCurrent(at);
+    for (int i = 0; i < 30; ++i)
+      (void)side.frame();
+    const float settled = list.current();
+    const auto before = scene::walkCounts();
+    int wanted = 0;
+    for (int i = 0; i < 10; ++i)
+      wanted += side.frame().fWantsAnotherFrame ? 1 : 0;
+    EXPECT_EQ(wanted, 0) << "at " << at;
+    EXPECT_EQ(scene::walkCounts().laidOut - before.laidOut, 0u) << "at " << at;
+    EXPECT_FLOAT_EQ(list.current(), settled) << "at " << at;
+  }
+}
+
+// A room clicked away from the top of the list: its press taken, the list
+// where it was.
+TEST(SideColumn, ARoomAwayFromTheTopTakesItsClick) {
+  for (const float at : {0.0f, 3000.0f}) {
+    side_frames side;
+    for (int i = 0; i < 5; ++i)
+      (void)side.frame();
+    auto& list = chat_scroll(side.tree.root());
+    list.setCurrent(at);
+    for (int i = 0; i < 10; ++i)
+      (void)side.frame();
+    const auto& rows = std::get<0>(list.fChildren).fRows;
+    const auto shown = std::ranges::find_if(rows, [&](const auto& row) { return row.bounds().fTop >= at + 10.0f; });
+    ASSERT_NE(shown, rows.end()) << "at " << at;
+    const auto box = list.toView(shown->bounds());
+    auto& work = scene::hostWork();
+    work.answers.clear();
+    work.pressed.clear();
+    side.tree.dispatchPointer(scene::pointer::move{box.centerX(), box.centerY()});
+    (void)side.frame();
+    side.tree.dispatchPointer(scene::pointer::down{box.centerX(), box.centerY(), 1});
+    (void)side.frame();
+    side.tree.dispatchPointer(scene::pointer::up{box.centerX(), box.centerY(), 1});
+    (void)side.frame();
+    EXPECT_FALSE(work.pressed.empty()) << "at " << at;
+    EXPECT_FLOAT_EQ(list.current(), at) << "at " << at;
+    work.answers.clear();
+    work.pressed.clear();
+  }
+}

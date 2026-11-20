@@ -317,21 +317,21 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 # Debug-only sharing remains guarded in skiff. Both configurations need the
 # editor menu facts, elapsed-time animation, and held-page binding fixes.
-set(mux_skiff_pin c51c0bb0c9a8be9eebd71ee5679642d024afbe10)
+set(mux_skiff_pin ca6dfb6aca7276c597a22063200eb01e8b519b7d)
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
   GIT_TAG ${mux_skiff_pin}
   VERSION 0.1.0)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
-  GIT_TAG 851bcb361590967059a2e5b7d9a237e01c9c92fa
+  GIT_TAG 3a9ae64a59ef746c82e58eac858b72bce4afb1ae
   VERSION 0.1.0)
 # skiff-framework: the window (skiff.platform.window) -- SDL3 makes it and
 # brings its input, Skia draws skiff's scene into it -- as any program of
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG 322a79a397680fd1ff35afbf4b47de955e5b7504
+  GIT_TAG 33bb934b2f12d8d81e3eca830b4f8b4c97f9bdac
   VERSION 0.1.0)
 # `mux --page`: the same program laid out and painted by an HTML engine
 # called directly (Blitz, through skiff.platform.page) -- for measuring it

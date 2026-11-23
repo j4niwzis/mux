@@ -127,10 +127,16 @@ struct part {
     this->act().send_styled(*chat, text, std::move(runs));
   }
   // Sent as typed: one run over all of it that keeps it from being read as
-  // Markdown.
+  // Markdown. Typed while a message is edited, the edit, not a new message.
   void apply(const raw& one) {
-    if (const auto chat = this->act().chat(); chat && !one.arguments.empty())
-      this->act().send_styled(*chat, one.arguments, {styled_run{0, one.arguments.size(), run_style::verbatim{}}});
+    const auto chat = this->act().chat();
+    if (!chat || one.arguments.empty())
+      return;
+    std::vector<styled_run> as_typed{styled_run{0, one.arguments.size(), run_style::verbatim{}}};
+    if (const auto edited = this->act().editing())
+      this->act().edit_styled(*chat, *edited, one.arguments, std::move(as_typed));
+    else
+      this->act().send_styled(*chat, one.arguments, std::move(as_typed));
   }
   // The chat's first message from the time asked -- a date, a date and a
   // time (UTC), or a time ago -- of those loaded; earlier than them, the

@@ -9,6 +9,7 @@
 export module mux.app.commands;
 
 import std;
+import splice;
 import mux.composition;
 import mux.core;
 import mux.ui;
@@ -120,6 +121,22 @@ struct script {
       return;
     }
     s->net->send(to, std::move(text), std::nullopt, {}, std::move(styles));
+  }
+  // The message the field edits, where it edits one.
+  [[nodiscard]] std::optional<std::string> editing() const {
+    return spl::visit(spl::overloaded{[](const mux::ui::compose::edit& e) { return std::optional<std::string>(e.id); },
+                                      [](const auto&) { return std::optional<std::string>(); }},
+                      s->showing->look<mux::ui::chat_compose>()->now);
+  }
+  // A message of one's own edited with runs of its own formatting, as
+  // send_styled sends one -- and the field let go of the edit, as Enter
+  // lets it go. In the demo, its text alone.
+  void edit_styled(const conversation_id& in, std::string id, std::string text, std::vector<styled_run> styles) const {
+    if (s->demo())
+      s->box->push(change_t{change::message_edited{in, id, body{std::move(text), std::nullopt}}});
+    else
+      s->net->edit(in, std::move(id), std::move(text), std::move(styles), {});
+    mux::ui::show(*s->showing, mux::ui::chat_compose{});
   }
   // A message of a chat gone to, as a link or a reply goes to it.
   template <class Asked>

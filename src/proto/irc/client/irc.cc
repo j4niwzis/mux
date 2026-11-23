@@ -209,6 +209,59 @@ inline constexpr std::array<std::uint32_t, 16> mirc_colours{0xffffff, 0x000000, 
   return found == known.end() ? std::nullopt : std::optional<std::string>(found->second);
 }
 
+}  // namespace mux::proto::irc::client
+
+export namespace mux::contract {
+// What a plugin hears of an IRC account's lines, and keeps of it
+// (mux.plugins.irc).
+struct irc_events {};
+}  // namespace mux::contract
+
+export namespace mux::proto::irc::client {
+
+// What a plugin hears of a line come -- irc_message(contract::irc_events,
+// type_tag<its feature>, the message, the account), found by ADL where the
+// account is made -- told to the program as its own changes (tell_program):
+// who is typing, for one.
+template <class Plugin, class Account>
+concept hears_irc_messages = requires(const cairn::message& got, Account& account) {
+  irc_message(contract::irc_events{}, type_tag<Plugin>{}, got, account);
+};
+// What a plugin keeps of an account while it is connected -- irc_kept_type(
+// contract::irc_events, type_tag<its feature>) -> type_tag<what> -- and
+// every plugin's, in one tuple.
+template <class Plugin>
+struct irc_kept_of {
+  struct type {};
+};
+template <class Plugin>
+  requires requires { irc_kept_type(contract::irc_events{}, type_tag<Plugin>{}); }
+struct irc_kept_of<Plugin> {
+  using type = typename decltype(irc_kept_type(contract::irc_events{}, type_tag<Plugin>{}))::type;
+};
+template <class Plugin>
+struct irc_kept_slot {
+  typename irc_kept_of<Plugin>::type kept{};
+};
+template <class List>
+struct irc_kept_slots {
+  using type = std::tuple<>;
+};
+template <template <class...> class List, class... Plugins>
+struct irc_kept_slots<List<Plugins...>> {
+  using type = std::tuple<irc_kept_slot<Plugins>...>;
+};
+// The plugins an account's sink serves (the program's); none for any other.
+template <class Sink>
+struct irc_plugins {
+  using type = plugin_list<>;
+};
+template <class Sink>
+  requires requires { typename Sink::plugins; }
+struct irc_plugins<Sink> {
+  using type = typename Sink::plugins;
+};
+
 // net::stream's chunks as the characters cairn reads: the chunk a read
 // brought walked a character at a time, where it is in it kept between
 // lines. The chunk is a view into the stream's buffer, good until the next
@@ -462,6 +515,31 @@ class account {
     });
   }
 
+  // What a plugin's IRC side (mux.plugins.irc) does through the account:
+  // work on the account's loop; whether it is connected; a change told to
+  // the program; the chat a line is in; client tags sent alone (a TAGMSG,
+  // where the server takes message tags); and what it keeps of the account.
+  template <class Work>
+  void on_fiber(Work work) {
+    this->spawn_guarded(std::move(work));
+  }
+  [[nodiscard]] bool connected() const { return client_.has_value() && client_->registered(); }
+  template <class Change>
+  void tell_program(Change change) {
+    sink_(std::move(change));
+  }
+  [[nodiscard]] std::string chat_for(std::string_view target, std::string_view nick) const { return chat_of(target, nick); }
+  [[nodiscard]] bool mine_nick(std::string_view nick) const { return mine(nick); }
+  // Tags as the wire has them -- "+typing=active" -- escaped by the caller.
+  void send_tags(std::string_view to, std::string_view tags) {
+    if (!client_ || !client_->has_cap("message-tags")) return;
+    this->raw(std::format("@{} TAGMSG {}", tags, to));
+  }
+  template <class Plugin>
+  [[nodiscard]] auto& kept_for(type_tag<Plugin>) {
+    return std::get<irc_kept_slot<Plugin>>(plugins_kept_).kept;
+  }
+
   // A command typed in a chat (command_of), done.
   void command(std::string room, command_t what) {
     this->spawn_guarded([this, room = std::move(room), what = std::move(what)] {
@@ -707,6 +785,7 @@ class account {
     client_.emplace(std::move(asked));
     nick_ = where.nick;
     channels_ = cairn::channels(where.nick);
+    plugins_kept_ = {};
     written out{&wire};
     client_->start(out);
     wire.flush();
@@ -848,8 +927,23 @@ class account {
     sink_(change::conversation_updated{.id = in, .kind = conversation_kind::direct{}, .name = in.id});
   }
 
+  // A line come, to every plugin that hears it (hears_irc_messages).
+  using sink_plugins_tag = type_tag<typename irc_plugins<Sink>::type>;
+  template <class Plugin>
+    requires hears_irc_messages<Plugin, account>
+  void message_for(const cairn::message& got) {
+    irc_message(contract::irc_events{}, type_tag<Plugin>{}, got, *this);
+  }
+  template <class Plugin>
+  void message_for(const cairn::message&) {}
+  template <template <class...> class List, class... Plugins>
+  void plugins_hear_message(type_tag<List<Plugins...>>, const cairn::message& got) {
+    (this->template message_for<Plugins>(got), ...);
+  }
+
   void received(const cairn::message& m) {
     channels_.take(m);
+    this->plugins_hear_message(sink_plugins_tag{}, m);
     const auto& l = m.line;
     const std::string_view nick = l.from ? std::string_view(l.from->nick) : std::string_view();
     const auto said = [&](std::string_view target, std::string_view text, bool emote) {
@@ -1174,6 +1268,7 @@ class account {
   // The people watched (MONITOR), folded: watched again on each connection.
   std::set<std::string> watched_;
   std::uint64_t batches_ = 0;
+  typename irc_kept_slots<typename irc_plugins<Sink>::type>::type plugins_kept_{};
   std::uint64_t sent_ = 0, received_ = 0;
   bool stopping_ = false, started_ = false, retry_ = true, connected_ = false;
   std::size_t commands_ = 0;

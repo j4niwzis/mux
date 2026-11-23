@@ -11,4 +11,5 @@ mux_plugin(typing ORDER 25
   APP     app.cc
   MATRIX  matrix.cc
   XMPP    xmpp.cc
+  IRC     irc.cc
   LOOM    cs-typing)

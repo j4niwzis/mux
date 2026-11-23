@@ -5,6 +5,8 @@ module mux.app.network;
 import std;
 import mux.core;
 import mux.proto.irc.client;
+// What the plugins hear of its lines, found where it is made.
+import mux.plugins.irc;
 
 template class mux::proto::irc::client::account<mux::app::post_change>;
 #if defined(MUX_SPLIT_ACCOUNTS)

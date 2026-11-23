@@ -38,6 +38,9 @@ set(MUX_EXTRA_PLUGINS "" CACHE STRING "Folders of third-party plugins, each with
 #   XMPP      what it asks of an XMPP account, through its door for plugins
 #             (mux.plugins.xmpp); built where MUX_PROTOCOL_XMPP is on --
 #             mux.plugin.<name>.xmpp
+#   IRC       what it hears of an IRC account's lines and asks of it, through
+#             its door for plugins (mux.plugins.irc); built where
+#             MUX_PROTOCOL_IRC is on -- mux.plugin.<name>.irc
 #   ORDER     its place among the plugins (where they come in turn: tabs,
 #             parts), then by name
 #   REQUIRES  the plugins it needs, turned on too
@@ -50,7 +53,7 @@ set(MUX_EXTRA_PLUGINS "" CACHE STRING "Folders of third-party plugins, each with
 # (mux's own: mux's, AGPL-3.0-only); and its folder's README.md, put in
 # the program whole (#embed).
 function(mux_plugin name)
-  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER;REPO;LICENSE;SUMMARY" "MODEL;CHANGES;TYPES;UI;UI_TOP;APP;MATRIX;XMPP;REQUIRES;LIBRARIES;LOOM")
+  cmake_parse_arguments(PARSE_ARGV 1 one "" "ORDER;REPO;LICENSE;SUMMARY" "MODEL;CHANGES;TYPES;UI;UI_TOP;APP;MATRIX;XMPP;IRC;REQUIRES;LIBRARIES;LOOM")
   # The parts of loom it needs, where Matrix is on: asked for with the
   # protocol's own, and only then.
   if(MUX_PROTOCOL_MATRIX)
@@ -65,13 +68,16 @@ function(mux_plugin name)
   if(NOT MUX_PROTOCOL_XMPP)
     set(one_XMPP)
   endif()
+  if(NOT MUX_PROTOCOL_IRC)
+    set(one_IRC)
+  endif()
   if(one_MODEL)
     set_property(GLOBAL APPEND PROPERTY MUX_PLUGINS_WITH_MODEL ${name})
   endif()
   if(one_CHANGES)
     set_property(GLOBAL APPEND PROPERTY MUX_PLUGINS_WITH_CHANGES ${name})
   endif()
-  foreach(layer IN ITEMS MODEL CHANGES TYPES UI UI_TOP APP MATRIX XMPP)
+  foreach(layer IN ITEMS MODEL CHANGES TYPES UI UI_TOP APP MATRIX XMPP IRC)
     # Its own sources by their paths in its folder; one it wrote (a layer's
     # module made from the protocols turned on: room_admin's) by its own.
     set(paths)
@@ -168,7 +174,7 @@ else()
   set(mux_all_plugins OFF)
 endif()
 get_property(mux_plugin_libraries GLOBAL PROPERTY MUX_PLUGIN_LIBRARIES)
-foreach(layer IN ITEMS MODEL CHANGES TYPES UI UI_TOP APP MATRIX XMPP)
+foreach(layer IN ITEMS MODEL CHANGES TYPES UI UI_TOP APP MATRIX XMPP IRC)
   string(TOLOWER "${layer}" lower)
   get_property(mux_plugin_${lower} GLOBAL PROPERTY MUX_PLUGIN_${layer})
   get_property(mux_plugin_modules_${lower} GLOBAL PROPERTY MUX_PLUGIN_MODULES_${layer})
@@ -253,3 +259,6 @@ mux_plugins_module(mux_plugins_matrix mux.plugins.matrix "${mux_plugin_modules_m
 # What the plugins ask of an XMPP account: imported where its asks are put to
 # the account (mux.app.network).
 mux_plugins_module(mux_plugins_xmpp mux.plugins.xmpp "${mux_plugin_modules_xmpp}" "")
+# What the plugins hear of an IRC account's lines and ask of it: imported
+# where the account is made and asked (mux.app.network).
+mux_plugins_module(mux_plugins_irc mux.plugins.irc "${mux_plugin_modules_irc}" "")

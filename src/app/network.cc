@@ -10,6 +10,7 @@ import mux.core;
 // account is made.
 import mux.plugins.matrix;
 import mux.plugins.xmpp;
+import mux.plugins.irc;
 import mux.config;
 import mux.net;
 import mux.preview;

@@ -23,6 +23,7 @@ make_account(const kept& saved, ::mux::net::loop& loop, ::mux::net::tls& tls, ::
   ::mux::proto::irc::client::settings how{.address = saved.address,
                                           .where = where,
                                           .password = saved.password,
+                                          .mechanism = ::mux::proto::irc::client::mechanism_of(saved.mechanism),
                                           .login = saved.login,
                                           .server_password = saved.server_password,
                                           .username = saved.username,

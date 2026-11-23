@@ -38,6 +38,7 @@ inline auto advanced_fields(const palette& colours) {
   using d = account_draft;
   return SKIFF_NAMED(irc_advanced_fields, c::column(c::vbox(8.0f) | c::fill_x | c::content_y | c::with({.padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
                    model_field<&d::login>(colours, "SASL account", "the nick"),
+                   choice_field<&d::scram, bool>(colours, "SASL mechanism", {{"PLAIN", false}, {"SCRAM-SHA-256", true}}),
                    model_field<&d::server_password>(colours, "Server password (PASS)", "none", true),
                    model_field<&d::username>(colours, "User name", "the nick"),
                    model_field<&d::realname>(colours, "Real name", "the nick")));

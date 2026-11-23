@@ -60,6 +60,8 @@ struct kept {
   // nick. No password: no SASL.
   std::string password;
   std::optional<std::string> login;
+  // SASL's mechanism: "SCRAM-SHA-256"; PLAIN where it says nothing.
+  std::optional<std::string> mechanism;
   // The server's own password (PASS), where it asks one -- a bouncer's.
   std::optional<std::string> server_password;
   std::optional<std::string> username, realname;
@@ -109,6 +111,7 @@ inline std::optional<std::string> check(const kept& one) {
 // commas.
 struct account_draft {
   std::string address, password, login, server_password, username, realname, channels;
+  bool scram = false;  // SASL by SCRAM-SHA-256, not PLAIN
   bool advanced = false;
   friend bool operator==(const account_draft&, const account_draft&) = default;
 };
@@ -120,7 +123,8 @@ inline account_draft draft_of(const kept& saved) {
           saved.username.value_or(""),
           saved.realname.value_or(""),
           saved.channels | std::views::join_with(' ') | std::ranges::to<std::string>(),
-          saved.login || saved.server_password || saved.username || saved.realname};
+          saved.mechanism == std::optional<std::string>("SCRAM-SHA-256"),
+          saved.login || saved.server_password || saved.username || saved.realname || saved.mechanism};
 }
 // The words of a line, separated by spaces or commas.
 [[nodiscard]] inline std::vector<std::string> words_of(std::string_view line) {
@@ -134,6 +138,7 @@ inline account_draft draft_of(const kept& saved) {
   kept out{.address = draft.address,
            .password = draft.password,
            .login = given(draft.login),
+           .mechanism = draft.scram ? std::optional<std::string>("SCRAM-SHA-256") : std::nullopt,
            .server_password = given(draft.server_password),
            .username = given(draft.username),
            .realname = given(draft.realname),

@@ -21,10 +21,28 @@ import mux.proto.irc.changes;
 
 export namespace mux::proto::irc::client {
 
+// SASL's mechanism, read once from what the account keeps.
+namespace mechanism {
+struct plain {};
+struct scram_sha256 {};
+}  // namespace mechanism
+using mechanism_t = spl::variant<mechanism::plain, mechanism::scram_sha256>;
+[[nodiscard]] inline mechanism_t mechanism_of(const std::optional<std::string>& named) {
+  if (named == std::optional<std::string>("SCRAM-SHA-256")) return mechanism::scram_sha256{};
+  return mechanism::plain{};
+}
+// A SCRAM nonce: printable, not a comma, from the system's randomness.
+[[nodiscard]] inline std::string fresh_nonce() {
+  static constexpr std::string_view letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::random_device random;
+  return std::views::iota(0, 32) | std::views::transform([&](int) { return letters[random() % letters.size()]; }) | std::ranges::to<std::string>();
+}
+
 struct settings {
   std::string address;  // what the account is known by: ircs://nick@host
   target where;
   std::string password;  // SASL's, where not empty
+  mechanism_t mechanism = mechanism::plain{};
   std::optional<std::string> login, server_password, username, realname;
   std::vector<std::string> channels;
   std::optional<net::proxy> proxy;
@@ -139,6 +157,49 @@ inline constexpr std::array<std::uint32_t, 16> mirc_colours{0xffffff, 0x000000, 
   return out;
 }
 
+// What is sent, with mux's runs of formatting written as mIRC's codes:
+// each run's code at its start and at its end -- bold, italic, underline,
+// strikethrough and monospace toggle; a colour set by ^D (hex) and reset by
+// ^C; a spoiler as black on black. Runs as typed (/raw) and links, custom
+// emoji -- what IRC has no code for -- are their text alone.
+[[nodiscard]] inline std::string with_codes(std::string_view text, const std::vector<mux::styled_run>& styles) {
+  struct mark {
+    std::size_t at;
+    bool closing;
+    std::string code;
+  };
+  std::vector<mark> marks;
+  for (const auto& run : styles) {
+    const auto codes = spl::visit(
+        spl::overloaded{[](const run_style::bold&) { return std::pair<std::string, std::string>{"\x02", "\x02"}; },
+                        [](const run_style::italic&) { return std::pair<std::string, std::string>{"\x1d", "\x1d"}; },
+                        [](const run_style::underline&) { return std::pair<std::string, std::string>{"\x1f", "\x1f"}; },
+                        [](const run_style::strike&) { return std::pair<std::string, std::string>{"\x1e", "\x1e"}; },
+                        [](const run_style::code&) { return std::pair<std::string, std::string>{"\x11", "\x11"}; },
+                        [](const run_style::spoiler&) { return std::pair<std::string, std::string>{"\x03" "01,01", "\x03"}; },
+                        [](const run_style::colour& c) {
+                          return std::pair<std::string, std::string>{std::format("\x04{:06X}", c.rgb & 0xffffff), "\x04"};
+                        },
+                        [](const auto&) { return std::pair<std::string, std::string>{}; }},
+        run.style);
+    if (codes.first.empty() || run.first >= run.last || run.last > text.size()) continue;
+    marks.push_back({run.first, false, codes.first});
+    marks.push_back({run.last, true, codes.second});
+  }
+  // Closings before openings at one place, so that a run ending where the
+  // next begins is not reopened by its own close.
+  std::ranges::stable_sort(marks, [](const mark& a, const mark& b) { return a.at != b.at ? a.at < b.at : a.closing > b.closing; });
+  std::string out;
+  std::size_t from = 0;
+  for (const auto& one : marks) {
+    out.append(text.substr(from, one.at - from));
+    out += one.code;
+    from = one.at;
+  }
+  out.append(text.substr(from));
+  return out;
+}
+
 // What a status symbol in a channel stands for, as mux shows a member's role.
 [[nodiscard]] inline std::optional<std::string> role_of(std::string_view prefixes) {
   if (prefixes.empty()) return std::nullopt;
@@ -225,8 +286,9 @@ class account {
   // A message said, in as many lines as it takes: each line of the text a
   // PRIVMSG, cut where a line is too long for the server (cairn's pieces).
   void send(std::string to, std::string text, std::optional<std::string> reply_to = std::nullopt, std::vector<mux::mention> = {},
-            std::vector<mux::styled_run> = {}, std::optional<std::string> local = std::nullopt, plugin_message_parts = {}) {
-    this->spawn_guarded([this, to = std::move(to), text = std::move(text), reply_to = std::move(reply_to), local = std::move(local)] {
+            std::vector<mux::styled_run> styles = {}, std::optional<std::string> local = std::nullopt, plugin_message_parts = {}) {
+    this->spawn_guarded([this, to = std::move(to), text = std::move(text), reply_to = std::move(reply_to), local = std::move(local),
+                         styles = std::move(styles)] {
       message out{.in = {id_, to},
                   .id = local ? *local : "mux-" + std::to_string(++sent_),
                   .sender = nick_,
@@ -236,7 +298,8 @@ class account {
                   .delivery = delivery::sending{}};
       out.replies_to = reply_to;
       sink_(change::message_added{out});
-      const bool sent = this->say_lines(to, text, reply_to, [](std::string_view target, std::string_view piece) {
+      const std::string coded = with_codes(text, styles);
+      const bool sent = this->say_lines(to, coded, reply_to, [](std::string_view target, std::string_view piece) {
         return cairn::message_t(cairn::msg::privmsg{target, piece});
       });
       sink_(change::delivery_changed{out.in, out.id, sent ? delivery_t{delivery::sent{}} : delivery_t{delivery::failed{}}});
@@ -300,6 +363,102 @@ class account {
       const h::query asked = before.empty() ? h::query(h::latest{with, h::none{}, page_size})
                                             : h::query(h::before{with, h::point_of(before), page_size});
       this->write(cairn::msg::chathistory{asked});
+    });
+  }
+
+  // Explore: the server's channels (LIST), those whose name or topic has
+  // the words asked, as the replies come (322), told at their end (323).
+  void search_directory(std::string server, std::string query, std::optional<std::string> = std::nullopt) {
+    this->spawn_guarded([this, server = std::move(server), query = std::move(query)] {
+      if (!client_) return;
+      listing_ = listing{server.empty() ? how_.where.host : server, query, {}};
+      this->write(cairn::msg::list{{}, {}});
+    });
+  }
+  // Someone's card: WHOIS, its replies gathered (311...) and told at its end
+  // (318).
+  void fetch_profile(std::string user) {
+    this->spawn_guarded([this, user = std::move(user)] {
+      if (!client_) return;
+      whois_[fold(user)] = whois_reply{user};
+      this->write(cairn::msg::whois{cairn::params_rest{user}});
+    });
+  }
+  // Someone's presence: watched with MONITOR where the server has it (730,
+  // 731 as they come and go); AWAY as away-notify says, besides.
+  void fetch_presence(std::string user) {
+    this->spawn_guarded([this, user = std::move(user)] {
+      if (!client_ || is_channel(user) || watched_.contains(fold(user))) return;
+      watched_.insert(fold(user));
+      if (client_->server().monitor) this->write(cairn::msg::monitor{"+", cairn::commas{user}});
+    });
+  }
+  // One's own presence: away (with what it says, or "Away"), or back.
+  void set_presence(presence now) {
+    this->spawn_guarded([this, now = std::move(now)] {
+      if (!client_) return;
+      const bool away = spl::visit(spl::overloaded{[](availability::away) { return true; }, [](availability::extended_away) { return true; },
+                                                   [](availability::do_not_disturb) { return true; }, [](const auto&) { return false; }},
+                                   now.state);
+      const std::string said = now.status.value_or("Away");
+      this->write(cairn::msg::away{away ? std::optional<std::string_view>(said) : std::nullopt});
+    });
+  }
+  // One's own name: the nick (NICK); the server says it back, and it is
+  // taken then.
+  void set_display_name(std::string name) {
+    this->spawn_guarded([this, name = std::move(name)] {
+      if (client_) this->write(cairn::msg::nick{name});
+    });
+  }
+  // A channel's members, asked again (NAMES).
+  void fetch_members(std::string room) {
+    this->spawn_guarded([this, room = std::move(room)] {
+      if (client_ && is_channel(room)) this->write(cairn::msg::names{cairn::commas{room}});
+    });
+  }
+  // A channel managed: its topic, someone invited, sent out, banned or let
+  // back. A channel has no name but its own: not renamed.
+  void manage(std::string room, const room_action_t& action) {
+    spl::visit(spl::overloaded{
+                   [&](const room_action::rename&) { sink_(change::refused{id_, "An IRC channel's name is its own: it cannot be renamed."}); },
+                   [&](const room_action::retopic& one) {
+                     this->spawn_guarded([this, room, topic = one.topic] { this->write(cairn::msg::topic{room, std::optional<std::string_view>(topic)}); });
+                   },
+                   [&](const room_action::invite& one) {
+                     this->spawn_guarded([this, room, user = one.user] { this->write(cairn::msg::invite{user, room}); });
+                   },
+                   [&](const room_action::kick& one) {
+                     this->spawn_guarded([this, room, user = one.user, why = one.reason.value_or("")] {
+                       this->write(cairn::msg::kick{room, user, why});
+                     });
+                   },
+                   [&](const room_action::ban& one) {
+                     this->spawn_guarded([this, room, user = one.user, why = one.reason] {
+                       this->raw(std::format("MODE {} +b {}!*@*", room, user));
+                       if (why) this->write(cairn::msg::kick{room, user, *why});
+                     });
+                   },
+                   [&](const room_action::unban& one) {
+                     this->spawn_guarded([this, room, user = one.user] { this->raw(std::format("MODE {} -b {}!*@*", room, user)); });
+                   }},
+               action);
+  }
+  // A reaction put on a message, or taken back (+draft/react, +draft/unreact
+  // on a TAGMSG, client tags): where the server takes message tags.
+  void react(std::string room, std::string target, std::string key, bool on, std::optional<std::string> = std::nullopt) {
+    this->spawn_guarded([this, room = std::move(room), target = std::move(target), key = std::move(key), on] {
+      if (!client_ || !client_->has_cap("message-tags")) {
+        sink_(change::refused{id_, "This server does not carry reactions."});
+        return;
+      }
+      std::string line = on ? "@+draft/react=" : "@+draft/unreact=";
+      for (char c : cairn::escaped(key)) line.push_back(c);
+      line += ";+draft/reply=";
+      for (char c : cairn::escaped(target)) line.push_back(c);
+      line += " TAGMSG " + room;
+      this->raw(line);
+      sink_(change::reaction_changed{.in = {id_, room}, .id = target, .key = key, .who = nick_, .added = on, .at = now(), .live = true});
     });
   }
 
@@ -385,6 +544,19 @@ class account {
     });
   }
 
+  // A line written as it is (no CR or LF in it), and sent.
+  void raw(std::string_view line) {
+    if (!wire_) return;
+    const std::string clean = line | std::views::filter([](char c) { return c != '\r' && c != '\n'; }) | std::ranges::to<std::string>();
+    wire_->write(clean);
+    wire_->write("\r\n");
+    wire_->flush();
+  }
+  // A nick folded by the server's casemapping: what people are found by.
+  std::string fold(std::string_view nick) const {
+    if (!client_) return std::string(nick);
+    return std::ranges::to<std::string>(cairn::folded(nick, client_->server().casemapping));
+  }
   // A message written to the server, and sent.
   template <class Message>
   bool write(const Message& what) {
@@ -404,6 +576,25 @@ class account {
     // the user, a host of the longest.
     const std::string prefix = client_->nick() + "!~" + how_.username.value_or("mux") + "@" + std::string(63, 'h');
     written out{wire_};
+    // More than one line, and draft/multiline: one batch, the lines in it,
+    // shown as one message by those who read the batch.
+    const bool multiline = text.find('\n') != std::string_view::npos && client_->has_cap("draft/multiline") && client_->has_cap("batch");
+    const std::string ref = "ml" + std::to_string(++batches_);
+    if (multiline) {
+      if (reply_to && client_->has_cap("message-tags")) {
+        out.append("@+draft/reply=");
+        for (char c : cairn::escaped(*reply_to)) out.push_back(c);
+        out.append(" ");
+      }
+      out.append(std::format("BATCH +{} draft/multiline {}\r\n", ref, to));
+      for (auto line : text | std::views::split('\n')) {
+        out.append("@batch=" + ref + " ");
+        cairn::write(make(to, std::string_view(line.begin(), line.end()).empty() ? std::string_view(" ") : std::string_view(line.begin(), line.end())), out);
+      }
+      out.append(std::format("BATCH -{}\r\n", ref));
+      wire_->flush();
+      return !wire_->failed();
+    }
     bool first = true;
     for (auto line : text | std::views::split('\n')) {
       const std::string_view one(line.begin(), line.end());
@@ -499,7 +690,14 @@ class account {
                               .username = how_.username.value_or(where.nick),
                               .realname = how_.realname.value_or(where.nick),
                               .password = how_.server_password.value_or("")};
-    if (!how_.password.empty()) asked.sasl = cairn::sasl::plain{how_.login.value_or(where.nick), how_.password};
+    if (!how_.password.empty())
+      asked.sasl = spl::visit(spl::overloaded{[&](mechanism::plain) -> cairn::sasl_t {
+                                                return cairn::sasl::plain{how_.login.value_or(where.nick), how_.password};
+                                              },
+                                              [&](mechanism::scram_sha256) -> cairn::sasl_t {
+                                                return cairn::sasl::scram_sha256{how_.login.value_or(where.nick), how_.password, fresh_nonce()};
+                                              }},
+                              how_.mechanism);
     // Not echo-message: what is sent is shown as sent, and an echo would be
     // a second copy of it.
     std::erase(asked.caps, std::string("echo-message"));
@@ -549,6 +747,24 @@ class account {
   void on(const cairn::event_t& e) {
     spl::visit(spl::overloaded{
                    [&](const cairn::events::registered& one) {
+                     // STS (IRCv3): offered over a plain connection, the
+                     // port to come back on with TLS -- and that done, now.
+                     if (!how_.where.tls)
+                       if (const auto policy = client_->offered_value("sts")) {
+                         for (auto part : *policy | std::views::split(',')) {
+                           const std::string_view one_part(part.begin(), part.end());
+                           unsigned port = 0;
+                           if (one_part.starts_with("port=") &&
+                               std::from_chars(one_part.data() + 5, one_part.data() + one_part.size(), port).ec == std::errc{} && port > 0 &&
+                               port < 65536) {
+                             log(id_, "the server asks for TLS (STS): connecting again on port {}", port);
+                             how_.where.tls = true;
+                             how_.where.port = static_cast<std::uint16_t>(port);
+                             if (wire_) wire_->abort();
+                             return;
+                           }
+                         }
+                       }
                      connected_ = true;
                      nick_ = std::string(one.nick);
                      channels_.set_nick(nick_);
@@ -557,6 +773,18 @@ class account {
                      publish_state();
                      sink_(change::conversation_updated{.id = server_chat(), .kind = conversation_kind::direct{}, .name = server_name()});
                      for (const auto& room : joined_) this->write(cairn::msg::join{cairn::commas{room}, {}, {}, {}});
+                     // The private chats of the last month, where the server
+                     // keeps history: in the list again.
+                     if (state_.history) {
+                       const auto stamp = [](auto t) { return std::format("timestamp={:%FT%T}Z", std::chrono::floor<std::chrono::milliseconds>(t)); };
+                       const auto until = std::chrono::system_clock::now();
+                       namespace h = cairn::msg::history;
+                       const auto from_point = h::point_of(stamp(until - std::chrono::days(30)));
+                       const auto to_point = h::point_of(stamp(until));
+                       this->write(cairn::msg::chathistory{h::targets{from_point, to_point, 100}});
+                     }
+                     if (client_->server().monitor && !watched_.empty())
+                       for (const auto& nick : watched_) this->write(cairn::msg::monitor{"+", cairn::commas{nick}});
                    },
                    [&](const cairn::events::caps_enabled&) {
                      if (client_->registered()) publish_state();
@@ -608,6 +836,7 @@ class account {
       const std::string stamp = std::ranges::to<std::string>(*time);
       if (const auto at = time_of(stamp)) out.at = *at;
       times_.insert_or_assign(out.id, stamp);
+      ids_by_time_.insert_or_assign(stamp, out.id);
     }
     if (const auto reply = l.tag_value("+draft/reply")) out.replies_to = std::ranges::to<std::string>(*reply);
     return out;
@@ -663,6 +892,67 @@ class account {
                                                     one.reason.empty() ? std::nullopt : std::optional<std::string>(one.reason)});
                    },
                    [&](const cairn::msg::reply& one) { this->replied(one); },
+                   // Invited: the channel in the list as an invite; joined
+                   // where it is accepted, let go where it is declined.
+                   [&](const cairn::msg::invite& one) {
+                     if (!mine(one.nick)) return;
+                     sink_(change::conversation_updated{.id = {id_, std::string(one.channel)},
+                                                        .kind = conversation_kind::group{},
+                                                        .name = std::string(one.channel),
+                                                        .invite = invite_info{.from = std::string(nick), .from_name = std::string(nick)}});
+                   },
+                   // away-notify: someone away, with what they say, or back.
+                   [&](const cairn::msg::away& one) {
+                     if (nick.empty()) return;
+                     sink_(change::presence_changed{id_, std::string(nick),
+                                                    one.body ? mux::presence{availability::away{}, shown_text(*one.body)}
+                                                             : mux::presence{availability::online{}, std::nullopt}});
+                   },
+                   // Client tags without a message: a reaction put on or
+                   // taken back (+draft/react, +draft/unreact on
+                   // +draft/reply's message).
+                   [&](const cairn::msg::tagmsg& one) {
+                     const auto tag = [&](std::string_view key) -> std::optional<std::string> {
+                       if (const auto v = l.tag_value(key)) return std::ranges::to<std::string>(*v);
+                       return std::nullopt;
+                     };
+                     const auto target = tag("+draft/reply");
+                     const auto put = tag("+draft/react");
+                     const auto taken = tag("+draft/unreact");
+                     if (!target || (!put && !taken) || nick.empty() || mine(nick)) return;
+                     sink_(change::reaction_changed{.in = {id_, chat_of(one.target, nick)},
+                                                    .id = *target,
+                                                    .key = put ? *put : *taken,
+                                                    .who = std::string(nick),
+                                                    .added = put.has_value(),
+                                                    .event = tag("msgid").value_or(""),
+                                                    .at = now(),
+                                                    .live = true});
+                   },
+                   // Standard replies: what failed refused, a warning or a
+                   // note said.
+                   [&](const cairn::msg::fail& one) {
+                     sink_(change::refused{id_, std::format("{}: {}", one.command, shown_text(one.description()))});
+                   },
+                   [&](const cairn::msg::warn& one) {
+                     sink_(change::notice{id_, std::string(one.command), shown_text(one.description())});
+                   },
+                   [&](const cairn::msg::note& one) {
+                     sink_(change::notice{id_, std::string(one.command), shown_text(one.description())});
+                   },
+                   // Read elsewhere up to a time (draft/read-marker): the
+                   // line of that time, where it is held.
+                   [&](const cairn::msg::markread& one) {
+                     std::string_view stamp = one.timestamp;
+                     if (!stamp.starts_with("timestamp=")) return;
+                     stamp.remove_prefix(10);
+                     if (const auto found = ids_by_time_.find(std::string(stamp)); found != ids_by_time_.end())
+                       sink_(change::read_marker{{id_, chat_of(one.target, nick_)}, found->second});
+                   },
+                   // setname: someone's real name, as their card says it.
+                   [&](const cairn::msg::setname& one) {
+                     if (!nick.empty()) sink_(change::profile_found{id_, std::string(nick), shown_text(one.realname), std::nullopt, std::nullopt});
+                   },
                    [](const auto&) {}},
                m.what);
   }
@@ -680,10 +970,88 @@ class account {
       case 422:
         sink_(motd_read{id_, motd_});
         break;
-      case 403: case 405: case 471: case 473: case 474: case 475: case 477: case 482: case 404: case 401:
-        sink_(change::refused{id_, std::format("{}: {}", param(0), shown_text(one.params.back()))});
+      // WHOIS: gathered by the nick, told at its end.
+      case 311: {  // RPL_WHOISUSER nick user host * :realname
+        auto& w = whois_[fold(param(0))];
+        w.nick = param(0);
+        w.realname = shown_text(one.params.back());
+        w.lines.push_back(std::format("{}!{}@{}", param(0), param(1), param(2)));
         break;
-      default: break;
+      }
+      case 312:  // RPL_WHOISSERVER nick server :info
+        whois_[fold(param(0))].lines.push_back(std::format("Server: {} ({})", param(1), shown_text(one.params.back())));
+        break;
+      case 313: whois_[fold(param(0))].lines.push_back(shown_text(one.params.back())); break;  // an operator
+      case 317: {  // RPL_WHOISIDLE nick seconds signon :...
+        long long seconds = 0;
+        const std::string idle = param(1);
+        std::from_chars(idle.data(), idle.data() + idle.size(), seconds);
+        whois_[fold(param(0))].lines.push_back(std::format("Idle {}m {}s", seconds / 60, seconds % 60));
+        break;
+      }
+      case 319: whois_[fold(param(0))].lines.push_back("Channels: " + shown_text(one.params.back())); break;
+      case 330: whois_[fold(param(0))].account = param(1); whois_[fold(param(0))].lines.push_back("Logged in as " + param(1)); break;
+      case 671: whois_[fold(param(0))].lines.push_back("Connected securely (TLS)"); break;
+      case 301: whois_[fold(param(0))].lines.push_back("Away: " + shown_text(one.params.back())); break;
+      case 318: {  // RPL_ENDOFWHOIS
+        const auto found = whois_.find(fold(param(0)));
+        if (found == whois_.end()) break;
+        const auto& w = found->second;
+        profile_details details;
+        details.biography.plain = w.lines | std::views::join_with('\n') | std::ranges::to<std::string>();
+        sink_(change::profile_found{id_, w.nick.empty() ? param(0) : w.nick,
+                                    w.realname.empty() ? std::nullopt : std::optional<std::string>(w.realname), std::nullopt, details});
+        whois_.erase(found);
+        break;
+      }
+      // LIST: the channels as they come, those with the words asked; told at
+      // the end, the busiest first.
+      case 322:  // RPL_LIST channel users :topic
+        if (listing_) {
+          const std::string name = param(0), topic = shown_text(one.params.back());
+          const auto has = [&](std::string_view in) {
+            const auto lower = [](std::string_view s) {
+              return s | std::views::transform([](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }) |
+                     std::ranges::to<std::string>();
+            };
+            return lower(in).find(lower(listing_->query)) != std::string::npos;
+          };
+          if (listing_->query.empty() || has(name) || has(topic)) {
+            std::int64_t users = 0;
+            const auto count = param(1);
+            std::from_chars(count.data(), count.data() + count.size(), users);
+            listing_->rooms.push_back(directory_room{.id = name, .name = name, .alias = name, .topic = topic, .members = users});
+          }
+        }
+        break;
+      case 323:  // RPL_LISTEND
+        if (listing_) {
+          std::ranges::sort(listing_->rooms, std::ranges::greater{}, &directory_room::members);
+          if (listing_->rooms.size() > 500) listing_->rooms.resize(500);
+          sink_(change::directory_listed{.by = id_, .server = listing_->server, .query = listing_->query, .rooms = std::move(listing_->rooms)});
+          listing_.reset();
+        }
+        break;
+      // MONITOR: the people watched, come and gone.
+      case 730:  // RPL_MONONLINE :nick!user@host,...
+      case 731:  // RPL_MONOFFLINE :nick,...
+        for (auto who : one.params.back() | std::views::split(',')) {
+          std::string_view one_nick(who.begin(), who.end());
+          one_nick = one_nick.substr(0, one_nick.find('!'));
+          if (one_nick.empty()) continue;
+          sink_(change::presence_changed{id_, std::string(one_nick),
+                                         one.number == 730 ? mux::presence{availability::online{}, std::nullopt}
+                                                           : mux::presence{availability::offline{}, std::nullopt}});
+        }
+        break;
+      case 433:  // ERR_NICKNAMEINUSE, once registered: a nick asked for taken
+        if (client_->registered()) sink_(change::refused{id_, std::format("The nick {} is taken.", param(0))});
+        break;
+      default:
+        // Any other error (400-599): refused, as the server says it.
+        if (one.number >= 400 && one.number < 600 && one.number != 433)
+          sink_(change::refused{id_, std::format("{}: {}", param(0), shown_text(one.params.back()))});
+        break;
     }
   }
   void topic_of(std::string_view room, std::string text, std::string_view by) {
@@ -712,7 +1080,43 @@ class account {
   // chat holds, newest first; and where to page back from next -- none
   // where it gave less than a page, the beginning.
   void batched(const cairn::events::batch& done) {
-    if ((done.type != "chathistory" && done.type != "draft/chathistory") || done.params.empty()) return;
+    // draft/multiline: its lines one message -- joined by line breaks, or
+    // run on where a line says draft/multiline-concat.
+    if (done.type == "draft/multiline" && !done.params.empty()) {
+      std::string text;
+      std::optional<cairn::line_view> first;
+      for (const auto& wire : done.lines)
+        if (const auto l = cairn::try_parse(wire); l && (l->is("PRIVMSG") || l->is("NOTICE"))) {
+          if (!first) first = *l;
+          else if (!l->tag_value("draft/multiline-concat")) text += '\n';
+          text.append(l->param(1));
+        }
+      if (!first) return;
+      auto one = message_of(*first, done.params.front(), text, false);
+      heard_from(one.in);
+      sink_(change::message_added{std::move(one)});
+      return;
+    }
+    // The chats of before (CHATHISTORY TARGETS): each a private chat, in
+    // the list, paged back from its newest.
+    if (done.type == "draft/chathistory-targets" || done.type == "chathistory-targets") {
+      for (const auto& wire : done.lines)
+        if (const auto l = cairn::try_parse(wire); l && l->is("CHATHISTORY") && l->param(0) == "TARGETS") {
+          const std::string who(l->param(1));
+          if (is_channel(who)) continue;
+          known_.insert(who);
+          create_direct(who);
+        }
+      return;
+    }
+    // Any other batch -- a netsplit's, a netjoin's: its lines as if they had
+    // come one by one.
+    if (done.type != "chathistory" && done.type != "draft/chathistory") {
+      for (const auto& wire : done.lines)
+        if (const auto l = cairn::try_parse(wire)) this->received(cairn::read(*l));
+      return;
+    }
+    if (done.params.empty()) return;
     const conversation_id in{id_, done.params.front()};
     std::vector<message> page;
     for (const auto& wire : done.lines) {
@@ -752,8 +1156,24 @@ class account {
   std::set<std::string> joined_;
   // The private conversations told of.
   std::set<std::string> known_;
-  // Each line's server-time, by its id: what MARKREAD and a page back name.
-  std::unordered_map<std::string, std::string> times_;
+  // Each line's server-time, by its id: what MARKREAD and a page back name;
+  // and the id by the time, for a MARKREAD come.
+  std::unordered_map<std::string, std::string> times_, ids_by_time_;
+  // A LIST under way: where, what was asked, what came so far.
+  struct listing {
+    std::string server, query;
+    std::vector<directory_room> rooms;
+  };
+  std::optional<listing> listing_;
+  // WHOIS replies gathered, by the nick folded, until 318.
+  struct whois_reply {
+    std::string nick, realname, account, server;
+    std::vector<std::string> lines;
+  };
+  std::map<std::string, whois_reply> whois_;
+  // The people watched (MONITOR), folded: watched again on each connection.
+  std::set<std::string> watched_;
+  std::uint64_t batches_ = 0;
   std::uint64_t sent_ = 0, received_ = 0;
   bool stopping_ = false, started_ = false, retry_ = true, connected_ = false;
   std::size_t commands_ = 0;

@@ -124,7 +124,14 @@ struct part {
     const std::ptrdiff_t top = s_->list.top ? place(*s_->list.top) : std::numeric_limits<std::ptrdiff_t>::max();
     // Not const: a filter_view caches its begin, so begin() and end() are not.
     auto above = pinned_of(*chat) | std::views::enumerate | std::views::filter([&](const auto& one) { return place(std::get<1>(one)) < top; });
-    const auto best = std::ranges::max_element(above, {}, [&](const auto& one) { return place(std::get<1>(one)); });
+    // The newest above the view: by its place in the timeline, and -- where
+    // places tie, as every pin not loaded does (-1: older than all that is,
+    // the chat just opened) -- by its place in the pins, the last pinned
+    // last. By place alone the first of a tie won: the oldest pin was shown
+    // on opening a chat, not the newest.
+    const auto best = std::ranges::max_element(above, {}, [&](const auto& one) {
+      return std::pair{place(std::get<1>(one)), static_cast<std::ptrdiff_t>(std::get<0>(one))};
+    });
     const std::size_t count = pinned_of(*chat).size();
     const std::size_t at = cycled_ ? cycled_->at : best == std::ranges::end(above) ? 0 : static_cast<std::size_t>(std::get<0>(*best));
     const std::string& id = pinned_of(*chat)[at];

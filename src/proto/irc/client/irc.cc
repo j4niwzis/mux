@@ -79,6 +79,66 @@ struct settings {
   return out;
 }
 
+// mIRC's sixteen colours, as modern.ircdocs.horse/formatting gives them;
+// those past 15 are shown without a colour.
+inline constexpr std::array<std::uint32_t, 16> mirc_colours{0xffffff, 0x000000, 0x00007f, 0x009300, 0xff0000, 0x7f0000,
+                                                            0x9c009c, 0xfc7f00, 0xffff00, 0x00fc00, 0x009393, 0x00ffff,
+                                                            0x0000fc, 0xff00ff, 0x7f7f7f, 0xd2d2d2};
+[[nodiscard]] inline std::optional<std::uint32_t> rgb_of(const cairn::format::colour& one) {
+  if (one.hex) return one.rgb;
+  if (one.number >= 0 && one.number < 16) return mirc_colours[static_cast<std::size_t>(one.number)];
+  return std::nullopt;
+}
+// Text as HTML's: its markup characters escaped.
+[[nodiscard]] inline std::string escaped_html(std::string_view text) {
+  std::string out;
+  for (const char c : text) {
+    switch (c) {
+      case '<': out += "&lt;"; break;
+      case '>': out += "&gt;"; break;
+      case '&': out += "&amp;"; break;
+      case '"': out += "&quot;"; break;
+      default: out += c;
+    }
+  }
+  return out;
+}
+// A line's formatting as the HTML mux shows a message's in: each span in
+// the tags its style says -- bold, italic, underline, strikethrough,
+// monospace, a colour -- its text UTF-8 as the whole line is read. None
+// where nothing in it is formatted.
+[[nodiscard]] inline std::optional<std::string> html_of(std::string_view wire) {
+  const auto how = cairn::text::encoding_of(wire);
+  std::string out;
+  bool styled = false;
+  for (const auto& one : cairn::format::spans(wire)) {
+    const auto& st = one.style;
+    std::string text;
+    for (const char32_t c : cairn::text::decoded(one.text, how)) cairn::text::put_utf8(c, text);
+    std::string open, close;
+    const auto wrap = [&](bool on, std::string_view tag) {
+      if (!on) return;
+      open += std::format("<{}>", tag);
+      close.insert(0, std::format("</{}>", tag));
+      styled = true;
+    };
+    wrap(st.bold, "b");
+    wrap(st.italic, "i");
+    wrap(st.underline, "u");
+    wrap(st.strikethrough, "s");
+    wrap(st.monospace, "code");
+    const auto fg = st.reverse ? rgb_of(st.background) : rgb_of(st.foreground);
+    if (fg) {
+      open += std::format("<font color=\"#{:06x}\">", *fg);
+      close.insert(0, "</font>");
+      styled = true;
+    }
+    out += open + escaped_html(text) + close;
+  }
+  if (!styled) return std::nullopt;
+  return out;
+}
+
 // What a status symbol in a channel stands for, as mux shows a member's role.
 [[nodiscard]] inline std::optional<std::string> role_of(std::string_view prefixes) {
   if (prefixes.empty()) return std::nullopt;
@@ -541,6 +601,8 @@ class account {
                 .at = now(),
                 .body = body_of(shown_text(text), emote),
                 .outgoing = !nick.empty() && mine(nick)};
+    if (!emote)
+      if (auto formatted = html_of(text)) out.body.html = std::move(formatted);
     if (const auto id = l.tag_value("msgid")) out.id = std::ranges::to<std::string>(*id);
     if (const auto time = l.tag_value("time")) {
       const std::string stamp = std::ranges::to<std::string>(*time);

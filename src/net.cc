@@ -427,6 +427,13 @@ class stream {
   }
 
   bool secured() const { return tls_; }
+  // The address of this machine the connection goes out from: what DCC tells
+  // the other side to connect to. Empty where it is not known.
+  std::string local_address() const {
+    error_code error;
+    const auto at = stream_.next_layer().local_endpoint(error);
+    return error ? std::string() : at.address().to_string();
+  }
 
   // TLS on the server's side of the connection, with the settings the
   // stream was made with.

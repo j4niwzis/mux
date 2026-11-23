@@ -14,6 +14,7 @@ import splice;
 import cairn;
 import mux.core;
 import mux.net;
+import mux.http;
 import mux.proto.irc;
 import mux.proto.irc.kept;
 import mux.proto.irc.links;
@@ -200,6 +201,136 @@ inline constexpr std::array<std::uint32_t, 16> mirc_colours{0xffffff, 0x000000, 
   return out;
 }
 
+// A DCC offer, as a CTCP DCC says it: a file to receive (SEND), or a chat
+// of its own (CHAT) -- each at an address to connect to, or, where its port
+// is 0, a token to answer with an address of one's own (passive DCC).
+namespace dcc {
+struct send {
+  std::string name, host;
+  std::uint16_t port = 0;
+  std::uint64_t size = 0;
+  std::string token;
+};
+struct chat {
+  std::string host;
+  std::uint16_t port = 0;
+};
+}  // namespace dcc
+using dcc_t = spl::variant<dcc::send, dcc::chat>;
+// An address as DCC writes it: IPv4 as one decimal number, IPv6 as it is.
+[[nodiscard]] inline std::string dcc_host(std::string_view written) {
+  if (written.find(':') != std::string_view::npos) return std::string(written);
+  std::uint32_t n = 0;
+  if (std::from_chars(written.data(), written.data() + written.size(), n).ec != std::errc{}) return std::string(written);
+  return std::format("{}.{}.{}.{}", n >> 24, (n >> 16) & 255, (n >> 8) & 255, n & 255);
+}
+// And back: an IPv4 address as DCC's decimal number; IPv6 as it is.
+[[nodiscard]] inline std::string dcc_written(std::string_view address) {
+  std::uint32_t n = 0;
+  int parts = 0;
+  for (auto part : address | std::views::split('.')) {
+    unsigned byte = 0;
+    const std::string_view one(part.begin(), part.end());
+    if (std::from_chars(one.data(), one.data() + one.size(), byte).ec != std::errc{} || byte > 255) return std::string(address);
+    n = (n << 8) | byte;
+    ++parts;
+  }
+  return parts == 4 ? std::to_string(n) : std::string(address);
+}
+// SEND "file name" host port size [token], CHAT chat host port.
+[[nodiscard]] inline std::optional<dcc_t> dcc_of(std::string_view body) {
+  const auto word = [&]() -> std::string {
+    body.remove_prefix(std::min(body.find_first_not_of(' '), body.size()));
+    if (body.starts_with('"')) {
+      const auto end = body.find('"', 1);
+      std::string got(body.substr(1, end == std::string_view::npos ? std::string_view::npos : end - 1));
+      body.remove_prefix(end == std::string_view::npos ? body.size() : end + 1);
+      return got;
+    }
+    const auto end = std::min(body.find(' '), body.size());
+    std::string got(body.substr(0, end));
+    body.remove_prefix(end);
+    return got;
+  };
+  const auto number = [](const std::string& s, auto& out) { return std::from_chars(s.data(), s.data() + s.size(), out).ec == std::errc{}; };
+  const std::string kind = word();
+  const auto upper = kind | std::views::transform([](char c) { return static_cast<char>(std::toupper(static_cast<unsigned char>(c))); }) |
+                     std::ranges::to<std::string>();
+  if (upper == "SEND") {
+    dcc::send out;
+    out.name = word();
+    out.host = dcc_host(word());
+    unsigned port = 0;
+    if (!number(word(), port) || port > 65535) return std::nullopt;
+    out.port = static_cast<std::uint16_t>(port);
+    number(word(), out.size);
+    out.token = word();
+    // Only the file's own name: no path to put it anywhere else.
+    if (const auto slash = out.name.find_last_of("/\\"); slash != std::string::npos) out.name = out.name.substr(slash + 1);
+    if (out.name.empty()) return std::nullopt;
+    return out;
+  }
+  if (upper == "CHAT") {
+    dcc::chat out;
+    word();  // "chat"
+    out.host = dcc_host(word());
+    unsigned port = 0;
+    if (!number(word(), port) || port == 0 || port > 65535) return std::nullopt;
+    out.port = static_cast<std::uint16_t>(port);
+    return out;
+  }
+  return std::nullopt;
+}
+// Where a DCC file is fetched from, as a message's attachment says it:
+// dcc://host:port?size=N, or dccp://nick?token=T&size=N for a passive one
+// -- read again by fetch_media (dcc_source_of).
+struct dcc_source {
+  bool passive = false;
+  std::string host;  // or, passive, the nick to answer
+  std::uint16_t port = 0;
+  std::uint64_t size = 0;
+  std::string token, name;
+};
+[[nodiscard]] inline std::string source_of(const dcc_source& one) {
+  if (one.passive) return std::format("dccp://{}?token={}&size={}&name={}", one.host, one.token, one.size, one.name);
+  return std::format("dcc://{}:{}?size={}&name={}", one.host.find(':') != std::string::npos ? "[" + one.host + "]" : one.host, one.port,
+                     one.size, one.name);
+}
+[[nodiscard]] inline std::optional<dcc_source> dcc_source_of(std::string_view source) {
+  dcc_source out;
+  if (source.starts_with("dccp://")) {
+    out.passive = true;
+    source.remove_prefix(7);
+  } else if (source.starts_with("dcc://")) {
+    source.remove_prefix(6);
+  } else {
+    return std::nullopt;
+  }
+  const auto query = source.find('?');
+  std::string_view where = source.substr(0, query);
+  const std::string_view rest = query == std::string_view::npos ? std::string_view() : source.substr(query + 1);
+  if (!out.passive) {
+    const auto colon = where.rfind(':');
+    if (colon == std::string_view::npos) return std::nullopt;
+    unsigned port = 0;
+    if (std::from_chars(where.data() + colon + 1, where.data() + where.size(), port).ec != std::errc{} || port == 0 || port > 65535)
+      return std::nullopt;
+    out.port = static_cast<std::uint16_t>(port);
+    where = where.substr(0, colon);
+    if (where.starts_with('[') && where.ends_with(']')) where = where.substr(1, where.size() - 2);
+  }
+  out.host = std::string(where);
+  for (auto pair : rest | std::views::split('&')) {
+    const std::string_view one(pair.begin(), pair.end());
+    const auto eq = one.find('=');
+    const auto key = one.substr(0, eq), value = eq == std::string_view::npos ? std::string_view() : one.substr(eq + 1);
+    if (key == "size") std::from_chars(value.data(), value.data() + value.size(), out.size);
+    else if (key == "token") out.token = std::string(value);
+    else if (key == "name") out.name = std::string(value);
+  }
+  return out;
+}
+
 // What a status symbol in a channel stands for, as mux shows a member's role.
 [[nodiscard]] inline std::optional<std::string> role_of(std::string_view prefixes) {
   if (prefixes.empty()) return std::nullopt;
@@ -334,6 +465,7 @@ class account {
   void stop() {
     stopping_ = true;
     if (wire_) wire_->abort();
+    for (auto& [name, chat] : chats_) chat->abort();
   }
 
   // A message said, in as many lines as it takes: each line of the text a
@@ -352,6 +484,12 @@ class account {
       out.replies_to = reply_to;
       sink_(change::message_added{out});
       const std::string coded = with_codes(text, styles);
+      if (const auto chat = chats_.find(to); chat != chats_.end()) {
+        chat->second->write(coded + "\n");
+        chat->second->flush();
+        sink_(change::delivery_changed{out.in, out.id, chat->second->failed() ? delivery_t{delivery::failed{}} : delivery_t{delivery::sent{}}});
+        return;
+      }
       const bool sent = this->say_lines(to, coded, reply_to, [](std::string_view target, std::string_view piece) {
         return cairn::message_t(cairn::msg::privmsg{target, piece});
       });
@@ -377,6 +515,7 @@ class account {
   void leave(std::string room) {
     this->spawn_guarded([this, room = std::move(room)] {
       if (client_ && is_channel(room) && joined_.contains(room)) this->write(cairn::msg::part{cairn::commas{room}, {}});
+      if (const auto chat = chats_.find(room); chat != chats_.end()) chat->second->abort();
       joined_.erase(room);
       sink_(change::conversation_removed{{id_, room}});
     });
@@ -512,6 +651,113 @@ class account {
       line += " TAGMSG " + room;
       this->raw(line);
       sink_(change::reaction_changed{.in = {id_, room}, .id = target, .key = key, .who = nick_, .added = on, .at = now(), .live = true});
+    });
+  }
+
+  // A file sent: put on the server's file host where it has one
+  // (draft/FILEHOST, soju's) and its link said; else offered by DCC SEND, from
+  // a port of this machine, to whoever takes it first.
+  void send_file(std::string to, std::string local, std::string bytes, std::string name, std::string mimetype, bool image, int width,
+                 int height, std::string caption, std::optional<std::string> reply_to, plugin_message_parts, std::optional<video_look>) {
+    this->spawn_guarded([this, to = std::move(to), local = std::move(local), bytes = std::move(bytes), name = std::move(name),
+                         mimetype = std::move(mimetype), image, width, height, caption = std::move(caption), reply_to] {
+      message out{.in = {id_, to}, .id = local, .sender = nick_, .at = now(), .body = {caption, {}}, .outgoing = true,
+                  .delivery = delivery::sending{}};
+      out.replies_to = reply_to;
+      attachment file{.source = "local:" + local, .name = name, .mimetype = mimetype, .size = static_cast<std::int64_t>(bytes.size()),
+                      .width = width, .height = height};
+      if (image) file.kind = attachment_kind::image{};
+      out.attachment = file;
+      sink_(change::message_added{out});
+      const auto done = [&](bool sent) { sink_(change::delivery_changed{out.in, out.id, sent ? delivery_t{delivery::sent{}} : delivery_t{delivery::failed{}}}); };
+      if (!client_) {
+        done(false);
+        return;
+      }
+      const auto* host = client_->server().token("draft/FILEHOST");
+      if (!host) host = client_->server().token("soju.im/FILEHOST");
+      if (host) {
+        try {
+          const auto url = http::url::parse(*host);
+          if (!url) {
+            sink_(change::refused{id_, "The server's file host has no address mux can read."});
+            done(false);
+            return;
+          }
+          const auto path = host->find('/', host->find("://") == std::string::npos ? 0 : host->find("://") + 3);
+          http::connection upload(*loop_, *tls_, http::url{.host = url->host, .port = url->port}, how_.proxy);
+          const std::vector<std::pair<std::string, std::string>> headers{{"Content-Disposition", std::format("attachment; filename=\"{}\"", name)}};
+          const auto got = upload.request("POST", path == std::string::npos ? "/" : host->substr(path), bytes, std::nullopt,
+                                          std::chrono::seconds(120), mimetype, static_cast<const http::no_progress*>(nullptr), "*/*", headers);
+          if (got.status < 200 || got.status >= 300 || !got.location) {
+            sink_(change::refused{id_, std::format("The file host refused the file ({}).", got.status)});
+            done(false);
+            return;
+          }
+          // Where it is: the address the host gave, made whole.
+          std::string link = *got.location;
+          if (link.starts_with('/')) link = host->substr(0, path == std::string::npos ? host->size() : path) + link;
+          this->say_lines(to, caption.empty() ? link : caption + " " + link, reply_to, [](std::string_view target, std::string_view piece) {
+            return cairn::message_t(cairn::msg::privmsg{target, piece});
+          });
+          done(true);
+        } catch (const net::failure&) {
+          sink_(change::refused{id_, "The file could not be put on the server's file host."});
+          done(false);
+        }
+        return;
+      }
+      // DCC SEND: from this machine, on a port of its own, to the first to connect.
+      try {
+        net::listener offered(*loop_, 0, "0.0.0.0");
+        const std::string address = dcc_written(wire_ ? wire_->local_address() : std::string());
+        this->write(cairn::msg::ctcp{to, "DCC", std::format("SEND \"{}\" {} {} {}", name, address, offered.port(), bytes.size()), false});
+        done(true);
+        net::stream peer(*loop_, *tls_, offered.accept());
+        offered.close();
+        peer.write(bytes);
+        peer.flush();
+        // Its acknowledgements, as long as it sends them: then let go.
+        auto& acks = peer.input();
+        for (auto at = acks.begin(); at != acks.end(); ++at) {}
+      } catch (const net::failure& failed) {
+        sink_(change::refused{id_, std::format("The file was not sent: {}", failed.what())});
+      }
+    });
+  }
+  // A DCC file fetched: connected to (or, passive, listened for), its bytes
+  // read and acknowledged as DCC does, and handed over as any media is.
+  void fetch_media(std::string source, media_use_t use, int, bool = false) {
+    const auto from = dcc_source_of(source);
+    if (!from) return;
+    this->spawn_guarded([this, source = std::move(source), use = std::move(use), from = *from] {
+      try {
+        std::optional<net::stream> peer;
+        if (from.passive) {
+          net::listener waiting(*loop_, 0, "0.0.0.0");
+          const std::string address = dcc_written(wire_ ? wire_->local_address() : std::string());
+          this->write(cairn::msg::ctcp{from.host, "DCC", std::format("SEND \"{}\" {} {} {} {}", from.name, address, waiting.port(), from.size, from.token), false});
+          peer.emplace(*loop_, *tls_, waiting.accept());
+        } else {
+          peer.emplace(*loop_, *tls_, net::connect(*loop_, from.host, from.port));
+        }
+        std::string got;
+        auto& chunks = peer->input();
+        for (auto at = chunks.begin(); got.size() < from.size && at != chunks.end(); ++at) {
+          got.append(*at);
+          const auto total = static_cast<std::uint32_t>(got.size());
+          const char ack[4] = {static_cast<char>(total >> 24), static_cast<char>(total >> 16), static_cast<char>(total >> 8), static_cast<char>(total)};
+          peer->write(std::string_view(ack, 4));
+          peer->flush();
+        }
+        if (from.size != 0 && got.size() < from.size) {
+          sink_(change::refused{id_, std::format("{} came cut short ({} of {} bytes).", from.name, got.size(), from.size)});
+          return;
+        }
+        sink_(change::avatar_loaded{use, source, std::move(got)});
+      } catch (const net::failure& failed) {
+        sink_(change::refused{id_, std::format("{} could not be fetched: {}", from.name, failed.what())});
+      }
     });
   }
 
@@ -986,6 +1232,25 @@ class account {
                                                     one.reason.empty() ? std::nullopt : std::optional<std::string>(one.reason)});
                    },
                    [&](const cairn::msg::reply& one) { this->replied(one); },
+                   // A CTCP DCC: a file offered, shown as one to fetch; a
+                   // chat offered, connected to as a chat of its own (=nick).
+                   [&](const cairn::msg::ctcp& one) {
+                     if (one.reply || nick.empty() || !std::ranges::equal(one.command, std::string_view("DCC"), [](char x, char y) { return std::toupper(static_cast<unsigned char>(x)) == y; })) return;
+                     const auto offer = dcc_of(one.body);
+                     if (!offer) return;
+                     spl::visit(spl::overloaded{
+                                    [&](const dcc::send& file) {
+                                      const dcc_source from{.passive = file.port == 0, .host = file.port == 0 ? std::string(nick) : file.host,
+                                                            .port = file.port, .size = file.size, .token = file.token, .name = file.name};
+                                      auto in = message_of(l, one.target, "", false);
+                                      in.attachment = attachment{.source = source_of(from), .name = file.name,
+                                                                 .size = static_cast<std::int64_t>(file.size)};
+                                      heard_from(in.in);
+                                      sink_(change::message_added{std::move(in)});
+                                    },
+                                    [&](const dcc::chat& chat) { this->open_chat(std::string(nick), chat); }},
+                                *offer);
+                   },
                    // Invited: the channel in the list as an invite; joined
                    // where it is accepted, let go where it is declined.
                    [&](const cairn::msg::invite& one) {
@@ -1049,6 +1314,35 @@ class account {
                    },
                    [](const auto&) {}},
                m.what);
+  }
+
+  // A DCC chat: connected to, its lines read as they come -- a chat of its
+  // own, =nick, what is said in it written to that connection.
+  void open_chat(std::string nick, dcc::chat where) {
+    this->spawn_guarded([this, nick = std::move(nick), where = std::move(where)] {
+      const std::string chat = "=" + nick;
+      try {
+        auto peer = std::make_unique<net::stream>(*loop_, *tls_, net::connect(*loop_, where.host, where.port));
+        net::stream& own = *peer;
+        chats_[chat] = std::move(peer);
+        sink_(change::conversation_updated{.id = {id_, chat}, .kind = conversation_kind::direct{}, .name = nick + " (DCC)"});
+        std::string pending;
+        auto& chunks = own.input();
+        for (auto at = chunks.begin(); at != chunks.end(); ++at) {
+          pending.append(*at);
+          for (auto end = pending.find('\n'); end != std::string::npos; end = pending.find('\n')) {
+            std::string line = pending.substr(0, end);
+            pending.erase(0, end + 1);
+            if (line.ends_with('\r')) line.pop_back();
+            sink_(change::message_added{message{.in = {id_, chat}, .id = "dcc-" + std::to_string(++received_), .sender = nick, .at = now(),
+                                                .body = {shown_text(line), std::nullopt}}});
+          }
+        }
+      } catch (const net::failure& failed) {
+        sink_(change::refused{id_, std::format("The DCC chat with {} failed: {}", nick, failed.what())});
+      }
+      chats_.erase(chat);
+    });
   }
 
   // The numerics the account shows: a channel's topic and members, the
@@ -1268,6 +1562,8 @@ class account {
   // The people watched (MONITOR), folded: watched again on each connection.
   std::set<std::string> watched_;
   std::uint64_t batches_ = 0;
+  // The DCC chats open, by their chat (=nick).
+  std::map<std::string, std::unique_ptr<net::stream>> chats_;
   typename irc_kept_slots<typename irc_plugins<Sink>::type>::type plugins_kept_{};
   std::uint64_t sent_ = 0, received_ = 0;
   bool stopping_ = false, started_ = false, retry_ = true, connected_ = false;

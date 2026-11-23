@@ -134,6 +134,14 @@ cme_declare_port(NAME tern PROVIDES tern
   LICENSE AGPL-3.0-only
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
+# cairn: IRC -- lines, messages, the client's registration and SASL --
+# sans-IO, which the IRC protocol's account runs on mux.net's stream.
+cme_declare_port(NAME cairn PROVIDES cairn
+  GITHUB_REPOSITORY j4niwzis/cairn
+  GIT_TAG 4576113bc624b8e4552bd667cc563996f5cbcea2
+  LICENSE AGPL-3.0-only
+  TARGETS cairn)
+cme_options(cairn "CAIRN_TESTS OFF" "CAIRN_BENCHMARKS OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
   GIT_TAG 6c36bda2c03b3e8da0116e3ff4e15595dd7a11d4
@@ -207,6 +215,7 @@ cme_declare_port(NAME knot PROVIDES knot
 set_property(GLOBAL APPEND PROPERTY MUX_ABOUT_PRIMARY_PACKAGES knot)
 mux_find_package(chevron 0.2 REQUIRED)
 mux_find_package(tern REQUIRED)
+mux_find_package(cairn REQUIRED)
 
 # One library of mux's modules, as the libraries it stands on have: modules
 # are what separates them. The window's two join it where the window is
@@ -282,7 +291,7 @@ set(mux_std_flags
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
   $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 target_compile_options(mux_modules PUBLIC ${mux_std_flags})
-target_link_libraries(mux_modules PUBLIC chevron tern ${mux_loom_libraries} Boost::asio_core Boost::beast
+target_link_libraries(mux_modules PUBLIC chevron tern cairn ${mux_loom_libraries} Boost::asio_core Boost::beast
   OpenSSL::SSL OpenSSL::Crypto)
 if(mux_context)
   target_link_libraries(mux_modules PUBLIC Boost::context)

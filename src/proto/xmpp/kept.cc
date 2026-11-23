@@ -66,8 +66,12 @@ inline void server_given(kept& one, std::string server, std::optional<std::int64
 constexpr type_tag<kept> kept_type(const state&) { return {}; }
 constexpr std::string_view protocol_word(const kept&) { return "xmpp"; }
 constexpr std::string_view protocol_name(const kept&) { return "XMPP"; }
-// A JID: anything a Matrix user ID is not (those begin with '@').
-constexpr bool owns_address(const state&, std::string_view address) { return !address.empty() && !address.starts_with('@'); }
+// A JID: anything a Matrix user ID is not (those begin with '@'), and no URL
+// -- a JID's local part has no ':' or '/' (RFC 7622, 3.3.1).
+constexpr bool owns_address(const state&, std::string_view address) {
+  const auto local = address.substr(0, address.find('@'));
+  return !address.empty() && !address.starts_with('@') && local.find_first_of(":/") == std::string_view::npos;
+}
 // Made on the server: signed in to from now on.
 inline void forget_registration(kept& one) {
   one.create.reset();

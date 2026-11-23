@@ -50,10 +50,48 @@ using logic::runs_in;
       return (run.first > base + from && run.first < base + to) || (run.last > base + from && run.last < base + to);
     });
   };
-  // A run closed by `close` on this line, from just after its opening.
+  // The bare links on the line -- a word from a scheme's "://" or "www." to
+  // the next space, less the punctuation that ends a sentence after it --
+  // as [first, last): their addresses are kept as they are.
+  const auto addresses = [&] {
+    std::vector<std::pair<std::size_t, std::size_t>> found;
+    for (std::size_t from = 0; from < line.size();) {
+      const auto start = line.find_first_not_of(' ', from);
+      if (start == std::string_view::npos)
+        break;
+      const auto end = std::min(line.find(' ', start), line.size());
+      std::string_view word = line.substr(start, end - start);
+      // Where the word opens with a bracket or a quote, the link after it.
+      const auto lead = std::min(word.find_first_not_of("(<\"'"), word.size());
+      word.remove_prefix(lead);
+      const auto scheme = word.find("://");
+      const bool link = (scheme != std::string_view::npos && scheme > 0 &&
+                         std::ranges::all_of(word.substr(0, scheme), [](char c) {
+                           return std::isalnum(static_cast<unsigned char>(c)) || c == '+' || c == '-' || c == '.';
+                         })) ||
+                        word.starts_with("www.");
+      if (link) {
+        while (!word.empty() && std::string_view(".,;:!?)>\"'").find(word.back()) != std::string_view::npos)
+          word.remove_suffix(1);
+        found.emplace_back(start + lead, start + lead + word.size());
+      }
+      from = end;
+    }
+    return found;
+  }();
+  const auto address_at = [&](std::size_t here) {
+    return std::ranges::find_if(addresses, [&](const auto& one) { return one.first <= here && here < one.second; });
+  };
+  // A run closed by `close` on this line, from just after its opening -- not
+  // by one inside a link's address.
   const auto closing = [&](std::size_t from, std::string_view close) {
-    const auto end = line.find(close, from);
-    return end == std::string_view::npos || end == from ? std::string_view::npos : end;
+    for (auto end = line.find(close, from); end != std::string_view::npos; end = line.find(close, end + 1)) {
+      if (end == from)
+        return std::string_view::npos;
+      if (address_at(end) == addresses.end())
+        return end;
+    }
+    return std::string_view::npos;
   };
   while (at < line.size()) {
     sync(base + at);
@@ -64,6 +102,15 @@ using logic::runs_in;
       at = found->last - base;
       marked = true;
       continue;
+    }
+    // A bare link: its address as it is, up to where it ends.
+    if (const auto link = address_at(at); link != addresses.end() && link->first == at) {
+      const std::size_t last = std::min(link->second, line.size());
+      if (whole(at, last)) {
+        out += chevron::escaped(line.substr(at, last - at));
+        at = last;
+        continue;
+      }
     }
     const std::string_view rest = line.substr(at);
     if (rest.starts_with("`")) {

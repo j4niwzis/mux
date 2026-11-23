@@ -543,6 +543,18 @@ struct field_quotes {
       return std::nullopt;
     const std::size_t body = body_at(text, start);
     const auto blank = [](char c) { return c == ' ' || c == '\t' || c == '\n'; };
+    // A link's address -- a word with "://" in it, or one beginning "www." --
+    // is the address, its underscores and stars too: no markup read in it.
+    const auto in_address = [&](std::size_t at) {
+      std::size_t from = at;
+      while (from > body && !blank(text[from - 1]))
+        --from;
+      std::size_t to = at;
+      while (to < text.size() && !blank(text[to]))
+        ++to;
+      const std::string_view word = text.substr(from, to - from);
+      return word.find("://") != std::string_view::npos || word.starts_with("www.");
+    };
     const auto word = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; };
     for (const auto& [mark, style] : markdown_marks()) {
       const std::size_t size = mark.size();
@@ -550,13 +562,13 @@ struct field_quotes {
         continue;
       const std::size_t close = caret - size;
       const char own = mark.front();
-      if (blank(text[close - 1]) || text[close - 1] == own)
+      if (blank(text[close - 1]) || text[close - 1] == own || in_address(close))
         continue;
       for (std::size_t from = close - size - 1;;) {
         const std::size_t open = text.rfind(mark, from);
         if (open == std::string_view::npos || open < body)
           break;
-        const bool good_before = open == body || (!word(text[open - 1]) && text[open - 1] != own);
+        const bool good_before = (open == body || (!word(text[open - 1]) && text[open - 1] != own)) && !in_address(open);
         const char first = text[open + size];
         if (good_before && open + size < close && !blank(first) && first != own) {
           // The closing mark out, then the opening one: the run where its

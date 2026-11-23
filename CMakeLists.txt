@@ -138,7 +138,7 @@ cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 # sans-IO, which the IRC protocol's account runs on mux.net's stream.
 cme_declare_port(NAME cairn PROVIDES cairn
   GITHUB_REPOSITORY j4niwzis/cairn
-  GIT_TAG cc6f0fd2414f796261c2d438122b6a249304fe64
+  GIT_TAG 8bd5b98364c25753f26a7c95fc45042cc4a1df9f
   LICENSE AGPL-3.0-only
   TARGETS cairn)
 cme_options(cairn "CAIRN_TESTS OFF" "CAIRN_BENCHMARKS OFF")

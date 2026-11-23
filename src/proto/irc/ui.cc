@@ -41,7 +41,8 @@ inline auto advanced_fields(const palette& colours) {
                    choice_field<&d::scram, bool>(colours, "SASL mechanism", {{"PLAIN", false}, {"SCRAM-SHA-256", true}}),
                    model_field<&d::server_password>(colours, "Server password (PASS)", "none", true),
                    model_field<&d::username>(colours, "User name", "the nick"),
-                   model_field<&d::realname>(colours, "Real name", "the nick")));
+                   model_field<&d::realname>(colours, "Real name", "the nick"),
+                   model_field<&d::bouncer_network>(colours, "Bouncer network ID (soju)", "none: the bouncer itself")));
 }
 
 }  // namespace mux::proto::irc::form_detail

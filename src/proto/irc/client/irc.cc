@@ -46,6 +46,7 @@ struct settings {
   mechanism_t mechanism = mechanism::plain{};
   std::optional<std::string> login, server_password, username, realname;
   std::vector<std::string> channels;
+  std::string bouncer_network;
   std::optional<net::proxy> proxy;
 };
 
@@ -1026,6 +1027,7 @@ class account {
     // a second copy of it.
     std::erase(asked.caps, std::string("echo-message"));
     asked.caps.push_back("chathistory");
+    asked.bouncer_network = how_.bouncer_network;
     asked.version = "mux";
     asked.source = "https://github.com/j4niwzis/mux";
     client_.emplace(std::move(asked));
@@ -1108,6 +1110,7 @@ class account {
                        const auto to_point = h::point_of(stamp(until));
                        this->write(cairn::msg::chathistory{h::targets{from_point, to_point, 100}});
                      }
+                     if (how_.bouncer_network.empty() && client_->has_cap("soju.im/bouncer-networks")) this->raw("BOUNCER LISTNETWORKS");
                      if (client_->server().monitor && !watched_.empty())
                        for (const auto& nick : watched_) this->write(cairn::msg::monitor{"+", cairn::commas{nick}});
                    },
@@ -1483,6 +1486,25 @@ class account {
       auto one = message_of(*first, done.params.front(), text, false);
       heard_from(one.in);
       sink_(change::message_added{std::move(one)});
+      return;
+    }
+    // A bouncer's networks (soju.im/bouncer-networks): said, each with the id
+    // an account binds to it by.
+    if (done.type == "soju.im/bouncer-networks") {
+      std::vector<std::string> said;
+      for (const auto& wire : done.lines)
+        if (const auto l = cairn::try_parse(wire); l && l->is("BOUNCER") && l->param(0) == "NETWORK") {
+          std::string name(l->param(1));
+          for (auto attr : l->param(2) | std::views::split(';')) {
+            const std::string_view one(attr.begin(), attr.end());
+            if (one.starts_with("name=")) name = std::string(one.substr(5));
+          }
+          said.push_back(std::format("{} (ID {})", name, l->param(1)));
+        }
+      if (!said.empty())
+        sink_(change::notice{id_, "Networks on this bouncer",
+                             (said | std::views::join_with(std::string_view(", ")) | std::ranges::to<std::string>()) +
+                                 ". For one of them, add an account with its ID as the bouncer network (Advanced)."});
       return;
     }
     // The chats of before (CHATHISTORY TARGETS): each a private chat, in

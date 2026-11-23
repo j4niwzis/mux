@@ -29,6 +29,7 @@ make_account(const kept& saved, ::mux::net::loop& loop, ::mux::net::tls& tls, ::
                                           .username = saved.username,
                                           .realname = saved.realname,
                                           .channels = saved.channels,
+                                          .bouncer_network = saved.bouncer_network.value_or(""),
                                           .proxy = std::move(via)};
   // Held with the deleter the sink names: made here, let go where it says.
   using account_t = ::mux::proto::irc::client::account<Sink>;

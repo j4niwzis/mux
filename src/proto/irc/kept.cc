@@ -67,6 +67,9 @@ struct kept {
   std::optional<std::string> username, realname;
   // The channels joined once connected.
   std::vector<std::string> channels;
+  // A bouncer's network (soju.im/bouncer-networks): its id, bound as the
+  // account connects.
+  std::optional<std::string> bouncer_network;
   friend bool operator==(const kept&, const kept&) = default;
 };
 consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>().tag("irc"); }
@@ -110,7 +113,7 @@ inline std::optional<std::string> check(const kept& one) {
 // Raw form data, as typed: the channels as one line, separated by spaces or
 // commas.
 struct account_draft {
-  std::string address, password, login, server_password, username, realname, channels;
+  std::string address, password, login, server_password, username, realname, channels, bouncer_network;
   bool scram = false;  // SASL by SCRAM-SHA-256, not PLAIN
   bool advanced = false;
   friend bool operator==(const account_draft&, const account_draft&) = default;
@@ -123,8 +126,9 @@ inline account_draft draft_of(const kept& saved) {
           saved.username.value_or(""),
           saved.realname.value_or(""),
           saved.channels | std::views::join_with(' ') | std::ranges::to<std::string>(),
+          saved.bouncer_network.value_or(""),
           saved.mechanism == std::optional<std::string>("SCRAM-SHA-256"),
-          saved.login || saved.server_password || saved.username || saved.realname || saved.mechanism};
+          saved.login || saved.server_password || saved.username || saved.realname || saved.mechanism || saved.bouncer_network};
 }
 // The words of a line, separated by spaces or commas.
 [[nodiscard]] inline std::vector<std::string> words_of(std::string_view line) {
@@ -142,7 +146,8 @@ inline account_draft draft_of(const kept& saved) {
            .server_password = given(draft.server_password),
            .username = given(draft.username),
            .realname = given(draft.realname),
-           .channels = words_of(draft.channels)};
+           .channels = words_of(draft.channels),
+           .bouncer_network = given(draft.bouncer_network)};
   if (auto wrong = check(out)) return std::unexpected(*wrong);
   return out;
 }

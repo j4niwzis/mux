@@ -94,7 +94,9 @@ consteval auto json_schema(knot::type<chat_notify>) { return knot::schema<chat_n
 // its password, its server -- is its kept type, mux::proto::<protocol>::kept
 // (through mux.proto.kept).
 struct account_shared {
-  style_settings style;
+  // Unsaid where the account has no style of its own -- an old file's
+  // accounts, and another protocol's -- not a key every account must have.
+  std::optional<style_settings> style;
   bool enabled = true;
   std::optional<bool> read_receipts;
   std::optional<bool> room_events;

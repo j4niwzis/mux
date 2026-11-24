@@ -143,7 +143,7 @@ TEST(Config, AnAccountOfAnotherProtocolIsKept) {
   scratch here;
   fs::create_directories(here.dir);
   const fs::path where = here.dir / "accounts.json";
-  std::ofstream(where) << R"({"accounts": [{"protocol": "irc", "own": {"nick": "alice", "server": "irc.libera.chat"}, "shared": {"enabled": true}},
+  std::ofstream(where) << R"({"accounts": [{"protocol": "tox", "own": {"id": "alice"}, "shared": {"enabled": true}},
                                            {"protocol": "xmpp", "own": {"address": "a@b.c", "password": "x", "resource": "mux", "plain_without_tls": false}, "shared": {"enabled": true}}]})";
   const auto got = mux::config::load(where, vault);
   ASSERT_TRUE(got.has_value()) << got.error();
@@ -152,7 +152,7 @@ TEST(Config, AnAccountOfAnotherProtocolIsKept) {
   EXPECT_EQ(mux::config::address_of(all[0]), "a@b.c");
   const auto foreign = mux::config::foreign_of(*got);
   ASSERT_EQ(foreign.size(), 1u);
-  EXPECT_EQ(foreign[0].protocol, "irc");
+  EXPECT_EQ(foreign[0].protocol, "tox");
   ASSERT_TRUE(mux::config::save(where, mux::config::file_of(all, foreign), vault).has_value());
   const auto again = mux::config::load(where, vault);
   ASSERT_TRUE(again.has_value()) << again.error();

@@ -136,8 +136,8 @@ struct chat_settings {
     }
     const auto owner = chat ? std::optional(chat->account) : account;
     if (owner)
-      if (const auto* saved = settings_of(owner->address))
-        out = config::filled_from(std::move(out), saved->shared.style);
+      if (const auto* saved = settings_of(owner->address); saved && saved->shared.style)
+        out = config::filled_from(std::move(out), *saved->shared.style);
     auto every = appearance().style;
     every.theme = appearance().theme;
     out = config::filled_from(std::move(out), every);

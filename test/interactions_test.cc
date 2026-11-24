@@ -8,6 +8,7 @@ import skiff.bind;
 import skiff.model;
 import mux.ui;
 import mux.plugins.ui;
+import mux.plugin.threads.ui;
 import gtest;
 
 #include "gtest/gtest-macros.h"
@@ -64,7 +65,7 @@ TEST(Interactions, ClickingTheThreadSummaryRequestsItsRoot) {
   environment env;
   model state;
   requests heard;
-  scene::Scene tree(ui::message_thread_link(env.colours, "$root", "3 replies · latest answer"));
+  scene::Scene tree(mux::plugins::threads::message_thread_link(env.colours, "$root", "3 replies · latest answer"));
   tree.layoutIfNeeded(skia::SkRect::MakeXYWH(0, 0, 400, 80));
   const auto link = button(tree, "Open thread");
   ASSERT_TRUE(link.has_value());

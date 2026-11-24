@@ -11,6 +11,7 @@ import skiff.model;
 import skiff.bind;
 import mux.core;
 import mux.ui;
+import mux.plugin.emoji_picker.ui;
 import gtest;
 #include "gtest/gtest-macros.h"
 namespace {
@@ -38,7 +39,7 @@ struct panel_window {
   ui::emoji_kept kept{};
   shown_model shown{shown_root{}};
   skiff::bind::Binding<shown_model> binding;
-  scene::Scene<ui::emoji_panel_t<ui::insert_emoji_into>> tree;
+  scene::Scene<ui::emoji_panel_t<mux::plugins::emoji_picker::insert_emoji_into>> tree;
   std::map<std::string, std::size_t> order;
   double at = 0.0;
   static constexpr float kWidth = 345.0f, kHeight = 400.0f;
@@ -51,7 +52,7 @@ struct panel_window {
       frame();
   }
   ~panel_window() { skiff::paint::defaultFont() = nullptr; }
-  ui::emoji_panel_t<ui::insert_emoji_into> made() { return ui::emoji_panel(colours, kept, ui::insert_emoji_into{}); }
+  ui::emoji_panel_t<mux::plugins::emoji_picker::insert_emoji_into> made() { return ui::emoji_panel(colours, kept, mux::plugins::emoji_picker::insert_emoji_into{}); }
   // A frame as the window makes one: what was pressed and answered
   // delivered, the binding refreshed, ticked, laid out, finished.
   void frame() {

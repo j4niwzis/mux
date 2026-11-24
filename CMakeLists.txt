@@ -238,6 +238,12 @@ if(mux_loom_components)
   if("crypto" IN_LIST mux_loom_components)
     mux_find_package(vodozemac REQUIRED)
     list(APPEND mux_loom_libraries vodozemac::vodozemac)
+    # loom.crypto includes the bridge's headers (rust/cxx.h) cargo makes:
+    # loom built -- its sources scanned too -- only once they are there.
+    # Without it a fast build scanned wire.cc first and found no header.
+    if(TARGET loom AND TARGET vodozemac-rust)
+      add_dependencies(loom vodozemac-rust)
+    endif()
   endif()
 endif()
 add_library(mux_modules)
@@ -340,7 +346,7 @@ cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
 # skiff's has it; only that, not skiff.app (the page).
 cme_declare_port(NAME skiff-framework PROVIDES skiff-framework skiff_framework
   GITHUB_REPOSITORY j4niwzis/skiff-framework
-  GIT_TAG e1a06a14816419507d852308664c37c105926345
+  GIT_TAG da1f418b987ed963942d6bf574834aae16656a75
   VERSION 0.1.0)
 # `mux --page`: the same program laid out and painted by an HTML engine
 # called directly (Blitz, through skiff.platform.page) -- for measuring it

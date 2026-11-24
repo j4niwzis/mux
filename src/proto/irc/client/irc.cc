@@ -13,6 +13,7 @@ import std;
 import splice;
 import cairn;
 import mux.core;
+import mux.composition;
 import mux.net;
 import mux.http;
 import mux.proto.irc;
@@ -1411,7 +1412,7 @@ class account {
             std::int64_t users = 0;
             const auto count = param(1);
             std::from_chars(count.data(), count.data() + count.size(), users);
-            listing_->rooms.push_back(directory_room{.id = name, .name = name, .alias = name, .topic = topic, .members = users});
+            listing_->rooms.push_back(mux::directory_room{.id = name, .name = name, .alias = name, .topic = topic, .members = users});
           }
         }
         break;
@@ -1572,7 +1573,7 @@ class account {
   // A LIST under way: where, what was asked, what came so far.
   struct listing {
     std::string server, query;
-    std::vector<directory_room> rooms;
+    std::vector<mux::directory_room> rooms;
   };
   std::optional<listing> listing_;
   // WHOIS replies gathered, by the nick folded, until 318.

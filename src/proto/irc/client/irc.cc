@@ -1418,7 +1418,7 @@ class account {
         break;
       case 323:  // RPL_LISTEND
         if (listing_) {
-          std::ranges::sort(listing_->rooms, std::ranges::greater{}, &directory_room::members);
+          std::ranges::sort(listing_->rooms, std::ranges::greater{}, &mux::directory_room::members);
           if (listing_->rooms.size() > 500) listing_->rooms.resize(500);
           sink_(change::directory_listed{.by = id_, .server = listing_->server, .query = listing_->query, .rooms = std::move(listing_->rooms)});
           listing_.reset();
